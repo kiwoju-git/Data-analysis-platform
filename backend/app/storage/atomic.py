@@ -36,7 +36,7 @@ def atomic_replace(target_path: Path, write_temp: BytesWriter) -> None:
 def _create_temp_path(target_path: Path) -> Path:
     handle = tempfile.NamedTemporaryFile(
         mode="wb",
-        prefix=f".{target_path.name}.",
+        prefix=".tmp-",
         suffix=".tmp",
         dir=target_path.parent,
         delete=False,

@@ -1,6 +1,7 @@
 # Storage and Migration Notes
 
-Gate A introduces a minimal SQLite metadata store skeleton.
+Gate A introduced a minimal SQLite metadata store skeleton.
+Gate B0 extends it with immutable dataset-version metadata and analysis run/job metadata contracts.
 
 ## Metadata Database
 
@@ -11,10 +12,32 @@ Gate A introduces a minimal SQLite metadata store skeleton.
 
 ## Migration Skeleton
 
-- Current schema version: `1`.
+- Current schema version: `5`.
 - Migration history is recorded in `schema_migrations`.
 - `PRAGMA user_version` is set to the current schema version after migrations run.
 - Startup initializes the metadata store during FastAPI lifespan startup.
+- Version `2` adds the `datasets` table for raw upload provenance and parsing-entry metadata.
+- Version `3` adds `dataset_versions` and `dataset_columns`.
+- Version `4` adds `analysis_runs`, `analysis_artifacts`, and `jobs`.
+- Version `5` adds `dataset_artifacts`.
+- `dataset_versions.parsing_options_json` stores confirmed parsing options as canonical JSON.
+- `dataset_columns` preserves the original header text separately from the unique display name.
+- `analysis_runs.config_json` stores request/config snapshots and must include `schema_version`.
+- `analysis_runs.result_path` and `result_sha256` are populated for succeeded inline `eda.descriptive` runs.
+- `dataset_artifacts` stores relative workspace paths, hashes, media type, and byte size for app-owned dataset artifacts such as canonical rows and manifests.
+- `analysis_artifacts` stores relative workspace paths and hashes for app-owned artifacts, not raw result blobs.
+- `jobs` stores job state, progress, cancellation request state, and sanitized error codes.
+- Upgrade from schema versions `1`, `2`, `3`, and `4` to `5` is covered by unit tests.
+
+## Canonical Parsed Artifact Decision
+
+- The current stdlib canonical materialization writes UTF-8 JSONL rows plus a JSON manifest under `workspaces/datasets/{dataset_id}/versions/{version_id}/`.
+- SQLite records only relative artifact paths, SHA-256 hashes, media types, and byte sizes; raw row values are not stored in metadata tables.
+- Parquet remains the preferred higher-performance canonical data format candidate for later slices.
+- Current Windows Python 3.10 environment check on 2026-06-24 found `pyarrow_available=False`.
+- `pyarrow` is not added in this slice because dependency compatibility, wheel availability, license, size, and offline runtime behavior still need a recorded review.
+- Until that review is done, delimited-text dataset versions use preserved raw upload plus confirmed `parsing_options_json`, `dataset_columns`, and the app-owned JSONL canonical rows manifest as the reproducible source of truth.
+- Pickle/joblib are not allowed as a temporary canonical data format.
 
 ## Recovery Direction
 

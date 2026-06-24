@@ -2,7 +2,7 @@ from enum import Enum
 from typing import TypeAlias
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 DatasetId: TypeAlias = UUID
 AnalysisId: TypeAlias = UUID
@@ -26,6 +26,21 @@ class JobReference(BaseModel):
 
     job_id: JobId
     state: JobState
+
+
+class JobStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: JobId
+    analysis_id: AnalysisId | None
+    job_type: str
+    state: JobState
+    progress: float = Field(ge=0, le=1)
+    cancel_requested: bool
+    error_code: str | None
+    created_at: str
+    updated_at: str
+    completed_at: str | None
 
 
 class DatasetReference(BaseModel):

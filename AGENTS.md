@@ -7,9 +7,11 @@ Build **DataLab Studio**, a local-first statistical analysis web application.
 Read these files before changing code:
 
 1. `AGENTS.md`
-2. `data_prd_addendum.md`
-3. `data_prd.md`
-4. The nearest nested `AGENTS.md` or `AGENTS.override.md`, if one exists
+2. `docs/six_module_implementation_guide.md`
+3. `to_do_list.md`
+4. `data_prd_addendum.md`
+5. `data_prd.md`
+6. The nearest nested `AGENTS.md` or `AGENTS.override.md`, if one exists
 
 When product documents conflict, `data_prd_addendum.md` overrides `data_prd.md`. A nested instruction file may specialize rules for its directory but must not weaken security, statistical correctness, or reproducibility requirements.
 

@@ -1,5 +1,8 @@
+import csv
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from app.api.v1.schemas.datasets import (
     DatasetFormat,
@@ -18,6 +21,7 @@ TEXT_DELIMITERS = (
 )
 MAX_XLSX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
 MAX_XLSX_COMPRESSION_RATIO = 100
+MAX_TEXT_LAYOUT_SCAN_LINES: Final = 50
 
 
 def detect_dataset_format(filename: str, first_bytes: bytes) -> DatasetFormat:
@@ -69,7 +73,17 @@ def _build_text_suggestion(
     decoded_text: str | None = None
     encoding_candidates: list[str] = []
 
-    for encoding in TEXT_ENCODINGS:
+    encodings = (
+        TEXT_ENCODINGS
+        if first_bytes.startswith(b"\xef\xbb\xbf")
+        else (
+            "utf-8",
+            "utf-8-sig",
+            "cp949",
+        )
+    )
+
+    for encoding in encodings:
         try:
             candidate = first_bytes.decode(encoding)
         except UnicodeDecodeError:
@@ -87,6 +101,7 @@ def _build_text_suggestion(
 
     delimiter_candidates = _score_delimiters(decoded_text)
     suggested_delimiter = _choose_delimiter(detected_format, delimiter_candidates)
+    layout = _detect_delimited_layout(decoded_text, suggested_delimiter)
     if suggested_delimiter is None:
         warnings.append(
             UploadWarning(
@@ -119,7 +134,9 @@ def _build_text_suggestion(
             quote_char='"',
             decimal=".",
             thousands=None,
-            header_row=1,
+            has_header=layout.has_header,
+            header_row=layout.header_row,
+            data_start_row=layout.data_start_row,
             xlsx_requires_sheet_selection=False,
         ),
         warnings,
@@ -138,7 +155,9 @@ def _build_xlsx_suggestion(stored_path: Path) -> tuple[ParsingSuggestion, list[U
             quote_char=None,
             decimal=".",
             thousands=None,
+            has_header=True,
             header_row=1,
+            data_start_row=2,
             xlsx_requires_sheet_selection=True,
         ),
         [
@@ -192,6 +211,105 @@ def _choose_delimiter(
     if candidates:
         return candidates[0].delimiter
     return None
+
+
+@dataclass(frozen=True)
+class _DelimitedLayout:
+    has_header: bool
+    header_row: int
+    data_start_row: int
+
+
+@dataclass(frozen=True)
+class _DelimitedLine:
+    line_number: int
+    cells: list[str]
+
+
+def _detect_delimited_layout(text: str, delimiter: str | None) -> _DelimitedLayout:
+    if delimiter is None:
+        return _DelimitedLayout(has_header=True, header_row=1, data_start_row=2)
+
+    rows = _parse_nonblank_delimited_lines(text, delimiter)
+    run = _best_tabular_run(rows)
+    if not run:
+        return _DelimitedLayout(has_header=True, header_row=1, data_start_row=2)
+
+    first_row = run[0]
+    second_row = run[1] if len(run) > 1 else None
+    has_header = _looks_like_header(first_row.cells, second_row.cells if second_row else None)
+    if has_header:
+        return _DelimitedLayout(
+            has_header=True,
+            header_row=first_row.line_number,
+            data_start_row=first_row.line_number + 1,
+        )
+    return _DelimitedLayout(
+        has_header=False,
+        header_row=1,
+        data_start_row=first_row.line_number,
+    )
+
+
+def _parse_nonblank_delimited_lines(text: str, delimiter: str) -> list[_DelimitedLine]:
+    parsed_rows: list[_DelimitedLine] = []
+    for line_number, line in enumerate(text.splitlines()[:MAX_TEXT_LAYOUT_SCAN_LINES], start=1):
+        if line.strip() == "":
+            continue
+        try:
+            cells = next(csv.reader([line], delimiter=delimiter, quotechar='"'))
+        except csv.Error:
+            continue
+        if len(cells) >= 2 and any(cell.strip() != "" for cell in cells):
+            parsed_rows.append(_DelimitedLine(line_number=line_number, cells=cells))
+    return parsed_rows
+
+
+def _best_tabular_run(rows: list[_DelimitedLine]) -> list[_DelimitedLine]:
+    best_run: list[_DelimitedLine] = []
+    best_score = 0
+    index = 0
+    while index < len(rows):
+        field_count = len(rows[index].cells)
+        run = [rows[index]]
+        lookahead = index + 1
+        while lookahead < len(rows) and len(rows[lookahead].cells) == field_count:
+            run.append(rows[lookahead])
+            lookahead += 1
+
+        score = len(run) * field_count
+        if score > best_score:
+            best_score = score
+            best_run = run
+        index = lookahead
+    return best_run
+
+
+def _looks_like_header(first_cells: list[str], second_cells: list[str] | None) -> bool:
+    if second_cells is None:
+        return True
+
+    first_values = [cell.strip() for cell in first_cells]
+    second_values = [cell.strip() for cell in second_cells]
+    first_numeric = sum(1 for value in first_values if _is_numeric_like(value))
+    second_numeric = sum(1 for value in second_values if _is_numeric_like(value))
+
+    if first_numeric > 0:
+        return False
+    return second_numeric >= max(1, len(second_values) // 2)
+
+
+def _is_numeric_like(value: str) -> bool:
+    if value == "":
+        return False
+    normalized = value.replace(",", "")
+    if normalized.endswith("%"):
+        normalized = normalized[:-1]
+    try:
+        float(normalized)
+    except ValueError:
+        return False
+    return True
 
 
 def _validate_xlsx_container(path: Path) -> None:

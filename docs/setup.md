@@ -2,6 +2,11 @@
 
 DataLab Studio is developed as a local single-user application for Windows 11, PowerShell, Python 3.10.x, CPU-only execution, and localhost access.
 
+## Runtime Tool Versions
+
+- Python: CPython 3.10.x
+- Node.js: 22 LTS is recommended. The current Vite toolchain requires Node.js 20.19+ or 22.12+.
+
 ## Initial Setup
 
 Run from the repository root in PowerShell:
