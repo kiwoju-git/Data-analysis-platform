@@ -24,7 +24,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - `dataset_columns` preserves the original header text separately from the unique display name.
 - `analysis_runs.config_json` stores request/config snapshots and must include `schema_version`.
 - `analysis_runs.result_path` and `result_sha256` are populated for succeeded inline `eda.descriptive` runs.
-- `dataset_artifacts` stores relative workspace paths, hashes, media type, and byte size for app-owned dataset artifacts such as canonical rows and manifests.
+- `dataset_artifacts` stores relative workspace paths, hashes, media type, and byte size for app-owned dataset artifacts such as canonical rows, canonical manifests, and profile summaries.
 - `analysis_artifacts` stores relative workspace paths and hashes for app-owned artifacts, not raw result blobs.
 - `jobs` stores job state, progress, cancellation request state, and sanitized error codes.
 - Upgrade from schema versions `1`, `2`, `3`, and `4` to `5` is covered by unit tests.
@@ -33,6 +33,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 
 - The current stdlib canonical materialization writes UTF-8 JSONL rows plus a JSON manifest under `workspaces/datasets/{dataset_id}/versions/{version_id}/`.
 - SQLite records only relative artifact paths, SHA-256 hashes, media types, and byte sizes; raw row values are not stored in metadata tables.
+- Profile scans persist raw-value-free `profile_summary` JSON artifacts under the dataset version workspace and upsert the latest profile artifact metadata in `dataset_artifacts`.
 - Parquet remains the preferred higher-performance canonical data format candidate for later slices.
 - Current Windows Python 3.10 environment check on 2026-06-24 found `pyarrow_available=False`.
 - `pyarrow` is not added in this slice because dependency compatibility, wheel availability, license, size, and offline runtime behavior still need a recorded review.
@@ -48,5 +49,6 @@ Future schema changes must add forward migrations with tests for upgrade from th
 - Use `backend.app.storage.atomic.atomic_write_bytes` or `atomic_write_text` for small metadata-adjacent artifacts such as manifests, analysis result JSON, and export manifests.
 - The helper writes a temporary file in the target directory, flushes and fsyncs file content, then replaces the target with `os.replace`.
 - The target directory is created before writing.
+- The helper uses a short temporary filename prefix to avoid Windows path-length failures in deep workspace paths.
 - If the writer fails before replacement, the previous target file is preserved and the temporary file is removed.
 - Do not use this helper to stream large uploaded datasets directly; large file ingestion needs chunked validation, hashing, size checks, and cleanup logic in Gate B.

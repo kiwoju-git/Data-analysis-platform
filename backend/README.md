@@ -28,5 +28,5 @@ It also exposes the 6-module analysis method catalog.
 `eda.descriptive` is the first executable inline method and computes real descriptive statistics from validated canonical rows for an immutable dataset version.
 Other methods remain `planned` or `disabled` and return structured unavailable-method errors.
 Schema version `5` includes dataset artifact metadata plus analysis run, artifact, and job metadata tables with status/cancel API skeletons.
-The profile endpoint reads validated canonical rows and returns aggregate counts, canonical artifact metadata, duplicate-row count, memory estimate, and warnings only, not raw value samples.
+The profile endpoint reads validated canonical rows, persists a raw-value-free `profile_summary` JSON artifact with SHA-256 metadata, and returns aggregate counts, canonical/profile artifact metadata, duplicate-row count, memory estimate, and warnings only, not raw value samples.
 It does not create mock results.

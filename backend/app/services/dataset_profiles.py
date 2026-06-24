@@ -440,14 +440,15 @@ def _profile_artifact_relative_path(
     version_id: str,
     artifact_id: str,
 ) -> Path:
+    short_artifact_id = artifact_id.replace("-", "")[:16]
     return (
         Path("workspaces")
         / "datasets"
         / dataset_id
         / "versions"
         / version_id
-        / "profiles"
-        / f"{artifact_id}.profile.json"
+        / "p"
+        / f"{short_artifact_id}.json"
     )
 
 

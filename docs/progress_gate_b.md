@@ -4,7 +4,7 @@ Last updated: 2026-06-25
 
 ## Summary
 
-Gate B has completed the upload/version, canonical JSONL artifact materialization, canonical row reader adoption for profile and `eda.descriptive`, schema/preview, profile/preflight with duplicate-row and memory estimates, analysis catalog, storage/run foundation, selected-method six-module Workbench shell, shared Workbench component split, and the first real exploration-method slice in the working tree. The app can accept a local multipart dataset upload, validate the file envelope, preserve raw bytes unchanged, store SHA-256 provenance in SQLite metadata, return parsing-option candidates, confirm delimited-text parsing, create immutable dataset version `v1`, materialize canonical rows plus a manifest under the workspace, store dataset columns and artifact metadata, retrieve version metadata, update confirmed column metadata, return paginated row preview, return aggregate profile/preflight counts and warnings from validated canonical rows, expose the 6-module analysis method catalog, show planned/disabled methods in a hash-restorable Workbench shell, initialize analysis run/artifact/job metadata tables with status/cancel API skeletons, and execute `eda.descriptive` with real descriptive statistics from validated canonical rows. Delimited-text parsing also handles leading preamble plus headerless tabular data through explicit `has_header=false` and `data_start_row` confirmation. The schema UI includes a guarded 34-column Bayesian sample role preset for headerless generated columns. It does not yet provide cell-level data edits, route-based analysis pages, executable methods beyond `eda.descriptive`, generated chart artifacts, or inferential statistical results.
+Gate B has completed the upload/version, canonical JSONL artifact materialization, canonical row reader adoption for profile and `eda.descriptive`, schema/preview, profile/preflight with duplicate-row and memory estimates, persisted profile summary artifacts, analysis catalog, storage/run foundation, selected-method six-module Workbench shell, shared Workbench component split, and the first real exploration-method slice in the working tree. The app can accept a local multipart dataset upload, validate the file envelope, preserve raw bytes unchanged, store SHA-256 provenance in SQLite metadata, return parsing-option candidates, confirm delimited-text parsing, create immutable dataset version `v1`, materialize canonical rows plus a manifest under the workspace, store dataset columns and artifact metadata, retrieve version metadata, update confirmed column metadata, return paginated row preview, return aggregate profile/preflight counts and warnings from validated canonical rows, persist a raw-value-free `profile_summary` artifact with SHA-256 metadata, expose the 6-module analysis method catalog, show planned/disabled methods in a hash-restorable Workbench shell, initialize analysis run/artifact/job metadata tables with status/cancel API skeletons, and execute `eda.descriptive` with real descriptive statistics from validated canonical rows. Delimited-text parsing also handles leading preamble plus headerless tabular data through explicit `has_header=false` and `data_start_row` confirmation. The schema UI includes a guarded 34-column Bayesian sample role preset for headerless generated columns. It does not yet provide cell-level data edits, route-based analysis pages, executable methods beyond `eda.descriptive`, generated chart artifacts, or inferential statistical results.
 
 ## Checklist
 
@@ -21,6 +21,7 @@ Gate B has completed the upload/version, canonical JSONL artifact materializatio
 | Dataset schema API | Done | `GET/PATCH /api/v1/dataset-versions/{version_id}/schema` |
 | Rows preview API | Done for delimited text | `GET /api/v1/dataset-versions/{version_id}/rows?offset=0&limit=25`, `limit <= 100`, honors headerless `data_start_row` |
 | Basic profile/preflight API | Done for delimited text | `GET /api/v1/dataset-versions/{version_id}/profile`, aggregate counts/warnings, canonical artifact metadata, duplicate-row count, memory estimate, no raw value samples |
+| Profile summary artifact | Done for delimited text | profile scans persist raw-value-free `profile_summary` JSON artifacts and upsert latest metadata in `dataset_artifacts` |
 | Minimal UI | Done for B0/profile slices | upload, parsing option confirmation with header/no-header controls, Context Bar, schema controls, Bayesian sample role preset, paginated preview, profile/preflight table, canonical/preflight summary |
 | Analysis method registry | Done for B0/B1 first method | `GET /api/v1/analysis-methods`, 6 modules, 29 stable method IDs, only `eda.descriptive` available |
 | Analysis run request guard | Done for B0/B1 first method | `POST /api/v1/analysis-runs` executes `eda.descriptive`; planned/disabled methods still reject without a result body |
@@ -33,13 +34,15 @@ Gate B has completed the upload/version, canonical JSONL artifact materializatio
 | Metadata migration | Done | schema version `5`, `datasets`, `dataset_versions`, `dataset_columns`, `dataset_artifacts`, `analysis_runs`, `analysis_artifacts`, `jobs`, upgrade tests from versions 1, 2, 3, and 4 |
 | Canonical parsed artifact | Done for stdlib delimited-text slice | UTF-8 JSONL canonical rows plus JSON manifest are materialized with SHA-256 metadata; Parquet remains candidate after `pyarrow` review |
 | Canonical row reader | Done for profile/B1 first method | profile and `eda.descriptive` read validated canonical rows; corrupt/missing artifact metadata returns explicit recovery errors without raw fallback |
-| Full profile | Started | aggregate profile/preflight, duplicate-row analysis, and memory estimate exist; richer date/time profiling and persisted profile artifacts remain |
+| Full profile | Started | aggregate profile/preflight, duplicate-row analysis, memory estimate, and persisted profile artifacts exist; richer date/time profiling remains |
 | Statistical analysis | Started | `eda.descriptive` only; no inferential tests, p-values, fake charts, or mock results |
 
 ## Latest Validation
 
-Last validated on 2026-06-24:
+Last validated on 2026-06-25:
 
+- Targeted persisted-profile-artifact validation: backend dataset upload/profile plus metadata pytest passed with 32 tests; backend API contract pytest passed with 13 tests; backend ruff passed; backend mypy passed with 35 source files; frontend typecheck and lint passed.
+- Full `scripts/check.ps1`: passed after the persisted profile artifact slice; backend pytest 55 tests, frontend lint/typecheck/Vitest 6 tests/build passed.
 - Targeted backend pytest: passed, 19 dataset upload/parsing/profile tests including preamble-plus-headerless TXT and basic profile warnings.
 - Targeted backend pytest: passed, 15 descriptive/API contract tests including hand-checkable descriptive statistics and `eda.descriptive` API execution.
 - Backend ruff check: passed.
@@ -73,6 +76,6 @@ Last validated on 2026-06-24:
 
 The next slice should stay narrow and avoid mock statistics:
 
-1. Either persist profile artifacts, deepen richer date/time preflight, or continue the Workbench split into dedicated route-level analysis pages.
+1. Either deepen richer date/time preflight or continue the Workbench split into dedicated route-level analysis pages.
 2. Keep every method except `eda.descriptive` non-executable until it has real calculation code and tests.
 3. Keep Bayesian optimization, DOE, regression, quality control, optimizer work, and general ML out of the next slice unless the user explicitly changes gates.

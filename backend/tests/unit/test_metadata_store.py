@@ -23,8 +23,8 @@ from app.storage.metadata import (
     list_dataset_artifact_records,
     metadata_db_path,
     update_analysis_run_status_record,
-    upsert_dataset_artifact_record,
     update_job_cancellation_record,
+    upsert_dataset_artifact_record,
 )
 
 
