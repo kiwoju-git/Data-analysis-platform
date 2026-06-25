@@ -16,6 +16,7 @@ from app.main import create_app
 from app.storage.metadata import (
     AnalysisRunRecord,
     JobRecord,
+    get_analysis_run_record,
     get_dataset_record,
     initialize_metadata_store,
     insert_analysis_run_record,
@@ -229,6 +230,120 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     assert status_payload["result_available"] is True
 
 
+def test_analysis_result_api_returns_persisted_envelope_and_detects_checksum_mismatch(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        result_response = client.get(f"/api/v1/analysis-runs/{analysis_id}/result")
+
+        record = get_analysis_run_record(settings.workspace_root, analysis_id)
+        assert record is not None
+        assert record.result_path is not None
+        (settings.workspace_root / record.result_path).write_bytes(b'{"tampered":true}\n')
+        tampered_response = client.get(f"/api/v1/analysis-runs/{analysis_id}/result")
+
+    assert response.status_code == 201
+    assert result_response.status_code == 200
+    assert result_response.json() == response.json()
+    assert "result_path" not in result_response.text
+    assert tampered_response.status_code == 409
+    assert tampered_response.json()["error"]["code"] == "analysis_result_checksum_mismatch"
+    assert record.result_path not in tampered_response.text
+
+
+def test_dataset_schema_update_marks_existing_analysis_run_stale(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        initial_status = client.get(f"/api/v1/analysis-runs/{analysis_id}")
+        patch_response = client.patch(
+            f"/api/v1/dataset-versions/{version['version_id']}/schema",
+            json={
+                "columns": [
+                    {
+                        "column_id": version["columns"][0]["column_id"],
+                        "display_name": "측정값",
+                        "measurement_level": "continuous",
+                        "role": "feature",
+                        "unit": "kg",
+                    },
+                ],
+            },
+        )
+        stale_status = client.get(f"/api/v1/analysis-runs/{analysis_id}")
+
+    assert response.status_code == 201
+    assert initial_status.status_code == 200
+    assert initial_status.json()["stale"] is False
+    assert patch_response.status_code == 200
+    assert stale_status.status_code == 200
+    assert stale_status.json()["stale"] is True
+
+
+def test_descriptive_result_file_is_removed_when_analysis_run_insert_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+
+        def fail_insert(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("metadata insert failed")
+
+        monkeypatch.setattr("app.services.analysis_runs.insert_analysis_run_record", fail_insert)
+
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+
+    assert response.status_code == 500
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/result.json"))
+
+
 def test_analysis_run_rejects_unknown_method(tmp_path) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         response = client.post(
@@ -339,6 +454,34 @@ def test_job_status_rejects_missing_job(tmp_path) -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "job_not_found"
+
+
+def _upload_confirmed_numeric_dataset(client: TestClient) -> dict[str, object]:
+    upload_response = client.post(
+        "/api/v1/datasets",
+        files={"file": ("sample.csv", b"alpha,beta\n1,10\n2,20\n", "text/csv")},
+    )
+    assert upload_response.status_code == 201
+    confirm_response = client.post(
+        f"/api/v1/datasets/{upload_response.json()['dataset_id']}/confirm-parsing",
+        json={
+            "parsing": {
+                "kind": "delimited_text",
+                "encoding": "utf-8",
+                "delimiter": ",",
+                "quote_char": '"',
+                "decimal": ".",
+                "thousands": None,
+                "has_header": True,
+                "header_row": 1,
+                "data_start_row": 2,
+                "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+            },
+            "columns": [],
+        },
+    )
+    assert confirm_response.status_code == 201
+    return confirm_response.json()
 
 
 def test_analysis_result_envelope_allows_empty_result_only_as_schema_contract() -> None:

@@ -164,6 +164,22 @@ export interface DatasetProfileIssue {
   message: string;
 }
 
+export interface DatasetDateTimeFormatCandidate {
+  format: string;
+  n_matched: number;
+}
+
+export interface DatasetDateTimeProfile {
+  n_datetime: number;
+  n_non_datetime: number;
+  datetime_min: string | null;
+  datetime_max: string | null;
+  timezone_aware_count: number;
+  timezone_naive_count: number;
+  mixed_timezone_awareness: boolean;
+  format_candidates: DatasetDateTimeFormatCandidate[];
+}
+
 export interface DatasetColumnProfile {
   column_id: string;
   column_index: number;
@@ -182,6 +198,7 @@ export interface DatasetColumnProfile {
   numeric_min: number | null;
   numeric_max: number | null;
   numeric_mean: number | null;
+  datetime_profile: DatasetDateTimeProfile | null;
   constant: boolean;
   warnings: DatasetProfileIssue[];
 }

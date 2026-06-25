@@ -8,12 +8,15 @@ from typing import Any, Final, Literal
 from uuid import UUID, uuid4
 
 from fastapi import status
+from pydantic import ValidationError
 
 from app.api.v1.schemas.datasets import (
     DatasetArtifactResponse,
     DatasetColumnDataType,
     DatasetColumnProfile,
     DatasetColumnRole,
+    DatasetDateTimeFormatCandidate,
+    DatasetDateTimeProfile,
     DatasetMeasurementLevel,
     DatasetProfileIssue,
     DatasetProfilePreflight,
@@ -21,7 +24,6 @@ from app.api.v1.schemas.datasets import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
-from app.services.canonical_artifacts import CANONICAL_ROWS_KIND
 from app.services.dataset_rows import (
     DatasetRowsContext,
     get_dataset_rows_context,
@@ -35,7 +37,7 @@ from app.storage.metadata import (
     upsert_dataset_artifact_record,
 )
 
-PROFILE_SCHEMA_VERSION: Final = 3
+PROFILE_SCHEMA_VERSION: Final = 4
 PROFILE_ARTIFACT_SCHEMA_VERSION: Final = 1
 PROFILE_ARTIFACT_KIND: Final = "profile_summary"
 PROFILE_ARTIFACT_MEDIA_TYPE: Final = "application/json"
@@ -45,6 +47,24 @@ MEMORY_PREFLIGHT_WARNING_BYTES: Final = 512 * 1024 * 1024
 ESTIMATED_BYTES_PER_CELL: Final = 64
 HIGH_MISSING_RATE_THRESHOLD: Final = 0.5
 NUMERIC_DATA_TYPES: Final = {"integer", "decimal"}
+DATETIME_FORMATS: Final[tuple[tuple[str, str], ...]] = (
+    ("YYYY-MM-DD", "%Y-%m-%d"),
+    ("YYYY/MM/DD", "%Y/%m/%d"),
+    ("YYYY.MM.DD", "%Y.%m.%d"),
+    ("YYYY-MM-DD HH:MM", "%Y-%m-%d %H:%M"),
+    ("YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"),
+    ("YYYY/MM/DD HH:MM", "%Y/%m/%d %H:%M"),
+    ("YYYY/MM/DD HH:MM:SS", "%Y/%m/%d %H:%M:%S"),
+    ("YYYY-MM-DDTHH:MM", "%Y-%m-%dT%H:%M"),
+    ("YYYY-MM-DDTHH:MM:SS", "%Y-%m-%dT%H:%M:%S"),
+)
+
+
+@dataclass(frozen=True)
+class _DateTimeParseResult:
+    value: datetime
+    format_label: str
+    timezone_aware: bool
 
 
 @dataclass
@@ -58,6 +78,13 @@ class _ColumnAccumulator:
     numeric_sum: Decimal = Decimal("0")
     numeric_min: Decimal | None = None
     numeric_max: Decimal | None = None
+    n_datetime: int = 0
+    n_non_datetime: int = 0
+    datetime_min: datetime | None = None
+    datetime_max: datetime | None = None
+    timezone_aware_count: int = 0
+    timezone_naive_count: int = 0
+    datetime_format_counts: dict[str, int] = field(default_factory=dict)
     unique_values: set[str] = field(default_factory=set)
     unique_count_capped: bool = False
 
@@ -69,6 +96,7 @@ class _ColumnAccumulator:
 
         self.n_present += 1
         self._observe_unique(value)
+        self._observe_datetime(value)
         parsed = _parse_decimal(value.strip(), decimal=decimal, thousands=thousands)
         if parsed is None:
             self.n_non_numeric += 1
@@ -78,6 +106,27 @@ class _ColumnAccumulator:
         self.numeric_sum += parsed
         self.numeric_min = parsed if self.numeric_min is None else min(self.numeric_min, parsed)
         self.numeric_max = parsed if self.numeric_max is None else max(self.numeric_max, parsed)
+
+    def _observe_datetime(self, value: str) -> None:
+        parsed = _parse_datetime(value.strip())
+        if parsed is None:
+            self.n_non_datetime += 1
+            return
+
+        self.n_datetime += 1
+        self.datetime_format_counts[parsed.format_label] = (
+            self.datetime_format_counts.get(parsed.format_label, 0) + 1
+        )
+        if parsed.timezone_aware:
+            self.timezone_aware_count += 1
+        else:
+            self.timezone_naive_count += 1
+
+        comparable = _datetime_order_value(parsed.value)
+        if self.datetime_min is None or comparable < _datetime_order_value(self.datetime_min):
+            self.datetime_min = parsed.value
+        if self.datetime_max is None or comparable > _datetime_order_value(self.datetime_max):
+            self.datetime_max = parsed.value
 
     def _observe_unique(self, value: str) -> None:
         if self.unique_count_capped:
@@ -117,13 +166,13 @@ class _PreflightAccumulator:
 
 def get_dataset_profile(settings: Settings, version_id: UUID) -> DatasetProfileResponse:
     context = get_dataset_rows_context(settings, version_id)
+    canonical_artifact = context.canonical_rows_artifact
+    cached_profile = _load_reusable_profile_artifact(settings, context, canonical_artifact)
+    if cached_profile is not None:
+        return cached_profile
+
     accumulators = [_ColumnAccumulator(column=column) for column in context.columns]
     preflight_accumulator = _PreflightAccumulator()
-    canonical_artifact = get_dataset_artifact_record(
-        settings.workspace_root,
-        str(version_id),
-        CANONICAL_ROWS_KIND,
-    )
 
     for row in iter_dataset_rows(context):
         preflight_accumulator.observe_row(row)
@@ -154,7 +203,7 @@ def get_dataset_profile(settings: Settings, version_id: UUID) -> DatasetProfileR
         columns=columns,
         warnings=warnings,
     )
-    profile_artifact = _persist_profile_artifact(settings, profile)
+    profile_artifact = _persist_profile_artifact(settings, profile, canonical_artifact)
     return profile.model_copy(
         update={"profile_artifact": _dataset_artifact_response(profile_artifact)},
     )
@@ -191,6 +240,7 @@ def _column_profile(accumulator: _ColumnAccumulator) -> DatasetColumnProfile:
         numeric_min=_float_or_none(accumulator.numeric_min),
         numeric_max=_float_or_none(accumulator.numeric_max),
         numeric_mean=_float_or_none(numeric_mean),
+        datetime_profile=_datetime_profile(accumulator),
         constant=constant,
         warnings=_column_warnings(accumulator, unique_count, constant, missing_rate),
     )
@@ -232,6 +282,46 @@ def _column_warnings(
             ),
         )
 
+    if (
+        _declared_datetime_column(column)
+        and accumulator.n_non_datetime > 0
+        and accumulator.n_present > 0
+    ):
+        warnings.append(
+            _issue(
+                "non_datetime_values_in_datetime_column",
+                "warning",
+                "날짜시간 컬럼에 날짜/시간으로 해석할 수 없는 값이 있습니다.",
+            ),
+        )
+
+    if _possible_datetime_column(accumulator):
+        warnings.append(
+            _issue(
+                "possible_datetime_column",
+                "info",
+                "대부분의 값이 날짜/시간 형식으로 보입니다. 변환 전 형식과 시간대를 확인하세요.",
+            ),
+        )
+
+    if len(accumulator.datetime_format_counts) > 1:
+        warnings.append(
+            _issue(
+                "mixed_datetime_formats",
+                "warning",
+                "날짜/시간 값에 여러 형식 후보가 섞여 있습니다.",
+            ),
+        )
+
+    if accumulator.timezone_aware_count > 0 and accumulator.timezone_naive_count > 0:
+        warnings.append(
+            _issue(
+                "mixed_timezone_awareness",
+                "warning",
+                "시간대가 있는 값과 없는 값이 섞여 있습니다.",
+            ),
+        )
+
     if accumulator.unique_count_capped:
         warnings.append(
             _issue(
@@ -258,6 +348,47 @@ def _column_warnings(
         )
 
     return warnings
+
+
+def _datetime_profile(accumulator: _ColumnAccumulator) -> DatasetDateTimeProfile | None:
+    if accumulator.n_datetime == 0 and not _declared_datetime_column(accumulator.column):
+        return None
+
+    format_candidates = [
+        DatasetDateTimeFormatCandidate(format=format_label, n_matched=count)
+        for format_label, count in sorted(
+            accumulator.datetime_format_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+    return DatasetDateTimeProfile(
+        n_datetime=accumulator.n_datetime,
+        n_non_datetime=accumulator.n_non_datetime,
+        datetime_min=_datetime_iso_or_none(accumulator.datetime_min),
+        datetime_max=_datetime_iso_or_none(accumulator.datetime_max),
+        timezone_aware_count=accumulator.timezone_aware_count,
+        timezone_naive_count=accumulator.timezone_naive_count,
+        mixed_timezone_awareness=(
+            accumulator.timezone_aware_count > 0 and accumulator.timezone_naive_count > 0
+        ),
+        format_candidates=format_candidates,
+    )
+
+
+def _declared_datetime_column(column: DatasetColumnRecord) -> bool:
+    return (
+        column.data_type == DatasetColumnDataType.DATETIME.value
+        or column.measurement_level == DatasetMeasurementLevel.DATETIME.value
+        or column.role == DatasetColumnRole.TIME.value
+    )
+
+
+def _possible_datetime_column(accumulator: _ColumnAccumulator) -> bool:
+    if _declared_datetime_column(accumulator.column):
+        return False
+    if accumulator.n_present < 2 or accumulator.n_datetime < 2:
+        return False
+    return accumulator.n_datetime / accumulator.n_present >= 0.8
 
 
 def _dataset_warnings(
@@ -372,6 +503,100 @@ def _canonical_artifact_warnings(
     return []
 
 
+def _load_reusable_profile_artifact(
+    settings: Settings,
+    context: DatasetRowsContext,
+    canonical_artifact: DatasetArtifactRecord,
+) -> DatasetProfileResponse | None:
+    profile_artifact = get_dataset_artifact_record(
+        settings.workspace_root,
+        context.version.version_id,
+        PROFILE_ARTIFACT_KIND,
+    )
+    if profile_artifact is None:
+        return None
+    if profile_artifact.media_type != PROFILE_ARTIFACT_MEDIA_TYPE:
+        return None
+    if not _artifact_file_matches_record(settings, canonical_artifact):
+        return None
+
+    profile_path = _safe_artifact_path(settings.workspace_root, profile_artifact.path)
+    if not profile_path.exists():
+        return None
+    profile_bytes = profile_path.read_bytes()
+    if (
+        len(profile_bytes) != profile_artifact.size_bytes
+        or hashlib.sha256(profile_bytes).hexdigest() != profile_artifact.sha256
+    ):
+        return None
+
+    try:
+        payload = json.loads(profile_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+    if not _profile_artifact_payload_matches(payload, context, canonical_artifact):
+        return None
+
+    profile_payload = payload.get("profile")
+    if not isinstance(profile_payload, dict):
+        return None
+    profile_payload = dict(profile_payload)
+    profile_payload.setdefault("profile_artifact", None)
+    try:
+        profile = DatasetProfileResponse.model_validate(profile_payload)
+    except ValidationError:
+        return None
+    return profile.model_copy(
+        update={"profile_artifact": _dataset_artifact_response(profile_artifact)},
+    )
+
+
+def _profile_artifact_payload_matches(
+    payload: object,
+    context: DatasetRowsContext,
+    canonical_artifact: DatasetArtifactRecord,
+) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("artifact_schema_version") != PROFILE_ARTIFACT_SCHEMA_VERSION:
+        return False
+    if payload.get("artifact_kind") != PROFILE_ARTIFACT_KIND:
+        return False
+    if payload.get("profile_schema_version") != PROFILE_SCHEMA_VERSION:
+        return False
+    if payload.get("schema_hash") != context.version.schema_hash:
+        return False
+    if payload.get("source_canonical_artifact_sha256") != canonical_artifact.sha256:
+        return False
+
+    source_artifact = payload.get("source_canonical_artifact")
+    if not isinstance(source_artifact, dict):
+        return False
+    return (
+        source_artifact.get("kind") == canonical_artifact.kind
+        and source_artifact.get("sha256") == canonical_artifact.sha256
+        and source_artifact.get("size_bytes") == canonical_artifact.size_bytes
+        and source_artifact.get("media_type") == canonical_artifact.media_type
+    )
+
+
+def _artifact_file_matches_record(
+    settings: Settings,
+    artifact: DatasetArtifactRecord,
+) -> bool:
+    artifact_path = _safe_artifact_path(settings.workspace_root, artifact.path)
+    if not artifact_path.exists():
+        return False
+    digest = hashlib.sha256()
+    size_bytes = 0
+    with artifact_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            size_bytes += len(chunk)
+            digest.update(chunk)
+    return size_bytes == artifact.size_bytes and digest.hexdigest() == artifact.sha256
+
+
 def _dataset_artifact_response(
     artifact: DatasetArtifactRecord | None,
 ) -> DatasetArtifactResponse | None:
@@ -392,6 +617,7 @@ def _dataset_artifact_response(
 def _persist_profile_artifact(
     settings: Settings,
     profile: DatasetProfileResponse,
+    canonical_artifact: DatasetArtifactRecord,
 ) -> DatasetArtifactRecord:
     artifact_id = str(uuid4())
     relative_path = _profile_artifact_relative_path(
@@ -402,6 +628,15 @@ def _persist_profile_artifact(
     payload = {
         "artifact_schema_version": PROFILE_ARTIFACT_SCHEMA_VERSION,
         "artifact_kind": PROFILE_ARTIFACT_KIND,
+        "profile_schema_version": profile.profile_schema_version,
+        "schema_hash": profile.schema_hash,
+        "source_canonical_artifact_sha256": canonical_artifact.sha256,
+        "source_canonical_artifact": {
+            "kind": canonical_artifact.kind,
+            "sha256": canonical_artifact.sha256,
+            "media_type": canonical_artifact.media_type,
+            "size_bytes": canonical_artifact.size_bytes,
+        },
         "profile": profile.model_dump(mode="json", exclude={"profile_artifact"}),
     }
     artifact_bytes = _canonical_json_bytes(payload)
@@ -495,6 +730,57 @@ def _parse_decimal(value: str, *, decimal: str, thousands: str | None) -> Decima
     if not parsed.is_finite():
         return None
     return parsed
+
+
+def _parse_datetime(value: str) -> _DateTimeParseResult | None:
+    if not _looks_datetime_candidate(value):
+        return None
+
+    for format_label, format_pattern in DATETIME_FORMATS:
+        try:
+            parsed = datetime.strptime(value, format_pattern)
+        except ValueError:
+            continue
+        return _DateTimeParseResult(
+            value=parsed,
+            format_label=format_label,
+            timezone_aware=False,
+        )
+
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    return _DateTimeParseResult(
+        value=parsed,
+        format_label="ISO 8601",
+        timezone_aware=_datetime_has_timezone(parsed),
+    )
+
+
+def _looks_datetime_candidate(value: str) -> bool:
+    if len(value) < 8:
+        return False
+    if not value[0].isdigit():
+        return False
+    return "-" in value or "/" in value or "." in value or "T" in value
+
+
+def _datetime_has_timezone(value: datetime) -> bool:
+    return value.tzinfo is not None and value.utcoffset() is not None
+
+
+def _datetime_order_value(value: datetime) -> datetime:
+    if _datetime_has_timezone(value):
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
+def _datetime_iso_or_none(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.isoformat()
 
 
 def _float_or_none(value: Decimal | None) -> float | None:

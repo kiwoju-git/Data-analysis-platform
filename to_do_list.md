@@ -52,6 +52,7 @@ Already implemented:
 - Upload size limit through `DATALAB_MAX_UPLOAD_BYTES`
 - Sanitized filename handling and UUID-based raw workspace paths
 - Raw upload preservation with SHA-256 and byte size metadata
+- Confirm-parsing raw upload integrity recheck against stored SHA-256 and byte size before canonical artifact creation
 - Parsing suggestions for encoding, delimiter, quote, decimal, thousands, header presence, header row, and data start row
 - Explicit parsing confirmation records encoding, delimiter, quote, decimal/thousands, header presence, header row, data start row, and missing tokens
 - Delimited TXT files with leading preamble and no header can be confirmed with generated `column_1...column_n` names
@@ -59,11 +60,11 @@ Already implemented:
 - Immutable dataset version `v1` creation for confirmed delimited text uploads
 - Streamed header and row-count scan for delimited text without browser full-data loading
 - Dataset schema lookup/update for display name, measurement level, role, and unit
-- Paginated delimited-text row preview with `limit <= 100`
+- Paginated canonical row preview with `limit <= 100`
 - Canonical UTF-8 JSONL rows and JSON manifest materialization for confirmed delimited text dataset versions
-- Basic delimited-text profile/preflight API with aggregate missing, unique-count, numeric, constant-column, possible-ID, non-numeric-in-numeric, duplicate-row, canonical-artifact, persisted profile-artifact, and memory-estimate warnings
+- Basic delimited-text profile/preflight API with aggregate missing, unique-count, numeric, date/time, constant-column, possible-ID, non-numeric-in-numeric, non-datetime-in-datetime, duplicate-row, canonical-artifact, persisted profile-artifact, and memory-estimate warnings
 - Minimal React UI for upload, parsing confirmation, dataset Context Bar, schema update, and row preview
-- Minimal React UI for profile/preflight warnings, canonical/profile artifact summary, preflight summary, and column-level aggregate profile table
+- Minimal React UI for profile/preflight warnings, canonical/profile artifact summary, preflight summary, and column-level aggregate/numeric/date-time profile table
 - Minimal React schema UI includes a guarded 34-column headerless Bayesian sample role preset: `column_1` as ID, `column_2`-`column_25` as X/features, and `column_26`-`column_34` as Y/responses
 - Analysis method registry with 6 modules and 29 stable method IDs
 - Common analysis request, filter snapshot, warning, provenance, and result envelope schemas
@@ -89,10 +90,17 @@ Already implemented:
 - Canonical row reader adoption tests proving profile and `eda.descriptive` read canonical rows after raw upload mutation
 - Corrupt canonical artifact tests proving profile returns an explicit recovery error without raw fallback
 - Profile artifact persistence tests proving profile scans write raw-value-free JSON artifacts, update `dataset_artifacts`, and do not echo raw values
+- Date/time preflight tests proving profile reports parse counts, format candidates, timezone-aware/naive counts, and profile artifact payloads without raw value samples
+- Data integrity/reproducibility hardening:
+  - rows preview, profile, and `eda.descriptive` use the same canonical JSONL source after parsing confirmation
+  - schema PATCH marks existing analysis runs for the same dataset version `stale=true`
+  - stored `eda.descriptive` result envelopes are retrievable through checksum-validated `GET /api/v1/analysis-runs/{analysis_id}/result`
+  - profile artifacts are reused only when schema hash and source canonical artifact hash still match
+  - descriptive result files are removed if metadata insert fails after file write
 
 Not implemented yet:
 
-- Full profile API beyond the current aggregate/duplicate/memory preflight slice
+- Full profile API beyond the current aggregate/duplicate/memory/date-time preflight slice
 - Full route-based Analysis Workbench with dedicated routes and additional shared feature components
 - Cell-level data editing or transformations that create a new immutable dataset version
 - Executable analysis method dispatch beyond the inline `eda.descriptive` slice
@@ -134,7 +142,7 @@ Completed in this slice:
 - Basic profile/preflight API and UI:
   - `GET /api/v1/dataset-versions/{version_id}/profile`
   - streams confirmed delimited-text versions without returning raw value samples
-  - reports missing rate, capped unique count, numeric parse summary, constants, possible identifiers, numeric parse warnings, duplicate rows, memory estimate, and canonical/profile artifact state
+  - reports missing rate, capped unique count, numeric parse summary, date/time parse summary, date/time format/timezone warnings, constants, possible identifiers, numeric parse warnings, duplicate rows, memory estimate, and canonical/profile artifact state
   - persists raw-value-free `profile_summary` JSON artifacts and upserts latest profile artifact metadata in `dataset_artifacts`
   - UI displays aggregate profile rows and preflight summary after version creation and schema save
 - Tests for schema update validation and row pagination bounds
@@ -184,6 +192,19 @@ Completed in this slice:
   - `dataset_artifacts` stores the latest profile artifact relative path, SHA-256, media type, byte size, and timestamp
   - profile responses and the React summary UI expose profile artifact hash/size metadata
   - atomic writes use short temporary filename prefixes to avoid Windows path-length failures in deep workspace paths
+- Date/time preflight implementation:
+  - profile schema version `4` adds column-level `datetime_profile`
+  - reports date/time parse count, non-date/time count, min/max ISO values, format candidates, timezone-aware count, timezone-naive count, and mixed timezone status
+  - warnings cover possible date/time columns, non-date/time values in datetime/time columns, mixed date/time formats, and mixed timezone awareness
+  - frontend profile summary displays date/time aggregate info without raw value samples
+- Data integrity/reproducibility hardening PR:
+  - confirm-parsing streams the preserved raw upload and rejects SHA-256/size mismatch before canonical artifact or dataset version creation
+  - rows preview reads canonical JSONL rows, matching profile and `eda.descriptive`
+  - schema PATCH marks existing analysis runs stale in the same SQLite transaction as schema metadata updates
+  - `GET /api/v1/analysis-runs/{analysis_id}/result` returns persisted result envelopes only after path and SHA-256 validation
+  - profile artifact payloads include schema hash, profile schema version, and source canonical artifact hash, and matching artifacts are reused
+  - descriptive result file writes compensate by deleting the file if `analysis_runs` insert fails
+  - runtime workspaces, SQLite DBs, logs, exports, temp directories, and test caches are ignored by Git
 - Canonical parsed artifact decision record:
   - Parquet remains candidate
   - `pyarrow_available=False` in current Windows Python 3.10 venv
@@ -193,7 +214,7 @@ The next implementation PR should remain narrow and must still avoid fake statis
 
 Allowed next scope:
 
-- Deepen profile/preflight with richer date/time profiling, or move the shared Workbench into dedicated route-level analysis pages.
+- Move the shared Workbench into dedicated route-level analysis pages, or add filter snapshot row freezing.
 - Keep every method except `eda.descriptive` unavailable until real calculation code and tests exist.
 - Keep analysis run status/job storage as infrastructure unless a later method requires worker execution.
 
@@ -201,7 +222,7 @@ Still explicitly out of scope:
 
 - Statistical method calculations beyond `eda.descriptive`
 - Analysis mock results
-- Full profile implementation beyond the current aggregate/duplicate/memory/profile-artifact preflight slice
+- Full profile implementation beyond the current aggregate/duplicate/memory/date-time/profile-artifact preflight slice
 - Full route-based Analysis Workbench beyond the current hash-restorable shared component shell
 - Bayesian optimization, Response Optimizer, DOE, regression, quality control, or hypothesis testing
 - PyCaret, Optuna, SHAP, LIME, PyTorch, or GPU dependency
@@ -285,7 +306,8 @@ Current status:
 - The canonical/profile preflight slice is implemented: schema v5 `dataset_artifacts`, canonical JSONL rows/manifest materialization, duplicate-row count, memory estimate, and minimal UI summary.
 - The canonical reader adoption slice is implemented: profile and `eda.descriptive` read validated canonical rows and reject corrupt artifacts without raw fallback.
 - The persisted profile artifact slice is implemented: profile scans write raw-value-free `profile_summary` JSON artifacts and expose latest hash/size metadata.
-- Still missing in Gate B0/B1 transition: full route-based Analysis Workbench, richer date/time preflight, filter snapshot row freezing, and additional reference-backed methods.
+- The date/time preflight slice is implemented: profile reports conservative format/timezone aggregate checks without coercing values.
+- Still missing in Gate B0/B1 transition: full route-based Analysis Workbench, filter snapshot row freezing, and additional reference-backed methods.
 - XLSX upload is accepted for envelope validation only; parsing confirmation remains blocked until a workbook parser dependency is reviewed.
 
 ### Gate B1: Exploratory Analysis
@@ -887,8 +909,9 @@ Document priority:
 Next PR:
 
 - Superseded by section 11: profile artifacts with hashes are implemented.
-- Next narrow slice should add richer date/time preflight or split route-level Workbench views.
-- Keep richer date/time profiling, filter snapshots, and route-level Workbench as separate narrow slices.
+- Superseded by section 12: richer date/time preflight is implemented.
+- Next narrow slice should split route-level Workbench views or add filter snapshot row freezing.
+- Keep filter snapshots and route-level Workbench as separate narrow slices unless one is explicitly selected.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 
 Validation:
@@ -941,7 +964,8 @@ Document priority:
 Next PR:
 
 - Superseded by section 11: profile result artifacts with hash metadata are implemented.
-- Next narrow slice should add richer date/time preflight or route-level Workbench separation.
+- Superseded by section 12: richer date/time preflight is implemented.
+- Next narrow slice should add route-level Workbench separation or filter snapshot row freezing.
 - Keep filter snapshot row freezing and route-level Workbench as separate narrow slices.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 
@@ -996,7 +1020,8 @@ Document priority:
 
 Next PR:
 
-- Add richer date/time preflight, or split the shared Workbench into dedicated route-level analysis pages.
+- Superseded by section 12: richer date/time preflight is implemented.
+- Next narrow slice should split the shared Workbench into dedicated route-level analysis pages or add filter snapshot row freezing.
 - Keep filter snapshot row freezing as a separate narrow slice unless the selected next slice needs it.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 - Do not make planned methods executable without real calculation code, reference tests, provenance, and no-mock API/UI behavior.
@@ -1013,6 +1038,63 @@ Validation:
 
 Known limitations:
 
-- Profile artifacts store the latest aggregate profile result; richer date/time profiling is still not implemented.
+- Profile artifacts store the latest aggregate profile result; date/time preflight is now implemented by the later section 12 slice.
+- Rows preview still streams the raw upload for bounded user preview.
+- JSONL canonical rows are a stdlib local format; Parquet remains a future candidate after `pyarrow` review.
+
+## 12. PR Description Draft For Date/Time Profile Preflight Slice
+
+Summary:
+
+- Added column-level `datetime_profile` to `GET /api/v1/dataset-versions/{version_id}/profile` and bumped `profile_schema_version` to `4`.
+- Reports date/time parse counts, non-date/time counts, ISO min/max, format candidates, timezone-aware counts, timezone-naive counts, and mixed timezone status.
+- Added warnings for possible date/time columns, non-date/time values in datetime/time columns, mixed date/time formats, and mixed timezone awareness.
+- Kept date/time detection as conservative preflight only; it does not coerce cell values, infer study design, or create dataset transformations.
+- Persisted profile artifacts include the new date/time profile fields without raw value samples.
+- Updated the React profile table summary to display date/time aggregate information next to numeric summaries.
+- Kept every method except `eda.descriptive` non-executable and added no mock statistics.
+
+Changed files:
+
+- `backend/app/api/v1/schemas/datasets.py`
+- `backend/app/services/dataset_profiles.py`
+- `backend/tests/unit/test_dataset_upload.py`
+- `frontend/src/api.ts`
+- `frontend/src/App.tsx`
+- `backend/README.md`
+- `docs/datasets.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Document priority:
+
+- `AGENTS.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+- `data_prd_addendum.md`
+- `data_prd.md` if present
+- nearest nested instruction file
+
+Next PR:
+
+- Split the shared Workbench into dedicated route-level analysis pages, or add filter snapshot row freezing.
+- Keep cell editing/transformation versioning as a separate slice unless explicitly selected.
+- Do not add Parquet/`pyarrow` until dependency review is complete.
+- Do not make planned methods executable without real calculation code, reference tests, provenance, and no-mock API/UI behavior.
+
+Validation:
+
+- Targeted backend pytest for dataset upload/profile: passed, 24 tests.
+- Backend API contract pytest: passed, 13 tests.
+- Backend ruff check: passed.
+- Backend mypy: passed, 35 source files.
+- Frontend typecheck: passed.
+- Frontend lint: passed.
+- Full `scripts/check.ps1`: passed; backend pytest 56 tests, frontend lint/typecheck/Vitest 6 tests/build passed.
+
+Known limitations:
+
+- Date/time detection is a preflight summary only; it does not perform confirmed type conversion or timezone normalization.
 - Rows preview still streams the raw upload for bounded user preview.
 - JSONL canonical rows are a stdlib local format; Parquet remains a future candidate after `pyarrow` review.

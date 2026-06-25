@@ -4,7 +4,7 @@ Last updated: 2026-06-25
 
 ## Summary
 
-Gate B has completed the upload/version, canonical JSONL artifact materialization, canonical row reader adoption for profile and `eda.descriptive`, schema/preview, profile/preflight with duplicate-row and memory estimates, persisted profile summary artifacts, analysis catalog, storage/run foundation, selected-method six-module Workbench shell, shared Workbench component split, and the first real exploration-method slice in the working tree. The app can accept a local multipart dataset upload, validate the file envelope, preserve raw bytes unchanged, store SHA-256 provenance in SQLite metadata, return parsing-option candidates, confirm delimited-text parsing, create immutable dataset version `v1`, materialize canonical rows plus a manifest under the workspace, store dataset columns and artifact metadata, retrieve version metadata, update confirmed column metadata, return paginated row preview, return aggregate profile/preflight counts and warnings from validated canonical rows, persist a raw-value-free `profile_summary` artifact with SHA-256 metadata, expose the 6-module analysis method catalog, show planned/disabled methods in a hash-restorable Workbench shell, initialize analysis run/artifact/job metadata tables with status/cancel API skeletons, and execute `eda.descriptive` with real descriptive statistics from validated canonical rows. Delimited-text parsing also handles leading preamble plus headerless tabular data through explicit `has_header=false` and `data_start_row` confirmation. The schema UI includes a guarded 34-column Bayesian sample role preset for headerless generated columns. It does not yet provide cell-level data edits, route-based analysis pages, executable methods beyond `eda.descriptive`, generated chart artifacts, or inferential statistical results.
+Gate B has completed the upload/version, canonical JSONL artifact materialization, canonical row reader adoption for preview/profile/`eda.descriptive`, schema/preview, profile/preflight with duplicate-row and memory estimates, persisted profile summary artifacts, conservative date/time preflight, analysis catalog, storage/run foundation, selected-method six-module Workbench shell, shared Workbench component split, and the first real exploration-method slice in the working tree. The app can accept a local multipart dataset upload, validate the file envelope, preserve raw bytes unchanged, store SHA-256 provenance in SQLite metadata, return parsing-option candidates, revalidate raw upload integrity before parsing confirmation, confirm delimited-text parsing, create immutable dataset version `v1`, materialize canonical rows plus a manifest under the workspace, store dataset columns and artifact metadata, retrieve version metadata, update confirmed column metadata while marking dependent analysis runs stale, return paginated row preview from canonical rows, return aggregate profile/preflight counts and warnings from validated canonical rows, summarize date/time format candidates and timezone-awareness risks without raw samples, persist and reuse raw-value-free `profile_summary` artifacts tied to schema/canonical hashes, expose the 6-module analysis method catalog, show planned/disabled methods in a hash-restorable Workbench shell, initialize analysis run/artifact/job metadata tables with status/cancel API skeletons, execute `eda.descriptive` with real descriptive statistics from validated canonical rows, and re-read stored analysis result envelopes after checksum validation. Delimited-text parsing also handles leading preamble plus headerless tabular data through explicit `has_header=false` and `data_start_row` confirmation. The schema UI includes a guarded 34-column Bayesian sample role preset for headerless generated columns. It does not yet provide cell-level data edits, route-based analysis pages, executable methods beyond `eda.descriptive`, generated chart artifacts, or inferential statistical results.
 
 ## Checklist
 
@@ -15,33 +15,40 @@ Gate B has completed the upload/version, canonical JSONL artifact materializatio
 | File validation | Done for envelope | extension/type mismatch, empty, size limit, binary text rejection, XLSX container checks |
 | Parser options | Done for initial slice | text encoding/delimiter/header/data-start suggestions, default `N/T` missing-token support, XLSX sheet-selection warning |
 | Parsing confirmation | Done for delimited text | `POST /api/v1/datasets/{dataset_id}/confirm-parsing`, including headerless data after preamble |
+| Raw upload integrity recheck | Done | confirm-parsing streams the preserved raw file and rejects SHA-256/size mismatch with a stable 409 error before canonical artifact creation |
 | Immutable dataset version | Done for initial slice | `dataset_versions`, version `v1`, schema hash |
 | Dataset columns | Done for initial slice | `dataset_columns`, original names plus unique display names |
 | Dataset version lookup | Done | `GET /api/v1/datasets/{dataset_id}/versions`, `GET /api/v1/dataset-versions/{version_id}` |
 | Dataset schema API | Done | `GET/PATCH /api/v1/dataset-versions/{version_id}/schema` |
-| Rows preview API | Done for delimited text | `GET /api/v1/dataset-versions/{version_id}/rows?offset=0&limit=25`, `limit <= 100`, honors headerless `data_start_row` |
+| Rows preview API | Done for delimited text | `GET /api/v1/dataset-versions/{version_id}/rows?offset=0&limit=25`, `limit <= 100`, reads canonical JSONL rows |
 | Basic profile/preflight API | Done for delimited text | `GET /api/v1/dataset-versions/{version_id}/profile`, aggregate counts/warnings, canonical artifact metadata, duplicate-row count, memory estimate, no raw value samples |
-| Profile summary artifact | Done for delimited text | profile scans persist raw-value-free `profile_summary` JSON artifacts and upsert latest metadata in `dataset_artifacts` |
+| Profile summary artifact | Done for delimited text | profile scans persist raw-value-free `profile_summary` JSON artifacts, include schema/canonical hashes, and reuse matching artifacts without churn |
+| Date/time preflight | Done for delimited text | column-level parse counts, min/max, format candidates, timezone-aware/naive counts, mixed-format and mixed-timezone warnings without coercion |
 | Minimal UI | Done for B0/profile slices | upload, parsing option confirmation with header/no-header controls, Context Bar, schema controls, Bayesian sample role preset, paginated preview, profile/preflight table, canonical/preflight summary |
 | Analysis method registry | Done for B0/B1 first method | `GET /api/v1/analysis-methods`, 6 modules, 29 stable method IDs, only `eda.descriptive` available |
 | Analysis run request guard | Done for B0/B1 first method | `POST /api/v1/analysis-runs` executes `eda.descriptive`; planned/disabled methods still reject without a result body |
 | Analysis run status/cancel API | Done for B0 storage/run slice | `GET/DELETE /api/v1/analysis-runs/{analysis_id}` skeleton |
+| Analysis result retrieval API | Done for `eda.descriptive` | `GET /api/v1/analysis-runs/{analysis_id}/result` validates stored result path and SHA-256 before returning the envelope |
 | Job status/cancel API | Done for B0 storage/run slice | `GET/DELETE /api/v1/jobs/{job_id}` skeleton |
 | Six-module navigation shell | Done for B0 third slice | frontend catalog fetch, module selector, planned/disabled method cards |
 | Six-module Workbench shell | Done for current slice | selected method details, local URL hash restore, shared `AnalysisWorkbench` component, common data/role/option/preflight/run/result step rail, method-specific role/option/preflight/result guidance for all 29 methods, no execution controls for planned/disabled methods |
 | Common analysis schemas | Started | request, filter snapshot, warning, provenance, result envelope, run status, and job status schemas exist |
 | `eda.descriptive` | Done for first B1 slice | pure calculation module, dataset-version streaming reader, inline API execution, result JSON persistence, minimal UI result table |
+| Analysis stale handling | Done for schema edits | schema PATCH marks existing runs for the same dataset version `stale=true` in the same SQLite transaction |
 | Metadata migration | Done | schema version `5`, `datasets`, `dataset_versions`, `dataset_columns`, `dataset_artifacts`, `analysis_runs`, `analysis_artifacts`, `jobs`, upgrade tests from versions 1, 2, 3, and 4 |
 | Canonical parsed artifact | Done for stdlib delimited-text slice | UTF-8 JSONL canonical rows plus JSON manifest are materialized with SHA-256 metadata; Parquet remains candidate after `pyarrow` review |
 | Canonical row reader | Done for profile/B1 first method | profile and `eda.descriptive` read validated canonical rows; corrupt/missing artifact metadata returns explicit recovery errors without raw fallback |
-| Full profile | Started | aggregate profile/preflight, duplicate-row analysis, memory estimate, and persisted profile artifacts exist; richer date/time profiling remains |
+| Full profile | Started | aggregate profile/preflight, duplicate-row analysis, memory estimate, persisted profile artifacts, and conservative date/time preflight exist; richer distribution/outlier profiling remains |
 | Statistical analysis | Started | `eda.descriptive` only; no inferential tests, p-values, fake charts, or mock results |
 
 ## Latest Validation
 
 Last validated on 2026-06-25:
 
+- Current data integrity/reproducibility PR: targeted backend pytest passed with 42 tests (`test_dataset_upload.py`, `test_api_contracts.py`) on Windows Python 3.10.11. Full `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1` passed, including formatting check, mypy over 35 source files, backend pytest with 61 tests, frontend lint, frontend typecheck, Vitest with 6 tests, and frontend build.
 - Targeted persisted-profile-artifact validation: backend dataset upload/profile plus metadata pytest passed with 32 tests; backend API contract pytest passed with 13 tests; backend ruff passed; backend mypy passed with 35 source files; frontend typecheck and lint passed.
+- Targeted date/time preflight validation: backend dataset upload/profile pytest passed with 24 tests; backend ruff passed; backend mypy passed with 35 source files; frontend typecheck and lint passed.
+- Full `scripts/check.ps1`: passed after the date/time preflight slice; backend pytest 56 tests, frontend lint/typecheck/Vitest 6 tests/build passed.
 - Full `scripts/check.ps1`: passed after the persisted profile artifact slice; backend pytest 55 tests, frontend lint/typecheck/Vitest 6 tests/build passed.
 - Targeted backend pytest: passed, 19 dataset upload/parsing/profile tests including preamble-plus-headerless TXT and basic profile warnings.
 - Targeted backend pytest: passed, 15 descriptive/API contract tests including hand-checkable descriptive statistics and `eda.descriptive` API execution.
@@ -68,7 +75,7 @@ Last validated on 2026-06-25:
 - Privacy/security: committed tests use synthetic bytes only. The local `input_example/` file was used only for manual HTTP smoke and was not copied into fixtures or committed.
 - Compatibility: upload, parsing-confirmation, schema update, and rows preview logic use Python 3.10-compatible stdlib streaming, `pathlib`, SQLite, and FastAPI `UploadFile`.
 - Migration/storage: schema version advanced to `5`; upgrades from schema versions `1`, `2`, `3`, and `4` are tested.
-- Performance: upload reads in 1 MB chunks and enforces `DATALAB_MAX_UPLOAD_BYTES`; confirm-parsing streams delimited text for header, row count, column type candidates, and canonical JSONL materialization; rows preview streams only until the requested page is filled; profile streams the dataset once, caps per-column unique tracking at 1,000 values, caps duplicate-row signature tracking at 100,000 signatures, and returns a memory estimate.
+- Performance: upload reads in 1 MB chunks and enforces `DATALAB_MAX_UPLOAD_BYTES`; confirm-parsing streams delimited text for header, row count, column type candidates, and canonical JSONL materialization; rows preview streams only until the requested page is filled; profile streams the dataset once, caps per-column unique tracking at 1,000 values, caps duplicate-row signature tracking at 100,000 signatures, uses conservative stdlib date/time candidate parsing, and returns a memory estimate.
 - Dependency: `python-multipart==0.0.32` was added for FastAPI multipart uploads and recorded in `docs/dependency_review.md`.
 - XLSX: upload envelope validation exists, but parsing confirmation returns `xlsx_confirmation_pending` until a workbook parser dependency is reviewed.
 
@@ -76,6 +83,6 @@ Last validated on 2026-06-25:
 
 The next slice should stay narrow and avoid mock statistics:
 
-1. Either deepen richer date/time preflight or continue the Workbench split into dedicated route-level analysis pages.
+1. Either continue the Workbench split into dedicated route-level analysis pages or add filter snapshot row freezing.
 2. Keep every method except `eda.descriptive` non-executable until it has real calculation code and tests.
 3. Keep Bayesian optimization, DOE, regression, quality control, optimizer work, and general ML out of the next slice unless the user explicitly changes gates.

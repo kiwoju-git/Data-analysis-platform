@@ -35,6 +35,11 @@ from app.services.canonical_artifacts import (
     CANONICAL_ROWS_KIND,
     materialize_canonical_dataset_artifacts,
 )
+from app.services.dataset_rows import (
+    DatasetRowsContext,
+    get_dataset_rows_context,
+    iter_dataset_rows,
+)
 from app.storage.metadata import (
     DatasetArtifactRecord,
     DatasetColumnRecord,
@@ -80,6 +85,8 @@ def confirm_dataset_parsing(
     request: DatasetParsingConfirmationRequest,
 ) -> DatasetVersionResponse:
     dataset = _get_existing_dataset(settings, dataset_id)
+    source_path = _safe_workspace_path(settings.workspace_root, dataset.stored_path)
+    _validate_source_file_integrity(source_path, dataset)
 
     existing_versions = list_dataset_version_records(settings.workspace_root, str(dataset_id))
     if existing_versions:
@@ -92,7 +99,6 @@ def confirm_dataset_parsing(
     options = request.parsing
     _validate_confirmation_options(dataset.detected_format, options)
 
-    source_path = _safe_workspace_path(settings.workspace_root, dataset.stored_path)
     parsed_schema = _scan_delimited_schema(source_path, options)
     columns = _build_column_records(parsed_schema, request.columns)
     parsing_options_json = _dump_parsing_options(options)
@@ -206,6 +212,7 @@ def update_dataset_schema(
         str(version_id),
         schema_hash,
         updated_columns,
+        stale_updated_at=_utc_now(),
     )
     updated_version = DatasetVersionRecord(
         version_id=version.version_id,
@@ -227,31 +234,15 @@ def get_dataset_rows_preview(
     offset: int,
     limit: int,
 ) -> DatasetRowsPreviewResponse:
-    version = _get_existing_version(settings, version_id)
-    columns = list_dataset_column_records(settings.workspace_root, str(version_id))
-    dataset = _get_existing_dataset(settings, UUID(version.dataset_id))
-    options = ConfirmedParsingOptions.model_validate(json.loads(version.parsing_options_json))
-    if options.kind != "delimited_text":
-        raise ApiError(
-            code="rows_preview_not_supported",
-            message="현재 행 미리보기는 구분 텍스트 데이터셋 버전만 지원합니다.",
-        )
-
-    source_path = _safe_workspace_path(settings.workspace_root, dataset.stored_path)
-    rows = _read_preview_rows(
-        path=source_path,
-        options=options,
-        column_count=len(columns),
-        offset=offset,
-        limit=limit,
-    )
+    context = get_dataset_rows_context(settings, version_id)
+    rows = _read_canonical_preview_rows(context, offset=offset, limit=limit)
     return DatasetRowsPreviewResponse(
         version_id=version_id,
         offset=offset,
         limit=limit,
-        total_rows=version.row_count,
+        total_rows=context.version.row_count,
         returned_rows=len(rows),
-        columns=dataset_column_responses(columns),
+        columns=dataset_column_responses(context.columns),
         rows=rows,
     )
 
@@ -408,64 +399,20 @@ def _apply_schema_updates(
     return updated_columns
 
 
-def _read_preview_rows(
-    path: Path,
-    options: ConfirmedParsingOptions,
-    column_count: int,
+def _read_canonical_preview_rows(
+    context: DatasetRowsContext,
+    *,
     offset: int,
     limit: int,
 ) -> list[DatasetPreviewRow]:
-    if options.encoding is None or options.delimiter is None:
-        raise ApiError(
-            code="incomplete_parsing_options",
-            message="텍스트 파싱에는 인코딩과 구분자가 필요합니다.",
-        )
-
-    try:
-        with path.open("r", encoding=options.encoding, newline="") as handle:
-            reader = _csv_reader(handle, options)
-            rows: list[DatasetPreviewRow] = []
-            data_row_index = 0
-            first_data_row_number = _first_data_row_number(options)
-            for line_number, row in enumerate(reader, start=1):
-                if line_number < first_data_row_number:
-                    continue
-                if _is_blank_row(row):
-                    continue
-                if data_row_index >= offset and len(rows) < limit:
-                    rows.append(
-                        DatasetPreviewRow(
-                            row_index=data_row_index,
-                            values=_preview_values(row, options, column_count),
-                        ),
-                    )
-                data_row_index += 1
-                if len(rows) >= limit:
-                    break
-    except UnicodeDecodeError as exc:
-        raise ApiError(
-            code="text_decoding_failed",
-            message="확정한 인코딩으로 텍스트 파일을 읽을 수 없습니다.",
-        ) from exc
-    except csv.Error as exc:
-        raise ApiError(
-            code="text_parsing_failed",
-            message="확정한 파싱 옵션으로 텍스트 파일을 읽을 수 없습니다.",
-        ) from exc
-
+    rows: list[DatasetPreviewRow] = []
+    for row_index, values in enumerate(iter_dataset_rows(context)):
+        if row_index < offset:
+            continue
+        if len(rows) >= limit:
+            break
+        rows.append(DatasetPreviewRow(row_index=row_index, values=values))
     return rows
-
-
-def _preview_values(
-    row: list[str],
-    options: ConfirmedParsingOptions,
-    column_count: int,
-) -> list[str | None]:
-    values: list[str | None] = []
-    for index in range(column_count):
-        value = row[index] if index < len(row) else ""
-        values.append(None if value in options.missing_tokens else value)
-    return values
 
 
 def _schema_hash_for_records(
@@ -502,6 +449,22 @@ def _get_existing_dataset(settings: Settings, dataset_id: UUID) -> DatasetRecord
             status_code=status.HTTP_404_NOT_FOUND,
         )
     return dataset
+
+
+def _validate_source_file_integrity(path: Path, dataset: DatasetRecord) -> None:
+    digest = hashlib.sha256()
+    size_bytes = 0
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            size_bytes += len(chunk)
+            digest.update(chunk)
+
+    if size_bytes != dataset.size_bytes or digest.hexdigest() != dataset.sha256:
+        raise ApiError(
+            code="source_file_integrity_mismatch",
+            message="저장된 원본 업로드 파일이 업로드 시점의 메타데이터와 일치하지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
 
 
 def _validate_confirmation_options(

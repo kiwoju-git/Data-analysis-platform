@@ -6,6 +6,11 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
 .env
 .env.*
 !.env.example
@@ -20,3 +25,11 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# DataLab Studio runtime artifacts
+/workspaces/
+/db/
+/logs/
+/tmp/
+/exports/
+*.sqlite3

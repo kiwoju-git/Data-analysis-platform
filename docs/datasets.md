@@ -54,12 +54,12 @@ Gate B currently covers upload, parsing confirmation, canonical JSONL materializ
 `GET /api/v1/dataset-versions/{version_id}/profile`
 
 - Streams the validated canonical rows artifact and returns aggregate profile/preflight data only.
-- Reports row count, schema hash, per-column present/missing counts, missing rate, capped unique count, numeric parse count, numeric min/max/mean, constant-column flag, and warnings.
+- Reports row count, schema hash, per-column present/missing counts, missing rate, capped unique count, numeric parse count, numeric min/max/mean, date/time parse count, date/time min/max, date/time format candidates, timezone-awareness counts, constant-column flag, and warnings.
 - Reports canonical artifact metadata plus preflight fields for estimated memory bytes, duplicate row count, duplicate row check cap, and cap status.
 - Persists a raw-value-free `profile_summary` JSON artifact under the local workspace, records its SHA-256/size/path metadata in `dataset_artifacts`, and returns `profile_artifact` metadata in the API response.
-- Detects all-missing columns, high missing rate, constant columns, possible identifier columns, capped high-cardinality columns, non-numeric values inside columns currently marked as numeric, duplicate rows, and missing/incomplete canonical artifacts.
+- Detects all-missing columns, high missing rate, constant columns, possible identifier columns, possible date/time columns, capped high-cardinality columns, non-numeric values inside columns currently marked as numeric, non-date/time values inside columns currently marked as datetime/time, mixed date/time formats, mixed timezone awareness, duplicate rows, and missing/incomplete canonical artifacts.
 - Does not return raw cell values or value samples.
-- This is still not the final full profile contract. Richer date/time profiling remains future work.
+- This is still not the final full profile contract. Date/time detection is a conservative preflight summary only and does not coerce values or create a new dataset version.
 
 ## Safety Rules
 
@@ -82,5 +82,5 @@ Gate B currently covers upload, parsing confirmation, canonical JSONL materializ
 
 ## Next Step
 
-The next Gate B slice should either deepen profile/preflight with richer date/time checks or move toward route-level Workbench separation.
+The next Gate B slice should move toward route-level Workbench separation or filter snapshot row freezing.
 Full dataset parsing must remain explicit and must not silently coerce values or infer study design from dtype alone.

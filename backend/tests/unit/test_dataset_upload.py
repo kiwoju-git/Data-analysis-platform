@@ -275,6 +275,35 @@ def test_confirm_parsing_creates_immutable_dataset_version_and_columns(tmp_path)
     assert version_response.json() == payload
 
 
+def test_confirm_parsing_rejects_raw_upload_integrity_mismatch(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"alpha,beta\n1,2\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("sample.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        dataset_record = get_dataset_record(settings.workspace_root, dataset_id)
+        assert dataset_record is not None
+        tampered = b"alpha,beta\n9,9\n"
+        assert len(tampered) == len(content)
+        (settings.workspace_root / dataset_record.stored_path).write_bytes(tampered)
+
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json=_confirmation_body(),
+        )
+        versions_response = client.get(f"/api/v1/datasets/{dataset_id}/versions")
+
+    assert confirm_response.status_code == 409
+    assert confirm_response.json()["error"]["code"] == "source_file_integrity_mismatch"
+    assert versions_response.status_code == 200
+    assert versions_response.json()["versions"] == []
+    assert not list(settings.workspace_root.glob("workspaces/datasets/*/versions/*/canonical.*"))
+
+
 def test_confirm_parsing_preserves_duplicate_and_empty_header_names(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"alpha,,alpha\n1,2,3\n"
@@ -578,6 +607,32 @@ def test_dataset_rows_preview_is_paginated_and_uses_confirmed_schema(tmp_path) -
     assert invalid_limit_response.json()["error"]["code"] == "validation_error"
 
 
+def test_dataset_rows_preview_reads_canonical_artifact_after_raw_upload_changes(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"alpha,beta\n1,x\n2,y\n"
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_and_confirm(client, content)
+        dataset_record = get_dataset_record(settings.workspace_root, version["dataset_id"])
+        assert dataset_record is not None
+        (settings.workspace_root / dataset_record.stored_path).write_bytes(
+            b"alpha,beta\n999,changed\n999,changed\n",
+        )
+
+        response = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/rows",
+            params={"offset": 0, "limit": 10},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["rows"] == [
+        {"row_index": 0, "values": ["1", "x"]},
+        {"row_index": 1, "values": ["2", "y"]},
+    ]
+
+
 def test_dataset_profile_reports_quality_without_echoing_cell_values(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"id,value,group\nA1,1,same\nA2,,same\nA3,SECRET_VALUE,same\nA4,4,same\n"
@@ -609,7 +664,7 @@ def test_dataset_profile_reports_quality_without_echoing_cell_values(tmp_path) -
     assert response.status_code == 200
     assert "SECRET_VALUE" not in response.text
     payload = response.json()
-    assert payload["profile_schema_version"] == 3
+    assert payload["profile_schema_version"] == 4
     assert payload["row_count"] == 4
     assert payload["column_count"] == 3
     assert payload["schema_hash"] == confirm_response.json()["schema_hash"]
@@ -652,7 +707,7 @@ def test_dataset_profile_reports_canonical_preflight_and_duplicate_rows(tmp_path
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["profile_schema_version"] == 3
+    assert payload["profile_schema_version"] == 4
     assert payload["canonical_artifact"] == version["canonical_artifact"]
     assert payload["preflight"]["estimated_memory_bytes"] > 0
     assert payload["preflight"]["duplicate_row_count"] == 1
@@ -661,6 +716,77 @@ def test_dataset_profile_reports_canonical_preflight_and_duplicate_rows(tmp_path
     assert {warning["code"] for warning in payload["warnings"]} == {
         "duplicate_rows_detected",
     }
+
+
+def test_dataset_profile_reports_datetime_preflight_without_raw_samples(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"event_date,when,mixed,note\n"
+        b"2024-01-01,2024-01-01T09:00:00Z,2024-01-01,SECRET_NOTE\n"
+        b"2024-01-02,2024-01-02T18:30:00+09:00,not-a-date,plain\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_and_confirm(
+            client,
+            content,
+            columns=[
+                {
+                    "column_index": 0,
+                    "data_type": "datetime",
+                    "measurement_level": "datetime",
+                    "role": "time",
+                },
+                {
+                    "column_index": 1,
+                    "data_type": "datetime",
+                    "measurement_level": "datetime",
+                    "role": "time",
+                },
+            ],
+        )
+        response = client.get(f"/api/v1/dataset-versions/{version['version_id']}/profile")
+
+    assert response.status_code == 200
+    assert "SECRET_NOTE" not in response.text
+    payload = response.json()
+    assert payload["profile_schema_version"] == 4
+    profiles = {column["display_name"]: column for column in payload["columns"]}
+
+    event_date_profile = profiles["event_date"]["datetime_profile"]
+    assert event_date_profile == {
+        "n_datetime": 2,
+        "n_non_datetime": 0,
+        "datetime_min": "2024-01-01T00:00:00",
+        "datetime_max": "2024-01-02T00:00:00",
+        "timezone_aware_count": 0,
+        "timezone_naive_count": 2,
+        "mixed_timezone_awareness": False,
+        "format_candidates": [{"format": "YYYY-MM-DD", "n_matched": 2}],
+    }
+
+    when_profile = profiles["when"]["datetime_profile"]
+    assert when_profile["n_datetime"] == 2
+    assert when_profile["n_non_datetime"] == 0
+    assert when_profile["timezone_aware_count"] == 2
+    assert when_profile["timezone_naive_count"] == 0
+    assert when_profile["format_candidates"] == [{"format": "ISO 8601", "n_matched": 2}]
+
+    mixed_profile = profiles["mixed"]["datetime_profile"]
+    assert mixed_profile["n_datetime"] == 1
+    assert mixed_profile["n_non_datetime"] == 1
+    assert mixed_profile["format_candidates"] == [{"format": "YYYY-MM-DD", "n_matched": 1}]
+
+    artifact = payload["profile_artifact"]
+    artifact_payload = json.loads(
+        (settings.workspace_root / artifact["path"]).read_text(encoding="utf-8"),
+    )
+    artifact_profiles = {
+        column["display_name"]: column for column in artifact_payload["profile"]["columns"]
+    }
+    assert artifact_payload["profile"]["profile_schema_version"] == 4
+    assert artifact_profiles["event_date"]["datetime_profile"] == event_date_profile
+    assert "SECRET_NOTE" not in json.dumps(artifact_payload, ensure_ascii=False)
 
 
 def test_dataset_profile_persists_profile_artifact_without_raw_values(tmp_path) -> None:
@@ -695,10 +821,23 @@ def test_dataset_profile_persists_profile_artifact_without_raw_values(tmp_path) 
     first_artifact_payload = json.loads(first_artifact_text)
     assert first_artifact_payload["artifact_schema_version"] == 1
     assert first_artifact_payload["artifact_kind"] == "profile_summary"
+    assert first_artifact_payload["profile_schema_version"] == 4
+    assert first_artifact_payload["schema_hash"] == version["schema_hash"]
+    assert (
+        first_artifact_payload["source_canonical_artifact_sha256"]
+        == version["canonical_artifact"]["sha256"]
+    )
+    assert first_artifact_payload["source_canonical_artifact"] == {
+        "kind": "canonical_rows",
+        "sha256": version["canonical_artifact"]["sha256"],
+        "media_type": "application/x-ndjson",
+        "size_bytes": version["canonical_artifact"]["size_bytes"],
+    }
     assert "profile_artifact" not in first_artifact_payload["profile"]
     assert first_artifact_payload["profile"]["canonical_artifact"] == version["canonical_artifact"]
 
     second_artifact = second_response.json()["profile_artifact"]
+    assert second_artifact == first_artifact
     artifact_records = list_dataset_artifact_records(
         settings.workspace_root,
         version["version_id"],
@@ -763,7 +902,12 @@ def _minimal_xlsx_bytes() -> bytes:
     return buffer.getvalue()
 
 
-def _upload_and_confirm(client: TestClient, content: bytes) -> dict[str, object]:
+def _upload_and_confirm(
+    client: TestClient,
+    content: bytes,
+    *,
+    columns: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     upload_response = client.post(
         "/api/v1/datasets",
         files={"file": ("sample.csv", content, "text/csv")},
@@ -771,7 +915,7 @@ def _upload_and_confirm(client: TestClient, content: bytes) -> dict[str, object]
     assert upload_response.status_code == 201
     confirm_response = client.post(
         f"/api/v1/datasets/{upload_response.json()['dataset_id']}/confirm-parsing",
-        json=_confirmation_body(),
+        json=_confirmation_body(columns=columns),
     )
     assert confirm_response.status_code == 201
     return confirm_response.json()

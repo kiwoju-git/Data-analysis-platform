@@ -233,6 +233,26 @@ class DatasetProfileIssue(BaseModel):
     message: str
 
 
+class DatasetDateTimeFormatCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    format: str
+    n_matched: int
+
+
+class DatasetDateTimeProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    n_datetime: int
+    n_non_datetime: int
+    datetime_min: str | None
+    datetime_max: str | None
+    timezone_aware_count: int
+    timezone_naive_count: int
+    mixed_timezone_awareness: bool
+    format_candidates: list[DatasetDateTimeFormatCandidate]
+
+
 class DatasetColumnProfile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -253,6 +273,7 @@ class DatasetColumnProfile(BaseModel):
     numeric_min: float | None
     numeric_max: float | None
     numeric_mean: float | None
+    datetime_profile: DatasetDateTimeProfile | None
     constant: bool
     warnings: list[DatasetProfileIssue]
 

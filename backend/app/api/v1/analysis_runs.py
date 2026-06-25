@@ -9,6 +9,7 @@ from app.api.v1.schemas.analyses import (
 )
 from app.services.analysis_runs import (
     create_analysis_run,
+    get_analysis_run_result,
     get_analysis_run_status,
     request_analysis_run_cancellation,
 )
@@ -28,6 +29,17 @@ def create_analysis_run_route(
     return create_analysis_run(
         settings=request.app.state.settings,
         request=body,
+    )
+
+
+@router.get("/{analysis_id}/result", response_model=AnalysisResultEnvelope)
+def get_analysis_run_result_route(
+    request: Request,
+    analysis_id: UUID,
+) -> AnalysisResultEnvelope:
+    return get_analysis_run_result(
+        settings=request.app.state.settings,
+        analysis_id=analysis_id,
     )
 
 

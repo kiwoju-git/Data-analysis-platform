@@ -807,7 +807,7 @@ export default function App() {
                         <th>역할</th>
                         <th>결측</th>
                         <th>고유값</th>
-                        <th>수치 요약</th>
+                        <th>요약</th>
                         <th>점검</th>
                       </tr>
                     </thead>
@@ -836,7 +836,7 @@ export default function App() {
                               ? `${profile.unique_count_limit}+`
                               : column.unique_count.toLocaleString()}
                           </td>
-                          <td>{formatNumericProfile(column)}</td>
+                          <td>{formatProfileSummary(column)}</td>
                           <td>
                             {column.warnings.length > 0 ? (
                               <ul className="inline-warning-list">
@@ -1128,13 +1128,37 @@ function formatBytes(value: number): string {
   }).format(currentValue)} ${units[unitIndex]}`;
 }
 
-function formatNumericProfile(column: DatasetColumnProfile): string {
-  if (column.n_numeric === 0) {
+function formatProfileSummary(column: DatasetColumnProfile): string {
+  const summaries: string[] = [];
+  if (column.n_numeric > 0) {
+    summaries.push(
+      `평균 ${formatNumber(column.numeric_mean)} · 범위 ${formatNumber(
+        column.numeric_min,
+      )}-${formatNumber(column.numeric_max)}`,
+    );
+  }
+  if (column.datetime_profile !== null && column.datetime_profile.n_datetime > 0) {
+    summaries.push(formatDateTimeProfile(column.datetime_profile));
+  }
+  return summaries.length > 0 ? summaries.join(" · ") : "-";
+}
+
+function formatDateTimeProfile(profile: DatasetColumnProfile["datetime_profile"]): string {
+  if (profile === null || profile.n_datetime === 0) {
     return "-";
   }
-  return `평균 ${formatNumber(column.numeric_mean)} · 범위 ${formatNumber(
-    column.numeric_min,
-  )}-${formatNumber(column.numeric_max)}`;
+  const formatCandidates = profile.format_candidates
+    .slice(0, 2)
+    .map((candidate) => `${candidate.format} ${candidate.n_matched.toLocaleString()}개`)
+    .join(", ");
+  const timezoneSummary =
+    profile.timezone_aware_count > 0
+      ? ` · TZ ${profile.timezone_aware_count.toLocaleString()}개`
+      : "";
+  const formatSummary = formatCandidates.length > 0 ? ` · ${formatCandidates}` : "";
+  return `날짜 ${profile.n_datetime.toLocaleString()}개 · ${profile.datetime_min ?? "?"}-${
+    profile.datetime_max ?? "?"
+  }${formatSummary}${timezoneSummary}`;
 }
 
 function measurementLevelLabel(value: DatasetMeasurementLevel): string {

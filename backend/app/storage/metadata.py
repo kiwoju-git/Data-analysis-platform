@@ -682,6 +682,8 @@ def update_dataset_schema_records(
     version_id: str,
     schema_hash: str,
     columns: list[DatasetColumnRecord],
+    *,
+    stale_updated_at: str,
 ) -> None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
@@ -715,6 +717,14 @@ def update_dataset_schema_records(
                     )
                     for column in columns
                 ],
+            )
+            connection.execute(
+                """
+                UPDATE analysis_runs
+                SET stale = 1, updated_at = ?
+                WHERE dataset_version_id = ?;
+                """,
+                (stale_updated_at, version_id),
             )
 
 

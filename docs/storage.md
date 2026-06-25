@@ -24,6 +24,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - `dataset_columns` preserves the original header text separately from the unique display name.
 - `analysis_runs.config_json` stores request/config snapshots and must include `schema_version`.
 - `analysis_runs.result_path` and `result_sha256` are populated for succeeded inline `eda.descriptive` runs.
+- `PATCH /api/v1/dataset-versions/{version_id}/schema` updates `dataset_versions`, `dataset_columns`, and marks existing `analysis_runs` for the same `dataset_version_id` as `stale=true` in one SQLite transaction.
 - `dataset_artifacts` stores relative workspace paths, hashes, media type, and byte size for app-owned dataset artifacts such as canonical rows, canonical manifests, and profile summaries.
 - `analysis_artifacts` stores relative workspace paths and hashes for app-owned artifacts, not raw result blobs.
 - `jobs` stores job state, progress, cancellation request state, and sanitized error codes.
@@ -33,7 +34,11 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 
 - The current stdlib canonical materialization writes UTF-8 JSONL rows plus a JSON manifest under `workspaces/datasets/{dataset_id}/versions/{version_id}/`.
 - SQLite records only relative artifact paths, SHA-256 hashes, media types, and byte sizes; raw row values are not stored in metadata tables.
+- `confirm-parsing` re-reads the preserved raw upload in streaming mode and compares SHA-256 plus byte size against `datasets` metadata before schema scan or canonical materialization.
+- Rows preview, profile, and `eda.descriptive` all read validated canonical rows after parsing confirmation. They do not reparse the raw upload as a fallback.
 - Profile scans persist raw-value-free `profile_summary` JSON artifacts under the dataset version workspace and upsert the latest profile artifact metadata in `dataset_artifacts`.
+- Profile artifacts include `schema_hash`, `profile_schema_version`, and `source_canonical_artifact_sha256`; `GET /profile` reuses the latest artifact only when those values and the artifact checksums still match.
+- Succeeded inline analysis result JSON can be fetched through `GET /api/v1/analysis-runs/{analysis_id}/result`; the service validates the relative `result_path` and `result_sha256` before returning the stored envelope.
 - Parquet remains the preferred higher-performance canonical data format candidate for later slices.
 - Current Windows Python 3.10 environment check on 2026-06-24 found `pyarrow_available=False`.
 - `pyarrow` is not added in this slice because dependency compatibility, wheel availability, license, size, and offline runtime behavior still need a recorded review.
