@@ -39,8 +39,8 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - Profile scans persist raw-value-free `profile_summary` JSON artifacts under the dataset version workspace and upsert the latest profile artifact metadata in `dataset_artifacts`.
 - Profile artifacts include `schema_hash`, `profile_schema_version`, and `source_canonical_artifact_sha256`; `GET /profile` reuses the latest artifact only when those values and the artifact checksums still match.
 - Succeeded inline analysis result JSON can be fetched through `GET /api/v1/analysis-runs/{analysis_id}/result`; the service validates the relative `result_path` and `result_sha256` before returning the stored envelope.
-- Empty filter snapshots for `eda.descriptive` are frozen as `analysis_row_snapshot` JSON artifacts under `workspaces/analyses/{analysis_id}/row_snapshot.json`. The payload records the dataset version, source schema hash, source canonical artifact hash, filter snapshot hash, row identity, and included row count without raw cell values.
-- Non-empty filter conditions remain unsupported until a validated filter expression engine is added; unsupported filters fail before row snapshot or result artifacts are written.
+- `eda.descriptive` filter snapshots are frozen as `analysis_row_snapshot` JSON artifacts under `workspaces/analyses/{analysis_id}/row_snapshot.json`. The payload records the dataset version, source schema hash, source canonical artifact hash, filter snapshot hash, row identity, and included row count without raw cell values.
+- The current filter expression engine supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions. Unsupported or invalid filters fail before row snapshot or result artifacts are written.
 - Parquet remains the preferred higher-performance canonical data format candidate for later slices.
 - Current Windows Python 3.10 environment check on 2026-06-24 found `pyarrow_available=False`.
 - `pyarrow` is not added in this slice because dependency compatibility, wheel availability, license, size, and offline runtime behavior still need a recorded review.

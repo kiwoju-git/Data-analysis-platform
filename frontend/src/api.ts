@@ -267,7 +267,19 @@ export interface AnalysisRunRequest {
   dataset_version_id: string | null;
   filter_snapshot: {
     expression_version: number;
-    conditions: Array<Record<string, unknown>>;
+    conditions: Array<{
+      column_id: string;
+      operator:
+        | "is_missing"
+        | "is_not_missing"
+        | "eq"
+        | "ne"
+        | "gt"
+        | "gte"
+        | "lt"
+        | "lte";
+      value?: string | number | null;
+    }>;
   };
   roles: Record<string, string>;
   options: Record<string, unknown>;

@@ -1,7 +1,9 @@
 import hashlib
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -45,7 +47,20 @@ ROW_SNAPSHOT_SCHEMA_VERSION = 1
 ROW_SNAPSHOT_ARTIFACT_KIND = "analysis_row_snapshot"
 ROW_SNAPSHOT_MEDIA_TYPE = "application/json"
 MAX_DESCRIPTIVE_COLUMNS = 100
+MAX_FILTER_CONDITIONS = 20
+MAX_FILTER_STRING_LENGTH = 200
 NUMERIC_DATA_TYPES = {"integer", "decimal"}
+FILTER_OPERATORS = {
+    "is_missing",
+    "is_not_missing",
+    "eq",
+    "ne",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+}
+NUMERIC_FILTER_OPERATORS = {"gt", "gte", "lt", "lte"}
 CANCELLABLE_STATES = {AnalysisRunState.QUEUED.value, AnalysisRunState.RUNNING.value}
 TERMINAL_STATES = {
     AnalysisRunState.SUCCEEDED.value,
@@ -59,6 +74,14 @@ class _RowSnapshotArtifact:
     record: AnalysisArtifactRecord
     relative_path: Path
     payload: dict[str, Any]
+    included_row_indices: tuple[int, ...] | None
+
+
+@dataclass(frozen=True)
+class _FilterCondition:
+    column: DatasetColumnRecord
+    operator: str
+    value: object | None = None
 
 
 def create_analysis_run(
@@ -215,7 +238,7 @@ def _run_descriptive_analysis(
 
     try:
         result = describe_numeric_columns(
-            iter_dataset_rows(context),
+            _iter_rows_for_snapshot(context, row_snapshot),
             selected_columns,
             decimal=context.parsing.decimal,
             thousands=context.parsing.thousands,
@@ -229,7 +252,7 @@ def _run_descriptive_analysis(
             filter_snapshot_sha256=str(row_snapshot.payload["filter_snapshot_sha256"]),
             row_snapshot_sha256=row_snapshot.record.sha256,
             row_count_total=context.version.row_count,
-            row_count_included=context.version.row_count,
+            row_count_included=int(row_snapshot.payload["selection"]["row_count_included"]),
             app_version=APP_VERSION,
         )
         envelope = AnalysisResultEnvelope(
@@ -390,17 +413,24 @@ def _create_row_snapshot_artifact(
     filter_snapshot: AnalysisFilterSnapshot,
     created_at: str,
 ) -> _RowSnapshotArtifact:
-    if filter_snapshot.conditions:
-        raise ApiError(
-            code="analysis_filters_not_supported",
-            message="현재 기술통계 slice는 필터 조건 실행을 아직 지원하지 않습니다.",
-            status_code=status.HTTP_409_CONFLICT,
-        )
-
     filter_snapshot_payload = filter_snapshot.model_dump(mode="json")
     filter_snapshot_sha256 = hashlib.sha256(
         _canonical_json_bytes(filter_snapshot_payload),
     ).hexdigest()
+    included_row_indices = _freeze_row_indices(context, filter_snapshot)
+    row_count_included = (
+        context.version.row_count if included_row_indices is None else len(included_row_indices)
+    )
+    row_count_excluded = context.version.row_count - row_count_included
+    selection: dict[str, Any] = {
+        "kind": "all_rows" if included_row_indices is None else "row_ranges",
+        "row_count_total": context.version.row_count,
+        "row_count_included": row_count_included,
+        "row_count_excluded": row_count_excluded,
+    }
+    if included_row_indices is not None:
+        selection["row_ranges"] = _row_ranges(included_row_indices)
+
     artifact_id = str(uuid4())
     relative_path = _row_snapshot_relative_path(analysis_id)
     payload: dict[str, Any] = {
@@ -421,12 +451,7 @@ def _create_row_snapshot_artifact(
             "kind": "canonical_row_index",
             "base": 0,
         },
-        "selection": {
-            "kind": "all_rows",
-            "row_count_total": context.version.row_count,
-            "row_count_included": context.version.row_count,
-            "row_count_excluded": 0,
-        },
+        "selection": selection,
         "created_at": created_at,
     }
     artifact_bytes = _canonical_json_bytes(payload)
@@ -445,6 +470,238 @@ def _create_row_snapshot_artifact(
         ),
         relative_path=relative_path,
         payload=payload,
+        included_row_indices=included_row_indices,
+    )
+
+
+def _freeze_row_indices(
+    context: DatasetRowsContext,
+    filter_snapshot: AnalysisFilterSnapshot,
+) -> tuple[int, ...] | None:
+    if not filter_snapshot.conditions:
+        return None
+
+    conditions = _parse_filter_conditions(context, filter_snapshot)
+    included_row_indices: list[int] = []
+    for row_index, row in enumerate(iter_dataset_rows(context)):
+        if all(_row_matches_condition(row, condition, context) for condition in conditions):
+            included_row_indices.append(row_index)
+    return tuple(included_row_indices)
+
+
+def _parse_filter_conditions(
+    context: DatasetRowsContext,
+    filter_snapshot: AnalysisFilterSnapshot,
+) -> list[_FilterCondition]:
+    if filter_snapshot.expression_version != 1:
+        raise ApiError(
+            code="filter_expression_version_unsupported",
+            message="지원하지 않는 필터 표현식 버전입니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if len(filter_snapshot.conditions) > MAX_FILTER_CONDITIONS:
+        raise ApiError(
+            code="too_many_filter_conditions",
+            message="필터 조건 수가 허용 범위를 초과했습니다.",
+        )
+
+    columns_by_id = {column.column_id: column for column in context.columns}
+    conditions: list[_FilterCondition] = []
+    for raw_condition in filter_snapshot.conditions:
+        if not isinstance(raw_condition, dict):
+            raise _invalid_filter_condition()
+
+        column_id = raw_condition.get("column_id")
+        operator = raw_condition.get("operator")
+        if not isinstance(column_id, str) or not column_id:
+            raise _invalid_filter_condition()
+        if not isinstance(operator, str) or operator not in FILTER_OPERATORS:
+            raise ApiError(
+                code="filter_operator_not_supported",
+                message="지원하지 않는 필터 연산자입니다.",
+            )
+
+        column = columns_by_id.get(column_id)
+        if column is None:
+            raise ApiError(
+                code="filter_column_not_found",
+                message="필터 컬럼을 찾을 수 없습니다.",
+            )
+
+        if operator in {"is_missing", "is_not_missing"}:
+            conditions.append(_FilterCondition(column=column, operator=operator))
+            continue
+
+        if "value" not in raw_condition:
+            raise ApiError(
+                code="filter_value_required",
+                message="필터 조건 값이 필요합니다.",
+            )
+        value = raw_condition["value"]
+        _validate_filter_value(column, operator, value)
+        conditions.append(_FilterCondition(column=column, operator=operator, value=value))
+
+    return conditions
+
+
+def _validate_filter_value(
+    column: DatasetColumnRecord,
+    operator: str,
+    value: object,
+) -> None:
+    if value is None:
+        raise ApiError(
+            code="filter_value_invalid",
+            message="필터 조건 값이 올바르지 않습니다.",
+        )
+    if operator in NUMERIC_FILTER_OPERATORS and column.data_type not in NUMERIC_DATA_TYPES:
+        raise ApiError(
+            code="filter_operator_not_supported_for_column",
+            message="이 컬럼에는 요청한 필터 연산자를 사용할 수 없습니다.",
+        )
+    if column.data_type in NUMERIC_DATA_TYPES:
+        _filter_decimal_value(value)
+        return
+    if not isinstance(value, str) or len(value) > MAX_FILTER_STRING_LENGTH:
+        raise ApiError(
+            code="filter_value_invalid",
+            message="필터 조건 값이 올바르지 않습니다.",
+        )
+
+
+def _row_matches_condition(
+    row: list[str | None],
+    condition: _FilterCondition,
+    context: DatasetRowsContext,
+) -> bool:
+    value = row[condition.column.column_index] if condition.column.column_index < len(row) else None
+    missing = value is None or value.strip() == ""
+
+    if condition.operator == "is_missing":
+        return missing
+    if condition.operator == "is_not_missing":
+        return not missing
+    if missing:
+        return False
+    assert value is not None
+
+    if condition.column.data_type in NUMERIC_DATA_TYPES:
+        row_value = _parse_filter_decimal(
+            value,
+            decimal=context.parsing.decimal,
+            thousands=context.parsing.thousands,
+        )
+        filter_value = _filter_decimal_value(condition.value)
+        if row_value is None:
+            return False
+        return _compare_values(row_value, filter_value, condition.operator)
+
+    string_filter_value = condition.value
+    if not isinstance(string_filter_value, str):
+        return False
+    return _compare_values(value, string_filter_value, condition.operator)
+
+
+def _iter_rows_for_snapshot(
+    context: DatasetRowsContext,
+    row_snapshot: _RowSnapshotArtifact,
+) -> Iterator[list[str | None]]:
+    if row_snapshot.included_row_indices is None:
+        yield from iter_dataset_rows(context)
+        return
+
+    included = set(row_snapshot.included_row_indices)
+    for row_index, row in enumerate(iter_dataset_rows(context)):
+        if row_index in included:
+            yield row
+
+
+def _compare_values(left: Any, right: Any, operator: str) -> bool:
+    if operator == "eq":
+        return left == right
+    if operator == "ne":
+        return left != right
+    if operator == "gt":
+        return left > right
+    if operator == "gte":
+        return left >= right
+    if operator == "lt":
+        return left < right
+    if operator == "lte":
+        return left <= right
+    return False
+
+
+def _parse_filter_decimal(
+    value: str,
+    *,
+    decimal: str,
+    thousands: str | None,
+) -> Decimal | None:
+    normalized = value.strip()
+    if normalized == "":
+        return None
+    if thousands is not None:
+        normalized = normalized.replace(thousands, "")
+    if decimal != ".":
+        normalized = normalized.replace(decimal, ".")
+    try:
+        parsed = Decimal(normalized)
+    except InvalidOperation:
+        return None
+    if not parsed.is_finite():
+        return None
+    return parsed
+
+
+def _filter_decimal_value(value: object) -> Decimal:
+    if isinstance(value, bool):
+        raise ApiError(
+            code="filter_value_invalid",
+            message="필터 조건 값이 올바르지 않습니다.",
+        )
+    if not isinstance(value, int | float | str):
+        raise ApiError(
+            code="filter_value_invalid",
+            message="필터 조건 값이 올바르지 않습니다.",
+        )
+    try:
+        parsed = Decimal(str(value).strip())
+    except InvalidOperation as exc:
+        raise ApiError(
+            code="filter_value_invalid",
+            message="필터 조건 값이 올바르지 않습니다.",
+        ) from exc
+    if not parsed.is_finite():
+        raise ApiError(
+            code="filter_value_invalid",
+            message="필터 조건 값이 올바르지 않습니다.",
+        )
+    return parsed
+
+
+def _row_ranges(row_indices: tuple[int, ...]) -> list[dict[str, int]]:
+    if not row_indices:
+        return []
+
+    ranges: list[dict[str, int]] = []
+    range_start = row_indices[0]
+    previous = row_indices[0]
+    for row_index in row_indices[1:]:
+        if row_index == previous + 1:
+            previous = row_index
+            continue
+        ranges.append({"start": range_start, "end": previous + 1})
+        range_start = row_index
+        previous = row_index
+    ranges.append({"start": range_start, "end": previous + 1})
+    return ranges
+
+
+def _invalid_filter_condition() -> ApiError:
+    return ApiError(
+        code="invalid_filter_condition",
+        message="필터 조건 형식이 올바르지 않습니다.",
     )
 
 

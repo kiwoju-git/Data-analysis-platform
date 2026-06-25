@@ -82,7 +82,7 @@ Already implemented:
 - Analysis run API guard that rejects planned/disabled methods without returning fake results
 - `eda.descriptive` is the first executable method and computes real descriptive statistics from confirmed dataset versions
 - Descriptive statistics result persistence stores app-owned JSON under the workspace and records result SHA-256 in `analysis_runs`
-- Empty-filter `eda.descriptive` runs persist an `analysis_row_snapshot` artifact with filter snapshot hash, source canonical artifact hash, and included row counts
+- `eda.descriptive` runs persist an `analysis_row_snapshot` artifact with filter snapshot hash, source canonical artifact hash, included row counts, and row ranges for supported filters
 - XLSX container checks and sheet-selection warning
 - XLSX parsing confirmation is intentionally rejected with `xlsx_confirmation_pending` until workbook parser adoption
 - Synthetic upload tests, parsing confirmation tests, canonical artifact tests, and migration upgrade tests from schema version `1`/`2`/`3`/`4` to `5`
@@ -99,15 +99,15 @@ Already implemented:
   - profile artifacts are reused only when schema hash and source canonical artifact hash still match
   - descriptive result files are removed if metadata insert fails after file write
 - Filter snapshot row freezing:
-  - `eda.descriptive` empty filter snapshots are frozen into `analysis_row_snapshot` artifacts
+  - `eda.descriptive` filter snapshots are frozen into `analysis_row_snapshot` artifacts
   - analysis provenance records filter snapshot hash, row snapshot hash, total row count, and included row count
-  - non-empty filter conditions still fail explicitly with `analysis_filters_not_supported`
+  - supported non-empty filters select canonical row-index ranges before calculation
 
 Not implemented yet:
 
 - Full profile API beyond the current aggregate/duplicate/memory/date-time preflight slice
 - Full route-based Analysis Workbench with dedicated routes and additional shared feature components
-- Non-empty filter condition execution and row-index selection beyond the current all-rows snapshot
+- Frontend controls for supported filter conditions
 - Cell-level data editing or transformations that create a new immutable dataset version
 - Executable analysis method dispatch beyond the inline `eda.descriptive` slice
 - Any statistical calculation beyond `eda.descriptive`
@@ -214,7 +214,11 @@ Completed in this slice:
 - Filter snapshot row-freezing slice:
   - `analysis_runs.config_json` schema version `2` includes `filter_snapshot_sha256` and row snapshot metadata
   - `analysis_artifacts` records one `analysis_row_snapshot` artifact per succeeded inline `eda.descriptive` run
-  - row snapshot files contain no raw cell values and link the executed all-row selection to the canonical artifact hash
+  - row snapshot files contain no raw cell values and link the executed row selection to the canonical artifact hash
+- Non-empty filter expression slice:
+  - supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions
+  - stores selected canonical rows as `row_ranges` in the row snapshot artifact
+  - rejects unsupported operators, unknown columns, invalid values, and excessive condition counts before writing artifacts
 - Canonical parsed artifact decision record:
   - Parquet remains candidate
   - `pyarrow_available=False` in current Windows Python 3.10 venv
@@ -224,7 +228,7 @@ The next implementation PR should remain narrow and must still avoid fake statis
 
 Allowed next scope:
 
-- Move the shared Workbench into dedicated route-level analysis pages, or add a validated non-empty filter expression engine.
+- Move the shared Workbench into dedicated route-level analysis pages, or add frontend controls for supported filter conditions.
 - Keep every method except `eda.descriptive` unavailable until real calculation code and tests exist.
 - Keep analysis run status/job storage as infrastructure unless a later method requires worker execution.
 

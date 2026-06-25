@@ -274,7 +274,7 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     assert "999" not in row_snapshot_bytes.decode("utf-8")
 
 
-def test_analysis_run_rejects_filter_conditions_until_filter_engine_exists(tmp_path) -> None:
+def test_analysis_run_applies_numeric_filter_and_freezes_row_ranges(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
 
     with TestClient(create_app(settings)) as client:
@@ -302,9 +302,73 @@ def test_analysis_run_rejects_filter_conditions_until_filter_engine_exists(tmp_p
                 },
             },
         )
+        record = get_analysis_run_record(
+            settings.workspace_root,
+            response.json()["analysis_id"],
+        )
 
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "analysis_filters_not_supported"
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["provenance"]["row_count_total"] == 2
+    assert payload["provenance"]["row_count_included"] == 1
+    assert payload["result"]["columns"][0]["n_total"] == 1
+    assert payload["result"]["columns"][0]["n_used"] == 1
+    assert payload["result"]["columns"][0]["mean"] == 2
+
+    assert record is not None
+    config_payload = json.loads(record.config_json)
+    row_snapshot_path = settings.workspace_root / config_payload["row_snapshot"]["path"]
+    row_snapshot_payload = json.loads(row_snapshot_path.read_text(encoding="utf-8"))
+    assert row_snapshot_payload["filter_snapshot"] == {
+        "expression_version": 1,
+        "conditions": [
+            {
+                "column_id": version["columns"][0]["column_id"],
+                "operator": "gt",
+                "value": 1,
+            },
+        ],
+    }
+    assert row_snapshot_payload["selection"] == {
+        "kind": "row_ranges",
+        "row_count_total": 2,
+        "row_count_included": 1,
+        "row_count_excluded": 1,
+        "row_ranges": [{"start": 1, "end": 2}],
+    }
+
+
+def test_analysis_run_rejects_invalid_filter_without_artifacts(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "filter_snapshot": {
+                    "expression_version": 1,
+                    "conditions": [
+                        {
+                            "column_id": version["columns"][0]["column_id"],
+                            "operator": "contains",
+                            "value": "1",
+                        },
+                    ],
+                },
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "filter_operator_not_supported"
     assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
 
 
