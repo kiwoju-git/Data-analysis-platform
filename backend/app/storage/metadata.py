@@ -732,41 +732,20 @@ def insert_analysis_run_record(workspace_root: Path, record: AnalysisRunRecord) 
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
         with connection:
-            connection.execute(
-                """
-                INSERT INTO analysis_runs (
-                    analysis_id,
-                    method_id,
-                    method_version,
-                    dataset_version_id,
-                    config_json,
-                    status,
-                    result_path,
-                    result_sha256,
-                    stale,
-                    created_at,
-                    updated_at,
-                    completed_at,
-                    app_version
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    record.analysis_id,
-                    record.method_id,
-                    record.method_version,
-                    record.dataset_version_id,
-                    record.config_json,
-                    record.status,
-                    record.result_path,
-                    record.result_sha256,
-                    1 if record.stale else 0,
-                    record.created_at,
-                    record.updated_at,
-                    record.completed_at,
-                    record.app_version,
-                ),
-            )
+            _insert_analysis_run(connection, record)
+
+
+def insert_analysis_run_record_with_artifacts(
+    workspace_root: Path,
+    record: AnalysisRunRecord,
+    artifacts: list[AnalysisArtifactRecord],
+) -> None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        with connection:
+            _insert_analysis_run(connection, record)
+            for artifact in artifacts:
+                _insert_analysis_artifact(connection, artifact)
 
 
 def get_analysis_run_record(
@@ -870,29 +849,7 @@ def insert_analysis_artifact_record(
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
         with connection:
-            connection.execute(
-                """
-                INSERT INTO analysis_artifacts (
-                    artifact_id,
-                    analysis_id,
-                    kind,
-                    path,
-                    sha256,
-                    media_type,
-                    created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    record.artifact_id,
-                    record.analysis_id,
-                    record.kind,
-                    record.path,
-                    record.sha256,
-                    record.media_type,
-                    record.created_at,
-                ),
-            )
+            _insert_analysis_artifact(connection, record)
 
 
 def insert_job_record(workspace_root: Path, record: JobRecord) -> None:
@@ -928,6 +885,76 @@ def insert_job_record(workspace_root: Path, record: JobRecord) -> None:
                     record.completed_at,
                 ),
             )
+
+
+def _insert_analysis_run(
+    connection: sqlite3.Connection,
+    record: AnalysisRunRecord,
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO analysis_runs (
+            analysis_id,
+            method_id,
+            method_version,
+            dataset_version_id,
+            config_json,
+            status,
+            result_path,
+            result_sha256,
+            stale,
+            created_at,
+            updated_at,
+            completed_at,
+            app_version
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """,
+        (
+            record.analysis_id,
+            record.method_id,
+            record.method_version,
+            record.dataset_version_id,
+            record.config_json,
+            record.status,
+            record.result_path,
+            record.result_sha256,
+            1 if record.stale else 0,
+            record.created_at,
+            record.updated_at,
+            record.completed_at,
+            record.app_version,
+        ),
+    )
+
+
+def _insert_analysis_artifact(
+    connection: sqlite3.Connection,
+    record: AnalysisArtifactRecord,
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO analysis_artifacts (
+            artifact_id,
+            analysis_id,
+            kind,
+            path,
+            sha256,
+            media_type,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+        """,
+        (
+            record.artifact_id,
+            record.analysis_id,
+            record.kind,
+            record.path,
+            record.sha256,
+            record.media_type,
+            record.created_at,
+        ),
+    )
 
 
 def get_job_record(workspace_root: Path, job_id: str) -> JobRecord | None:

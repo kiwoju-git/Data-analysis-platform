@@ -82,6 +82,7 @@ Already implemented:
 - Analysis run API guard that rejects planned/disabled methods without returning fake results
 - `eda.descriptive` is the first executable method and computes real descriptive statistics from confirmed dataset versions
 - Descriptive statistics result persistence stores app-owned JSON under the workspace and records result SHA-256 in `analysis_runs`
+- Empty-filter `eda.descriptive` runs persist an `analysis_row_snapshot` artifact with filter snapshot hash, source canonical artifact hash, and included row counts
 - XLSX container checks and sheet-selection warning
 - XLSX parsing confirmation is intentionally rejected with `xlsx_confirmation_pending` until workbook parser adoption
 - Synthetic upload tests, parsing confirmation tests, canonical artifact tests, and migration upgrade tests from schema version `1`/`2`/`3`/`4` to `5`
@@ -97,11 +98,16 @@ Already implemented:
   - stored `eda.descriptive` result envelopes are retrievable through checksum-validated `GET /api/v1/analysis-runs/{analysis_id}/result`
   - profile artifacts are reused only when schema hash and source canonical artifact hash still match
   - descriptive result files are removed if metadata insert fails after file write
+- Filter snapshot row freezing:
+  - `eda.descriptive` empty filter snapshots are frozen into `analysis_row_snapshot` artifacts
+  - analysis provenance records filter snapshot hash, row snapshot hash, total row count, and included row count
+  - non-empty filter conditions still fail explicitly with `analysis_filters_not_supported`
 
 Not implemented yet:
 
 - Full profile API beyond the current aggregate/duplicate/memory/date-time preflight slice
 - Full route-based Analysis Workbench with dedicated routes and additional shared feature components
+- Non-empty filter condition execution and row-index selection beyond the current all-rows snapshot
 - Cell-level data editing or transformations that create a new immutable dataset version
 - Executable analysis method dispatch beyond the inline `eda.descriptive` slice
 - Any statistical calculation beyond `eda.descriptive`
@@ -205,6 +211,10 @@ Completed in this slice:
   - profile artifact payloads include schema hash, profile schema version, and source canonical artifact hash, and matching artifacts are reused
   - descriptive result file writes compensate by deleting the file if `analysis_runs` insert fails
   - runtime workspaces, SQLite DBs, logs, exports, temp directories, and test caches are ignored by Git
+- Filter snapshot row-freezing slice:
+  - `analysis_runs.config_json` schema version `2` includes `filter_snapshot_sha256` and row snapshot metadata
+  - `analysis_artifacts` records one `analysis_row_snapshot` artifact per succeeded inline `eda.descriptive` run
+  - row snapshot files contain no raw cell values and link the executed all-row selection to the canonical artifact hash
 - Canonical parsed artifact decision record:
   - Parquet remains candidate
   - `pyarrow_available=False` in current Windows Python 3.10 venv
@@ -214,7 +224,7 @@ The next implementation PR should remain narrow and must still avoid fake statis
 
 Allowed next scope:
 
-- Move the shared Workbench into dedicated route-level analysis pages, or add filter snapshot row freezing.
+- Move the shared Workbench into dedicated route-level analysis pages, or add a validated non-empty filter expression engine.
 - Keep every method except `eda.descriptive` unavailable until real calculation code and tests exist.
 - Keep analysis run status/job storage as infrastructure unless a later method requires worker execution.
 

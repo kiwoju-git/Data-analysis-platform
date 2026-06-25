@@ -1,5 +1,6 @@
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 
 from app.analyses.registry import get_analysis_method
 from app.api.v1.schemas.analyses import (
+    AnalysisFilterSnapshot,
     AnalysisProvenance,
     AnalysisResultEnvelope,
     AnalysisRunRequest,
@@ -28,16 +30,20 @@ from app.services.dataset_rows import (
 from app.statistics.descriptive import DescriptiveColumn, describe_numeric_columns
 from app.storage.atomic import atomic_write_bytes
 from app.storage.metadata import (
+    AnalysisArtifactRecord,
     AnalysisRunRecord,
     DatasetColumnRecord,
     count_analysis_artifact_records,
     get_analysis_run_record,
-    insert_analysis_run_record,
+    insert_analysis_run_record_with_artifacts,
     update_analysis_run_status_record,
 )
 
 APP_VERSION = "0.1.0"
-CONFIG_SCHEMA_VERSION = 1
+CONFIG_SCHEMA_VERSION = 2
+ROW_SNAPSHOT_SCHEMA_VERSION = 1
+ROW_SNAPSHOT_ARTIFACT_KIND = "analysis_row_snapshot"
+ROW_SNAPSHOT_MEDIA_TYPE = "application/json"
 MAX_DESCRIPTIVE_COLUMNS = 100
 NUMERIC_DATA_TYPES = {"integer", "decimal"}
 CANCELLABLE_STATES = {AnalysisRunState.QUEUED.value, AnalysisRunState.RUNNING.value}
@@ -46,6 +52,13 @@ TERMINAL_STATES = {
     AnalysisRunState.FAILED.value,
     AnalysisRunState.CANCELLED.value,
 }
+
+
+@dataclass(frozen=True)
+class _RowSnapshotArtifact:
+    record: AnalysisArtifactRecord
+    relative_path: Path
+    payload: dict[str, Any]
 
 
 def create_analysis_run(
@@ -187,56 +200,63 @@ def _run_descriptive_analysis(
             message="기술통계 실행에는 데이터셋 버전이 필요합니다.",
         )
 
-    if request.filter_snapshot.conditions:
-        raise ApiError(
-            code="analysis_filters_not_supported",
-            message="현재 기술통계 slice는 필터 스냅샷 실행을 아직 지원하지 않습니다.",
-        )
-
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     selected_columns = _selected_descriptive_columns(context, request.options)
-    result = describe_numeric_columns(
-        iter_dataset_rows(context),
-        selected_columns,
-        decimal=context.parsing.decimal,
-        thousands=context.parsing.thousands,
-    )
-    warnings = _descriptive_warnings(result)
     analysis_id = uuid4()
     completed_at = _utc_now()
-    provenance = AnalysisProvenance(
-        method_id=request.method_id,
-        method_version=request.method_version,
-        dataset_version_id=request.dataset_version_id,
-        source_schema_hash=context.version.schema_hash,
-        app_version=APP_VERSION,
+    row_snapshot = _create_row_snapshot_artifact(
+        settings=settings,
+        analysis_id=str(analysis_id),
+        context=context,
+        filter_snapshot=request.filter_snapshot,
+        created_at=completed_at,
     )
-    envelope = AnalysisResultEnvelope(
-        analysis_id=analysis_id,
-        method_id=request.method_id,
-        method_version=request.method_version,
-        dataset_version_id=request.dataset_version_id,
-        status="succeeded",
-        warnings=warnings,
-        provenance=provenance,
-        result=result,
-    )
-
-    result_bytes = _canonical_json_bytes(envelope.model_dump(mode="json"))
-    result_relative_path = _analysis_result_relative_path(str(analysis_id))
-    result_path = settings.workspace_root / result_relative_path
-    atomic_write_bytes(result_path, result_bytes)
-    result_sha256 = hashlib.sha256(result_bytes).hexdigest()
+    result_path: Path | None = None
 
     try:
-        insert_analysis_run_record(
+        result = describe_numeric_columns(
+            iter_dataset_rows(context),
+            selected_columns,
+            decimal=context.parsing.decimal,
+            thousands=context.parsing.thousands,
+        )
+        warnings = _descriptive_warnings(result)
+        provenance = AnalysisProvenance(
+            method_id=request.method_id,
+            method_version=request.method_version,
+            dataset_version_id=request.dataset_version_id,
+            source_schema_hash=context.version.schema_hash,
+            filter_snapshot_sha256=str(row_snapshot.payload["filter_snapshot_sha256"]),
+            row_snapshot_sha256=row_snapshot.record.sha256,
+            row_count_total=context.version.row_count,
+            row_count_included=context.version.row_count,
+            app_version=APP_VERSION,
+        )
+        envelope = AnalysisResultEnvelope(
+            analysis_id=analysis_id,
+            method_id=request.method_id,
+            method_version=request.method_version,
+            dataset_version_id=request.dataset_version_id,
+            status="succeeded",
+            warnings=warnings,
+            provenance=provenance,
+            result=result,
+        )
+
+        result_bytes = _canonical_json_bytes(envelope.model_dump(mode="json"))
+        result_relative_path = _analysis_result_relative_path(str(analysis_id))
+        result_path = settings.workspace_root / result_relative_path
+        atomic_write_bytes(result_path, result_bytes)
+        result_sha256 = hashlib.sha256(result_bytes).hexdigest()
+
+        insert_analysis_run_record_with_artifacts(
             settings.workspace_root,
             AnalysisRunRecord(
                 analysis_id=str(analysis_id),
                 method_id=request.method_id,
                 method_version=request.method_version,
                 dataset_version_id=str(request.dataset_version_id),
-                config_json=_analysis_config_json(request),
+                config_json=_analysis_config_json(request, row_snapshot),
                 status=AnalysisRunState.SUCCEEDED.value,
                 result_path=result_relative_path.as_posix(),
                 result_sha256=result_sha256,
@@ -246,9 +266,12 @@ def _run_descriptive_analysis(
                 completed_at=completed_at,
                 app_version=APP_VERSION,
             ),
+            artifacts=[row_snapshot.record],
         )
     except Exception:
-        _remove_file_if_exists(result_path)
+        _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
+        if result_path is not None:
+            _remove_file_if_exists(result_path)
         raise
     return envelope
 
@@ -359,11 +382,90 @@ def _descriptive_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
     return warnings
 
 
-def _analysis_config_json(request: AnalysisRunRequest) -> str:
+def _create_row_snapshot_artifact(
+    *,
+    settings: Settings,
+    analysis_id: str,
+    context: DatasetRowsContext,
+    filter_snapshot: AnalysisFilterSnapshot,
+    created_at: str,
+) -> _RowSnapshotArtifact:
+    if filter_snapshot.conditions:
+        raise ApiError(
+            code="analysis_filters_not_supported",
+            message="현재 기술통계 slice는 필터 조건 실행을 아직 지원하지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    filter_snapshot_payload = filter_snapshot.model_dump(mode="json")
+    filter_snapshot_sha256 = hashlib.sha256(
+        _canonical_json_bytes(filter_snapshot_payload),
+    ).hexdigest()
+    artifact_id = str(uuid4())
+    relative_path = _row_snapshot_relative_path(analysis_id)
+    payload: dict[str, Any] = {
+        "artifact_schema_version": ROW_SNAPSHOT_SCHEMA_VERSION,
+        "artifact_kind": ROW_SNAPSHOT_ARTIFACT_KIND,
+        "analysis_id": analysis_id,
+        "dataset_version_id": context.version.version_id,
+        "source_schema_hash": context.version.schema_hash,
+        "source_canonical_artifact": {
+            "kind": context.canonical_rows_artifact.kind,
+            "sha256": context.canonical_rows_artifact.sha256,
+            "media_type": context.canonical_rows_artifact.media_type,
+            "size_bytes": context.canonical_rows_artifact.size_bytes,
+        },
+        "filter_snapshot": filter_snapshot_payload,
+        "filter_snapshot_sha256": filter_snapshot_sha256,
+        "row_identity": {
+            "kind": "canonical_row_index",
+            "base": 0,
+        },
+        "selection": {
+            "kind": "all_rows",
+            "row_count_total": context.version.row_count,
+            "row_count_included": context.version.row_count,
+            "row_count_excluded": 0,
+        },
+        "created_at": created_at,
+    }
+    artifact_bytes = _canonical_json_bytes(payload)
+    artifact_path = settings.workspace_root / relative_path
+    atomic_write_bytes(artifact_path, artifact_bytes)
+
+    return _RowSnapshotArtifact(
+        record=AnalysisArtifactRecord(
+            artifact_id=artifact_id,
+            analysis_id=analysis_id,
+            kind=ROW_SNAPSHOT_ARTIFACT_KIND,
+            path=relative_path.as_posix(),
+            sha256=hashlib.sha256(artifact_bytes).hexdigest(),
+            media_type=ROW_SNAPSHOT_MEDIA_TYPE,
+            created_at=created_at,
+        ),
+        relative_path=relative_path,
+        payload=payload,
+    )
+
+
+def _analysis_config_json(
+    request: AnalysisRunRequest,
+    row_snapshot: _RowSnapshotArtifact,
+) -> str:
     return json.dumps(
         {
             "schema_version": CONFIG_SCHEMA_VERSION,
             "filter_snapshot": request.filter_snapshot.model_dump(mode="json"),
+            "filter_snapshot_sha256": row_snapshot.payload["filter_snapshot_sha256"],
+            "row_snapshot": {
+                "artifact_id": row_snapshot.record.artifact_id,
+                "kind": row_snapshot.record.kind,
+                "path": row_snapshot.record.path,
+                "sha256": row_snapshot.record.sha256,
+                "media_type": row_snapshot.record.media_type,
+                "row_count_total": row_snapshot.payload["selection"]["row_count_total"],
+                "row_count_included": row_snapshot.payload["selection"]["row_count_included"],
+            },
             "roles": request.roles,
             "options": request.options,
         },
@@ -384,6 +486,10 @@ def _canonical_json_bytes(payload: dict[str, Any]) -> bytes:
 
 def _analysis_result_relative_path(analysis_id: str) -> Path:
     return Path("workspaces") / "analyses" / analysis_id / "result.json"
+
+
+def _row_snapshot_relative_path(analysis_id: str) -> Path:
+    return Path("workspaces") / "analyses" / analysis_id / "row_snapshot.json"
 
 
 def _safe_result_path(workspace_root: Path, stored_path: str) -> Path:

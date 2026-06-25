@@ -1,3 +1,5 @@
+import hashlib
+import json
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -194,6 +196,10 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
         status_response = client.get(
             f"/api/v1/analysis-runs/{response.json()['analysis_id']}",
         )
+        record = get_analysis_run_record(
+            settings.workspace_root,
+            response.json()["analysis_id"],
+        )
 
     assert response.status_code == 201
     payload = response.json()
@@ -201,6 +207,8 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     assert payload["status"] == "succeeded"
     assert payload["method_id"] == "eda.descriptive"
     assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 4
+    assert payload["provenance"]["row_count_included"] == 4
     result = payload["result"]
     assert result["missing_policy"] == "available_case_by_column"
     assert result["quartile_method"] == "median_of_halves"
@@ -227,7 +235,77 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["status"] == "succeeded"
+    assert status_payload["config_schema_version"] == 2
     assert status_payload["result_available"] is True
+    assert status_payload["artifact_count"] == 1
+
+    assert record is not None
+    config_payload = json.loads(record.config_json)
+    assert config_payload["schema_version"] == 2
+    row_snapshot = config_payload["row_snapshot"]
+    assert row_snapshot["kind"] == "analysis_row_snapshot"
+    assert row_snapshot["row_count_total"] == 4
+    assert row_snapshot["row_count_included"] == 4
+    assert (
+        payload["provenance"]["filter_snapshot_sha256"] == config_payload["filter_snapshot_sha256"]
+    )
+    assert payload["provenance"]["row_snapshot_sha256"] == row_snapshot["sha256"]
+
+    row_snapshot_path = settings.workspace_root / row_snapshot["path"]
+    row_snapshot_bytes = row_snapshot_path.read_bytes()
+    assert row_snapshot["sha256"] == hashlib.sha256(row_snapshot_bytes).hexdigest()
+    row_snapshot_payload = json.loads(row_snapshot_bytes.decode("utf-8"))
+    assert row_snapshot_payload["artifact_kind"] == "analysis_row_snapshot"
+    assert row_snapshot_payload["source_schema_hash"] == version["schema_hash"]
+    assert (
+        row_snapshot_payload["source_canonical_artifact"]["sha256"]
+        == version["canonical_artifact"]["sha256"]
+    )
+    assert row_snapshot_payload["filter_snapshot"] == {
+        "expression_version": 1,
+        "conditions": [],
+    }
+    assert row_snapshot_payload["selection"] == {
+        "kind": "all_rows",
+        "row_count_total": 4,
+        "row_count_included": 4,
+        "row_count_excluded": 0,
+    }
+    assert "999" not in row_snapshot_bytes.decode("utf-8")
+
+
+def test_analysis_run_rejects_filter_conditions_until_filter_engine_exists(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "filter_snapshot": {
+                    "expression_version": 1,
+                    "conditions": [
+                        {
+                            "column_id": version["columns"][0]["column_id"],
+                            "operator": "gt",
+                            "value": 1,
+                        },
+                    ],
+                },
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "analysis_filters_not_supported"
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
 
 
 def test_analysis_result_api_returns_persisted_envelope_and_detects_checksum_mismatch(
@@ -324,7 +402,10 @@ def test_descriptive_result_file_is_removed_when_analysis_run_insert_fails(
         def fail_insert(*_args: object, **_kwargs: object) -> None:
             raise RuntimeError("metadata insert failed")
 
-        monkeypatch.setattr("app.services.analysis_runs.insert_analysis_run_record", fail_insert)
+        monkeypatch.setattr(
+            "app.services.analysis_runs.insert_analysis_run_record_with_artifacts",
+            fail_insert,
+        )
 
         response = client.post(
             "/api/v1/analysis-runs",
@@ -342,6 +423,7 @@ def test_descriptive_result_file_is_removed_when_analysis_run_insert_fails(
 
     assert response.status_code == 500
     assert not list(settings.workspace_root.glob("workspaces/analyses/*/result.json"))
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
 
 
 def test_analysis_run_rejects_unknown_method(tmp_path) -> None:

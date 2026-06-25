@@ -78,9 +78,11 @@ Gate B currently covers upload, parsing confirmation, canonical JSONL materializ
 - It requires a confirmed `dataset_version_id` and `options.column_ids`.
 - It streams the validated canonical rows artifact and computes real descriptive statistics for selected numeric columns.
 - The result records `n_total`, `n_used`, missing count, non-numeric exclusion count, mean, sample standard deviation, min, Q1, median, Q3, max, warning codes, and provenance.
+- Empty filter snapshots are frozen into an `analysis_row_snapshot` artifact linked from `analysis_artifacts`; the snapshot records the filter hash, canonical artifact hash, row identity, and included row count without raw cell values.
+- Non-empty filter conditions currently return `analysis_filters_not_supported`.
 - Other analysis methods remain unavailable and must not return mock results.
 
 ## Next Step
 
-The next Gate B slice should move toward route-level Workbench separation or filter snapshot row freezing.
+The next Gate B slice should move toward route-level Workbench separation or a validated non-empty filter expression engine.
 Full dataset parsing must remain explicit and must not silently coerce values or infer study design from dtype alone.

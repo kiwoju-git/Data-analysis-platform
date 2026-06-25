@@ -115,6 +115,10 @@ class AnalysisProvenance(BaseModel):
     method_version: str
     dataset_version_id: UUID | None
     source_schema_hash: str | None = None
+    filter_snapshot_sha256: str | None = None
+    row_snapshot_sha256: str | None = None
+    row_count_total: int | None = Field(default=None, ge=0)
+    row_count_included: int | None = Field(default=None, ge=0)
     app_version: str
 
 

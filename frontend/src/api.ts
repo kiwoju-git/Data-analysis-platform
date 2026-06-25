@@ -284,6 +284,10 @@ export interface AnalysisProvenance {
   method_version: string;
   dataset_version_id: string | null;
   source_schema_hash: string | null;
+  filter_snapshot_sha256?: string | null;
+  row_snapshot_sha256?: string | null;
+  row_count_total?: number | null;
+  row_count_included?: number | null;
   app_version: string;
 }
 
