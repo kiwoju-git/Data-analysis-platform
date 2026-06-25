@@ -74,7 +74,7 @@ Already implemented:
 - Six-module planned/disabled navigation shell in the React UI
 - Six-module selected-method Workbench shell in the React UI:
   - module and method selection comes from the backend catalog
-  - selected module/method is restorable through a local URL hash
+  - selected module/method is restorable through `/analysis/{module_id}/{method_id}` with legacy hash fallback
   - common shell rendering is split into `frontend/src/AnalysisWorkbench.tsx`
   - Workbench steps show data, roles, options, preflight, execution, and results
   - all 29 documented methods show UI guidance for required roles, options, preflight checks, and result focus
@@ -106,7 +106,7 @@ Already implemented:
 Not implemented yet:
 
 - Full profile API beyond the current aggregate/duplicate/memory/date-time preflight slice
-- Full route-based Analysis Workbench with dedicated routes and additional shared feature components
+- Deeper route-based Analysis Workbench page decomposition and additional shared feature components
 - Frontend controls for supported filter conditions
 - Cell-level data editing or transformations that create a new immutable dataset version
 - Executable analysis method dispatch beyond the inline `eda.descriptive` slice
@@ -228,7 +228,7 @@ The next implementation PR should remain narrow and must still avoid fake statis
 
 Allowed next scope:
 
-- Move the shared Workbench into dedicated route-level analysis pages, or add frontend controls for supported filter conditions.
+- Move the shared Workbench into deeper dedicated route-level analysis components/pages, or add frontend controls for supported filter conditions.
 - Keep every method except `eda.descriptive` unavailable until real calculation code and tests exist.
 - Keep analysis run status/job storage as infrastructure unless a later method requires worker execution.
 
@@ -237,7 +237,7 @@ Still explicitly out of scope:
 - Statistical method calculations beyond `eda.descriptive`
 - Analysis mock results
 - Full profile implementation beyond the current aggregate/duplicate/memory/date-time/profile-artifact preflight slice
-- Full route-based Analysis Workbench beyond the current hash-restorable shared component shell
+- Full dedicated route-based Analysis Workbench beyond the current path-restorable shared component shell
 - Bayesian optimization, Response Optimizer, DOE, regression, quality control, or hypothesis testing
 - PyCaret, Optuna, SHAP, LIME, PyTorch, or GPU dependency
 
@@ -321,7 +321,7 @@ Current status:
 - The canonical reader adoption slice is implemented: profile and `eda.descriptive` read validated canonical rows and reject corrupt artifacts without raw fallback.
 - The persisted profile artifact slice is implemented: profile scans write raw-value-free `profile_summary` JSON artifacts and expose latest hash/size metadata.
 - The date/time preflight slice is implemented: profile reports conservative format/timezone aggregate checks without coercing values.
-- Still missing in Gate B0/B1 transition: full route-based Analysis Workbench, filter snapshot row freezing, and additional reference-backed methods.
+- Still missing in Gate B0/B1 transition: deeper route-based Analysis Workbench page decomposition, frontend filter controls, and additional reference-backed methods.
 - XLSX upload is accepted for envelope validation only; parsing confirmation remains blocked until a workbook parser dependency is reviewed.
 
 ### Gate B1: Exploratory Analysis
@@ -820,7 +820,7 @@ Known limitations:
 - No statistical method calculation, fake chart, fake table, mock p-value, or mock result is introduced.
 - Canonical parsed artifact materialization was not part of this older slice; it is now tracked as implemented in section 9.
 - Analysis run, artifact, and job persistence is implemented as metadata infrastructure only.
-- Frontend navigation is a shell, not a route-based Analysis Workbench.
+- Frontend navigation is still a shell; selected analyses now have path-level restore, but the Workbench has not been decomposed into dedicated route pages.
 
 ## 8. PR Description Draft For Gate B0 Storage/Run Foundation
 
@@ -924,8 +924,8 @@ Next PR:
 
 - Superseded by section 11: profile artifacts with hashes are implemented.
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should split route-level Workbench views or add filter snapshot row freezing.
-- Keep filter snapshots and route-level Workbench as separate narrow slices unless one is explicitly selected.
+- Next narrow slice should split deeper route-level Workbench views or add frontend controls for supported filters.
+- Keep frontend filter controls and deeper Workbench decomposition as separate narrow slices unless one is explicitly selected.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 
 Validation:
@@ -979,8 +979,8 @@ Next PR:
 
 - Superseded by section 11: profile result artifacts with hash metadata are implemented.
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should add route-level Workbench separation or filter snapshot row freezing.
-- Keep filter snapshot row freezing and route-level Workbench as separate narrow slices.
+- Next narrow slice should add frontend controls for supported filters or deeper route-level Workbench separation.
+- Keep frontend filter controls and deeper Workbench decomposition as separate narrow slices.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 
 Validation:
@@ -1035,8 +1035,8 @@ Document priority:
 Next PR:
 
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should split the shared Workbench into dedicated route-level analysis pages or add filter snapshot row freezing.
-- Keep filter snapshot row freezing as a separate narrow slice unless the selected next slice needs it.
+- Next narrow slice should split the shared Workbench into deeper dedicated route-level analysis pages or add frontend controls for supported filters.
+- Keep frontend filter controls as a separate narrow slice unless the selected next slice needs it.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 - Do not make planned methods executable without real calculation code, reference tests, provenance, and no-mock API/UI behavior.
 
@@ -1092,7 +1092,7 @@ Document priority:
 
 Next PR:
 
-- Split the shared Workbench into dedicated route-level analysis pages, or add filter snapshot row freezing.
+- Split the shared Workbench into deeper dedicated route-level analysis pages, or add frontend controls for supported filters.
 - Keep cell editing/transformation versioning as a separate slice unless explicitly selected.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 - Do not make planned methods executable without real calculation code, reference tests, provenance, and no-mock API/UI behavior.

@@ -84,5 +84,5 @@ Gate B currently covers upload, parsing confirmation, canonical JSONL materializ
 
 ## Next Step
 
-The next Gate B slice should move toward route-level Workbench separation or frontend controls for supported filter conditions.
+The next Gate B slice should move toward deeper Workbench page/component separation or frontend controls for supported filter conditions.
 Full dataset parsing must remain explicit and must not silently coerce values or infer study design from dtype alone.

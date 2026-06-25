@@ -8,7 +8,13 @@ import {
   analysisMethodGuidanceIds,
   getAnalysisMethodGuidance,
 } from "./analysisMethodGuidance";
-import { buildAnalysisHash, parseAnalysisHash } from "./analysisNavigation";
+import {
+  buildAnalysisHash,
+  buildAnalysisPath,
+  parseAnalysisHash,
+  parseAnalysisLocation,
+  parseAnalysisPath,
+} from "./analysisNavigation";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
 
 describe("App", () => {
@@ -56,8 +62,28 @@ describe("App", () => {
     });
   });
 
-  it("rejects unknown analysis module hashes", () => {
+  it("round-trips route-level analysis paths and keeps legacy hash fallback", () => {
+    const path = buildAnalysisPath("regression", "regression.fit_model");
+
+    expect(path).toBe("/analysis/regression/regression.fit_model");
+    expect(parseAnalysisPath(path)).toEqual({
+      moduleId: "regression",
+      methodId: "regression.fit_model",
+    });
+    expect(parseAnalysisLocation(path, "")).toEqual({
+      moduleId: "regression",
+      methodId: "regression.fit_model",
+    });
+    expect(parseAnalysisLocation("/", "#analysis/hypothesis/hypothesis.two_sample_t")).toEqual({
+      moduleId: "hypothesis",
+      methodId: "hypothesis.two_sample_t",
+    });
+  });
+
+  it("rejects unknown analysis module routes", () => {
     expect(parseAnalysisHash("#analysis/unknown/eda.descriptive")).toBeNull();
+    expect(parseAnalysisPath("/analysis/unknown/eda.descriptive")).toBeNull();
+    expect(parseAnalysisPath("/analysis/exploration/eda.descriptive/extra")).toBeNull();
     expect(parseAnalysisHash("#datasets")).toBeNull();
   });
 

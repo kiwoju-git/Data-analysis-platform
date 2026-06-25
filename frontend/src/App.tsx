@@ -26,7 +26,7 @@ import {
   type HealthResponse,
 } from "./api";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
-import { buildAnalysisHash, parseAnalysisHash } from "./analysisNavigation";
+import { buildAnalysisPath, parseAnalysisLocation } from "./analysisNavigation";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
 
 type HealthState =
@@ -157,7 +157,7 @@ export default function App() {
         setSelectedModuleId(moduleId);
         setSelectedMethodId(methodId);
         if (methodId !== null) {
-          replaceAnalysisHash(moduleId, methodId);
+          replaceAnalysisRoute(moduleId, methodId);
         }
       })
       .catch(() => {
@@ -168,6 +168,25 @@ export default function App() {
 
     return () => {
       controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handleRouteChange() {
+      const selection = initialAnalysisSelectionFromLocation();
+      setSelectedModuleId(selection.moduleId);
+      setSelectedMethodId(selection.methodId);
+    }
+
+    window.addEventListener("popstate", handleRouteChange);
+    window.addEventListener("hashchange", handleRouteChange);
+    return () => {
+      window.removeEventListener("popstate", handleRouteChange);
+      window.removeEventListener("hashchange", handleRouteChange);
     };
   }, []);
 
@@ -209,7 +228,7 @@ export default function App() {
     setSelectedModuleId(moduleId);
     setSelectedMethodId(methodId);
     if (methodId !== null) {
-      replaceAnalysisHash(moduleId, methodId);
+      replaceAnalysisRoute(moduleId, methodId);
     }
   }
 
@@ -1180,20 +1199,19 @@ function initialAnalysisSelectionFromLocation(): {
     };
   }
 
-  const parsed = parseAnalysisHash(window.location.hash);
+  const parsed = parseAnalysisLocation(window.location.pathname, window.location.hash);
   return {
     moduleId: parsed?.moduleId ?? defaultAnalysisModuleId,
     methodId: parsed?.methodId ?? null,
   };
 }
 
-function replaceAnalysisHash(moduleId: AnalysisModuleId, methodId: string) {
+function replaceAnalysisRoute(moduleId: AnalysisModuleId, methodId: string) {
   if (typeof window === "undefined") {
     return;
   }
-  window.history.replaceState(null, "", `#${buildAnalysisHash(moduleId, methodId)}`);
+  window.history.replaceState(null, "", buildAnalysisPath(moduleId, methodId));
 }
-
 
 function delimiterLabel(delimiter: string): string {
   if (delimiter === "\t") {
