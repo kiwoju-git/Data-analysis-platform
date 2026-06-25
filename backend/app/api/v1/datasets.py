@@ -12,9 +12,10 @@ from app.api.v1.schemas.datasets import (
     DatasetUploadResponse,
     DatasetVersionListResponse,
     DatasetVersionResponse,
+    PastedDatasetRequest,
 )
 from app.services.dataset_profiles import get_dataset_profile
-from app.services.dataset_upload import create_dataset_from_upload
+from app.services.dataset_upload import create_dataset_from_pasted_text, create_dataset_from_upload
 from app.services.dataset_versions import (
     confirm_dataset_parsing,
     get_dataset_rows_preview,
@@ -39,6 +40,21 @@ async def upload_dataset(
 ) -> DatasetUploadResponse:
     return await create_dataset_from_upload(
         upload_file=file,
+        settings=request.app.state.settings,
+    )
+
+
+@router.post(
+    "/paste",
+    response_model=DatasetUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_dataset_from_paste_route(
+    request: Request,
+    body: PastedDatasetRequest,
+) -> DatasetUploadResponse:
+    return create_dataset_from_pasted_text(
+        request=body,
         settings=request.app.state.settings,
     )
 

@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 from fastapi import UploadFile, status
 
-from app.api.v1.schemas.datasets import DatasetUploadResponse
+from app.api.v1.schemas.datasets import DatasetUploadResponse, PastedDatasetRequest
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.parsing_options import build_parsing_suggestion, detect_dataset_format
@@ -34,7 +34,37 @@ async def create_dataset_from_upload(
 ) -> DatasetUploadResponse:
     safe_filename = sanitize_filename(upload_file.filename)
     stored_upload = await _store_upload(upload_file, settings, safe_filename)
+    return _create_dataset_response_from_stored_upload(
+        stored_upload=stored_upload,
+        safe_filename=safe_filename,
+        media_type=upload_file.content_type,
+        settings=settings,
+    )
 
+
+def create_dataset_from_pasted_text(
+    request: PastedDatasetRequest,
+    settings: Settings,
+) -> DatasetUploadResponse:
+    safe_filename = sanitize_filename(request.original_filename or "pasted-data.txt")
+    if Path(safe_filename).suffix.lower() not in {".csv", ".tsv", ".txt"}:
+        safe_filename = f"{safe_filename}.txt"
+    stored_upload = _store_pasted_text(request.content, settings, safe_filename)
+    return _create_dataset_response_from_stored_upload(
+        stored_upload=stored_upload,
+        safe_filename=safe_filename,
+        media_type="text/plain; charset=utf-8",
+        settings=settings,
+    )
+
+
+def _create_dataset_response_from_stored_upload(
+    *,
+    stored_upload: StoredUpload,
+    safe_filename: str,
+    media_type: str | None,
+    settings: Settings,
+) -> DatasetUploadResponse:
     try:
         with stored_upload.absolute_path.open("rb") as handle:
             first_bytes = handle.read(SNIFF_BYTES)
@@ -52,7 +82,7 @@ async def create_dataset_from_upload(
                 dataset_id=stored_upload.dataset_id,
                 original_filename=safe_filename,
                 safe_filename=safe_filename,
-                media_type=upload_file.content_type,
+                media_type=media_type,
                 detected_format=detected_format.value,
                 stored_path=stored_upload.relative_path.as_posix(),
                 sha256=stored_upload.sha256,
@@ -140,6 +170,52 @@ async def _store_upload(
         relative_path=relative_path,
         absolute_path=absolute_path,
         sha256=digest.hexdigest(),
+        size_bytes=size_bytes,
+    )
+
+
+def _store_pasted_text(
+    content: str,
+    settings: Settings,
+    safe_filename: str,
+) -> StoredUpload:
+    if content.strip() == "":
+        raise ApiError(
+            code="empty_pasted_data",
+            message="붙여넣은 데이터가 비어 있습니다.",
+        )
+
+    payload = content.encode("utf-8")
+    size_bytes = len(payload)
+    if size_bytes > settings.max_upload_bytes:
+        raise ApiError(
+            code="file_too_large",
+            message="붙여넣은 데이터 크기가 허용 한도를 초과했습니다.",
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        )
+
+    dataset_id = str(uuid4())
+    relative_path = _raw_upload_relative_path(dataset_id, safe_filename)
+    absolute_path = settings.workspace_root / relative_path
+    absolute_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = _create_temp_path(absolute_path)
+    try:
+        with temp_path.open("wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, absolute_path)
+    except Exception:
+        _remove_if_exists(temp_path)
+        _remove_if_exists(absolute_path)
+        raise
+
+    return StoredUpload(
+        dataset_id=dataset_id,
+        safe_filename=safe_filename,
+        relative_path=relative_path,
+        absolute_path=absolute_path,
+        sha256=hashlib.sha256(payload).hexdigest(),
         size_bytes=size_bytes,
     )
 

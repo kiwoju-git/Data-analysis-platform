@@ -3,11 +3,17 @@ import { describe, expect, it } from "vitest";
 
 import App from "./App";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
-import type { AnalysisMethodListResponse } from "./api";
+import type { AnalysisMethodListResponse, DatasetColumnResponse } from "./api";
 import {
   analysisMethodGuidanceIds,
   getAnalysisMethodGuidance,
 } from "./analysisMethodGuidance";
+import {
+  filterOperatorOptions,
+  serializeAnalysisFilterDrafts,
+  validateAnalysisFilterDrafts,
+  type AnalysisFilterDraft,
+} from "./analysisFilters";
 import {
   buildAnalysisHash,
   buildAnalysisPath,
@@ -27,6 +33,7 @@ describe("App", () => {
     expect(html).toContain("분석 모듈");
     expect(html).toContain("데이터셋 파싱 확정");
     expect(html).toContain("원본 데이터 파일");
+    expect(html).toContain("복사한 표 붙여넣기");
     expect(html).toContain("스키마 확인");
     expect(html).toContain("미리보기");
   });
@@ -146,4 +153,95 @@ describe("App", () => {
     expect(html).toContain("Welch 기본");
     expect(html).toContain("계산 코드, 기준 데이터, 수치 검증 테스트");
   });
+
+  it("builds supported descriptive filter payloads without unsupported operators", () => {
+    const columns = filterTestColumns();
+
+    expect(filterOperatorOptions(columns[0]).map((operator) => operator.value)).toEqual([
+      "is_not_missing",
+      "is_missing",
+      "eq",
+      "ne",
+      "gt",
+      "gte",
+      "lt",
+      "lte",
+    ]);
+    expect(filterOperatorOptions(columns[1]).map((operator) => operator.value)).toEqual([
+      "is_not_missing",
+      "is_missing",
+      "eq",
+      "ne",
+    ]);
+
+    const drafts: AnalysisFilterDraft[] = [
+      {
+        id: "filter-1",
+        column_id: "column-a",
+        operator: "gt",
+        value: "1.5",
+      },
+      {
+        id: "filter-2",
+        column_id: "column-b",
+        operator: "is_not_missing",
+        value: "",
+      },
+    ];
+
+    expect(validateAnalysisFilterDrafts(drafts, columns)).toBeNull();
+    expect(serializeAnalysisFilterDrafts(drafts, columns)).toEqual([
+      {
+        column_id: "column-a",
+        operator: "gt",
+        value: "1.5",
+      },
+      {
+        column_id: "column-b",
+        operator: "is_not_missing",
+      },
+    ]);
+  });
+
+  it("rejects incomplete descriptive filter drafts before API submission", () => {
+    const columns = filterTestColumns();
+    const drafts: AnalysisFilterDraft[] = [
+      {
+        id: "filter-1",
+        column_id: "column-a",
+        operator: "lte",
+        value: "",
+      },
+    ];
+
+    expect(validateAnalysisFilterDrafts(drafts, columns)).toBe("filter_value_required");
+    expect(() => serializeAnalysisFilterDrafts(drafts, columns)).toThrow("filter_value_required");
+  });
 });
+
+function filterTestColumns(): DatasetColumnResponse[] {
+  return [
+    {
+      column_id: "column-a",
+      version_id: "version-1",
+      column_index: 0,
+      original_name: "a",
+      display_name: "A",
+      data_type: "decimal",
+      measurement_level: "continuous",
+      role: "feature",
+      unit: null,
+    },
+    {
+      column_id: "column-b",
+      version_id: "version-1",
+      column_index: 1,
+      original_name: "b",
+      display_name: "B",
+      data_type: "text",
+      measurement_level: "nominal",
+      role: "group",
+      unit: null,
+    },
+  ];
+}

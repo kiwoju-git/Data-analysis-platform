@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-06-25
+Last updated: 2026-06-26
 
 ## 1. Required Reading And Priority
 
@@ -35,7 +35,8 @@ Already implemented:
 - `dataset_artifacts` metadata table for app-owned dataset artifact paths and hashes
 - Atomic file write helper for small app-owned artifacts, with short temporary filename prefixes for deep Windows workspace paths
 - `POST /api/v1/datasets` multipart upload
-- `POST /api/v1/datasets/{dataset_id}/confirm-parsing` for delimited text files
+- `POST /api/v1/datasets/paste` for pasted spreadsheet text
+- `POST /api/v1/datasets/{dataset_id}/confirm-parsing` for delimited text files and basic XLSX worksheets
 - `GET /api/v1/datasets/{dataset_id}/versions`
 - `GET /api/v1/dataset-versions/{version_id}`
 - `GET /api/v1/dataset-versions/{version_id}/schema`
@@ -49,21 +50,23 @@ Already implemented:
 - `GET /api/v1/jobs/{job_id}`
 - `DELETE /api/v1/jobs/{job_id}`
 - CSV, TSV, TXT-as-delimited-text, XLSX envelope validation
+- Clipboard/paste text intake stores raw pasted bytes with SHA-256 provenance and reuses parsing confirmation
 - Upload size limit through `DATALAB_MAX_UPLOAD_BYTES`
 - Sanitized filename handling and UUID-based raw workspace paths
 - Raw upload preservation with SHA-256 and byte size metadata
 - Confirm-parsing raw upload integrity recheck against stored SHA-256 and byte size before canonical artifact creation
 - Parsing suggestions for encoding, delimiter, quote, decimal, thousands, header presence, header row, and data start row
-- Explicit parsing confirmation records encoding, delimiter, quote, decimal/thousands, header presence, header row, data start row, and missing tokens
+- Explicit parsing confirmation records encoding, delimiter, quote, decimal/thousands, header presence, header row, data start row, missing tokens, and XLSX sheet name where applicable
 - Delimited TXT files with leading preamble and no header can be confirmed with generated `column_1...column_n` names
 - Default parsing-confirmation missing tokens include `N/T` for local no-test/not-tested style entries, while still remaining user-editable before confirmation
-- Immutable dataset version `v1` creation for confirmed delimited text uploads
+- Immutable dataset version `v1` creation for confirmed delimited text and basic XLSX uploads
 - Streamed header and row-count scan for delimited text without browser full-data loading
 - Dataset schema lookup/update for display name, measurement level, role, and unit
 - Paginated canonical row preview with `limit <= 100`
-- Canonical UTF-8 JSONL rows and JSON manifest materialization for confirmed delimited text dataset versions
-- Basic delimited-text profile/preflight API with aggregate missing, unique-count, numeric, date/time, constant-column, possible-ID, non-numeric-in-numeric, non-datetime-in-datetime, duplicate-row, canonical-artifact, persisted profile-artifact, and memory-estimate warnings
+- Canonical UTF-8 JSONL rows and JSON manifest materialization for confirmed delimited text and basic XLSX dataset versions
+- Basic profile/preflight API with aggregate missing, unique-count, numeric, date/time, constant-column, possible-ID, non-numeric-in-numeric, non-datetime-in-datetime, duplicate-row, canonical-artifact, persisted profile-artifact, and memory-estimate warnings
 - Minimal React UI for upload, parsing confirmation, dataset Context Bar, schema update, and row preview
+- Minimal React UI for pasted spreadsheet text intake without keeping successful paste contents in React state
 - Minimal React UI for profile/preflight warnings, canonical/profile artifact summary, preflight summary, and column-level aggregate/numeric/date-time profile table
 - Minimal React schema UI includes a guarded 34-column headerless Bayesian sample role preset: `column_1` as ID, `column_2`-`column_25` as X/features, and `column_26`-`column_34` as Y/responses
 - Analysis method registry with 6 modules and 29 stable method IDs
@@ -83,8 +86,8 @@ Already implemented:
 - `eda.descriptive` is the first executable method and computes real descriptive statistics from confirmed dataset versions
 - Descriptive statistics result persistence stores app-owned JSON under the workspace and records result SHA-256 in `analysis_runs`
 - `eda.descriptive` runs persist an `analysis_row_snapshot` artifact with filter snapshot hash, source canonical artifact hash, included row counts, and row ranges for supported filters
-- XLSX container checks and sheet-selection warning
-- XLSX parsing confirmation is intentionally rejected with `xlsx_confirmation_pending` until workbook parser adoption
+- XLSX container checks, sheet-selection warning, and basic stdlib parsing confirmation for the first or named worksheet
+- XLSX formula recalculation, merged-cell expansion, hidden row/column handling, and display-format/date serial restoration remain out of scope
 - Synthetic upload tests, parsing confirmation tests, canonical artifact tests, and migration upgrade tests from schema version `1`/`2`/`3`/`4` to `5`
 - Schema update validation tests and rows preview pagination/bounds tests
 - Synthetic tests for preamble-plus-headerless delimited text upload, parsing confirmation, generated columns, and row preview
@@ -102,12 +105,17 @@ Already implemented:
   - `eda.descriptive` filter snapshots are frozen into `analysis_row_snapshot` artifacts
   - analysis provenance records filter snapshot hash, row snapshot hash, total row count, and included row count
   - supported non-empty filters select canonical row-index ranges before calculation
+- Frontend controls for `eda.descriptive` supported filters:
+  - users can add/remove AND filter conditions before running descriptive statistics
+  - numeric columns expose `gt`/`gte`/`lt`/`lte`; all columns expose missing and equality conditions
+  - filter drafts are validated before API submission and serialized into `filter_snapshot.conditions`
 
 Not implemented yet:
 
 - Full profile API beyond the current aggregate/duplicate/memory/date-time preflight slice
 - Deeper route-based Analysis Workbench page decomposition and additional shared feature components
-- Frontend controls for supported filter conditions
+- Cross-method reusable filter UI beyond the first `eda.descriptive` panel
+- Full XLSX workbook semantics beyond cached worksheet values
 - Cell-level data editing or transformations that create a new immutable dataset version
 - Executable analysis method dispatch beyond the inline `eda.descriptive` slice
 - Any statistical calculation beyond `eda.descriptive`
@@ -228,7 +236,7 @@ The next implementation PR should remain narrow and must still avoid fake statis
 
 Allowed next scope:
 
-- Move the shared Workbench into deeper dedicated route-level analysis components/pages, or add frontend controls for supported filter conditions.
+- Move the shared Workbench into deeper dedicated route-level analysis components/pages, or generalize the first filter controls for cross-method reuse.
 - Keep every method except `eda.descriptive` unavailable until real calculation code and tests exist.
 - Keep analysis run status/job storage as infrastructure unless a later method requires worker execution.
 
@@ -321,8 +329,8 @@ Current status:
 - The canonical reader adoption slice is implemented: profile and `eda.descriptive` read validated canonical rows and reject corrupt artifacts without raw fallback.
 - The persisted profile artifact slice is implemented: profile scans write raw-value-free `profile_summary` JSON artifacts and expose latest hash/size metadata.
 - The date/time preflight slice is implemented: profile reports conservative format/timezone aggregate checks without coercing values.
-- Still missing in Gate B0/B1 transition: deeper route-based Analysis Workbench page decomposition, frontend filter controls, and additional reference-backed methods.
-- XLSX upload is accepted for envelope validation only; parsing confirmation remains blocked until a workbook parser dependency is reviewed.
+- Still missing in Gate B0/B1 transition: deeper route-based Analysis Workbench page decomposition, cross-method filter reuse, and additional reference-backed methods.
+- Basic XLSX parsing confirmation is implemented with a stdlib ZIP/XML reader; full workbook semantics remain out of scope.
 
 ### Gate B1: Exploratory Analysis
 
@@ -761,7 +769,7 @@ Validation:
 Known limitations:
 
 - No statistical method calculation or mock result is introduced.
-- XLSX confirmation remains intentionally blocked until workbook parser dependency review.
+- Superseded by the basic XLSX parsing-confirmation slice: XLSX cached worksheet values can now be confirmed into canonical JSONL rows.
 - Full profile beyond the current aggregate/duplicate/memory/profile-artifact preflight slice is not implemented yet.
 
 ## 7. PR Description Draft For Gate B0 Third Slice
@@ -924,8 +932,8 @@ Next PR:
 
 - Superseded by section 11: profile artifacts with hashes are implemented.
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should split deeper route-level Workbench views or add frontend controls for supported filters.
-- Keep frontend filter controls and deeper Workbench decomposition as separate narrow slices unless one is explicitly selected.
+- Next narrow slice should split deeper route-level Workbench views or generalize filter controls for cross-method reuse.
+- Keep cross-method filter reuse and deeper Workbench decomposition as separate narrow slices unless one is explicitly selected.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 
 Validation:
@@ -941,7 +949,7 @@ Known limitations:
 
 - JSONL canonical rows are a stdlib local format; Parquet remains a future candidate after `pyarrow` review.
 - Profile artifacts are now persisted by the later section 11 slice.
-- XLSX parsing confirmation remains intentionally blocked until workbook parser dependency review.
+- Superseded by the basic XLSX parsing-confirmation slice: XLSX cached worksheet values can now be confirmed into canonical JSONL rows.
 
 ## 10. PR Description Draft For Canonical Reader Adoption Slice
 
@@ -979,8 +987,8 @@ Next PR:
 
 - Superseded by section 11: profile result artifacts with hash metadata are implemented.
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should add frontend controls for supported filters or deeper route-level Workbench separation.
-- Keep frontend filter controls and deeper Workbench decomposition as separate narrow slices.
+- Next narrow slice should generalize filter controls for cross-method reuse or deepen route-level Workbench separation.
+- Keep cross-method filter reuse and deeper Workbench decomposition as separate narrow slices.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 
 Validation:
@@ -1035,8 +1043,8 @@ Document priority:
 Next PR:
 
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should split the shared Workbench into deeper dedicated route-level analysis pages or add frontend controls for supported filters.
-- Keep frontend filter controls as a separate narrow slice unless the selected next slice needs it.
+- Next narrow slice should split the shared Workbench into deeper dedicated route-level analysis pages or generalize filter controls for cross-method reuse.
+- Keep cross-method filter reuse as a separate narrow slice unless the selected next slice needs it.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 - Do not make planned methods executable without real calculation code, reference tests, provenance, and no-mock API/UI behavior.
 
@@ -1092,7 +1100,7 @@ Document priority:
 
 Next PR:
 
-- Split the shared Workbench into deeper dedicated route-level analysis pages, or add frontend controls for supported filters.
+- Split the shared Workbench into deeper dedicated route-level analysis pages, or generalize filter controls for cross-method reuse.
 - Keep cell editing/transformation versioning as a separate slice unless explicitly selected.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 - Do not make planned methods executable without real calculation code, reference tests, provenance, and no-mock API/UI behavior.

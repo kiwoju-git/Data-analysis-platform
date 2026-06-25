@@ -41,6 +41,11 @@ export interface DatasetUploadResponse {
   next_step: "confirm_schema";
 }
 
+export interface PastedDatasetRequest {
+  content: string;
+  original_filename?: string | null;
+}
+
 export interface ConfirmedParsingOptions {
   kind: "delimited_text" | "xlsx";
   encoding: string | null;
@@ -261,26 +266,32 @@ export interface AnalysisMethodListResponse {
   methods: AnalysisMethodDescriptor[];
 }
 
+export type AnalysisFilterOperator =
+  | "is_missing"
+  | "is_not_missing"
+  | "eq"
+  | "ne"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte";
+
+export interface AnalysisFilterCondition {
+  column_id: string;
+  operator: AnalysisFilterOperator;
+  value?: string | number | null;
+}
+
+export interface AnalysisFilterSnapshot {
+  expression_version: number;
+  conditions: AnalysisFilterCondition[];
+}
+
 export interface AnalysisRunRequest {
   method_id: string;
   method_version: string;
   dataset_version_id: string | null;
-  filter_snapshot: {
-    expression_version: number;
-    conditions: Array<{
-      column_id: string;
-      operator:
-        | "is_missing"
-        | "is_not_missing"
-        | "eq"
-        | "ne"
-        | "gt"
-        | "gte"
-        | "lt"
-        | "lte";
-      value?: string | number | null;
-    }>;
-  };
+  filter_snapshot: AnalysisFilterSnapshot;
   roles: Record<string, string>;
   options: Record<string, unknown>;
 }
@@ -367,7 +378,7 @@ function isHealthResponse(value: unknown): value is HealthResponse {
 }
 
 export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/health`, {
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/health`, {
     headers: {
       Accept: "application/json",
     },
@@ -390,7 +401,7 @@ export async function uploadDataset(file: File): Promise<DatasetUploadResponse> 
   const body = new FormData();
   body.append("file", file);
 
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/datasets`, {
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/datasets`, {
     method: "POST",
     body,
   });
@@ -402,11 +413,10 @@ export async function uploadDataset(file: File): Promise<DatasetUploadResponse> 
   return (await response.json()) as DatasetUploadResponse;
 }
 
-export async function confirmDatasetParsing(
-  datasetId: string,
-  request: DatasetParsingConfirmationRequest,
-): Promise<DatasetVersionResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/datasets/${datasetId}/confirm-parsing`, {
+export async function createDatasetFromPastedText(
+  request: PastedDatasetRequest,
+): Promise<DatasetUploadResponse> {
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/datasets/paste`, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -414,6 +424,29 @@ export async function confirmDatasetParsing(
     },
     body: JSON.stringify(request),
   });
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "dataset_paste_failed"));
+  }
+
+  return (await response.json()) as DatasetUploadResponse;
+}
+
+export async function confirmDatasetParsing(
+  datasetId: string,
+  request: DatasetParsingConfirmationRequest,
+): Promise<DatasetVersionResponse> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/datasets/${datasetId}/confirm-parsing`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(await apiErrorCode(response, "parsing_confirmation_failed"));
@@ -426,14 +459,17 @@ export async function updateDatasetSchema(
   versionId: string,
   request: DatasetSchemaUpdateRequest,
 ): Promise<DatasetSchemaResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/dataset-versions/${versionId}/schema`, {
-    method: "PATCH",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/dataset-versions/${versionId}/schema`,
+    {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
     },
-    body: JSON.stringify(request),
-  });
+  );
 
   if (!response.ok) {
     throw new Error(await apiErrorCode(response, "schema_update_failed"));
@@ -451,7 +487,7 @@ export async function fetchRowsPreview(
     limit: String(limit),
     offset: String(offset),
   });
-  const response = await fetch(
+  const response = await fetchApi(
     `${getApiBaseUrl()}/api/v1/dataset-versions/${versionId}/rows?${params.toString()}`,
     {
       headers: {
@@ -468,7 +504,7 @@ export async function fetchRowsPreview(
 }
 
 export async function fetchDatasetProfile(versionId: string): Promise<DatasetProfileResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/dataset-versions/${versionId}/profile`, {
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/dataset-versions/${versionId}/profile`, {
     headers: {
       Accept: "application/json",
     },
@@ -484,7 +520,7 @@ export async function fetchDatasetProfile(versionId: string): Promise<DatasetPro
 export async function fetchAnalysisMethods(
   signal?: AbortSignal,
 ): Promise<AnalysisMethodListResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/analysis-methods`, {
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/analysis-methods`, {
     headers: {
       Accept: "application/json",
     },
@@ -501,7 +537,7 @@ export async function fetchAnalysisMethods(
 export async function createAnalysisRun(
   request: AnalysisRunRequest,
 ): Promise<AnalysisResultEnvelope> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/analysis-runs`, {
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/analysis-runs`, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -515,6 +551,17 @@ export async function createAnalysisRun(
   }
 
   return (await response.json()) as AnalysisResultEnvelope;
+}
+
+async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("api_unreachable");
+    }
+    throw error;
+  }
 }
 
 async function apiErrorCode(response: Response, fallback: string): Promise<string> {

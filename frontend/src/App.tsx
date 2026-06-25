@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import "./App.css";
 import {
   confirmDatasetParsing,
+  createDatasetFromPastedText,
   createAnalysisRun,
   fetchAnalysisMethods,
   fetchDatasetProfile,
@@ -25,8 +26,16 @@ import {
   type DescriptiveStatisticsResult,
   type HealthResponse,
 } from "./api";
+import {
+  AnalysisFilterControls,
+} from "./AnalysisFilterControls";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { buildAnalysisPath, parseAnalysisLocation } from "./analysisNavigation";
+import {
+  serializeAnalysisFilterDrafts,
+  validateAnalysisFilterDrafts,
+  type AnalysisFilterDraft,
+} from "./analysisFilters";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
 
 type HealthState =
@@ -95,6 +104,16 @@ function statusClassName(health: HealthState): string {
   return "status-pill";
 }
 
+function canConfirmParsingOptions(options: ConfirmedParsingOptions): boolean {
+  if (!(options.has_header || options.data_start_row !== null)) {
+    return false;
+  }
+  if (options.kind === "delimited_text") {
+    return options.encoding !== null && options.delimiter !== null;
+  }
+  return options.kind === "xlsx";
+}
+
 export default function App() {
   const initialAnalysisSelection = initialAnalysisSelectionFromLocation();
   const [health, setHealth] = useState<HealthState>({ kind: "checking" });
@@ -114,9 +133,15 @@ export default function App() {
   const [preview, setPreview] = useState<DatasetRowsPreviewResponse | null>(null);
   const [profile, setProfile] = useState<DatasetProfileResponse | null>(null);
   const [selectedDescriptiveColumnIds, setSelectedDescriptiveColumnIds] = useState<string[]>([]);
+  const [descriptiveFilterDrafts, setDescriptiveFilterDrafts] = useState<AnalysisFilterDraft[]>(
+    [],
+  );
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
+  const pasteTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [pastedTextLength, setPastedTextLength] = useState(0);
   const [previewOffset, setPreviewOffset] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [isPastingDataset, setIsPastingDataset] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSavingSchema, setIsSavingSchema] = useState(false);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -199,10 +224,7 @@ export default function App() {
   const canConfirm =
     upload !== null &&
     parsingOptions !== null &&
-    parsingOptions.kind === "delimited_text" &&
-    parsingOptions.encoding !== null &&
-    parsingOptions.delimiter !== null &&
-    (parsingOptions.has_header || parsingOptions.data_start_row !== null) &&
+    canConfirmParsingOptions(parsingOptions) &&
     !isConfirming;
 
   const selectedModule = useMemo(
@@ -241,6 +263,7 @@ export default function App() {
     setPreview(null);
     setProfile(null);
     setSelectedDescriptiveColumnIds([]);
+    setDescriptiveFilterDrafts([]);
     setAnalysisResult(null);
     setPreviewOffset(0);
     setFlowError(null);
@@ -260,6 +283,7 @@ export default function App() {
     setPreview(null);
     setProfile(null);
     setSelectedDescriptiveColumnIds([]);
+    setDescriptiveFilterDrafts([]);
     setAnalysisResult(null);
     setPreviewOffset(0);
     try {
@@ -272,6 +296,47 @@ export default function App() {
       setFlowError(error instanceof Error ? error.message : "dataset_upload_failed");
     } finally {
       setIsUploading(false);
+    }
+  }
+
+  async function handlePasteDataset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const content = pasteTextAreaRef.current?.value ?? "";
+    if (content.trim() === "") {
+      setFlowError("empty_pasted_data");
+      return;
+    }
+
+    setIsPastingDataset(true);
+    setFlowError(null);
+    setSelectedFile(null);
+    setUpload(null);
+    setParsingOptions(null);
+    setVersion(null);
+    setSchemaDrafts([]);
+    setPreview(null);
+    setProfile(null);
+    setSelectedDescriptiveColumnIds([]);
+    setDescriptiveFilterDrafts([]);
+    setAnalysisResult(null);
+    setPreviewOffset(0);
+    try {
+      const response = await createDatasetFromPastedText({
+        content,
+        original_filename: "pasted-data.txt",
+      });
+      setUpload(response);
+      setParsingOptions(parsingSuggestionToConfirmation(response));
+      if (pasteTextAreaRef.current !== null) {
+        pasteTextAreaRef.current.value = "";
+      }
+      setPastedTextLength(0);
+    } catch (error) {
+      setUpload(null);
+      setParsingOptions(null);
+      setFlowError(error instanceof Error ? error.message : "dataset_paste_failed");
+    } finally {
+      setIsPastingDataset(false);
     }
   }
 
@@ -290,6 +355,7 @@ export default function App() {
       setVersion(response);
       setSchemaDrafts(schemaDraftsFromColumns(response.columns));
       setSelectedDescriptiveColumnIds(defaultDescriptiveColumnIds(response.columns));
+      setDescriptiveFilterDrafts([]);
       setAnalysisResult(null);
       setPreviewOffset(0);
       await Promise.all([loadRowsPreview(response.version_id, 0), loadDatasetProfile(response.version_id)]);
@@ -393,6 +459,14 @@ export default function App() {
     ? analysisResult.result
     : null;
 
+  const descriptiveFilterValidationError = useMemo(
+    () =>
+      version === null
+        ? null
+        : validateAnalysisFilterDrafts(descriptiveFilterDrafts, version.columns),
+    [descriptiveFilterDrafts, version],
+  );
+
   async function handleRunDescriptiveAnalysis() {
     if (
       version === null ||
@@ -403,17 +477,25 @@ export default function App() {
       setFlowError("descriptive_columns_required");
       return;
     }
+    if (descriptiveFilterValidationError !== null) {
+      setFlowError(descriptiveFilterValidationError);
+      return;
+    }
 
     setIsRunningAnalysis(true);
     setFlowError(null);
     try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        descriptiveFilterDrafts,
+        version.columns,
+      );
       const response = await createAnalysisRun({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
         filter_snapshot: {
           expression_version: 1,
-          conditions: [],
+          conditions: filterConditions,
         },
         roles: {},
         options: {
@@ -523,9 +605,26 @@ export default function App() {
                               </label>
                             ))}
                           </div>
+                          <AnalysisFilterControls
+                            columns={version.columns}
+                            drafts={descriptiveFilterDrafts}
+                            onChange={(drafts) => {
+                              setDescriptiveFilterDrafts(drafts);
+                              setAnalysisResult(null);
+                            }}
+                          />
+                          {descriptiveFilterValidationError !== null ? (
+                            <div className="error-box">
+                              {filterValidationMessage(descriptiveFilterValidationError)}
+                            </div>
+                          ) : null}
                           <button
                             className="primary-button"
-                            disabled={isRunningAnalysis || selectedDescriptiveColumnIds.length === 0}
+                            disabled={
+                              isRunningAnalysis ||
+                              selectedDescriptiveColumnIds.length === 0 ||
+                              descriptiveFilterValidationError !== null
+                            }
                             onClick={() => {
                               void handleRunDescriptiveAnalysis();
                             }}
@@ -533,6 +632,20 @@ export default function App() {
                           >
                             {isRunningAnalysis ? "실행 중" : "기술통계 실행"}
                           </button>
+                          {analysisResult?.provenance.row_count_included !== undefined &&
+                          analysisResult.provenance.row_count_included !== null ? (
+                            <div className="metadata-grid" aria-label="분석 대상 행">
+                              <span>사용 행</span>
+                              <strong>
+                                {analysisResult.provenance.row_count_included.toLocaleString()} /
+                                {" "}
+                                {(
+                                  analysisResult.provenance.row_count_total ??
+                                  analysisResult.provenance.row_count_included
+                                ).toLocaleString()}
+                              </strong>
+                            </div>
+                          ) : null}
                           {analysisResult?.warnings.length ? (
                             <ul className="warning-list" aria-label="분석 경고">
                               {analysisResult.warnings.map((warning, index) => (
@@ -608,6 +721,34 @@ export default function App() {
             <button className="primary-button" disabled={selectedFile === null || isUploading}>
               {isUploading ? "업로드 중" : "업로드"}
             </button>
+          </form>
+          <form
+            className="paste-panel"
+            onSubmit={(event) => {
+              void handlePasteDataset(event);
+            }}
+          >
+            <label className="paste-control">
+              <span>복사한 표 붙여넣기</span>
+              <textarea
+                ref={pasteTextAreaRef}
+                onChange={(event) => {
+                  setPastedTextLength(event.currentTarget.value.length);
+                }}
+                placeholder="Excel이나 스프레드시트에서 범위를 복사한 뒤 여기에 붙여넣으세요."
+                rows={6}
+              />
+            </label>
+            <div className="paste-actions">
+              <span>{pastedTextLength.toLocaleString()}자</span>
+              <button
+                className="primary-button"
+                disabled={pastedTextLength === 0 || isPastingDataset}
+                type="submit"
+              >
+                {isPastingDataset ? "등록 중" : "붙여넣기 데이터 등록"}
+              </button>
+            </div>
           </form>
           {flowError !== null ? (
             <div className="error-box" role="alert">
@@ -731,7 +872,75 @@ export default function App() {
                   </label>
                 </div>
               ) : (
-                <div className="notice-box">XLSX 파싱 확정은 워크북 파서 도입 후 활성화됩니다.</div>
+                <div className="option-grid">
+                  <label>
+                    <span>시트명</span>
+                    <input
+                      placeholder="비우면 첫 시트"
+                      value={parsingOptions.xlsx_sheet_name ?? ""}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value.trim();
+                        setParsingOptions({
+                          ...parsingOptions,
+                          xlsx_sheet_name: value === "" ? null : value,
+                        });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    <span>첫 데이터 행을 헤더로 사용</span>
+                    <input
+                      checked={parsingOptions.has_header}
+                      type="checkbox"
+                      onChange={(event) => {
+                        const hasHeader = event.currentTarget.checked;
+                        setParsingOptions({
+                          ...parsingOptions,
+                          has_header: hasHeader,
+                          data_start_row: hasHeader
+                            ? parsingOptions.header_row + 1
+                            : (parsingOptions.data_start_row ?? parsingOptions.header_row),
+                        });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    <span>{parsingOptions.has_header ? "헤더 행" : "데이터 시작 행"}</span>
+                    <input
+                      min={1}
+                      type="number"
+                      value={
+                        parsingOptions.has_header
+                          ? parsingOptions.header_row
+                          : (parsingOptions.data_start_row ?? parsingOptions.header_row)
+                      }
+                      onChange={(event) => {
+                        const rowNumber = Number(event.currentTarget.value);
+                        setParsingOptions({
+                          ...parsingOptions,
+                          header_row: parsingOptions.has_header
+                            ? rowNumber
+                            : parsingOptions.header_row,
+                          data_start_row: parsingOptions.has_header
+                            ? rowNumber + 1
+                            : rowNumber,
+                        });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    <span>결측 토큰</span>
+                    <input
+                      value={parsingOptions.missing_tokens.join(",")}
+                      onChange={(event) => {
+                        setParsingOptions({
+                          ...parsingOptions,
+                          missing_tokens: event.currentTarget.value.split(","),
+                        });
+                      }}
+                    />
+                  </label>
+                </div>
               )}
               <button
                 className="primary-button"
@@ -1186,6 +1395,19 @@ function measurementLevelLabel(value: DatasetMeasurementLevel): string {
 
 function roleLabel(value: DatasetColumnRole): string {
   return columnRoles.find((role) => role.value === value)?.label ?? value;
+}
+
+function filterValidationMessage(code: string): string {
+  if (code === "filter_column_not_found") {
+    return "필터 컬럼을 찾을 수 없습니다.";
+  }
+  if (code === "filter_operator_not_supported_for_column") {
+    return "선택한 컬럼에는 해당 필터 조건을 사용할 수 없습니다.";
+  }
+  if (code === "filter_value_required") {
+    return "필터 조건 값을 입력하세요.";
+  }
+  return code;
 }
 
 function initialAnalysisSelectionFromLocation(): {

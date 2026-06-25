@@ -55,10 +55,10 @@ def get_dataset_rows_context(settings: Settings, version_id: UUID) -> DatasetRow
         )
 
     parsing = ConfirmedParsingOptions.model_validate(json.loads(version.parsing_options_json))
-    if parsing.kind != "delimited_text":
+    if parsing.kind not in {"delimited_text", "xlsx"}:
         raise ApiError(
             code="dataset_rows_not_supported",
-            message="현재 분석은 구분 텍스트 데이터셋 버전만 지원합니다.",
+            message="현재 분석은 구분 텍스트와 XLSX 데이터셋 버전만 지원합니다.",
         )
 
     columns = list_dataset_column_records(settings.workspace_root, version.version_id)

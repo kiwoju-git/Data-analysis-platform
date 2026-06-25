@@ -40,6 +40,7 @@ from app.services.dataset_rows import (
     get_dataset_rows_context,
     iter_dataset_rows,
 )
+from app.services.xlsx_reader import XlsxSheetRow, iter_xlsx_sheet_rows
 from app.storage.metadata import (
     DatasetArtifactRecord,
     DatasetColumnRecord,
@@ -58,7 +59,7 @@ ALLOWED_TEXT_ENCODINGS: Final = {"utf-8", "utf-8-sig", "cp949"}
 ALLOWED_TEXT_DELIMITERS: Final = {",", "\t", ";", "|"}
 ALLOWED_DECIMALS: Final = {".", ","}
 ALLOWED_THOUSANDS: Final = {",", ".", " ", "'", None}
-SUPPORTED_CONFIRMATION_FORMATS: Final = {"csv", "tsv", "delimited_text"}
+SUPPORTED_TEXT_CONFIRMATION_FORMATS: Final = {"csv", "tsv", "delimited_text"}
 MAX_MISSING_TOKENS: Final = 50
 MAX_MISSING_TOKEN_LENGTH: Final = 40
 
@@ -99,7 +100,7 @@ def confirm_dataset_parsing(
     options = request.parsing
     _validate_confirmation_options(dataset.detected_format, options)
 
-    parsed_schema = _scan_delimited_schema(source_path, options)
+    parsed_schema = _scan_dataset_schema(source_path, options)
     columns = _build_column_records(parsed_schema, request.columns)
     parsing_options_json = _dump_parsing_options(options)
 
@@ -472,12 +473,24 @@ def _validate_confirmation_options(
     options: ConfirmedParsingOptions,
 ) -> None:
     if detected_format == "xlsx":
-        raise ApiError(
-            code="xlsx_confirmation_pending",
-            message="XLSX 파싱 확정은 워크북 파서 도입 후 사용할 수 있습니다.",
-        )
+        if options.kind != "xlsx":
+            raise ApiError(
+                code="inconsistent_parsing_options",
+                message="업로드 형식과 파싱 확정 옵션이 일치하지 않습니다.",
+            )
+        if options.xlsx_sheet_name is not None and len(options.xlsx_sheet_name.strip()) > 120:
+            raise ApiError(
+                code="xlsx_sheet_name_too_long",
+                message="XLSX 시트명이 허용 길이를 초과했습니다.",
+            )
+        _validate_header_and_data_rows(options)
+        _validate_missing_tokens(options)
+        return
 
-    if detected_format not in SUPPORTED_CONFIRMATION_FORMATS or options.kind != "delimited_text":
+    if (
+        detected_format not in SUPPORTED_TEXT_CONFIRMATION_FORMATS
+        or options.kind != "delimited_text"
+    ):
         raise ApiError(
             code="inconsistent_parsing_options",
             message="업로드 형식과 파싱 확정 옵션이 일치하지 않습니다.",
@@ -513,14 +526,16 @@ def _validate_confirmation_options(
             message="소수점과 천 단위 구분자는 같을 수 없습니다.",
         )
 
+    _validate_header_and_data_rows(options)
+    _validate_missing_tokens(options)
+
+
+def _validate_header_and_data_rows(options: ConfirmedParsingOptions) -> None:
     if options.has_header:
         if options.data_start_row is not None and options.data_start_row != options.header_row + 1:
             raise ApiError(
                 code="invalid_data_start_row",
-                message=(
-                    "헤더가 있는 텍스트 데이터의 데이터 시작 행은 "
-                    "헤더 바로 다음 행이어야 합니다."
-                ),
+                message="헤더가 있는 데이터의 데이터 시작 행은 헤더 바로 다음 행이어야 합니다.",
             )
     elif options.data_start_row is not None and options.data_start_row < 1:
         raise ApiError(
@@ -528,6 +543,8 @@ def _validate_confirmation_options(
             message="데이터 시작 행은 1 이상이어야 합니다.",
         )
 
+
+def _validate_missing_tokens(options: ConfirmedParsingOptions) -> None:
     if len(options.missing_tokens) > MAX_MISSING_TOKENS:
         raise ApiError(
             code="too_many_missing_tokens",
@@ -572,6 +589,17 @@ def _remove_artifact_files(
             (workspace_root / relative_path).unlink()
         except FileNotFoundError:
             continue
+
+
+def _scan_dataset_schema(path: Path, options: ConfirmedParsingOptions) -> _ParsedSchema:
+    if options.kind == "delimited_text":
+        return _scan_delimited_schema(path, options)
+    if options.kind == "xlsx":
+        return _scan_xlsx_schema(path, options)
+    raise ApiError(
+        code="unsupported_parsing_kind",
+        message="지원하지 않는 파싱 방식입니다.",
+    )
 
 
 def _scan_delimited_schema(path: Path, options: ConfirmedParsingOptions) -> _ParsedSchema:
@@ -626,6 +654,43 @@ def _scan_delimited_schema(path: Path, options: ConfirmedParsingOptions) -> _Par
     )
 
 
+def _scan_xlsx_schema(path: Path, options: ConfirmedParsingOptions) -> _ParsedSchema:
+    rows = iter_xlsx_sheet_rows(path, options.xlsx_sheet_name)
+    first_data_row: list[str] | None = None
+    if options.has_header:
+        headers = _read_xlsx_header(rows, options.header_row)
+    else:
+        first_data_row = _read_xlsx_data_start_row(rows, _first_data_row_number(options))
+        headers = _generated_headers(len(first_data_row))
+
+    inferences = [_ColumnInference() for _ in headers]
+    row_count = 0
+    if first_data_row is not None:
+        row_count += 1
+        _observe_row(first_data_row, inferences, options)
+
+    first_data_row_number = _first_data_row_number(options)
+    for sheet_row in rows:
+        if sheet_row.row_number < first_data_row_number:
+            continue
+        if _is_blank_row(sheet_row.cells):
+            continue
+        row_count += 1
+        _observe_row(sheet_row.cells, inferences, options)
+
+    if row_count == 0:
+        raise ApiError(
+            code="no_data_rows",
+            message="헤더 아래에 데이터 행이 없습니다.",
+        )
+
+    return _ParsedSchema(
+        headers=headers,
+        row_count=row_count,
+        data_types=[_data_type_for_inference(inference) for inference in inferences],
+    )
+
+
 def _csv_reader(handle: TextIO, options: ConfirmedParsingOptions) -> Iterator[list[str]]:
     if options.delimiter is None:
         raise ApiError(
@@ -661,12 +726,59 @@ def _read_header(reader: Iterator[list[str]], header_row: int) -> list[str]:
     return header
 
 
+def _read_xlsx_header(reader: Iterator[XlsxSheetRow], header_row: int) -> list[str]:
+    header: list[str] | None = None
+    for sheet_row in reader:
+        if sheet_row.row_number < header_row:
+            continue
+        if sheet_row.row_number == header_row:
+            header = sheet_row.cells
+        break
+
+    if header is None:
+        raise ApiError(
+            code="header_row_not_found",
+            message="지정한 헤더 행을 찾을 수 없습니다.",
+        )
+
+    if not header or all(cell.strip() == "" for cell in header):
+        raise ApiError(
+            code="header_row_empty",
+            message="헤더 행에 사용할 수 있는 컬럼명이 없습니다.",
+        )
+
+    return header
+
+
 def _read_data_start_row(reader: Iterator[list[str]], data_start_row: int) -> list[str]:
     data_row: list[str] | None = None
     for line_number, row in enumerate(reader, start=1):
         if line_number < data_start_row:
             continue
         data_row = row
+        break
+
+    if data_row is None:
+        raise ApiError(
+            code="data_start_row_not_found",
+            message="지정한 데이터 시작 행을 찾을 수 없습니다.",
+        )
+
+    if _is_blank_row(data_row):
+        raise ApiError(
+            code="data_start_row_empty",
+            message="데이터 시작 행에 사용할 수 있는 값이 없습니다.",
+        )
+
+    return data_row
+
+
+def _read_xlsx_data_start_row(reader: Iterator[XlsxSheetRow], data_start_row: int) -> list[str]:
+    data_row: list[str] | None = None
+    for sheet_row in reader:
+        if sheet_row.row_number < data_start_row:
+            continue
+        data_row = sheet_row.cells
         break
 
     if data_row is None:

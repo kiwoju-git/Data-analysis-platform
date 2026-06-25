@@ -179,6 +179,59 @@ def test_cp949_text_upload_is_supported(tmp_path) -> None:
     assert "cp949" in response.json()["parsing"]["encoding_candidates"]
 
 
+def test_create_dataset_from_pasted_text_preserves_raw_and_can_confirm(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = "alpha\tbeta\n1\tx\n2\tN/T\n"
+
+    with TestClient(create_app(settings)) as client:
+        paste_response = client.post(
+            "/api/v1/datasets/paste",
+            json={"content": content, "original_filename": "clipboard.txt"},
+        )
+        dataset_id = paste_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": "\t",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                    "xlsx_sheet_name": None,
+                },
+                "columns": [],
+            },
+        )
+        preview_response = client.get(
+            f"/api/v1/dataset-versions/{confirm_response.json()['version_id']}/rows",
+        )
+
+    assert paste_response.status_code == 201
+    paste_payload = paste_response.json()
+    assert paste_payload["original_filename"] == "clipboard.txt"
+    assert paste_payload["detected_format"] == "delimited_text"
+    assert paste_payload["sha256"] == hashlib.sha256(content.encode("utf-8")).hexdigest()
+    assert paste_payload["parsing"]["suggested_delimiter"] == "\t"
+
+    record = get_dataset_record(settings.workspace_root, dataset_id)
+    assert record is not None
+    assert (settings.workspace_root / record.stored_path).read_text(encoding="utf-8") == content
+
+    assert confirm_response.status_code == 201
+    assert confirm_response.json()["row_count"] == 2
+    assert preview_response.status_code == 200
+    assert preview_response.json()["rows"] == [
+        {"row_index": 0, "values": ["1", "x"]},
+        {"row_index": 1, "values": ["2", None]},
+    ]
+
+
 def test_confirm_parsing_creates_immutable_dataset_version_and_columns(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"alpha,beta\n1,2.5\n3,4.25\n"
@@ -428,7 +481,68 @@ def test_confirm_parsing_rejects_invalid_options_without_echoing_values(tmp_path
     assert "SECRET_VALUE" not in response.text
 
 
-def test_confirm_parsing_rejects_xlsx_until_workbook_parser_exists(tmp_path) -> None:
+def test_confirm_parsing_creates_xlsx_dataset_version_and_preview(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = _xlsx_workbook_bytes()
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={
+                "file": (
+                    "sample.xlsx",
+                    content,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ),
+            },
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "xlsx",
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                    "xlsx_sheet_name": None,
+                },
+            },
+        )
+        preview_response = client.get(
+            f"/api/v1/dataset-versions/{confirm_response.json()['version_id']}/rows",
+        )
+
+    assert confirm_response.status_code == 201
+    payload = confirm_response.json()
+    assert payload["dataset_id"] == dataset_id
+    assert payload["source_sha256"] == hashlib.sha256(content).hexdigest()
+    assert payload["row_count"] == 2
+    assert payload["column_count"] == 3
+    assert [column["display_name"] for column in payload["columns"]] == ["alpha", "beta", "flag"]
+    assert [column["data_type"] for column in payload["columns"]] == [
+        "integer",
+        "text",
+        "boolean",
+    ]
+    canonical_path = settings.workspace_root / payload["canonical_artifact"]["path"]
+    canonical_rows = [
+        json.loads(line) for line in canonical_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert canonical_rows == [
+        {"row_index": 0, "values": ["1", "x", "TRUE"]},
+        {"row_index": 1, "values": ["2", None, "FALSE"]},
+    ]
+    assert preview_response.status_code == 200
+    assert preview_response.json()["rows"] == [
+        {"row_index": 0, "values": ["1", "x", "TRUE"]},
+        {"row_index": 1, "values": ["2", None, "FALSE"]},
+    ]
+
+
+def test_confirm_parsing_rejects_unknown_xlsx_sheet(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
 
     with TestClient(create_app(settings)) as client:
@@ -437,7 +551,7 @@ def test_confirm_parsing_rejects_xlsx_until_workbook_parser_exists(tmp_path) -> 
             files={
                 "file": (
                     "sample.xlsx",
-                    _minimal_xlsx_bytes(),
+                    _xlsx_workbook_bytes(),
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 ),
             },
@@ -449,14 +563,17 @@ def test_confirm_parsing_rejects_xlsx_until_workbook_parser_exists(tmp_path) -> 
             json={
                 "parsing": {
                     "kind": "xlsx",
+                    "has_header": True,
                     "header_row": 1,
-                    "xlsx_sheet_name": "Sheet1",
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                    "xlsx_sheet_name": "Missing Sheet",
                 },
             },
         )
 
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "xlsx_confirmation_pending"
+    assert response.json()["error"]["code"] == "xlsx_sheet_not_found"
 
 
 def test_dataset_schema_can_be_read_and_updated_without_changing_original_names(
@@ -889,9 +1006,11 @@ def test_dataset_profile_rejects_corrupt_canonical_artifact_without_raw_fallback
         response = client.get(f"/api/v1/dataset-versions/{version['version_id']}/profile")
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "canonical_artifact_invalid"
-    assert "SECRET_VALUE" not in response.text
-    assert "999" not in response.text
+    error = response.json()["error"]
+    assert error["code"] == "canonical_artifact_invalid"
+    assert "SECRET_VALUE" not in error["message"]
+    assert "999" not in error["message"]
+    assert error["developer_detail"] is None
 
 
 def _minimal_xlsx_bytes() -> bytes:
@@ -899,6 +1018,75 @@ def _minimal_xlsx_bytes() -> bytes:
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("[Content_Types].xml", "<Types />")
         archive.writestr("xl/workbook.xml", "<workbook />")
+    return buffer.getvalue()
+
+
+def _xlsx_workbook_bytes() -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            "\n".join(
+                [
+                    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+                    '<Default Extension="rels" '
+                    'ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+                    '<Default Extension="xml" ContentType="application/xml"/>',
+                    '<Override PartName="/xl/workbook.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet.main+xml"/>',
+                    '<Override PartName="/xl/worksheets/sheet1.xml" '
+                    'ContentType="application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.worksheet+xml"/>',
+                    "</Types>",
+                ],
+            ),
+        )
+        archive.writestr(
+            "xl/workbook.xml",
+            """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <sheets>
+                <sheet name="Sheet1" sheetId="1" r:id="rId1"/>
+              </sheets>
+            </workbook>
+            """,
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1"
+                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+                Target="worksheets/sheet1.xml"/>
+            </Relationships>
+            """,
+        )
+        archive.writestr(
+            "xl/worksheets/sheet1.xml",
+            """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1">
+                  <c r="A1" t="inlineStr"><is><t>alpha</t></is></c>
+                  <c r="B1" t="inlineStr"><is><t>beta</t></is></c>
+                  <c r="C1" t="inlineStr"><is><t>flag</t></is></c>
+                </row>
+                <row r="2">
+                  <c r="A2"><v>1</v></c>
+                  <c r="B2" t="inlineStr"><is><t>x</t></is></c>
+                  <c r="C2" t="b"><v>1</v></c>
+                </row>
+                <row r="3">
+                  <c r="A3"><v>2</v></c>
+                  <c r="B3" t="inlineStr"><is><t>N/T</t></is></c>
+                  <c r="C3" t="b"><v>0</v></c>
+                </row>
+              </sheetData>
+            </worksheet>
+            """,
+        )
     return buffer.getvalue()
 
 

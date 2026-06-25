@@ -9,7 +9,7 @@ from fastapi import status
 from app.api.v1.schemas.datasets import ConfirmedParsingOptions
 from app.core.config import Settings
 from app.core.errors import ApiError
-from app.services.row_readers import iter_delimited_rows
+from app.services.row_readers import iter_source_rows
 from app.storage.atomic import atomic_replace, atomic_write_text
 from app.storage.metadata import (
     DatasetArtifactRecord,
@@ -33,10 +33,10 @@ def materialize_canonical_dataset_artifacts(
     columns: list[DatasetColumnRecord],
     parsing: ConfirmedParsingOptions,
 ) -> list[DatasetArtifactRecord]:
-    if parsing.kind != "delimited_text":
+    if parsing.kind not in {"delimited_text", "xlsx"}:
         raise ApiError(
             code="canonical_artifact_not_supported",
-            message="현재 canonical artifact는 구분 텍스트 데이터셋 버전만 지원합니다.",
+            message="현재 canonical artifact는 구분 텍스트와 XLSX 데이터셋 버전만 지원합니다.",
         )
 
     source_path = _safe_workspace_path(settings.workspace_root, dataset.stored_path)
@@ -140,7 +140,7 @@ def _write_canonical_rows_jsonl(
         nonlocal size_bytes, row_count
         with temp_path.open("wb") as handle:
             for row_index, values in enumerate(
-                iter_delimited_rows(source_path, parsing, column_count),
+                iter_source_rows(source_path, parsing, column_count),
             ):
                 payload = (
                     json.dumps(

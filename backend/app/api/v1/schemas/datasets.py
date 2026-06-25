@@ -57,6 +57,13 @@ class DatasetUploadResponse(BaseModel):
     next_step: Literal["confirm_schema"]
 
 
+class PastedDatasetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1)
+    original_filename: str | None = Field(default=None, max_length=180)
+
+
 class DatasetColumnDataType(str, Enum):
     INTEGER = "integer"
     DECIMAL = "decimal"

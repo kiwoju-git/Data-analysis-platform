@@ -5,6 +5,24 @@ from typing import TextIO
 
 from app.api.v1.schemas.datasets import ConfirmedParsingOptions
 from app.core.errors import ApiError
+from app.services.xlsx_reader import iter_xlsx_sheet_rows
+
+
+def iter_source_rows(
+    source_path: Path,
+    options: ConfirmedParsingOptions,
+    column_count: int,
+) -> Iterator[list[str | None]]:
+    if options.kind == "delimited_text":
+        yield from iter_delimited_rows(source_path, options, column_count)
+        return
+    if options.kind == "xlsx":
+        yield from iter_xlsx_rows(source_path, options, column_count)
+        return
+    raise ApiError(
+        code="unsupported_row_source",
+        message="지원하지 않는 데이터셋 행 원본입니다.",
+    )
 
 
 def iter_delimited_rows(
@@ -38,6 +56,20 @@ def iter_delimited_rows(
             code="text_parsing_failed",
             message="확정한 파싱 옵션으로 텍스트 파일을 읽을 수 없습니다.",
         ) from exc
+
+
+def iter_xlsx_rows(
+    source_path: Path,
+    options: ConfirmedParsingOptions,
+    column_count: int,
+) -> Iterator[list[str | None]]:
+    first_data_row_number = _first_data_row_number(options)
+    for sheet_row in iter_xlsx_sheet_rows(source_path, options.xlsx_sheet_name):
+        if sheet_row.row_number < first_data_row_number:
+            continue
+        if _is_blank_row(sheet_row.cells):
+            continue
+        yield _row_values(sheet_row.cells, options, column_count)
 
 
 def _row_values(
