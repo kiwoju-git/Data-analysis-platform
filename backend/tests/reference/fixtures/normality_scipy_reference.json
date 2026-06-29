@@ -1,0 +1,106 @@
+{
+  "cases": [
+    {
+      "anderson_norm": {
+        "critical_values": [
+          0.501,
+          0.57,
+          0.684,
+          0.798,
+          0.95
+        ],
+        "significance_level": [
+          15.0,
+          10.0,
+          5.0,
+          2.5,
+          1.0
+        ],
+        "statistic": 0.10273657677884351
+      },
+      "case_id": "near_normal_10",
+      "expected_warning_codes": [],
+      "methods": [
+        "shapiro",
+        "anderson_norm"
+      ],
+      "n": 10,
+      "shapiro": {
+        "pvalue": 0.9989582346078788,
+        "statistic": 0.9924829130989719
+      }
+    },
+    {
+      "anderson_norm": {
+        "critical_values": [
+          0.497,
+          0.566,
+          0.679,
+          0.792,
+          0.942
+        ],
+        "significance_level": [
+          15.0,
+          10.0,
+          5.0,
+          2.5,
+          1.0
+        ],
+        "statistic": 1.049717877020008
+      },
+      "case_id": "right_skew_12",
+      "expected_warning_codes": [],
+      "methods": [
+        "shapiro",
+        "anderson_norm"
+      ],
+      "n": 12,
+      "shapiro": {
+        "pvalue": 0.006079015982464299,
+        "statistic": 0.7832378837818863
+      }
+    },
+    {
+      "anderson_norm": {
+        "critical_values": [
+          0.576,
+          0.656,
+          0.786,
+          0.917,
+          1.091
+        ],
+        "significance_level": [
+          15.0,
+          10.0,
+          5.0,
+          2.5,
+          1.0
+        ],
+        "statistic": 66.69247270657434
+      },
+      "case_id": "large_deterministic_6001",
+      "expected_warning_codes": [
+        "shapiro_large_n_pvalue_limitation"
+      ],
+      "methods": [
+        "shapiro",
+        "anderson_norm"
+      ],
+      "n": 6001,
+      "shapiro": {
+        "pvalue": 1.5104668351761954e-39,
+        "scipy_note": "p-value accuracy is limited for N > 5000",
+        "statistic": 0.9549106219581149
+      }
+    }
+  ],
+  "dependencies": {
+    "numpy": "2.2.6",
+    "scipy": "1.15.3"
+  },
+  "generator": "scripts/generate_normality_reference.py",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "python_version": "3.10.11",
+  "reference_schema_version": 1,
+  "source_fixture_id": "normality_reference_inputs_v1"
+}

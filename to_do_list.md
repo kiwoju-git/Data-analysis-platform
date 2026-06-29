@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-06-26
+Last updated: 2026-06-29
 
 ## 1. Required Reading And Priority
 
@@ -69,6 +69,10 @@ Already implemented:
 - Minimal React UI for pasted spreadsheet text intake without keeping successful paste contents in React state
 - Minimal React UI for profile/preflight warnings, canonical/profile artifact summary, preflight summary, and column-level aggregate/numeric/date-time profile table
 - Minimal React schema UI includes a guarded 34-column headerless Bayesian sample role preset: `column_1` as ID, `column_2`-`column_25` as X/features, and `column_26`-`column_34` as Y/responses
+- App chrome rendering is split into `frontend/src/AppChrome.tsx`, while `App.tsx` keeps API bootstrap and analysis state ownership
+- Dataset workflow state and handlers are split into `frontend/src/useDatasetWorkflow.ts`
+- Dataset preparation rendering is split into `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, `frontend/src/DatasetProfileSection.tsx`, and `frontend/src/DatasetPreviewSection.tsx`, while `WorkspaceRouter` chooses the active dataset/analysis page
+- Dataset formatting, labels, and profile summary helpers are centralized in `frontend/src/datasetDisplay.ts`
 - Analysis method registry with 6 modules and 29 stable method IDs
 - Common analysis request, filter snapshot, warning, provenance, and result envelope schemas
 - Common analysis run status and job status schemas
@@ -78,14 +82,24 @@ Already implemented:
 - Six-module selected-method Workbench shell in the React UI:
   - module and method selection comes from the backend catalog
   - selected module/method is restorable through `/analysis/{module_id}/{method_id}` with legacy hash fallback
+  - route selection state is centralized in `frontend/src/analysisSelection.ts`
+  - app page route parsing is centralized in `frontend/src/appRoute.ts`
+  - workspace route boundary is split into `frontend/src/WorkspaceRouter.tsx`
+  - analysis page boundary is split into `frontend/src/AnalysisPage.tsx`
   - common shell rendering is split into `frontend/src/AnalysisWorkbench.tsx`
+  - analysis area rendering is further split into `frontend/src/AnalysisShell.tsx`, `frontend/src/DescriptiveAnalysisPanel.tsx`, `frontend/src/GraphicalSummaryPanel.tsx`, and `frontend/src/NormalityAnalysisPanel.tsx`
+  - root/dataset routes render the dataset preparation page and `/analysis/{module_id}/{method_id}` routes render the analysis page
+  - supported filter controls render through a common Workbench slot for dataset-backed methods
   - Workbench steps show data, roles, options, preflight, execution, and results
   - all 29 documented methods show UI guidance for required roles, options, preflight checks, and result focus
-  - only `eda.descriptive` exposes execution controls
+  - `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` expose execution controls
 - Analysis run API guard that rejects planned/disabled methods without returning fake results
 - `eda.descriptive` is the first executable method and computes real descriptive statistics from confirmed dataset versions
+- `eda.graphical_summary` is the second executable method and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads from confirmed dataset versions
+- `eda.normality` is the third executable method and computes real SciPy-backed Shapiro-Wilk, Anderson-Darling, and Q-Q point payloads from confirmed dataset versions
+- NumPy 2.2.6/SciPy 1.15.3 are production-pinned after the native Windows Python 3.10.11 dependency spike, and a SciPy-backed normality reference fixture was generated and validated
 - Descriptive statistics result persistence stores app-owned JSON under the workspace and records result SHA-256 in `analysis_runs`
-- `eda.descriptive` runs persist an `analysis_row_snapshot` artifact with filter snapshot hash, source canonical artifact hash, included row counts, and row ranges for supported filters
+- Available inline analysis runs persist an `analysis_row_snapshot` artifact with filter snapshot hash, source canonical artifact hash, included row counts, and row ranges for supported filters
 - XLSX container checks, sheet-selection warning, and basic stdlib parsing confirmation for the first or named worksheet
 - XLSX formula recalculation, merged-cell expansion, hidden row/column handling, and display-format/date serial restoration remain out of scope
 - Synthetic upload tests, parsing confirmation tests, canonical artifact tests, and migration upgrade tests from schema version `1`/`2`/`3`/`4` to `5`
@@ -105,20 +119,21 @@ Already implemented:
   - `eda.descriptive` filter snapshots are frozen into `analysis_row_snapshot` artifacts
   - analysis provenance records filter snapshot hash, row snapshot hash, total row count, and included row count
   - supported non-empty filters select canonical row-index ranges before calculation
-- Frontend controls for `eda.descriptive` supported filters:
-  - users can add/remove AND filter conditions before running descriptive statistics
+- Workbench-level frontend controls for supported filters:
+  - users can add/remove AND filter conditions in the selected-method Workbench before running supported analyses
   - numeric columns expose `gt`/`gte`/`lt`/`lte`; all columns expose missing and equality conditions
-  - filter drafts are validated before API submission and serialized into `filter_snapshot.conditions`
+  - filter drafts are validated in the shared UI slot
+  - current executable payload serialization into `filter_snapshot.conditions` covers `eda.descriptive`, `eda.graphical_summary`, and `eda.normality`
 
 Not implemented yet:
 
 - Full profile API beyond the current aggregate/duplicate/memory/date-time preflight slice
-- Deeper route-based Analysis Workbench page decomposition and additional shared feature components
-- Cross-method reusable filter UI beyond the first `eda.descriptive` panel
+- Router-mounted Analysis Workbench page decomposition and additional shared feature components
+- Binding the common filter UI state into additional executable methods beyond `eda.descriptive`, `eda.graphical_summary`, and `eda.normality`
 - Full XLSX workbook semantics beyond cached worksheet values
 - Cell-level data editing or transformations that create a new immutable dataset version
-- Executable analysis method dispatch beyond the inline `eda.descriptive` slice
-- Any statistical calculation beyond `eda.descriptive`
+- Executable analysis method dispatch beyond the inline `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` slices
+- Any production statistical calculation beyond `eda.descriptive`, `eda.graphical_summary`, and `eda.normality`
 - Any Bayesian, optimizer, DOE, regression, quality, or hypothesis test calculation
 - Any mock/fake statistical result
 
@@ -170,9 +185,25 @@ Completed in this slice:
 - Hash-restorable selected-method Workbench shell:
   - selected method details are shown for all 29 method IDs
   - method-specific guidance describes required roles, options, preflight checks, and result focus for all 29 method IDs
+  - route selection state is centralized in `frontend/src/analysisSelection.ts`
+  - page boundary rendering is split into `frontend/src/AnalysisPage.tsx`
   - common module, method, guidance, and status rendering is split into `frontend/src/AnalysisWorkbench.tsx`
+  - analysis shell and executable panel rendering are split into `frontend/src/AnalysisShell.tsx`, `frontend/src/DescriptiveAnalysisPanel.tsx`, `frontend/src/GraphicalSummaryPanel.tsx`, and `frontend/src/NormalityAnalysisPanel.tsx`
   - planned/disabled methods show availability state without execution controls
-  - `eda.descriptive` remains the only executable Workbench method
+  - `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` are executable Workbench methods
+- Dataset-preparation component split:
+  - sidebar, topbar, and dataset context layout are split into `frontend/src/AppChrome.tsx`
+  - dataset upload, pasted text, parsing confirmation, schema, preview, and profile workflow state/handlers are split into `frontend/src/useDatasetWorkflow.ts`
+  - upload and pasted text intake are composed by `frontend/src/DatasetPreparationPage.tsx`
+  - parsing confirmation is split into `frontend/src/DatasetParsingPanel.tsx`
+  - dataset version context is split into `frontend/src/DatasetVersionPanel.tsx`
+  - profile/preflight, schema, and preview rendering are split into `frontend/src/DatasetProfileSection.tsx`, `frontend/src/DatasetSchemaSection.tsx`, and `frontend/src/DatasetPreviewSection.tsx`
+  - dataset display labels, byte/number/percent formatting, hash shortening, and profile/date-time summaries are split into `frontend/src/datasetDisplay.ts`
+  - `App.tsx` still owns API bootstrap, route state, and analysis state to avoid behavior changes during the component split
+- Route-selected page rendering:
+  - `frontend/src/appRoute.ts` maps root/dataset URLs to the dataset page and `/analysis/{module_id}/{method_id}` URLs to the analysis page
+  - `WorkspaceRouter` renders either `DatasetPreparationPage` or `AnalysisPage` for the current page route instead of showing both at once
+  - `useAnalysisSelection` no longer rewrites the root/dataset route to the default analysis route when the method catalog loads
 - Tests for method ID stability, disabled method behavior, and no mock results
 - `eda.descriptive` first real method:
   - pure calculation module independent of FastAPI/UI
@@ -180,6 +211,19 @@ Completed in this slice:
   - API integration test through dataset version abstraction
   - minimal UI column selector and result table
   - result JSON persisted under workspace with SHA-256 in `analysis_runs`
+- `eda.graphical_summary` second real method:
+  - pure stdlib calculation module independent of FastAPI/UI
+  - hand-checkable histogram, boxplot, Q-Q, ECDF fixture and edge tests
+  - API integration test through dataset version abstraction
+  - minimal UI column selector and result table
+  - result JSON persisted under workspace with SHA-256 in `analysis_runs`
+- `eda.normality` third real method:
+  - SciPy-backed calculation module independent of FastAPI/UI
+  - hand-checkable and generated SciPy reference fixture tests
+  - API integration test through dataset version abstraction and canonical raw-mutation guard
+  - minimal UI column selector, alpha input, warnings, and result table
+  - result JSON persisted under workspace with SHA-256 in `analysis_runs`
+  - grouped execution is explicitly rejected with `normality_grouping_not_supported`
 - SQLite schema v4:
   - `analysis_runs`
   - `analysis_artifacts`
@@ -236,16 +280,16 @@ The next implementation PR should remain narrow and must still avoid fake statis
 
 Allowed next scope:
 
-- Move the shared Workbench into deeper dedicated route-level analysis components/pages, or generalize the first filter controls for cross-method reuse.
-- Keep every method except `eda.descriptive` unavailable until real calculation code and tests exist.
+- Implement the next real executable method only after its statistical dependency, reference fixtures, warning metadata, and provenance contract are ready.
+- Keep every method except `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` unavailable until real calculation code and tests exist.
 - Keep analysis run status/job storage as infrastructure unless a later method requires worker execution.
 
 Still explicitly out of scope:
 
-- Statistical method calculations beyond `eda.descriptive`
+- Statistical method calculations beyond `eda.descriptive`, `eda.graphical_summary`, and `eda.normality`
 - Analysis mock results
 - Full profile implementation beyond the current aggregate/duplicate/memory/date-time/profile-artifact preflight slice
-- Full dedicated route-based Analysis Workbench beyond the current path-restorable shared component shell
+- Router-mounted Analysis Workbench pages beyond the current path-restorable shared component shell
 - Bayesian optimization, Response Optimizer, DOE, regression, quality control, or hypothesis testing
 - PyCaret, Optuna, SHAP, LIME, PyTorch, or GPU dependency
 
@@ -329,7 +373,7 @@ Current status:
 - The canonical reader adoption slice is implemented: profile and `eda.descriptive` read validated canonical rows and reject corrupt artifacts without raw fallback.
 - The persisted profile artifact slice is implemented: profile scans write raw-value-free `profile_summary` JSON artifacts and expose latest hash/size metadata.
 - The date/time preflight slice is implemented: profile reports conservative format/timezone aggregate checks without coercing values.
-- Still missing in Gate B0/B1 transition: deeper route-based Analysis Workbench page decomposition, cross-method filter reuse, and additional reference-backed methods.
+- Still missing in Gate B0/B1 transition: router-mounted Analysis Workbench page decomposition, binding common filter state into additional executable methods, and additional reference-backed methods.
 - Basic XLSX parsing confirmation is implemented with a stdlib ZIP/XML reader; full workbook semantics remain out of scope.
 
 ### Gate B1: Exploratory Analysis
@@ -380,7 +424,9 @@ Completion criteria:
 
 Current status:
 
-- Not started.
+- Started. `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` are available with real calculations, persisted results, and minimal UI.
+- `eda.normality` uses pinned NumPy 2.2.6/SciPy 1.15.3, generated SciPy reference fixtures, Shapiro-Wilk, Anderson-Darling, deterministic Q-Q point payloads, and a persistent no-automatic-method-switch warning.
+- `eda.equal_variances` remains planned. The dependency smoke covered Levene/Brown-Forsythe calculations, but no executable equal-variance method exists yet.
 
 ### Gate B2: Hypothesis And Categorical Analysis
 
@@ -828,7 +874,7 @@ Known limitations:
 - No statistical method calculation, fake chart, fake table, mock p-value, or mock result is introduced.
 - Canonical parsed artifact materialization was not part of this older slice; it is now tracked as implemented in section 9.
 - Analysis run, artifact, and job persistence is implemented as metadata infrastructure only.
-- Frontend navigation is still a shell; selected analyses now have path-level restore, but the Workbench has not been decomposed into dedicated route pages.
+- Frontend navigation is still a shell; selected analyses now have path-level restore and a page boundary, but the Workbench has not been mounted as a separate routed page.
 
 ## 8. PR Description Draft For Gate B0 Storage/Run Foundation
 
@@ -932,8 +978,8 @@ Next PR:
 
 - Superseded by section 11: profile artifacts with hashes are implemented.
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should split deeper route-level Workbench views or generalize filter controls for cross-method reuse.
-- Keep cross-method filter reuse and deeper Workbench decomposition as separate narrow slices unless one is explicitly selected.
+- Next narrow slice should move the split Workbench into router-mounted page components or bind the common filter state into the next real executable method.
+- Keep additional executable filter binding and deeper Workbench decomposition as separate narrow slices unless one is explicitly selected.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 
 Validation:
@@ -987,8 +1033,8 @@ Next PR:
 
 - Superseded by section 11: profile result artifacts with hash metadata are implemented.
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should generalize filter controls for cross-method reuse or deepen route-level Workbench separation.
-- Keep cross-method filter reuse and deeper Workbench decomposition as separate narrow slices.
+- Next narrow slice should bind the common filter state into the next real executable method or move Workbench into router-mounted page components.
+- Keep additional executable filter binding and deeper Workbench decomposition as separate narrow slices.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 
 Validation:
@@ -1000,7 +1046,7 @@ Validation:
 
 Known limitations:
 
-- Rows preview still streams the raw upload for bounded user preview.
+- Superseded by data integrity/reproducibility hardening: rows preview now reads canonical JSONL rows.
 - Profile artifacts are now persisted by the later section 11 slice.
 - JSONL canonical rows are a stdlib local format; Parquet remains a future candidate after `pyarrow` review.
 
@@ -1043,8 +1089,8 @@ Document priority:
 Next PR:
 
 - Superseded by section 12: richer date/time preflight is implemented.
-- Next narrow slice should split the shared Workbench into deeper dedicated route-level analysis pages or generalize filter controls for cross-method reuse.
-- Keep cross-method filter reuse as a separate narrow slice unless the selected next slice needs it.
+- Next narrow slice should move the shared Workbench into router-mounted analysis pages or bind common filter state into the next real executable method.
+- Keep additional executable filter binding as a separate narrow slice unless the selected next slice needs it.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 - Do not make planned methods executable without real calculation code, reference tests, provenance, and no-mock API/UI behavior.
 
@@ -1061,7 +1107,7 @@ Validation:
 Known limitations:
 
 - Profile artifacts store the latest aggregate profile result; date/time preflight is now implemented by the later section 12 slice.
-- Rows preview still streams the raw upload for bounded user preview.
+- Superseded by data integrity/reproducibility hardening: rows preview now reads canonical JSONL rows.
 - JSONL canonical rows are a stdlib local format; Parquet remains a future candidate after `pyarrow` review.
 
 ## 12. PR Description Draft For Date/Time Profile Preflight Slice
@@ -1100,7 +1146,7 @@ Document priority:
 
 Next PR:
 
-- Split the shared Workbench into deeper dedicated route-level analysis pages, or generalize filter controls for cross-method reuse.
+- Move the split Workbench into router-mounted analysis pages, or bind common filter state into the next real executable method.
 - Keep cell editing/transformation versioning as a separate slice unless explicitly selected.
 - Do not add Parquet/`pyarrow` until dependency review is complete.
 - Do not make planned methods executable without real calculation code, reference tests, provenance, and no-mock API/UI behavior.
@@ -1118,5 +1164,363 @@ Validation:
 Known limitations:
 
 - Date/time detection is a preflight summary only; it does not perform confirmed type conversion or timezone normalization.
-- Rows preview still streams the raw upload for bounded user preview.
+- Superseded by data integrity/reproducibility hardening: rows preview now reads canonical JSONL rows.
 - JSONL canonical rows are a stdlib local format; Parquet remains a future candidate after `pyarrow` review.
+
+## 13. PR Description Draft For Workbench-Level Filter UI Slice
+
+Summary:
+
+- Moved supported analysis filter controls out of the `eda.descriptive` execution panel and into a common `AnalysisWorkbench` render slot for dataset-backed methods.
+- Kept `eda.descriptive` as the only executable method and the only method that serializes filter drafts into `filter_snapshot.conditions`.
+- Added a frontend test assertion that the shared Workbench renders the common filter slot while planned methods remain non-executable.
+- Added `*.tsbuildinfo` to `.gitignore` so TypeScript incremental build metadata does not enter Git.
+- Added no new statistical method, no fake result, and no new backend API.
+
+Changed files:
+
+- `.gitignore`
+- `frontend/src/AnalysisWorkbench.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/App.test.tsx`
+- `docs/datasets.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Document priority:
+
+- `AGENTS.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+- `data_prd_addendum.md`
+- `data_prd.md` if present
+- nearest nested instruction file
+
+Next PR:
+
+- Move the split Workbench into router-mounted analysis pages, or implement the next reference-backed method and bind the common filter state into that real calculation.
+- Keep every method except `eda.descriptive` unavailable until calculation code, reference tests, provenance, and no-mock API/UI behavior exist.
+- Do not add Bayesian optimization, DOE, regression, quality control, inferential tests, or chart rendering as part of this UI-only slice.
+
+Validation:
+
+- `git diff --check`: passed.
+- `npm --prefix ./frontend run typecheck`: passed under WSL Node 24.14.0.
+- `npm --prefix ./frontend run lint`: passed under WSL Node 24.14.0.
+- `npm --prefix ./frontend run test -- --run`: passed with 13 Vitest tests under WSL Node 24.14.0 after restoring missing Linux native optional bindings in the local mixed Windows/WSL `node_modules`.
+- `npm --prefix ./frontend run build`: passed under WSL Node 24.14.0 after restoring missing Linux native optional bindings in the local mixed Windows/WSL `node_modules`.
+- Windows PowerShell validation and full `scripts/check.ps1`: not run in this session because `powershell.exe -NoProfile -Command "$PSVersionTable.PSVersion"` still fails from WSL before command execution with a WSL socket/vsock error.
+
+Known limitations:
+
+- The common filter UI state is bound to executable analysis requests for `eda.descriptive` and `eda.graphical_summary`.
+- Planned/disabled methods remain non-executable and must not return mock results.
+
+## 14. PR Description Draft For Frontend Component Split
+
+Summary:
+
+- Split the dataset preparation UI out of `App.tsx` into `frontend/src/DatasetPreparationPage.tsx`.
+- Split parsing confirmation, dataset version summary, profile/preflight, schema, and preview rendering into dedicated dataset-preparation components.
+- Moved dataset display labels, hash/byte/number formatting, and profile/date-time summary helpers into `frontend/src/datasetDisplay.ts`.
+- Split the analysis area out of `App.tsx` into `frontend/src/AnalysisShell.tsx`.
+- Added `frontend/src/AnalysisPage.tsx` as the analysis page boundary for the current single-screen app.
+- Split the first executable `eda.descriptive` panel into `frontend/src/DescriptiveAnalysisPanel.tsx`.
+- Moved route selection parsing, catalog validation, popstate/hashchange handling, and route replacement into `frontend/src/analysisSelection.ts`.
+- Added `frontend/src/appRoute.ts` so root/dataset URLs render the dataset preparation page and `/analysis/{module_id}/{method_id}` URLs render the analysis page.
+- Added `frontend/src/WorkspaceRouter.tsx` so `App.tsx` delegates dataset-vs-analysis page rendering while keeping state/API ownership.
+- Added `frontend/src/AppChrome.tsx` so `App.tsx` delegates sidebar, topbar, and dataset context layout while keeping state/API ownership.
+- Added `frontend/src/useDatasetWorkflow.ts` so `App.tsx` delegates dataset upload/paste/parsing/schema/preview/profile workflow state and handlers while keeping analysis orchestration.
+- Prevented catalog loading from automatically replacing the root/dataset route with the default analysis route.
+- Kept analysis state ownership and API bootstrap in `App.tsx` to avoid changing behavior while reducing rendering boundaries.
+- Added frontend SSR/pure tests for `AppChrome`, `DatasetPreparationPage`, `WorkspaceRouter`, `AnalysisPage`, catalog-backed route selection resolution, dataset workflow parsing helpers, the common filter UI, and the `eda.descriptive` execution panel.
+- Added no backend API, no statistical calculation, no fake result, and no execution path for planned/disabled methods.
+
+Changed files:
+
+- `frontend/src/DatasetPreparationPage.tsx`
+- `frontend/src/DatasetParsingPanel.tsx`
+- `frontend/src/DatasetVersionPanel.tsx`
+- `frontend/src/DatasetProfileSection.tsx`
+- `frontend/src/DatasetSchemaSection.tsx`
+- `frontend/src/DatasetPreviewSection.tsx`
+- `frontend/src/datasetPreparationTypes.ts`
+- `frontend/src/datasetDisplay.ts`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/AnalysisPage.tsx`
+- `frontend/src/DescriptiveAnalysisPanel.tsx`
+- `frontend/src/WorkspaceRouter.tsx`
+- `frontend/src/AppChrome.tsx`
+- `frontend/src/useDatasetWorkflow.ts`
+- `frontend/src/analysisSelection.ts`
+- `frontend/src/appRoute.ts`
+- `frontend/src/App.tsx`
+- `frontend/src/App.css`
+- `frontend/src/App.test.tsx`
+- `docs/datasets.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Document priority:
+
+- `AGENTS.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+- `data_prd_addendum.md`
+- `data_prd.md` if present
+- nearest nested instruction file
+
+Next PR:
+
+- Continue small component decomposition only where behavior stays stable, or implement the next reference-backed method and bind the common filter state into that real calculation.
+- Keep every method except `eda.descriptive` unavailable until calculation code, reference tests, provenance, and no-mock API/UI behavior exist.
+- Do not add Bayesian optimization, DOE, regression, quality control, inferential tests, or chart rendering as part of this component-split slice.
+
+Validation:
+
+- `git diff --check`: passed.
+- `npm --prefix ./frontend run typecheck`: passed under WSL Node 24.14.0.
+- `npm --prefix ./frontend run lint`: passed under WSL Node 24.14.0.
+- `npm --prefix ./frontend run test -- --run`: passed with 15 Vitest tests under WSL Node 24.14.0 after restoring missing Linux native optional bindings in the local mixed Windows/WSL `node_modules`.
+- `npm --prefix ./frontend run build`: passed under WSL Node 24.14.0 after restoring missing Linux native optional bindings in the local mixed Windows/WSL `node_modules`.
+- Windows PowerShell validation and full `scripts/check.ps1`: not run in this session because `powershell.exe -NoProfile -Command "$PSVersionTable.PSVersion"` still fails from WSL before command execution with a WSL socket/vsock error.
+
+Known limitations:
+
+- This is a component-boundary split and route-selection cleanup, not a full router-mounted page implementation or a data editing implementation.
+- The common filter UI state is still bound to an executable analysis request only for `eda.descriptive`.
+- Planned/disabled methods remain non-executable and must not return mock results.
+
+## 15. PR Description Draft For Graphical Summary Calculation Slice
+
+Summary:
+
+- Added `eda.graphical_summary` as the second real executable method after `eda.descriptive`.
+- Implemented stdlib-backed histogram, boxplot, Q-Q, and ECDF chart-data calculation from validated canonical rows.
+- Reused immutable dataset version lookup, canonical row streaming, filter snapshot row freezing, result JSON persistence, result SHA-256 validation, and no-raw-value artifact metadata.
+- Added a minimal Workbench execution panel for `eda.graphical_summary` without adding chart rendering or fake chart images.
+- Kept all remaining methods planned/disabled until real calculation code and tests exist.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/graphical_summary.py`
+- `backend/tests/unit/test_graphical_summary.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/README.md`
+- `frontend/src/api.ts`
+- `frontend/src/App.tsx`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/GraphicalSummaryPanel.tsx`
+- `frontend/src/App.test.tsx`
+- `docs/datasets.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Document priority:
+
+- `AGENTS.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+- `data_prd_addendum.md`
+- `data_prd.md` if present
+- nearest nested instruction file
+
+Next PR:
+
+- Choose the next real statistical method only after dependency review and reference fixtures are ready.
+- Likely candidates are `eda.normality` or `eda.equal_variances`, but both require a validated SciPy/statsmodels compatibility plan before being marked executable.
+- Keep Bayesian optimization, DOE, regression, quality control, ML, and chart renderer work out of the next narrow stats slice unless the gate changes.
+
+Validation:
+
+- `python3 -m compileall -q backend/app/statistics/graphical_summary.py backend/app/services/analysis_runs.py backend/app/analyses/registry.py backend/tests/unit/test_graphical_summary.py backend/tests/unit/test_api_contracts.py`: passed under WSL Python 3.12 syntax check only.
+- `npm --prefix ./frontend run typecheck`: passed under WSL Node.
+- `git diff --check`: passed.
+- `npm --prefix ./frontend run lint`: passed under WSL Node.
+- `npm --prefix ./frontend run test -- --run`: passed with 16 Vitest tests under WSL Node.
+- `npm --prefix ./frontend run build`: passed under WSL Node.
+- Backend pytest: not run in this WSL Python environment because `python3 -m pytest ...` fails with `No module named pytest`.
+- Full `scripts/check.ps1` and Windows `.venv` backend pytest: not run because `cmd.exe`/`powershell.exe` from this WSL session fail before command execution with the known WSL socket/vsock error.
+
+Known limitations:
+
+- `eda.graphical_summary` returns chart-data payloads and a minimal table summary; actual chart renderer is not implemented in this slice.
+- Grouped graphical summaries, KDE, density rendering, and small-multiple UI are not implemented.
+- This method has no p-values, inferential decision logic, confidence intervals, or effect sizes.
+
+## 16. PR Description Draft For Normality Dependency Gate
+
+Summary:
+
+- Kept `eda.normality` and `eda.equal_variances` in `planned` state because SciPy is not yet part of backend production dependencies.
+- Added registry disabled reasons that explicitly require SciPy-based compatibility validation and reference fixtures before either method can become executable.
+- Updated frontend method guidance so planned normality/equal-variance methods show the SciPy validation preflight requirement.
+- Updated dependency review and progress docs with the exact gate for future p-value/statistic methods.
+- Added no p-values, no test statistics, no inferential decision logic, and no mock result payloads.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `frontend/src/analysisMethodGuidance.ts`
+- `docs/dependency_review.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Next PR:
+
+- Validate SciPy/NumPy on native Windows Python 3.10.
+- Add exact pinned dependencies only after wheel/license/offline/runtime checks.
+- Implement `eda.normality` with Shapiro-Wilk, Anderson-Darling, Q-Q metadata, N/exclusion/warning metadata, reference fixtures, and no automatic downstream test switching.
+
+Validation:
+
+- WSL `python3` check showed SciPy is not installed: `ModuleNotFoundError No module named 'scipy'`.
+- Focused syntax check for the changed backend registry and API contract test passed under WSL Python.
+- `git diff --check`: passed.
+- Touched backend Python line-length scan: passed after wrapping one API contract assertion.
+- `npm --prefix ./frontend run typecheck`: passed under WSL Node.
+- `npm --prefix ./frontend run lint`: passed under WSL Node.
+- `npm --prefix ./frontend run test -- --run`: passed with 16 Vitest tests under WSL Node.
+- `npm --prefix ./frontend run build`: passed under WSL Node.
+- Backend pytest was not run because WSL `python3` has no pytest and Windows `.venv` execution fails from this WSL session with the known WSL socket/vsock error.
+
+Known limitations:
+
+- This is a gate-hardening slice, not a new executable statistical method.
+- Backend pytest and full Windows check still require native Windows PowerShell in the current environment.
+
+## 17. PR Description Draft For Statistical Dependency Smoke
+
+Summary:
+
+- Added an opt-in Windows PowerShell install/smoke flow for future statistical dependencies.
+- Added a Python smoke helper that checks Python 3.10, imports NumPy/SciPy, and runs Shapiro-Wilk, Anderson-Darling, Levene, and Brown-Forsythe calculations.
+- Added smoke output capture and validation so native Windows results can be recorded before dependency pins change.
+- Added a markdown record renderer and unit tests for the smoke JSON validator/renderer.
+- Added synthetic normality reference input fixture and a SciPy-backed reference generator for the next implementation PR.
+- Added a generated normality reference validator and tests to check case alignment, Python version, dependency metadata, and p-value/statistic ranges.
+- Added a result-record template for native Windows dependency spike evidence.
+- Kept SciPy/NumPy out of the production dependency list and lockfiles in that slice.
+- Kept `eda.normality` and `eda.equal_variances` planned in that dependency-gate slice; no p-values, test statistics, or fake result payloads were added.
+
+Changed files:
+
+- `scripts/check-stat-deps.ps1`
+- `scripts/install-stat-deps-spike.ps1`
+- `scripts/stat_dependency_smoke.py`
+- `scripts/validate_stat_dependency_smoke.py`
+- `scripts/render_stat_dependency_record.py`
+- `scripts/generate_normality_reference.py`
+- `scripts/validate_normality_reference.py`
+- `backend/tests/reference/fixtures/normality_input.json`
+- `backend/tests/reference/fixtures/normality_scipy_reference.json`
+- `backend/tests/unit/test_stat_dependency_smoke_tools.py`
+- `backend/tests/unit/test_normality_reference_fixture.py`
+- `backend/tests/unit/test_normality_reference_validator.py`
+- `docs/normality_method_contract.md`
+- `docs/stat_dependency_spike.md`
+- `docs/setup.md`
+- `docs/dependency_review.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+How to run on native Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-stat-deps-spike.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\check-stat-deps.ps1
+.\.venv\Scripts\python.exe .\scripts\validate_stat_dependency_smoke.py .\logs\stat-dependency-smoke.json
+.\.venv\Scripts\python.exe .\scripts\render_stat_dependency_record.py .\logs\stat-dependency-smoke.json
+.\.venv\Scripts\python.exe .\scripts\generate_normality_reference.py
+.\.venv\Scripts\python.exe .\scripts\validate_normality_reference.py
+```
+
+Next PR:
+
+- Decide whether to production-pin NumPy 2.2.6 and SciPy 1.15.3 after the recorded candidate spike.
+- If approved, update backend dependency metadata and run full Windows checks.
+- Implement `eda.normality` according to `docs/normality_method_contract.md` using `backend/tests/reference/fixtures/normality_scipy_reference.json`; do not add downstream automatic method switching.
+
+Validation:
+
+- `git diff --check`: passed.
+- `python3 -m compileall -q scripts/stat_dependency_smoke.py scripts/validate_stat_dependency_smoke.py scripts/render_stat_dependency_record.py scripts/generate_normality_reference.py scripts/validate_normality_reference.py backend/tests/unit/test_stat_dependency_smoke_tools.py backend/tests/unit/test_normality_reference_fixture.py backend/tests/unit/test_normality_reference_validator.py`: passed under WSL.
+- Touched script line-length scan: passed.
+- Direct renderer smoke with a synthetic passed payload: passed.
+- Direct normality input fixture load smoke: passed with 3 cases.
+- Direct normality reference validator smoke with a synthetic generated-reference payload: passed.
+- Direct WSL `python3 scripts/generate_normality_reference.py`: returned the expected `python_version_unsupported` JSON because WSL Python is 3.12.3.
+- Direct WSL `python3 scripts/stat_dependency_smoke.py`: returned the expected `python_version_unsupported` JSON because WSL Python is 3.12.3.
+- Native Windows Python 3.10.11 smoke passed after installing candidate NumPy 2.2.6 and SciPy 1.15.3 into `.venv`.
+- `.\.venv\Scripts\python.exe .\scripts\validate_stat_dependency_smoke.py .\logs\stat-dependency-smoke.json`: passed.
+- `.\.venv\Scripts\python.exe .\scripts\render_stat_dependency_record.py .\logs\stat-dependency-smoke.json`: passed.
+- `.\.venv\Scripts\python.exe .\scripts\generate_normality_reference.py`: passed and generated `backend\tests\reference\fixtures\normality_scipy_reference.json`; SciPy emitted the expected Shapiro-Wilk `N > 5000` accuracy warning for the large synthetic case.
+- `.\.venv\Scripts\python.exe .\scripts\validate_normality_reference.py`: passed.
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_stat_dependency_smoke_tools.py .\backend\tests\unit\test_normality_reference_fixture.py .\backend\tests\unit\test_normality_reference_validator.py`: passed with 9 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed after formatting one backend file and fixing ruff findings; backend pytest 78 tests, frontend Vitest 16 tests, frontend build passed.
+
+Known limitations:
+
+- `check-stat-deps.ps1` does not install dependencies; `install-stat-deps-spike.ps1` installs candidate wheels only into local `.venv`.
+- Passing smoke checks is necessary but not sufficient for marking `eda.normality` or `eda.equal_variances` available.
+- This section is historical. NumPy/SciPy are now production-pinned for the later `eda.normality` implementation slice.
+
+## 18. PR Description Draft For Normality Implementation
+
+Summary:
+
+- Added production pins for NumPy 2.2.6 and SciPy 1.15.3 after the recorded Windows Python 3.10 dependency spike.
+- Made `eda.normality` available with real Shapiro-Wilk, Anderson-Darling, and deterministic Q-Q point payloads from canonical rows.
+- Added warnings for non-numeric exclusions, no numeric values, insufficient observations, constant columns, Shapiro large-N p-value limitations, Q-Q truncation, and the no-automatic-method-switch rule.
+- Added persisted result envelope support through the existing analysis run/result API and row snapshot provenance.
+- Added a minimal frontend execution panel with numeric column selection, alpha input, warnings, and result table.
+- Added `instruction.md` with Windows PowerShell install, run, check, and basic usage flow.
+- Kept grouped normality unsupported with stable error `normality_grouping_not_supported`.
+- Kept `eda.equal_variances` and all later methods planned/disabled; no fake results were added.
+
+Changed files:
+
+- `backend/pyproject.toml`
+- `backend/app/analyses/registry.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/normality.py`
+- `backend/tests/unit/test_normality.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `frontend/src/api.ts`
+- `frontend/src/App.tsx`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/NormalityAnalysisPanel.tsx`
+- `frontend/src/App.css`
+- `frontend/src/App.test.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `instruction.md`
+- `backend/README.md`
+- `docs/datasets.md`
+- `docs/dependency_review.md`
+- `docs/normality_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/setup.md`
+- `docs/six_module_implementation_guide.md`
+- `docs/stat_dependency_spike.md`
+- `docs/storage.md`
+- `to_do_list.md`
+
+Next PR:
+
+- Implement `eda.equal_variances` only after adding reference fixtures and API/UI tests for Levene and Brown-Forsythe.
+- Keep hypothesis tests, regression, quality control, DOE, Bayesian optimization, chart rendering, and heavy optional dependencies out of the next narrow slice unless explicitly requested.
+
+Validation:
+
+- Targeted backend pytest for `test_normality.py` and `test_api_contracts.py`: passed with 25 tests.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Frontend `npm --prefix ./frontend run test -- --run`: passed with 17 tests.
+- Full `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed; backend pytest 84 tests, frontend Vitest 17 tests, frontend build passed.

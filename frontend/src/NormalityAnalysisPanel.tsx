@@ -1,0 +1,174 @@
+import type {
+  AnalysisResultEnvelope,
+  DatasetColumnResponse,
+  DatasetVersionResponse,
+  NormalityResult,
+} from "./api";
+
+interface NormalityAnalysisPanelProps {
+  alpha: number;
+  analysisResult: AnalysisResultEnvelope | null;
+  filterValidationError: string | null;
+  isRunningAnalysis: boolean;
+  methodId: string;
+  normalityColumns: DatasetColumnResponse[];
+  normalityResult: NormalityResult | null;
+  selectedColumnIds: string[];
+  version: DatasetVersionResponse | null;
+  onAlphaChange: (alpha: number) => void;
+  onRun: () => void;
+  onToggleColumn: (columnId: string, checked: boolean) => void;
+}
+
+const maxNormalityColumns = 20;
+
+export function NormalityAnalysisPanel({
+  alpha,
+  analysisResult,
+  filterValidationError,
+  isRunningAnalysis,
+  methodId,
+  normalityColumns,
+  normalityResult,
+  selectedColumnIds,
+  version,
+  onAlphaChange,
+  onRun,
+  onToggleColumn,
+}: NormalityAnalysisPanelProps) {
+  return (
+    <section className="analysis-run-panel" aria-labelledby="normality-title">
+      <div className="panel-heading">
+        <div>
+          <h3 id="normality-title">정규성 검정 실행</h3>
+          <p>{methodId}</p>
+        </div>
+        <span className="status-pill status-ready">사용 가능</span>
+      </div>
+      {version === null ? (
+        <div className="notice-box">데이터셋 버전 생성 후 실행할 수 있습니다.</div>
+      ) : (
+        <>
+          <div className="column-picker" aria-label="정규성 검정 컬럼 선택">
+            {normalityColumns.map((column) => (
+              <label key={column.column_id}>
+                <input
+                  checked={selectedColumnIds.includes(column.column_id)}
+                  type="checkbox"
+                  onChange={(event) => {
+                    onToggleColumn(column.column_id, event.currentTarget.checked);
+                  }}
+                />
+                <span>{column.display_name}</span>
+              </label>
+            ))}
+          </div>
+          <label className="inline-field">
+            <span>유의수준 alpha</span>
+            <input
+              max="0.5"
+              min="0.001"
+              step="0.001"
+              type="number"
+              value={alpha}
+              onChange={(event) => {
+                onAlphaChange(Number(event.currentTarget.value));
+              }}
+            />
+          </label>
+          <button
+            className="primary-button"
+            disabled={
+              isRunningAnalysis ||
+              selectedColumnIds.length === 0 ||
+              selectedColumnIds.length > maxNormalityColumns ||
+              alpha <= 0 ||
+              alpha >= 1 ||
+              filterValidationError !== null
+            }
+            onClick={() => {
+              onRun();
+            }}
+            type="button"
+          >
+            {isRunningAnalysis ? "실행 중" : "정규성 검정 실행"}
+          </button>
+          {analysisResult?.provenance.row_count_included !== undefined &&
+          analysisResult.provenance.row_count_included !== null ? (
+            <div className="metadata-grid" aria-label="분석 대상 행">
+              <span>사용 행</span>
+              <strong>
+                {analysisResult.provenance.row_count_included.toLocaleString()} /{" "}
+                {(
+                  analysisResult.provenance.row_count_total ??
+                  analysisResult.provenance.row_count_included
+                ).toLocaleString()}
+              </strong>
+            </div>
+          ) : null}
+          {analysisResult?.warnings.length ? (
+            <ul className="warning-list" aria-label="분석 경고">
+              {analysisResult.warnings.map((warning, index) => (
+                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+              ))}
+            </ul>
+          ) : null}
+          {normalityResult !== null ? (
+            <div className="table-wrap">
+              <table className="result-table">
+                <thead>
+                  <tr>
+                    <th>컬럼</th>
+                    <th>N</th>
+                    <th>결측</th>
+                    <th>평균</th>
+                    <th>표준편차</th>
+                    <th>Shapiro W</th>
+                    <th>Shapiro p</th>
+                    <th>AD</th>
+                    <th>AD 결정</th>
+                    <th>Q-Q</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {normalityResult.columns.map((column) => (
+                    <tr key={column.column_id}>
+                      <td>{column.display_name}</td>
+                      <td>{column.n_used}</td>
+                      <td>{column.n_missing}</td>
+                      <td>{formatAnalysisNumber(column.mean)}</td>
+                      <td>{formatAnalysisNumber(column.std)}</td>
+                      <td>{formatAnalysisNumber(column.shapiro_wilk.statistic)}</td>
+                      <td>{formatAnalysisNumber(column.shapiro_wilk.p_value)}</td>
+                      <td>{formatAnalysisNumber(column.anderson_darling.statistic)}</td>
+                      <td>{andersonDecisionLabel(column.anderson_darling.decision_at_alpha)}</td>
+                      <td>{column.qq_plot.point_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+function andersonDecisionLabel(
+  decision: NormalityResult["columns"][number]["anderson_darling"]["decision_at_alpha"],
+): string {
+  if (decision === null || decision.reject_normality === null) {
+    return "-";
+  }
+  return decision.reject_normality ? "기각" : "기각 안 함";
+}
+
+function formatAnalysisNumber(value: number | null): string {
+  if (value === null) {
+    return "-";
+  }
+  return new Intl.NumberFormat("ko-KR", {
+    maximumSignificantDigits: 6,
+  }).format(value);
+}

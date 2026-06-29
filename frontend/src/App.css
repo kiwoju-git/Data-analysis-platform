@@ -75,6 +75,21 @@ textarea {
   font-size: 0.95rem;
 }
 
+.nav-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.nav-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .nav-item-active {
   border-color: #1d7f5f;
   background: #eef8f4;
@@ -253,6 +268,7 @@ textarea {
 
 .method-item:focus-visible,
 .module-button:focus-visible,
+.nav-button:focus-visible,
 .primary-button:focus-visible,
 .secondary-button:focus-visible,
 .filter-row input:focus-visible,
@@ -677,6 +693,25 @@ textarea {
 .column-picker span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.inline-field {
+  display: grid;
+  max-width: 220px;
+  gap: 7px;
+  color: #384457;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.inline-field input {
+  min-height: 38px;
+  min-width: 0;
+  border: 1px solid #c7ced8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172033;
+  padding: 7px 9px;
 }
 
 .filter-panel {

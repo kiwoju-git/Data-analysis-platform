@@ -2,6 +2,9 @@
 
 Gate B currently covers upload, parsing confirmation, canonical JSONL materialization, schema metadata update, paginated row preview, and a profile/preflight scan with persisted profile artifacts for delimited text and basic XLSX datasets.
 
+The current React data-preparation surface is rendered through `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, profile/schema/preview section components, and shared formatting and label helpers in `frontend/src/datasetDisplay.ts`; `frontend/src/AppChrome.tsx` owns the sidebar, topbar, and dataset context layout, while `frontend/src/useDatasetWorkflow.ts` owns dataset upload/paste/parsing/schema/preview/profile workflow state and handlers. `App.tsx` still owns API bootstrap, route state, and analysis orchestration, so this split does not change dataset behavior.
+`frontend/src/WorkspaceRouter.tsx` chooses between this data-preparation surface on root/dataset routes and the analysis page on `/analysis/{module_id}/{method_id}` routes against the same in-memory dataset state.
+
 ## Current API
 
 `POST /api/v1/datasets`
@@ -77,22 +80,24 @@ Gate B currently covers upload, parsing confirmation, canonical JSONL materializ
 - Stored raw upload paths are UUID-based relative paths.
 - Unsupported binary files, path traversal filenames, extension/type mismatches, empty files, oversized files, invalid XLSX containers, and excessive XLSX decompression ratios are rejected.
 - Client errors must not include raw cell values, absolute paths, SQL, or tracebacks.
-- Browser state must not hold the full dataset; the current UI stores upload metadata, parsing options, version/schema/artifact metadata, one preview page, and aggregate profile/preflight data only.
+- Browser state must not hold the full dataset; the current UI stores upload metadata, parsing options, version/schema/artifact metadata, one preview page, aggregate profile/preflight data, and transient pasted text only until successful registration.
 
 ## Analysis Use
 
 `POST /api/v1/analysis-runs`
 
-- `eda.descriptive` is currently the only executable method.
-- It requires a confirmed `dataset_version_id` and `options.column_ids`.
+- `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` are currently executable methods.
+- Both require a confirmed `dataset_version_id` and `options.column_ids`.
 - It streams the validated canonical rows artifact and computes real descriptive statistics for selected numeric columns.
 - The result records `n_total`, `n_used`, missing count, non-numeric exclusion count, mean, sample standard deviation, min, Q1, median, Q3, max, warning codes, and provenance.
+- `eda.graphical_summary` streams the same canonical row source and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads for selected numeric columns. It does not add an image/chart renderer yet.
+- `eda.normality` streams the same canonical row source and computes real SciPy-backed Shapiro-Wilk, Anderson-Darling, and Q-Q point payloads for selected numeric columns. It does not automatically choose a downstream parametric or nonparametric method.
 - Filter snapshots are frozen into an `analysis_row_snapshot` artifact linked from `analysis_artifacts`; the snapshot records the filter hash, canonical artifact hash, row identity, row ranges, and included row count without raw cell values.
 - The current filter expression engine supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions.
-- The current `eda.descriptive` UI can create those supported AND filter conditions and validates incomplete filter values before submitting the analysis request.
+- The current Workbench UI exposes those supported AND filter conditions for dataset-backed method pages, and `eda.descriptive`, `eda.graphical_summary`, plus `eda.normality` serialize them into executable analysis requests.
 - Other analysis methods remain unavailable and must not return mock results.
 
 ## Next Step
 
-The next Gate B slice should move toward deeper Workbench page/component separation or cross-method filter reuse.
+The next Gate B slice should implement the next reference-backed method only after its statistical dependency and reference-test plan are clear.
 Full dataset parsing must remain explicit and must not silently coerce values or infer study design from dtype alone.

@@ -2,6 +2,7 @@ import hashlib
 import json
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.analyses.registry import METHODS, MODULES, analysis_method_catalog
@@ -75,7 +76,11 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         for method in METHODS
         if method.availability == MethodAvailability.AVAILABLE
     ]
-    assert available_methods == ["eda.descriptive"]
+    assert available_methods == [
+        "eda.descriptive",
+        "eda.graphical_summary",
+        "eda.normality",
+    ]
 
 
 def test_analysis_method_catalog_response_groups_planned_and_disabled_methods() -> None:
@@ -96,10 +101,19 @@ def test_analysis_method_catalog_response_groups_planned_and_disabled_methods() 
         "eda.normality",
         "eda.equal_variances",
     ]
+    normality = next(method for method in catalog.methods if method.method_id == "eda.normality")
+    equal_variances = next(
+        method for method in catalog.methods if method.method_id == "eda.equal_variances"
+    )
+    assert normality.availability == MethodAvailability.AVAILABLE
+    assert normality.disabled_reason is None
+    assert equal_variances.availability == MethodAvailability.PLANNED
+    assert equal_variances.disabled_reason is not None
+    assert "SciPy" in equal_variances.disabled_reason
     assert [method.module_id.value for method in catalog.methods[-2:]] == ["doe", "doe"]
 
 
-def test_analysis_methods_api_exposes_only_descriptive_as_available_without_mock_results(
+def test_analysis_methods_api_exposes_only_real_methods_as_available_without_mock_results(
     tmp_path,
 ) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
@@ -119,17 +133,22 @@ def test_analysis_methods_api_exposes_only_descriptive_as_available_without_mock
         for method in payload["methods"]
         if method["availability"] == "available"
     ]
-    assert available == ["eda.descriptive"]
+    assert available == ["eda.descriptive", "eda.graphical_summary", "eda.normality"]
+    normality = next(
+        method for method in payload["methods"] if method["method_id"] == "eda.normality"
+    )
+    assert normality["availability"] == "available"
+    assert normality["disabled_reason"] is None
     assert "p_value" not in response.text
     assert "statistic" not in response.text
 
 
-def test_analysis_run_rejects_planned_method_without_fake_result(tmp_path) -> None:
+def test_analysis_run_rejects_remaining_planned_method_without_fake_result(tmp_path) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         response = client.post(
             "/api/v1/analysis-runs",
             json={
-                "method_id": "eda.graphical_summary",
+                "method_id": "eda.equal_variances",
                 "method_version": "0.1.0",
                 "dataset_version_id": str(uuid4()),
                 "roles": {},
@@ -193,13 +212,6 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
                 },
             },
         )
-        status_response = client.get(
-            f"/api/v1/analysis-runs/{response.json()['analysis_id']}",
-        )
-        record = get_analysis_run_record(
-            settings.workspace_root,
-            response.json()["analysis_id"],
-        )
 
     assert response.status_code == 201
     payload = response.json()
@@ -232,20 +244,79 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     assert payload["warnings"] == []
     assert "p_value" not in response.text
 
+
+def test_analysis_run_executes_graphical_summary_from_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.graphical_summary",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [column_id],
+                    "histogram_bin_count": 2,
+                    "point_limit": 10,
+                },
+            },
+        )
+        status_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}",
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+        record = get_analysis_run_record(
+            settings.workspace_root,
+            response.json()["analysis_id"],
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "eda.graphical_summary"
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 2
+    assert payload["provenance"]["row_count_included"] == 2
+    assert payload["warnings"] == []
+    result = payload["result"]
+    assert result["summary_type"] == "graphical_summary"
+    assert result["histogram_method"] == "fixed_count"
+    column = result["columns"][0]
+    assert column["display_name"] == "alpha"
+    assert column["n_total"] == 2
+    assert column["n_used"] == 2
+    assert column["histogram"]["bin_count"] == 2
+    assert [bin_payload["count"] for bin_payload in column["histogram"]["bins"]] == [1, 1]
+    assert column["boxplot"]["lower_whisker"] == 1.0
+    assert column["boxplot"]["median"] == 1.5
+    assert column["boxplot"]["upper_whisker"] == 2.0
+    assert column["qq_plot"]["point_count"] == 2
+    assert column["ecdf"]["points"][-1] == {"x": 2.0, "probability": 1.0}
+    assert "p_value" not in response.text
+
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["status"] == "succeeded"
     assert status_payload["config_schema_version"] == 2
     assert status_payload["result_available"] is True
     assert status_payload["artifact_count"] == 1
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
 
     assert record is not None
+    assert record.result_path is not None
     config_payload = json.loads(record.config_json)
     assert config_payload["schema_version"] == 2
     row_snapshot = config_payload["row_snapshot"]
     assert row_snapshot["kind"] == "analysis_row_snapshot"
-    assert row_snapshot["row_count_total"] == 4
-    assert row_snapshot["row_count_included"] == 4
+    assert row_snapshot["row_count_total"] == 2
+    assert row_snapshot["row_count_included"] == 2
     assert (
         payload["provenance"]["filter_snapshot_sha256"] == config_payload["filter_snapshot_sha256"]
     )
@@ -267,11 +338,140 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     }
     assert row_snapshot_payload["selection"] == {
         "kind": "all_rows",
-        "row_count_total": 4,
-        "row_count_included": 4,
+        "row_count_total": 2,
+        "row_count_included": 2,
         "row_count_excluded": 0,
     }
-    assert "999" not in row_snapshot_bytes.decode("utf-8")
+
+
+def test_analysis_run_executes_normality_from_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"alpha,beta\n"
+        b"-1.5,10\n-0.9,20\n-0.4,30\n-0.1,40\n0,50\n"
+        b"0.2,60\n0.5,70\n0.8,80\n1.1,90\n1.6,100\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("normal.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        dataset_record = get_dataset_record(settings.workspace_root, dataset_id)
+        assert dataset_record is not None
+        (settings.workspace_root / dataset_record.stored_path).write_bytes(
+            b"alpha,beta\n999,999\n999,999\n",
+        )
+        column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.normality",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [column_id],
+                    "alpha": 0.05,
+                    "missing_policy": "available_case_by_column",
+                    "qq_point_limit": 10,
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+        record = get_analysis_run_record(
+            settings.workspace_root,
+            response.json()["analysis_id"],
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "eda.normality"
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 10
+    assert payload["provenance"]["row_count_included"] == 10
+    assert payload["warnings"] == [
+        {
+            "code": "normality_not_method_switch",
+            "severity": "info",
+            "message": "정규성 검정 결과만으로 후속 모수/비모수 검정을 자동 전환하지 않습니다.",
+        },
+    ]
+    result = payload["result"]
+    assert result["summary_type"] == "normality_test"
+    assert result["alpha"] == 0.05
+    assert result["package_versions"] == {"numpy": "2.2.6", "scipy": "1.15.3"}
+    column = result["columns"][0]
+    assert column["display_name"] == "alpha"
+    assert column["n_total"] == 10
+    assert column["n_used"] == 10
+    assert column["mean"] == pytest.approx(0.13)
+    assert column["shapiro_wilk"]["computed"] is True
+    assert column["shapiro_wilk"]["statistic"] == 0.9924829130989719
+    assert column["shapiro_wilk"]["p_value"] == 0.9989582346078788
+    assert column["anderson_darling"]["computed"] is True
+    assert column["anderson_darling"]["decision_at_alpha"] == {
+        "alpha": 0.05,
+        "critical_value": 0.684,
+        "reject_normality": False,
+        "method": "tabulated_critical_value",
+    }
+    assert column["qq_plot"]["point_count"] == 10
+    assert column["warnings"] == []
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+
+    assert record is not None
+    config_payload = json.loads(record.config_json)
+    row_snapshot = config_payload["row_snapshot"]
+    assert row_snapshot["kind"] == "analysis_row_snapshot"
+    assert row_snapshot["row_count_total"] == 10
+    assert row_snapshot["row_count_included"] == 10
+
+
+def test_analysis_run_rejects_normality_grouping_for_first_slice(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.normality",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {"group": version["columns"][1]["column_id"]},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "normality_grouping_not_supported"
 
 
 def test_analysis_run_applies_numeric_filter_and_freezes_row_ranges(tmp_path) -> None:

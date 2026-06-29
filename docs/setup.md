@@ -27,6 +27,27 @@ powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
 
+NumPy and SciPy are part of the backend base install for the current `eda.normality` slice. The statistical dependency spike scripts remain available for revalidating or reviewing future SciPy-backed methods:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-stat-deps-spike.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\check-stat-deps.ps1
+```
+
+`install-stat-deps-spike.ps1` installs the candidate NumPy/SciPy wheels into `.venv` for local validation. `check-stat-deps.ps1` expects SciPy and NumPy to already be installed and does not install or pin new dependencies by itself. Record the result in `docs/stat_dependency_spike.md` before changing or expanding SciPy-backed method coverage.
+
+The default spike output is `logs\stat-dependency-smoke.json`. Validate it with:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\validate_stat_dependency_smoke.py .\logs\stat-dependency-smoke.json
+```
+
+Render a markdown record for `docs/stat_dependency_spike.md` with:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\render_stat_dependency_record.py .\logs\stat-dependency-smoke.json
+```
+
 ## Development Servers
 
 Backend:

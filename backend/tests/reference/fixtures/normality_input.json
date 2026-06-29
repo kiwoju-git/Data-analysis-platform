@@ -1,0 +1,31 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "normality_reference_inputs_v1",
+  "description": "Synthetic numeric inputs for future SciPy-backed eda.normality reference generation. This file intentionally contains no expected p-values or test statistics.",
+  "cases": [
+    {
+      "case_id": "near_normal_10",
+      "description": "Small hand-inspectable roughly symmetric sample.",
+      "values": [-1.5, -0.9, -0.4, -0.1, 0.0, 0.2, 0.5, 0.8, 1.1, 1.6],
+      "methods": ["shapiro", "anderson_norm"]
+    },
+    {
+      "case_id": "right_skew_12",
+      "description": "Positive right-skewed sample.",
+      "values": [0.2, 0.4, 0.5, 0.7, 0.9, 1.2, 1.8, 2.7, 3.9, 5.8, 8.6, 12.9],
+      "methods": ["shapiro", "anderson_norm"]
+    },
+    {
+      "case_id": "large_deterministic_6001",
+      "description": "Deterministic large-N sample for Shapiro-Wilk p-value limitation warning coverage.",
+      "values_spec": {
+        "kind": "linear_space",
+        "start": -3.0,
+        "stop": 3.0,
+        "count": 6001
+      },
+      "methods": ["shapiro", "anderson_norm"],
+      "expected_warning_codes": ["shapiro_large_n_pvalue_limitation"]
+    }
+  ]
+}

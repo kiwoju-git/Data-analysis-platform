@@ -35,11 +35,11 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - The current stdlib canonical materialization writes UTF-8 JSONL rows plus a JSON manifest under `workspaces/datasets/{dataset_id}/versions/{version_id}/`.
 - SQLite records only relative artifact paths, SHA-256 hashes, media types, and byte sizes; raw row values are not stored in metadata tables.
 - `confirm-parsing` re-reads the preserved raw upload in streaming mode and compares SHA-256 plus byte size against `datasets` metadata before schema scan or canonical materialization.
-- Rows preview, profile, and `eda.descriptive` all read validated canonical rows after parsing confirmation. They do not reparse the raw upload as a fallback.
+- Rows preview, profile, `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` all read validated canonical rows after parsing confirmation. They do not reparse the raw upload as a fallback.
 - Profile scans persist raw-value-free `profile_summary` JSON artifacts under the dataset version workspace and upsert the latest profile artifact metadata in `dataset_artifacts`.
 - Profile artifacts include `schema_hash`, `profile_schema_version`, and `source_canonical_artifact_sha256`; `GET /profile` reuses the latest artifact only when those values and the artifact checksums still match.
 - Succeeded inline analysis result JSON can be fetched through `GET /api/v1/analysis-runs/{analysis_id}/result`; the service validates the relative `result_path` and `result_sha256` before returning the stored envelope.
-- `eda.descriptive` filter snapshots are frozen as `analysis_row_snapshot` JSON artifacts under `workspaces/analyses/{analysis_id}/row_snapshot.json`. The payload records the dataset version, source schema hash, source canonical artifact hash, filter snapshot hash, row identity, and included row count without raw cell values.
+- Available inline analysis methods freeze filter snapshots as `analysis_row_snapshot` JSON artifacts under `workspaces/analyses/{analysis_id}/row_snapshot.json`. The payload records the dataset version, source schema hash, source canonical artifact hash, filter snapshot hash, row identity, and included row count without raw cell values.
 - The current filter expression engine supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions. Unsupported or invalid filters fail before row snapshot or result artifacts are written.
 - Parquet remains the preferred higher-performance canonical data format candidate for later slices.
 - Current Windows Python 3.10 environment check on 2026-06-24 found `pyarrow_available=False`.

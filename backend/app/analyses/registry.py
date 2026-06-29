@@ -69,6 +69,7 @@ def _planned(
     label_en: str,
     order: int,
     requires_dataset: bool = True,
+    disabled_reason: str = "아직 구현되지 않은 Gate의 계획된 메서드입니다.",
 ) -> AnalysisMethodDescriptor:
     return AnalysisMethodDescriptor(
         method_id=method_id,
@@ -80,7 +81,7 @@ def _planned(
         execution_mode=AnalysisExecutionMode.INLINE,
         requires_dataset=requires_dataset,
         order=order,
-        disabled_reason="아직 구현되지 않은 Gate의 계획된 메서드입니다.",
+        disabled_reason=disabled_reason,
     )
 
 
@@ -139,14 +140,14 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_en="Display Descriptive Statistics",
         order=10,
     ),
-    _planned(
+    _available(
         method_id="eda.graphical_summary",
         module_id=AnalysisModuleId.EXPLORATION,
         label_ko="그래프 요약",
         label_en="Graphical Summary",
         order=20,
     ),
-    _planned(
+    _available(
         method_id="eda.normality",
         module_id=AnalysisModuleId.EXPLORATION,
         label_ko="정규성 검정",
@@ -159,6 +160,10 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_ko="등분산 검정",
         label_en="Test for Equal Variances",
         order=40,
+        disabled_reason=(
+            "SciPy 기반 Levene/Brown-Forsythe 호환성 검증과 기준 fixture가 완료된 뒤 "
+            "실행할 수 있습니다."
+        ),
     ),
     _planned(
         method_id="hypothesis.one_sample_t",

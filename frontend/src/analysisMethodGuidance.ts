@@ -41,15 +41,15 @@ export const analysisMethodGuidance = {
   "eda.normality": {
     methodId: "eda.normality",
     roleRequirements: [required("분석 변수", "연속형 수치 컬럼"), optional("그룹", "그룹별 정규성 점검")],
-    optionChecklist: ["유의수준", "Q-Q plot", "검정 방식"],
+    optionChecklist: ["유의수준", "Q-Q plot", "Shapiro-Wilk/Anderson-Darling"],
     preflightChecks: ["표본 수 범위", "상수열", "비정규 자동 전환 금지", "결측 제외 수"],
     resultFocus: ["Q-Q plot", "검정통계량", "p-value", "정규성 한계 경고"],
   },
   "eda.equal_variances": {
     methodId: "eda.equal_variances",
     roleRequirements: [required("반응", "연속형 수치 컬럼"), required("그룹", "2개 이상 그룹 컬럼")],
-    optionChecklist: ["검정 방식", "유의수준", "결측 처리"],
-    preflightChecks: ["그룹 수", "그룹별 N", "상수 그룹", "비정규성 민감도"],
+    optionChecklist: ["Brown-Forsythe/Levene", "유의수준", "결측 처리"],
+    preflightChecks: ["SciPy 검증", "그룹 수", "그룹별 N", "상수 그룹", "비정규성 민감도"],
     resultFocus: ["그룹별 산포", "검정통계량", "p-value", "Welch 대안 안내"],
   },
   "hypothesis.one_sample_t": {

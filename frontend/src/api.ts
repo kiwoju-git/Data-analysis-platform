@@ -345,6 +345,146 @@ export interface DescriptiveStatisticsResult {
   columns: DescriptiveColumnSummary[];
 }
 
+export interface GraphicalHistogramBin {
+  lower: number;
+  upper: number;
+  count: number;
+  include_lower: boolean;
+  include_upper: boolean;
+}
+
+export interface GraphicalHistogramSummary {
+  binning: string;
+  bin_count: number;
+  bins: GraphicalHistogramBin[];
+}
+
+export interface GraphicalBoxplotSummary {
+  lower_whisker: number | null;
+  q1: number | null;
+  median: number | null;
+  q3: number | null;
+  upper_whisker: number | null;
+  lower_fence: number | null;
+  upper_fence: number | null;
+  outlier_count: number;
+}
+
+export interface GraphicalPoint {
+  theoretical?: number;
+  sample?: number;
+  x?: number;
+  probability?: number;
+}
+
+export interface GraphicalPointSeries {
+  point_count: number;
+  points_truncated: boolean;
+  points: GraphicalPoint[];
+}
+
+export interface GraphicalSummaryColumn {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+  n_total: number;
+  n_used: number;
+  n_missing: number;
+  n_non_numeric: number;
+  min: number | null;
+  q1: number | null;
+  median: number | null;
+  q3: number | null;
+  max: number | null;
+  histogram: GraphicalHistogramSummary;
+  boxplot: GraphicalBoxplotSummary;
+  qq_plot: GraphicalPointSeries;
+  ecdf: GraphicalPointSeries;
+  warnings: string[];
+}
+
+export interface GraphicalSummaryResult {
+  schema_version: number;
+  summary_type: "graphical_summary";
+  histogram_method: string;
+  boxplot_method: string;
+  qq_plot_distribution: string;
+  qq_plotting_position: string;
+  ecdf_method: string;
+  point_limit: number;
+  columns: GraphicalSummaryColumn[];
+}
+
+export interface NormalityShapiroWilkResult {
+  computed: boolean;
+  statistic: number | null;
+  p_value: number | null;
+  valid_n_min: number;
+  p_value_accuracy_n_max: number;
+}
+
+export interface NormalityAndersonCriticalValue {
+  significance_level: number;
+  critical_value: number;
+  reject_normality: boolean;
+}
+
+export interface NormalityAndersonDecision {
+  alpha: number;
+  critical_value: number | null;
+  reject_normality: boolean | null;
+  method: string;
+}
+
+export interface NormalityAndersonDarlingResult {
+  computed: boolean;
+  statistic: number | null;
+  critical_values: NormalityAndersonCriticalValue[];
+  decision_at_alpha: NormalityAndersonDecision | null;
+}
+
+export interface NormalityColumnSummary {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+  n_total: number;
+  n_used: number;
+  n_missing: number;
+  n_non_numeric: number;
+  mean: number | null;
+  std: number | null;
+  skewness: number | null;
+  kurtosis_excess: number | null;
+  shapiro_wilk: NormalityShapiroWilkResult;
+  anderson_darling: NormalityAndersonDarlingResult;
+  qq_plot: GraphicalPointSeries;
+  warnings: string[];
+}
+
+export interface NormalityResult {
+  schema_version: number;
+  summary_type: "normality_test";
+  missing_policy: string;
+  alpha: number;
+  qq_plot_distribution: string;
+  qq_plotting_position: string;
+  shape_moment_definition: string;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  columns: NormalityColumnSummary[];
+}
+
 export interface AnalysisResultEnvelope {
   analysis_id: string;
   method_id: string;
@@ -353,7 +493,12 @@ export interface AnalysisResultEnvelope {
   status: "succeeded" | "failed" | "cancelled";
   warnings: AnalysisWarning[];
   provenance: AnalysisProvenance;
-  result: DescriptiveStatisticsResult | Record<string, unknown> | null;
+  result:
+    | DescriptiveStatisticsResult
+    | GraphicalSummaryResult
+    | NormalityResult
+    | Record<string, unknown>
+    | null;
 }
 
 export function getApiBaseUrl(): string {

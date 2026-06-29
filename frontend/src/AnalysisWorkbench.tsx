@@ -17,6 +17,7 @@ interface AnalysisWorkbenchProps {
   version: DatasetVersionResponse | null;
   profile: DatasetProfileResponse | null;
   onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
+  renderAnalysisFilters?: (method: AnalysisMethodDescriptor) => ReactNode;
   renderExecutableMethod: (method: AnalysisMethodDescriptor) => ReactNode;
 }
 
@@ -37,6 +38,7 @@ export function AnalysisWorkbench({
   version,
   profile,
   onSelectMethod,
+  renderAnalysisFilters,
   renderExecutableMethod,
 }: AnalysisWorkbenchProps) {
   const selectedGuidance =
@@ -147,6 +149,7 @@ export function AnalysisWorkbench({
               <strong>{selectedMethod.execution_mode}</strong>
             </div>
           </div>
+          {renderAnalysisFilters !== undefined ? renderAnalysisFilters(selectedMethod) : null}
           {selectedGuidance !== null ? (
             <div className="guidance-grid" aria-label="메서드 입력 계약">
               <section>

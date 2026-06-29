@@ -26,6 +26,8 @@ The Gate B0 slice creates immutable dataset-version metadata for delimited text 
 Delimited-text parsing confirmation supports both header rows and headerless tabular data after a leading preamble through explicit `has_header` and `data_start_row` options.
 It also exposes the 6-module analysis method catalog.
 `eda.descriptive` is the first executable inline method and computes real descriptive statistics from validated canonical rows for an immutable dataset version.
+`eda.graphical_summary` is the second executable inline method and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads from the same canonical row source.
+`eda.normality` is the third executable inline method and computes SciPy-backed Shapiro-Wilk, Anderson-Darling, and Q-Q point payloads from the same canonical row source.
 Other methods remain `planned` or `disabled` and return structured unavailable-method errors.
 Schema version `5` includes dataset artifact metadata plus analysis run, artifact, and job metadata tables with status/cancel API skeletons.
 The profile endpoint reads validated canonical rows, persists a raw-value-free `profile_summary` JSON artifact with SHA-256 metadata, and returns aggregate counts, canonical/profile artifact metadata, duplicate-row count, memory estimate, date/time format and timezone preflight, and warnings only, not raw value samples.
