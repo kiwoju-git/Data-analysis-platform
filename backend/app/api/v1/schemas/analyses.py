@@ -133,3 +133,152 @@ class AnalysisResultEnvelope(BaseModel):
     warnings: list[AnalysisWarning]
     provenance: AnalysisProvenance
     result: dict[str, Any] | None = None
+
+
+class RegressionModelManifestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: UUID
+    analysis_id: UUID
+    dataset_version_id: UUID
+    method_id: str
+    method_version: str
+    schema_hash: str
+    manifest_sha256: str
+    created_at: str
+    app_version: str
+    manifest: dict[str, Any]
+
+
+class RegressionPredictionPreflightRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version_id: UUID
+
+
+class RegressionPredictionPreflightIssue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    severity: Literal["info", "warning", "error"]
+    message: str
+    source_column_id: str | None = None
+    target_column_id: str | None = None
+    display_name: str | None = None
+    count: int | None = Field(default=None, ge=0)
+
+
+class RegressionPredictionColumnMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_column_id: str
+    display_name: str
+    predictor_kind: Literal["numeric", "categorical"]
+    target_column_id: str | None
+    match_type: Literal["column_id", "display_name", "missing", "ambiguous"]
+    status: Literal["ok", "warning", "error"]
+
+
+class RegressionPredictionNumericCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_column_id: str
+    target_column_id: str
+    display_name: str
+    n_valid: int = Field(ge=0)
+    n_missing: int = Field(ge=0)
+    n_non_numeric: int = Field(ge=0)
+    n_below_training_range: int = Field(ge=0)
+    n_above_training_range: int = Field(ge=0)
+
+
+class RegressionPredictionCategoricalCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_column_id: str
+    target_column_id: str
+    display_name: str
+    training_level_count: int = Field(ge=0)
+    n_valid: int = Field(ge=0)
+    n_missing: int = Field(ge=0)
+    n_unseen_level: int = Field(ge=0)
+
+
+class RegressionPredictionPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: UUID
+    analysis_id: UUID
+    source_dataset_version_id: UUID
+    target_dataset_version_id: UUID
+    model_manifest_sha256: str
+    source_schema_hash: str
+    target_schema_hash: str
+    schema_hash_match: bool
+    row_count_total: int = Field(ge=0)
+    row_count_usable: int = Field(ge=0)
+    prediction_ready: bool
+    required_columns: list[RegressionPredictionColumnMapping]
+    numeric_checks: list[RegressionPredictionNumericCheck]
+    categorical_checks: list[RegressionPredictionCategoricalCheck]
+    issues: list[RegressionPredictionPreflightIssue]
+
+
+class RegressionPredictionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version_id: UUID
+    confidence_level: float = Field(default=0.95, gt=0.0, lt=1.0)
+    missing_policy: Literal["complete_case"] = "complete_case"
+    include_intervals: bool = True
+
+
+class RegressionPredictionWarning(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    severity: Literal["info", "warning", "error"]
+    message: str
+    count: int | None = Field(default=None, ge=0)
+
+
+class RegressionPredictionInterval(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["t"]
+    level: float = Field(gt=0.0, lt=1.0)
+    lower: float
+    upper: float
+
+
+class RegressionPredictionRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row_index: int = Field(ge=0)
+    predicted_mean: float
+    mean_confidence_interval: RegressionPredictionInterval | None = None
+    prediction_interval: RegressionPredictionInterval | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RegressionPredictionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prediction_id: UUID
+    model_id: UUID
+    analysis_id: UUID
+    source_dataset_version_id: UUID
+    target_dataset_version_id: UUID
+    model_manifest_sha256: str
+    target_schema_hash: str
+    row_count_total: int = Field(ge=0)
+    row_count_predicted: int = Field(ge=0)
+    row_count_excluded: int = Field(ge=0)
+    row_count_omitted: int = Field(ge=0)
+    row_limit: int = Field(ge=1)
+    truncated: bool
+    confidence_level: float = Field(gt=0.0, lt=1.0)
+    warnings: list[RegressionPredictionWarning]
+    provenance: dict[str, Any]
+    columns: list[RegressionPredictionColumnMapping]
+    rows: list[RegressionPredictionRow]

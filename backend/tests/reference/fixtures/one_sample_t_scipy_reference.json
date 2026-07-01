@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "reference_tool": "scipy.stats.t distribution with hand-computed sample statistics",
+  "cases": [
+    {
+      "case_id": "two_sided_mean_against_10",
+      "n": 6,
+      "mean": 10.15,
+      "variance": 0.07499999999999989,
+      "std": 0.27386127875258287,
+      "estimate": 0.15000000000000036,
+      "standard_error": 0.11180339887498941,
+      "df": 5.0,
+      "statistic": 1.3416407864998778,
+      "pvalue": 0.23741931006324796,
+      "ci_lower": -0.13739978631044897,
+      "ci_upper": 0.4373997863104497,
+      "effect_size": {
+        "cohen_dz": 0.5477225575051677,
+        "hedges_g": 0.4612400484254044,
+        "hedges_correction": 0.8421052631578947
+      }
+    }
+  ]
+}

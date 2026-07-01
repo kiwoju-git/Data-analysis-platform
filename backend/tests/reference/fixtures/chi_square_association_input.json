@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "case_id": "three_by_three_significant",
+      "row_levels": ["A", "B", "C"],
+      "column_levels": ["X", "Y", "Z"],
+      "counts": [
+        [20, 15, 5],
+        [10, 20, 10],
+        [5, 10, 25]
+      ],
+      "alpha": 0.05
+    },
+    {
+      "case_id": "sparse_two_by_two",
+      "row_levels": ["A", "B"],
+      "column_levels": ["yes", "no"],
+      "counts": [
+        [8, 1],
+        [2, 9]
+      ],
+      "alpha": 0.05
+    }
+  ]
+}

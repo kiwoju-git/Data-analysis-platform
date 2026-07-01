@@ -1,0 +1,41 @@
+{
+  "cases": [
+    {
+      "case_id": "three_by_three_significant",
+      "method": "pearson_chi_square_independence",
+      "row_levels": ["A", "B", "C"],
+      "column_levels": ["X", "Y", "Z"],
+      "n_used": 120,
+      "chi_square": 29.58333333333333,
+      "df": 4,
+      "p_value": 0.0000059496135390747285,
+      "cramers_v": 0.35108957388234824,
+      "expected_counts": [
+        [11.666666666666666, 15.0, 13.333333333333334],
+        [11.666666666666666, 15.0, 13.333333333333334],
+        [11.666666666666666, 15.0, 13.333333333333334]
+      ],
+      "min_expected": 11.666666666666666,
+      "cells_below_5": 0,
+      "share_below_5": 0.0
+    },
+    {
+      "case_id": "sparse_two_by_two",
+      "method": "pearson_chi_square_independence",
+      "row_levels": ["A", "B"],
+      "column_levels": ["yes", "no"],
+      "n_used": 20,
+      "chi_square": 9.898989898989898,
+      "df": 1,
+      "p_value": 0.0016536951637003432,
+      "cramers_v": 0.7035264706814485,
+      "expected_counts": [
+        [4.5, 4.5],
+        [5.5, 5.5]
+      ],
+      "min_expected": 4.5,
+      "cells_below_5": 2,
+      "share_below_5": 0.5
+    }
+  ]
+}

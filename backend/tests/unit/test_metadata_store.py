@@ -2,6 +2,7 @@ import sqlite3
 from uuid import uuid4
 
 from app.storage.metadata import (
+    MIGRATIONS,
     SCHEMA_VERSION,
     AnalysisArtifactRecord,
     AnalysisRunRecord,
@@ -10,13 +11,16 @@ from app.storage.metadata import (
     DatasetRecord,
     DatasetVersionRecord,
     JobRecord,
+    RegressionModelRecord,
     count_analysis_artifact_records,
     get_analysis_run_record,
     get_dataset_artifact_record,
     get_job_record,
+    get_regression_model_record,
     initialize_metadata_store,
     insert_analysis_artifact_record,
     insert_analysis_run_record,
+    insert_analysis_run_record_with_artifacts_and_regression_model,
     insert_dataset_record,
     insert_dataset_version_record,
     insert_job_record,
@@ -49,6 +53,7 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (3, "create_dataset_versions_and_columns"),
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
+        (6, "create_regression_models"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -64,7 +69,7 @@ def test_initialize_metadata_store_is_idempotent(tmp_path) -> None:
     with sqlite3.connect(second.path) as connection:
         count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
 
-    assert count == 5
+    assert count == 6
 
 
 def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) -> None:
@@ -109,6 +114,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (3, "create_dataset_versions_and_columns"),
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
+        (6, "create_regression_models"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -181,6 +187,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (3, "create_dataset_versions_and_columns"),
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
+        (6, "create_regression_models"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -264,7 +271,13 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
                 SELECT name
                 FROM sqlite_master
                 WHERE type = 'table'
-                AND name IN ('analysis_runs', 'analysis_artifacts', 'jobs', 'dataset_artifacts');
+                AND name IN (
+                    'analysis_runs',
+                    'analysis_artifacts',
+                    'jobs',
+                    'dataset_artifacts',
+                    'regression_models'
+                );
                 """,
             ).fetchall()
         }
@@ -276,8 +289,15 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (3, "create_dataset_versions_and_columns"),
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
+        (6, "create_regression_models"),
     ]
-    assert table_names == {"analysis_runs", "analysis_artifacts", "jobs", "dataset_artifacts"}
+    assert table_names == {
+        "analysis_runs",
+        "analysis_artifacts",
+        "jobs",
+        "dataset_artifacts",
+        "regression_models",
+    }
     assert user_version == SCHEMA_VERSION
 
 
@@ -425,8 +445,55 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (3, "create_dataset_versions_and_columns"),
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
+        (6, "create_regression_models"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
+    assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 5:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO schema_migrations (version, name)
+                VALUES (?, ?);
+                """,
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 5;")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT version, name FROM schema_migrations ORDER BY version",
+        ).fetchall()
+        regression_models_table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'regression_models';
+            """,
+        ).fetchone()
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert rows == [
+        (1, "create_schema_migrations"),
+        (2, "create_datasets"),
+        (3, "create_dataset_versions_and_columns"),
+        (4, "create_analysis_runs_artifacts_and_jobs"),
+        (5, "create_dataset_artifacts"),
+        (6, "create_regression_models"),
+    ]
+    assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
 
 
@@ -586,6 +653,118 @@ def test_dataset_artifact_record_upsert_replaces_same_kind(tmp_path) -> None:
     artifacts = list_dataset_artifact_records(workspace_root, version_id)
 
     assert artifacts == [second]
+
+
+def test_regression_model_record_round_trips_with_analysis_artifacts(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace"
+    initialize_metadata_store(workspace_root)
+    dataset_id = str(uuid4())
+    version_id = str(uuid4())
+    analysis_id = str(uuid4())
+    model_id = str(uuid4())
+    created_at = "2026-06-24T00:00:00.000Z"
+
+    insert_dataset_record(
+        workspace_root,
+        DatasetRecord(
+            dataset_id=dataset_id,
+            original_filename="sample.csv",
+            safe_filename="sample.csv",
+            media_type="text/csv",
+            detected_format="csv",
+            stored_path="workspaces/datasets/raw/source.csv",
+            sha256="1" * 64,
+            size_bytes=12,
+            created_at=created_at,
+        ),
+    )
+    insert_dataset_version_record(
+        workspace_root,
+        DatasetVersionRecord(
+            version_id=version_id,
+            dataset_id=dataset_id,
+            version_number=1,
+            source_sha256="1" * 64,
+            parsing_options_json='{"kind":"delimited_text"}',
+            row_count=8,
+            column_count=1,
+            schema_hash="2" * 64,
+            created_at=created_at,
+        ),
+        [
+            DatasetColumnRecord(
+                column_id=str(uuid4()),
+                version_id=version_id,
+                column_index=0,
+                original_name="y",
+                display_name="y",
+                data_type="integer",
+                measurement_level="continuous",
+                role="response",
+                unit=None,
+            ),
+        ],
+    )
+
+    regression_model = RegressionModelRecord(
+        model_id=model_id,
+        analysis_id=analysis_id,
+        dataset_version_id=version_id,
+        method_id="regression.linear_model",
+        method_version="0.1.0",
+        manifest_path=f"workspaces/analyses/{analysis_id}/model-{model_id}.json",
+        manifest_sha256="4" * 64,
+        schema_hash="2" * 64,
+        created_at=created_at,
+        app_version="0.1.0",
+    )
+    insert_analysis_run_record_with_artifacts_and_regression_model(
+        workspace_root,
+        AnalysisRunRecord(
+            analysis_id=analysis_id,
+            method_id="regression.linear_model",
+            method_version="0.1.0",
+            dataset_version_id=version_id,
+            config_json='{"schema_version":2,"roles":{},"options":{}}',
+            status="succeeded",
+            result_path=f"workspaces/analyses/{analysis_id}/result.json",
+            result_sha256="3" * 64,
+            stale=False,
+            created_at=created_at,
+            updated_at=created_at,
+            completed_at=created_at,
+            app_version="0.1.0",
+        ),
+        artifacts=[
+            AnalysisArtifactRecord(
+                artifact_id=str(uuid4()),
+                analysis_id=analysis_id,
+                kind="analysis_row_snapshot",
+                path=f"workspaces/analyses/{analysis_id}/row_snapshot.json",
+                sha256="5" * 64,
+                media_type="application/json",
+                created_at=created_at,
+            ),
+            AnalysisArtifactRecord(
+                artifact_id=str(uuid4()),
+                analysis_id=analysis_id,
+                kind="regression_model_manifest",
+                path=regression_model.manifest_path,
+                sha256=regression_model.manifest_sha256,
+                media_type="application/json",
+                created_at=created_at,
+            ),
+        ],
+        regression_model=regression_model,
+    )
+
+    run = get_analysis_run_record(workspace_root, analysis_id)
+    stored_model = get_regression_model_record(workspace_root, model_id)
+
+    assert run is not None
+    assert run.method_id == "regression.linear_model"
+    assert count_analysis_artifact_records(workspace_root, analysis_id) == 2
+    assert stored_model == regression_model
 
 
 def test_analysis_run_artifact_and_job_records_round_trip(tmp_path) -> None:

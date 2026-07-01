@@ -1,0 +1,42 @@
+{
+  "reference_schema_version": 1,
+  "source_fixture_id": "two_sample_t_reference_inputs_v1",
+  "generator": "manual_scipy_1_15_3_check",
+  "python_version": "3.10.11",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "dependencies": {
+    "numpy": "2.2.6",
+    "scipy": "1.15.3"
+  },
+  "cases": [
+    {
+      "case_id": "welch_default_mean_difference",
+      "group_order": ["A", "B"],
+      "group_sizes": [5, 6],
+      "group_means": [5.88, 4.783333333333333],
+      "group_variances": [0.24700000000000027, 0.10166666666666659],
+      "estimate": 1.0966666666666667,
+      "welch": {
+        "standard_error": 0.25757415329268674,
+        "df": 6.594008456673691,
+        "statistic": 4.257673577288254,
+        "pvalue": 0.004305516567486469,
+        "ci_lower": 0.47991554689372173,
+        "ci_upper": 1.7134177864396116
+      },
+      "pooled": {
+        "standard_error": 0.24690428994867986,
+        "df": 9.0,
+        "statistic": 4.441667120869441,
+        "pvalue": 0.0016195856261761895,
+        "ci_lower": 0.5381303586198551,
+        "ci_upper": 1.6552029747134782
+      },
+      "effect_size": {
+        "cohen_d": 2.6895630062567104,
+        "hedges_g": 2.4590290342918495,
+        "hedges_correction": 0.9142857142857143
+      }
+    }
+  ]
+}

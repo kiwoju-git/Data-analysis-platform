@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-SCHEMA_VERSION: Final = 5
+SCHEMA_VERSION: Final = 6
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -97,6 +97,20 @@ class AnalysisArtifactRecord:
     sha256: str
     media_type: str
     created_at: str
+
+
+@dataclass(frozen=True)
+class RegressionModelRecord:
+    model_id: str
+    analysis_id: str
+    dataset_version_id: str
+    method_id: str
+    method_version: str
+    manifest_path: str
+    manifest_sha256: str
+    schema_hash: str
+    created_at: str
+    app_version: str
 
 
 @dataclass(frozen=True)
@@ -282,6 +296,32 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
 
         CREATE INDEX IF NOT EXISTS idx_dataset_artifacts_version_id
         ON dataset_artifacts(version_id, kind);
+        """,
+    ),
+    Migration(
+        version=6,
+        name="create_regression_models",
+        sql="""
+        CREATE TABLE IF NOT EXISTS regression_models (
+            model_id TEXT PRIMARY KEY,
+            analysis_id TEXT NOT NULL UNIQUE
+                REFERENCES analysis_runs(analysis_id) ON DELETE CASCADE,
+            dataset_version_id TEXT NOT NULL
+                REFERENCES dataset_versions(version_id) ON DELETE RESTRICT,
+            method_id TEXT NOT NULL,
+            method_version TEXT NOT NULL,
+            manifest_path TEXT NOT NULL,
+            manifest_sha256 TEXT NOT NULL,
+            schema_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            app_version TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_regression_models_analysis_id
+        ON regression_models(analysis_id);
+
+        CREATE INDEX IF NOT EXISTS idx_regression_models_dataset_version_id
+        ON regression_models(dataset_version_id, created_at);
         """,
     ),
 )
@@ -748,6 +788,21 @@ def insert_analysis_run_record_with_artifacts(
                 _insert_analysis_artifact(connection, artifact)
 
 
+def insert_analysis_run_record_with_artifacts_and_regression_model(
+    workspace_root: Path,
+    record: AnalysisRunRecord,
+    artifacts: list[AnalysisArtifactRecord],
+    regression_model: RegressionModelRecord,
+) -> None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        with connection:
+            _insert_analysis_run(connection, record)
+            for artifact in artifacts:
+                _insert_analysis_artifact(connection, artifact)
+            _insert_regression_model(connection, regression_model)
+
+
 def get_analysis_run_record(
     workspace_root: Path,
     analysis_id: str,
@@ -779,6 +834,36 @@ def get_analysis_run_record(
         return None
 
     return _analysis_run_from_row(row)
+
+
+def get_regression_model_record(
+    workspace_root: Path,
+    model_id: str,
+) -> RegressionModelRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                model_id,
+                analysis_id,
+                dataset_version_id,
+                method_id,
+                method_version,
+                manifest_path,
+                manifest_sha256,
+                schema_hash,
+                created_at,
+                app_version
+            FROM regression_models
+            WHERE model_id = ?;
+            """,
+            (model_id,),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return _regression_model_from_row(row)
 
 
 def count_analysis_artifact_records(workspace_root: Path, analysis_id: str) -> int:
@@ -957,6 +1042,41 @@ def _insert_analysis_artifact(
     )
 
 
+def _insert_regression_model(
+    connection: sqlite3.Connection,
+    record: RegressionModelRecord,
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO regression_models (
+            model_id,
+            analysis_id,
+            dataset_version_id,
+            method_id,
+            method_version,
+            manifest_path,
+            manifest_sha256,
+            schema_hash,
+            created_at,
+            app_version
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """,
+        (
+            record.model_id,
+            record.analysis_id,
+            record.dataset_version_id,
+            record.method_id,
+            record.method_version,
+            record.manifest_path,
+            record.manifest_sha256,
+            record.schema_hash,
+            record.created_at,
+            record.app_version,
+        ),
+    )
+
+
 def get_job_record(workspace_root: Path, job_id: str) -> JobRecord | None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         row = connection.execute(
@@ -1083,6 +1203,21 @@ def _analysis_run_from_row(row: tuple[object, ...]) -> AnalysisRunRecord:
         updated_at=str(row[10]),
         completed_at=None if row[11] is None else str(row[11]),
         app_version=str(row[12]),
+    )
+
+
+def _regression_model_from_row(row: tuple[object, ...]) -> RegressionModelRecord:
+    return RegressionModelRecord(
+        model_id=str(row[0]),
+        analysis_id=str(row[1]),
+        dataset_version_id=str(row[2]),
+        method_id=str(row[3]),
+        method_version=str(row[4]),
+        manifest_path=str(row[5]),
+        manifest_sha256=str(row[6]),
+        schema_hash=str(row[7]),
+        created_at=str(row[8]),
+        app_version=str(row[9]),
     )
 
 

@@ -12,7 +12,7 @@ This file records direct dependencies introduced for the Gate A scaffold. Transi
 | `numpy` | `2.2.6` | SciPy numeric runtime dependency pinned after the Windows statistical dependency spike. | `cp310-win_amd64` wheel validated; CPU-only. | BSD |
 | `pydantic-settings` | `2.7.0` | Typed environment-based settings without custom parsing. | Supports Python 3.10 and does not require GPU. | MIT |
 | `python-multipart` | `0.0.32` | Multipart form parsing for browser file uploads through FastAPI `UploadFile`. | Supports Python 3.10 and does not require GPU. | Apache-2.0 |
-| `scipy` | `1.15.3` | Shapiro-Wilk, Anderson-Darling, Levene/Brown-Forsythe statistical calculations. | `cp310-win_amd64` wheel validated; CPU-only. | BSD |
+| `scipy` | `1.15.3` | Shapiro-Wilk, Anderson-Darling, Levene/Brown-Forsythe, t-test, rank-test, and exact binomial statistical calculations. | `cp310-win_amd64` wheel validated; CPU-only. | BSD |
 | `uvicorn[standard]` | `0.32.1` | Local ASGI development server bound to `127.0.0.1`. | Supports Python 3.10 and does not require GPU. | BSD-3-Clause |
 
 ## Backend Dev
@@ -45,7 +45,7 @@ This file records direct dependencies introduced for the Gate A scaffold. Transi
 
 ## Statistical Dependencies
 
-NumPy 2.2.6 and SciPy 1.15.3 are now production-pinned for the `eda.normality` slice after a native Windows Python 3.10.11 wheel-only smoke passed.
+NumPy 2.2.6 and SciPy 1.15.3 are now production-pinned for the current SciPy-backed EDA, Gate B2 hypothesis, and first two categorical slices after a native Windows Python 3.10.11 wheel-only smoke passed.
 
 Before additional SciPy-backed methods become `available`, the implementation PR must record:
 
@@ -75,6 +75,6 @@ Recorded candidate spike result:
 - Installed wheel metadata classifiers report `License :: OSI Approved :: BSD License` for both packages.
 - Full `scripts/check.ps1` passed after the candidate spike in the local `.venv`.
 - Production dependency pins have been added to `backend/pyproject.toml`.
-- `eda.normality` is available with reference-backed tests. `eda.equal_variances` remains `planned` until its own reference fixture, edge-case warnings, API/UI contract, and full Windows check are added.
+- `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, and `categorical.chi_square_association` are available with reference-backed tests. Re-run the dependency smoke before changing these pins or adding another SciPy-backed method.
 
 Passing the dependency smoke remains necessary but not sufficient for any future SciPy-backed method.

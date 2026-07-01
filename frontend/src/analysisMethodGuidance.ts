@@ -10,6 +10,8 @@ export interface AnalysisMethodGuidance {
   optionChecklist: readonly string[];
   preflightChecks: readonly string[];
   resultFocus: readonly string[];
+  plainLanguage?: string;
+  commonErrors?: readonly string[];
 }
 
 function required(label: string, detail: string): MethodRoleRequirement {
@@ -49,7 +51,7 @@ export const analysisMethodGuidance = {
     methodId: "eda.equal_variances",
     roleRequirements: [required("반응", "연속형 수치 컬럼"), required("그룹", "2개 이상 그룹 컬럼")],
     optionChecklist: ["Brown-Forsythe/Levene", "유의수준", "결측 처리"],
-    preflightChecks: ["SciPy 검증", "그룹 수", "그룹별 N", "상수 그룹", "비정규성 민감도"],
+    preflightChecks: ["그룹 수", "그룹별 N", "상수 그룹", "비정규성 민감도"],
     resultFocus: ["그룹별 산포", "검정통계량", "p-value", "Welch 대안 안내"],
   },
   "hypothesis.one_sample_t": {
@@ -58,6 +60,13 @@ export const analysisMethodGuidance = {
     optionChecklist: ["대립가설", "유의수준", "신뢰수준", "결측 처리"],
     preflightChecks: ["유효 N", "상수열", "정규성은 보조 점검", "기준값 입력"],
     resultFocus: ["평균 차이", "95% CI", "t 통계량/df", "효과크기"],
+    plainLanguage:
+      "한 숫자 컬럼의 평균이 사용자가 입력한 기준 평균과 다르다고 볼 근거가 있는지 확인합니다. 예를 들어 평균 두께가 목표 10과 다른지 보는 검정입니다.",
+    commonErrors: [
+      "반응 변수에 문자 컬럼이나 ID 컬럼을 고른 경우",
+      "기준 평균이 비어 있거나 숫자가 아닌 경우",
+      "필터나 결측 때문에 사용 가능한 숫자 값이 2개 미만인 경우",
+    ],
   },
   "hypothesis.paired_t": {
     methodId: "hypothesis.paired_t",
@@ -68,6 +77,13 @@ export const analysisMethodGuidance = {
     optionChecklist: ["대립가설", "신뢰수준", "불완전 쌍 처리"],
     preflightChecks: ["쌍 매칭", "불완전 쌍 수", "차이값 상수 여부", "결측 제외 수"],
     resultFocus: ["평균 차이", "차이의 CI", "paired t", "효과크기"],
+    plainLanguage:
+      "같은 대상의 전/후 또는 두 조건 측정값을 비교합니다. 각 행에서 두 번째 측정값에서 첫 번째 측정값을 뺀 차이의 평균을 검정합니다.",
+    commonErrors: [
+      "전 측정과 후 측정에 같은 컬럼을 고른 경우",
+      "둘 중 하나가 숫자 컬럼이 아닌 경우",
+      "한쪽 값이 빠진 행이 많아 complete pair가 부족한 경우",
+    ],
   },
   "hypothesis.two_sample_t": {
     methodId: "hypothesis.two_sample_t",
@@ -75,20 +91,45 @@ export const analysisMethodGuidance = {
     optionChecklist: ["Welch 기본", "대립가설", "신뢰수준", "결측 처리"],
     preflightChecks: ["그룹별 N", "빈 그룹", "상수 그룹", "독립성 설계 확인"],
     resultFocus: ["평균 차이", "95% CI", "Welch df", "Hedges g"],
+    plainLanguage:
+      "두 독립 그룹의 평균 차이를 비교합니다. 기본은 Welch 방식이라 두 그룹의 분산이 같다고 강하게 가정하지 않습니다.",
+    commonErrors: [
+      "그룹 컬럼에 실제 그룹이 정확히 2개가 아닌 경우",
+      "반응 변수와 그룹 변수에 같은 컬럼을 고른 경우",
+      "필터 후 한 그룹이 비거나 값이 모두 같은 경우",
+    ],
   },
   "hypothesis.one_way_anova": {
     methodId: "hypothesis.one_way_anova",
-    roleRequirements: [required("반응", "연속형 수치 컬럼"), required("요인", "3개 이상 그룹")],
-    optionChecklist: ["표준/Welch ANOVA", "사후검정", "다중비교 보정"],
-    preflightChecks: ["그룹별 N", "분산 동질성", "상수 그룹", "사후검정 호환성"],
-    resultFocus: ["omnibus 검정", "효과크기", "사후비교", "가정 경고"],
+    roleRequirements: [required("반응", "연속형 수치 컬럼"), required("요인", "2개 이상 독립 그룹")],
+    optionChecklist: ["표준 ANOVA", "Tukey-Kramer 사후비교", "유의한 omnibus 후 사후비교", "결측 처리"],
+    preflightChecks: ["그룹별 N", "잔차 정규성 설계 확인", "등분산 가정", "상수 그룹"],
+    resultFocus: ["ANOVA table", "F 통계량/p-value", "eta/omega squared", "Tukey-Kramer 비교"],
+    plainLanguage:
+      "세 개 이상 그룹의 평균이 모두 같다고 보기 어려운지 먼저 확인합니다. 전체 검정이 유의할 때만 어떤 그룹끼리 다른지 사후비교를 보여줍니다.",
+    commonErrors: [
+      "그룹 컬럼에 사용 가능한 그룹이 2개 미만인 경우",
+      "반응 변수가 숫자 컬럼이 아닌 경우",
+      "그룹 안 값이 모두 같거나 결측 제외 후 그룹별 N이 부족한 경우",
+    ],
   },
   "hypothesis.equivalence_tost": {
     methodId: "hypothesis.equivalence_tost",
-    roleRequirements: [required("반응", "연속형 수치 컬럼"), required("동등성 한계", "하한/상한 또는 허용 차이")],
-    optionChecklist: ["동등성 한계", "신뢰수준", "대상 설계"],
-    preflightChecks: ["한계값 방향", "유효 N", "설계 유형", "결측 제외 수"],
-    resultFocus: ["TOST 결과", "CI와 동등성 한계", "효과크기"],
+    roleRequirements: [
+      required("반응", "연속형 수치 컬럼"),
+      required("기준 평균", "비교할 모집단 평균"),
+      required("동등성 한계", "원 단위 평균 차이 하한/상한"),
+    ],
+    optionChecklist: ["1표본 평균 설계", "동등성 한계", "유의수준", "결측 처리"],
+    preflightChecks: ["한계값 방향", "유효 N", "상수열", "동등성 한계 사전 지정"],
+    resultFocus: ["두 단측검정 p-value", "TOST 판정", "CI와 동등성 한계", "Cohen dz"],
+    plainLanguage:
+      "평균이 기준값과 '충분히 비슷하다'고 볼 근거를 확인합니다. 일반 t-test에서 차이가 안 난다는 결과만으로 동등하다고 말할 수 없어서, 허용 가능한 차이 범위인 동등성 하한/상한을 먼저 정해야 합니다.",
+    commonErrors: [
+      "동등성 하한이 상한보다 크거나 같은 경우",
+      "동등성 한계를 임의로 너무 넓게 잡아 결과를 좋게 만드는 경우",
+      "반응 변수에 숫자 컬럼이 아닌 컬럼을 고른 경우",
+    ],
   },
   "hypothesis.one_sample_wilcoxon": {
     methodId: "hypothesis.one_sample_wilcoxon",
@@ -96,6 +137,13 @@ export const analysisMethodGuidance = {
     optionChecklist: ["대립가설", "zero difference 처리", "결측 처리"],
     preflightChecks: ["0 차이 수", "동률", "유효 N", "중앙값 단정 금지"],
     resultFocus: ["signed-rank 통계량", "p-value", "rank 기반 효과크기"],
+    plainLanguage:
+      "한 컬럼의 값들이 기준 위치보다 전반적으로 크거나 작은지 순위 기반으로 봅니다. 정규성 가정이 부담스러울 때 쓰지만, 자동 대체 검정은 아닙니다.",
+    commonErrors: [
+      "기준값과 정확히 같은 값이 많아 zero difference 처리가 필요한 경우",
+      "exact 방식을 요청했지만 동률이나 0 차이가 있는 경우",
+      "결과를 무조건 중앙값 차이로만 해석하는 경우",
+    ],
   },
   "hypothesis.mann_whitney": {
     methodId: "hypothesis.mann_whitney",
@@ -103,6 +151,13 @@ export const analysisMethodGuidance = {
     optionChecklist: ["대립가설", "exact/asymptotic", "결측 처리"],
     preflightChecks: ["그룹별 N", "동률", "독립성 설계 확인", "분포 차이 해석"],
     resultFocus: ["U 통계량", "p-value", "rank-biserial 효과크기"],
+    plainLanguage:
+      "두 독립 그룹의 값 분포가 한쪽으로 더 크거나 다른지 순위로 비교합니다. 평균 차이 검정이 아니라 순위 기반 비교입니다.",
+    commonErrors: [
+      "그룹이 정확히 2개가 아닌 경우",
+      "exact 방식을 요청했지만 동률이 있는 경우",
+      "결과를 단순히 중앙값 차이라고만 해석하는 경우",
+    ],
   },
   "hypothesis.kruskal_wallis": {
     methodId: "hypothesis.kruskal_wallis",
@@ -110,27 +165,55 @@ export const analysisMethodGuidance = {
     optionChecklist: ["Dunn 사후검정", "Holm 보정", "결측 처리"],
     preflightChecks: ["그룹별 N", "동률", "빈 그룹", "사후검정 보정"],
     resultFocus: ["H 통계량", "p-value", "사후비교", "효과크기"],
+    plainLanguage:
+      "세 개 이상 독립 그룹을 순위 기반으로 비교합니다. 전체 검정이 유의할 때만 Dunn/Holm 사후비교로 어떤 그룹 차이가 큰지 봅니다.",
+    commonErrors: [
+      "사용 가능한 그룹이 3개 미만인 경우",
+      "필터 후 일부 그룹이 비는 경우",
+      "전체 검정이 유의하지 않은데 사후비교를 기대하는 경우",
+    ],
   },
   "categorical.one_proportion": {
     methodId: "categorical.one_proportion",
-    roleRequirements: [required("사건/비사건", "이진 컬럼 또는 사건 수/전체 수")],
-    optionChecklist: ["기준 비율", "대립가설", "신뢰수준", "정확/근사 방식"],
-    preflightChecks: ["사건 수", "전체 N", "희소 조건", "이진 수준 확인"],
-    resultFocus: ["비율 추정치", "CI", "검정통계량", "p-value"],
+    roleRequirements: [required("사건/비사건", "이진 반응 컬럼과 사건 수준")],
+    optionChecklist: ["기준 비율", "대립가설", "신뢰수준", "CI 방식"],
+    preflightChecks: ["사건 수", "전체 N", "이진 수준 확인", "독립성 설계 확인"],
+    resultFocus: ["비율 추정치", "CI", "exact binomial p-value", "Cohen h"],
+    plainLanguage:
+      "예/아니오처럼 두 수준인 컬럼에서 사건 비율이 기준 비율과 다른지 확인합니다.",
+    commonErrors: [
+      "사건 수준에 실제 데이터에 없는 값을 입력한 경우",
+      "반응 컬럼이 이진 컬럼이 아닌 경우",
+      "기준 비율이 0과 1 사이가 아닌 경우",
+    ],
   },
   "categorical.two_proportion": {
     methodId: "categorical.two_proportion",
-    roleRequirements: [required("결과", "이진 결과"), required("그룹", "정확히 2개 그룹")],
-    optionChecklist: ["대립가설", "신뢰수준", "정확/근사 방식"],
-    preflightChecks: ["그룹별 사건 수", "그룹별 N", "희소 조건", "수준 매핑"],
-    resultFocus: ["비율 차이", "CI", "위험비/오즈비 후보", "p-value"],
+    roleRequirements: [required("결과", "이진 반응 컬럼"), required("그룹", "정확히 2개 그룹")],
+    optionChecklist: ["사건 수준", "대립가설", "신뢰수준", "complete-case 결측 처리"],
+    preflightChecks: ["그룹별 사건 수", "그룹별 N", "기대도수", "독립성 설계 확인"],
+    resultFocus: ["비율 차이", "Newcombe-Wilson CI", "Fisher exact p-value", "risk/odds ratio"],
+    plainLanguage:
+      "두 그룹의 사건 비율이 다른지 비교합니다. 현재는 정확히 2개 그룹과 이진 반응 컬럼을 사용합니다.",
+    commonErrors: [
+      "그룹이 정확히 2개가 아닌 경우",
+      "사건 수준이 실제 반응 값과 일치하지 않는 경우",
+      "반응 변수와 그룹 변수에 같은 컬럼을 고른 경우",
+    ],
   },
   "categorical.chi_square_association": {
     methodId: "categorical.chi_square_association",
     roleRequirements: [required("행 변수", "범주형 컬럼"), required("열 변수", "범주형 컬럼")],
-    optionChecklist: ["연관성 검정", "Fisher 2x2 대안", "효과크기"],
-    preflightChecks: ["분할표 크기", "기대도수", "희소 셀", "결측 제외 수"],
-    resultFocus: ["카이제곱 통계량", "df", "p-value", "Cramer's V"],
+    optionChecklist: ["Pearson 카이제곱", "유의수준", "complete-case 결측 처리"],
+    preflightChecks: ["분할표 크기", "기대도수", "희소 2x2 Fisher 권고", "결측 제외 수"],
+    resultFocus: ["카이제곱 통계량", "df", "p-value", "Cramer's V", "기대도수 진단"],
+    plainLanguage:
+      "두 범주형 변수가 서로 독립이라고 보기 어려운지 확인합니다. 예를 들어 그룹과 합격/불합격이 관련 있어 보이는지 보는 검정입니다.",
+    commonErrors: [
+      "행 변수와 열 변수에 같은 컬럼을 고른 경우",
+      "ID처럼 고유값이 너무 많은 컬럼을 범주형 변수로 고른 경우",
+      "기대도수가 작아 Fisher exact 같은 다른 방법을 검토해야 하는 경우",
+    ],
   },
   "regression.pearson": {
     methodId: "regression.pearson",
@@ -138,20 +221,46 @@ export const analysisMethodGuidance = {
     optionChecklist: ["신뢰수준", "다중비교 보정", "결측 처리"],
     preflightChecks: ["쌍별 N", "상수열", "비선형 패턴", "이상점 후보"],
     resultFocus: ["상관계수", "CI", "p-value", "산점도 진단"],
+    plainLanguage:
+      "두 숫자 컬럼이 함께 증가하거나 감소하는 선형 관계가 있는지 요약합니다. r은 -1에서 1 사이이며, 1에 가까울수록 같은 방향, -1에 가까울수록 반대 방향 선형 관계가 강합니다.",
+    commonErrors: [
+      "X와 Y에 같은 컬럼을 고른 경우",
+      "둘 중 하나가 숫자 컬럼이 아니거나 ID 컬럼인 경우",
+      "필터/결측/문자값 제외 후 사용 가능한 쌍이 4개 미만인 경우",
+      "상관을 인과관계로 해석하는 경우",
+    ],
   },
   "regression.xy_correlation": {
     methodId: "regression.xy_correlation",
     roleRequirements: [required("X 변수 집합", "수치 컬럼 1개 이상"), required("Y 변수 집합", "수치 컬럼 1개 이상")],
-    optionChecklist: ["상관 방식", "다중비교 보정", "결측 처리"],
+    optionChecklist: ["Pearson pairwise 상관", "신뢰수준", "pairwise complete-case 결측 처리"],
     preflightChecks: ["변수별 N", "상수열", "쌍별 결측 변화", "상관행렬 크기"],
-    resultFocus: ["교차 상관행렬", "보정 p-value", "유효 N"],
+    resultFocus: ["교차 상관행렬", "p-value", "Fisher z CI", "유효 N"],
+    plainLanguage:
+      "여러 X 숫자 컬럼과 여러 Y 숫자 컬럼 사이의 선형 상관을 한 번에 표로 봅니다. 각 칸은 하나의 X/Y 조합이므로 사용 N이 서로 다를 수 있습니다.",
+    commonErrors: [
+      "X 또는 Y 변수 집합에 숫자 컬럼을 하나도 고르지 않은 경우",
+      "필터/결측/문자값 제외 후 특정 X/Y 조합의 사용 가능한 쌍이 4개 미만인 경우",
+      "한 컬럼이 상수처럼 변하지 않아 해당 조합의 상관을 계산할 수 없는 경우",
+      "상관이 큰 셀을 원인과 결과로 해석하는 경우",
+    ],
   },
   "regression.linear_model": {
     methodId: "regression.linear_model",
-    roleRequirements: [required("반응", "연속형 또는 이진 타깃"), required("예측변수", "수치/범주형 컬럼")],
-    optionChecklist: ["모형 유형", "상호작용", "신뢰수준", "진단 출력"],
-    preflightChecks: ["결측 complete-case", "다중공선성", "특이행렬", "분리/수렴"],
-    resultFocus: ["계수 추정치", "CI", "잔차 진단", "모형 적합도"],
+    roleRequirements: [required("반응 변수", "연속형 수치 컬럼 1개"), required("예측변수", "숫자형 또는 범주형 컬럼 1개 이상")],
+    optionChecklist: ["OLS main effects", "범주형 treatment coding", "숫자형 2차항/상호작용", "intercept 포함", "신뢰수준", "complete-case 결측 처리"],
+    preflightChecks: ["사용 N과 잔차 자유도", "상수 컬럼/단일 수준 factor", "추가 항의 rank deficiency", "condition number와 VIF"],
+    resultFocus: ["계수 추정치", "CI", "p-value", "R²/adjusted R²", "잔차/leverage/Cook's D"],
+    plainLanguage:
+      "숫자형 반응 변수 Y가 숫자형 예측변수, 범주형 factor, 선택한 숫자형 2차항/상호작용 항과 평균적으로 어떻게 함께 변하는지 OLS 선형회귀로 적합합니다. 범주형 계수는 기준 수준과 비교한 평균 차이 추정치입니다.",
+    commonErrors: [
+      "반응 변수와 예측변수에 같은 컬럼을 고른 경우",
+      "예측변수 수에 비해 complete-case 행이 너무 적은 경우",
+      "범주형 예측변수가 필터 후 한 수준만 남은 경우",
+      "2차항 또는 상호작용 항이 기존 predictor와 완전히 중복되어 설계행렬이 특이해지는 경우",
+      "예측변수들이 서로 완전히 중복되거나 선형 조합인 경우",
+      "회귀계수를 관찰 데이터만으로 원인 효과라고 해석하는 경우",
+    ],
   },
   "regression.predict": {
     methodId: "regression.predict",

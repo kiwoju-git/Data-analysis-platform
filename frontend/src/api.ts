@@ -485,6 +485,1406 @@ export interface NormalityResult {
   columns: NormalityColumnSummary[];
 }
 
+export interface EqualVarianceColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface EqualVarianceGroupSummary {
+  group_label: string;
+  group_index: number;
+  n: number;
+  mean: number | null;
+  median: number | null;
+  variance: number | null;
+  std: number | null;
+  min: number | null;
+  max: number | null;
+  warnings: string[];
+}
+
+export interface EqualVarianceTestResult {
+  method: string;
+  center: string;
+  computed: boolean;
+  statistic: number | null;
+  p_value: number | null;
+  alpha: number;
+  reject_equal_variances: boolean | null;
+  valid_group_n_min: number;
+  warnings: string[];
+}
+
+export interface EqualVariancesResult {
+  schema_version: number;
+  summary_type: "equal_variances_test";
+  missing_policy: string;
+  alpha: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: EqualVarianceColumnRef;
+  group: EqualVarianceColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_response: number;
+  n_excluded_missing_group: number;
+  n_excluded_non_numeric_response: number;
+  group_count: number;
+  groups: EqualVarianceGroupSummary[];
+  tests: EqualVarianceTestResult[];
+}
+
+export interface TwoSampleTColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface TwoSampleTGroupSummary {
+  group_label: string;
+  group_index: number;
+  n: number;
+  mean: number;
+  median: number;
+  variance: number;
+  std: number;
+  min: number;
+  max: number;
+  warnings: string[];
+}
+
+export interface TwoSampleTConfidenceInterval {
+  level: number;
+  alternative: string;
+  lower: number | null;
+  upper: number | null;
+}
+
+export interface TwoSampleTEffectSize {
+  standardizer: string;
+  cohen_d: number | null;
+  hedges_g: number | null;
+  hedges_correction: number | null;
+}
+
+export interface TwoSampleTContrast {
+  group_1_label: string;
+  group_2_label: string;
+  estimate: number;
+  estimate_definition: string;
+  null_difference: number;
+  standard_error: number;
+  statistic: number;
+  df: number;
+  p_value: number;
+  reject_null: boolean;
+  confidence_interval: TwoSampleTConfidenceInterval;
+  effect_size: TwoSampleTEffectSize;
+}
+
+export interface TwoSampleTResult {
+  schema_version: number;
+  summary_type: "two_sample_t_test";
+  method: string;
+  variance_assumption: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  confidence_level: number;
+  null_difference: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: TwoSampleTColumnRef;
+  group: TwoSampleTColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_response: number;
+  n_excluded_missing_group: number;
+  n_excluded_non_numeric_response: number;
+  group_count: number;
+  groups: TwoSampleTGroupSummary[];
+  contrast: TwoSampleTContrast;
+}
+
+export interface MannWhitneyColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface MannWhitneyGroupSummary {
+  group_label: string;
+  group_index: number;
+  n: number;
+  mean: number;
+  median: number;
+  min: number;
+  max: number;
+  rank_sum: number;
+  mean_rank: number;
+  warnings: string[];
+}
+
+export interface MannWhitneyEffectSize {
+  rank_biserial: number;
+  common_language_probability: number;
+  definition: string;
+}
+
+export interface MannWhitneyTestResult {
+  group_1_label: string;
+  group_2_label: string;
+  u_statistic: number;
+  u_statistic_group: string;
+  p_value: number;
+  reject_null: boolean;
+  alternative: string;
+  requested_method: string;
+  resolved_method: string;
+  has_ties: boolean;
+  effect_size: MannWhitneyEffectSize;
+}
+
+export interface MannWhitneyResult {
+  schema_version: number;
+  summary_type: "mann_whitney_u_test";
+  method: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  requested_method: string;
+  resolved_method: string;
+  use_continuity: boolean;
+  has_ties: boolean;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: MannWhitneyColumnRef;
+  group: MannWhitneyColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_response: number;
+  n_excluded_missing_group: number;
+  n_excluded_non_numeric_response: number;
+  group_count: number;
+  groups: MannWhitneyGroupSummary[];
+  test: MannWhitneyTestResult;
+}
+
+export interface KruskalWallisColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface KruskalWallisGroupSummary {
+  group_label: string;
+  group_index: number;
+  n: number;
+  mean: number;
+  median: number;
+  q1: number | null;
+  q3: number | null;
+  iqr: number | null;
+  min: number;
+  max: number;
+  rank_sum: number;
+  mean_rank: number;
+  warnings: string[];
+}
+
+export interface KruskalWallisEffectSize {
+  epsilon_squared: number | null;
+  definition: string;
+  tie_correction: number;
+}
+
+export interface KruskalWallisTestResult {
+  h_statistic: number;
+  df: number;
+  p_value: number;
+  reject_null: boolean;
+  effect_size: KruskalWallisEffectSize;
+}
+
+export interface KruskalWallisPosthocComparison {
+  group_1_label: string;
+  group_2_label: string;
+  mean_rank_difference: number;
+  standard_error: number;
+  z_statistic: number;
+  raw_p_value: number;
+  adjusted_p_value: number;
+  reject_holm: boolean;
+}
+
+export interface KruskalWallisPosthocResult {
+  method: string;
+  multiplicity_method: string | null;
+  policy: string;
+  performed: boolean;
+  reason: string | null;
+  comparisons: KruskalWallisPosthocComparison[];
+}
+
+export interface KruskalWallisResult {
+  schema_version: number;
+  summary_type: "kruskal_wallis_test";
+  method: string;
+  missing_policy: string;
+  alpha: number;
+  posthoc_method: string;
+  posthoc_policy: string;
+  tie_correction: number;
+  has_ties: boolean;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: KruskalWallisColumnRef;
+  group: KruskalWallisColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_response: number;
+  n_excluded_missing_group: number;
+  n_excluded_non_numeric_response: number;
+  group_count: number;
+  groups: KruskalWallisGroupSummary[];
+  test: KruskalWallisTestResult;
+  posthoc: KruskalWallisPosthocResult;
+}
+
+export interface OneWayAnovaColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface OneWayAnovaConfidenceInterval {
+  method: string;
+  level: number;
+  lower: number;
+  upper: number;
+}
+
+export interface OneWayAnovaGroupSummary {
+  group_label: string;
+  group_index: number;
+  n: number;
+  mean: number;
+  median: number;
+  variance: number;
+  std: number;
+  sem: number;
+  min: number;
+  max: number;
+  mean_confidence_interval: OneWayAnovaConfidenceInterval;
+  warnings: string[];
+}
+
+export interface OneWayAnovaTableRow {
+  source: string;
+  sum_squares: number;
+  df: number;
+  mean_square: number | null;
+}
+
+export interface OneWayAnovaEffectSize {
+  eta_squared: number;
+  omega_squared: number;
+  definition: string;
+}
+
+export interface OneWayAnovaTable {
+  grand_mean: number;
+  rows: OneWayAnovaTableRow[];
+  ss_between: number;
+  ss_within: number;
+  ss_total: number;
+  df_between: number;
+  df_within: number;
+  df_total: number;
+  ms_between: number;
+  ms_within: number;
+  f_statistic: number;
+  p_value: number;
+  effect_size: OneWayAnovaEffectSize;
+}
+
+export interface OneWayAnovaTestResult {
+  f_statistic: number;
+  df_between: number;
+  df_within: number;
+  p_value: number;
+  reject_null: boolean;
+  effect_size: OneWayAnovaEffectSize;
+}
+
+export interface OneWayAnovaPosthocComparison {
+  group_1_label: string;
+  group_2_label: string;
+  mean_1: number;
+  mean_2: number;
+  mean_difference: number;
+  standard_error: number;
+  q_statistic: number;
+  raw_p_value: number;
+  adjusted_p_value: number;
+  reject_adjusted: boolean;
+  confidence_interval: OneWayAnovaConfidenceInterval;
+}
+
+export interface OneWayAnovaPosthocResult {
+  method: string;
+  multiplicity_method: string | null;
+  policy: string;
+  performed: boolean;
+  reason: string | null;
+  confidence_level?: number;
+  q_critical?: number;
+  comparisons: OneWayAnovaPosthocComparison[];
+}
+
+export interface OneWayAnovaResult {
+  schema_version: number;
+  summary_type: "one_way_anova";
+  method: string;
+  anova_type: string;
+  missing_policy: string;
+  alpha: number;
+  confidence_level: number;
+  posthoc_method: string;
+  posthoc_policy: string;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: OneWayAnovaColumnRef;
+  group: OneWayAnovaColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_response: number;
+  n_excluded_missing_group: number;
+  n_excluded_non_numeric_response: number;
+  group_count: number;
+  groups: OneWayAnovaGroupSummary[];
+  anova_table: OneWayAnovaTable;
+  test: OneWayAnovaTestResult;
+  posthoc: OneWayAnovaPosthocResult;
+}
+
+export interface OneProportionColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface OneProportionLevelSummary {
+  level: string;
+  count: number;
+  is_event: boolean;
+}
+
+export interface OneProportionSampleSummary {
+  event_count: number;
+  non_event_count: number;
+  total: number;
+  sample_proportion: number;
+  difference_from_null: number;
+  odds: number | null;
+}
+
+export interface OneProportionTestResult {
+  statistic: number;
+  statistic_name: string;
+  p_value: number;
+  reject_null: boolean;
+  alternative: string;
+  exact: boolean;
+}
+
+export interface OneProportionConfidenceInterval {
+  method: string;
+  level: number;
+  lower: number;
+  upper: number;
+}
+
+export interface OneProportionEffectSize {
+  cohen_h: number;
+  definition: string;
+}
+
+export interface OneProportionResult {
+  schema_version: number;
+  summary_type: "one_proportion_test";
+  method: string;
+  input_mode: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  confidence_level: number;
+  ci_method: string;
+  null_proportion: number;
+  event_level: string;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: OneProportionColumnRef;
+  n_total: number;
+  n_used: number;
+  n_missing: number;
+  levels: OneProportionLevelSummary[];
+  sample: OneProportionSampleSummary;
+  test: OneProportionTestResult;
+  confidence_interval: OneProportionConfidenceInterval;
+  effect_size: OneProportionEffectSize;
+}
+
+export interface TwoProportionColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface TwoProportionLevelSummary {
+  level: string;
+  count: number;
+}
+
+export interface TwoProportionGroupSummary {
+  group_label: string;
+  group_index: number;
+  event_count: number;
+  non_event_count: number;
+  total: number;
+  sample_proportion: number;
+  levels: TwoProportionLevelSummary[];
+  warnings: string[];
+}
+
+export interface TwoProportionConfidenceInterval {
+  method: string;
+  level: number;
+  lower: number;
+  upper: number;
+}
+
+export interface TwoProportionDifferenceResult {
+  estimate: number;
+  definition: string;
+  confidence_interval: TwoProportionConfidenceInterval;
+}
+
+export interface TwoProportionEffectMeasure {
+  estimate: number | null;
+  confidence_interval: TwoProportionConfidenceInterval | null;
+  definition: string;
+}
+
+export interface TwoProportionEffectSizes {
+  risk_ratio: TwoProportionEffectMeasure;
+  odds_ratio: TwoProportionEffectMeasure;
+}
+
+export interface TwoProportionContingencyRow {
+  group_label: string;
+  event_count: number;
+  non_event_count: number;
+}
+
+export interface TwoProportionContingencyTable {
+  columns: string[];
+  rows: TwoProportionContingencyRow[];
+  expected_counts: number[][];
+  min_expected_count: number;
+}
+
+export interface TwoProportionTestResult {
+  statistic: number | null;
+  statistic_name: string;
+  p_value: number;
+  reject_null: boolean;
+  alternative: string;
+  exact: boolean;
+}
+
+export interface TwoProportionResult {
+  schema_version: number;
+  summary_type: "two_proportion_test";
+  method: string;
+  input_mode: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  confidence_level: number;
+  ci_method: string;
+  event_level: string;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: TwoProportionColumnRef;
+  group: TwoProportionColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_response: number;
+  n_excluded_missing_group: number;
+  group_count: number;
+  groups: TwoProportionGroupSummary[];
+  contingency_table: TwoProportionContingencyTable;
+  difference: TwoProportionDifferenceResult;
+  effect_sizes: TwoProportionEffectSizes;
+  test: TwoProportionTestResult;
+}
+
+export interface ChiSquareAssociationColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface ChiSquareAssociationLevelSummary {
+  level: string;
+  index: number;
+  count: number;
+}
+
+export interface ChiSquareAssociationCell {
+  column_level: string;
+  observed: number;
+  expected: number;
+  row_percent: number | null;
+  column_percent: number | null;
+  total_percent: number | null;
+  standardized_residual: number | null;
+}
+
+export interface ChiSquareAssociationTableRow {
+  row_level: string;
+  row_total: number;
+  cells: ChiSquareAssociationCell[];
+}
+
+export interface ChiSquareAssociationContingencyTable {
+  row_levels: string[];
+  column_levels: string[];
+  rows: ChiSquareAssociationTableRow[];
+  column_totals: number[];
+  grand_total: number;
+}
+
+export interface ChiSquareAssociationExpectedCountSummary {
+  min_expected: number;
+  cells_below_1: number;
+  cells_below_5: number;
+  cell_count: number;
+  share_below_5: number;
+  rule_of_thumb_passed: boolean;
+}
+
+export interface ChiSquareAssociationTestResult {
+  statistic: number;
+  statistic_name: string;
+  df: number;
+  p_value: number;
+  reject_null: boolean;
+  continuity_correction: boolean;
+}
+
+export interface ChiSquareAssociationEffectSize {
+  cramers_v: number;
+  definition: string;
+}
+
+export interface ChiSquareAssociationRecommendedAlternative {
+  method: string;
+  reason: string;
+  implemented: boolean;
+}
+
+export interface ChiSquareAssociationResult {
+  schema_version: number;
+  summary_type: "chi_square_association";
+  method: string;
+  input_mode: string;
+  missing_policy: string;
+  alpha: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  row_variable: ChiSquareAssociationColumnRef;
+  column_variable: ChiSquareAssociationColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_row: number;
+  n_excluded_missing_column: number;
+  row_levels: ChiSquareAssociationLevelSummary[];
+  column_levels: ChiSquareAssociationLevelSummary[];
+  contingency_table: ChiSquareAssociationContingencyTable;
+  expected_count_summary: ChiSquareAssociationExpectedCountSummary;
+  test: ChiSquareAssociationTestResult;
+  effect_size: ChiSquareAssociationEffectSize;
+  recommended_alternative_tests: ChiSquareAssociationRecommendedAlternative[];
+}
+
+export interface PearsonCorrelationColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface PearsonCorrelationSampleSummary {
+  n: number;
+  mean: number;
+  std: number;
+  min: number;
+  max: number;
+}
+
+export interface PearsonCorrelationAssociation {
+  correlation: number;
+  r_squared: number;
+  covariance: number;
+  correlation_definition: string;
+}
+
+export interface PearsonCorrelationTestResult {
+  statistic: number;
+  statistic_name: string;
+  p_value: number;
+  reject_null: boolean;
+  null_hypothesis: string;
+  alternative: string;
+}
+
+export interface PearsonCorrelationConfidenceInterval {
+  method: string;
+  level: number;
+  lower: number | null;
+  upper: number | null;
+}
+
+export interface PearsonScatterPoint {
+  x: number;
+  y: number;
+}
+
+export interface PearsonScatterplot {
+  x_column_id: string;
+  y_column_id: string;
+  point_count: number;
+  points_truncated: boolean;
+  point_limit: number;
+  points: PearsonScatterPoint[];
+}
+
+export interface PearsonCorrelationResult {
+  schema_version: number;
+  summary_type: "pearson_correlation";
+  method: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  confidence_level: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  x: PearsonCorrelationColumnRef;
+  y: PearsonCorrelationColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_x: number;
+  n_excluded_missing_y: number;
+  n_excluded_non_numeric_x: number;
+  n_excluded_non_numeric_y: number;
+  x_summary: PearsonCorrelationSampleSummary;
+  y_summary: PearsonCorrelationSampleSummary;
+  scatterplot: PearsonScatterplot;
+  association: PearsonCorrelationAssociation;
+  test: PearsonCorrelationTestResult;
+  confidence_interval: PearsonCorrelationConfidenceInterval;
+}
+
+export interface XyCorrelationColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface XyCorrelationAssociation {
+  correlation: number;
+  r_squared: number;
+  covariance: number;
+  correlation_definition: string;
+}
+
+export interface XyCorrelationTestResult {
+  statistic: number;
+  statistic_name: string;
+  p_value: number;
+  reject_null: boolean;
+  null_hypothesis: string;
+  alternative: string;
+}
+
+export interface XyCorrelationConfidenceInterval {
+  method: string;
+  level: number;
+  lower: number | null;
+  upper: number | null;
+}
+
+export interface XyCorrelationPairResult {
+  x: XyCorrelationColumnRef;
+  y: XyCorrelationColumnRef;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_x: number;
+  n_excluded_missing_y: number;
+  n_excluded_non_numeric_x: number;
+  n_excluded_non_numeric_y: number;
+  status: "ok" | "failed";
+  error_code: string | null;
+  warnings: string[];
+  association: XyCorrelationAssociation | null;
+  test: XyCorrelationTestResult | null;
+  confidence_interval: XyCorrelationConfidenceInterval | null;
+}
+
+export interface XyCorrelationResult {
+  schema_version: number;
+  summary_type: "xy_correlation_matrix";
+  method: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  confidence_level: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  x_columns: XyCorrelationColumnRef[];
+  y_columns: XyCorrelationColumnRef[];
+  x_column_count: number;
+  y_column_count: number;
+  pair_count: number;
+  pairs: XyCorrelationPairResult[];
+}
+
+export interface LinearModelColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface LinearModelSample {
+  n_total: number;
+  n_used: number;
+  n_excluded_missing: number;
+  n_excluded_non_numeric: number;
+  df_model: number;
+  df_residual: number;
+}
+
+export interface LinearModelFit {
+  r_squared: number;
+  adjusted_r_squared: number;
+  residual_standard_error: number;
+  sigma_squared: number;
+  sse: number;
+  ssr: number;
+  tss: number;
+  f_statistic: number;
+  f_p_value: number;
+}
+
+export interface LinearModelCoefficient {
+  term: string;
+  term_kind: string;
+  column_id: string | null;
+  source_column_ids: string[];
+  response_column_id: string;
+  level: string | null;
+  reference_level: string | null;
+  coding: string | null;
+  estimate: number;
+  standard_error: number;
+  statistic: number;
+  statistic_name: string;
+  p_value: number;
+  confidence_interval: {
+    method: string;
+    level: number;
+    lower: number;
+    upper: number;
+  };
+  vif: number | null;
+}
+
+export interface LinearModelDiagnostics {
+  rank: number;
+  parameter_count: number;
+  condition_number: number;
+  max_vif: number | null;
+  residual_summary: {
+    mean: number;
+    min: number;
+    q1: number;
+    median: number;
+    q3: number;
+    max: number;
+    max_abs_standardized: number | null;
+    large_standardized_threshold: number;
+    large_standardized_count: number;
+    large_standardized_row_indices: number[];
+  };
+  leverage: {
+    mean: number;
+    max: number;
+    threshold: number;
+    high_count: number;
+    high_row_indices: number[];
+  };
+  influence: {
+    cooks_distance_max: number | null;
+    cooks_distance_threshold: number;
+    high_cooks_distance_count: number;
+    high_cooks_distance_row_indices: number[];
+  };
+  diagnostic_points: {
+    point_limit: number;
+    points_included: number;
+    truncated: boolean;
+    points: Array<{
+      row_index: number;
+      fitted: number;
+      residual: number;
+      standardized_residual: number | null;
+      leverage: number;
+      cooks_distance: number | null;
+    }>;
+  };
+}
+
+export interface LinearModelManifestPointer {
+  model_id: string;
+  manifest_schema_version: number;
+  manifest_sha256: string;
+}
+
+export interface LinearModelResult {
+  schema_version: number;
+  summary_type: "linear_model";
+  method: string;
+  missing_policy: string;
+  alpha: number;
+  confidence_level: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: LinearModelColumnRef;
+  predictors: LinearModelColumnRef[];
+  model_specification: {
+    intercept: boolean;
+    terms: Array<{
+      term: string;
+      kind: string;
+      column_id: string | null;
+      source_column_ids?: string[];
+      coding?: string;
+      reference_level?: string;
+      levels?: string[];
+    }>;
+  };
+  sample: LinearModelSample;
+  fit: LinearModelFit;
+  coefficients: LinearModelCoefficient[];
+  diagnostics: LinearModelDiagnostics;
+  model_manifest?: LinearModelManifestPointer;
+}
+
+export interface RegressionPredictionPreflightRequest {
+  dataset_version_id: string;
+}
+
+export interface RegressionPredictionPreflightIssue {
+  code: string;
+  severity: "info" | "warning" | "error";
+  message: string;
+  source_column_id: string | null;
+  target_column_id: string | null;
+  display_name: string | null;
+  count: number | null;
+}
+
+export interface RegressionPredictionColumnMapping {
+  source_column_id: string;
+  display_name: string;
+  predictor_kind: "numeric" | "categorical";
+  target_column_id: string | null;
+  match_type: "column_id" | "display_name" | "missing" | "ambiguous";
+  status: "ok" | "warning" | "error";
+}
+
+export interface RegressionPredictionNumericCheck {
+  source_column_id: string;
+  target_column_id: string;
+  display_name: string;
+  n_valid: number;
+  n_missing: number;
+  n_non_numeric: number;
+  n_below_training_range: number;
+  n_above_training_range: number;
+}
+
+export interface RegressionPredictionCategoricalCheck {
+  source_column_id: string;
+  target_column_id: string;
+  display_name: string;
+  training_level_count: number;
+  n_valid: number;
+  n_missing: number;
+  n_unseen_level: number;
+}
+
+export interface RegressionPredictionPreflightResponse {
+  model_id: string;
+  analysis_id: string;
+  source_dataset_version_id: string;
+  target_dataset_version_id: string;
+  model_manifest_sha256: string;
+  source_schema_hash: string;
+  target_schema_hash: string;
+  schema_hash_match: boolean;
+  row_count_total: number;
+  row_count_usable: number;
+  prediction_ready: boolean;
+  required_columns: RegressionPredictionColumnMapping[];
+  numeric_checks: RegressionPredictionNumericCheck[];
+  categorical_checks: RegressionPredictionCategoricalCheck[];
+  issues: RegressionPredictionPreflightIssue[];
+}
+
+export interface RegressionPredictionRequest {
+  dataset_version_id: string;
+  confidence_level: number;
+  missing_policy: "complete_case";
+  include_intervals: boolean;
+}
+
+export interface RegressionPredictionWarning {
+  code: string;
+  severity: "info" | "warning" | "error";
+  message: string;
+  count: number | null;
+}
+
+export interface RegressionPredictionInterval {
+  method: "t";
+  level: number;
+  lower: number;
+  upper: number;
+}
+
+export interface RegressionPredictionRow {
+  row_index: number;
+  predicted_mean: number;
+  mean_confidence_interval: RegressionPredictionInterval | null;
+  prediction_interval: RegressionPredictionInterval | null;
+  warnings: string[];
+}
+
+export interface RegressionPredictionResponse {
+  prediction_id: string;
+  model_id: string;
+  analysis_id: string;
+  source_dataset_version_id: string;
+  target_dataset_version_id: string;
+  model_manifest_sha256: string;
+  target_schema_hash: string;
+  row_count_total: number;
+  row_count_predicted: number;
+  row_count_excluded: number;
+  row_count_omitted: number;
+  row_limit: number;
+  truncated: boolean;
+  confidence_level: number;
+  warnings: RegressionPredictionWarning[];
+  provenance: Record<string, unknown>;
+  columns: RegressionPredictionColumnMapping[];
+  rows: RegressionPredictionRow[];
+}
+
+export interface OneSampleTColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface OneSampleTSampleSummary {
+  n: number;
+  mean: number;
+  median: number;
+  variance: number;
+  std: number;
+  min: number;
+  max: number;
+  warnings: string[];
+}
+
+export interface OneSampleTConfidenceInterval {
+  level: number;
+  alternative: string;
+  lower: number | null;
+  upper: number | null;
+}
+
+export interface OneSampleTEffectSize {
+  standardizer: string;
+  cohen_dz: number | null;
+  hedges_g: number | null;
+  hedges_correction: number | null;
+}
+
+export interface OneSampleTContrast {
+  estimate: number;
+  estimate_definition: string;
+  null_mean: number;
+  standard_error: number;
+  statistic: number;
+  df: number;
+  p_value: number;
+  reject_null: boolean;
+  confidence_interval: OneSampleTConfidenceInterval;
+  effect_size: OneSampleTEffectSize;
+}
+
+export interface OneSampleTResult {
+  schema_version: number;
+  summary_type: "one_sample_t_test";
+  method: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  confidence_level: number;
+  null_mean: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: OneSampleTColumnRef;
+  n_total: number;
+  n_used: number;
+  n_missing: number;
+  n_non_numeric: number;
+  sample: OneSampleTSampleSummary;
+  contrast: OneSampleTContrast;
+}
+
+export interface EquivalenceTostBounds {
+  lower: number;
+  upper: number;
+  scale: string;
+  estimate_definition: string;
+}
+
+export interface EquivalenceTostEstimate {
+  value: number;
+  definition: string;
+  standard_error: number;
+  df: number;
+}
+
+export interface EquivalenceTostOneSidedTest {
+  bound: number;
+  null_hypothesis: string;
+  alternative: string;
+  statistic: number;
+  df: number;
+  p_value: number;
+  reject_null: boolean;
+}
+
+export interface EquivalenceTostDecision {
+  p_value: number;
+  equivalent: boolean;
+  decision_rule: string;
+  ci_inside_equivalence_bounds: boolean;
+}
+
+export interface EquivalenceTostConfidenceInterval {
+  level: number;
+  lower: number;
+  upper: number;
+  inside_equivalence_bounds: boolean;
+}
+
+export interface EquivalenceTostEffectSize {
+  standardizer: string;
+  cohen_dz: number | null;
+  hedges_g: number | null;
+  hedges_correction: number | null;
+}
+
+export interface EquivalenceTostResult {
+  schema_version: number;
+  summary_type: "equivalence_tost";
+  method: string;
+  input_mode: string;
+  design: "one_sample_mean";
+  missing_policy: string;
+  alpha: number;
+  confidence_level: number;
+  reference_mean: number;
+  equivalence_bounds: EquivalenceTostBounds;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: OneSampleTColumnRef;
+  n_total: number;
+  n_used: number;
+  n_missing: number;
+  n_non_numeric: number;
+  sample: OneSampleTSampleSummary;
+  estimate: EquivalenceTostEstimate;
+  tests: {
+    lower: EquivalenceTostOneSidedTest;
+    upper: EquivalenceTostOneSidedTest;
+  };
+  tost: EquivalenceTostDecision;
+  confidence_interval: EquivalenceTostConfidenceInterval;
+  effect_size: EquivalenceTostEffectSize;
+}
+
+export interface PairedTColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface PairedTSampleSummary {
+  n: number;
+  before_mean: number;
+  after_mean: number;
+  mean_difference: number;
+  median_difference: number;
+  difference_variance: number;
+  difference_std: number;
+  min_difference: number;
+  max_difference: number;
+  positive_difference_count: number;
+  negative_difference_count: number;
+  zero_difference_count: number;
+  warnings: string[];
+}
+
+export interface PairedTEffectSize {
+  standardizer: string;
+  cohen_dz: number | null;
+  hedges_g: number | null;
+  hedges_correction: number | null;
+}
+
+export interface PairedTContrast {
+  estimate: number;
+  estimate_definition: string;
+  null_difference: number;
+  standard_error: number;
+  statistic: number;
+  df: number;
+  p_value: number;
+  reject_null: boolean;
+  confidence_interval: {
+    level: number;
+    alternative: string;
+    lower: number | null;
+    upper: number | null;
+  };
+  effect_size: PairedTEffectSize;
+}
+
+export interface PairedTResult {
+  schema_version: number;
+  summary_type: "paired_t_test";
+  method: string;
+  design: string;
+  difference_definition: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  confidence_level: number;
+  null_difference: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  before: PairedTColumnRef;
+  after: PairedTColumnRef;
+  n_total: number;
+  n_used: number;
+  n_incomplete_pairs: number;
+  n_missing_before: number;
+  n_missing_after: number;
+  n_non_numeric_pairs: number;
+  n_non_numeric_before: number;
+  n_non_numeric_after: number;
+  paired_sample: PairedTSampleSummary;
+  contrast: PairedTContrast;
+}
+
+export interface OneSampleWilcoxonColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface OneSampleWilcoxonSampleSummary {
+  n: number;
+  mean: number;
+  median: number;
+  min: number;
+  max: number;
+  median_difference: number;
+  positive_difference_count: number;
+  negative_difference_count: number;
+  zero_difference_count: number;
+  warnings: string[];
+}
+
+export interface OneSampleWilcoxonEffectSize {
+  rank_biserial: number | null;
+  definition: string;
+}
+
+export interface OneSampleWilcoxonTestResult {
+  w_statistic: number;
+  p_value: number;
+  reject_null: boolean;
+  alternative: string;
+  requested_method: string;
+  resolved_method: string;
+  zero_method: string;
+  zero_difference_count: number;
+  tie_count: number;
+  positive_rank_sum: number;
+  negative_rank_sum: number;
+  zero_rank_sum: number;
+  rank_sum_total: number;
+  effect_size: OneSampleWilcoxonEffectSize;
+}
+
+export interface OneSampleWilcoxonResult {
+  schema_version: number;
+  summary_type: "one_sample_wilcoxon_signed_rank_test";
+  method: string;
+  missing_policy: string;
+  alternative: string;
+  alpha: number;
+  null_location: number;
+  requested_method: string;
+  resolved_method: string;
+  zero_method: string;
+  correction: boolean;
+  has_ties: boolean;
+  tie_count: number;
+  zero_difference_count: number;
+  package_versions: {
+    numpy: string;
+    scipy: string;
+  };
+  warnings: string[];
+  response: OneSampleWilcoxonColumnRef;
+  n_total: number;
+  n_used: number;
+  n_missing: number;
+  n_non_numeric: number;
+  n_nonzero: number;
+  sample: OneSampleWilcoxonSampleSummary;
+  test: OneSampleWilcoxonTestResult;
+}
+
 export interface AnalysisResultEnvelope {
   analysis_id: string;
   method_id: string;
@@ -497,6 +1897,21 @@ export interface AnalysisResultEnvelope {
     | DescriptiveStatisticsResult
     | GraphicalSummaryResult
     | NormalityResult
+    | EqualVariancesResult
+    | OneSampleTResult
+    | EquivalenceTostResult
+    | PairedTResult
+    | OneSampleWilcoxonResult
+    | TwoSampleTResult
+    | MannWhitneyResult
+    | KruskalWallisResult
+    | OneWayAnovaResult
+    | OneProportionResult
+    | TwoProportionResult
+    | ChiSquareAssociationResult
+    | PearsonCorrelationResult
+    | XyCorrelationResult
+    | LinearModelResult
     | Record<string, unknown>
     | null;
 }
@@ -696,6 +2111,52 @@ export async function createAnalysisRun(
   }
 
   return (await response.json()) as AnalysisResultEnvelope;
+}
+
+export async function fetchRegressionPredictionPreflight(
+  modelId: string,
+  request: RegressionPredictionPreflightRequest,
+): Promise<RegressionPredictionPreflightResponse> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/regression-models/${modelId}/prediction-preflight`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_prediction_preflight_failed"));
+  }
+
+  return (await response.json()) as RegressionPredictionPreflightResponse;
+}
+
+export async function fetchRegressionPredictions(
+  modelId: string,
+  request: RegressionPredictionRequest,
+): Promise<RegressionPredictionResponse> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/regression-models/${modelId}/predictions`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_prediction_failed"));
+  }
+
+  return (await response.json()) as RegressionPredictionResponse;
 }
 
 async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

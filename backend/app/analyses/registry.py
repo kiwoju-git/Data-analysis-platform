@@ -154,109 +154,105 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_en="Normality Test",
         order=30,
     ),
-    _planned(
+    _available(
         method_id="eda.equal_variances",
         module_id=AnalysisModuleId.EXPLORATION,
         label_ko="등분산 검정",
         label_en="Test for Equal Variances",
         order=40,
-        disabled_reason=(
-            "SciPy 기반 Levene/Brown-Forsythe 호환성 검증과 기준 fixture가 완료된 뒤 "
-            "실행할 수 있습니다."
-        ),
     ),
-    _planned(
+    _available(
         method_id="hypothesis.one_sample_t",
         module_id=AnalysisModuleId.HYPOTHESIS,
         label_ko="1-표본 t-검정",
         label_en="1-Sample t-Test",
         order=10,
     ),
-    _planned(
+    _available(
         method_id="hypothesis.paired_t",
         module_id=AnalysisModuleId.HYPOTHESIS,
         label_ko="대응표본 t-검정",
         label_en="Paired t-Test",
         order=20,
     ),
-    _planned(
+    _available(
         method_id="hypothesis.two_sample_t",
         module_id=AnalysisModuleId.HYPOTHESIS,
         label_ko="2-표본 t-검정",
         label_en="2-Sample t-Test",
         order=30,
     ),
-    _planned(
+    _available(
         method_id="hypothesis.one_way_anova",
         module_id=AnalysisModuleId.HYPOTHESIS,
         label_ko="일원분산분석",
         label_en="One-Way ANOVA",
         order=40,
     ),
-    _planned(
+    _available(
         method_id="hypothesis.equivalence_tost",
         module_id=AnalysisModuleId.HYPOTHESIS,
         label_ko="동등성 검정",
         label_en="Equivalence Test (TOST)",
         order=50,
     ),
-    _planned(
+    _available(
         method_id="hypothesis.one_sample_wilcoxon",
         module_id=AnalysisModuleId.HYPOTHESIS,
         label_ko="1-표본 Wilcoxon",
         label_en="1-Sample Wilcoxon Signed-Rank",
         order=60,
     ),
-    _planned(
+    _available(
         method_id="hypothesis.mann_whitney",
         module_id=AnalysisModuleId.HYPOTHESIS,
         label_ko="Mann-Whitney U",
         label_en="Mann-Whitney U",
         order=70,
     ),
-    _planned(
+    _available(
         method_id="hypothesis.kruskal_wallis",
         module_id=AnalysisModuleId.HYPOTHESIS,
         label_ko="Kruskal-Wallis",
         label_en="Kruskal-Wallis",
         order=80,
     ),
-    _planned(
+    _available(
         method_id="categorical.one_proportion",
         module_id=AnalysisModuleId.CATEGORICAL,
         label_ko="1-비율",
         label_en="1-Proportion",
         order=10,
     ),
-    _planned(
+    _available(
         method_id="categorical.two_proportion",
         module_id=AnalysisModuleId.CATEGORICAL,
         label_ko="2-비율",
         label_en="2-Proportion",
         order=20,
     ),
-    _planned(
+    _available(
         method_id="categorical.chi_square_association",
         module_id=AnalysisModuleId.CATEGORICAL,
         label_ko="카이제곱 독립성 검정",
         label_en="Chi-square Test for Association",
         order=30,
     ),
-    _planned(
+    _available(
         method_id="regression.pearson",
         module_id=AnalysisModuleId.REGRESSION,
         label_ko="Pearson 상관",
         label_en="Pearson Correlation",
         order=10,
     ),
-    _planned(
+    _available(
         method_id="regression.xy_correlation",
         module_id=AnalysisModuleId.REGRESSION,
         label_ko="X-Y 상관행렬",
         label_en="X-Y Correlation",
         order=20,
     ),
-    _planned(
+    _available(
         method_id="regression.linear_model",
         module_id=AnalysisModuleId.REGRESSION,
         label_ko="회귀모형 적합",

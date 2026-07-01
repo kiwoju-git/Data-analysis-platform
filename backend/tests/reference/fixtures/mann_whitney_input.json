@@ -1,0 +1,15 @@
+{
+  "fixture_id": "mann_whitney_reference_inputs_v1",
+  "cases": [
+    {
+      "case_id": "exact_two_sided_no_ties",
+      "alpha": 0.05,
+      "alternative": "two_sided",
+      "method": "exact",
+      "groups": {
+        "A": [7, 9, 10, 12],
+        "B": [3, 5, 6, 8, 11]
+      }
+    }
+  ]
+}

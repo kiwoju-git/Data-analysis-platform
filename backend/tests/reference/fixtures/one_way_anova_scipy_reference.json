@@ -1,0 +1,77 @@
+{
+  "cases": [
+    {
+      "case_id": "three_group_significant",
+      "method": "standard_one_way_anova",
+      "group_labels": ["A", "B", "C"],
+      "group_ns": [4, 4, 4],
+      "group_means": [7.5, 10.5, 13.5],
+      "ss_between": 72.0,
+      "ss_within": 15.0,
+      "ss_total": 87.0,
+      "df_between": 2,
+      "df_within": 9,
+      "ms_between": 36.0,
+      "ms_within": 1.6666666666666667,
+      "f_statistic": 21.599999999999998,
+      "p_value": 0.000366922233939463,
+      "eta_squared": 0.8275862068965517,
+      "omega_squared": 0.7744360902255639,
+      "posthoc_performed": true,
+      "tukey_q_critical": 3.948492203457512,
+      "comparisons": [
+        {
+          "group_1_label": "A",
+          "group_2_label": "B",
+          "mean_difference": -3.0,
+          "q_statistic": 4.6475800154489,
+          "raw_p_value": 0.009433364582600643,
+          "adjusted_p_value": 0.0231730044120374,
+          "ci_lower": -5.548740757770128,
+          "ci_upper": -0.45125924222987157
+        },
+        {
+          "group_1_label": "A",
+          "group_2_label": "C",
+          "mean_difference": -6.0,
+          "q_statistic": 9.2951600308978,
+          "raw_p_value": 0.000102451871250676,
+          "adjusted_p_value": 0.000269948833402589,
+          "ci_lower": -8.548740757770128,
+          "ci_upper": -3.4512592422298716
+        },
+        {
+          "group_1_label": "B",
+          "group_2_label": "C",
+          "mean_difference": -3.0,
+          "q_statistic": 4.6475800154489,
+          "raw_p_value": 0.009433364582600643,
+          "adjusted_p_value": 0.0231730044120374,
+          "ci_lower": -5.548740757770128,
+          "ci_upper": -0.45125924222987157
+        }
+      ]
+    },
+    {
+      "case_id": "three_group_not_significant",
+      "method": "standard_one_way_anova",
+      "group_labels": ["A", "B", "C"],
+      "group_ns": [4, 4, 4],
+      "group_means": [2.5, 2.575, 2.525],
+      "ss_between": 0.011666666666666766,
+      "ss_within": 14.514999999999999,
+      "ss_total": 14.526666666666666,
+      "df_between": 2,
+      "df_within": 9,
+      "ms_between": 0.005833333333333383,
+      "ms_within": 1.6127777777777776,
+      "f_statistic": 0.00361694798484324,
+      "p_value": 0.9963910328599767,
+      "eta_squared": 0.000803120697567686,
+      "omega_squared": -0.19913255998072354,
+      "posthoc_performed": false,
+      "posthoc_reason": "overall_not_significant",
+      "comparisons": []
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "equal_variances_reference_inputs_v1",
+  "description": "Synthetic grouped numeric inputs for SciPy-backed eda.equal_variances reference checks.",
+  "cases": [
+    {
+      "case_id": "balanced_similar_variance",
+      "groups": {
+        "A": [8, 9, 10, 11],
+        "B": [7, 8, 9, 10],
+        "C": [6, 8, 10, 12]
+      }
+    },
+    {
+      "case_id": "unequal_variance",
+      "groups": {
+        "A": [9, 10, 11, 12],
+        "B": [2, 6, 14, 18],
+        "C": [8, 8.5, 9, 9.5]
+      }
+    }
+  ]
+}

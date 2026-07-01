@@ -1,0 +1,43 @@
+{
+  "reference_schema_version": 1,
+  "source_fixture_id": "equal_variances_reference_inputs_v1",
+  "generator": "manual_scipy_1_15_3_check",
+  "python_version": "3.10.11",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "dependencies": {
+    "numpy": "2.2.6",
+    "scipy": "1.15.3"
+  },
+  "cases": [
+    {
+      "case_id": "balanced_similar_variance",
+      "n_groups": 3,
+      "group_sizes": [4, 4, 4],
+      "brown_forsythe": {
+        "center": "median",
+        "statistic": 2.0,
+        "pvalue": 0.1911376345768913
+      },
+      "levene_mean": {
+        "center": "mean",
+        "statistic": 2.0,
+        "pvalue": 0.1911376345768913
+      }
+    },
+    {
+      "case_id": "unequal_variance",
+      "n_groups": 3,
+      "group_sizes": [4, 4, 4],
+      "brown_forsythe": {
+        "center": "median",
+        "statistic": 19.304347826086957,
+        "pvalue": 0.0005552684761157682
+      },
+      "levene_mean": {
+        "center": "mean",
+        "statistic": 19.304347826086957,
+        "pvalue": 0.0005552684761157682
+      }
+    }
+  ]
+}

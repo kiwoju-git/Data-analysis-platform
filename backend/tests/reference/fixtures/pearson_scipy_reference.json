@@ -1,0 +1,23 @@
+{
+  "reference_tool": "scipy.stats.pearsonr plus Fisher z confidence interval",
+  "cases": [
+    {
+      "case_id": "moderate_positive",
+      "n": 6,
+      "correlation": 0.9268715709799871,
+      "pvalue": 0.007826113791877531,
+      "covariance": 4.2,
+      "ci_lower": 0.46536068630404304,
+      "ci_upper": 0.9921355297202177
+    },
+    {
+      "case_id": "negative",
+      "n": 6,
+      "correlation": -0.9936944054529899,
+      "pvalue": 0.00005951542701970584,
+      "covariance": -4.8,
+      "ci_lower": -0.9993422335599395,
+      "ci_upper": -0.9409836680659732
+    }
+  ]
+}

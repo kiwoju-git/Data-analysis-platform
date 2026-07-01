@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "separated_three_groups",
+      "group_order": ["A", "B", "C"],
+      "group_sizes": [3, 3, 3],
+      "group_medians": [2.0, 5.0, 8.0],
+      "rank_sums": [6.0, 15.0, 24.0],
+      "mean_ranks": [2.0, 5.0, 8.0],
+      "h_statistic": 7.200000000000003,
+      "df": 2,
+      "pvalue": 0.02732372244729252,
+      "epsilon_squared": 0.8666666666666671,
+      "tie_correction": 1.0,
+      "posthoc": [
+        {
+          "group_1_label": "A",
+          "group_2_label": "B",
+          "mean_rank_difference": -3.0,
+          "standard_error": 2.23606797749979,
+          "z_statistic": -1.3416407864998738,
+          "raw_p_value": 0.17971249487899985,
+          "adjusted_p_value": 0.3594249897579997
+        },
+        {
+          "group_1_label": "A",
+          "group_2_label": "C",
+          "mean_rank_difference": -6.0,
+          "standard_error": 2.23606797749979,
+          "z_statistic": -2.6832815729997477,
+          "raw_p_value": 0.007290358091535644,
+          "adjusted_p_value": 0.02187107427460693
+        },
+        {
+          "group_1_label": "B",
+          "group_2_label": "C",
+          "mean_rank_difference": -3.0,
+          "standard_error": 2.23606797749979,
+          "z_statistic": -1.3416407864998738,
+          "raw_p_value": 0.17971249487899985,
+          "adjusted_p_value": 0.3594249897579997
+        }
+      ]
+    },
+    {
+      "case_id": "ties_three_groups",
+      "group_order": ["A", "B", "C"],
+      "group_sizes": [4, 4, 4],
+      "group_medians": [2.0, 4.5, 7.5],
+      "rank_sums": [12.0, 24.0, 42.0],
+      "mean_ranks": [3.0, 6.0, 10.5],
+      "h_statistic": 8.925266903914595,
+      "df": 2,
+      "pvalue": 0.011531954416961908,
+      "epsilon_squared": 0.769474100434955,
+      "tie_correction": 0.9825174825174825,
+      "posthoc": [
+        {
+          "group_1_label": "A",
+          "group_2_label": "B",
+          "mean_rank_difference": -3.0,
+          "standard_error": 2.527125567985025,
+          "z_statistic": -1.1871194838933214,
+          "raw_p_value": 0.23518049403871932,
+          "adjusted_p_value": 0.23518049403871932
+        },
+        {
+          "group_1_label": "A",
+          "group_2_label": "C",
+          "mean_rank_difference": -7.5,
+          "standard_error": 2.527125567985025,
+          "z_statistic": -2.967798709733304,
+          "raw_p_value": 0.002999406835020553,
+          "adjusted_p_value": 0.00899822050506166
+        },
+        {
+          "group_1_label": "B",
+          "group_2_label": "C",
+          "mean_rank_difference": -4.5,
+          "standard_error": 2.527125567985025,
+          "z_statistic": -1.7806792258399824,
+          "raw_p_value": 0.07496486879562228,
+          "adjusted_p_value": 0.14992973759124456
+        }
+      ]
+    }
+  ]
+}

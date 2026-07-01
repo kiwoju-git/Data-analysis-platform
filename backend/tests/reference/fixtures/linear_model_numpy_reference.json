@@ -1,0 +1,90 @@
+{
+  "fit": {
+    "r_squared": 0.9982608695652174,
+    "adjusted_r_squared": 0.9975652173913044,
+    "residual_standard_error": 0.3240370349203927,
+    "sse": 0.524999999999999,
+    "f_statistic": 1435.0000000000027,
+    "f_p_value": 1.2613348298348502e-07
+  },
+  "coefficients": {
+    "Intercept": {
+      "estimate": 7.425000000000003,
+      "standard_error": 0.4109440351191382,
+      "statistic": 18.068153727666097,
+      "p_value": 9.540830086971738e-06,
+      "ci_low": 6.368634727859655,
+      "ci_high": 8.481365272140351
+    },
+    "x1": {
+      "estimate": 2.6999999999999993,
+      "standard_error": 0.08366600265340751,
+      "statistic": 32.27117245202864,
+      "p_value": 5.367504823025137e-07,
+      "ci_low": 2.4849296933188505,
+      "ci_high": 2.915070306681148,
+      "vif": 2.7999999999999994
+    },
+    "x2": {
+      "estimate": -0.05000000000000138,
+      "standard_error": 0.15652475842498512,
+      "statistic": -0.3194382824999791,
+      "p_value": 0.7623092727542442,
+      "ci_low": -0.45235970083463023,
+      "ci_high": 0.3523597008346275,
+      "vif": 2.7999999999999994
+    }
+  },
+  "diagnostics": {
+    "rank": 3,
+    "parameter_count": 3,
+    "condition_number": 24.679774623698034,
+    "max_vif": 2.7999999999999994,
+    "residual_summary": {
+      "mean": 4.884981308350689e-15,
+      "min": -0.4249999999999936,
+      "q1": -0.13749999999999574,
+      "median": 4.440892098500626e-15,
+      "q3": 0.23750000000000648,
+      "max": 0.3250000000000064,
+      "max_abs_standardized": 1.5403707996220706,
+      "large_standardized_threshold": 3.0,
+      "large_standardized_count": 0,
+      "large_standardized_row_indices": []
+    },
+    "leverage": {
+      "mean": 0.3749999999999993,
+      "max": 0.47499999999999987,
+      "threshold": 0.75,
+      "high_count": 0,
+      "high_row_indices": []
+    },
+    "influence": {
+      "cooks_distance_max": 0.41374221646330445,
+      "cooks_distance_threshold": 0.5,
+      "high_cooks_distance_count": 0,
+      "high_cooks_distance_row_indices": []
+    },
+    "diagnostic_points": {
+      "point_limit": 500,
+      "points_included": 8,
+      "truncated": false,
+      "first_point": {
+        "row_index": 0,
+        "fitted": 9.975,
+        "residual": 0.025000000000000355,
+        "standardized_residual": 0.10647942749999159,
+        "leverage": 0.47499999999999987,
+        "cooks_distance": 0.0034193571608538607
+      },
+      "max_cooks_distance_point": {
+        "row_index": 1,
+        "fitted": 12.725,
+        "residual": 0.27500000000000036,
+        "standardized_residual": 1.1712737024998914,
+        "leverage": 0.4749999999999991,
+        "cooks_distance": 0.41374221646330445
+      }
+    }
+  }
+}
