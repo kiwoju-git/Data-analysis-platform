@@ -47,7 +47,8 @@ export function AnalysisWorkbench({
   const selectedGuidance =
     selectedMethod === null ? null : getAnalysisMethodGuidance(selectedMethod.method_id);
   const executablePanel =
-    selectedMethod !== null && selectedMethod.availability === "available"
+    selectedMethod !== null &&
+    (selectedMethod.availability === "available" || selectedMethod.method_id === "quality.gage_rr")
       ? renderExecutableMethod(selectedMethod)
       : null;
 

@@ -12,11 +12,13 @@ from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
     AnalysisRunStatusResponse,
     AnalysisWarning,
+    GageRrPreflightResponse,
     MethodAvailability,
     RegressionPredictionPreflightResponse,
     RegressionPredictionResponse,
 )
 from app.api.v1.schemas.common import JobReference, JobState, JobStatusResponse
+from app.api.v1.schemas.doe import DoeDesignResponsesResponse, FactorialDesignResponse
 from app.core.config import Settings
 from app.main import create_app
 from app.storage.metadata import (
@@ -100,6 +102,13 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "regression.pearson",
         "regression.xy_correlation",
         "regression.linear_model",
+        "quality.individuals_chart",
+        "quality.subgroup_chart",
+        "quality.run_chart",
+        "quality.capability",
+        "quality.gage_rr",
+        "quality.gage_run_chart",
+        "doe.factorial_design",
     ]
 
 
@@ -199,6 +208,40 @@ def test_analysis_method_catalog_response_groups_planned_and_disabled_methods() 
     )
     assert linear_model.availability == MethodAvailability.AVAILABLE
     assert linear_model.disabled_reason is None
+    individuals_chart = next(
+        method for method in catalog.methods if method.method_id == "quality.individuals_chart"
+    )
+    assert individuals_chart.availability == MethodAvailability.AVAILABLE
+    assert individuals_chart.disabled_reason is None
+    subgroup_chart = next(
+        method for method in catalog.methods if method.method_id == "quality.subgroup_chart"
+    )
+    assert subgroup_chart.availability == MethodAvailability.AVAILABLE
+    assert subgroup_chart.disabled_reason is None
+    run_chart = next(
+        method for method in catalog.methods if method.method_id == "quality.run_chart"
+    )
+    assert run_chart.availability == MethodAvailability.AVAILABLE
+    assert run_chart.disabled_reason is None
+    capability = next(
+        method for method in catalog.methods if method.method_id == "quality.capability"
+    )
+    assert capability.availability == MethodAvailability.AVAILABLE
+    assert capability.disabled_reason is None
+    gage_rr = next(method for method in catalog.methods if method.method_id == "quality.gage_rr")
+    assert gage_rr.availability == MethodAvailability.AVAILABLE
+    assert gage_rr.disabled_reason is None
+    gage_run_chart = next(
+        method for method in catalog.methods if method.method_id == "quality.gage_run_chart"
+    )
+    assert gage_run_chart.availability == MethodAvailability.AVAILABLE
+    assert gage_run_chart.disabled_reason is None
+    factorial_design = next(
+        method for method in catalog.methods if method.method_id == "doe.factorial_design"
+    )
+    assert factorial_design.availability == MethodAvailability.AVAILABLE
+    assert factorial_design.disabled_reason is None
+    assert factorial_design.requires_dataset is False
     assert [method.module_id.value for method in catalog.methods[-2:]] == ["doe", "doe"]
 
 
@@ -241,6 +284,13 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
         "regression.pearson",
         "regression.xy_correlation",
         "regression.linear_model",
+        "quality.individuals_chart",
+        "quality.subgroup_chart",
+        "quality.run_chart",
+        "quality.capability",
+        "quality.gage_rr",
+        "quality.gage_run_chart",
+        "doe.factorial_design",
     ]
     normality = next(
         method for method in payload["methods"] if method["method_id"] == "eda.normality"
@@ -270,6 +320,190 @@ def test_analysis_run_rejects_remaining_planned_or_disabled_method_without_fake_
     assert response.json()["error"]["code"] == "analysis_method_not_available"
     assert "p_value" not in response.text
     assert "statistic" not in response.text
+    assert "result" not in response.text
+
+
+def test_analysis_run_rejects_factorial_design_on_generic_analysis_api(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "doe.factorial_design",
+                "method_version": "0.1.0",
+                "dataset_version_id": None,
+                "filter_snapshot": {"expression_version": 1, "conditions": []},
+                "roles": {},
+                "options": {},
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "analysis_method_uses_dedicated_api"
+    assert "p_value" not in response.text
+    assert "statistic" not in response.text
+    assert "result" not in response.text
+
+
+def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "screening design",
+                "factors": [
+                    {"name": "Temperature", "low": 60, "high": 80, "unit": "C"},
+                    {"name": "Pressure", "low": 5, "high": 15, "unit": "bar"},
+                ],
+                "replicates": 1,
+                "center_points": 1,
+                "randomize": False,
+                "randomization_seed": 20260702,
+                "block_count": 1,
+            },
+        )
+        get_response = client.get(f"/api/v1/doe-designs/{response.json()['design_id']}")
+
+    assert response.status_code == 201
+    payload = response.json()
+    FactorialDesignResponse.model_validate(payload)
+    assert payload["method_id"] == "doe.factorial_design"
+    assert payload["method_version"] == "0.1.0"
+    assert payload["family"] == "two_level_full_factorial"
+    assert payload["status"] == "designed"
+    assert payload["name"] == "screening design"
+    assert payload["run_count"] == 5
+    assert len(payload["design_sha256"]) == 64
+    assert payload["options"] == {
+        "replicates": 1,
+        "center_points": 1,
+        "randomize": False,
+        "randomization_seed": 20260702,
+        "block_count": 1,
+    }
+    assert [factor["name"] for factor in payload["factors"]] == ["Temperature", "Pressure"]
+    assert payload["runs"][0]["run_order"] == 1
+    assert payload["runs"][0]["standard_order"] == 1
+    assert payload["runs"][0]["factor_levels"] == {"Temperature": 60.0, "Pressure": 5.0}
+    assert payload["runs"][1]["factor_levels"] == {"Temperature": 80.0, "Pressure": 5.0}
+    assert payload["runs"][4]["center_point"] is True
+    assert payload["runs"][4]["coded_levels"] == {"Temperature": 0, "Pressure": 0}
+    assert "p_value" not in response.text
+    assert "statistic" not in response.text
+
+    assert get_response.status_code == 200
+    assert get_response.json() == payload
+
+
+def test_factorial_design_api_rejects_duplicate_factor_names(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "bad design",
+                "factors": [
+                    {"name": "Temp", "low": 60, "high": 80},
+                    {"name": "temp", "low": 5, "high": 15},
+                ],
+                "replicates": 1,
+                "center_points": 0,
+                "randomize": True,
+                "randomization_seed": 42,
+                "block_count": 1,
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "doe_factorial_factor_names_not_unique"
+    assert "result" not in response.text
+
+
+def test_factorial_design_response_api_saves_values_without_regenerating_runs(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "response design",
+                "factors": [
+                    {"name": "Temperature", "low": 60, "high": 80, "unit": "C"},
+                    {"name": "Pressure", "low": 5, "high": 15, "unit": "bar"},
+                ],
+                "replicates": 1,
+                "center_points": 0,
+                "randomize": False,
+                "randomization_seed": 20260702,
+                "block_count": 1,
+            },
+        )
+        design_payload = create_response.json()
+        values = [
+            {"run_order": run["run_order"], "value": 20.0 + run["run_order"]}
+            for run in design_payload["runs"]
+        ]
+        save_response = client.put(
+            f"/api/v1/doe-designs/{design_payload['design_id']}/responses",
+            json={"response_name": "Yield", "unit": "kg", "values": values},
+        )
+        read_response = client.get(f"/api/v1/doe-designs/{design_payload['design_id']}/responses")
+        design_after_response = client.get(f"/api/v1/doe-designs/{design_payload['design_id']}")
+
+    assert create_response.status_code == 201
+    assert save_response.status_code == 200
+    response_payload = save_response.json()
+    DoeDesignResponsesResponse.model_validate(response_payload)
+    assert response_payload["status"] == "completed"
+    assert response_payload["design_version_id"] == design_payload["design_version_id"]
+    assert response_payload["responses"] == [
+        {
+            "response_name": "Yield",
+            "unit": "kg",
+            "response_count": 4,
+            "values": [
+                {"run_order": 1, "value": 21.0},
+                {"run_order": 2, "value": 22.0},
+                {"run_order": 3, "value": 23.0},
+                {"run_order": 4, "value": 24.0},
+            ],
+        },
+    ]
+    assert read_response.status_code == 200
+    assert read_response.json() == response_payload
+    assert design_after_response.status_code == 200
+    assert design_after_response.json()["status"] == "completed"
+    assert [run["run_order"] for run in design_after_response.json()["runs"]] == [1, 2, 3, 4]
+    assert "p_value" not in save_response.text
+    assert "statistic" not in save_response.text
+
+
+def test_factorial_design_response_api_rejects_incomplete_run_set(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "bad response design",
+                "factors": [
+                    {"name": "Temperature", "low": 60, "high": 80},
+                    {"name": "Pressure", "low": 5, "high": 15},
+                ],
+                "replicates": 1,
+                "center_points": 0,
+                "randomize": False,
+                "randomization_seed": 20260702,
+                "block_count": 1,
+            },
+        )
+        design_payload = create_response.json()
+        response = client.put(
+            f"/api/v1/doe-designs/{design_payload['design_id']}/responses",
+            json={
+                "response_name": "Yield",
+                "unit": "kg",
+                "values": [{"run_order": 1, "value": 21.0}],
+            },
+        )
+
+    assert create_response.status_code == 201
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "doe_response_run_set_mismatch"
     assert "result" not in response.text
 
 
@@ -2399,6 +2633,2232 @@ def test_analysis_run_executes_xy_correlation_from_dataset_version(tmp_path) -> 
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 6
     assert row_snapshot["row_count_included"] == 6
+
+
+def test_analysis_run_executes_individuals_chart_from_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n10\n11\n9\n10\n12\n11\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "quality.individuals_chart"
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 6
+    assert payload["provenance"]["row_count_included"] == 6
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "individuals_chart_uses_canonical_row_order",
+        "individuals_chart_control_limits_estimated_from_moving_range",
+        "individuals_chart_process_stability_not_proven",
+    ]
+    result = payload["result"]
+    assert result["summary_type"] == "individuals_chart"
+    assert result["method"] == "i_mr_chart"
+    assert result["order_source"] == "canonical_row_order"
+    assert result["sigma_estimator"]["mrbar"] == pytest.approx(1.4)
+    assert result["sigma_estimator"]["sigma"] == pytest.approx(1.2411347517730495)
+    assert result["individuals_chart"]["center_line"] == pytest.approx(10.5)
+    assert result["individuals_chart"]["lcl"] == pytest.approx(6.776595744680851)
+    assert result["individuals_chart"]["ucl"] == pytest.approx(14.22340425531915)
+    assert result["moving_range_chart"]["center_line"] == pytest.approx(1.4)
+    assert result["moving_range_chart"]["ucl"] == pytest.approx(4.5738)
+    assert result["signals"] == []
+    assert result["individuals_chart"]["points"][0] == {
+        "position": 1,
+        "canonical_position": 1,
+        "value": 10.0,
+        "signal_codes": [],
+    }
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+
+
+def test_analysis_run_executes_individuals_chart_with_limit_signals(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n10\n10.1\n10.2\n10.1\n10\n14\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart-signals.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "individuals_chart_uses_canonical_row_order",
+        "individuals_chart_control_limits_estimated_from_moving_range",
+        "individuals_chart_process_stability_not_proven",
+        "individuals_chart_i_limit_signal_detected",
+        "individuals_chart_mr_limit_signal_detected",
+    ]
+    result = payload["result"]
+    assert result["individuals_chart"]["ucl"] == pytest.approx(13.073758865248226)
+    assert result["moving_range_chart"]["ucl"] == pytest.approx(2.87496)
+    assert [signal["code"] for signal in result["signals"]] == [
+        "individuals_chart_i_beyond_3_sigma",
+        "individuals_chart_mr_beyond_ucl",
+    ]
+
+
+def test_analysis_run_executes_individuals_chart_with_trend_signal(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n1\n2\n3\n4\n5\n6\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart-trend.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                    "trend_min_length": 6,
+                    "same_side_min_length": 9,
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "individuals_chart_uses_canonical_row_order",
+        "individuals_chart_control_limits_estimated_from_moving_range",
+        "individuals_chart_process_stability_not_proven",
+        "individuals_chart_i_trend_signal_detected",
+    ]
+    result = payload["result"]
+    assert [rule["code"] for rule in result["control_rules"]] == [
+        "individuals_chart_i_beyond_3_sigma",
+        "individuals_chart_mr_beyond_ucl",
+        "individuals_chart_i_same_side_centerline",
+        "individuals_chart_i_trend",
+        "individuals_chart_i_alternating",
+        "individuals_chart_i_two_of_three_beyond_2_sigma",
+        "individuals_chart_i_four_of_five_beyond_1_sigma",
+        "individuals_chart_i_fifteen_within_1_sigma",
+        "individuals_chart_i_eight_outside_1_sigma",
+    ]
+    assert result["signals"] == [
+        {
+            "signal_id": "i-trend-1",
+            "code": "individuals_chart_i_trend",
+            "severity": "warning",
+            "chart": "individuals",
+            "direction": "increasing",
+            "length": 6,
+            "start_position": 1,
+            "end_position": 6,
+            "position": 6,
+            "start_canonical_position": 1,
+            "canonical_position": 6,
+            "value": 6.0,
+            "definition": "strictly_monotonic_consecutive_points",
+        },
+    ]
+    assert result["individuals_chart"]["points"][0]["signal_codes"] == [
+        "individuals_chart_i_trend",
+    ]
+    assert result["individuals_chart"]["points"][-1]["signal_codes"] == [
+        "individuals_chart_i_trend",
+    ]
+
+
+def test_analysis_run_executes_individuals_chart_with_zone_signal(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n0\n0.3\n0.2\n0.3\n0.2\n0.62\n0.58\n0.61\n0.59\n0.6\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart-zone.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert "individuals_chart_i_four_of_five_signal_detected" in [
+        warning["code"] for warning in payload["warnings"]
+    ]
+    result = payload["result"]
+    zone_signals = [
+        signal
+        for signal in result["signals"]
+        if signal["code"] == "individuals_chart_i_four_of_five_beyond_1_sigma"
+    ]
+    assert zone_signals == [
+        {
+            "signal_id": "i-four-of-five-1",
+            "code": "individuals_chart_i_four_of_five_beyond_1_sigma",
+            "severity": "warning",
+            "chart": "individuals",
+            "direction": "above",
+            "length": 5,
+            "count": 4,
+            "sigma_multiple": 1.0,
+            "start_position": 5,
+            "end_position": 9,
+            "position": 9,
+            "positions": [6, 7, 8, 9],
+            "start_canonical_position": 5,
+            "canonical_position": 9,
+            "canonical_positions": [6, 7, 8, 9],
+            "value": 0.59,
+            "definition": "four_of_five_consecutive_points_beyond_1_sigma_same_side",
+        },
+    ]
+    assert (
+        "individuals_chart_i_four_of_five_beyond_1_sigma"
+        not in result["individuals_chart"]["points"][4]["signal_codes"]
+    )
+    assert (
+        "individuals_chart_i_four_of_five_beyond_1_sigma"
+        in result["individuals_chart"]["points"][5]["signal_codes"]
+    )
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+
+
+def test_analysis_run_executes_individuals_chart_with_extended_pattern_signals(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n" b"9.0\n" b"9.1\n" b"9.2\n" b"9.1\n" b"10.8\n" b"10.9\n" b"10.8\n" b"10.9\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart-zone-pattern.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    warning_codes = [warning["code"] for warning in payload["warnings"]]
+    assert "individuals_chart_i_eight_outside_1_sigma_signal_detected" in warning_codes
+    result = payload["result"]
+    pattern_signals = [
+        signal
+        for signal in result["signals"]
+        if signal["code"] == "individuals_chart_i_eight_outside_1_sigma"
+    ]
+    assert pattern_signals == [
+        {
+            "signal_id": "i-eight-outside-one-sigma-1",
+            "code": "individuals_chart_i_eight_outside_1_sigma",
+            "severity": "warning",
+            "chart": "individuals",
+            "direction": "outside",
+            "length": 8,
+            "count": 8,
+            "sigma_multiple": 1.0,
+            "start_position": 1,
+            "end_position": 8,
+            "position": 8,
+            "positions": list(range(1, 9)),
+            "start_canonical_position": 1,
+            "canonical_position": 8,
+            "canonical_positions": list(range(1, 9)),
+            "value": 10.9,
+            "definition": "eight_consecutive_points_outside_1_sigma_centerline",
+        },
+    ]
+    assert (
+        "individuals_chart_i_eight_outside_1_sigma"
+        in result["individuals_chart"]["points"][0]["signal_codes"]
+    )
+    assert (
+        "individuals_chart_i_eight_outside_1_sigma"
+        in result["individuals_chart"]["points"][-1]["signal_codes"]
+    )
+
+
+def test_analysis_run_executes_individuals_chart_with_numeric_order_column(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value,order\n4,30\n1,10\n3,20\n2,20\n5,40\n6,50\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart-order.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        order_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                    "order": order_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "order_column_id": order_column_id,
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "individuals_chart_uses_numeric_order_column",
+        "individuals_chart_control_limits_estimated_from_moving_range",
+        "individuals_chart_process_stability_not_proven",
+        "individuals_chart_order_ties_stable_sorted",
+    ]
+    result = payload["result"]
+    assert result["order_source"] == "numeric_order_column_ascending"
+    assert result["order_tie_breaker"] == "canonical_row_position"
+    assert result["order"]["column_id"] == order_column_id
+    assert result["order_duplicate_count"] == 1
+    assert result["individuals_chart"]["x_axis"] == "order_rank"
+    assert [point["canonical_position"] for point in result["individuals_chart"]["points"]] == [
+        2,
+        3,
+        4,
+        1,
+        5,
+        6,
+    ]
+    assert [point["value"] for point in result["individuals_chart"]["points"]] == [
+        1.0,
+        3.0,
+        2.0,
+        4.0,
+        5.0,
+        6.0,
+    ]
+    assert [point["value"] for point in result["moving_range_chart"]["points"]] == [
+        2.0,
+        1.0,
+        2.0,
+        1.0,
+        1.0,
+    ]
+    assert "order_value" not in json.dumps(result)
+
+
+def test_analysis_run_executes_individuals_chart_with_datetime_order_column(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"value,when\n"
+        b"4,2024-01-03\n"
+        b"1,2024-01-01\n"
+        b"3,2024-01-02\n"
+        b"2,2024-01-02\n"
+        b"5,2024-01-04\n"
+        b"6,2024-01-05\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart-datetime-order.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        order_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                    "order": order_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "order_column_id": order_column_id,
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "individuals_chart_uses_datetime_order_column",
+        "individuals_chart_control_limits_estimated_from_moving_range",
+        "individuals_chart_process_stability_not_proven",
+        "individuals_chart_order_ties_stable_sorted",
+    ]
+    result = payload["result"]
+    assert result["order_source"] == "datetime_order_column_ascending"
+    assert result["order_timezone"] == "timezone_naive"
+    assert result["order"]["column_id"] == order_column_id
+    assert [point["canonical_position"] for point in result["individuals_chart"]["points"]] == [
+        2,
+        3,
+        4,
+        1,
+        5,
+        6,
+    ]
+    result_json = json.dumps(result)
+    assert "2024" not in result_json
+    assert "order_value" not in result_json
+
+
+def test_analysis_run_rejects_constant_individuals_chart_values(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n5\n5\n5\n5\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart-constant.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "individuals_chart_zero_moving_range"
+
+
+def test_analysis_run_rejects_individuals_chart_mixed_timezone_order_column(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"value,when\n"
+        b"1,2024-01-01T00:00:00Z\n"
+        b"2,2024-01-02T00:00:00\n"
+        b"3,2024-01-03T00:00:00Z\n"
+        b"4,2024-01-04T00:00:00Z\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("individuals-chart-mixed-timezone.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                    "order": version["columns"][1]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                    "order_column_id": version["columns"][1]["column_id"],
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "individuals_chart_order_mixed_timezone_awareness"
+
+
+def test_analysis_run_executes_subgroup_chart_from_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value,lot\n10,A\n12,A\n11,B\n13,B\n9,C\n11,C\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("subgroup-chart.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        subgroup_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.subgroup_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                    "subgroup": subgroup_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "subgroup_column_id": subgroup_column_id,
+                    "chart_type": "xbar_r",
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "quality.subgroup_chart"
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 6
+    assert payload["provenance"]["row_count_included"] == 6
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "subgroup_chart_uses_canonical_subgroup_order",
+        "subgroup_chart_control_limits_estimated_from_xbar_r_constants",
+        "subgroup_chart_rational_subgroups_not_proven",
+    ]
+    result = payload["result"]
+    assert result["summary_type"] == "subgroup_chart"
+    assert result["method"] == "xbar_r_chart"
+    assert result["subgroup_size"] == 2
+    assert result["subgroup_count"] == 3
+    assert result["xbar_chart"]["center_line"] == pytest.approx(11.0)
+    assert result["xbar_chart"]["lcl"] == pytest.approx(7.24)
+    assert result["xbar_chart"]["ucl"] == pytest.approx(14.76)
+    assert result["r_chart"]["center_line"] == pytest.approx(2.0)
+    assert result["r_chart"]["ucl"] == pytest.approx(6.534)
+    assert result["signals"] == []
+    assert result["xbar_chart"]["points"][0] == {
+        "position": 1,
+        "subgroup_label": "A",
+        "first_canonical_position": 1,
+        "last_canonical_position": 2,
+        "n": 2,
+        "value": 11.0,
+        "mean": 11.0,
+        "range": 2.0,
+        "signal_codes": [],
+    }
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+
+
+def test_analysis_run_executes_xbar_s_subgroup_chart_from_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value,lot\n10,A\n11,A\n12,A\n11,B\n12,B\n13,B\n9,C\n10,C\n11,C\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("subgroup-chart-s.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        subgroup_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.subgroup_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                    "subgroup": subgroup_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "subgroup_column_id": subgroup_column_id,
+                    "chart_type": "xbar_s",
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "quality.subgroup_chart"
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "subgroup_chart_uses_canonical_subgroup_order",
+        "subgroup_chart_control_limits_estimated_from_xbar_s_constants",
+        "subgroup_chart_rational_subgroups_not_proven",
+    ]
+    result = payload["result"]
+    assert result["summary_type"] == "subgroup_chart"
+    assert result["method"] == "xbar_s_chart"
+    assert result["chart_type"] == "xbar_s"
+    assert result["constants"] == {
+        "source": "standard_xbar_s_constants",
+        "subgroup_size": 3,
+        "a3": 1.954,
+        "b3": 0.0,
+        "b4": 2.568,
+        "stddev_definition": "sample_standard_deviation_n_minus_1",
+    }
+    assert result["xbar_chart"]["center_line"] == pytest.approx(11.0)
+    assert result["xbar_chart"]["lcl"] == pytest.approx(9.046)
+    assert result["xbar_chart"]["ucl"] == pytest.approx(12.954)
+    assert result["s_chart"]["center_line"] == pytest.approx(1.0)
+    assert result["s_chart"]["ucl"] == pytest.approx(2.568)
+    assert "r_chart" not in result
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+
+
+def test_analysis_run_rejects_varying_size_subgroup_chart(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value,lot\n10,A\n12,A\n11,B\n13,B\n14,B\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("subgroup-chart-varying.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.subgroup_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                    "subgroup": version["columns"][1]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                    "subgroup_column_id": version["columns"][1]["column_id"],
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "subgroup_chart_varying_subgroup_size_unsupported"
+
+
+def test_analysis_run_executes_capability_from_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n10\n11\n12\n13\n14\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("capability.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.capability",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "lsl": 8.0,
+                    "usl": 16.0,
+                    "target": 12.0,
+                    "missing_policy": "complete_case",
+                    "histogram_bin_limit": 20,
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "quality.capability"
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 5
+    assert payload["provenance"]["row_count_included"] == 5
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "capability_normal_model_assumed",
+        "capability_control_limits_not_spec_limits",
+        "capability_process_stability_not_proven",
+        "capability_measurement_system_not_verified",
+        "capability_within_sigma_uses_canonical_moving_range",
+        "capability_point_estimates_without_ci",
+        "capability_target_recorded_cpm_not_computed",
+    ]
+    result = payload["result"]
+    assert result["summary_type"] == "capability_analysis"
+    assert result["method"] == "normal_capability"
+    assert result["sample"]["mean"] == pytest.approx(12.0)
+    assert result["capability"]["within"]["min_side"] == pytest.approx(1.504)
+    assert result["capability"]["overall"]["min_side"] == pytest.approx(0.8432740427115678)
+    assert result["observed_nonconformance"]["total_count"] == 0
+    assert result["expected_nonconformance_normal"]["total_ppm"] == pytest.approx(
+        11412.036386001651,
+    )
+    assert len(result["histogram"]["bins"]) == 5
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+
+
+def test_analysis_run_rejects_invalid_capability_spec_limits(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n10\n11\n12\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("capability-invalid-spec.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.capability",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                    "lsl": 12.0,
+                    "usl": 8.0,
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "capability_spec_limits_invalid"
+
+
+def test_gage_rr_preflight_accepts_balanced_crossed_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"measurement,part,operator,replicate\n"
+        b"10.0,P1,A,1\n"
+        b"10.1,P1,A,2\n"
+        b"10.2,P1,B,1\n"
+        b"10.3,P1,B,2\n"
+        b"11.0,P2,A,1\n"
+        b"11.1,P2,A,2\n"
+        b"11.2,P2,B,1\n"
+        b"11.3,P2,B,2\n"
+        b"12.0,P3,A,1\n"
+        b"12.1,P3,A,2\n"
+        b"12.2,P3,B,1\n"
+        b"12.3,P3,B,2\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("gage-rr-balanced.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/quality/gage-rr/preflight",
+            json={
+                "dataset_version_id": version["version_id"],
+                "measurement_column_id": version["columns"][0]["column_id"],
+                "part_column_id": version["columns"][1]["column_id"],
+                "operator_column_id": version["columns"][2]["column_id"],
+                "replicate_column_id": version["columns"][3]["column_id"],
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    GageRrPreflightResponse.model_validate(payload)
+    assert payload["method_id"] == "quality.gage_rr"
+    assert payload["summary_type"] == "gage_rr_preflight"
+    assert payload["schema_hash"] == version["schema_hash"]
+    assert payload["sample"]["n_total"] == 12
+    assert payload["sample"]["n_used"] == 12
+    assert payload["design"]["ready_for_anova"] is True
+    assert payload["design"]["part_count"] == 3
+    assert payload["design"]["operator_count"] == 2
+    assert payload["design"]["expected_replicates_per_cell"] == 2
+    assert payload["next_step"] == "ready_for_balanced_crossed_anova"
+    assert "anova_table" not in payload
+    assert "variance_components" not in payload
+    assert "P1" not in json.dumps(payload)
+
+
+def test_gage_rr_preflight_reports_unbalanced_design_as_response_issue(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"measurement,part,operator,replicate\n"
+        b"10.0,P1,A,1\n"
+        b"10.1,P1,A,2\n"
+        b"10.2,P1,B,1\n"
+        b"11.0,P2,A,1\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("gage-rr-unbalanced.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/quality/gage-rr/preflight",
+            json={
+                "dataset_version_id": version["version_id"],
+                "measurement_column_id": version["columns"][0]["column_id"],
+                "part_column_id": version["columns"][1]["column_id"],
+                "operator_column_id": version["columns"][2]["column_id"],
+                "replicate_column_id": version["columns"][3]["column_id"],
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["design"]["ready_for_anova"] is False
+    assert payload["next_step"] == "fix_design_before_gage_rr"
+    issue_codes = [issue["code"] for issue in payload["issues"]]
+    assert "gage_rr_crossed_cells_missing" in issue_codes
+    assert "gage_rr_unbalanced_crossed_design" in issue_codes
+
+
+def test_gage_rr_preflight_rejects_non_numeric_measurement_column(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"measurement,part,operator,replicate\nbad,P1,A,1\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("gage-rr-bad-measurement.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/quality/gage-rr/preflight",
+            json={
+                "dataset_version_id": version["version_id"],
+                "measurement_column_id": version["columns"][0]["column_id"],
+                "part_column_id": version["columns"][1]["column_id"],
+                "operator_column_id": version["columns"][2]["column_id"],
+                "replicate_column_id": version["columns"][3]["column_id"],
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "gage_rr_measurement_column_not_numeric"
+
+
+def test_analysis_run_executes_gage_rr_from_balanced_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"measurement,part,operator,replicate\n"
+        b"9,Part A,Operator 1,1\n"
+        b"11,Part A,Operator 1,2\n"
+        b"15,Part A,Operator 2,1\n"
+        b"17,Part A,Operator 2,2\n"
+        b"20,Part B,Operator 1,1\n"
+        b"22,Part B,Operator 1,2\n"
+        b"24,Part B,Operator 2,1\n"
+        b"26,Part B,Operator 2,2\n"
+        b"31,Part C,Operator 1,1\n"
+        b"33,Part C,Operator 1,2\n"
+        b"33,Part C,Operator 2,1\n"
+        b"35,Part C,Operator 2,2\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("gage-rr-analysis.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_rr",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "measurement": version["columns"][0]["column_id"],
+                    "part": version["columns"][1]["column_id"],
+                    "operator": version["columns"][2]["column_id"],
+                    "replicate": version["columns"][3]["column_id"],
+                },
+                "options": {
+                    "measurement_column_id": version["columns"][0]["column_id"],
+                    "part_column_id": version["columns"][1]["column_id"],
+                    "operator_column_id": version["columns"][2]["column_id"],
+                    "replicate_column_id": version["columns"][3]["column_id"],
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "quality.gage_rr"
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 12
+    assert payload["provenance"]["row_count_included"] == 12
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "gage_rr_balanced_crossed_anova_assumed",
+        "gage_rr_interaction_not_pooled",
+        "gage_rr_independence_not_proven",
+        "gage_rr_labels_redacted",
+    ]
+    result = payload["result"]
+    assert result["summary_type"] == "gage_rr"
+    assert result["design"]["part_count"] == 3
+    assert result["design"]["operator_count"] == 2
+    assert result["design"]["replicate_count"] == 2
+    assert result["anova_table"][0]["source"] == "part"
+    assert result["anova_table"][0]["sum_of_squares"] == pytest.approx(800)
+    assert result["variance_components"]["total_gage_rr"]["final_variance"] == pytest.approx(
+        31 / 3,
+    )
+    assert result["variance_components"]["part_to_part"]["final_variance"] == pytest.approx(99)
+    assert result["variance_components"]["ndc"] == 4
+    assert "Part A" not in json.dumps(result)
+    assert "Operator 1" not in json.dumps(result)
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+
+
+def test_analysis_run_rejects_unbalanced_gage_rr_without_result_payload(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"measurement,part,operator,replicate\n"
+        b"10,P1,A,1\n"
+        b"11,P1,A,2\n"
+        b"12,P1,B,1\n"
+        b"13,P1,B,2\n"
+        b"14,P1,B,3\n"
+        b"20,P2,A,1\n"
+        b"21,P2,A,2\n"
+        b"22,P2,B,1\n"
+        b"23,P2,B,2\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("gage-rr-unbalanced-analysis.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_rr",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "measurement": version["columns"][0]["column_id"],
+                    "part": version["columns"][1]["column_id"],
+                    "operator": version["columns"][2]["column_id"],
+                    "replicate": version["columns"][3]["column_id"],
+                },
+                "options": {
+                    "measurement_column_id": version["columns"][0]["column_id"],
+                    "part_column_id": version["columns"][1]["column_id"],
+                    "operator_column_id": version["columns"][2]["column_id"],
+                    "replicate_column_id": version["columns"][3]["column_id"],
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "gage_rr_unbalanced_crossed_design"
+
+
+def test_analysis_run_executes_gage_run_chart_from_balanced_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"measurement,part,operator,replicate,run\n"
+        b"9,Part A,Operator 1,1,2\n"
+        b"11,Part A,Operator 1,2,1\n"
+        b"15,Part A,Operator 2,1,4\n"
+        b"17,Part A,Operator 2,2,3\n"
+        b"20,Part B,Operator 1,1,6\n"
+        b"22,Part B,Operator 1,2,5\n"
+        b"24,Part B,Operator 2,1,8\n"
+        b"26,Part B,Operator 2,2,7\n"
+        b"31,Part C,Operator 1,1,10\n"
+        b"33,Part C,Operator 1,2,9\n"
+        b"33,Part C,Operator 2,1,12\n"
+        b"35,Part C,Operator 2,2,11\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("gage-run-chart.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "measurement": version["columns"][0]["column_id"],
+                    "part": version["columns"][1]["column_id"],
+                    "operator": version["columns"][2]["column_id"],
+                    "replicate": version["columns"][3]["column_id"],
+                    "order": version["columns"][4]["column_id"],
+                },
+                "options": {
+                    "measurement_column_id": version["columns"][0]["column_id"],
+                    "part_column_id": version["columns"][1]["column_id"],
+                    "operator_column_id": version["columns"][2]["column_id"],
+                    "replicate_column_id": version["columns"][3]["column_id"],
+                    "order_column_id": version["columns"][4]["column_id"],
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "quality.gage_run_chart"
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 12
+    assert payload["provenance"]["row_count_included"] == 12
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "gage_run_chart_diagnostic_only",
+        "gage_run_chart_requires_gage_design",
+        "gage_run_chart_labels_redacted",
+        "gage_run_chart_uses_order_column",
+    ]
+    result = payload["result"]
+    assert result["summary_type"] == "gage_run_chart"
+    assert result["design"]["part_count"] == 3
+    assert result["design"]["operator_count"] == 2
+    assert result["design"]["replicate_count"] == 2
+    assert result["summary"]["mean"] == pytest.approx(23)
+    assert result["chart"]["point_count"] == 12
+    assert result["chart"]["points"][0]["canonical_position"] == 2
+    assert result["chart"]["points"][0]["part_index"] == 1
+    assert result["chart"]["points"][0]["operator_index"] == 1
+    assert result["chart"]["points"][0]["replicate_index"] == 2
+    assert "Part A" not in json.dumps(result)
+    assert "Operator 1" not in json.dumps(result)
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+
+
+def test_analysis_run_rejects_unbalanced_gage_run_chart_without_result_payload(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"measurement,part,operator,replicate\n"
+        b"10,P1,A,1\n"
+        b"11,P1,A,2\n"
+        b"12,P1,B,1\n"
+        b"13,P1,B,2\n"
+        b"14,P1,B,3\n"
+        b"20,P2,A,1\n"
+        b"21,P2,A,2\n"
+        b"22,P2,B,1\n"
+        b"23,P2,B,2\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("gage-run-chart-unbalanced.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "measurement": version["columns"][0]["column_id"],
+                    "part": version["columns"][1]["column_id"],
+                    "operator": version["columns"][2]["column_id"],
+                    "replicate": version["columns"][3]["column_id"],
+                },
+                "options": {
+                    "measurement_column_id": version["columns"][0]["column_id"],
+                    "part_column_id": version["columns"][1]["column_id"],
+                    "operator_column_id": version["columns"][2]["column_id"],
+                    "replicate_column_id": version["columns"][3]["column_id"],
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "gage_run_chart_unbalanced_crossed_design"
+
+
+def test_analysis_run_executes_run_chart_from_dataset_version(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n1\n2\n3\n4\n5\n6\n4\n3\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        dataset_record = get_dataset_record(settings.workspace_root, dataset_id)
+        assert dataset_record is not None
+        (settings.workspace_root / dataset_record.stored_path).write_bytes(b"value\n999\n999\n")
+        value_column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "center_method": "median",
+                    "trend_min_length": 6,
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        result_response = client.get(
+            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result",
+        )
+        record = get_analysis_run_record(
+            settings.workspace_root,
+            response.json()["analysis_id"],
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "quality.run_chart"
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 8
+    assert payload["provenance"]["row_count_included"] == 8
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "run_chart_not_control_chart",
+        "run_chart_uses_canonical_row_order",
+        "run_chart_trend_rule_defined",
+        "run_chart_oscillation_rule_defined",
+        "run_chart_runs_test_defined",
+        "run_chart_trend_signal_detected",
+    ]
+    result = payload["result"]
+    assert result["summary_type"] == "run_chart"
+    assert result["method"] == "median_run_chart"
+    assert result["order_source"] == "canonical_row_order"
+    assert result["center_line"] == 3.5
+    assert result["runs"]["run_count"] == 3
+    assert result["runs"]["n_above"] == 4
+    assert result["runs"]["n_below"] == 4
+    assert result["signals"] == [
+        {
+            "signal_id": "trend-1",
+            "code": "run_chart_trend",
+            "severity": "warning",
+            "direction": "increasing",
+            "length": 6,
+            "start_position": 1,
+            "end_position": 6,
+            "definition": "strictly_monotonic_consecutive_points",
+        },
+    ]
+    assert result["chart"]["points"][0] == {
+        "position": 1,
+        "value": 1.0,
+        "relative_to_center": "below",
+        "signal_codes": ["run_chart_trend"],
+    }
+    assert "control_limit" not in json.dumps(result)
+    assert result_response.status_code == 200
+    assert result_response.json() == payload
+    assert record is not None
+    config_payload = json.loads(record.config_json)
+    row_snapshot = config_payload["row_snapshot"]
+    assert row_snapshot["kind"] == "analysis_row_snapshot"
+    assert row_snapshot["row_count_total"] == 8
+    assert row_snapshot["row_count_included"] == 8
+
+
+def test_analysis_run_executes_run_chart_with_numeric_order_column(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value,order\n4,30\n1,10\n3,20\n2,20\n5,40\n6,50\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart-order.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        order_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                    "order": order_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "order_column_id": order_column_id,
+                    "center_method": "median",
+                    "trend_min_length": 6,
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "run_chart_not_control_chart",
+        "run_chart_uses_numeric_order_column",
+        "run_chart_trend_rule_defined",
+        "run_chart_oscillation_rule_defined",
+        "run_chart_runs_test_defined",
+        "run_chart_order_ties_stable_sorted",
+    ]
+    result = payload["result"]
+    assert result["order_source"] == "numeric_order_column_ascending"
+    assert result["order_tie_breaker"] == "canonical_row_position"
+    assert result["order"]["column_id"] == order_column_id
+    assert result["order_duplicate_count"] == 1
+    assert result["chart"]["x_axis"] == "order_rank"
+    assert [point["position"] for point in result["chart"]["points"]] == [1, 2, 3, 4, 5, 6]
+    assert [point["canonical_position"] for point in result["chart"]["points"]] == [
+        2,
+        3,
+        4,
+        1,
+        5,
+        6,
+    ]
+    assert [point["value"] for point in result["chart"]["points"]] == [
+        1.0,
+        3.0,
+        2.0,
+        4.0,
+        5.0,
+        6.0,
+    ]
+    assert "order_value" not in json.dumps(result)
+    assert "control_limit" not in json.dumps(result)
+
+
+def test_analysis_run_executes_run_chart_with_datetime_order_column(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"value,when\n"
+        b"4,2024-01-03\n"
+        b"1,2024-01-01\n"
+        b"3,2024-01-02\n"
+        b"2,2024-01-02\n"
+        b"5,2024-01-04\n"
+        b"6,2024-01-05\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart-datetime-order.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        order_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                    "order": order_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "order_column_id": order_column_id,
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "run_chart_not_control_chart",
+        "run_chart_uses_datetime_order_column",
+        "run_chart_trend_rule_defined",
+        "run_chart_oscillation_rule_defined",
+        "run_chart_runs_test_defined",
+        "run_chart_order_ties_stable_sorted",
+    ]
+    result = payload["result"]
+    assert result["order_source"] == "datetime_order_column_ascending"
+    assert result["order_timezone"] == "timezone_naive"
+    assert result["order"]["column_id"] == order_column_id
+    assert result["chart"]["x_axis"] == "order_rank"
+    assert [point["canonical_position"] for point in result["chart"]["points"]] == [
+        2,
+        3,
+        4,
+        1,
+        5,
+        6,
+    ]
+    assert [point["value"] for point in result["chart"]["points"]] == [
+        1.0,
+        3.0,
+        2.0,
+        4.0,
+        5.0,
+        6.0,
+    ]
+    result_json = json.dumps(result)
+    assert "2024" not in result_json
+    assert "order_value" not in result_json
+
+
+def test_analysis_run_executes_run_chart_with_oscillation_signal(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n1\n8\n2\n7\n3\n6\n4\n5\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart-oscillation.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "oscillation_min_length": 8,
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "run_chart_not_control_chart",
+        "run_chart_uses_canonical_row_order",
+        "run_chart_trend_rule_defined",
+        "run_chart_oscillation_rule_defined",
+        "run_chart_runs_test_defined",
+        "run_chart_oscillation_signal_detected",
+        "run_chart_mixture_signal_detected",
+    ]
+    result = payload["result"]
+    assert result["oscillation_rule"] == {
+        "code": "run_chart_oscillation",
+        "definition": "strictly_alternating_consecutive_point_directions",
+        "minimum_length": 8,
+    }
+    assert result["signals"] == [
+        {
+            "signal_id": "oscillation-1",
+            "code": "run_chart_oscillation",
+            "severity": "warning",
+            "direction": "alternating",
+            "length": 8,
+            "start_position": 1,
+            "end_position": 8,
+            "definition": "strictly_alternating_consecutive_point_directions",
+        },
+        {
+            "signal_id": "mixture-1",
+            "code": "run_chart_mixture",
+            "severity": "warning",
+            "direction": "high_runs",
+            "length": 8,
+            "start_position": 1,
+            "end_position": 8,
+            "definition": "exact_high_run_count_given_above_below_counts",
+        },
+    ]
+    assert result["chart"]["points"][0]["signal_codes"] == [
+        "run_chart_oscillation",
+        "run_chart_mixture",
+    ]
+    assert "control_limit" not in json.dumps(result)
+
+
+def test_analysis_run_executes_run_chart_with_clustering_signal(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n1\n1.4\n1.1\n1.3\n1.2\n10\n10.4\n10.1\n10.3\n10.2\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart-clustering.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        value_column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "runs_test_alpha": 0.05,
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    AnalysisResultEnvelope.model_validate(payload)
+    assert [warning["code"] for warning in payload["warnings"]] == [
+        "run_chart_not_control_chart",
+        "run_chart_uses_canonical_row_order",
+        "run_chart_trend_rule_defined",
+        "run_chart_oscillation_rule_defined",
+        "run_chart_runs_test_defined",
+        "run_chart_clustering_signal_detected",
+    ]
+    result = payload["result"]
+    assert result["runs"]["run_count"] == 2
+    assert result["runs_test"]["available"] is True
+    assert result["runs_test"]["p_value_low"] == pytest.approx(2 / 252)
+    assert result["runs_test"]["interpretation"] == "clustering"
+    assert result["signals"] == [
+        {
+            "signal_id": "clustering-1",
+            "code": "run_chart_clustering",
+            "severity": "warning",
+            "direction": "low_runs",
+            "length": 10,
+            "start_position": 1,
+            "end_position": 10,
+            "definition": "exact_low_run_count_given_above_below_counts",
+        },
+    ]
+    assert "control_limit" not in json.dumps(result)
+
+
+def test_analysis_run_rejects_run_chart_non_numeric_order_column(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value,order\n1,first\n2,second\n3,third\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart-order-text.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                    "order": version["columns"][1]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                    "order_column_id": version["columns"][1]["column_id"],
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "run_chart_order_column_not_numeric"
+
+
+def test_analysis_run_rejects_run_chart_mixed_timezone_order_column(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = (
+        b"value,when\n"
+        b"1,2024-01-01T00:00:00Z\n"
+        b"2,2024-01-02T00:00:00\n"
+        b"3,2024-01-03T00:00:00Z\n"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart-mixed-timezone.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                    "order": version["columns"][1]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                    "order_column_id": version["columns"][1]["column_id"],
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "run_chart_order_mixed_timezone_awareness"
+
+
+def test_analysis_run_rejects_invalid_run_chart_oscillation_min_length(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n1\n2\n3\n4\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart-invalid-oscillation.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                    "oscillation_min_length": 3,
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_run_chart_oscillation_min_length"
+
+
+def test_analysis_run_rejects_invalid_run_chart_runs_test_alpha(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n1\n2\n3\n4\n"
+
+    with TestClient(create_app(settings)) as client:
+        upload_response = client.post(
+            "/api/v1/datasets",
+            files={"file": ("run-chart-invalid-alpha.csv", content, "text/csv")},
+        )
+        dataset_id = upload_response.json()["dataset_id"]
+        confirm_response = client.post(
+            f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+            json={
+                "parsing": {
+                    "kind": "delimited_text",
+                    "encoding": "utf-8",
+                    "delimiter": ",",
+                    "quote_char": '"',
+                    "decimal": ".",
+                    "thousands": None,
+                    "has_header": True,
+                    "header_row": 1,
+                    "data_start_row": 2,
+                    "missing_tokens": ["", "NA", "N/A", "null", "N/T"],
+                },
+                "columns": [],
+            },
+        )
+        version = confirm_response.json()
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": version["columns"][0]["column_id"],
+                },
+                "options": {
+                    "value_column_id": version["columns"][0]["column_id"],
+                    "runs_test_alpha": 0.5,
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_run_chart_runs_test_alpha"
 
 
 def test_analysis_run_executes_linear_model_from_dataset_version(tmp_path) -> None:

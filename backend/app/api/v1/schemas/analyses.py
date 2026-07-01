@@ -135,6 +135,101 @@ class AnalysisResultEnvelope(BaseModel):
     result: dict[str, Any] | None = None
 
 
+class GageRrPreflightRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version_id: UUID
+    measurement_column_id: str = Field(min_length=1)
+    part_column_id: str = Field(min_length=1)
+    operator_column_id: str = Field(min_length=1)
+    replicate_column_id: str = Field(min_length=1)
+    missing_policy: Literal["complete_case"] = "complete_case"
+
+
+class GageRrPreflightColumn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_id: str
+    column_index: int = Field(ge=0)
+    display_name: str
+    data_type: str
+    measurement_level: str
+    role: str
+    unit: str | None = None
+
+
+class GageRrPreflightSample(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    n_total: int = Field(ge=0)
+    n_used: int = Field(ge=0)
+    n_excluded: int = Field(ge=0)
+    n_excluded_missing_measurement: int = Field(ge=0)
+    n_excluded_non_numeric_measurement: int = Field(ge=0)
+    n_excluded_missing_part: int = Field(ge=0)
+    n_excluded_missing_operator: int = Field(ge=0)
+    n_excluded_missing_replicate: int = Field(ge=0)
+    n_excluded_missing_identifier: int = Field(ge=0)
+
+
+class GageRrCellReplicateCount(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    replicate_count: int = Field(ge=0)
+    cell_count: int = Field(ge=0)
+
+
+class GageRrPreflightDesign(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    design_type: Literal["crossed"]
+    balanced: bool
+    ready_for_anova: bool
+    part_count: int = Field(ge=0)
+    operator_count: int = Field(ge=0)
+    replicate_level_count: int = Field(ge=0)
+    expected_cell_count: int = Field(ge=0)
+    observed_cell_count: int = Field(ge=0)
+    missing_cell_count: int = Field(ge=0)
+    min_replicates_per_cell: int = Field(ge=0)
+    max_replicates_per_cell: int = Field(ge=0)
+    expected_replicates_per_cell: int | None = Field(default=None, ge=0)
+    replicate_set_consistent: bool
+    duplicate_replicates_per_cell: int = Field(ge=0)
+    cell_replicate_count_distribution: list[GageRrCellReplicateCount]
+
+
+class GageRrPreflightIssue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    severity: Literal["info", "warning", "error"]
+    message: str
+    count: int | None = Field(default=None, ge=0)
+
+
+class GageRrPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = Field(ge=1)
+    method_id: Literal["quality.gage_rr"]
+    preflight_type: Literal["balanced_crossed_anova"]
+    dataset_version_id: UUID
+    schema_hash: str
+    row_count_total: int = Field(ge=0)
+    summary_type: Literal["gage_rr_preflight"]
+    method: Literal["balanced_crossed_anova_preflight"]
+    missing_policy: Literal["complete_case"]
+    columns: dict[
+        Literal["measurement", "part", "operator", "replicate"],
+        GageRrPreflightColumn,
+    ]
+    sample: GageRrPreflightSample
+    design: GageRrPreflightDesign
+    issues: list[GageRrPreflightIssue]
+    next_step: Literal["ready_for_balanced_crossed_anova", "fix_design_before_gage_rr"]
+
+
 class RegressionModelManifestResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

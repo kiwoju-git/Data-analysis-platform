@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-01
+Last updated: 2026-07-02
 
 ## 1. Required Reading And Priority
 
@@ -28,7 +28,7 @@ Already implemented:
 - Local-only default host `127.0.0.1` and narrow CORS
 - React 18 + Vite + TypeScript shell with API health display
 - PowerShell workflow scripts: `bootstrap.ps1`, `dev.ps1`, `test.ps1`, `check.ps1`
-- SQLite migration skeleton through schema version `6`
+- SQLite migration skeleton through schema version `8`
 - `datasets` metadata table for raw upload provenance
 - `dataset_versions` metadata table for immutable parsing-confirmed versions
 - `dataset_columns` metadata table preserving original names and unique display names
@@ -77,6 +77,7 @@ Already implemented:
 - Common analysis request, filter snapshot, warning, provenance, and result envelope schemas
 - Common analysis run status and job status schemas
 - `analysis_runs`, `analysis_artifacts`, and `jobs` metadata tables
+- `experiment_designs`, `experiment_design_versions`, `experiment_runs`, and `experiment_run_responses` metadata tables for DOE design/response assets
 - Analysis run and job status/cancel API skeletons
 - Six-module planned/disabled navigation shell in the React UI
 - Six-module selected-method Workbench shell in the React UI:
@@ -87,12 +88,13 @@ Already implemented:
   - workspace route boundary is split into `frontend/src/WorkspaceRouter.tsx`
   - analysis page boundary is split into `frontend/src/AnalysisPage.tsx`
   - common shell rendering is split into `frontend/src/AnalysisWorkbench.tsx`
-  - analysis area rendering is further split into `frontend/src/AnalysisShell.tsx`, `frontend/src/DescriptiveAnalysisPanel.tsx`, `frontend/src/GraphicalSummaryPanel.tsx`, `frontend/src/NormalityAnalysisPanel.tsx`, `frontend/src/EqualVariancesPanel.tsx`, `frontend/src/OneSampleTPanel.tsx`, `frontend/src/PairedTPanel.tsx`, `frontend/src/EquivalenceTostPanel.tsx`, `frontend/src/OneSampleWilcoxonPanel.tsx`, `frontend/src/TwoSampleTPanel.tsx`, `frontend/src/MannWhitneyPanel.tsx`, `frontend/src/KruskalWallisPanel.tsx`, `frontend/src/OneWayAnovaPanel.tsx`, `frontend/src/OneProportionPanel.tsx`, `frontend/src/TwoProportionPanel.tsx`, `frontend/src/ChiSquareAssociationPanel.tsx`, `frontend/src/PearsonCorrelationPanel.tsx`, `frontend/src/XyCorrelationPanel.tsx`, and `frontend/src/LinearModelPanel.tsx`
+  - analysis area rendering is further split into `frontend/src/AnalysisShell.tsx`, `frontend/src/DescriptiveAnalysisPanel.tsx`, `frontend/src/GraphicalSummaryPanel.tsx`, `frontend/src/NormalityAnalysisPanel.tsx`, `frontend/src/EqualVariancesPanel.tsx`, `frontend/src/OneSampleTPanel.tsx`, `frontend/src/PairedTPanel.tsx`, `frontend/src/EquivalenceTostPanel.tsx`, `frontend/src/OneSampleWilcoxonPanel.tsx`, `frontend/src/TwoSampleTPanel.tsx`, `frontend/src/MannWhitneyPanel.tsx`, `frontend/src/KruskalWallisPanel.tsx`, `frontend/src/OneWayAnovaPanel.tsx`, `frontend/src/OneProportionPanel.tsx`, `frontend/src/TwoProportionPanel.tsx`, `frontend/src/ChiSquareAssociationPanel.tsx`, `frontend/src/PearsonCorrelationPanel.tsx`, `frontend/src/XyCorrelationPanel.tsx`, `frontend/src/LinearModelPanel.tsx`, `frontend/src/IndividualsChartPanel.tsx`, `frontend/src/SubgroupChartPanel.tsx`, `frontend/src/RunChartPanel.tsx`, `frontend/src/CapabilityPanel.tsx`, `frontend/src/GageRrPreflightPanel.tsx`, `frontend/src/GageRunChartPanel.tsx`, and `frontend/src/FactorialDesignPanel.tsx`
   - root/dataset routes render the dataset preparation page and `/analysis/{module_id}/{method_id}` routes render the analysis page
   - supported filter controls render through a common Workbench slot for dataset-backed methods
   - Workbench steps show data, roles, options, preflight, execution, and results
   - all 29 documented methods show UI guidance for required roles, options, preflight checks, and result focus
-  - `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, and `regression.linear_model` expose execution controls
+  - `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` expose analysis execution controls
+  - `doe.factorial_design` exposes dedicated DOE design-asset creation and response-entry controls, not a generic analysis-run result
 - Analysis run API guard that rejects planned/disabled methods without returning fake results
 - `eda.descriptive` is the first executable method and computes real descriptive statistics from confirmed dataset versions
 - `eda.graphical_summary` is the second executable method and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads from confirmed dataset versions, with frontend inline SVG rendering for histogram, box plot, Q-Q plot, and ECDF
@@ -112,12 +114,14 @@ Already implemented:
 - `regression.pearson` is the first Gate C1 executable method and computes real SciPy-backed Pearson product-moment correlation results from two numeric columns on confirmed dataset versions
 - `regression.xy_correlation` is the second Gate C1 executable method and computes real SciPy-backed pairwise Pearson X-Y correlation matrix results from numeric X/Y column sets on confirmed dataset versions
 - `regression.linear_model` is the third Gate C1 executable method and computes real NumPy/SciPy-backed OLS linear model results from one numeric response and one or more numeric/categorical predictors on confirmed dataset versions, with safe JSON model manifest persistence, checksum-validated manifest retrieval, stored-model prediction preflight, backend prediction values/intervals from app-created manifests, and frontend preflight result display
+- `quality.gage_run_chart` is the second Gate C3 executable method and computes real stdlib measurement-system diagnostic chart payloads from balanced crossed Gage rows with raw part/operator/replicate label redaction
+- `doe.factorial_design` is the first Gate D1 design-asset method and creates real 2-level full factorial design/run tables through the dedicated DOE design API with deterministic seed handling, design SHA-256, SQLite schema v7 metadata persistence, SQLite schema v8 response persistence, and frontend run-table preview/response entry; effects, OLS/ANOVA, alias structure, and DOE analysis charts remain out of scope
 - NumPy 2.2.6/SciPy 1.15.3 are production-pinned after the native Windows Python 3.10.11 dependency spike, and a SciPy-backed normality reference fixture was generated and validated
 - Descriptive statistics result persistence stores app-owned JSON under the workspace and records result SHA-256 in `analysis_runs`
 - Available inline analysis runs persist an `analysis_row_snapshot` artifact with filter snapshot hash, source canonical artifact hash, included row counts, and row ranges for supported filters
 - XLSX container checks, sheet-selection warning, and basic stdlib parsing confirmation for the first or named worksheet
 - XLSX formula recalculation, merged-cell expansion, hidden row/column handling, and display-format/date serial restoration remain out of scope
-- Synthetic upload tests, parsing confirmation tests, canonical artifact tests, and migration upgrade tests from schema version `1`/`2`/`3`/`4`/`5` to `6`
+- Synthetic upload tests, parsing confirmation tests, canonical artifact tests, and migration upgrade tests from schema version `1`/`2`/`3`/`4`/`5`/`6`/`7` to `8`
 - Schema update validation tests and rows preview pagination/bounds tests
 - Synthetic tests for preamble-plus-headerless delimited text upload, parsing confirmation, generated columns, and row preview
 - Canonical row reader adoption tests proving profile and `eda.descriptive` read canonical rows after raw upload mutation
@@ -145,7 +149,13 @@ Already implemented:
   - users can add/remove AND filter conditions in the selected-method Workbench before running supported analyses
   - numeric columns expose `gt`/`gte`/`lt`/`lte`; all columns expose missing and equality conditions
   - filter drafts are validated in the shared UI slot
-  - current executable payload serialization into `filter_snapshot.conditions` covers `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, and `regression.linear_model`
+  - current executable payload serialization into `filter_snapshot.conditions` covers `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
+  - `quality.individuals_chart` uses canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks, complete-case exclusions, arithmetic mean center line, `MRbar / d2` sigma estimate, I chart 3-sigma limits, MR chart `D3/D4` limits, I/MR single-point limit signals, I chart same-side centerline signals, I chart strict trend signals, I chart alternating signals, and explicit I chart zone/pattern signals
+  - `quality.subgroup_chart` uses canonical first-seen subgroup order, fixed subgroup size 2-10, complete-case exclusions, Xbar-R/Xbar-S standard constants, Xbar/R/S control limits, and Xbar/R/S single-point limit signals
+  - `quality.run_chart` uses canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks, median center line, complete-case exclusions, above/below median run counts, tie-to-median exclusion policy, strict 6-point trend signal, strict 14-point oscillation signal, and exact conditional run-count clustering/mixture signals without control limits
+  - `quality.capability` uses one numeric measurement column, LSL and/or USL, optional target, complete-case exclusions, overall sample SD, within `MRbar/d2` sigma, Cp/Cpk/Pp/Ppk side indices, observed/expected nonconformance, and histogram/fitted-normal/spec-line payloads
+  - `quality.gage_rr` uses one numeric measurement column plus part/operator/replicate columns, complete-case exclusions, strict balanced crossed design validation, ANOVA table, raw/final variance components, % contribution, % study variation, ndc, and raw-label redaction
+  - `quality.gage_run_chart` uses one numeric measurement column plus part/operator/replicate columns, optional numeric/datetime order, strict balanced crossed design validation, capped indexed chart points, part/operator summaries, and raw-label redaction
 - Gate B2 first inferential slice:
   - `hypothesis.one_sample_t` validates an explicit response role and reference mean from schema metadata and request options
   - returns N/exclusion counts, sample summary, mean difference, confidence interval, t statistic, df, p-value, Cohen dz, Hedges-corrected effect, warning codes, and provenance
@@ -183,12 +193,12 @@ Not implemented yet:
 
 - Full profile API beyond the current aggregate/duplicate/memory/date-time preflight slice
 - Router-mounted Analysis Workbench page decomposition and additional shared feature components
-- Binding the common filter UI state into future executable methods beyond the current eighteen available methods
+- Binding the common filter UI state into future dataset-backed executable methods beyond the current twenty-four analysis-run methods
 - Full XLSX workbook semantics beyond cached worksheet values
 - Cell-level data editing or transformations that create a new immutable dataset version
-- Executable analysis method dispatch beyond the current eighteen available methods
-- Any production statistical calculation beyond `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, and `regression.linear_model`
-- Any Bayesian, optimizer, DOE, quality, regression prediction target-dataset selection UI, paged prediction result retrieval, or additional hypothesis/categorical test calculation
+- Executable analysis method dispatch beyond the current twenty-four analysis-run methods and the dedicated DOE design endpoint
+- Any production statistical calculation beyond `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
+- Any Bayesian, optimizer, DOE response/effects/ANOVA analysis beyond the first factorial design-asset slice, broader quality-control method, regression prediction target-dataset selection UI, paged prediction result retrieval, or additional hypothesis/categorical test calculation
 - Any mock/fake statistical result
 
 Strict rule:
@@ -293,13 +303,20 @@ Completed in this slice:
   - `dataset_artifacts`
 - SQLite schema v6:
   - `regression_models`
+- SQLite schema v8:
+  - `experiment_designs`
+  - `experiment_design_versions`
+  - `experiment_runs`
+  - `experiment_run_responses`
 - Analysis run status/cancel API skeleton:
   - `GET /api/v1/analysis-runs/{analysis_id}`
   - `DELETE /api/v1/analysis-runs/{analysis_id}`
 - Job status/cancel API skeleton:
-  - `GET /api/v1/jobs/{job_id}`
-  - `DELETE /api/v1/jobs/{job_id}`
-- Tests for v3 to v4 migration, v4 to v5 migration, v5 to v6 migration, analysis/job/regression model metadata round trip, dataset artifact metadata round trip, status lookup, cancellation request, and no fake results
+- `GET /api/v1/jobs/{job_id}`
+- `DELETE /api/v1/jobs/{job_id}`
+- `POST /api/v1/doe-designs/factorial`
+- `GET /api/v1/doe-designs/{design_id}`
+- Tests for v3 to v4 migration, v4 to v5 migration, v5 to v6 migration, v6 to v7 migration, v7 to v8 migration, analysis/job/regression model metadata round trip, dataset artifact metadata round trip, DOE design/response metadata round trip, status lookup, cancellation request, and no fake results
 - Canonical parsed artifact implementation:
   - UTF-8 JSONL rows and JSON manifest are written under the local workspace
   - artifact metadata stores relative paths, SHA-256, media type, and byte size in `dataset_artifacts`
@@ -344,16 +361,16 @@ The next implementation PR should remain narrow and must still avoid fake statis
 Allowed next scope:
 
 - Implement the next real executable method only after its statistical dependency, reference fixtures, warning metadata, and provenance contract are ready.
-- Keep every method except the current eighteen available methods unavailable until real calculation code and tests exist.
+- Keep every method except the current twenty-four analysis-run methods and the dedicated `doe.factorial_design` design/response API unavailable until real code and tests exist.
 - Keep analysis run status/job storage as infrastructure unless a later method requires worker execution.
 
 Still explicitly out of scope:
 
-- Statistical method calculations beyond the current eighteen available methods
+- Statistical method calculations beyond the current twenty-four analysis-run methods
 - Analysis mock results
 - Full profile implementation beyond the current aggregate/duplicate/memory/date-time/profile-artifact preflight slice
 - Router-mounted Analysis Workbench pages beyond the current path-restorable shared component shell
-- Bayesian optimization, Response Optimizer, DOE, regression, quality control, or hypothesis testing
+- Bayesian optimization, Response Optimizer, DOE effects/ANOVA analysis beyond the factorial design/response asset slices, broader quality-control methods, or additional hypothesis testing
 - PyCaret, Optuna, SHAP, LIME, PyTorch, or GPU dependency
 
 ## 4. Gate Roadmap
@@ -637,13 +654,13 @@ Completion criteria:
 
 Current status:
 
-- Not started.
+- Started. `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` now provide real quality/measurement-system slices. `quality.subgroup_chart` is available as a fixed subgroup-size Xbar-R/Xbar-S slice with canonical row reader, persisted result JSON, Xbar/R/S control limits, single-point limit signals, varying subgroup-size rejection, zero-average-range/stddev rejection, backend unit/API tests, and a minimal inline SVG frontend panel with Xbar-R/Xbar-S selector. `quality.capability` is available as a normal capability first slice with LSL/USL/target inputs, Cp/Cpk/Pp/Ppk side indices, observed/expected nonconformance, histogram/fitted-normal/spec-line payload, backend unit/API tests, and minimal inline SVG frontend panel. `quality.gage_rr` is available as a balanced crossed ANOVA first slice with canonical row reader, persisted result JSON, ANOVA table, raw/final variance components, % contribution, % study variation, ndc, backend unit/API tests, and minimal frontend preflight/run/result table UI. `quality.gage_run_chart` is available as a balanced crossed diagnostic chart first slice with canonical row reader, optional order column, capped indexed point payload, part/operator summaries, raw-label redaction, backend unit/API tests, and minimal inline SVG frontend panel. Attribute charts, varying subgroup-size limits, non-normal capability, nested/unbalanced/expanded Gage R&R, full Nelson/Western Electric rules, component/interaction plots, and chart export artifacts remain planned until each has reference fixtures and UI/API coverage.
 
 ### Gate C3: Measurement System Analysis
 
 Purpose:
 
-- Implement balanced crossed Gage R&R and Gage Run Chart with design validation.
+- Implement balanced crossed Gage R&R calculation and Gage Run Chart with design validation.
 
 Implementation scope:
 
@@ -681,7 +698,9 @@ Completion criteria:
 
 Current status:
 
-- Not started.
+- Started. Balanced crossed Gage R&R first slice is available through `quality.gage_rr`. It validates measurement, part, operator, and replicate roles; rejects unbalanced/missing-cell/duplicate-replicate/too-small/zero-total-variation cases with stable errors; returns ANOVA table, raw/final variance components, % contribution, % study variation, and ndc; and persists the result through the common analysis run/result API.
+- `quality.gage_run_chart` is available as a separate diagnostic chart first slice. It validates the same balanced crossed role design, accepts an optional order column, returns capped indexed chart points plus part/operator summaries, redacts raw part/operator/replicate labels, and persists the result through the common analysis run/result API. Nested Gage R&R, unbalanced designs, tolerance/process variation, pooling choices, component/interaction plots, high-volume paged chart payloads, and chart export artifacts remain out of scope.
+- Gate D1 DOE has started with design-asset and response-entry slices: `doe.factorial_design` is available through `POST /api/v1/doe-designs/factorial`, `GET /api/v1/doe-designs/{design_id}`, `PUT /api/v1/doe-designs/{design_id}/responses`, and `GET /api/v1/doe-designs/{design_id}/responses`. It creates a persisted 2-level full factorial design/run table with deterministic seed handling and `design_sha256`, then stores numeric response series against the immutable design version/run IDs. Effects, OLS/ANOVA, diagnostics, alias structure, and DOE charts remain out of scope.
 
 ### Gate D1: Factorial DOE
 
@@ -691,33 +710,41 @@ Purpose:
 
 Implementation scope:
 
-- 2-level full factorial
-- Design asset/version
-- Randomization, block, replicate, center-point metadata
-- Response import
-- Effects, OLS, ANOVA, diagnostics
+- Done in first slice: 2-level full factorial design asset/version/run metadata
+- Done in first slice: randomization, block, replicate, center-point metadata
+- Done in first slice: deterministic run order from explicit seed and design SHA-256
+- Done in first slice: dedicated create/read API and minimal Workbench preview
+- Done in second slice: response import/storage API and minimal response-entry UI
+- Remaining: effects, OLS, ANOVA, diagnostics
 
 Backend work:
 
-- Generate deterministic design/run order from explicit seed.
-- Preserve design after response entry; changes create a new design version.
+- Done: generate deterministic design/run order from explicit seed.
+- Done: persist design, version, and run metadata in schema v7.
+- Done: persist numeric run response metadata in schema v8 without mutating design run order.
+- Done: checksum-verify stored design metadata before returning it.
+- Done: preserve design after response entry by storing response rows separately from factor/run metadata.
 - Add design analysis only after response data is present and validated.
 
 Frontend work:
 
-- Add DOE design creation flow.
-- Show factor settings, randomization seed, run order, and response entry status.
+- Done: add DOE design creation flow for factors, randomization seed, block, replicate, and center points.
+- Done: show factor settings, randomization seed, run order, and design SHA summary.
+- Done: add response name/unit/value entry table keyed by run order and save status.
 - Prevent accidental rerandomization after responses are recorded.
 
 DB/migration work:
 
-- Add `experiment_designs` and `experiment_runs` when this gate starts.
-- Store factor definitions and run order as versioned design assets.
+- Done: add `experiment_designs`, `experiment_design_versions`, and `experiment_runs`.
+- Done: store factor definitions and run order as versioned design assets.
+- Done: add `experiment_run_responses` for response metadata by design version/run ID.
 
 Tests:
 
-- Same seed produces same run order.
-- Design immutability after response entry.
+- Done: same seed produces same run order.
+- Done: metadata migration v6 to v7, v7 to v8, and DOE design/response record round trip.
+- Done: create/read API, duplicate factor rejection, response save/read, and incomplete response run-set rejection.
+- Done: design immutability after response entry at the factor/run metadata level.
 - Reference effect and ANOVA fixtures.
 
 Completion criteria:
@@ -2883,3 +2910,826 @@ Remaining limitations:
 Next PR:
 
 - After committing this accumulated vertical-slice work, choose either a small chart-export/reporting contract or the first Gate D quality-control method with real reference tests.
+
+## Progress Update 46 - Run Chart Executable Quality Slice
+
+Completed in current working tree:
+
+- Made `quality.run_chart` available in the analysis method registry as the first narrow Gate D quality-control slice.
+- Added `backend/app/statistics/run_chart.py` with a real stdlib median run chart calculation for one numeric measurement column.
+- The backend reads canonical rows through the existing row snapshot path, persists result JSON, and stores row snapshot provenance.
+- Result payload includes complete-case exclusion counts, median center line, above/below median run count, tie-to-median exclusion policy, strict 6-point trend signal metadata, and capped chart points.
+- The method explicitly does not compute control limits and does not represent trend signals as control-chart out-of-control violations.
+- Added frontend API types and `RunChartPanel` with measurement selector, canonical row order policy display, inline SVG run chart, run count summary, and signal table.
+- Updated method guidance and docs with the current contract and limitations.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/run_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_run_chart.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/RunChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/run_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation:
+
+- Backend targeted pytest for `test_run_chart.py` and selected run-chart/catalog API contracts: passed with 7 selected tests.
+- Backend ruff for touched backend files: passed.
+- Backend mypy for touched backend files: passed.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Frontend `npm --prefix ./frontend run lint`: passed.
+- Frontend `npm --prefix ./frontend run test -- --run`: passed with 34 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 178 tests, frontend Vitest 34 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Run chart supports canonical row order and optional numeric order columns only; datetime order parsing remains out of scope.
+- Strict monotonic trend and strict alternating oscillation signals are implemented; clustering and mixture signal definitions remain out of scope.
+- Control limits, I-MR, Xbar charts, capability analysis, and Gage methods remain planned.
+- Inline chart rendering is not a chart export artifact.
+
+Next PR:
+
+- Define the next run-chart signal contract or implement the next small quality method only after its result contract and reference fixtures are ready.
+
+## Progress Update 47 - Run Chart Numeric Order Column Slice
+
+Completed in current working tree:
+
+- Extended `quality.run_chart` to accept an optional numeric `order_column_id`.
+- Numeric order columns are sorted ascending, with canonical row position as the deterministic tie-breaker.
+- Result payload now records order column metadata, order-source policy, order tie-breaker, order missing/non-numeric exclusions, and order duplicate count.
+- Chart payload uses `order_rank` when an order column is selected and does not expose raw order values or source paths.
+- Frontend `RunChartPanel` now exposes an order selector, displays the chosen order policy, and shows order exclusion/tie counts.
+- No control limits, fake signals, or new statistical methods were added.
+
+Changed files:
+
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/run_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_run_chart.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/RunChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/run_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_run_chart.py` and selected run-chart API contracts: passed with 8 selected tests.
+- Backend ruff for touched backend files: passed.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run lint`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 34 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 182 tests, frontend Vitest 34 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Strict monotonic trend and strict alternating oscillation signals are implemented; clustering and mixture signal definitions remain out of scope.
+- Control limits, I-MR, Xbar charts, capability analysis, and Gage methods remain planned.
+- Inline chart rendering is not a chart export artifact.
+
+Next PR:
+
+- Define the next run-chart signal contract or implement the next small quality-control slice only after its method contract and reference fixtures are ready.
+
+## Progress Update 48 - Run Chart Oscillation Signal Slice
+
+Completed in current working tree:
+
+- Added a real `run_chart_oscillation` signal to `quality.run_chart`.
+- The oscillation signal is strictly defined as consecutive point-to-point directions alternating between increasing and decreasing for at least the configured minimum number of points.
+- Default oscillation rule length is 14 points; API accepts `oscillation_min_length` from 4 to 30.
+- Equal adjacent values break the oscillation sequence; no fallback or fake signal is emitted.
+- Result payload now includes `oscillation_rule`, and chart points can carry `run_chart_oscillation` signal codes.
+- Frontend Run Chart UI now shows the oscillation rule, separate trend/oscillation signal counts, and signal-code-aware chart tooltips.
+- No control limits, Nelson/Western Electric rules, clustering/mixture signals, or new quality method were added.
+
+Changed files:
+
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/run_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_run_chart.py`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/RunChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/run_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_run_chart.py` and selected run-chart API contracts: passed with 12 selected tests.
+- Backend ruff for touched backend files: passed.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 34 tests.
+- Frontend `npm --prefix frontend run lint`: passed.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 186 tests, frontend Vitest 34 tests, frontend lint/typecheck, and frontend build. The first full-check attempt stopped on backend ruff format for `backend/app/services/analysis_runs.py`; after running ruff format, the full check passed.
+
+Remaining limitations:
+
+- Clustering and mixture signal definitions remain out of scope.
+- Control limits, Nelson/Western Electric control-chart rules, I-MR, Xbar charts, capability analysis, and Gage methods remain planned.
+- Inline chart rendering is not a chart export artifact.
+
+Next PR:
+
+- Define the next run-chart signal contract or implement the next small quality-control method only after its result contract and reference fixtures are ready.
+
+## Progress Update 49 - Run Chart Datetime Order Column Slice
+
+Completed in current working tree:
+
+- Extended `quality.run_chart` order-column support from numeric-only to numeric or datetime order columns.
+- Datetime order columns are sorted ascending with canonical row position as the deterministic tie-breaker.
+- Supported datetime parsing follows the dataset profile preflight slice: ISO 8601 plus common date/time formats such as `YYYY-MM-DD`, slash/dot dates, and minute/second timestamps.
+- Timezone-aware datetime values are normalized to UTC for ordering.
+- Mixed timezone-aware and timezone-naive order values are rejected with `run_chart_order_mixed_timezone_awareness` instead of imposing an ambiguous order.
+- Invalid datetime order values are excluded under complete-case handling and emit `run_chart_order_invalid_datetime_excluded`.
+- Result payload now records `order_source: datetime_order_column_ascending` and `order_timezone`, while chart payloads continue to expose only order rank plus canonical position and not raw datetime values.
+- Frontend order-column selection now includes datetime columns and labels datetime order results.
+- No control limits, fake signals, clustering/mixture signals, or new quality method were added.
+
+Changed files:
+
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/run_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_run_chart.py`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/RunChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/run_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_run_chart.py` and selected run-chart API contracts: passed with 17 selected tests.
+- Backend ruff for touched backend files: passed.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 34 tests.
+- Frontend `npm --prefix frontend run lint`: passed.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 191 tests, frontend Vitest 34 tests, frontend lint/typecheck, and frontend build. The first full-check attempt stopped on backend mypy for datetime duplicate-count typing in `backend/app/statistics/run_chart.py`; after widening the helper type and rerunning targeted mypy/pytest, the full check passed.
+
+Remaining limitations:
+
+- Clustering and mixture signal definitions remain out of scope.
+- Control limits, Nelson/Western Electric control-chart rules, I-MR, Xbar charts, capability analysis, and Gage methods remain planned.
+- Inline chart rendering is not a chart export artifact.
+
+Next PR:
+
+- Define the next run-chart signal contract or implement the next small quality-control method only after its result contract and reference fixtures are ready.
+
+## Progress Update 50 - Run Chart Exact Run-Count Signal Slice
+
+Completed in current working tree:
+
+- Added exact conditional run-count testing to `quality.run_chart` for clustering and mixture signals.
+- `run_chart_clustering` is emitted when the observed above/below median run count is in the low exact tail at `runs_test_alpha`.
+- `run_chart_mixture` is emitted when the observed above/below median run count is in the high exact tail at `runs_test_alpha`.
+- Default `runs_test_alpha` is `0.05`; API rejects non-finite values and values outside `0 < alpha < 0.5` with `invalid_run_chart_runs_test_alpha`.
+- Result payload now includes `runs_test` with observed run count, above/below/tie counts, expected run count, variance, low/high tail p-values, interpretation, skip reason, and max exact calculation limit.
+- Exact run-count testing excludes values tied to the median; if one side is absent or the non-tie count exceeds 5000, the result records `available=false` and does not create a fallback signal.
+- Frontend Run Chart UI now displays the exact runs-test policy, low/high tail p-values, and separate clustering/mixture signal counts.
+- No control limits, Nelson/Western Electric rules, normal approximation fallback, fake signals, or new quality method were added.
+
+Changed files:
+
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/run_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_run_chart.py`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/RunChartPanel.tsx`
+- `frontend/src/api.ts`
+- `docs/run_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_run_chart.py` and selected run-chart API contracts: passed with 22 selected tests.
+- Backend ruff for touched backend files: passed.
+- Backend mypy for `backend/app`: passed with 56 source files.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run lint`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 34 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 196 tests, frontend Vitest 34 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Exact clustering/mixture signals are capped at 5000 non-tie points; larger inputs record an explicit unavailable result rather than using an approximation.
+- Run Chart still does not compute control limits or control-chart out-of-control rules.
+- I-MR, Xbar charts, capability analysis, Gage methods, chart export artifacts, and paged chart payloads remain planned.
+
+Next PR:
+
+- Start the next small quality-control slice only after choosing between I-MR/control-chart rule foundation and capability-analysis contract work, with reference fixtures ready first.
+
+## Progress Update 51 - Individuals Chart First I-MR Slice
+
+Completed in current working tree:
+
+- Made `quality.individuals_chart` available as the first Gate D I-MR slice.
+- Added stdlib I-MR calculation for one numeric measurement column from canonical rows.
+- Uses canonical row order, complete-case exclusions, arithmetic mean center line, adjacent moving ranges of length 2, `MRbar / d2` sigma estimate, I chart 3-sigma limits, and MR chart `D3/D4` limits.
+- Emits `individuals_chart_i_beyond_3_sigma` and `individuals_chart_mr_beyond_ucl` for the first P0 single-point limit signals.
+- Rejects all-zero moving ranges with `individuals_chart_zero_moving_range` instead of fabricating limits.
+- Persists the result envelope and row snapshot through the existing analysis run path.
+- Added frontend `IndividualsChartPanel` with value selector, inline SVG I/MR charts, limit table, and signal table.
+- No fake limits/signals, full Nelson/Western Electric rules, subgroup charts, capability analysis, Gage R&R, or export artifacts were added.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/individuals_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_individuals_chart.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/IndividualsChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/individuals_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_individuals_chart.py` and selected individuals-chart API contracts: passed with 8 selected tests.
+- Backend ruff for touched backend files: passed.
+- Backend mypy for `backend/app`: passed with 57 source files.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run lint`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 35 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 203 tests, frontend Vitest 35 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Current execution order is canonical row order only in this slice; numeric/datetime order-column support is added in Progress Update 52.
+- In this slice, control rules only covered first single-point I/MR limit checks; same-side/trend rules are added in Progress Update 53.
+- Subgroup charts, capability analysis, Gage R&R, paged chart payloads, and chart export artifacts remain planned.
+
+Next PR:
+
+- Superseded by Progress Update 52 for order-column support; the next remaining path is a tested control-rule slice after its statistical contract and fixtures are ready.
+
+## Progress Update 52 - Individuals Chart Order Column Slice
+
+Completed in current working tree:
+
+- Extended `quality.individuals_chart` from canonical-only order to optional numeric or datetime order columns.
+- Numeric and datetime order columns sort ascending and use canonical row position as the deterministic tie-breaker.
+- Datetime order parsing follows the Run Chart/profile preflight policy: ISO 8601 plus common date/time formats, timezone-aware values normalized to UTC for comparison, and mixed timezone-aware/timezone-naive values rejected with `individuals_chart_order_mixed_timezone_awareness`.
+- Result payload now records order column metadata, `order_source`, `order_tie_breaker`, `order_timezone`, order missing/non-numeric exclusions, and duplicate order count without exposing raw order values.
+- I chart and MR chart payloads now include `x_axis` and use `order_rank` when an order column is selected.
+- Frontend `IndividualsChartPanel` now includes an order-column selector and displays the selected order policy in the result summary.
+- No Nelson/Western Electric rules, subgroup charts, capability analysis, Gage R&R, chart export artifact, or fake signal fallback was added.
+
+Changed files:
+
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/individuals_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_individuals_chart.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/IndividualsChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/individuals_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_individuals_chart.py` and selected individuals-chart API contracts: passed with 15 selected tests.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 211 tests, frontend Vitest 35 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- In this slice, control rules only covered first single-point I/MR limit checks; same-side/trend rules are added in Progress Update 53.
+- Subgroup charts, capability analysis, Gage R&R, paged chart payloads, and chart export artifacts remain planned.
+
+Next PR:
+
+- Implement the next tested control-rule slice for `quality.individuals_chart`, or start a narrow subgroup/capability contract only after reference fixtures are ready.
+
+## Progress Update 53 - Individuals Chart Centerline And Trend Rule Slice
+
+Completed in current working tree:
+
+- Added two explicit I chart rule signals to `quality.individuals_chart`.
+- `individuals_chart_i_same_side_centerline` is emitted for at least `same_side_min_length` consecutive I-chart points strictly above or strictly below the center line.
+- `individuals_chart_i_trend` is emitted for at least `trend_min_length` consecutive I-chart points that are strictly increasing or strictly decreasing.
+- Defaults are `same_side_min_length=9` and `trend_min_length=6`; API rejects invalid lengths with stable error codes.
+- Center-line ties break the same-side run; equal adjacent values break trend runs.
+- Range signals are attached to every chart point in the detected range through `signal_codes`.
+- Frontend signal tables now display point ranges plus direction/length for range-based signals.
+- No full Nelson/Western Electric rule set, subgroup charts, capability analysis, Gage R&R, chart export artifact, or fake signal fallback was added.
+
+Changed files:
+
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/individuals_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_individuals_chart.py`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/IndividualsChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/individuals_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_individuals_chart.py` and selected individuals-chart API contracts: passed with 19 selected tests.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 35 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 215 tests, frontend Vitest 35 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Full Nelson/Western Electric rule sets remain out of scope; only the explicitly listed same-side/trend I-chart rules are implemented.
+- Subgroup charts, capability analysis, Gage R&R, paged chart payloads, and chart export artifacts remain planned.
+
+Next PR:
+
+- Add the next explicitly specified control-rule slice or start a narrow subgroup/capability contract with reference fixtures.
+
+## Progress Update 54 - Individuals Chart Zone Rule Slice
+
+Completed in current working tree:
+
+- Added two explicit I chart zone rule signals to `quality.individuals_chart`.
+- `individuals_chart_i_two_of_three_beyond_2_sigma` is emitted for at least two of three consecutive I-chart points beyond 2 sigma on the same side of the center line.
+- `individuals_chart_i_four_of_five_beyond_1_sigma` is emitted for at least four of five consecutive I-chart points beyond 1 sigma on the same side of the center line.
+- Zone-rule signal payloads record window start/end, qualifying point positions, qualifying canonical positions, count, window length, direction, and sigma multiple.
+- Chart point `signal_codes` mark only qualifying threshold-crossing points inside the evaluated window, not every point in the window.
+- Frontend signal tables now display zone-rule direction, count/window length, and sigma multiple.
+- No full Nelson/Western Electric rule set, subgroup charts, capability analysis, Gage R&R, chart export artifact, or fake signal fallback was added.
+
+Changed files:
+
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/individuals_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_individuals_chart.py`
+- `frontend/src/App.test.tsx`
+- `frontend/src/IndividualsChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/individuals_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_individuals_chart.py` and selected individuals-chart API contracts: passed with 22 selected tests.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 35 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 218 tests, frontend Vitest 35 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Full Nelson/Western Electric rule sets remain out of scope; only explicitly listed I chart limit, same-side, trend, and zone rules are implemented.
+- Subgroup charts, capability analysis, Gage R&R, paged chart payloads, and chart export artifacts remain planned.
+
+Next PR:
+
+- Either add the next explicitly specified control-rule slice or start a narrow subgroup/capability contract with reference fixtures.
+
+## Progress Update 55 - Individuals Chart Extended Pattern Rule Slice
+
+Completed in current working tree:
+
+- Added three explicit I chart pattern signals to `quality.individuals_chart`.
+- `individuals_chart_i_alternating` is emitted for 14 consecutive I-chart points with strictly alternating adjacent directions.
+- `individuals_chart_i_fifteen_within_1_sigma` is emitted for 15 consecutive I-chart points within 1 sigma of the center line.
+- `individuals_chart_i_eight_outside_1_sigma` is emitted for 8 consecutive I-chart points outside 1 sigma of the center line on either side.
+- Pattern signal payloads record window start/end, point positions, canonical positions, count, window length, direction, and sigma multiple where applicable.
+- Chart point `signal_codes` mark every point in the alternating/within/outside qualifying pattern window.
+- Frontend signal tables accept and display `alternating`, `within`, and `outside` directions.
+- No new statistical method, full Nelson/Western Electric rule claim, subgroup chart, capability analysis, Gage R&R, chart export artifact, or fake signal fallback was added.
+
+Changed files:
+
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/individuals_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_individuals_chart.py`
+- `frontend/src/App.test.tsx`
+- `frontend/src/IndividualsChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/individuals_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_individuals_chart.py` and selected individuals-chart API contracts: passed with 26 selected tests.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 35 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 222 tests, frontend Vitest 35 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Full Nelson/Western Electric rule sets remain out of scope; only explicitly listed I chart limit, same-side, trend, alternating, and zone/pattern rules are implemented.
+- Subgroup charts, capability analysis, Gage R&R, paged chart payloads, and chart export artifacts remain planned.
+
+Next PR:
+
+- Start the next narrow Gate D quality method slice, likely subgroup chart contract/preflight, or add capability-analysis requirements only after reference fixtures are ready.
+
+## Progress Update 56 - Subgroup Chart Xbar-R/Xbar-S Fixed-Subgroup Slice
+
+Completed in current working tree:
+
+- Made `quality.subgroup_chart` available as the Gate D fixed-subgroup chart slice.
+- Added stdlib Xbar-R and Xbar-S calculation for one numeric measurement column and one subgroup ID column.
+- Uses canonical row first-seen subgroup order, complete-case exclusions, fixed subgroup size 2-10, standard `A2/D3/D4` Xbar-R constants, standard `A3/B3/B4` Xbar-S constants, Xbar center, R/S center, and Xbar/R/S control limits.
+- Emits `subgroup_chart_xbar_beyond_control_limits`, `subgroup_chart_r_beyond_control_limits`, and `subgroup_chart_s_beyond_control_limits` for first-slice single-point limit signals.
+- Rejects varying subgroup sizes with `subgroup_chart_varying_subgroup_size_unsupported`.
+- Rejects all-zero average subgroup range with `subgroup_chart_zero_average_range` instead of fabricating limits.
+- Rejects all-zero average subgroup sample standard deviation with `subgroup_chart_zero_average_stddev` instead of fabricating limits.
+- Added frontend `SubgroupChartPanel` with value/subgroup selectors, Xbar-R/Xbar-S selector, inline SVG Xbar/R/S charts, limit table, and signal table.
+- No varying-size limits, full Nelson/Western Electric rule set, capability analysis, Gage R&R, chart export artifact, or fake signal fallback was added.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/subgroup_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_subgroup_chart.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/SubgroupChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `docs/subgroup_chart_method_contract.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_subgroup_chart.py` and selected subgroup-chart API contracts: passed with 10 selected tests.
+- Frontend `npm --prefix frontend run typecheck`: passed.
+- Frontend `npm --prefix frontend run test -- --run`: passed with 36 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 232 tests, frontend Vitest 36 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Varying subgroup-size Xbar-R/Xbar-S limits remain out of scope.
+- Full Nelson/Western Electric rule sets, attribute charts, capability analysis, Gage R&R, paged chart payloads, and chart export artifacts remain planned.
+
+Next PR:
+
+- Add the next narrow Gate D quality slice: either varying-size subgroup chart contract work or the first capability-analysis preflight slice, only after reference fixtures are ready.
+
+## Progress Update 57 - Capability Normal First Slice
+
+Completed in current working tree:
+
+- Made `quality.capability` available as the first Gate D normal capability slice.
+- Added stdlib normal capability calculation for one numeric measurement column.
+- Requires LSL and/or USL, accepts optional target, and rejects invalid spec ordering or target outside spec.
+- Uses complete-case exclusions, overall sample standard deviation, and within sigma from canonical adjacent moving range `MRbar / d2` with `d2=1.128`.
+- Computes Cp/Cpk-style within side indices and Pp/Ppk-style overall side indices.
+- Handles one-sided specs by returning `null` for two-sided Cp/Pp while preserving the available side index.
+- Computes observed below/above/total nonconformance counts/proportions/ppm and expected normal-model nonconformance probability/ppm.
+- Returns histogram bins with fitted normal density for inline frontend rendering.
+- Persists the result envelope and row snapshot through the existing analysis run path.
+- Added frontend `CapabilityPanel` with measurement selector, LSL/USL/target inputs, inline SVG histogram/fitted normal/spec lines, capability index table, and observed/expected nonconformance table.
+- No Cpm, confidence intervals, non-normal capability, Box-Cox/Johnson transform, subgroup pooled sigma, automatic stability approval, chart export artifact, or fake index fallback was added.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/capability.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_capability.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/CapabilityPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/capability_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_capability.py` and selected capability API/catalog contracts: passed with 6 selected tests.
+- Backend ruff for touched backend files: passed.
+- Backend mypy for `backend/app`: passed with 59 source files.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Frontend `npm --prefix ./frontend run test -- --run`: passed with 37 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 237 tests, frontend Vitest 37 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Capability indices are point estimates only; confidence intervals remain out of scope.
+- Within sigma uses canonical row adjacent moving ranges, not subgroup-pooled sigma.
+- Normal-model expected nonconformance is provided with warnings; normality and stability are not automatically approved.
+- Non-normal capability, transformations, Cpm, capability report export, and chart export artifacts remain planned.
+
+Next PR:
+
+- Either add subgroup-pooled sigma and capability CI contract work, or continue Gate D with Gage R&R preflight only after reference fixtures are ready.
+
+## Progress Update 58 - Gage R&R Preflight Shell
+
+Completed in current working tree:
+
+- At that earlier preflight-only slice, `quality.gage_rr` was not executable through `POST /api/v1/analysis-runs`.
+- Added `POST /api/v1/quality/gage-rr/preflight` for balanced crossed design readiness only.
+- The preflight reads canonical rows for one numeric measurement column plus part, operator, and replicate columns.
+- The preflight returns schema hash, role-column metadata, usable/excluded row counts, part/operator/replicate counts, expected/observed part-operator cells, missing cells, min/max replicates per cell, replicate-count distribution, `ready_for_anova`, issues, and next step.
+- Raw part/operator/replicate labels are not returned.
+- No ANOVA table, variance components, %GRR, ndc, component plots, analysis run, result artifact, or fake statistical result was added.
+- Added frontend `GageRrPreflightPanel` for the planned method with role selectors, readiness summary, replicate distribution table, and issues list.
+
+Changed files:
+
+- `backend/app/api/v1/quality.py`
+- `backend/app/api/v1/schemas/analyses.py`
+- `backend/app/main.py`
+- `backend/app/services/gage_rr.py`
+- `backend/app/statistics/gage_rr_preflight.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_gage_rr_preflight.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/AnalysisWorkbench.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/GageRrPreflightPanel.tsx`
+- `frontend/src/api.ts`
+- `docs/gage_rr_preflight_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_gage_rr_preflight.py` and selected Gage/API/catalog contracts: passed with 7 selected tests.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Frontend `npm --prefix ./frontend run test -- --run`: passed with 38 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 242 tests, frontend Vitest 38 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- This earlier limitation is superseded by Progress Update 59, which adds the executable balanced crossed ANOVA slice.
+- Nested, unbalanced, expanded Gage R&R remain out of scope.
+- The preflight does not apply Workbench filter snapshots; it checks the full canonical dataset version.
+- Tolerance/process variation, negative variance component policy, pooling policy, ndc, plots, and report output remain planned.
+
+Next PR:
+
+- Implement balanced crossed ANOVA Gage R&R only after adding independent reference fixtures and explicit negative-component/pooling/reporting policy.
+
+## Progress Update 59 - Gage R&R Balanced Crossed ANOVA First Slice
+
+Completed in current working tree:
+
+- Made `quality.gage_rr` available in the analysis method registry.
+- Added executable balanced crossed ANOVA Gage R&R through `POST /api/v1/analysis-runs`.
+- Reused the canonical row reader and common row-snapshot artifact path before calculation.
+- Added strict role validation for measurement, part, operator, and replicate columns.
+- Added complete-case handling for missing measurement and identifier values.
+- Rejects unbalanced crossed designs, missing part-operator cells, duplicate replicate IDs per cell, too few parts/operators/replicates, zero total variation, and unsupported missing policies with stable errors.
+- Returns ANOVA table, raw/final variance components, repeatability, reproducibility, total Gage R&R, part-to-part, total variation, % contribution, % study variation, ndc, negative component policy, and interaction no-pooling policy.
+- Preserves negative raw variance estimates while clamping final variance to zero and recording a warning.
+- Redacts raw part/operator/replicate labels from preflight and result payloads.
+- Added frontend Gage R&R execution control and result tables to the existing preflight panel.
+- Added `docs/gage_rr_method_contract.md` and updated the six-module guide, preflight contract, and progress documents.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/services/gage_rr.py`
+- `backend/app/statistics/gage_rr.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_gage_rr.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/GageRrPreflightPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/gage_rr_method_contract.md`
+- `docs/gage_rr_preflight_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_gage_rr.py`, `test_gage_rr_preflight.py`, and selected Gage/API/catalog contracts: passed with 12 selected tests.
+- Backend ruff format check, ruff check, and mypy passed.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Frontend `npm --prefix ./frontend run test -- --run`: passed with 38 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 247 tests, frontend Vitest 38 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Only balanced crossed ANOVA is supported.
+- Nested, unbalanced, expanded Gage R&R remain out of scope.
+- Tolerance/process variation, pooling selection, component/interaction plots, chart artifacts, and report export remain planned.
+- The preflight endpoint checks the full canonical dataset version; execution can still use the common analysis filter snapshot and then validates balance on the included rows.
+
+Next PR:
+
+- Continue with Gage Run Chart shell/calculation or the next DOE/quality slice only after adding reference fixtures and UI/result contracts; do not add mock statistical output.
+
+## Progress Update 60 - Gage Run Chart Diagnostic First Slice
+
+Completed in current working tree:
+
+- Made `quality.gage_run_chart` available in the analysis method registry.
+- Added stdlib Gage Run Chart calculation for balanced crossed measurement-system data.
+- Reused canonical rows, the common filter snapshot, and `analysis_row_snapshot` provenance before calculation.
+- Added role validation for measurement, part, operator, replicate, and optional order columns.
+- Rejects unsupported missing policy, too few parts/operators/replicates, missing part/operator cells, unbalanced replicate sets, duplicate replicate IDs, invalid point limits, and no-usable-measurement cases with stable errors.
+- Returns diagnostic-only warning metadata, design counts, overall summary, per-part-index and per-operator-index summaries, capped indexed chart points, canonical row positions, and order-source metadata.
+- Redacts raw part/operator/replicate labels from the result payload.
+- Added frontend `GageRunChartPanel` with role selectors, optional order selector, warning display, inline SVG indexed chart, and part/operator summary tables.
+- Added `docs/gage_run_chart_method_contract.md` and updated progress and six-module planning docs.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/statistics/gage_run_chart.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_gage_run_chart.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/GageRunChartPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/gage_run_chart_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- Backend targeted pytest for `test_gage_run_chart.py` and selected Gage/API/catalog contracts: passed with 7 selected tests.
+- Backend ruff check for touched backend files: passed.
+- Backend mypy for `backend/app`: passed.
+- Frontend `npm --prefix ./frontend run lint`: passed.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Frontend `npm --prefix ./frontend run test -- --run`: passed with 39 tests.
+- Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 252 tests, frontend Vitest 39 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- This is a diagnostic chart payload, not variance component analysis.
+- Component/interaction plots, faceting, chart export artifacts, and paged chart result retrieval remain out of scope.
+- Datetime order columns are currently sorted by canonical string representation in the calculation slice.
+- The UI displays indexed part/operator/replicate context only; raw labels stay redacted.
+
+Next PR:
+
+- Either harden Gage Run Chart ordering/faceting/export contracts or begin the first narrow Gate D1 DOE design-asset slice after adding fixtures and explicit result contracts.
+
+## Progress Update 61 - Factorial DOE Design Asset First Slice
+
+Completed in current working tree:
+
+- Made `doe.factorial_design` available in the analysis method registry as a dedicated design-asset method with `requires_dataset=false`.
+- Added a pure stdlib 2-level full factorial generator with deterministic randomization seed, standard order, run order, replicate index, center points, optional block assignment, explicit factor/run-count limits, and canonical `design_sha256`.
+- Added SQLite schema v7 tables: `experiment_designs`, `experiment_design_versions`, and `experiment_runs`.
+- Added `POST /api/v1/doe-designs/factorial` and `GET /api/v1/doe-designs/{design_id}` for persisted design creation/readback.
+- Added checksum verification on stored DOE metadata before returning design payloads.
+- Added `analysis_method_uses_dedicated_api` guard so `POST /api/v1/analysis-runs` does not create a fake DOE analysis result.
+- Added frontend `FactorialDesignPanel` for factors, low/high/unit, replicates, center points, randomization seed, block count, and actual returned run-table preview.
+- Added `docs/factorial_design_method_contract.md` and updated the six-module guide/progress docs.
+
+Changed files:
+
+- `backend/app/analyses/registry.py`
+- `backend/app/api/v1/doe_designs.py`
+- `backend/app/api/v1/schemas/doe.py`
+- `backend/app/main.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/services/doe_designs.py`
+- `backend/app/statistics/factorial_design.py`
+- `backend/app/storage/metadata.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_factorial_design.py`
+- `backend/tests/unit/test_metadata_store.py`
+- `frontend/src/AnalysisShell.tsx`
+- `frontend/src/App.test.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/FactorialDesignPanel.tsx`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/factorial_design_method_contract.md`
+- `docs/progress_gate_b.md`
+- `docs/six_module_implementation_guide.md`
+- `to_do_list.md`
+
+Validation so far:
+
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL temporary Python 3.12 validation venv with `--ignore-requires-python` was used because Windows executables currently fail from this WSL session with `UtilAcceptVsock: accept4 failed 110`.
+- WSL temporary backend ruff format check for `backend`: passed, 103 files already formatted.
+- WSL temporary backend ruff check for `backend`: passed.
+- WSL temporary backend mypy for `backend/app`: passed with 68 source files.
+- WSL temporary backend targeted pytest for `test_factorial_design.py`, `test_metadata_store.py`, and `test_api_contracts.py`: passed with 95 tests.
+- WSL temporary backend full pytest for `backend/tests`: passed with 260 tests.
+- WSL `npm --prefix ./frontend run lint`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 40 Vitest tests.
+- WSL `npm --prefix ./frontend run build`: passed.
+- `git diff --check`: passed.
+
+Remaining limitations:
+
+- This slice creates and stores design assets only.
+- Response import is completed in Progress Update 62; effects, OLS/ANOVA, diagnostics, alias structure, DOE charts, design export, and report output remain out of scope.
+- Native Windows Python 3.10 `scripts/check.ps1` still needs to be rerun from Windows PowerShell because this WSL session cannot launch Windows executables.
+
+Next PR:
+
+- Add response-entry/import for the persisted DOE design without regenerating factor levels or run order, then add effects/OLS/ANOVA only after reference fixtures and result contracts are ready.
+
+## Progress Update 62 - Factorial DOE Response Entry Slice
+
+Completed in current working tree:
+
+- Added SQLite schema v8 table `experiment_run_responses` for numeric DOE response values keyed by immutable design version and run ID.
+- Added metadata helpers to replace one response series and update DOE design status in the same transaction without mutating `experiment_runs`.
+- Added `PUT /api/v1/doe-designs/{design_id}/responses` and `GET /api/v1/doe-designs/{design_id}/responses`.
+- Added service validation that response entry must include exactly one finite numeric value for every persisted run_order, with duplicate/missing/extra run_order rejected.
+- Kept `doe.factorial_design` blocked on the generic analysis-run API; no DOE effects, OLS, ANOVA, p-values, or fake result envelope was added.
+- Added minimal frontend response entry in `FactorialDesignPanel` with response name/unit and run-order keyed numeric inputs.
+- Updated `docs/factorial_design_method_contract.md`, `docs/six_module_implementation_guide.md`, `docs/progress_gate_b.md`, and `docs/storage.md`.
+
+Validation so far:
+
+- WSL temporary backend ruff format/check for touched backend files: passed.
+- WSL temporary backend targeted pytest for `test_metadata_store.py` and `test_api_contracts.py`: passed with 95 tests.
+- WSL temporary backend full ruff/mypy/pytest: passed with 263 backend tests.
+- WSL `npm --prefix ./frontend run lint`: passed.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 40 Vitest tests.
+- WSL `npm --prefix ./frontend run build`: passed.
+- Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend pytest 263 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Response entry currently supports one numeric response series at a time through the UI, although the API can store named series.
+- DOE effects, OLS/ANOVA, residual diagnostics, alias structure, DOE charts, design export, and report output remain out of scope.
+- No Windows validation gap remains for this slice.
+
+Next PR:
+
+- Add the DOE effects/OLS/ANOVA contract and reference fixtures first, then implement calculation only after the contract has stable result fields and failure cases.

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-SCHEMA_VERSION: Final = 6
+SCHEMA_VERSION: Final = 8
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -111,6 +111,57 @@ class RegressionModelRecord:
     schema_hash: str
     created_at: str
     app_version: str
+
+
+@dataclass(frozen=True)
+class ExperimentDesignRecord:
+    design_id: str
+    method_id: str
+    method_version: str
+    family: str
+    name: str
+    status: str
+    current_version: int
+    created_at: str
+    updated_at: str
+    app_version: str
+
+
+@dataclass(frozen=True)
+class ExperimentDesignVersionRecord:
+    design_version_id: str
+    design_id: str
+    version_number: int
+    factors_json: str
+    options_json: str
+    run_count: int
+    design_sha256: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class ExperimentRunRecord:
+    run_id: str
+    design_version_id: str
+    standard_order: int
+    run_order: int
+    replicate_index: int
+    center_point: bool
+    block_index: int | None
+    factor_levels_json: str
+    coded_levels_json: str
+
+
+@dataclass(frozen=True)
+class ExperimentRunResponseRecord:
+    response_id: str
+    design_version_id: str
+    run_id: str
+    response_name: str
+    response_value: float
+    unit: str | None
+    created_at: str
+    updated_at: str
 
 
 @dataclass(frozen=True)
@@ -322,6 +373,89 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
 
         CREATE INDEX IF NOT EXISTS idx_regression_models_dataset_version_id
         ON regression_models(dataset_version_id, created_at);
+        """,
+    ),
+    Migration(
+        version=7,
+        name="create_experiment_designs",
+        sql="""
+        CREATE TABLE IF NOT EXISTS experiment_designs (
+            design_id TEXT PRIMARY KEY,
+            method_id TEXT NOT NULL,
+            method_version TEXT NOT NULL,
+            family TEXT NOT NULL,
+            name TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (
+                status IN (
+                    'designed',
+                    'responses_in_progress',
+                    'completed',
+                    'analyzed'
+                )
+            ),
+            current_version INTEGER NOT NULL CHECK (current_version >= 1),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            app_version TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_experiment_designs_method
+        ON experiment_designs(method_id, method_version, created_at);
+
+        CREATE TABLE IF NOT EXISTS experiment_design_versions (
+            design_version_id TEXT PRIMARY KEY,
+            design_id TEXT NOT NULL
+                REFERENCES experiment_designs(design_id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL CHECK (version_number >= 1),
+            factors_json TEXT NOT NULL,
+            options_json TEXT NOT NULL,
+            run_count INTEGER NOT NULL CHECK (run_count >= 1),
+            design_sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(design_id, version_number)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_experiment_design_versions_design_id
+        ON experiment_design_versions(design_id, version_number);
+
+        CREATE TABLE IF NOT EXISTS experiment_runs (
+            run_id TEXT PRIMARY KEY,
+            design_version_id TEXT NOT NULL
+                REFERENCES experiment_design_versions(design_version_id) ON DELETE CASCADE,
+            standard_order INTEGER NOT NULL CHECK (standard_order >= 1),
+            run_order INTEGER NOT NULL CHECK (run_order >= 1),
+            replicate_index INTEGER NOT NULL CHECK (replicate_index >= 1),
+            center_point INTEGER NOT NULL CHECK (center_point IN (0, 1)),
+            block_index INTEGER CHECK (block_index IS NULL OR block_index >= 1),
+            factor_levels_json TEXT NOT NULL,
+            coded_levels_json TEXT NOT NULL,
+            UNIQUE(design_version_id, run_order)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_experiment_runs_design_version_id
+        ON experiment_runs(design_version_id, run_order);
+        """,
+    ),
+    Migration(
+        version=8,
+        name="create_experiment_run_responses",
+        sql="""
+        CREATE TABLE IF NOT EXISTS experiment_run_responses (
+            response_id TEXT PRIMARY KEY,
+            design_version_id TEXT NOT NULL
+                REFERENCES experiment_design_versions(design_version_id) ON DELETE CASCADE,
+            run_id TEXT NOT NULL
+                REFERENCES experiment_runs(run_id) ON DELETE CASCADE,
+            response_name TEXT NOT NULL,
+            response_value REAL NOT NULL,
+            unit TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(design_version_id, run_id, response_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_experiment_run_responses_version_name
+        ON experiment_run_responses(design_version_id, response_name, run_id);
         """,
     ),
 )
@@ -803,6 +937,271 @@ def insert_analysis_run_record_with_artifacts_and_regression_model(
             _insert_regression_model(connection, regression_model)
 
 
+def insert_experiment_design_records(
+    workspace_root: Path,
+    design: ExperimentDesignRecord,
+    version: ExperimentDesignVersionRecord,
+    runs: list[ExperimentRunRecord],
+) -> None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        with connection:
+            connection.execute(
+                """
+                INSERT INTO experiment_designs (
+                    design_id,
+                    method_id,
+                    method_version,
+                    family,
+                    name,
+                    status,
+                    current_version,
+                    created_at,
+                    updated_at,
+                    app_version
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    design.design_id,
+                    design.method_id,
+                    design.method_version,
+                    design.family,
+                    design.name,
+                    design.status,
+                    design.current_version,
+                    design.created_at,
+                    design.updated_at,
+                    design.app_version,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO experiment_design_versions (
+                    design_version_id,
+                    design_id,
+                    version_number,
+                    factors_json,
+                    options_json,
+                    run_count,
+                    design_sha256,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    version.design_version_id,
+                    version.design_id,
+                    version.version_number,
+                    version.factors_json,
+                    version.options_json,
+                    version.run_count,
+                    version.design_sha256,
+                    version.created_at,
+                ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO experiment_runs (
+                    run_id,
+                    design_version_id,
+                    standard_order,
+                    run_order,
+                    replicate_index,
+                    center_point,
+                    block_index,
+                    factor_levels_json,
+                    coded_levels_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                [
+                    (
+                        run.run_id,
+                        run.design_version_id,
+                        run.standard_order,
+                        run.run_order,
+                        run.replicate_index,
+                        1 if run.center_point else 0,
+                        run.block_index,
+                        run.factor_levels_json,
+                        run.coded_levels_json,
+                    )
+                    for run in runs
+                ],
+            )
+
+
+def get_experiment_design_record(
+    workspace_root: Path,
+    design_id: str,
+) -> ExperimentDesignRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                design_id,
+                method_id,
+                method_version,
+                family,
+                name,
+                status,
+                current_version,
+                created_at,
+                updated_at,
+                app_version
+            FROM experiment_designs
+            WHERE design_id = ?;
+            """,
+            (design_id,),
+        ).fetchone()
+
+    if row is None:
+        return None
+    return _experiment_design_from_row(row)
+
+
+def get_experiment_design_version_record(
+    workspace_root: Path,
+    design_id: str,
+    version_number: int,
+) -> ExperimentDesignVersionRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                design_version_id,
+                design_id,
+                version_number,
+                factors_json,
+                options_json,
+                run_count,
+                design_sha256,
+                created_at
+            FROM experiment_design_versions
+            WHERE design_id = ? AND version_number = ?;
+            """,
+            (design_id, version_number),
+        ).fetchone()
+
+    if row is None:
+        return None
+    return _experiment_design_version_from_row(row)
+
+
+def list_experiment_run_records(
+    workspace_root: Path,
+    design_version_id: str,
+) -> list[ExperimentRunRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                run_id,
+                design_version_id,
+                standard_order,
+                run_order,
+                replicate_index,
+                center_point,
+                block_index,
+                factor_levels_json,
+                coded_levels_json
+            FROM experiment_runs
+            WHERE design_version_id = ?
+            ORDER BY run_order;
+            """,
+            (design_version_id,),
+        ).fetchall()
+
+    return [_experiment_run_from_row(row) for row in rows]
+
+
+def replace_experiment_run_response_records(
+    workspace_root: Path,
+    *,
+    design_id: str,
+    design_version_id: str,
+    response_name: str,
+    records: list[ExperimentRunResponseRecord],
+    design_status: str,
+    updated_at: str,
+) -> None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        with connection:
+            connection.execute(
+                """
+                DELETE FROM experiment_run_responses
+                WHERE design_version_id = ? AND response_name = ?;
+                """,
+                (design_version_id, response_name),
+            )
+            connection.executemany(
+                """
+                INSERT INTO experiment_run_responses (
+                    response_id,
+                    design_version_id,
+                    run_id,
+                    response_name,
+                    response_value,
+                    unit,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                [
+                    (
+                        record.response_id,
+                        record.design_version_id,
+                        record.run_id,
+                        record.response_name,
+                        record.response_value,
+                        record.unit,
+                        record.created_at,
+                        record.updated_at,
+                    )
+                    for record in records
+                ],
+            )
+            connection.execute(
+                """
+                UPDATE experiment_designs
+                SET status = ?, updated_at = ?
+                WHERE design_id = ?;
+                """,
+                (design_status, updated_at, design_id),
+            )
+
+
+def list_experiment_run_response_records(
+    workspace_root: Path,
+    design_version_id: str,
+) -> list[ExperimentRunResponseRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                response.response_id,
+                response.design_version_id,
+                response.run_id,
+                response.response_name,
+                response.response_value,
+                response.unit,
+                response.created_at,
+                response.updated_at
+            FROM experiment_run_responses AS response
+            INNER JOIN experiment_runs AS run
+                ON run.run_id = response.run_id
+            WHERE response.design_version_id = ?
+            ORDER BY response.response_name, run.run_order;
+            """,
+            (design_version_id,),
+        ).fetchall()
+
+    return [_experiment_run_response_from_row(row) for row in rows]
+
+
 def get_analysis_run_record(
     workspace_root: Path,
     analysis_id: str,
@@ -1218,6 +1617,63 @@ def _regression_model_from_row(row: tuple[object, ...]) -> RegressionModelRecord
         schema_hash=str(row[7]),
         created_at=str(row[8]),
         app_version=str(row[9]),
+    )
+
+
+def _experiment_design_from_row(row: tuple[object, ...]) -> ExperimentDesignRecord:
+    return ExperimentDesignRecord(
+        design_id=str(row[0]),
+        method_id=str(row[1]),
+        method_version=str(row[2]),
+        family=str(row[3]),
+        name=str(row[4]),
+        status=str(row[5]),
+        current_version=_row_int(row[6]),
+        created_at=str(row[7]),
+        updated_at=str(row[8]),
+        app_version=str(row[9]),
+    )
+
+
+def _experiment_design_version_from_row(
+    row: tuple[object, ...],
+) -> ExperimentDesignVersionRecord:
+    return ExperimentDesignVersionRecord(
+        design_version_id=str(row[0]),
+        design_id=str(row[1]),
+        version_number=_row_int(row[2]),
+        factors_json=str(row[3]),
+        options_json=str(row[4]),
+        run_count=_row_int(row[5]),
+        design_sha256=str(row[6]),
+        created_at=str(row[7]),
+    )
+
+
+def _experiment_run_from_row(row: tuple[object, ...]) -> ExperimentRunRecord:
+    return ExperimentRunRecord(
+        run_id=str(row[0]),
+        design_version_id=str(row[1]),
+        standard_order=_row_int(row[2]),
+        run_order=_row_int(row[3]),
+        replicate_index=_row_int(row[4]),
+        center_point=_row_bool(row[5]),
+        block_index=None if row[6] is None else _row_int(row[6]),
+        factor_levels_json=str(row[7]),
+        coded_levels_json=str(row[8]),
+    )
+
+
+def _experiment_run_response_from_row(row: tuple[object, ...]) -> ExperimentRunResponseRecord:
+    return ExperimentRunResponseRecord(
+        response_id=str(row[0]),
+        design_version_id=str(row[1]),
+        run_id=str(row[2]),
+        response_name=str(row[3]),
+        response_value=_row_float(row[4]),
+        unit=None if row[5] is None else str(row[5]),
+        created_at=str(row[6]),
+        updated_at=str(row[7]),
     )
 
 

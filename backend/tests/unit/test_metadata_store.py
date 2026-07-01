@@ -10,11 +10,17 @@ from app.storage.metadata import (
     DatasetColumnRecord,
     DatasetRecord,
     DatasetVersionRecord,
+    ExperimentDesignRecord,
+    ExperimentDesignVersionRecord,
+    ExperimentRunRecord,
+    ExperimentRunResponseRecord,
     JobRecord,
     RegressionModelRecord,
     count_analysis_artifact_records,
     get_analysis_run_record,
     get_dataset_artifact_record,
+    get_experiment_design_record,
+    get_experiment_design_version_record,
     get_job_record,
     get_regression_model_record,
     initialize_metadata_store,
@@ -23,9 +29,13 @@ from app.storage.metadata import (
     insert_analysis_run_record_with_artifacts_and_regression_model,
     insert_dataset_record,
     insert_dataset_version_record,
+    insert_experiment_design_records,
     insert_job_record,
     list_dataset_artifact_records,
+    list_experiment_run_records,
+    list_experiment_run_response_records,
     metadata_db_path,
+    replace_experiment_run_response_records,
     update_analysis_run_status_record,
     update_job_cancellation_record,
     upsert_dataset_artifact_record,
@@ -54,6 +64,8 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
         (6, "create_regression_models"),
+        (7, "create_experiment_designs"),
+        (8, "create_experiment_run_responses"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -69,7 +81,7 @@ def test_initialize_metadata_store_is_idempotent(tmp_path) -> None:
     with sqlite3.connect(second.path) as connection:
         count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
 
-    assert count == 6
+    assert count == 8
 
 
 def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) -> None:
@@ -115,6 +127,8 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
         (6, "create_regression_models"),
+        (7, "create_experiment_designs"),
+        (8, "create_experiment_run_responses"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -188,6 +202,8 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
         (6, "create_regression_models"),
+        (7, "create_experiment_designs"),
+        (8, "create_experiment_run_responses"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -276,7 +292,10 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
                     'analysis_artifacts',
                     'jobs',
                     'dataset_artifacts',
-                    'regression_models'
+                    'regression_models',
+                    'experiment_designs',
+                    'experiment_design_versions',
+                    'experiment_runs'
                 );
                 """,
             ).fetchall()
@@ -290,6 +309,8 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
         (6, "create_regression_models"),
+        (7, "create_experiment_designs"),
+        (8, "create_experiment_run_responses"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -297,6 +318,9 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         "jobs",
         "dataset_artifacts",
         "regression_models",
+        "experiment_designs",
+        "experiment_design_versions",
+        "experiment_runs",
     }
     assert user_version == SCHEMA_VERSION
 
@@ -446,6 +470,8 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
         (6, "create_regression_models"),
+        (7, "create_experiment_designs"),
+        (8, "create_experiment_run_responses"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -492,8 +518,118 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (4, "create_analysis_runs_artifacts_and_jobs"),
         (5, "create_dataset_artifacts"),
         (6, "create_regression_models"),
+        (7, "create_experiment_designs"),
+        (8, "create_experiment_run_responses"),
     ]
     assert regression_models_table == ("regression_models",)
+    assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 6:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO schema_migrations (version, name)
+                VALUES (?, ?);
+                """,
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 6;")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT version, name FROM schema_migrations ORDER BY version",
+        ).fetchall()
+        table_names = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                AND name IN (
+                    'experiment_designs',
+                    'experiment_design_versions',
+                    'experiment_runs'
+                );
+                """,
+            ).fetchall()
+        }
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert rows == [
+        (1, "create_schema_migrations"),
+        (2, "create_datasets"),
+        (3, "create_dataset_versions_and_columns"),
+        (4, "create_analysis_runs_artifacts_and_jobs"),
+        (5, "create_dataset_artifacts"),
+        (6, "create_regression_models"),
+        (7, "create_experiment_designs"),
+        (8, "create_experiment_run_responses"),
+    ]
+    assert table_names == {
+        "experiment_designs",
+        "experiment_design_versions",
+        "experiment_runs",
+    }
+    assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 7:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO schema_migrations (version, name)
+                VALUES (?, ?);
+                """,
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 7;")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT version, name FROM schema_migrations ORDER BY version",
+        ).fetchall()
+        response_table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'experiment_run_responses';
+            """,
+        ).fetchone()
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert rows == [
+        (1, "create_schema_migrations"),
+        (2, "create_datasets"),
+        (3, "create_dataset_versions_and_columns"),
+        (4, "create_analysis_runs_artifacts_and_jobs"),
+        (5, "create_dataset_artifacts"),
+        (6, "create_regression_models"),
+        (7, "create_experiment_designs"),
+        (8, "create_experiment_run_responses"),
+    ]
+    assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION
 
 
@@ -765,6 +901,123 @@ def test_regression_model_record_round_trips_with_analysis_artifacts(tmp_path) -
     assert run.method_id == "regression.linear_model"
     assert count_analysis_artifact_records(workspace_root, analysis_id) == 2
     assert stored_model == regression_model
+
+
+def test_experiment_design_records_round_trip(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace"
+    initialize_metadata_store(workspace_root)
+    design_id = str(uuid4())
+    design_version_id = str(uuid4())
+    created_at = "2026-07-02T00:00:00.000Z"
+    factors_json = (
+        '[{"high":80.0,"low":60.0,"name":"Temperature","unit":"C"},'
+        '{"high":15.0,"low":5.0,"name":"Pressure","unit":"bar"}]'
+    )
+    options_json = (
+        '{"block_count":1,"center_points":0,"randomization_seed":123,'
+        '"randomize":false,"replicates":1}'
+    )
+
+    design = ExperimentDesignRecord(
+        design_id=design_id,
+        method_id="doe.factorial_design",
+        method_version="0.1.0",
+        family="two_level_full_factorial",
+        name="screening design",
+        status="designed",
+        current_version=1,
+        created_at=created_at,
+        updated_at=created_at,
+        app_version="0.1.0",
+    )
+    version = ExperimentDesignVersionRecord(
+        design_version_id=design_version_id,
+        design_id=design_id,
+        version_number=1,
+        factors_json=factors_json,
+        options_json=options_json,
+        run_count=2,
+        design_sha256="a" * 64,
+        created_at=created_at,
+    )
+    runs = [
+        ExperimentRunRecord(
+            run_id=str(uuid4()),
+            design_version_id=design_version_id,
+            standard_order=1,
+            run_order=1,
+            replicate_index=1,
+            center_point=False,
+            block_index=None,
+            factor_levels_json='{"Pressure":5.0,"Temperature":60.0}',
+            coded_levels_json='{"Pressure":-1,"Temperature":-1}',
+        ),
+        ExperimentRunRecord(
+            run_id=str(uuid4()),
+            design_version_id=design_version_id,
+            standard_order=2,
+            run_order=2,
+            replicate_index=1,
+            center_point=False,
+            block_index=None,
+            factor_levels_json='{"Pressure":5.0,"Temperature":80.0}',
+            coded_levels_json='{"Pressure":-1,"Temperature":1}',
+        ),
+    ]
+
+    insert_experiment_design_records(workspace_root, design=design, version=version, runs=runs)
+
+    stored_design = get_experiment_design_record(workspace_root, design_id)
+    stored_version = get_experiment_design_version_record(workspace_root, design_id, 1)
+    stored_runs = list_experiment_run_records(workspace_root, design_version_id)
+
+    assert stored_design == design
+    assert stored_version == version
+    assert stored_runs == runs
+
+    response_updated_at = "2026-07-02T00:05:00.000Z"
+    response_records = [
+        ExperimentRunResponseRecord(
+            response_id=str(uuid4()),
+            design_version_id=design_version_id,
+            run_id=runs[0].run_id,
+            response_name="Yield",
+            response_value=10.5,
+            unit="kg",
+            created_at=response_updated_at,
+            updated_at=response_updated_at,
+        ),
+        ExperimentRunResponseRecord(
+            response_id=str(uuid4()),
+            design_version_id=design_version_id,
+            run_id=runs[1].run_id,
+            response_name="Yield",
+            response_value=12.25,
+            unit="kg",
+            created_at=response_updated_at,
+            updated_at=response_updated_at,
+        ),
+    ]
+
+    replace_experiment_run_response_records(
+        workspace_root,
+        design_id=design_id,
+        design_version_id=design_version_id,
+        response_name="Yield",
+        records=response_records,
+        design_status="completed",
+        updated_at=response_updated_at,
+    )
+
+    stored_responses = list_experiment_run_response_records(workspace_root, design_version_id)
+    stored_design_after_response = get_experiment_design_record(workspace_root, design_id)
+    stored_runs_after_response = list_experiment_run_records(workspace_root, design_version_id)
+
+    assert stored_responses == response_records
+    assert stored_design_after_response is not None
+    assert stored_design_after_response.status == "completed"
+    assert stored_design_after_response.updated_at == response_updated_at
+    assert stored_runs_after_response == runs
 
 
 def test_analysis_run_artifact_and_job_records_round_trip(tmp_path) -> None:

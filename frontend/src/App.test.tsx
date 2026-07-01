@@ -8,16 +8,24 @@ import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { DatasetPreparationPage } from "./DatasetPreparationPage";
 import type {
   AnalysisMethodListResponse,
+  CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
   DatasetUploadResponse,
   DatasetVersionResponse,
+  FactorialDesignResponse,
+  GageRrPreflightResponse,
+  GageRrResult,
+  GageRunChartResult,
   GraphicalSummaryResult,
+  IndividualsChartResult,
   LinearModelResult,
   NormalityResult,
   PearsonCorrelationResult,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
+  RunChartResult,
+  SubgroupChartResult,
   XyCorrelationResult,
 } from "./api";
 import { AppChrome } from "./AppChrome";
@@ -173,6 +181,57 @@ describe("App", () => {
     expect(getAnalysisMethodGuidance("doe.factorial_design").optionChecklist).toContain(
       "랜덤 seed",
     );
+    expect(getAnalysisMethodGuidance("doe.factorial_design").plainLanguage).toContain(
+      "효과 추정",
+    );
+  });
+
+  it("renders the DOE factorial design creation panel and run order preview", () => {
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "doe",
+          label_ko: "실험 계획법",
+          label_en: "Design Of Experiments",
+          order: 6,
+        },
+      ],
+      methods: [
+        {
+          method_id: "doe.factorial_design",
+          method_version: "0.1.0",
+          module_id: "doe",
+          label_ko: "실험 계획 생성",
+          label_en: "Design of Experiments",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: false,
+          order: 1,
+          disabled_reason: null,
+        },
+      ],
+    };
+
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        factorialDesign={factorialDesignTestResponse()}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="doe"
+      />,
+    );
+
+    expect(html).toContain("실험 계획법");
+    expect(html).toContain("2-level full factorial 설계 생성");
+    expect(html).toContain("DOE 설계 생성");
+    expect(html).toContain("screening design");
+    expect(html).toContain("two_level_full_factorial");
+    expect(html).toContain("효과/ANOVA 미포함");
+    expect(html).toContain("Temperature");
+    expect(html).toContain("Pressure");
+    expect(html).toContain("design-hash-");
   });
 
   it("keeps planned Workbench methods non-executable", () => {
@@ -695,6 +754,396 @@ describe("App", () => {
     expect(html).toContain("Schema hash");
     expect(html).toContain("컬럼 ID");
     expect(html).toContain("학습범위 위");
+  });
+
+  it("renders the individuals chart execution panel for the first quality method", () => {
+    const columns = filterTestColumns();
+    const version: DatasetVersionResponse = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.individuals_chart",
+          method_version: "0.1.0",
+          module_id: "quality",
+          label_ko: "개별값 관리도",
+          label_en: "Variables Charts for Individuals",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 2,
+          disabled_reason: null,
+        },
+      ],
+    };
+
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        individualsChartResult={individualsChartTestResult()}
+        individualsChartOrderColumnId={null}
+        individualsChartOrderColumns={columns.slice(1, 2)}
+        individualsChartValueColumnId="column-a"
+        individualsChartValueColumns={[columns[0]]}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("품질 관리");
+    expect(html).toContain("개별값 관리도 실행");
+    expect(html).toContain("순서 컬럼");
+    expect(html).toContain("선택 안 함");
+    expect(html).toContain("canonical row order");
+    expect(html).toContain("MRbar / d2");
+    expect(html).toContain("same side");
+    expect(html).toContain("I chart");
+    expect(html).toContain("MR chart");
+    expect(html).toContain("individuals_chart_i_beyond_3_sigma");
+  });
+
+  it("renders the run chart execution panel for the first quality method", () => {
+    const columns = filterTestColumns();
+    const version: DatasetVersionResponse = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.run_chart",
+          method_version: "0.1.0",
+          module_id: "quality",
+          label_ko: "런 차트",
+          label_en: "Run Chart",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 4,
+          disabled_reason: null,
+        },
+      ],
+    };
+    const datetimeOrderColumn: DatasetColumnResponse = {
+      ...columns[1],
+      column_id: "column-when",
+      column_index: 1,
+      original_name: "when",
+      display_name: "When",
+      data_type: "datetime",
+      measurement_level: "datetime",
+      role: "time",
+    };
+
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        runChartOrderColumnId={null}
+        runChartOrderColumns={[datetimeOrderColumn]}
+        runChartResult={runChartTestResult()}
+        runChartValueColumnId="column-a"
+        runChartValueColumns={[columns[0]]}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("품질 관리");
+    expect(html).toContain("런 차트 실행");
+    expect(html).toContain("canonical row order");
+    expect(html).toContain("When");
+    expect(html).toContain("순서");
+    expect(html).toContain("Oscillation");
+    expect(html).toContain("관리한계");
+    expect(html).toContain("계산 안 함");
+    expect(html).toContain("Run count");
+    expect(html).toContain("A run chart");
+    expect(html).toContain("run_chart_trend");
+  });
+
+  it("renders the subgroup chart execution panel for the first quality method", () => {
+    const columns = filterTestColumns();
+    const version: DatasetVersionResponse = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.subgroup_chart",
+          method_version: "0.1.0",
+          module_id: "quality",
+          label_ko: "부분군 관리도",
+          label_en: "Variables Charts for Subgroups",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 3,
+          disabled_reason: null,
+        },
+      ],
+    };
+
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        subgroupChartResult={subgroupChartTestResult()}
+        subgroupChartSubgroupColumnId="column-b"
+        subgroupChartSubgroupColumns={[columns[1]]}
+        subgroupChartValueColumnId="column-a"
+        subgroupChartValueColumns={[columns[0]]}
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("부분군 관리도 실행");
+    expect(html).toContain("Xbar-R");
+    expect(html).toContain("Xbar-S");
+    expect(html).toContain("fixed subgroup size");
+    expect(html).toContain("Xbar chart");
+    expect(html).toContain("Rbar");
+    expect(html).toContain("subgroup_chart_xbar_beyond_control_limits");
+  });
+
+  it("renders the capability execution panel for the first quality method", () => {
+    const columns = filterTestColumns();
+    const version: DatasetVersionResponse = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.capability",
+          method_version: "0.1.0",
+          module_id: "quality",
+          label_ko: "공정능력 분석",
+          label_en: "Capability Analysis",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 5,
+          disabled_reason: null,
+        },
+      ],
+    };
+
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        capabilityLsl="8"
+        capabilityResult={capabilityTestResult()}
+        capabilityTarget="12"
+        capabilityUsl="16"
+        capabilityValueColumnId="column-a"
+        capabilityValueColumns={[columns[0]]}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("공정능력 분석 실행");
+    expect(html).toContain("Normal capability");
+    expect(html).toContain("MRbar/d2 within");
+    expect(html).toContain("Cp / Pp");
+    expect(html).toContain("Cpk / Ppk");
+    expect(html).toContain("capability histogram");
+    expect(html).toContain("Total ppm");
+  });
+
+  it("renders the Gage R&R execution panel with ANOVA and variance components", () => {
+    const columns = gageRrTestColumns();
+    const version: DatasetVersionResponse = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.gage_rr",
+          method_version: "0.1.0",
+          module_id: "quality",
+          label_ko: "Gage R&R",
+          label_en: "Gage R&R Study",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 6,
+          disabled_reason: null,
+        },
+      ],
+    };
+
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        gageRrMeasurementColumnId="measurement"
+        gageRrMeasurementColumns={[columns[0]]}
+        gageRrOperatorColumnId="operator"
+        gageRrOperatorColumns={[columns[2]]}
+        gageRrPartColumnId="part"
+        gageRrPartColumns={[columns[1]]}
+        gageRrPreflight={gageRrPreflightTestResponse()}
+        gageRrReplicateColumnId="replicate"
+        gageRrReplicateColumns={[columns[3]]}
+        gageRrResult={gageRrTestResult()}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("Gage R&amp;R 실행");
+    expect(html).toContain("사용 가능");
+    expect(html).toContain("balanced crossed ANOVA");
+    expect(html).toContain("Gage R&amp;R 계산");
+    expect(html).toContain("준비됨");
+    expect(html).toContain("Replicates per cell");
+    expect(html).toContain("Total Gage R&amp;R");
+    expect(html).toContain("Part-to-Part");
+    expect(html).toContain("%Contribution");
+    expect(html).toContain("NDC");
+  });
+
+  it("renders the Gage Run Chart execution panel with redacted indexed points", () => {
+    const columns = [
+      ...gageRrTestColumns(),
+      {
+        column_id: "run",
+        version_id: "version-1",
+        column_index: 4,
+        original_name: "run",
+        display_name: "Run",
+        data_type: "integer",
+        measurement_level: "ordinal",
+        role: "order",
+        unit: null,
+      } satisfies DatasetColumnResponse,
+    ];
+    const version: DatasetVersionResponse = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.gage_run_chart",
+          method_version: "0.1.0",
+          module_id: "quality",
+          label_ko: "Gage Run Chart",
+          label_en: "Gage Run Chart",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 7,
+          disabled_reason: null,
+        },
+      ],
+    };
+
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        gageRrMeasurementColumnId="measurement"
+        gageRrMeasurementColumns={[columns[0]]}
+        gageRrOperatorColumnId="operator"
+        gageRrOperatorColumns={[columns[2]]}
+        gageRrPartColumnId="part"
+        gageRrPartColumns={[columns[1]]}
+        gageRrReplicateColumnId="replicate"
+        gageRrReplicateColumns={[columns[3]]}
+        gageRunChartOrderColumnId="run"
+        gageRunChartOrderColumns={[columns[4]]}
+        gageRunChartResult={gageRunChartTestResult()}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("Gage Run Chart 실행");
+    expect(html).toContain("part/operator/replicate index only");
+    expect(html).toContain("Part facet");
+    expect(html).toContain("Operator color");
+    expect(html).toContain("Replicate symbol");
+    expect(html).toContain("부품 요약");
+    expect(html).toContain("측정자 요약");
+    expect(html).toContain("redacted");
+    expect(html).not.toContain("Part A");
+    expect(html).not.toContain("Operator 1");
   });
 
   it("renders the split AnalysisShell with filters and descriptive execution panel", () => {
@@ -2249,6 +2698,55 @@ function filterTestColumns(): DatasetColumnResponse[] {
   ];
 }
 
+function gageRrTestColumns(): DatasetColumnResponse[] {
+  return [
+    {
+      column_id: "measurement",
+      version_id: "version-1",
+      column_index: 0,
+      original_name: "measurement",
+      display_name: "Measurement",
+      data_type: "decimal",
+      measurement_level: "continuous",
+      role: "response",
+      unit: null,
+    },
+    {
+      column_id: "part",
+      version_id: "version-1",
+      column_index: 1,
+      original_name: "part",
+      display_name: "Part",
+      data_type: "text",
+      measurement_level: "id",
+      role: "part_id",
+      unit: null,
+    },
+    {
+      column_id: "operator",
+      version_id: "version-1",
+      column_index: 2,
+      original_name: "operator",
+      display_name: "Operator",
+      data_type: "text",
+      measurement_level: "nominal",
+      role: "operator_id",
+      unit: null,
+    },
+    {
+      column_id: "replicate",
+      version_id: "version-1",
+      column_index: 3,
+      original_name: "replicate",
+      display_name: "Replicate",
+      data_type: "integer",
+      measurement_level: "ordinal",
+      role: "replicate_id",
+      unit: null,
+    },
+  ];
+}
+
 function analysisTestCatalog(): AnalysisMethodListResponse {
   return {
     modules: [
@@ -2370,6 +2868,82 @@ function datasetVersionTestResponse(): DatasetVersionResponse {
       xlsx_sheet_name: null,
     },
     columns,
+  };
+}
+
+function factorialDesignTestResponse(): FactorialDesignResponse {
+  return {
+    design_id: "11111111-1111-4111-8111-111111111111",
+    design_version_id: "22222222-2222-4222-8222-222222222222",
+    version_number: 1,
+    method_id: "doe.factorial_design",
+    method_version: "0.1.0",
+    family: "two_level_full_factorial",
+    name: "screening design",
+    status: "designed",
+    created_at: "2026-07-02T00:00:00.000Z",
+    updated_at: "2026-07-02T00:00:00.000Z",
+    app_version: "0.1.0",
+    factors: [
+      { name: "Temperature", low: 60, high: 80, unit: "C" },
+      { name: "Pressure", low: 5, high: 15, unit: "bar" },
+    ],
+    options: {
+      replicates: 1,
+      center_points: 1,
+      randomize: false,
+      randomization_seed: 20260702,
+      block_count: 1,
+    },
+    run_count: 5,
+    design_sha256: "design-hash-012345678901234567890123456789012345678901234567890",
+    runs: [
+      {
+        standard_order: 1,
+        run_order: 1,
+        replicate_index: 1,
+        center_point: false,
+        block_index: null,
+        factor_levels: { Temperature: 60, Pressure: 5 },
+        coded_levels: { Temperature: -1, Pressure: -1 },
+      },
+      {
+        standard_order: 2,
+        run_order: 2,
+        replicate_index: 1,
+        center_point: false,
+        block_index: null,
+        factor_levels: { Temperature: 80, Pressure: 5 },
+        coded_levels: { Temperature: 1, Pressure: -1 },
+      },
+      {
+        standard_order: 3,
+        run_order: 3,
+        replicate_index: 1,
+        center_point: false,
+        block_index: null,
+        factor_levels: { Temperature: 60, Pressure: 15 },
+        coded_levels: { Temperature: -1, Pressure: 1 },
+      },
+      {
+        standard_order: 4,
+        run_order: 4,
+        replicate_index: 1,
+        center_point: false,
+        block_index: null,
+        factor_levels: { Temperature: 80, Pressure: 15 },
+        coded_levels: { Temperature: 1, Pressure: 1 },
+      },
+      {
+        standard_order: 5,
+        run_order: 5,
+        replicate_index: 1,
+        center_point: true,
+        block_index: null,
+        factor_levels: { Temperature: 70, Pressure: 10 },
+        coded_levels: { Temperature: 0, Pressure: 0 },
+      },
+    ],
   };
 }
 
@@ -2895,6 +3469,970 @@ function datasetPageTestProps(): ComponentProps<typeof DatasetPreparationPage> {
     onSaveSchema: () => undefined,
     onSchemaDraftChange: () => undefined,
     onUpload: () => undefined,
+  };
+}
+
+function individualsChartTestResult(): IndividualsChartResult {
+  return {
+    schema_version: 1,
+    summary_type: "individuals_chart",
+    method: "i_mr_chart",
+    order_source: "canonical_row_order",
+    order_tie_breaker: null,
+    order_timezone: null,
+    missing_policy: "complete_case",
+    sigma_estimator: {
+      method: "average_moving_range_d2",
+      moving_range_length: 2,
+      d2: 1.128,
+      mrbar: 0.88,
+      sigma: 0.7801418439716312,
+    },
+    control_rules: [
+      {
+        code: "individuals_chart_i_beyond_3_sigma",
+        chart: "individuals",
+        definition: "one_point_outside_3_sigma_limits",
+        enabled: true,
+      },
+      {
+        code: "individuals_chart_mr_beyond_ucl",
+        chart: "moving_range",
+        definition: "one_moving_range_above_upper_control_limit",
+        enabled: true,
+      },
+      {
+        code: "individuals_chart_i_same_side_centerline",
+        chart: "individuals",
+        definition: "consecutive_points_on_same_side_of_centerline",
+        minimum_length: 9,
+        enabled: true,
+      },
+      {
+        code: "individuals_chart_i_trend",
+        chart: "individuals",
+        definition: "strictly_monotonic_consecutive_points",
+        minimum_length: 6,
+        enabled: true,
+      },
+      {
+        code: "individuals_chart_i_alternating",
+        chart: "individuals",
+        definition: "strictly_alternating_consecutive_point_directions",
+        minimum_length: 14,
+        enabled: true,
+      },
+      {
+        code: "individuals_chart_i_two_of_three_beyond_2_sigma",
+        chart: "individuals",
+        definition: "two_of_three_consecutive_points_beyond_2_sigma_same_side",
+        window_size: 3,
+        minimum_count: 2,
+        sigma_multiple: 2,
+        enabled: true,
+      },
+      {
+        code: "individuals_chart_i_four_of_five_beyond_1_sigma",
+        chart: "individuals",
+        definition: "four_of_five_consecutive_points_beyond_1_sigma_same_side",
+        window_size: 5,
+        minimum_count: 4,
+        sigma_multiple: 1,
+        enabled: true,
+      },
+      {
+        code: "individuals_chart_i_fifteen_within_1_sigma",
+        chart: "individuals",
+        definition: "fifteen_consecutive_points_within_1_sigma_centerline",
+        minimum_length: 15,
+        sigma_multiple: 1,
+        enabled: true,
+      },
+      {
+        code: "individuals_chart_i_eight_outside_1_sigma",
+        chart: "individuals",
+        definition: "eight_consecutive_points_outside_1_sigma_centerline",
+        minimum_length: 8,
+        sigma_multiple: 1,
+        enabled: true,
+      },
+    ],
+    warnings: [
+      "individuals_chart_uses_canonical_row_order",
+      "individuals_chart_control_limits_estimated_from_moving_range",
+      "individuals_chart_process_stability_not_proven",
+      "individuals_chart_i_limit_signal_detected",
+      "individuals_chart_mr_limit_signal_detected",
+    ],
+    value: {
+      column_id: "column-a",
+      column_index: 0,
+      display_name: "A",
+      data_type: "decimal",
+      measurement_level: "continuous",
+      role: "response",
+      unit: null,
+    },
+    order: null,
+    n_total: 6,
+    n_used: 6,
+    n_excluded_missing_value: 0,
+    n_excluded_non_numeric_value: 0,
+    n_excluded_missing_order: 0,
+    n_excluded_non_numeric_order: 0,
+    order_duplicate_count: 0,
+    individuals_chart: {
+      x_axis: "canonical_row_position",
+      center_line: 10.733333333333333,
+      lcl: 8.39290780141844,
+      ucl: 13.07375886524823,
+      point_count: 6,
+      points_truncated: false,
+      point_limit: 1000,
+      points: [
+        { position: 1, canonical_position: 1, value: 10, signal_codes: [] },
+        { position: 2, canonical_position: 2, value: 10.1, signal_codes: [] },
+        { position: 3, canonical_position: 3, value: 10.2, signal_codes: [] },
+        { position: 4, canonical_position: 4, value: 10.1, signal_codes: [] },
+        { position: 5, canonical_position: 5, value: 10, signal_codes: [] },
+        {
+          position: 6,
+          canonical_position: 6,
+          value: 14,
+          signal_codes: ["individuals_chart_i_beyond_3_sigma"],
+        },
+      ],
+    },
+    moving_range_chart: {
+      x_axis: "canonical_row_position",
+      center_line: 0.88,
+      lcl: 0,
+      ucl: 2.87496,
+      d3: 0,
+      d4: 3.267,
+      point_count: 5,
+      points_truncated: false,
+      point_limit: 1000,
+      points: [
+        {
+          position: 2,
+          previous_position: 1,
+          canonical_position: 2,
+          previous_canonical_position: 1,
+          value: 0.1,
+          signal_codes: [],
+        },
+        {
+          position: 3,
+          previous_position: 2,
+          canonical_position: 3,
+          previous_canonical_position: 2,
+          value: 0.1,
+          signal_codes: [],
+        },
+        {
+          position: 4,
+          previous_position: 3,
+          canonical_position: 4,
+          previous_canonical_position: 3,
+          value: 0.1,
+          signal_codes: [],
+        },
+        {
+          position: 5,
+          previous_position: 4,
+          canonical_position: 5,
+          previous_canonical_position: 4,
+          value: 0.1,
+          signal_codes: [],
+        },
+        {
+          position: 6,
+          previous_position: 5,
+          canonical_position: 6,
+          previous_canonical_position: 5,
+          value: 4,
+          signal_codes: ["individuals_chart_mr_beyond_ucl"],
+        },
+      ],
+    },
+    signals: [
+      {
+        signal_id: "i-limit-1",
+        code: "individuals_chart_i_beyond_3_sigma",
+        severity: "warning",
+        chart: "individuals",
+        position: 6,
+        canonical_position: 6,
+        value: 14,
+        limit: "upper",
+        definition: "one_point_outside_3_sigma_limits",
+      },
+      {
+        signal_id: "mr-limit-1",
+        code: "individuals_chart_mr_beyond_ucl",
+        severity: "warning",
+        chart: "moving_range",
+        position: 6,
+        previous_position: 5,
+        canonical_position: 6,
+        previous_canonical_position: 5,
+        value: 4,
+        limit: "upper",
+        definition: "one_moving_range_above_upper_control_limit",
+      },
+    ],
+  };
+}
+
+function subgroupChartTestResult(): SubgroupChartResult {
+  return {
+    schema_version: 1,
+    summary_type: "subgroup_chart",
+    method: "xbar_r_chart",
+    chart_type: "xbar_r",
+    order_source: "canonical_subgroup_first_seen",
+    missing_policy: "complete_case",
+    subgroup_size: 2,
+    subgroup_count: 3,
+    constants: {
+      source: "standard_xbar_r_constants",
+      subgroup_size: 2,
+      a2: 1.88,
+      d3: 0,
+      d4: 3.267,
+    },
+    control_rules: [
+      {
+        code: "subgroup_chart_xbar_beyond_control_limits",
+        chart: "xbar",
+        definition: "one_subgroup_mean_outside_xbar_control_limits",
+        enabled: true,
+      },
+      {
+        code: "subgroup_chart_r_beyond_control_limits",
+        chart: "r",
+        definition: "one_subgroup_range_outside_r_control_limits",
+        enabled: true,
+      },
+    ],
+    warnings: [
+      "subgroup_chart_uses_canonical_subgroup_order",
+      "subgroup_chart_control_limits_estimated_from_xbar_r_constants",
+      "subgroup_chart_rational_subgroups_not_proven",
+      "subgroup_chart_xbar_limit_signal_detected",
+    ],
+    value: {
+      column_id: "column-a",
+      column_index: 0,
+      display_name: "A",
+      data_type: "decimal",
+      measurement_level: "continuous",
+      role: "response",
+      unit: null,
+    },
+    subgroup: {
+      column_id: "column-b",
+      column_index: 1,
+      display_name: "B",
+      data_type: "text",
+      measurement_level: "nominal",
+      role: "subgroup_id",
+      unit: null,
+    },
+    n_total: 6,
+    n_used: 6,
+    n_excluded_missing_value: 0,
+    n_excluded_non_numeric_value: 0,
+    n_excluded_missing_subgroup: 0,
+    subgroup_size_distribution: [{ size: 2, count: 3 }],
+    xbar_chart: {
+      x_axis: "subgroup_position",
+      center_line: 11,
+      lcl: 7.24,
+      ucl: 14.76,
+      point_count: 3,
+      points_truncated: false,
+      point_limit: 1000,
+      points: [
+        {
+          position: 1,
+          subgroup_label: "A",
+          first_canonical_position: 1,
+          last_canonical_position: 2,
+          n: 2,
+          value: 11,
+          mean: 11,
+          range: 2,
+          signal_codes: [],
+        },
+        {
+          position: 2,
+          subgroup_label: "B",
+          first_canonical_position: 3,
+          last_canonical_position: 4,
+          n: 2,
+          value: 12,
+          mean: 12,
+          range: 2,
+          signal_codes: [],
+        },
+        {
+          position: 3,
+          subgroup_label: "C",
+          first_canonical_position: 5,
+          last_canonical_position: 6,
+          n: 2,
+          value: 16,
+          mean: 16,
+          range: 2,
+          signal_codes: ["subgroup_chart_xbar_beyond_control_limits"],
+        },
+      ],
+    },
+    r_chart: {
+      x_axis: "subgroup_position",
+      center_line: 2,
+      lcl: 0,
+      ucl: 6.534,
+      point_count: 3,
+      points_truncated: false,
+      point_limit: 1000,
+      points: [
+        {
+          position: 1,
+          subgroup_label: "A",
+          first_canonical_position: 1,
+          last_canonical_position: 2,
+          n: 2,
+          value: 2,
+          mean: 11,
+          range: 2,
+          signal_codes: [],
+        },
+        {
+          position: 2,
+          subgroup_label: "B",
+          first_canonical_position: 3,
+          last_canonical_position: 4,
+          n: 2,
+          value: 2,
+          mean: 12,
+          range: 2,
+          signal_codes: [],
+        },
+        {
+          position: 3,
+          subgroup_label: "C",
+          first_canonical_position: 5,
+          last_canonical_position: 6,
+          n: 2,
+          value: 2,
+          mean: 16,
+          range: 2,
+          signal_codes: [],
+        },
+      ],
+    },
+    signals: [
+      {
+        signal_id: "xbar-limit-1",
+        code: "subgroup_chart_xbar_beyond_control_limits",
+        severity: "warning",
+        chart: "xbar",
+        position: 3,
+        subgroup_label: "C",
+        first_canonical_position: 5,
+        last_canonical_position: 6,
+        value: 16,
+        limit: "upper",
+        definition: "one_subgroup_mean_outside_xbar_control_limits",
+      },
+    ],
+  };
+}
+
+function capabilityTestResult(): CapabilityResult {
+  return {
+    schema_version: 1,
+    summary_type: "capability_analysis",
+    method: "normal_capability",
+    distribution: "normal",
+    missing_policy: "complete_case",
+    sigma_estimators: {
+      overall: "sample_standard_deviation_ddof_1",
+      within: "average_moving_range_d2",
+      moving_range_length: 2,
+      d2: 1.128,
+      mrbar: 1,
+    },
+    warnings: [
+      "capability_normal_model_assumed",
+      "capability_control_limits_not_spec_limits",
+      "capability_process_stability_not_proven",
+      "capability_measurement_system_not_verified",
+      "capability_within_sigma_uses_canonical_moving_range",
+      "capability_point_estimates_without_ci",
+    ],
+    value: {
+      column_id: "column-a",
+      column_index: 0,
+      display_name: "A",
+      data_type: "decimal",
+      measurement_level: "continuous",
+      role: "response",
+      unit: null,
+    },
+    spec_limits: {
+      lsl: 8,
+      usl: 16,
+      target: 12,
+    },
+    n_total: 5,
+    n_used: 5,
+    n_excluded_missing_value: 0,
+    n_excluded_non_numeric_value: 0,
+    sample: {
+      mean: 12,
+      std_overall: 1.5811388300841898,
+      std_within: 0.8865248226950355,
+      min: 10,
+      max: 14,
+    },
+    capability: {
+      within: {
+        two_sided: 1.504,
+        lower: 1.504,
+        upper: 1.504,
+        min_side: 1.504,
+      },
+      overall: {
+        two_sided: 0.8432740427115678,
+        lower: 0.8432740427115678,
+        upper: 0.8432740427115678,
+        min_side: 0.8432740427115678,
+      },
+    },
+    observed_nonconformance: {
+      below_lsl_count: 0,
+      above_usl_count: 0,
+      total_count: 0,
+      below_lsl_proportion: 0,
+      above_usl_proportion: 0,
+      total_proportion: 0,
+      total_ppm: 0,
+    },
+    expected_nonconformance_normal: {
+      below_lsl_probability: 0.005706018193000826,
+      above_usl_probability: 0.005706018193000826,
+      total_probability: 0.011412036386001651,
+      total_ppm: 11412.036386001651,
+    },
+    histogram: {
+      bin_count: 5,
+      bins: [
+        {
+          lower: 10,
+          upper: 10.8,
+          midpoint: 10.4,
+          count: 1,
+          proportion: 0.2,
+          density: 0.25,
+          normal_density: 0.1519,
+        },
+        {
+          lower: 10.8,
+          upper: 11.6,
+          midpoint: 11.2,
+          count: 1,
+          proportion: 0.2,
+          density: 0.25,
+          normal_density: 0.2218,
+        },
+        {
+          lower: 11.6,
+          upper: 12.4,
+          midpoint: 12,
+          count: 1,
+          proportion: 0.2,
+          density: 0.25,
+          normal_density: 0.2523,
+        },
+        {
+          lower: 12.4,
+          upper: 13.2,
+          midpoint: 12.8,
+          count: 1,
+          proportion: 0.2,
+          density: 0.25,
+          normal_density: 0.2218,
+        },
+        {
+          lower: 13.2,
+          upper: 14,
+          midpoint: 13.6,
+          count: 1,
+          proportion: 0.2,
+          density: 0.25,
+          normal_density: 0.1519,
+        },
+      ],
+    },
+  };
+}
+
+function gageRrPreflightTestResponse(): GageRrPreflightResponse {
+  return {
+    schema_version: 1,
+    method_id: "quality.gage_rr",
+    preflight_type: "balanced_crossed_anova",
+    dataset_version_id: "version-1",
+    schema_hash: "schema-hash",
+    row_count_total: 12,
+    summary_type: "gage_rr_preflight",
+    method: "balanced_crossed_anova_preflight",
+    missing_policy: "complete_case",
+    columns: {
+      measurement: {
+        column_id: "measurement",
+        column_index: 0,
+        display_name: "Measurement",
+        data_type: "decimal",
+        measurement_level: "continuous",
+        role: "response",
+        unit: null,
+      },
+      part: {
+        column_id: "part",
+        column_index: 1,
+        display_name: "Part",
+        data_type: "text",
+        measurement_level: "id",
+        role: "part_id",
+        unit: null,
+      },
+      operator: {
+        column_id: "operator",
+        column_index: 2,
+        display_name: "Operator",
+        data_type: "text",
+        measurement_level: "nominal",
+        role: "operator_id",
+        unit: null,
+      },
+      replicate: {
+        column_id: "replicate",
+        column_index: 3,
+        display_name: "Replicate",
+        data_type: "integer",
+        measurement_level: "ordinal",
+        role: "replicate_id",
+        unit: null,
+      },
+    },
+    sample: {
+      n_total: 12,
+      n_used: 12,
+      n_excluded: 0,
+      n_excluded_missing_measurement: 0,
+      n_excluded_non_numeric_measurement: 0,
+      n_excluded_missing_part: 0,
+      n_excluded_missing_operator: 0,
+      n_excluded_missing_replicate: 0,
+      n_excluded_missing_identifier: 0,
+    },
+    design: {
+      design_type: "crossed",
+      balanced: true,
+      ready_for_anova: true,
+      part_count: 3,
+      operator_count: 2,
+      replicate_level_count: 2,
+      expected_cell_count: 6,
+      observed_cell_count: 6,
+      missing_cell_count: 0,
+      min_replicates_per_cell: 2,
+      max_replicates_per_cell: 2,
+      expected_replicates_per_cell: 2,
+      replicate_set_consistent: true,
+      duplicate_replicates_per_cell: 0,
+      cell_replicate_count_distribution: [{ replicate_count: 2, cell_count: 6 }],
+    },
+    issues: [
+      {
+        code: "gage_rr_preflight_only_no_variance_components",
+        severity: "info",
+        message:
+          "이번 단계는 Gage R&R 계산 전 설계 사전점검만 수행하며 ANOVA table, 분산성분, %GRR, ndc를 계산하지 않습니다.",
+        count: null,
+      },
+    ],
+    next_step: "ready_for_balanced_crossed_anova",
+  };
+}
+
+function gageRrTestResult(): GageRrResult {
+  return {
+    schema_version: 1,
+    summary_type: "gage_rr",
+    method: "balanced_crossed_anova",
+    missing_policy: "complete_case",
+    columns: gageRrPreflightTestResponse().columns,
+    sample: {
+      n_total: 12,
+      n_used: 12,
+      n_excluded: 0,
+      n_excluded_missing_measurement: 0,
+      n_excluded_non_numeric_measurement: 0,
+      n_excluded_missing_part: 0,
+      n_excluded_missing_operator: 0,
+      n_excluded_missing_replicate: 0,
+      n_excluded_missing_identifier: 0,
+    },
+    design: {
+      design_type: "crossed",
+      balanced: true,
+      ready_for_anova: true,
+      part_count: 3,
+      operator_count: 2,
+      replicate_count: 2,
+      expected_cell_count: 6,
+      observed_cell_count: 6,
+      missing_cell_count: 0,
+      min_replicates_per_cell: 2,
+      max_replicates_per_cell: 2,
+      replicate_set_consistent: true,
+      duplicate_replicates_per_cell: 0,
+    },
+    anova_table: [
+      {
+        source: "part",
+        degrees_of_freedom: 2,
+        sum_of_squares: 800,
+        mean_square: 400,
+        f_statistic: 100,
+        p_value: 0.009900990099009901,
+        denominator: "part_operator",
+      },
+      {
+        source: "operator",
+        degrees_of_freedom: 1,
+        sum_of_squares: 48,
+        mean_square: 48,
+        f_statistic: 12,
+        p_value: 0.07417990022744853,
+        denominator: "part_operator",
+      },
+      {
+        source: "part_operator",
+        degrees_of_freedom: 2,
+        sum_of_squares: 8,
+        mean_square: 4,
+        f_statistic: 2,
+        p_value: 0.216,
+        denominator: "repeatability",
+      },
+      {
+        source: "repeatability",
+        degrees_of_freedom: 6,
+        sum_of_squares: 12,
+        mean_square: 2,
+        f_statistic: null,
+        p_value: null,
+        denominator: null,
+      },
+      {
+        source: "total",
+        degrees_of_freedom: 11,
+        sum_of_squares: 868,
+        mean_square: null,
+        f_statistic: null,
+        p_value: null,
+        denominator: null,
+      },
+    ],
+    variance_components: {
+      repeatability: gageRrComponent("repeatability", 2),
+      operator: gageRrComponent("operator", 44 / 6),
+      part_operator: gageRrComponent("part_operator", 1),
+      reproducibility: gageRrComponent("reproducibility", 25 / 3),
+      total_gage_rr: gageRrComponent("total_gage_rr", 31 / 3),
+      part_to_part: gageRrComponent("part_to_part", 99),
+      total_variation: gageRrComponent("total_variation", 328 / 3),
+      ndc: 4,
+      ndc_formula: "floor(1.41 * part_to_part_sd / total_gage_rr_sd)",
+      negative_component_policy: "raw_estimate_reported_final_variance_clamped_to_zero",
+      interaction_policy: "preserve_part_operator_interaction_no_pooling",
+    },
+    warnings: [
+      "gage_rr_balanced_crossed_anova_assumed",
+      "gage_rr_interaction_not_pooled",
+      "gage_rr_independence_not_proven",
+      "gage_rr_labels_redacted",
+    ],
+    notes: [
+      "interaction_not_pooled",
+      "negative_variance_components_clamped_to_zero",
+      "part_operator_replicate_labels_redacted",
+    ],
+  };
+}
+
+function gageRrComponent(component: string, variance: number) {
+  const standardDeviation = Math.sqrt(variance);
+  return {
+    component,
+    raw_variance: variance,
+    final_variance: variance,
+    standard_deviation: standardDeviation,
+    study_variation: 6 * standardDeviation,
+    clamped_to_zero: false,
+    percent_contribution: null,
+    percent_study_variation: null,
+  };
+}
+
+function gageRunChartTestResult(): GageRunChartResult {
+  return {
+    schema_version: 1,
+    summary_type: "gage_run_chart",
+    method: "measurement_system_run_chart",
+    missing_policy: "complete_case",
+    order_source: "numeric_order_column_ascending",
+    order_tie_breaker: "canonical_row_position",
+    columns: {
+      measurement: gageRrPreflightTestResponse().columns.measurement,
+      part: gageRrPreflightTestResponse().columns.part,
+      operator: gageRrPreflightTestResponse().columns.operator,
+      replicate: gageRrPreflightTestResponse().columns.replicate,
+      order: {
+        column_id: "run",
+        column_index: 4,
+        display_name: "Run",
+        data_type: "integer",
+        measurement_level: "ordinal",
+        role: "order",
+        unit: null,
+      },
+    },
+    sample: {
+      n_total: 12,
+      n_used: 12,
+      n_excluded_missing_measurement: 0,
+      n_excluded_non_numeric_measurement: 0,
+      n_excluded_missing_part: 0,
+      n_excluded_missing_operator: 0,
+      n_excluded_missing_replicate: 0,
+      n_excluded_missing_identifier: 0,
+      n_excluded_missing_order: 0,
+      n_excluded_invalid_order: 0,
+    },
+    design: {
+      ready_for_chart: true,
+      part_count: 3,
+      operator_count: 2,
+      replicate_count: 2,
+      expected_cell_count: 6,
+      observed_cell_count: 6,
+      missing_cell_count: 0,
+      min_replicates_per_cell: 2,
+      max_replicates_per_cell: 2,
+      replicate_set_consistent: true,
+      duplicate_replicates_per_cell: 0,
+    },
+    summary: {
+      mean: 23,
+      minimum: 9,
+      maximum: 35,
+      range: 26,
+    },
+    part_summaries: [
+      { index: 1, n: 4, mean: 13, minimum: 9, maximum: 17, range: 8 },
+      { index: 2, n: 4, mean: 23, minimum: 20, maximum: 26, range: 6 },
+      { index: 3, n: 4, mean: 33, minimum: 31, maximum: 35, range: 4 },
+    ],
+    operator_summaries: [
+      { index: 1, n: 6, mean: 21, minimum: 9, maximum: 33, range: 24 },
+      { index: 2, n: 6, mean: 25, minimum: 15, maximum: 35, range: 20 },
+    ],
+    chart: {
+      point_count: 12,
+      points_truncated: false,
+      point_limit: 1000,
+      x_axis: "run_order",
+      color_role: "operator_index",
+      facet_role: "part_index",
+      symbol_role: "replicate_index",
+      label_policy: "part_operator_replicate_labels_redacted",
+      points: [
+        {
+          position: 1,
+          canonical_position: 2,
+          value: 11,
+          part_index: 1,
+          operator_index: 1,
+          replicate_index: 2,
+        },
+        {
+          position: 2,
+          canonical_position: 1,
+          value: 9,
+          part_index: 1,
+          operator_index: 1,
+          replicate_index: 1,
+        },
+        {
+          position: 3,
+          canonical_position: 4,
+          value: 17,
+          part_index: 1,
+          operator_index: 2,
+          replicate_index: 2,
+        },
+      ],
+    },
+    warnings: [
+      "gage_run_chart_diagnostic_only",
+      "gage_run_chart_requires_gage_design",
+      "gage_run_chart_labels_redacted",
+      "gage_run_chart_uses_order_column",
+    ],
+    notes: [
+      "diagnostic_chart_not_variance_component_analysis",
+      "part_operator_replicate_labels_redacted",
+    ],
+  };
+}
+
+function runChartTestResult(): RunChartResult {
+  return {
+    schema_version: 1,
+    summary_type: "run_chart",
+    method: "median_run_chart",
+    center_method: "median",
+    order_source: "canonical_row_order",
+    order_tie_breaker: null,
+    order_timezone: null,
+    missing_policy: "complete_case",
+    tie_policy: "exclude_from_runs",
+    trend_rule: {
+      code: "run_chart_trend",
+      definition: "strictly_monotonic_consecutive_points",
+      minimum_length: 6,
+    },
+    oscillation_rule: {
+      code: "run_chart_oscillation",
+      definition: "strictly_alternating_consecutive_point_directions",
+      minimum_length: 14,
+    },
+    warnings: [
+      "run_chart_not_control_chart",
+      "run_chart_trend_rule_defined",
+      "run_chart_oscillation_rule_defined",
+      "run_chart_runs_test_defined",
+      "run_chart_trend_signal_detected",
+    ],
+    order: null,
+    value: {
+      column_id: "column-a",
+      column_index: 0,
+      display_name: "A",
+      data_type: "decimal",
+      measurement_level: "continuous",
+      role: "response",
+      unit: null,
+    },
+    n_total: 8,
+    n_used: 8,
+    n_excluded_missing_value: 0,
+    n_excluded_non_numeric_value: 0,
+    n_excluded_missing_order: 0,
+    n_excluded_non_numeric_order: 0,
+    order_duplicate_count: 0,
+    center_line: 3.5,
+    runs: {
+      run_count: 3,
+      n_above: 4,
+      n_below: 4,
+      n_ties: 0,
+      longest_run_length: 4,
+      run_count_definition: "consecutive above/below median groups excluding ties",
+    },
+    runs_test: {
+      method: "exact_conditional_run_count_distribution",
+      alpha: 0.05,
+      available: true,
+      observed_run_count: 3,
+      n_above: 4,
+      n_below: 4,
+      n_ties: 0,
+      n_non_tie: 8,
+      expected_run_count: 5,
+      variance: 1.7142857142857142,
+      p_value_low: 8 / 70,
+      p_value_high: 68 / 70,
+      interpretation: "not_extreme",
+      skipped_reason: null,
+      max_exact_n: 5000,
+    },
+    signals: [
+      {
+        signal_id: "trend-1",
+        code: "run_chart_trend",
+        severity: "warning",
+        direction: "increasing",
+        length: 6,
+        start_position: 1,
+        end_position: 6,
+        definition: "strictly_monotonic_consecutive_points",
+      },
+    ],
+    chart: {
+      x_axis: "canonical_row_position",
+      point_count: 8,
+      points_truncated: false,
+      point_limit: 1000,
+      points: [
+        {
+          position: 1,
+          value: 1,
+          relative_to_center: "below",
+          signal_codes: ["run_chart_trend"],
+        },
+        {
+          position: 2,
+          value: 2,
+          relative_to_center: "below",
+          signal_codes: ["run_chart_trend"],
+        },
+        {
+          position: 3,
+          value: 3,
+          relative_to_center: "below",
+          signal_codes: ["run_chart_trend"],
+        },
+        {
+          position: 4,
+          value: 4,
+          relative_to_center: "above",
+          signal_codes: ["run_chart_trend"],
+        },
+        {
+          position: 5,
+          value: 5,
+          relative_to_center: "above",
+          signal_codes: ["run_chart_trend"],
+        },
+        {
+          position: 6,
+          value: 6,
+          relative_to_center: "above",
+          signal_codes: ["run_chart_trend"],
+        },
+        { position: 7, value: 4, relative_to_center: "above", signal_codes: [] },
+        { position: 8, value: 3, relative_to_center: "below", signal_codes: [] },
+      ],
+    },
   };
 }
 

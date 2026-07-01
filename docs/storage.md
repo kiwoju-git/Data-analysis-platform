@@ -12,7 +12,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 
 ## Migration Skeleton
 
-- Current schema version: `6`.
+- Current schema version: `8`.
 - Migration history is recorded in `schema_migrations`.
 - `PRAGMA user_version` is set to the current schema version after migrations run.
 - Startup initializes the metadata store during FastAPI lifespan startup.
@@ -21,6 +21,8 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - Version `4` adds `analysis_runs`, `analysis_artifacts`, and `jobs`.
 - Version `5` adds `dataset_artifacts`.
 - Version `6` adds `regression_models` for safe app-created regression model manifest metadata.
+- Version `7` adds `experiment_designs`, `experiment_design_versions`, and `experiment_runs` for DOE design assets.
+- Version `8` adds `experiment_run_responses` for numeric DOE response entry keyed to immutable design versions and run IDs.
 - `dataset_versions.parsing_options_json` stores confirmed parsing options as canonical JSON.
 - `dataset_columns` preserves the original header text separately from the unique display name.
 - `analysis_runs.config_json` stores request/config snapshots and must include `schema_version`.
@@ -29,8 +31,10 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - `dataset_artifacts` stores relative workspace paths, hashes, media type, and byte size for app-owned dataset artifacts such as canonical rows, canonical manifests, and profile summaries.
 - `analysis_artifacts` stores relative workspace paths and hashes for app-owned artifacts, not raw result blobs. Available inline analysis methods record an `analysis_row_snapshot` artifact for the frozen row selection.
 - `regression_models` stores model ID, source analysis ID, dataset version ID, method ID/version, schema hash, relative manifest path, manifest SHA-256, app version, and creation time for app-created regression models only.
+- `experiment_designs`, `experiment_design_versions`, and `experiment_runs` store DOE design assets, generated run order, factor settings, and design checksum metadata.
+- `experiment_run_responses` stores numeric DOE response values by design version and run ID; response saving updates the design status in the same SQLite transaction without mutating run metadata.
 - `jobs` stores job state, progress, cancellation request state, and sanitized error codes.
-- Upgrade from schema versions `1`, `2`, `3`, `4`, and `5` to `6` is covered by unit tests.
+- Upgrade from schema versions `1`, `2`, `3`, `4`, `5`, `6`, and `7` to `8` is covered by unit tests.
 
 ## Canonical Parsed Artifact Decision
 
@@ -46,6 +50,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - `GET /api/v1/regression-models/{model_id}` validates the stored manifest relative path and SHA-256 before returning the manifest envelope. Missing, invalid, or checksum-mismatched manifests return explicit recovery errors and do not expose absolute filesystem paths.
 - `POST /api/v1/regression-models/{model_id}/prediction-preflight` validates the same manifest checksum, reads the source row snapshot when deriving numeric training ranges, and scans only the target dataset version's validated canonical rows. It returns schema/column/range/category issue counts without raw cell samples or absolute paths.
 - `POST /api/v1/regression-models/{model_id}/predictions` reuses that validation path, stores a `regression.predict` result envelope under the analysis workspace with SHA-256 metadata, caps inline prediction rows, and omits raw target cell values from the response and stored config.
+- `doe.factorial_design` design creation stores design/version/run metadata in SQLite and response entry stores only the app-entered numeric response series in `experiment_run_responses`; it does not create DOE effects, OLS, ANOVA, or fake analysis result artifacts.
 - The current filter expression engine supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions. Unsupported or invalid filters fail before row snapshot or result artifacts are written.
 - Parquet remains the preferred higher-performance canonical data format candidate for later slices.
 - Current Windows Python 3.10 environment check on 2026-06-24 found `pyarrow_available=False`.

@@ -1,10 +1,15 @@
 import { AnalysisFilterControls } from "./AnalysisFilterControls";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
+import { CapabilityPanel } from "./CapabilityPanel";
 import { ChiSquareAssociationPanel } from "./ChiSquareAssociationPanel";
 import { DescriptiveAnalysisPanel } from "./DescriptiveAnalysisPanel";
 import { EqualVariancesPanel } from "./EqualVariancesPanel";
 import { EquivalenceTostPanel } from "./EquivalenceTostPanel";
+import { FactorialDesignPanel } from "./FactorialDesignPanel";
+import { GageRrPreflightPanel } from "./GageRrPreflightPanel";
+import { GageRunChartPanel } from "./GageRunChartPanel";
 import { GraphicalSummaryPanel } from "./GraphicalSummaryPanel";
+import { IndividualsChartPanel } from "./IndividualsChartPanel";
 import { KruskalWallisPanel } from "./KruskalWallisPanel";
 import { LinearModelPanel } from "./LinearModelPanel";
 import { MannWhitneyPanel } from "./MannWhitneyPanel";
@@ -15,6 +20,8 @@ import { OneSampleTPanel } from "./OneSampleTPanel";
 import { OneSampleWilcoxonPanel } from "./OneSampleWilcoxonPanel";
 import { PairedTPanel } from "./PairedTPanel";
 import { PearsonCorrelationPanel } from "./PearsonCorrelationPanel";
+import { RunChartPanel } from "./RunChartPanel";
+import { SubgroupChartPanel } from "./SubgroupChartPanel";
 import { TwoSampleTPanel } from "./TwoSampleTPanel";
 import { TwoProportionPanel } from "./TwoProportionPanel";
 import { XyCorrelationPanel } from "./XyCorrelationPanel";
@@ -23,6 +30,7 @@ import type {
   AnalysisMethodListResponse,
   AnalysisModuleId,
   AnalysisResultEnvelope,
+  CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
   DatasetProfileResponse,
@@ -30,7 +38,15 @@ import type {
   DescriptiveStatisticsResult,
   EqualVariancesResult,
   EquivalenceTostResult,
+  FactorialDesignCreateRequest,
+  FactorialDesignResponse,
+  DoeDesignResponsesResponse,
+  DoeDesignResponsesUpsertRequest,
+  GageRrPreflightResponse,
+  GageRrResult,
+  GageRunChartResult,
   GraphicalSummaryResult,
+  IndividualsChartResult,
   KruskalWallisResult,
   LinearModelResult,
   MannWhitneyResult,
@@ -43,11 +59,15 @@ import type {
   PearsonCorrelationResult,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
+  RunChartResult,
+  SubgroupChartResult,
   TwoSampleTResult,
   TwoProportionResult,
   XyCorrelationResult,
 } from "./api";
 import type { AnalysisFilterDraft } from "./analysisFilters";
+
+type SubgroupChartType = "xbar_r" | "xbar_s";
 
 export interface AnalysisShellProps {
   analysisCatalog: AnalysisMethodListResponse | null;
@@ -57,6 +77,13 @@ export interface AnalysisShellProps {
   analysisFilterValidationMessage: string | null;
   analysisRunError: string | null;
   analysisResult: AnalysisResultEnvelope | null;
+  capabilityAnalysisResult?: AnalysisResultEnvelope | null;
+  capabilityLsl?: string;
+  capabilityResult?: CapabilityResult | null;
+  capabilityTarget?: string;
+  capabilityUsl?: string;
+  capabilityValueColumnId?: string | null;
+  capabilityValueColumns?: DatasetColumnResponse[];
   chiSquareAssociationAlpha: number;
   chiSquareAssociationAnalysisResult: AnalysisResultEnvelope | null;
   chiSquareAssociationColumnColumnId: string | null;
@@ -84,6 +111,34 @@ export interface AnalysisShellProps {
   graphicalSummaryAnalysisResult: AnalysisResultEnvelope | null;
   graphicalSummaryColumns: DatasetColumnResponse[];
   graphicalSummaryResult: GraphicalSummaryResult | null;
+  factorialDesign?: FactorialDesignResponse | null;
+  factorialDesignError?: string | null;
+  factorialDesignResponseError?: string | null;
+  factorialDesignResponses?: DoeDesignResponsesResponse | null;
+  gageRrMeasurementColumnId?: string | null;
+  gageRrMeasurementColumns?: DatasetColumnResponse[];
+  gageRrOperatorColumnId?: string | null;
+  gageRrOperatorColumns?: DatasetColumnResponse[];
+  gageRrPartColumnId?: string | null;
+  gageRrPartColumns?: DatasetColumnResponse[];
+  gageRrAnalysisResult?: AnalysisResultEnvelope | null;
+  gageRrPreflight?: GageRrPreflightResponse | null;
+  gageRrPreflightError?: string | null;
+  gageRrReplicateColumnId?: string | null;
+  gageRrReplicateColumns?: DatasetColumnResponse[];
+  gageRrResult?: GageRrResult | null;
+  gageRunChartAnalysisResult?: AnalysisResultEnvelope | null;
+  gageRunChartOrderColumnId?: string | null;
+  gageRunChartOrderColumns?: DatasetColumnResponse[];
+  gageRunChartResult?: GageRunChartResult | null;
+  individualsChartAnalysisResult?: AnalysisResultEnvelope | null;
+  individualsChartOrderColumnId?: string | null;
+  individualsChartOrderColumns?: DatasetColumnResponse[];
+  individualsChartResult?: IndividualsChartResult | null;
+  individualsChartValueColumnId?: string | null;
+  individualsChartValueColumns?: DatasetColumnResponse[];
+  isCreatingFactorialDesign?: boolean;
+  isSavingFactorialDesignResponses?: boolean;
   isRunningAnalysis: boolean;
   kruskalWallisAlpha: number;
   kruskalWallisAnalysisResult: AnalysisResultEnvelope | null;
@@ -174,6 +229,19 @@ export interface AnalysisShellProps {
   pearsonXColumns: DatasetColumnResponse[];
   pearsonYColumnId: string | null;
   pearsonYColumns: DatasetColumnResponse[];
+  runChartAnalysisResult?: AnalysisResultEnvelope | null;
+  runChartOrderColumnId?: string | null;
+  runChartOrderColumns?: DatasetColumnResponse[];
+  runChartResult?: RunChartResult | null;
+  runChartValueColumnId?: string | null;
+  runChartValueColumns?: DatasetColumnResponse[];
+  subgroupChartAnalysisResult?: AnalysisResultEnvelope | null;
+  subgroupChartResult?: SubgroupChartResult | null;
+  subgroupChartSubgroupColumnId?: string | null;
+  subgroupChartSubgroupColumns?: DatasetColumnResponse[];
+  subgroupChartType?: SubgroupChartType;
+  subgroupChartValueColumnId?: string | null;
+  subgroupChartValueColumns?: DatasetColumnResponse[];
   xyCorrelationAlpha?: number;
   xyCorrelationAnalysisResult?: AnalysisResultEnvelope | null;
   xyCorrelationConfidenceLevel?: number;
@@ -211,11 +279,29 @@ export interface AnalysisShellProps {
   twoProportionResult: TwoProportionResult | null;
   version: DatasetVersionResponse | null;
   onAnalysisFilterDraftsChange: (drafts: AnalysisFilterDraft[]) => void;
+  onCapabilityLslChange?: (value: string) => void;
+  onCapabilityTargetChange?: (value: string) => void;
+  onCapabilityUslChange?: (value: string) => void;
+  onCapabilityValueColumnChange?: (columnId: string) => void;
+  onGageRrMeasurementColumnChange?: (columnId: string) => void;
+  onGageRrOperatorColumnChange?: (columnId: string) => void;
+  onGageRrPartColumnChange?: (columnId: string) => void;
+  onGageRrReplicateColumnChange?: (columnId: string) => void;
+  onGageRunChartOrderColumnChange?: (columnId: string) => void;
+  onCreateFactorialDesign?: (request: FactorialDesignCreateRequest) => void;
+  onSaveFactorialDesignResponses?: (
+    designId: string,
+    request: DoeDesignResponsesUpsertRequest,
+  ) => void;
   onRunChiSquareAssociationAnalysis: () => void;
   onRunDescriptiveAnalysis: () => void;
   onRunEqualVariancesAnalysis: () => void;
   onRunEquivalenceTostAnalysis: () => void;
   onRunGraphicalSummaryAnalysis: () => void;
+  onRunGageRrAnalysis?: () => void;
+  onRunGageRrPreflight?: () => void;
+  onRunGageRunChartAnalysis?: () => void;
+  onRunIndividualsChartAnalysis?: () => void;
   onRunKruskalWallisAnalysis: () => void;
   onRunLinearModelAnalysis?: () => void;
   onRunLinearModelPrediction?: () => void;
@@ -228,6 +314,9 @@ export interface AnalysisShellProps {
   onRunOneSampleWilcoxonAnalysis: () => void;
   onRunPairedTAnalysis: () => void;
   onRunPearsonAnalysis: () => void;
+  onRunChartAnalysis?: () => void;
+  onRunCapabilityAnalysis?: () => void;
+  onRunSubgroupChartAnalysis?: () => void;
   onRunTwoSampleTAnalysis: () => void;
   onRunTwoProportionAnalysis: () => void;
   onRunXyCorrelationAnalysis?: () => void;
@@ -288,6 +377,13 @@ export interface AnalysisShellProps {
   onPearsonConfidenceLevelChange: (confidenceLevel: number) => void;
   onPearsonXColumnChange: (columnId: string) => void;
   onPearsonYColumnChange: (columnId: string) => void;
+  onRunChartOrderColumnChange?: (columnId: string) => void;
+  onRunChartValueColumnChange?: (columnId: string) => void;
+  onSubgroupChartSubgroupColumnChange?: (columnId: string) => void;
+  onSubgroupChartTypeChange?: (chartType: SubgroupChartType) => void;
+  onSubgroupChartValueColumnChange?: (columnId: string) => void;
+  onIndividualsChartOrderColumnChange?: (columnId: string | null) => void;
+  onIndividualsChartValueColumnChange?: (columnId: string) => void;
   onXyCorrelationAlphaChange?: (alpha: number) => void;
   onXyCorrelationConfidenceLevelChange?: (confidenceLevel: number) => void;
   onTwoSampleTAlphaChange: (alpha: number) => void;
@@ -319,6 +415,13 @@ export function AnalysisShell({
   analysisFilterValidationMessage,
   analysisRunError,
   analysisResult,
+  capabilityAnalysisResult = null,
+  capabilityLsl = "",
+  capabilityResult = null,
+  capabilityTarget = "",
+  capabilityUsl = "",
+  capabilityValueColumnId = null,
+  capabilityValueColumns = [],
   chiSquareAssociationAlpha,
   chiSquareAssociationAnalysisResult,
   chiSquareAssociationColumnColumnId,
@@ -346,6 +449,28 @@ export function AnalysisShell({
   graphicalSummaryAnalysisResult,
   graphicalSummaryColumns,
   graphicalSummaryResult,
+  factorialDesign = null,
+  factorialDesignError = null,
+  factorialDesignResponseError = null,
+  factorialDesignResponses = null,
+  gageRrMeasurementColumnId = null,
+  gageRrMeasurementColumns = [],
+  gageRrOperatorColumnId = null,
+  gageRrOperatorColumns = [],
+  gageRrPartColumnId = null,
+  gageRrPartColumns = [],
+  gageRrAnalysisResult = null,
+  gageRrPreflight = null,
+  gageRrPreflightError = null,
+  gageRrReplicateColumnId = null,
+  gageRrReplicateColumns = [],
+  gageRrResult = null,
+  gageRunChartAnalysisResult = null,
+  gageRunChartOrderColumnId = null,
+  gageRunChartOrderColumns = [],
+  gageRunChartResult = null,
+  isCreatingFactorialDesign = false,
+  isSavingFactorialDesignResponses = false,
   isRunningAnalysis,
   kruskalWallisAlpha,
   kruskalWallisAnalysisResult,
@@ -436,6 +561,25 @@ export function AnalysisShell({
   pearsonXColumns,
   pearsonYColumnId,
   pearsonYColumns,
+  individualsChartAnalysisResult = null,
+  individualsChartOrderColumnId = null,
+  individualsChartOrderColumns = [],
+  individualsChartResult = null,
+  individualsChartValueColumnId = null,
+  individualsChartValueColumns = [],
+  runChartAnalysisResult = null,
+  runChartOrderColumnId = null,
+  runChartOrderColumns = [],
+  runChartResult = null,
+  runChartValueColumnId = null,
+  runChartValueColumns = [],
+  subgroupChartAnalysisResult = null,
+  subgroupChartResult = null,
+  subgroupChartSubgroupColumnId = null,
+  subgroupChartSubgroupColumns = [],
+  subgroupChartType = "xbar_r",
+  subgroupChartValueColumnId = null,
+  subgroupChartValueColumns = [],
   xyCorrelationAlpha = 0.05,
   xyCorrelationAnalysisResult = null,
   xyCorrelationConfidenceLevel = 0.95,
@@ -473,11 +617,26 @@ export function AnalysisShell({
   twoProportionResult,
   version,
   onAnalysisFilterDraftsChange,
+  onCapabilityLslChange = () => undefined,
+  onCapabilityTargetChange = () => undefined,
+  onCapabilityUslChange = () => undefined,
+  onCapabilityValueColumnChange = () => undefined,
+  onGageRrMeasurementColumnChange = () => undefined,
+  onGageRrOperatorColumnChange = () => undefined,
+  onGageRrPartColumnChange = () => undefined,
+  onGageRrReplicateColumnChange = () => undefined,
+  onGageRunChartOrderColumnChange = () => undefined,
+  onCreateFactorialDesign = () => undefined,
+  onSaveFactorialDesignResponses = () => undefined,
   onRunChiSquareAssociationAnalysis,
   onRunDescriptiveAnalysis,
   onRunEqualVariancesAnalysis,
   onRunEquivalenceTostAnalysis,
   onRunGraphicalSummaryAnalysis,
+  onRunGageRrAnalysis = () => undefined,
+  onRunGageRrPreflight = () => undefined,
+  onRunGageRunChartAnalysis = () => undefined,
+  onRunIndividualsChartAnalysis = () => undefined,
   onRunKruskalWallisAnalysis,
   onRunLinearModelAnalysis = () => undefined,
   onRunLinearModelPrediction = () => undefined,
@@ -490,6 +649,9 @@ export function AnalysisShell({
   onRunOneSampleWilcoxonAnalysis,
   onRunPairedTAnalysis,
   onRunPearsonAnalysis,
+  onRunChartAnalysis = () => undefined,
+  onRunCapabilityAnalysis = () => undefined,
+  onRunSubgroupChartAnalysis = () => undefined,
   onRunTwoSampleTAnalysis,
   onRunTwoProportionAnalysis,
   onRunXyCorrelationAnalysis = () => undefined,
@@ -550,6 +712,13 @@ export function AnalysisShell({
   onPearsonConfidenceLevelChange,
   onPearsonXColumnChange,
   onPearsonYColumnChange,
+  onIndividualsChartOrderColumnChange = () => undefined,
+  onIndividualsChartValueColumnChange = () => undefined,
+  onRunChartOrderColumnChange = () => undefined,
+  onRunChartValueColumnChange = () => undefined,
+  onSubgroupChartSubgroupColumnChange = () => undefined,
+  onSubgroupChartTypeChange = () => undefined,
+  onSubgroupChartValueColumnChange = () => undefined,
   onXyCorrelationAlphaChange = () => undefined,
   onXyCorrelationConfidenceLevelChange = () => undefined,
   onTwoSampleTAlphaChange,
@@ -1083,6 +1252,173 @@ export function AnalysisShell({
                   onToggleInteractionTerm={onToggleLinearModelInteractionTerm}
                   onTogglePredictorColumn={onToggleLinearModelPredictorColumn}
                   onToggleQuadraticColumn={onToggleLinearModelQuadraticColumn}
+                />
+              );
+            }
+            if (method.method_id === "quality.run_chart" && method.availability === "available") {
+              return (
+                <RunChartPanel
+                  analysisResult={runChartAnalysisResult}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  methodId={method.method_id}
+                  orderColumnId={runChartOrderColumnId}
+                  orderColumns={runChartOrderColumns}
+                  result={runChartResult}
+                  valueColumnId={runChartValueColumnId}
+                  valueColumns={runChartValueColumns}
+                  version={version}
+                  onOrderColumnChange={onRunChartOrderColumnChange}
+                  onRun={onRunChartAnalysis}
+                  onValueColumnChange={onRunChartValueColumnChange}
+                />
+              );
+            }
+            if (
+              method.method_id === "quality.capability" &&
+              method.availability === "available"
+            ) {
+              return (
+                <CapabilityPanel
+                  analysisResult={capabilityAnalysisResult}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  lsl={capabilityLsl}
+                  methodId={method.method_id}
+                  result={capabilityResult}
+                  target={capabilityTarget}
+                  usl={capabilityUsl}
+                  valueColumnId={capabilityValueColumnId}
+                  valueColumns={capabilityValueColumns}
+                  version={version}
+                  onLslChange={onCapabilityLslChange}
+                  onRun={onRunCapabilityAnalysis}
+                  onTargetChange={onCapabilityTargetChange}
+                  onUslChange={onCapabilityUslChange}
+                  onValueColumnChange={onCapabilityValueColumnChange}
+                />
+              );
+            }
+            if (method.method_id === "quality.gage_rr") {
+              return (
+                <GageRrPreflightPanel
+                  analysisResult={gageRrAnalysisResult}
+                  error={gageRrPreflightError}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunning={isRunningAnalysis}
+                  measurementColumnId={gageRrMeasurementColumnId}
+                  measurementColumns={gageRrMeasurementColumns}
+                  methodId={method.method_id}
+                  operatorColumnId={gageRrOperatorColumnId}
+                  operatorColumns={gageRrOperatorColumns}
+                  partColumnId={gageRrPartColumnId}
+                  partColumns={gageRrPartColumns}
+                  preflight={gageRrPreflight}
+                  replicateColumnId={gageRrReplicateColumnId}
+                  replicateColumns={gageRrReplicateColumns}
+                  result={gageRrResult}
+                  version={version}
+                  onMeasurementColumnChange={onGageRrMeasurementColumnChange}
+                  onOperatorColumnChange={onGageRrOperatorColumnChange}
+                  onPartColumnChange={onGageRrPartColumnChange}
+                  onReplicateColumnChange={onGageRrReplicateColumnChange}
+                  onRunAnalysis={onRunGageRrAnalysis}
+                  onRunPreflight={onRunGageRrPreflight}
+                />
+              );
+            }
+            if (
+              method.method_id === "quality.gage_run_chart" &&
+              method.availability === "available"
+            ) {
+              return (
+                <GageRunChartPanel
+                  analysisResult={gageRunChartAnalysisResult}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  measurementColumnId={gageRrMeasurementColumnId}
+                  measurementColumns={gageRrMeasurementColumns}
+                  methodId={method.method_id}
+                  operatorColumnId={gageRrOperatorColumnId}
+                  operatorColumns={gageRrOperatorColumns}
+                  orderColumnId={gageRunChartOrderColumnId}
+                  orderColumns={gageRunChartOrderColumns}
+                  partColumnId={gageRrPartColumnId}
+                  partColumns={gageRrPartColumns}
+                  replicateColumnId={gageRrReplicateColumnId}
+                  replicateColumns={gageRrReplicateColumns}
+                  result={gageRunChartResult}
+                  version={version}
+                  onMeasurementColumnChange={onGageRrMeasurementColumnChange}
+                  onOperatorColumnChange={onGageRrOperatorColumnChange}
+                  onOrderColumnChange={onGageRunChartOrderColumnChange}
+                  onPartColumnChange={onGageRrPartColumnChange}
+                  onReplicateColumnChange={onGageRrReplicateColumnChange}
+                  onRun={onRunGageRunChartAnalysis}
+                />
+              );
+            }
+            if (
+              method.method_id === "quality.subgroup_chart" &&
+              method.availability === "available"
+            ) {
+              return (
+                <SubgroupChartPanel
+                  analysisResult={subgroupChartAnalysisResult}
+                  chartType={subgroupChartType}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  methodId={method.method_id}
+                  result={subgroupChartResult}
+                  subgroupColumnId={subgroupChartSubgroupColumnId}
+                  subgroupColumns={subgroupChartSubgroupColumns}
+                  valueColumnId={subgroupChartValueColumnId}
+                  valueColumns={subgroupChartValueColumns}
+                  version={version}
+                  onChartTypeChange={onSubgroupChartTypeChange}
+                  onRun={onRunSubgroupChartAnalysis}
+                  onSubgroupColumnChange={onSubgroupChartSubgroupColumnChange}
+                  onValueColumnChange={onSubgroupChartValueColumnChange}
+                />
+              );
+            }
+            if (
+              method.method_id === "quality.individuals_chart" &&
+              method.availability === "available"
+            ) {
+              return (
+                <IndividualsChartPanel
+                  analysisResult={individualsChartAnalysisResult}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  methodId={method.method_id}
+                  orderColumnId={individualsChartOrderColumnId}
+                  orderColumns={individualsChartOrderColumns}
+                  result={individualsChartResult}
+                  valueColumnId={individualsChartValueColumnId}
+                  valueColumns={individualsChartValueColumns}
+                  version={version}
+                  onOrderColumnChange={onIndividualsChartOrderColumnChange}
+                  onRun={onRunIndividualsChartAnalysis}
+                  onValueColumnChange={onIndividualsChartValueColumnChange}
+                />
+              );
+            }
+            if (
+              method.method_id === "doe.factorial_design" &&
+              method.availability === "available"
+            ) {
+              return (
+                <FactorialDesignPanel
+                  design={factorialDesign}
+                  error={factorialDesignError}
+                  isCreating={isCreatingFactorialDesign}
+                  isSavingResponses={isSavingFactorialDesignResponses}
+                  methodId={method.method_id}
+                  onCreateDesign={onCreateFactorialDesign}
+                  onSaveResponses={onSaveFactorialDesignResponses}
+                  responseError={factorialDesignResponseError}
+                  responses={factorialDesignResponses}
                 />
               );
             }

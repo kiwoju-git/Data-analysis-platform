@@ -3,20 +3,32 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
   createAnalysisRun,
+  createFactorialDesign,
   fetchAnalysisMethods,
+  fetchGageRrPreflight,
   fetchHealth,
   fetchRegressionPredictions,
   fetchRegressionPredictionPreflight,
+  saveFactorialDesignResponses,
   type AnalysisResultEnvelope,
   type AnalysisMethodListResponse,
   type AnalysisModuleId,
+  type CapabilityResult,
   type ChiSquareAssociationResult,
   type DatasetColumnResponse,
   type DescriptiveStatisticsResult,
   type EqualVariancesResult,
   type EquivalenceTostResult,
+  type FactorialDesignCreateRequest,
+  type FactorialDesignResponse,
+  type DoeDesignResponsesResponse,
+  type DoeDesignResponsesUpsertRequest,
+  type GageRrPreflightResponse,
+  type GageRrResult,
+  type GageRunChartResult,
   type GraphicalSummaryResult,
   type HealthResponse,
+  type IndividualsChartResult,
   type KruskalWallisResult,
   type LinearModelResult,
   type MannWhitneyResult,
@@ -29,6 +41,8 @@ import {
   type PearsonCorrelationResult,
   type RegressionPredictionPreflightResponse,
   type RegressionPredictionResponse,
+  type RunChartResult,
+  type SubgroupChartResult,
   type TwoSampleTResult,
   type TwoProportionResult,
   type XyCorrelationResult,
@@ -49,6 +63,8 @@ type HealthState =
   | { kind: "checking" }
   | { kind: "ready"; response: HealthResponse }
   | { kind: "error"; message: string };
+
+type SubgroupChartType = "xbar_r" | "xbar_s";
 
 const numericDataTypes = new Set<DatasetColumnResponse["data_type"]>(["integer", "decimal"]);
 
@@ -189,6 +205,47 @@ export default function App() {
   >([]);
   const [xyCorrelationAlpha, setXyCorrelationAlpha] = useState(0.05);
   const [xyCorrelationConfidenceLevel, setXyCorrelationConfidenceLevel] = useState(0.95);
+  const [selectedIndividualsChartValueColumnId, setSelectedIndividualsChartValueColumnId] =
+    useState<string | null>(null);
+  const [selectedIndividualsChartOrderColumnId, setSelectedIndividualsChartOrderColumnId] =
+    useState<string | null>(null);
+  const [selectedSubgroupChartValueColumnId, setSelectedSubgroupChartValueColumnId] = useState<
+    string | null
+  >(null);
+  const [selectedSubgroupChartSubgroupColumnId, setSelectedSubgroupChartSubgroupColumnId] =
+    useState<string | null>(null);
+  const [selectedSubgroupChartType, setSelectedSubgroupChartType] =
+    useState<SubgroupChartType>("xbar_r");
+  const [selectedRunChartValueColumnId, setSelectedRunChartValueColumnId] = useState<
+    string | null
+  >(null);
+  const [selectedRunChartOrderColumnId, setSelectedRunChartOrderColumnId] = useState<
+    string | null
+  >(null);
+  const [selectedCapabilityValueColumnId, setSelectedCapabilityValueColumnId] = useState<
+    string | null
+  >(null);
+  const [capabilityLsl, setCapabilityLsl] = useState("");
+  const [capabilityUsl, setCapabilityUsl] = useState("");
+  const [capabilityTarget, setCapabilityTarget] = useState("");
+  const [selectedGageRrMeasurementColumnId, setSelectedGageRrMeasurementColumnId] = useState<
+    string | null
+  >(null);
+  const [selectedGageRrPartColumnId, setSelectedGageRrPartColumnId] = useState<string | null>(
+    null,
+  );
+  const [selectedGageRrOperatorColumnId, setSelectedGageRrOperatorColumnId] = useState<
+    string | null
+  >(null);
+  const [selectedGageRrReplicateColumnId, setSelectedGageRrReplicateColumnId] = useState<
+    string | null
+  >(null);
+  const [selectedGageRunChartOrderColumnId, setSelectedGageRunChartOrderColumnId] =
+    useState<string | null>(null);
+  const [gageRrPreflight, setGageRrPreflight] = useState<GageRrPreflightResponse | null>(
+    null,
+  );
+  const [gageRrPreflightError, setGageRrPreflightError] = useState<string | null>(null);
   const [selectedLinearModelResponseColumnId, setSelectedLinearModelResponseColumnId] = useState<
     string | null
   >(null);
@@ -218,6 +275,15 @@ export default function App() {
   const [analysisFilterDrafts, setAnalysisFilterDrafts] = useState<AnalysisFilterDraft[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
+  const [factorialDesign, setFactorialDesign] = useState<FactorialDesignResponse | null>(null);
+  const [factorialDesignError, setFactorialDesignError] = useState<string | null>(null);
+  const [isCreatingFactorialDesign, setIsCreatingFactorialDesign] = useState(false);
+  const [factorialDesignResponses, setFactorialDesignResponses] =
+    useState<DoeDesignResponsesResponse | null>(null);
+  const [factorialDesignResponseError, setFactorialDesignResponseError] = useState<string | null>(
+    null,
+  );
+  const [isSavingFactorialDesignResponses, setIsSavingFactorialDesignResponses] = useState(false);
   const [appRoute, setAppRoute] = useState(currentAppRoute);
   const {
     datasetPageProps,
@@ -318,6 +384,21 @@ export default function App() {
       setSelectedPearsonYColumnId(defaultPearsonYColumnId(columns, pearsonXColumnId));
       setSelectedXyCorrelationXColumnIds(defaultXyCorrelationXColumnIds(columns));
       setSelectedXyCorrelationYColumnIds(defaultXyCorrelationYColumnIds(columns));
+      setSelectedIndividualsChartValueColumnId(defaultIndividualsChartValueColumnId(columns));
+      setSelectedIndividualsChartOrderColumnId(null);
+      const subgroupChartValueColumnId = defaultSubgroupChartValueColumnId(columns);
+      setSelectedSubgroupChartValueColumnId(subgroupChartValueColumnId);
+      setSelectedSubgroupChartSubgroupColumnId(
+        defaultSubgroupChartSubgroupColumnId(columns, subgroupChartValueColumnId),
+      );
+      setSelectedSubgroupChartType("xbar_r");
+      setSelectedRunChartValueColumnId(defaultRunChartValueColumnId(columns));
+      setSelectedRunChartOrderColumnId(null);
+      setSelectedCapabilityValueColumnId(defaultCapabilityValueColumnId(columns));
+      setCapabilityLsl("");
+      setCapabilityUsl("");
+      setCapabilityTarget("");
+      resetGageRrSelection(columns);
       const linearModelResponseColumnId = defaultLinearModelResponseColumnId(columns);
       setSelectedLinearModelResponseColumnId(linearModelResponseColumnId);
       setSelectedLinearModelPredictorColumnIds(
@@ -383,6 +464,21 @@ export default function App() {
       setSelectedPearsonYColumnId(defaultPearsonYColumnId(columns, pearsonXColumnId));
       setSelectedXyCorrelationXColumnIds(defaultXyCorrelationXColumnIds(columns));
       setSelectedXyCorrelationYColumnIds(defaultXyCorrelationYColumnIds(columns));
+      setSelectedIndividualsChartValueColumnId(defaultIndividualsChartValueColumnId(columns));
+      setSelectedIndividualsChartOrderColumnId(null);
+      const subgroupChartValueColumnId = defaultSubgroupChartValueColumnId(columns);
+      setSelectedSubgroupChartValueColumnId(subgroupChartValueColumnId);
+      setSelectedSubgroupChartSubgroupColumnId(
+        defaultSubgroupChartSubgroupColumnId(columns, subgroupChartValueColumnId),
+      );
+      setSelectedSubgroupChartType("xbar_r");
+      setSelectedRunChartValueColumnId(defaultRunChartValueColumnId(columns));
+      setSelectedRunChartOrderColumnId(null);
+      setSelectedCapabilityValueColumnId(defaultCapabilityValueColumnId(columns));
+      setCapabilityLsl("");
+      setCapabilityUsl("");
+      setCapabilityTarget("");
+      resetGageRrSelection(columns);
       const linearModelResponseColumnId = defaultLinearModelResponseColumnId(columns);
       setSelectedLinearModelResponseColumnId(linearModelResponseColumnId);
       setSelectedLinearModelPredictorColumnIds(
@@ -549,6 +645,92 @@ export default function App() {
     () => (version === null ? [] : selectableXyCorrelationColumns(version.columns)),
     [version],
   );
+  const individualsChartValueColumns = useMemo(
+    () => (version === null ? [] : selectableIndividualsChartValueColumns(version.columns)),
+    [version],
+  );
+  const individualsChartOrderColumns = useMemo(
+    () =>
+      version === null
+        ? []
+        : selectableIndividualsChartOrderColumns(
+            version.columns,
+            selectedIndividualsChartValueColumnId,
+          ),
+    [selectedIndividualsChartValueColumnId, version],
+  );
+  const subgroupChartValueColumns = useMemo(
+    () => (version === null ? [] : selectableSubgroupChartValueColumns(version.columns)),
+    [version],
+  );
+  const subgroupChartSubgroupColumns = useMemo(
+    () =>
+      version === null
+        ? []
+        : selectableSubgroupChartSubgroupColumns(
+            version.columns,
+            selectedSubgroupChartValueColumnId,
+          ),
+    [selectedSubgroupChartValueColumnId, version],
+  );
+  const runChartValueColumns = useMemo(
+    () => (version === null ? [] : selectableRunChartValueColumns(version.columns)),
+    [version],
+  );
+  const runChartOrderColumns = useMemo(
+    () =>
+      version === null
+        ? []
+        : selectableRunChartOrderColumns(version.columns, selectedRunChartValueColumnId),
+    [selectedRunChartValueColumnId, version],
+  );
+  const capabilityValueColumns = useMemo(
+    () => (version === null ? [] : selectableCapabilityValueColumns(version.columns)),
+    [version],
+  );
+  const gageRrMeasurementColumns = useMemo(
+    () => (version === null ? [] : selectableGageRrMeasurementColumns(version.columns)),
+    [version],
+  );
+  const gageRrPartColumns = useMemo(
+    () =>
+      version === null
+        ? []
+        : selectableGageRrIdentifierColumns(version.columns, selectedGageRrMeasurementColumnId),
+    [selectedGageRrMeasurementColumnId, version],
+  );
+  const gageRrOperatorColumns = useMemo(
+    () =>
+      version === null
+        ? []
+        : selectableGageRrIdentifierColumns(version.columns, selectedGageRrMeasurementColumnId),
+    [selectedGageRrMeasurementColumnId, version],
+  );
+  const gageRrReplicateColumns = useMemo(
+    () =>
+      version === null
+        ? []
+        : selectableGageRrIdentifierColumns(version.columns, selectedGageRrMeasurementColumnId),
+    [selectedGageRrMeasurementColumnId, version],
+  );
+  const gageRunChartOrderColumns = useMemo(
+    () =>
+      version === null
+        ? []
+        : selectableGageRunChartOrderColumns(version.columns, {
+            measurementColumnId: selectedGageRrMeasurementColumnId,
+            partColumnId: selectedGageRrPartColumnId,
+            operatorColumnId: selectedGageRrOperatorColumnId,
+            replicateColumnId: selectedGageRrReplicateColumnId,
+          }),
+    [
+      selectedGageRrMeasurementColumnId,
+      selectedGageRrOperatorColumnId,
+      selectedGageRrPartColumnId,
+      selectedGageRrReplicateColumnId,
+      version,
+    ],
+  );
   const linearModelResponseColumns = useMemo(
     () => (version === null ? [] : selectableLinearModelResponseColumns(version.columns)),
     [version],
@@ -594,6 +776,18 @@ export default function App() {
     analysisResult?.method_id === "regression.xy_correlation" ? analysisResult : null;
   const linearModelAnalysisResult =
     analysisResult?.method_id === "regression.linear_model" ? analysisResult : null;
+  const individualsChartAnalysisResult =
+    analysisResult?.method_id === "quality.individuals_chart" ? analysisResult : null;
+  const subgroupChartAnalysisResult =
+    analysisResult?.method_id === "quality.subgroup_chart" ? analysisResult : null;
+  const runChartAnalysisResult =
+    analysisResult?.method_id === "quality.run_chart" ? analysisResult : null;
+  const capabilityAnalysisResult =
+    analysisResult?.method_id === "quality.capability" ? analysisResult : null;
+  const gageRrAnalysisResult =
+    analysisResult?.method_id === "quality.gage_rr" ? analysisResult : null;
+  const gageRunChartAnalysisResult =
+    analysisResult?.method_id === "quality.gage_run_chart" ? analysisResult : null;
   const descriptiveResult = isDescriptiveStatisticsResult(descriptiveAnalysisResult?.result)
     ? descriptiveAnalysisResult.result
     : null;
@@ -656,6 +850,24 @@ export default function App() {
   const linearModelResult = isLinearModelResult(linearModelAnalysisResult?.result)
     ? linearModelAnalysisResult.result
     : null;
+  const individualsChartResult = isIndividualsChartResult(individualsChartAnalysisResult?.result)
+    ? individualsChartAnalysisResult.result
+    : null;
+  const subgroupChartResult = isSubgroupChartResult(subgroupChartAnalysisResult?.result)
+    ? subgroupChartAnalysisResult.result
+    : null;
+  const runChartResult = isRunChartResult(runChartAnalysisResult?.result)
+    ? runChartAnalysisResult.result
+    : null;
+  const capabilityResult = isCapabilityResult(capabilityAnalysisResult?.result)
+    ? capabilityAnalysisResult.result
+    : null;
+  const gageRrResult = isGageRrResult(gageRrAnalysisResult?.result)
+    ? gageRrAnalysisResult.result
+    : null;
+  const gageRunChartResult = isGageRunChartResult(gageRunChartAnalysisResult?.result)
+    ? gageRunChartAnalysisResult.result
+    : null;
   const activeLinearModelModelId = linearModelResult?.model_manifest?.model_id ?? null;
 
   useEffect(() => {
@@ -680,6 +892,46 @@ export default function App() {
   function handleAnalysisFilterDraftsChange(drafts: AnalysisFilterDraft[]) {
     setAnalysisFilterDrafts(drafts);
     setAnalysisResult(null);
+  }
+
+  async function handleCreateFactorialDesign(request: FactorialDesignCreateRequest) {
+    setIsCreatingFactorialDesign(true);
+    setFactorialDesignError(null);
+    try {
+      const response = await createFactorialDesign(request);
+      setFactorialDesign(response);
+      setFactorialDesignResponses(null);
+      setFactorialDesignResponseError(null);
+    } catch (error) {
+      setFactorialDesign(null);
+      setFactorialDesignResponses(null);
+      setFactorialDesignError(error instanceof Error ? error.message : "doe_factorial_failed");
+    } finally {
+      setIsCreatingFactorialDesign(false);
+    }
+  }
+
+  async function handleSaveFactorialDesignResponses(
+    designId: string,
+    request: DoeDesignResponsesUpsertRequest,
+  ) {
+    setIsSavingFactorialDesignResponses(true);
+    setFactorialDesignResponseError(null);
+    try {
+      const response = await saveFactorialDesignResponses(designId, request);
+      setFactorialDesignResponses(response);
+      setFactorialDesign((current) =>
+        current !== null && current.design_id === response.design_id
+          ? { ...current, status: response.status }
+          : current,
+      );
+    } catch (error) {
+      setFactorialDesignResponseError(
+        error instanceof Error ? error.message : "doe_factorial_responses_failed",
+      );
+    } finally {
+      setIsSavingFactorialDesignResponses(false);
+    }
   }
 
   function handleToggleDescriptiveColumn(columnId: string, checked: boolean) {
@@ -1110,6 +1362,140 @@ export default function App() {
 
   function handleXyCorrelationConfidenceLevelChange(confidenceLevel: number) {
     setXyCorrelationConfidenceLevel(confidenceLevel);
+    setAnalysisResult(null);
+  }
+
+  function handleIndividualsChartValueColumnChange(columnId: string) {
+    const nextColumnId = columnId.length > 0 ? columnId : null;
+    setSelectedIndividualsChartValueColumnId(nextColumnId);
+    setSelectedIndividualsChartOrderColumnId((current) =>
+      current === nextColumnId ? null : current,
+    );
+    setAnalysisResult(null);
+  }
+
+  function handleIndividualsChartOrderColumnChange(columnId: string | null) {
+    setSelectedIndividualsChartOrderColumnId(columnId);
+    setAnalysisResult(null);
+  }
+
+  function handleSubgroupChartValueColumnChange(columnId: string) {
+    const nextColumnId = columnId.length > 0 ? columnId : null;
+    setSelectedSubgroupChartValueColumnId(nextColumnId);
+    setSelectedSubgroupChartSubgroupColumnId((current) =>
+      current === nextColumnId ? null : current,
+    );
+    setAnalysisResult(null);
+  }
+
+  function handleSubgroupChartSubgroupColumnChange(columnId: string) {
+    setSelectedSubgroupChartSubgroupColumnId(columnId.length > 0 ? columnId : null);
+    setAnalysisResult(null);
+  }
+
+  function handleSubgroupChartTypeChange(chartType: SubgroupChartType) {
+    setSelectedSubgroupChartType(chartType);
+    setAnalysisResult(null);
+  }
+
+  function handleRunChartValueColumnChange(columnId: string) {
+    const nextColumnId = columnId.length > 0 ? columnId : null;
+    setSelectedRunChartValueColumnId(nextColumnId);
+    setSelectedRunChartOrderColumnId((current) => (current === nextColumnId ? null : current));
+    setAnalysisResult(null);
+  }
+
+  function handleRunChartOrderColumnChange(columnId: string) {
+    setSelectedRunChartOrderColumnId(columnId.length > 0 ? columnId : null);
+    setAnalysisResult(null);
+  }
+
+  function handleCapabilityValueColumnChange(columnId: string) {
+    setSelectedCapabilityValueColumnId(columnId.length > 0 ? columnId : null);
+    setAnalysisResult(null);
+  }
+
+  function handleCapabilityLslChange(value: string) {
+    setCapabilityLsl(value);
+    setAnalysisResult(null);
+  }
+
+  function handleCapabilityUslChange(value: string) {
+    setCapabilityUsl(value);
+    setAnalysisResult(null);
+  }
+
+  function handleCapabilityTargetChange(value: string) {
+    setCapabilityTarget(value);
+    setAnalysisResult(null);
+  }
+
+  function resetGageRrSelection(columns: DatasetColumnResponse[]) {
+    const measurementColumnId = defaultGageRrMeasurementColumnId(columns);
+    setSelectedGageRrMeasurementColumnId(measurementColumnId);
+    setSelectedGageRrPartColumnId(defaultGageRrPartColumnId(columns, measurementColumnId));
+    setSelectedGageRrOperatorColumnId(
+      defaultGageRrOperatorColumnId(columns, measurementColumnId),
+    );
+    setSelectedGageRrReplicateColumnId(
+      defaultGageRrReplicateColumnId(columns, measurementColumnId),
+    );
+    setSelectedGageRunChartOrderColumnId(null);
+    setGageRrPreflight(null);
+    setGageRrPreflightError(null);
+    setAnalysisResult(null);
+  }
+
+  function handleGageRrMeasurementColumnChange(columnId: string) {
+    const selectedColumnId = columnId.length > 0 ? columnId : null;
+    setSelectedGageRrMeasurementColumnId(selectedColumnId);
+    if (version !== null) {
+      setSelectedGageRrPartColumnId(defaultGageRrPartColumnId(version.columns, selectedColumnId));
+      setSelectedGageRrOperatorColumnId(
+        defaultGageRrOperatorColumnId(version.columns, selectedColumnId),
+      );
+      setSelectedGageRrReplicateColumnId(
+        defaultGageRrReplicateColumnId(version.columns, selectedColumnId),
+      );
+    }
+    setSelectedGageRunChartOrderColumnId(null);
+    setGageRrPreflight(null);
+    setGageRrPreflightError(null);
+    setAnalysisResult(null);
+  }
+
+  function handleGageRrPartColumnChange(columnId: string) {
+    setSelectedGageRrPartColumnId(columnId.length > 0 ? columnId : null);
+    setSelectedGageRunChartOrderColumnId((current) =>
+      current === columnId ? null : current,
+    );
+    setGageRrPreflight(null);
+    setGageRrPreflightError(null);
+    setAnalysisResult(null);
+  }
+
+  function handleGageRrOperatorColumnChange(columnId: string) {
+    setSelectedGageRrOperatorColumnId(columnId.length > 0 ? columnId : null);
+    setSelectedGageRunChartOrderColumnId((current) =>
+      current === columnId ? null : current,
+    );
+    setGageRrPreflight(null);
+    setGageRrPreflightError(null);
+    setAnalysisResult(null);
+  }
+
+  function handleGageRrReplicateColumnChange(columnId: string) {
+    setSelectedGageRrReplicateColumnId(columnId.length > 0 ? columnId : null);
+    setSelectedGageRunChartOrderColumnId((current) =>
+      current === columnId ? null : current,
+    );
+    setGageRrPreflight(null);
+    setGageRrPreflightError(null);
+    setAnalysisResult(null);
+  }
+
+  function handleGageRunChartOrderColumnChange(columnId: string) {
+    setSelectedGageRunChartOrderColumnId(columnId.length > 0 ? columnId : null);
     setAnalysisResult(null);
   }
 
@@ -2199,6 +2585,424 @@ export default function App() {
     }
   }
 
+  async function handleRunChartAnalysis() {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "quality.run_chart" ||
+      selectedRunChartValueColumnId === null
+    ) {
+      setFlowError("run_chart_value_column_required");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const roles: Record<string, string> = {
+        value: selectedRunChartValueColumnId,
+      };
+      const options: Record<string, unknown> = {
+        value_column_id: selectedRunChartValueColumnId,
+        center_method: "median",
+        trend_min_length: 6,
+        oscillation_min_length: 14,
+        runs_test_alpha: 0.05,
+        point_limit: 1000,
+        missing_policy: "complete_case",
+      };
+      if (selectedRunChartOrderColumnId !== null) {
+        roles.order = selectedRunChartOrderColumnId;
+        options.order_column_id = selectedRunChartOrderColumnId;
+      }
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: {
+          expression_version: 1,
+          conditions: filterConditions,
+        },
+        roles,
+        options,
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
+  async function handleCapabilityAnalysis() {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "quality.capability" ||
+      selectedCapabilityValueColumnId === null
+    ) {
+      setFlowError("capability_value_column_required");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+
+    const lsl = parseCapabilityOptionalNumber(capabilityLsl);
+    const usl = parseCapabilityOptionalNumber(capabilityUsl);
+    const target = parseCapabilityOptionalNumber(capabilityTarget);
+    if (lsl.kind === "error" || usl.kind === "error" || target.kind === "error") {
+      setFlowError("capability_spec_limits_invalid");
+      return;
+    }
+    if (lsl.value === null && usl.value === null) {
+      setFlowError("capability_spec_limit_required");
+      return;
+    }
+    if (lsl.value !== null && usl.value !== null && lsl.value >= usl.value) {
+      setFlowError("capability_spec_limits_invalid");
+      return;
+    }
+    if (
+      target.value !== null &&
+      ((lsl.value !== null && target.value < lsl.value) ||
+        (usl.value !== null && target.value > usl.value))
+    ) {
+      setFlowError("capability_target_outside_spec");
+      return;
+    }
+
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: {
+          expression_version: 1,
+          conditions: filterConditions,
+        },
+        roles: {
+          value: selectedCapabilityValueColumnId,
+        },
+        options: {
+          value_column_id: selectedCapabilityValueColumnId,
+          lsl: lsl.value,
+          usl: usl.value,
+          target: target.value,
+          missing_policy: "complete_case",
+          histogram_bin_limit: 30,
+        },
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
+  async function handleGageRrPreflight() {
+    if (
+      version === null ||
+      selectedGageRrMeasurementColumnId === null ||
+      selectedGageRrPartColumnId === null ||
+      selectedGageRrOperatorColumnId === null ||
+      selectedGageRrReplicateColumnId === null
+    ) {
+      setGageRrPreflightError("gage_rr_columns_required");
+      return;
+    }
+    const selectedColumns = new Set([
+      selectedGageRrMeasurementColumnId,
+      selectedGageRrPartColumnId,
+      selectedGageRrOperatorColumnId,
+      selectedGageRrReplicateColumnId,
+    ]);
+    if (selectedColumns.size < 4) {
+      setGageRrPreflightError("gage_rr_distinct_columns_required");
+      return;
+    }
+
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    setGageRrPreflightError(null);
+    try {
+      const response = await fetchGageRrPreflight({
+        dataset_version_id: version.version_id,
+        measurement_column_id: selectedGageRrMeasurementColumnId,
+        part_column_id: selectedGageRrPartColumnId,
+        operator_column_id: selectedGageRrOperatorColumnId,
+        replicate_column_id: selectedGageRrReplicateColumnId,
+        missing_policy: "complete_case",
+      });
+      setGageRrPreflight(response);
+    } catch (error) {
+      setGageRrPreflight(null);
+      setGageRrPreflightError(
+        error instanceof Error ? error.message : "gage_rr_preflight_failed",
+      );
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
+  async function handleGageRrAnalysis() {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "quality.gage_rr" ||
+      selectedGageRrMeasurementColumnId === null ||
+      selectedGageRrPartColumnId === null ||
+      selectedGageRrOperatorColumnId === null ||
+      selectedGageRrReplicateColumnId === null
+    ) {
+      setFlowError("gage_rr_columns_required");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+    if (
+      gageRrPreflight === null ||
+      !gageRrPreflight.design.ready_for_anova ||
+      gageRrPreflight.dataset_version_id !== version.version_id
+    ) {
+      setGageRrPreflightError("gage_rr_ready_preflight_required");
+      return;
+    }
+
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: {
+          expression_version: 1,
+          conditions: filterConditions,
+        },
+        roles: {
+          measurement: selectedGageRrMeasurementColumnId,
+          part: selectedGageRrPartColumnId,
+          operator: selectedGageRrOperatorColumnId,
+          replicate: selectedGageRrReplicateColumnId,
+        },
+        options: {
+          measurement_column_id: selectedGageRrMeasurementColumnId,
+          part_column_id: selectedGageRrPartColumnId,
+          operator_column_id: selectedGageRrOperatorColumnId,
+          replicate_column_id: selectedGageRrReplicateColumnId,
+          missing_policy: "complete_case",
+        },
+      });
+      setAnalysisResult(response);
+      setGageRrPreflightError(null);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
+  async function handleGageRunChartAnalysis() {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "quality.gage_run_chart" ||
+      selectedGageRrMeasurementColumnId === null ||
+      selectedGageRrPartColumnId === null ||
+      selectedGageRrOperatorColumnId === null ||
+      selectedGageRrReplicateColumnId === null
+    ) {
+      setFlowError("gage_run_chart_columns_required");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+    const selectedColumns = new Set([
+      selectedGageRrMeasurementColumnId,
+      selectedGageRrPartColumnId,
+      selectedGageRrOperatorColumnId,
+      selectedGageRrReplicateColumnId,
+    ]);
+    if (selectedColumns.size < 4) {
+      setFlowError("gage_run_chart_distinct_columns_required");
+      return;
+    }
+
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const roles: Record<string, string> = {
+        measurement: selectedGageRrMeasurementColumnId,
+        part: selectedGageRrPartColumnId,
+        operator: selectedGageRrOperatorColumnId,
+        replicate: selectedGageRrReplicateColumnId,
+      };
+      const options: Record<string, unknown> = {
+        measurement_column_id: selectedGageRrMeasurementColumnId,
+        part_column_id: selectedGageRrPartColumnId,
+        operator_column_id: selectedGageRrOperatorColumnId,
+        replicate_column_id: selectedGageRrReplicateColumnId,
+        point_limit: 1000,
+        missing_policy: "complete_case",
+      };
+      if (selectedGageRunChartOrderColumnId !== null) {
+        roles.order = selectedGageRunChartOrderColumnId;
+        options.order_column_id = selectedGageRunChartOrderColumnId;
+      }
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: {
+          expression_version: 1,
+          conditions: filterConditions,
+        },
+        roles,
+        options,
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
+  async function handleIndividualsChartAnalysis() {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "quality.individuals_chart" ||
+      selectedIndividualsChartValueColumnId === null
+    ) {
+      setFlowError("individuals_chart_value_column_required");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const roles: Record<string, string> = {
+        value: selectedIndividualsChartValueColumnId,
+      };
+      const options: Record<string, unknown> = {
+        value_column_id: selectedIndividualsChartValueColumnId,
+        point_limit: 1000,
+        same_side_min_length: 9,
+        trend_min_length: 6,
+        missing_policy: "complete_case",
+      };
+      if (selectedIndividualsChartOrderColumnId !== null) {
+        roles.order = selectedIndividualsChartOrderColumnId;
+        options.order_column_id = selectedIndividualsChartOrderColumnId;
+      }
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: {
+          expression_version: 1,
+          conditions: filterConditions,
+        },
+        roles,
+        options,
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
+  async function handleSubgroupChartAnalysis() {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "quality.subgroup_chart" ||
+      selectedSubgroupChartValueColumnId === null ||
+      selectedSubgroupChartSubgroupColumnId === null
+    ) {
+      setFlowError("subgroup_chart_required_columns_missing");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: {
+          expression_version: 1,
+          conditions: filterConditions,
+        },
+        roles: {
+          value: selectedSubgroupChartValueColumnId,
+          subgroup: selectedSubgroupChartSubgroupColumnId,
+        },
+        options: {
+          value_column_id: selectedSubgroupChartValueColumnId,
+          subgroup_column_id: selectedSubgroupChartSubgroupColumnId,
+          chart_type: selectedSubgroupChartType,
+          point_limit: 1000,
+          missing_policy: "complete_case",
+        },
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
   async function handleRunLinearModelAnalysis() {
     if (
       version === null ||
@@ -2409,7 +3213,13 @@ export default function App() {
     graphicalSummaryAnalysisResult,
     graphicalSummaryColumns,
     graphicalSummaryResult,
+    factorialDesign,
+    factorialDesignError,
+    factorialDesignResponseError,
+    factorialDesignResponses,
     isRunningAnalysis,
+    isCreatingFactorialDesign,
+    isSavingFactorialDesignResponses,
     kruskalWallisAlpha,
     kruskalWallisAnalysisResult,
     kruskalWallisGroupColumnId: selectedKruskalWallisGroupColumnId,
@@ -2491,6 +3301,48 @@ export default function App() {
     xyCorrelationXColumns,
     xyCorrelationYColumnIds: selectedXyCorrelationYColumnIds,
     xyCorrelationYColumns,
+    capabilityAnalysisResult,
+    capabilityLsl,
+    capabilityResult,
+    capabilityTarget,
+    capabilityUsl,
+    capabilityValueColumnId: selectedCapabilityValueColumnId,
+    capabilityValueColumns,
+    gageRrAnalysisResult,
+    gageRrMeasurementColumnId: selectedGageRrMeasurementColumnId,
+    gageRrMeasurementColumns,
+    gageRrOperatorColumnId: selectedGageRrOperatorColumnId,
+    gageRrOperatorColumns,
+    gageRrPartColumnId: selectedGageRrPartColumnId,
+    gageRrPartColumns,
+    gageRrPreflight,
+    gageRrPreflightError,
+    gageRrReplicateColumnId: selectedGageRrReplicateColumnId,
+    gageRrReplicateColumns,
+    gageRrResult,
+    gageRunChartAnalysisResult,
+    gageRunChartOrderColumnId: selectedGageRunChartOrderColumnId,
+    gageRunChartOrderColumns,
+    gageRunChartResult,
+    individualsChartAnalysisResult,
+    individualsChartOrderColumnId: selectedIndividualsChartOrderColumnId,
+    individualsChartOrderColumns,
+    individualsChartResult,
+    individualsChartValueColumnId: selectedIndividualsChartValueColumnId,
+    individualsChartValueColumns,
+    subgroupChartAnalysisResult,
+    subgroupChartResult,
+    subgroupChartSubgroupColumnId: selectedSubgroupChartSubgroupColumnId,
+    subgroupChartSubgroupColumns,
+    subgroupChartType: selectedSubgroupChartType,
+    subgroupChartValueColumnId: selectedSubgroupChartValueColumnId,
+    subgroupChartValueColumns,
+    runChartAnalysisResult,
+    runChartOrderColumnId: selectedRunChartOrderColumnId,
+    runChartOrderColumns,
+    runChartResult,
+    runChartValueColumnId: selectedRunChartValueColumnId,
+    runChartValueColumns,
     linearModelAlpha,
     linearModelAnalysisResult,
     linearModelConfidenceLevel,
@@ -2536,6 +3388,24 @@ export default function App() {
     twoProportionResult,
     version,
     onAnalysisFilterDraftsChange: handleAnalysisFilterDraftsChange,
+    onCapabilityLslChange: handleCapabilityLslChange,
+    onCapabilityTargetChange: handleCapabilityTargetChange,
+    onCapabilityUslChange: handleCapabilityUslChange,
+    onCapabilityValueColumnChange: handleCapabilityValueColumnChange,
+    onGageRrMeasurementColumnChange: handleGageRrMeasurementColumnChange,
+    onGageRrOperatorColumnChange: handleGageRrOperatorColumnChange,
+    onGageRrPartColumnChange: handleGageRrPartColumnChange,
+    onGageRrReplicateColumnChange: handleGageRrReplicateColumnChange,
+    onGageRunChartOrderColumnChange: handleGageRunChartOrderColumnChange,
+    onCreateFactorialDesign: (request: FactorialDesignCreateRequest) => {
+      void handleCreateFactorialDesign(request);
+    },
+    onSaveFactorialDesignResponses: (
+      designId: string,
+      request: DoeDesignResponsesUpsertRequest,
+    ) => {
+      void handleSaveFactorialDesignResponses(designId, request);
+    },
     onRunChiSquareAssociationAnalysis: () => {
       void handleRunChiSquareAssociationAnalysis();
     },
@@ -2580,6 +3450,24 @@ export default function App() {
     },
     onRunXyCorrelationAnalysis: () => {
       void handleRunXyCorrelationAnalysis();
+    },
+    onRunIndividualsChartAnalysis: () => {
+      void handleIndividualsChartAnalysis();
+    },
+    onRunChartAnalysis: () => {
+      void handleRunChartAnalysis();
+    },
+    onRunCapabilityAnalysis: () => {
+      void handleCapabilityAnalysis();
+    },
+    onRunGageRrAnalysis: () => {
+      void handleGageRrAnalysis();
+    },
+    onRunGageRrPreflight: () => {
+      void handleGageRrPreflight();
+    },
+    onRunGageRunChartAnalysis: () => {
+      void handleGageRunChartAnalysis();
     },
     onRunLinearModelAnalysis: () => {
       void handleRunLinearModelAnalysis();
@@ -2649,6 +3537,16 @@ export default function App() {
     onPearsonConfidenceLevelChange: handlePearsonConfidenceLevelChange,
     onPearsonXColumnChange: handlePearsonXColumnChange,
     onPearsonYColumnChange: handlePearsonYColumnChange,
+    onIndividualsChartOrderColumnChange: handleIndividualsChartOrderColumnChange,
+    onIndividualsChartValueColumnChange: handleIndividualsChartValueColumnChange,
+    onRunSubgroupChartAnalysis: () => {
+      void handleSubgroupChartAnalysis();
+    },
+    onSubgroupChartSubgroupColumnChange: handleSubgroupChartSubgroupColumnChange,
+    onSubgroupChartTypeChange: handleSubgroupChartTypeChange,
+    onSubgroupChartValueColumnChange: handleSubgroupChartValueColumnChange,
+    onRunChartOrderColumnChange: handleRunChartOrderColumnChange,
+    onRunChartValueColumnChange: handleRunChartValueColumnChange,
     onXyCorrelationAlphaChange: handleXyCorrelationAlphaChange,
     onXyCorrelationConfidenceLevelChange: handleXyCorrelationConfidenceLevelChange,
     onLinearModelAlphaChange: handleLinearModelAlphaChange,
@@ -3078,6 +3976,108 @@ function selectableXyCorrelationColumns(columns: DatasetColumnResponse[]): Datas
   return selectableDescriptiveColumns(columns);
 }
 
+function selectableIndividualsChartValueColumns(
+  columns: DatasetColumnResponse[],
+): DatasetColumnResponse[] {
+  return selectableDescriptiveColumns(columns);
+}
+
+function selectableIndividualsChartOrderColumns(
+  columns: DatasetColumnResponse[],
+  valueColumnId: string | null,
+): DatasetColumnResponse[] {
+  return columns.filter(
+    (column) =>
+      column.column_id !== valueColumnId &&
+      (numericDataTypes.has(column.data_type) || column.data_type === "datetime"),
+  );
+}
+
+function selectableSubgroupChartValueColumns(
+  columns: DatasetColumnResponse[],
+): DatasetColumnResponse[] {
+  return selectableDescriptiveColumns(columns);
+}
+
+function selectableSubgroupChartSubgroupColumns(
+  columns: DatasetColumnResponse[],
+  valueColumnId: string | null,
+): DatasetColumnResponse[] {
+  return columns.filter(
+    (column) =>
+      column.column_id !== valueColumnId &&
+      column.data_type !== "datetime" &&
+      column.role !== "response" &&
+      column.role !== "target",
+  );
+}
+
+function selectableRunChartValueColumns(
+  columns: DatasetColumnResponse[],
+): DatasetColumnResponse[] {
+  return selectableDescriptiveColumns(columns);
+}
+
+function selectableCapabilityValueColumns(
+  columns: DatasetColumnResponse[],
+): DatasetColumnResponse[] {
+  return selectableDescriptiveColumns(columns);
+}
+
+function selectableGageRrMeasurementColumns(
+  columns: DatasetColumnResponse[],
+): DatasetColumnResponse[] {
+  return selectableDescriptiveColumns(columns);
+}
+
+function selectableGageRrIdentifierColumns(
+  columns: DatasetColumnResponse[],
+  measurementColumnId: string | null,
+): DatasetColumnResponse[] {
+  return columns.filter(
+    (column) =>
+      column.column_id !== measurementColumnId &&
+      column.data_type !== "datetime" &&
+      column.role !== "response" &&
+      column.role !== "target",
+  );
+}
+
+function selectableRunChartOrderColumns(
+  columns: DatasetColumnResponse[],
+  valueColumnId: string | null,
+): DatasetColumnResponse[] {
+  return columns.filter(
+    (column) =>
+      column.column_id !== valueColumnId &&
+      (numericDataTypes.has(column.data_type) || column.data_type === "datetime"),
+  );
+}
+
+function selectableGageRunChartOrderColumns(
+  columns: DatasetColumnResponse[],
+  roleColumnIds: {
+    measurementColumnId: string | null;
+    partColumnId: string | null;
+    operatorColumnId: string | null;
+    replicateColumnId: string | null;
+  },
+): DatasetColumnResponse[] {
+  const excludedIds = new Set(
+    [
+      roleColumnIds.measurementColumnId,
+      roleColumnIds.partColumnId,
+      roleColumnIds.operatorColumnId,
+      roleColumnIds.replicateColumnId,
+    ].filter((columnId): columnId is string => columnId !== null),
+  );
+  return columns.filter(
+    (column) =>
+      !excludedIds.has(column.column_id) &&
+      (numericDataTypes.has(column.data_type) || column.data_type === "datetime"),
+  );
+}
+
 function selectableLinearModelResponseColumns(
   columns: DatasetColumnResponse[],
 ): DatasetColumnResponse[] {
@@ -3148,6 +4148,134 @@ function defaultXyCorrelationYColumnIds(columns: DatasetColumnResponse[]): strin
   return (responseCandidates.length > 0 ? responseCandidates : candidates.slice(1))
     .slice(0, 3)
     .map((column) => column.column_id);
+}
+
+function defaultIndividualsChartValueColumnId(
+  columns: DatasetColumnResponse[],
+): string | null {
+  const candidates = selectableIndividualsChartValueColumns(columns);
+  return (
+    candidates.find((column) => column.role === "response")?.column_id ??
+    candidates.find((column) => column.role === "target")?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
+}
+
+function defaultSubgroupChartValueColumnId(columns: DatasetColumnResponse[]): string | null {
+  const candidates = selectableSubgroupChartValueColumns(columns);
+  return (
+    candidates.find((column) => column.role === "response")?.column_id ??
+    candidates.find((column) => column.role === "target")?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
+}
+
+function defaultSubgroupChartSubgroupColumnId(
+  columns: DatasetColumnResponse[],
+  valueColumnId: string | null,
+): string | null {
+  const candidates = selectableSubgroupChartSubgroupColumns(columns, valueColumnId);
+  return (
+    candidates.find((column) => column.role === "subgroup_id")?.column_id ??
+    candidates.find((column) => column.measurement_level === "nominal")?.column_id ??
+    candidates.find((column) => column.role === "id")?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
+}
+
+function defaultRunChartValueColumnId(columns: DatasetColumnResponse[]): string | null {
+  const candidates = selectableRunChartValueColumns(columns);
+  return (
+    candidates.find((column) => column.role === "response")?.column_id ??
+    candidates.find((column) => column.role === "target")?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
+}
+
+function parseCapabilityOptionalNumber(
+  value: string,
+): { kind: "ok"; value: number | null } | { kind: "error" } {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return { kind: "ok", value: null };
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return { kind: "error" };
+  }
+  return { kind: "ok", value: parsed };
+}
+
+function defaultCapabilityValueColumnId(columns: DatasetColumnResponse[]): string | null {
+  const candidates = selectableCapabilityValueColumns(columns);
+  return (
+    candidates.find((column) => column.role === "response")?.column_id ??
+    candidates.find((column) => column.role === "target")?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
+}
+
+function defaultGageRrMeasurementColumnId(columns: DatasetColumnResponse[]): string | null {
+  const candidates = selectableGageRrMeasurementColumns(columns);
+  return (
+    candidates.find((column) => column.role === "response")?.column_id ??
+    candidates.find((column) => column.role === "target")?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
+}
+
+function defaultGageRrPartColumnId(
+  columns: DatasetColumnResponse[],
+  measurementColumnId: string | null,
+): string | null {
+  const candidates = selectableGageRrIdentifierColumns(columns, measurementColumnId);
+  return (
+    candidates.find((column) => column.role === "part_id")?.column_id ??
+    candidates.find((column) => column.measurement_level === "id")?.column_id ??
+    candidates.find((column) => column.role === "id")?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
+}
+
+function defaultGageRrOperatorColumnId(
+  columns: DatasetColumnResponse[],
+  measurementColumnId: string | null,
+): string | null {
+  const candidates = selectableGageRrIdentifierColumns(columns, measurementColumnId);
+  return (
+    candidates.find((column) => column.role === "operator_id")?.column_id ??
+    candidates.find((column) => column.measurement_level === "nominal")?.column_id ??
+    candidates.find((column) => column.role === "group")?.column_id ??
+    candidates.find((column) => column.column_id !== defaultGageRrPartColumnId(
+      columns,
+      measurementColumnId,
+    ))?.column_id ??
+    null
+  );
+}
+
+function defaultGageRrReplicateColumnId(
+  columns: DatasetColumnResponse[],
+  measurementColumnId: string | null,
+): string | null {
+  const candidates = selectableGageRrIdentifierColumns(columns, measurementColumnId);
+  const usedIds = new Set([
+    defaultGageRrPartColumnId(columns, measurementColumnId),
+    defaultGageRrOperatorColumnId(columns, measurementColumnId),
+  ]);
+  return (
+    candidates.find((column) => column.role === "replicate_id")?.column_id ??
+    candidates.find((column) => column.role === "order")?.column_id ??
+    candidates.find((column) => !usedIds.has(column.column_id))?.column_id ??
+    null
+  );
 }
 
 function defaultLinearModelResponseColumnId(
@@ -3441,6 +4569,104 @@ function isXyCorrelationResult(
   }
   const candidate = value as Record<string, unknown>;
   return candidate.summary_type === "xy_correlation_matrix" && Array.isArray(candidate.pairs);
+}
+
+function isIndividualsChartResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is IndividualsChartResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.summary_type === "individuals_chart" &&
+    typeof candidate.individuals_chart === "object" &&
+    candidate.individuals_chart !== null &&
+    typeof candidate.moving_range_chart === "object" &&
+    candidate.moving_range_chart !== null &&
+    Array.isArray(candidate.signals)
+  );
+}
+
+function isSubgroupChartResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is SubgroupChartResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.summary_type === "subgroup_chart" &&
+    typeof candidate.xbar_chart === "object" &&
+    candidate.xbar_chart !== null &&
+    (candidate.chart_type === "xbar_s"
+      ? typeof candidate.s_chart === "object" && candidate.s_chart !== null
+      : typeof candidate.r_chart === "object" && candidate.r_chart !== null) &&
+    Array.isArray(candidate.signals)
+  );
+}
+
+function isRunChartResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is RunChartResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.summary_type === "run_chart" &&
+    typeof candidate.runs === "object" &&
+    candidate.runs !== null &&
+    Array.isArray(candidate.signals) &&
+    typeof candidate.chart === "object" &&
+    candidate.chart !== null
+  );
+}
+
+function isCapabilityResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is CapabilityResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.summary_type === "capability_analysis" &&
+    typeof candidate.capability === "object" &&
+    candidate.capability !== null &&
+    typeof candidate.histogram === "object" &&
+    candidate.histogram !== null
+  );
+}
+
+function isGageRrResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is GageRrResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.summary_type === "gage_rr" &&
+    Array.isArray(candidate.anova_table) &&
+    typeof candidate.variance_components === "object" &&
+    candidate.variance_components !== null
+  );
+}
+
+function isGageRunChartResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is GageRunChartResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.summary_type === "gage_run_chart" &&
+    typeof candidate.chart === "object" &&
+    candidate.chart !== null &&
+    Array.isArray((candidate.chart as Record<string, unknown>).points)
+  );
 }
 
 function isLinearModelResult(

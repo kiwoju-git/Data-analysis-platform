@@ -282,49 +282,49 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_en="Control Chart",
         order=10,
     ),
-    _planned(
+    _available(
         method_id="quality.individuals_chart",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="개별값 관리도",
         label_en="Variables Charts for Individuals",
         order=20,
     ),
-    _planned(
+    _available(
         method_id="quality.subgroup_chart",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="부분군 관리도",
         label_en="Variables Charts for Subgroups",
         order=30,
     ),
-    _planned(
+    _available(
         method_id="quality.run_chart",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="런 차트",
         label_en="Run Chart",
         order=40,
     ),
-    _planned(
+    _available(
         method_id="quality.capability",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="공정능력 분석",
         label_en="Capability Analysis",
         order=50,
     ),
-    _planned(
+    _available(
         method_id="quality.gage_rr",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="Gage R&R",
         label_en="Gage R&R Study",
         order=60,
     ),
-    _planned(
+    _available(
         method_id="quality.gage_run_chart",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="Gage Run Chart",
         label_en="Gage Run Chart",
         order=70,
     ),
-    _planned(
+    _available(
         method_id="doe.factorial_design",
         module_id=AnalysisModuleId.DOE,
         label_ko="실험 계획 생성",
