@@ -268,6 +268,8 @@ export const analysisMethodGuidance = {
     optionChecklist: ["예측 구간", "스키마 매핑", "내보내기 형식"],
     preflightChecks: ["모델 manifest", "스키마 drift", "범주 수준", "외삽 위험"],
     resultFocus: ["예측값", "예측/신뢰 구간", "스키마 경고"],
+    plainLanguage:
+      "일반 분석 실행 registry에서는 비활성 상태이며, 회귀 모델 패널의 저장 모델 예측 API로만 실행됩니다. 앱이 생성하고 checksum 검증한 모델 manifest와 현재 데이터셋 스키마 preflight를 통과한 경우에만 예측 결과를 저장합니다.",
   },
   "regression.response_optimizer": {
     methodId: "regression.response_optimizer",
@@ -432,7 +434,7 @@ export const analysisMethodGuidance = {
     preflightChecks: ["요인 수준", "실행 수 제한", "블록 수", "랜덤화 재현성"],
     resultFocus: ["설계표", "표준/실행 순서", "design SHA-256", "재현 seed"],
     plainLanguage:
-      "현재 slice는 2-level full factorial 설계표를 생성하고 저장합니다. 반응 입력, 효과 추정, OLS/ANOVA 분석은 다음 DOE slice에서 추가합니다.",
+      "현재 slice는 일반 분석 실행이 아니라 전용 DOE 설계 API로 2-level full factorial 설계표를 생성하고 반응값을 저장합니다. 효과 추정, OLS/ANOVA 분석, DOE 진단 차트는 다음 DOE slice에서 추가합니다.",
   },
   "doe.response_surface": {
     methodId: "doe.response_surface",

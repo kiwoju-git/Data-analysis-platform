@@ -750,6 +750,29 @@ def test_dataset_rows_preview_reads_canonical_artifact_after_raw_upload_changes(
     ]
 
 
+def test_dataset_rows_preview_rejects_tampered_canonical_artifact_before_page_return(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"alpha,beta\n1,x\n2,y\n"
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_and_confirm(client, content)
+        canonical_path = settings.workspace_root / version["canonical_artifact"]["path"]
+        lines = canonical_path.read_text(encoding="utf-8").splitlines()
+        lines[0] = json.dumps({"row_index": 0, "values": ["999", "x"]}, separators=(",", ":"))
+        canonical_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        response = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/rows",
+            params={"offset": 0, "limit": 1},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "canonical_artifact_invalid"
+    assert "999" not in response.text
+
+
 def test_dataset_profile_reports_quality_without_echoing_cell_values(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"id,value,group\nA1,1,same\nA2,,same\nA3,SECRET_VALUE,same\nA4,4,same\n"

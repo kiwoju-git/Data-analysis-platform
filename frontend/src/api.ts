@@ -404,6 +404,10 @@ export interface AnalysisProvenance {
   row_count_total?: number | null;
   row_count_included?: number | null;
   app_version: string;
+  python_version?: string | null;
+  platform?: string | null;
+  build_commit?: string | null;
+  package_versions?: Record<string, string> | null;
 }
 
 export interface DescriptiveColumnSummary {

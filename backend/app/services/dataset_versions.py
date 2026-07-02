@@ -39,6 +39,7 @@ from app.services.dataset_rows import (
     DatasetRowsContext,
     get_dataset_rows_context,
     iter_dataset_rows,
+    verify_canonical_rows_artifact,
 )
 from app.services.xlsx_reader import XlsxSheetRow, iter_xlsx_sheet_rows
 from app.storage.metadata import (
@@ -202,6 +203,9 @@ def update_dataset_schema(
     version = _get_existing_version(settings, version_id)
     current_columns = list_dataset_column_records(settings.workspace_root, str(version_id))
     updated_columns = _apply_schema_updates(current_columns, request)
+    if _schema_update_is_noop(current_columns, updated_columns):
+        return dataset_schema_response_from_records(version, current_columns)
+
     schema_hash = _schema_hash_for_records(
         source_sha256=version.source_sha256,
         parsing_options_json=version.parsing_options_json,
@@ -236,6 +240,7 @@ def get_dataset_rows_preview(
     limit: int,
 ) -> DatasetRowsPreviewResponse:
     context = get_dataset_rows_context(settings, version_id)
+    verify_canonical_rows_artifact(context)
     rows = _read_canonical_preview_rows(context, offset=offset, limit=limit)
     return DatasetRowsPreviewResponse(
         version_id=version_id,
@@ -398,6 +403,22 @@ def _apply_schema_updates(
             ),
         )
     return updated_columns
+
+
+def _schema_update_is_noop(
+    current_columns: list[DatasetColumnRecord],
+    updated_columns: list[DatasetColumnRecord],
+) -> bool:
+    if len(current_columns) != len(updated_columns):
+        return False
+    return all(
+        current.column_id == updated.column_id
+        and current.display_name == updated.display_name
+        and current.measurement_level == updated.measurement_level
+        and current.role == updated.role
+        and current.unit == updated.unit
+        for current, updated in zip(current_columns, updated_columns, strict=True)
+    )
 
 
 def _read_canonical_preview_rows(

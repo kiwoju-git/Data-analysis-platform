@@ -3733,3 +3733,814 @@ Remaining limitations:
 Next PR:
 
 - Add the DOE effects/OLS/ANOVA contract and reference fixtures first, then implement calculation only after the contract has stable result fields and failure cases.
+
+## Progress Update 63 - Statistical QA and Execution Hardening
+
+Completed in current working tree:
+
+- Added full canonical rows artifact verification before paginated row preview returns any row values.
+- Added schema PATCH no-op detection so unchanged display name, measurement level, role, and unit values keep the existing `schema_hash` and do not mark analysis runs stale.
+- Added runtime/build provenance fields to generic analysis-run envelopes: Python version, platform, optional `DATALAB_GIT_COMMIT`, and NumPy/SciPy package versions.
+- Added the first `MethodExecutionHandler` registry slice for `eda.descriptive` and `eda.graphical_summary` while keeping other methods on the existing guarded path.
+- Added a TOST regression audit for the rule that both one-sided tests must reject before equivalence is reported.
+- Documented the 29-method audit matrix, regression prediction vs generic registry boundary, DOE dedicated API boundary, canonical preview verification policy, schema no-op stale policy, and CI status.
+- Kept planned/disabled methods non-executable and did not add new statistical methods or fake results.
+
+Changed files:
+
+- `backend/app/api/v1/schemas/analyses.py`
+- `backend/app/core/config.py`
+- `backend/app/services/analysis_runs.py`
+- `backend/app/services/dataset_rows.py`
+- `backend/app/services/dataset_versions.py`
+- `backend/tests/unit/test_api_contracts.py`
+- `backend/tests/unit/test_dataset_upload.py`
+- `backend/tests/unit/test_equivalence_tost.py`
+- `frontend/src/analysisMethodGuidance.ts`
+- `frontend/src/api.ts`
+- `docs/ci_status.md`
+- `docs/datasets.md`
+- `docs/progress_gate_b.md`
+- `docs/statistical_method_audit_matrix.md`
+- `docs/storage.md`
+- `to_do_list.md`
+
+Validation:
+
+- Targeted Windows pytest for `test_dataset_upload.py`: passed with 29 tests.
+- Targeted Windows pytest for `test_equivalence_tost.py`: passed with 5 tests.
+- Targeted Windows pytest for selected API contract stabilization tests: passed with 5 selected tests.
+- Windows backend ruff format check for `backend`: passed, 103 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 68 source files.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 267 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Row preview now performs an extra full canonical JSONL pass before page extraction; this is intentionally conservative for the stabilization PR and may need cached artifact verification metadata later.
+- Only `eda.descriptive` and `eda.graphical_summary` have moved to the handler registry so far.
+- `regression.predict` remains disabled in the generic method registry and runs only through the dedicated stored-model prediction API.
+- `doe.factorial_design` remains available only through dedicated DOE design routes; effects, OLS/ANOVA, diagnostics, alias structure, and DOE charts remain out of scope.
+- Remote GitHub Actions run status could not be verified from this environment because public Actions access was not inspectable and `gh` was unavailable.
+
+Next PR:
+
+- Continue moving available methods into `MethodExecutionHandler` one module at a time, starting with EDA methods, without changing result contracts.
+- Add cached canonical artifact verification metadata or a more efficient verified-reader strategy if preview performance becomes an issue.
+- Add DOE effects/OLS/ANOVA contracts and reference fixtures before implementing any DOE calculation.
+
+## Progress Update 64 - EDA Handler Registry and Provenance Helper Follow-up
+
+Completed in current working tree:
+
+- Centralized generic analysis-run provenance construction in `_analysis_provenance` so runtime/build fields are applied consistently across current methods.
+- Replaced repeated `AnalysisProvenance(...)` blocks in `analysis_runs.py` with the shared helper.
+- Moved all four EDA methods into the `MethodExecutionHandler` registry: `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, and `eda.equal_variances`.
+- Removed the remaining EDA branches from the large `create_analysis_run` method-id chain without changing method availability or result contracts.
+- Updated the handler registry contract test and audit/progress docs.
+
+Validation:
+
+- Targeted Windows pytest for EDA method execution, handler registry, and provenance helper coverage: passed with 6 selected tests.
+- Windows backend ruff format check for `backend`: passed, 103 files already formatted after formatting `analysis_runs.py`.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 68 source files.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 267 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Hypothesis, categorical, regression, quality, and dedicated DOE methods still use the existing guarded dispatch path.
+- No new statistical method, result schema version, DB migration, or fake result was added.
+
+Next PR:
+
+- Move the hypothesis module methods into handler registry in smaller batches, or add an explicit handler interface file if `analysis_runs.py` becomes harder to navigate.
+
+## Progress Update 65 - First Hypothesis Handler Registry Batch
+
+Completed in current working tree:
+
+- Moved the first hypothesis batch into the `MethodExecutionHandler` registry:
+  `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, and `hypothesis.equivalence_tost`.
+- Removed those four method branches from the large `create_analysis_run` if-chain.
+- Kept `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, and `hypothesis.one_way_anova` on the existing guarded path for the next batch.
+- Updated the handler registry contract test and audit/progress docs.
+- Did not change statistical calculations, result schemas, availability, migrations, or frontend behavior.
+
+Validation:
+
+- Targeted Windows pytest for handler registry plus the four migrated hypothesis methods: passed with 5 selected tests.
+- Windows backend ruff format check for `backend`: passed, 103 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 68 source files.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 267 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- The remaining hypothesis methods, categorical methods, regression methods, quality methods, and dedicated DOE flow still use the existing dispatch path.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Move the remaining hypothesis methods into the handler registry after targeted execution tests pass.
+
+## Progress Update 66 - Complete Hypothesis Handler Registry Migration
+
+Completed in current working tree:
+
+- Moved the remaining hypothesis methods into the `MethodExecutionHandler` registry:
+  `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, and `hypothesis.one_way_anova`.
+- Removed the last hypothesis method branches from the large `create_analysis_run` if-chain.
+- Updated the handler registry contract test so it covers all EDA and hypothesis methods now handled by the registry.
+- Updated the audit/progress docs to reflect that all eight hypothesis methods are on the handler path.
+- Did not change statistical calculations, result schemas, availability, migrations, or frontend behavior.
+
+Validation:
+
+- Targeted Windows pytest for handler registry plus the four newly migrated hypothesis methods: passed with 5 selected tests.
+- Windows backend ruff format check for `backend`: passed, 103 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 68 source files.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 267 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Categorical, regression, quality, and dedicated DOE flows still use the existing dispatch path.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Move categorical methods into the handler registry as the next small batch, then repeat targeted API execution tests.
+
+## Progress Update 67 - Categorical Handler Registry Migration
+
+Completed in current working tree:
+
+- Moved all categorical methods into the `MethodExecutionHandler` registry:
+  `categorical.one_proportion`, `categorical.two_proportion`, and
+  `categorical.chi_square_association`.
+- Removed categorical method branches from the large `create_analysis_run` if-chain.
+- Updated the handler registry contract test so it covers EDA, hypothesis, and categorical methods handled by the registry.
+- Updated the audit/progress docs to reflect categorical handler coverage.
+- Did not change statistical calculations, result schemas, availability, migrations, or frontend behavior.
+
+Validation:
+
+- Targeted Windows pytest for handler registry plus the three migrated categorical methods: passed with 4 selected tests.
+- Windows backend ruff format check for `backend`: passed, 103 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 68 source files.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 267 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Regression, quality, and dedicated DOE flows still use the existing dispatch path.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Move regression analysis-run methods into the handler registry as the next small batch, keeping `regression.predict` on the dedicated stored-model API path.
+
+## Progress Update 68 - Regression Handler Registry Migration
+
+Completed in current working tree:
+
+- Moved the generic regression analysis-run methods into the `MethodExecutionHandler` registry:
+  `regression.pearson`, `regression.xy_correlation`, and `regression.linear_model`.
+- Removed regression analysis-run method branches from the large `create_analysis_run` if-chain.
+- Kept `regression.predict` out of the generic handler registry because it uses the dedicated stored-model prediction API and remains disabled in the generic method registry.
+- Updated the handler registry contract test so it covers EDA, hypothesis, categorical, and generic regression methods handled by the registry.
+- Updated the audit/progress docs to reflect generic regression handler coverage.
+- Did not change statistical calculations, result schemas, availability, migrations, or frontend behavior.
+
+Validation:
+
+- Targeted Windows pytest for handler registry plus the three migrated generic regression methods: passed with 4 selected tests.
+- Windows backend ruff format check for `backend`: passed, 103 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 68 source files.
+- Frontend `npm --prefix ./frontend run typecheck`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 267 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Quality and dedicated DOE flows still use the existing dispatch path.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Move quality methods into the handler registry in small batches, starting with chart-style methods.
+
+## Progress Update 69 - Quality Handler Registry Migration
+
+Completed in current working tree:
+
+- Moved all current quality analysis-run methods into the `MethodExecutionHandler` registry:
+  `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`,
+  `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`.
+- Removed quality method branches from the large `create_analysis_run` if-chain.
+- Kept `doe.factorial_design` out of the generic handler registry because it uses dedicated DOE design routes.
+- Updated the handler registry contract test so it covers EDA, hypothesis, categorical, generic regression, and quality methods handled by the registry, and fails if an available generic analysis-run method is missing a handler.
+- Updated the audit/progress docs to reflect quality handler coverage.
+- Did not change statistical calculations, result schemas, availability, migrations, or frontend behavior.
+
+Validation:
+
+- Targeted Windows pytest for handler registry plus the six migrated quality methods: passed with 8 selected tests.
+- Additional Windows pytest for the no-gap handler registry contract: passed with 1 selected test.
+- Windows backend ruff format check for `backend`: passed, 103 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 68 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 267 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- `doe.factorial_design` still uses dedicated DOE design routes and returns `analysis_method_uses_dedicated_api` from the generic analysis-run endpoint.
+- `regression.predict` remains disabled in the generic registry and uses the dedicated stored-model prediction API.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Split `analysis_runs.py` handlers into smaller module-owned files if the registry keeps growing, or start the next documented Gate slice only with reference-backed calculations.
+
+## Progress Update 70 - Handler Spec Module Split
+
+Completed in current working tree:
+
+- Added `backend/app/services/analysis_method_handlers.py` for the shared
+  `MethodExecutionHandler` dataclass, method handler specs, and missing-runner
+  validation builder.
+- Changed `analysis_runs.py` so it supplies only the method runner functions to
+  `build_method_execution_handlers`, while handler metadata lives outside the
+  large execution service.
+- Kept all current generic analysis-run methods on the same execution behavior:
+  four EDA, eight hypothesis, three categorical, three generic regression, and
+  six quality methods.
+- Kept `regression.predict` on the dedicated stored-model prediction API and
+  `doe.factorial_design` on dedicated DOE design routes.
+- Strengthened the handler contract tests so the spec order matches the runtime
+  registry and the builder fails loudly if a runner is missing.
+- Did not change statistical calculations, result schemas, availability,
+  migrations, or frontend behavior.
+
+Validation:
+
+- Targeted Windows pytest for handler registry, builder guard, and representative EDA executions: passed with 5 selected tests.
+- Additional Windows pytest for the focused handler registry and builder guard: passed with 2 selected tests.
+- Windows backend ruff format check for `backend`: passed, 104 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 69 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 268 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- The handler runner functions still live in `analysis_runs.py`; moving each
+  method family into module-owned runner files should be a separate refactor.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Split one low-risk method family, likely EDA, into a module-owned runner file
+  only after the current spec/builder contract remains green.
+
+## Progress Update 71 - Analysis Run Execution Support Split
+
+Completed in current working tree:
+
+- Added `backend/app/services/analysis_run_execution.py` for common inline
+  analysis-run execution helpers:
+  - runtime/build provenance construction
+  - row snapshot artifact creation
+  - filter snapshot row freezing
+  - canonical result/config JSON bytes
+  - result and row-snapshot workspace paths
+  - compensating file cleanup helper
+- Updated `analysis_runs.py` to import these common helpers instead of owning
+  duplicate row snapshot/filter/provenance infrastructure inline.
+- Added direct unit tests for deterministic canonical JSON bytes and contiguous
+  row-range compression in the new execution-support module.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for execution-support helpers, handler registry, and representative EDA executions: passed with 8 selected tests.
+- Windows backend ruff format check for `backend`: passed, 106 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 70 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Method runner functions still live in `analysis_runs.py`.
+- EDA runner extraction is now lower risk because execution-support helpers no
+  longer create a circular import boundary.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Move the four EDA runner functions and EDA-specific selection/warning helpers
+  into an EDA-owned runner module while keeping the same handler registry
+  method IDs and result envelopes.
+
+## Progress Update 72 - EDA Runner Module Split
+
+Completed in current working tree:
+
+- Added `backend/app/services/analysis_runners_eda.py` for the four EDA runner
+  functions:
+  - `eda.descriptive`
+  - `eda.graphical_summary`
+  - `eda.normality`
+  - `eda.equal_variances`
+- Moved EDA-specific column selection, option validation, and warning mapping
+  helpers out of `analysis_runs.py` into the EDA runner module.
+- Kept shared result persistence, row snapshot, filter snapshot, provenance,
+  and cleanup behavior delegated to `analysis_run_execution.py`.
+- Updated the method execution registry so the four EDA method IDs now point to
+  the EDA-owned runner functions.
+- Strengthened the handler contract test to assert the EDA handlers use the
+  module-owned runner functions.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for EDA-owned handler registry coverage, cleanup failure behavior, and representative EDA executions: passed with 5 selected tests.
+- Windows backend ruff format check for `backend`: passed, 107 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 71 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Hypothesis, categorical, regression, and quality runner functions still live
+  in `analysis_runs.py`.
+- The EDA runner module still has a local result-persistence wrapper around the
+  common execution helpers; a later refactor can generalize that wrapper after
+  one more method family is split.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Split the next low-risk method family, likely categorical or a small
+  hypothesis batch, into a module-owned runner file using the same
+  execution-support helpers.
+
+## Progress Update 73 - Categorical Runner Module Split
+
+Completed in current working tree:
+
+- Added `backend/app/services/analysis_runners_categorical.py` for the three
+  categorical runner functions:
+  - `categorical.one_proportion`
+  - `categorical.two_proportion`
+  - `categorical.chi_square_association`
+- Moved categorical-specific column selection, option validation, API error
+  mapping, and warning mapping helpers out of `analysis_runs.py` into the
+  categorical runner module.
+- Kept shared result persistence, row snapshot, filter snapshot, provenance,
+  and cleanup behavior delegated to `analysis_run_execution.py`.
+- Updated the method execution registry so the three categorical method IDs now
+  point to the categorical-owned runner functions.
+- Strengthened the handler contract test to assert the categorical handlers use
+  the module-owned runner functions.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for categorical-owned handler registry coverage and representative categorical executions: passed with 4 selected tests.
+- Windows backend ruff format check for `backend`: passed, 108 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 72 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Hypothesis, regression, and quality runner functions still live in
+  `analysis_runs.py`.
+- The categorical runner module still has a local result-persistence wrapper
+  around the common execution helpers; a later refactor can generalize that
+  wrapper after another method family is split.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Split the next method family, likely hypothesis or quality, into a
+  module-owned runner file only after the categorical split remains green.
+
+## Progress Update 74 - Hypothesis Runner Module Split
+
+Completed in current working tree:
+
+- Added `backend/app/services/analysis_runners_hypothesis.py` for the eight
+  hypothesis runner functions:
+  - `hypothesis.one_sample_t`
+  - `hypothesis.paired_t`
+  - `hypothesis.one_sample_wilcoxon`
+  - `hypothesis.two_sample_t`
+  - `hypothesis.mann_whitney`
+  - `hypothesis.kruskal_wallis`
+  - `hypothesis.one_way_anova`
+  - `hypothesis.equivalence_tost`
+- Moved hypothesis-specific column selection, option validation, API error
+  mapping, and warning mapping helpers out of `analysis_runs.py` into the
+  hypothesis runner module.
+- Kept row snapshot, filter snapshot, provenance, result persistence, and
+  cleanup behavior on the same shared `analysis_run_execution.py` helper path.
+- Updated the method execution registry so the eight hypothesis method IDs now
+  point to the hypothesis-owned runner functions.
+- Strengthened the handler contract test to assert the hypothesis handlers use
+  the module-owned runner functions.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for hypothesis-owned handler registry coverage and representative hypothesis executions: passed with 9 selected tests.
+- Windows backend ruff format check for `backend`: passed, 109 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 73 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Generic regression and quality runner functions still live in
+  `analysis_runs.py`.
+- The hypothesis runner module preserves the current inline result-persistence
+  pattern; a later refactor can generalize that wrapper after the remaining
+  method families are split.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Split the generic regression runners or quality runners into module-owned
+  files, then consider a shared result-persistence wrapper once at least three
+  method-family modules use the same pattern.
+
+## Progress Update 75 - Regression Correlation Runner Module Split
+
+Completed in current working tree:
+
+- Added `backend/app/services/analysis_runners_regression.py` for the first two
+  generic regression runner functions:
+  - `regression.pearson`
+  - `regression.xy_correlation`
+- Moved Pearson and X-Y correlation column selection, option validation, API
+  error mapping, and warning mapping helpers out of `analysis_runs.py` into the
+  regression runner module.
+- Updated the method execution registry so `regression.pearson` and
+  `regression.xy_correlation` now point to regression-owned runner functions.
+- Strengthened the handler contract test to assert the Pearson and X-Y
+  correlation handlers use module-owned runner functions.
+- Kept `regression.linear_model` in `analysis_runs.py` for this slice because
+  it owns safe JSON model-manifest persistence and the dedicated stored-model
+  prediction boundary; this limitation is superseded by Progress Update 76.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for regression-owned handler registry coverage and representative Pearson/X-Y executions: passed with 3 selected tests.
+- Windows backend ruff format check for `backend`: passed, 110 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 74 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Superseded by Progress Update 76 for `regression.linear_model`.
+- Quality runner functions still live in `analysis_runs.py`.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Superseded by Progress Update 76; the remaining runner-family split is quality.
+
+## Progress Update 76 - Linear Model Runner And Manifest Split
+
+Completed in current working tree:
+
+- Moved `regression.linear_model` into
+  `backend/app/services/analysis_runners_regression.py` alongside the Pearson
+  and X-Y correlation runners.
+- Moved linear-model-specific column selection, option validation, API error
+  mapping, warning mapping, safe JSON model-manifest payload construction,
+  diagnostics redaction, and model-manifest relative path helpers out of
+  `analysis_runs.py`.
+- Updated the method execution registry so all three generic regression method
+  IDs now point to regression-owned runner functions.
+- Updated the linear-model metadata-insert-failure cleanup test so it patches
+  the regression runner module boundary.
+- Strengthened the handler contract test to assert `regression.linear_model`
+  uses the module-owned runner function.
+- Kept the dedicated stored-model prediction API path unchanged; only the
+  generic analysis-run execution owner moved.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for regression-owned handler registry coverage, representative linear-model executions, and manifest cleanup: passed with 7 selected tests.
+- Windows backend ruff format check for `backend`: passed, 110 files already formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 74 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Quality runner functions still live in `analysis_runs.py`.
+- Regression runner module still preserves the current inline result-persistence
+  pattern; a later refactor can generalize that wrapper after quality runners
+  are split.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Split quality runners into a module-owned runner file or first extract the
+  duplicated succeeded-result persistence wrapper shared by runner modules.
+
+## Progress Update 77 - Quality Runner Module Split
+
+Completed in current working tree:
+
+- Added `backend/app/services/analysis_runners_quality.py` for the six current
+  quality runner functions:
+  - `quality.individuals_chart`
+  - `quality.subgroup_chart`
+  - `quality.run_chart`
+  - `quality.capability`
+  - `quality.gage_rr`
+  - `quality.gage_run_chart`
+- Moved quality-specific column selection, option validation, API error
+  mapping, warning mapping, Gage R&R column preflight reuse, and result
+  persistence cleanup paths out of `analysis_runs.py` into the quality runner
+  module.
+- Updated the method execution registry so all six current quality method IDs
+  now point to quality-owned runner functions.
+- Strengthened the handler contract test to assert all six quality handlers use
+  the module-owned runner functions.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for quality-owned handler registry coverage and
+  representative quality executions: passed with 8 selected tests.
+- Windows backend ruff format check for `backend`: passed, 111 files already
+  formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 75 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 270 tests,
+  frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Quality runner module still preserves the current inline result-persistence
+  pattern; a later refactor can generalize the duplicated succeeded-result
+  wrapper shared by runner modules.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Either extract the duplicated successful analysis-result persistence wrapper
+  shared by runner modules, or start the next documented Gate slice only with
+  reference-backed statistical fixtures.
+
+## Progress Update 78 - Shared Result Persistence Helper First Slice
+
+Completed in current working tree:
+
+- Added `store_succeeded_analysis_result` to
+  `backend/app/services/analysis_run_execution.py`.
+- Centralized successful analysis result envelope construction, canonical JSON
+  serialization, result path generation, SHA-256 calculation, metadata insert,
+  and result-file cleanup on metadata insert failure.
+- Migrated EDA runner methods to the shared helper:
+  - `eda.descriptive`
+  - `eda.graphical_summary`
+  - `eda.normality`
+  - `eda.equal_variances`
+- Migrated categorical runner methods to the shared helper:
+  - `categorical.one_proportion`
+  - `categorical.two_proportion`
+  - `categorical.chi_square_association`
+- Updated cleanup tests so metadata insert failures are injected at the shared
+  helper boundary, and added categorical cleanup coverage through
+  `categorical.one_proportion`.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for shared helper cleanup, representative EDA and
+  categorical execution, handler registry, and analysis-run helper tests:
+  passed with 7 selected tests.
+- Windows backend ruff format check for `backend`: passed, 111 files already
+  formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 75 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 271 tests,
+  frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Hypothesis, quality, and simple generic regression runners still use local
+  inline result-persistence blocks; `regression.linear_model` also has
+  model-manifest persistence that needs a narrower follow-up.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Migrate hypothesis and quality runner methods to
+  `store_succeeded_analysis_result` in one or two small batches, keeping
+  `regression.linear_model` manifest persistence separate until its cleanup
+  behavior has dedicated coverage.
+
+## Progress Update 79 - Shared Result Persistence Helper Expansion
+
+Completed in current working tree:
+
+- Migrated all hypothesis runner methods to `store_succeeded_analysis_result`:
+  - `hypothesis.one_sample_t`
+  - `hypothesis.paired_t`
+  - `hypothesis.one_sample_wilcoxon`
+  - `hypothesis.two_sample_t`
+  - `hypothesis.mann_whitney`
+  - `hypothesis.kruskal_wallis`
+  - `hypothesis.one_way_anova`
+  - `hypothesis.equivalence_tost`
+- Migrated all current quality runner methods to
+  `store_succeeded_analysis_result`:
+  - `quality.individuals_chart`
+  - `quality.subgroup_chart`
+  - `quality.run_chart`
+  - `quality.capability`
+  - `quality.gage_rr`
+  - `quality.gage_run_chart`
+- Preserved the existing outer row-snapshot cleanup block in each runner while
+  delegating result JSON cleanup to the shared helper.
+- Added cleanup regression coverage for `hypothesis.one_sample_t` and
+  `quality.individuals_chart` metadata insert failures.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for shared helper cleanup, representative hypothesis
+  and quality execution, and handler registry coverage: passed with 5 selected
+  tests.
+- Windows backend ruff format check for `backend`: passed, 111 files already
+  formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 75 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 273 tests,
+  frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- `regression.pearson` and `regression.xy_correlation` still use local inline
+  result-persistence blocks.
+- `regression.linear_model` still has custom result plus model-manifest
+  persistence and cleanup behavior that should remain separate until the
+  regression model manifest path has focused coverage.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Migrate simple generic regression result persistence for `regression.pearson`
+  and `regression.xy_correlation` to the shared helper, then evaluate a narrow
+  helper or wrapper for `regression.linear_model` manifest persistence.
+
+## Progress Update 80 - Simple Regression Result Persistence Helper Migration
+
+Completed in current working tree:
+
+- Migrated `regression.pearson` to `store_succeeded_analysis_result`.
+- Migrated `regression.xy_correlation` to `store_succeeded_analysis_result`.
+- Preserved the existing outer row-snapshot cleanup block in both simple
+  regression runners while delegating result JSON cleanup to the shared helper.
+- Added cleanup regression coverage for metadata insert failures:
+  - `regression.pearson`
+  - `regression.xy_correlation`
+- Kept `regression.linear_model` on its custom result plus model-manifest
+  persistence path because it writes and registers an additional
+  `regression_model_manifest` artifact.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for shared helper cleanup, representative Pearson and
+  X-Y execution, and handler registry coverage: passed with 5 selected tests.
+- Windows backend ruff format check for `backend`: passed, 111 files already
+  formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 75 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 275 tests,
+  frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- `regression.linear_model` still has custom result plus model-manifest
+  persistence and cleanup behavior.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Evaluate a narrow helper or wrapper for `regression.linear_model` that can
+  preserve manifest artifact registration and cleanup without weakening the
+  stored-model prediction boundary.
+
+## Progress Update 81 - Linear Model Manifest-Aware Persistence Wrapper
+
+Completed in current working tree:
+
+- Extracted `regression.linear_model` result and model-manifest persistence into
+  a dedicated `_store_succeeded_linear_model_result` wrapper inside
+  `backend/app/services/analysis_runners_regression.py`.
+- Kept `regression.linear_model` separate from the generic
+  `store_succeeded_analysis_result` helper because it writes both:
+  - the analysis `result.json`
+  - the app-created `regression_model_manifest` artifact and regression model
+    metadata record
+- Preserved result envelope behavior:
+  - `prediction_basis` stays out of the analysis result envelope
+  - `model_manifest` metadata remains in the result envelope
+  - the full prediction basis remains in the checksum-validated manifest
+- Preserved row-snapshot cleanup in the runner and moved result/manifest cleanup
+  into the manifest-aware wrapper.
+- Added focused cleanup coverage for the case where manifest writing succeeds
+  but `result.json` writing fails.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, prediction endpoints, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for linear-model execution, manifest cleanup,
+  result-write cleanup, manifest-backed prediction, and handler registry
+  coverage: passed with 5 selected tests.
+- Windows backend ruff format check for `backend`: passed, 111 files already
+  formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 75 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 276 tests,
+  frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- The regression-specific wrapper is intentionally local to
+  `analysis_runners_regression.py`; a more generic multi-artifact persistence
+  helper is not added yet.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- With method runner persistence mostly stabilized, move to either a small
+  documentation/contract cleanup pass or the next reference-backed statistical
+  Gate slice.
+
+## Progress Update 82 - Persistence Boundary Contract Test
+
+Completed in current working tree:
+
+- Added an explicit API contract test for analysis runner persistence
+  boundaries.
+- The test now verifies result-only runner modules delegate successful result
+  persistence to `store_succeeded_analysis_result` and do not directly import
+  low-level metadata insert or file-write primitives.
+- The test also verifies `regression.pearson` and `regression.xy_correlation`
+  use the shared result helper, while `regression.linear_model` keeps the
+  manifest-aware regression-model persistence boundary.
+- Updated Gate B progress and statistical audit docs to record the persistence
+  boundary contract coverage.
+- Kept statistical calculations, result schemas, method availability, storage
+  paths, migrations, prediction endpoints, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for handler registry, handler builder guard, and
+  persistence boundary contract coverage: passed with 3 selected tests.
+- Windows backend ruff format check for `backend`: passed, 111 files already
+  formatted.
+- Windows backend ruff check for `backend`: passed.
+- Windows backend mypy for `backend/app`: passed with 75 source files.
+- Full Windows `scripts/check.ps1`: passed with backend pytest 277 tests,
+  frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+
+Remaining limitations:
+
+- Persistence boundary checks are intentionally internal contract tests; they
+  complement but do not replace API execution and cleanup tests.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Continue with a small documentation/contract cleanup pass, or start the next
+  reference-backed statistical Gate slice.

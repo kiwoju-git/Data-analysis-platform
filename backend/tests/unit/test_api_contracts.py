@@ -6,6 +6,11 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+import app.services.analysis_runners_categorical as analysis_runners_categorical
+import app.services.analysis_runners_eda as analysis_runners_eda
+import app.services.analysis_runners_hypothesis as analysis_runners_hypothesis
+import app.services.analysis_runners_quality as analysis_runners_quality
+import app.services.analysis_runners_regression as analysis_runners_regression
 from app.analyses.registry import METHODS, MODULES, analysis_method_catalog
 from app.api.v1.schemas.analyses import (
     AnalysisProvenance,
@@ -21,6 +26,46 @@ from app.api.v1.schemas.common import JobReference, JobState, JobStatusResponse
 from app.api.v1.schemas.doe import DoeDesignResponsesResponse, FactorialDesignResponse
 from app.core.config import Settings
 from app.main import create_app
+from app.services.analysis_method_handlers import (
+    METHOD_EXECUTION_HANDLER_SPECS,
+    build_method_execution_handlers,
+)
+from app.services.analysis_run_execution import store_succeeded_analysis_result
+from app.services.analysis_runners_categorical import (
+    run_chi_square_association_analysis,
+    run_one_proportion_analysis,
+    run_two_proportion_analysis,
+)
+from app.services.analysis_runners_eda import (
+    run_descriptive_analysis,
+    run_equal_variances_analysis,
+    run_graphical_summary_analysis,
+    run_normality_analysis,
+)
+from app.services.analysis_runners_hypothesis import (
+    run_equivalence_tost_analysis,
+    run_kruskal_wallis_analysis,
+    run_mann_whitney_analysis,
+    run_one_sample_t_analysis,
+    run_one_sample_wilcoxon_analysis,
+    run_one_way_anova_analysis,
+    run_paired_t_analysis,
+    run_two_sample_t_analysis,
+)
+from app.services.analysis_runners_quality import (
+    run_capability_analysis,
+    run_gage_rr_analysis,
+    run_gage_run_chart_analysis,
+    run_individuals_chart_analysis,
+    run_run_chart_analysis,
+    run_subgroup_chart_analysis,
+)
+from app.services.analysis_runners_regression import (
+    run_linear_model_analysis,
+    run_pearson_analysis,
+    run_xy_correlation_analysis,
+)
+from app.services.analysis_runs import _METHOD_EXECUTION_HANDLERS
 from app.storage.metadata import (
     METADATA_DB_RELATIVE_PATH,
     AnalysisRunRecord,
@@ -110,6 +155,146 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "quality.gage_run_chart",
         "doe.factorial_design",
     ]
+
+
+def test_analysis_execution_handler_registry_covers_core_methods() -> None:
+    assert [spec.method_id for spec in METHOD_EXECUTION_HANDLER_SPECS] == list(
+        _METHOD_EXECUTION_HANDLERS
+    )
+
+    assert {
+        method_id: handler.result_summary_type
+        for method_id, handler in _METHOD_EXECUTION_HANDLERS.items()
+    } == {
+        "eda.descriptive": "descriptive_statistics",
+        "eda.graphical_summary": "graphical_summary",
+        "eda.normality": "normality",
+        "eda.equal_variances": "equal_variances",
+        "hypothesis.one_sample_t": "one_sample_t_test",
+        "hypothesis.paired_t": "paired_t_test",
+        "hypothesis.one_sample_wilcoxon": "one_sample_wilcoxon_signed_rank_test",
+        "hypothesis.two_sample_t": "two_sample_t_test",
+        "hypothesis.mann_whitney": "mann_whitney_u_test",
+        "hypothesis.kruskal_wallis": "kruskal_wallis_test",
+        "hypothesis.one_way_anova": "one_way_anova",
+        "hypothesis.equivalence_tost": "equivalence_tost",
+        "categorical.one_proportion": "one_proportion_test",
+        "categorical.two_proportion": "two_proportion_test",
+        "categorical.chi_square_association": "chi_square_association",
+        "regression.pearson": "pearson_correlation",
+        "regression.xy_correlation": "xy_correlation_matrix",
+        "regression.linear_model": "linear_model",
+        "quality.individuals_chart": "individuals_chart",
+        "quality.subgroup_chart": "subgroup_chart",
+        "quality.run_chart": "run_chart",
+        "quality.capability": "capability_analysis",
+        "quality.gage_rr": "gage_rr",
+        "quality.gage_run_chart": "gage_run_chart",
+    }
+    generic_analysis_run_exceptions = {"doe.factorial_design"}
+    assert set(_METHOD_EXECUTION_HANDLERS) == {
+        method.method_id
+        for method in METHODS
+        if method.availability == MethodAvailability.AVAILABLE
+        and method.method_id not in generic_analysis_run_exceptions
+    }
+
+    methods_by_id = {method.method_id: method for method in METHODS}
+    assert all(
+        handler.method_version == methods_by_id[method_id].method_version
+        for method_id, handler in _METHOD_EXECUTION_HANDLERS.items()
+    )
+    assert _METHOD_EXECUTION_HANDLERS["eda.descriptive"].run is run_descriptive_analysis
+    assert _METHOD_EXECUTION_HANDLERS["eda.graphical_summary"].run is run_graphical_summary_analysis
+    assert _METHOD_EXECUTION_HANDLERS["eda.normality"].run is run_normality_analysis
+    assert _METHOD_EXECUTION_HANDLERS["eda.equal_variances"].run is run_equal_variances_analysis
+    assert _METHOD_EXECUTION_HANDLERS["hypothesis.one_sample_t"].run is run_one_sample_t_analysis
+    assert _METHOD_EXECUTION_HANDLERS["hypothesis.paired_t"].run is run_paired_t_analysis
+    assert (
+        _METHOD_EXECUTION_HANDLERS["hypothesis.one_sample_wilcoxon"].run
+        is run_one_sample_wilcoxon_analysis
+    )
+    assert _METHOD_EXECUTION_HANDLERS["hypothesis.two_sample_t"].run is run_two_sample_t_analysis
+    assert _METHOD_EXECUTION_HANDLERS["hypothesis.mann_whitney"].run is run_mann_whitney_analysis
+    assert (
+        _METHOD_EXECUTION_HANDLERS["hypothesis.kruskal_wallis"].run is run_kruskal_wallis_analysis
+    )
+    assert _METHOD_EXECUTION_HANDLERS["hypothesis.one_way_anova"].run is run_one_way_anova_analysis
+    assert (
+        _METHOD_EXECUTION_HANDLERS["hypothesis.equivalence_tost"].run
+        is run_equivalence_tost_analysis
+    )
+    assert (
+        _METHOD_EXECUTION_HANDLERS["categorical.one_proportion"].run is run_one_proportion_analysis
+    )
+    assert (
+        _METHOD_EXECUTION_HANDLERS["categorical.two_proportion"].run is run_two_proportion_analysis
+    )
+    assert (
+        _METHOD_EXECUTION_HANDLERS["categorical.chi_square_association"].run
+        is run_chi_square_association_analysis
+    )
+    assert _METHOD_EXECUTION_HANDLERS["regression.pearson"].run is run_pearson_analysis
+    assert (
+        _METHOD_EXECUTION_HANDLERS["regression.xy_correlation"].run is run_xy_correlation_analysis
+    )
+    assert _METHOD_EXECUTION_HANDLERS["regression.linear_model"].run is run_linear_model_analysis
+    assert (
+        _METHOD_EXECUTION_HANDLERS["quality.individuals_chart"].run
+        is run_individuals_chart_analysis
+    )
+    assert _METHOD_EXECUTION_HANDLERS["quality.subgroup_chart"].run is run_subgroup_chart_analysis
+    assert _METHOD_EXECUTION_HANDLERS["quality.run_chart"].run is run_run_chart_analysis
+    assert _METHOD_EXECUTION_HANDLERS["quality.capability"].run is run_capability_analysis
+    assert _METHOD_EXECUTION_HANDLERS["quality.gage_rr"].run is run_gage_rr_analysis
+    assert _METHOD_EXECUTION_HANDLERS["quality.gage_run_chart"].run is run_gage_run_chart_analysis
+
+
+def test_analysis_execution_handler_builder_rejects_missing_runner() -> None:
+    with pytest.raises(RuntimeError, match="Missing analysis execution runners"):
+        build_method_execution_handlers({})
+
+
+def test_analysis_runner_persistence_boundaries_are_explicit() -> None:
+    result_only_runner_modules = (
+        analysis_runners_eda,
+        analysis_runners_categorical,
+        analysis_runners_hypothesis,
+        analysis_runners_quality,
+    )
+
+    assert analysis_runners_eda.store_succeeded_analysis_result is store_succeeded_analysis_result
+    assert (
+        analysis_runners_categorical.store_succeeded_analysis_result
+        is store_succeeded_analysis_result
+    )
+    assert (
+        analysis_runners_hypothesis._store_succeeded_analysis_result
+        is store_succeeded_analysis_result
+    )
+    assert (
+        analysis_runners_quality._store_succeeded_analysis_result is store_succeeded_analysis_result
+    )
+    assert (
+        analysis_runners_regression._store_succeeded_analysis_result
+        is store_succeeded_analysis_result
+    )
+
+    for module in result_only_runner_modules:
+        assert not hasattr(module, "atomic_write_bytes")
+        assert not hasattr(module, "AnalysisRunRecord")
+        assert not hasattr(module, "insert_analysis_run_record_with_artifacts")
+        assert not hasattr(
+            module,
+            "insert_analysis_run_record_with_artifacts_and_regression_model",
+        )
+
+    assert not hasattr(analysis_runners_regression, "insert_analysis_run_record_with_artifacts")
+    assert hasattr(
+        analysis_runners_regression,
+        "insert_analysis_run_record_with_artifacts_and_regression_model",
+    )
+    assert hasattr(analysis_runners_regression, "_store_succeeded_linear_model_result")
 
 
 def test_analysis_method_catalog_response_groups_planned_and_disabled_methods() -> None:
@@ -587,6 +772,50 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     assert beta["median"] == 30
     assert payload["warnings"] == []
     assert "p_value" not in response.text
+
+
+def test_analysis_provenance_includes_runtime_metadata_without_paths_or_values(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("DATALAB_GIT_COMMIT", "test-build-commit")
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value,label\n1,SECRET_VALUE\n2,SAFE\n",
+            filename="sample.csv",
+        )
+        value_column = next(
+            column for column in version["columns"] if column["display_name"] == "value"
+        )
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [value_column["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    provenance = response.json()["provenance"]
+    assert provenance["python_version"]
+    assert provenance["platform"]
+    assert provenance["build_commit"] == "test-build-commit"
+    assert "numpy" in provenance["package_versions"]
+    assert "scipy" in provenance["package_versions"]
+
+    provenance_json = json.dumps(provenance, ensure_ascii=False)
+    assert str(tmp_path) not in provenance_json
+    assert "SECRET_VALUE" not in provenance_json
+    assert "sample.csv" not in provenance_json
 
 
 def test_analysis_run_executes_graphical_summary_from_dataset_version(tmp_path) -> None:
@@ -6031,6 +6260,7 @@ def test_dataset_schema_update_marks_existing_analysis_run_stale(tmp_path) -> No
 
     with TestClient(create_app(settings)) as client:
         version = _upload_confirmed_numeric_dataset(client)
+        first_column = version["columns"][0]
         response = client.post(
             "/api/v1/analysis-runs",
             json={
@@ -6046,12 +6276,27 @@ def test_dataset_schema_update_marks_existing_analysis_run_stale(tmp_path) -> No
         )
         analysis_id = response.json()["analysis_id"]
         initial_status = client.get(f"/api/v1/analysis-runs/{analysis_id}")
+        noop_patch_response = client.patch(
+            f"/api/v1/dataset-versions/{version['version_id']}/schema",
+            json={
+                "columns": [
+                    {
+                        "column_id": first_column["column_id"],
+                        "display_name": first_column["display_name"],
+                        "measurement_level": first_column["measurement_level"],
+                        "role": first_column["role"],
+                        "unit": first_column["unit"],
+                    },
+                ],
+            },
+        )
+        noop_status = client.get(f"/api/v1/analysis-runs/{analysis_id}")
         patch_response = client.patch(
             f"/api/v1/dataset-versions/{version['version_id']}/schema",
             json={
                 "columns": [
                     {
-                        "column_id": version["columns"][0]["column_id"],
+                        "column_id": first_column["column_id"],
                         "display_name": "측정값",
                         "measurement_level": "continuous",
                         "role": "feature",
@@ -6065,7 +6310,12 @@ def test_dataset_schema_update_marks_existing_analysis_run_stale(tmp_path) -> No
     assert response.status_code == 201
     assert initial_status.status_code == 200
     assert initial_status.json()["stale"] is False
+    assert noop_patch_response.status_code == 200
+    assert noop_patch_response.json()["schema_hash"] == version["schema_hash"]
+    assert noop_status.status_code == 200
+    assert noop_status.json()["stale"] is False
     assert patch_response.status_code == 200
+    assert patch_response.json()["schema_hash"] != version["schema_hash"]
     assert stale_status.status_code == 200
     assert stale_status.json()["stale"] is True
 
@@ -6083,7 +6333,7 @@ def test_descriptive_result_file_is_removed_when_analysis_run_insert_fails(
             raise RuntimeError("metadata insert failed")
 
         monkeypatch.setattr(
-            "app.services.analysis_runs.insert_analysis_run_record_with_artifacts",
+            "app.services.analysis_run_execution.insert_analysis_run_record_with_artifacts",
             fail_insert,
         )
 
@@ -6097,6 +6347,253 @@ def test_descriptive_result_file_is_removed_when_analysis_run_insert_fails(
                 "options": {
                     "column_ids": [version["columns"][0]["column_id"]],
                     "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+
+    assert response.status_code == 500
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/result.json"))
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
+
+
+def test_one_proportion_result_file_is_removed_when_analysis_run_insert_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"outcome\nyes\nyes\nyes\nyes\nyes\nno\nno\n"
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=content,
+            filename="one-proportion-cleanup.csv",
+        )
+
+        def fail_insert(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("metadata insert failed")
+
+        monkeypatch.setattr(
+            "app.services.analysis_run_execution.insert_analysis_run_record_with_artifacts",
+            fail_insert,
+        )
+
+        response_column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "categorical.one_proportion",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "event_level": "yes",
+                    "null_proportion": 0.5,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "ci_method": "wilson",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+
+    assert response.status_code == 500
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/result.json"))
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
+
+
+def test_one_sample_t_result_file_is_removed_when_analysis_run_insert_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"response\n10.2\n9.8\n10.5\n10.1\n9.9\n10.4\n"
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=content,
+            filename="one-sample-cleanup.csv",
+        )
+
+        def fail_insert(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("metadata insert failed")
+
+        monkeypatch.setattr(
+            "app.services.analysis_run_execution.insert_analysis_run_record_with_artifacts",
+            fail_insert,
+        )
+
+        response_column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_sample_t",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "null_mean": 10,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+
+    assert response.status_code == 500
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/result.json"))
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
+
+
+def test_individuals_chart_result_file_is_removed_when_analysis_run_insert_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"value\n10\n11\n9\n10\n12\n11\n"
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=content,
+            filename="individuals-chart-cleanup.csv",
+        )
+
+        def fail_insert(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("metadata insert failed")
+
+        monkeypatch.setattr(
+            "app.services.analysis_run_execution.insert_analysis_run_record_with_artifacts",
+            fail_insert,
+        )
+
+        value_column_id = version["columns"][0]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "value": value_column_id,
+                },
+                "options": {
+                    "value_column_id": value_column_id,
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+
+    assert response.status_code == 500
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/result.json"))
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
+
+
+def test_pearson_result_file_is_removed_when_analysis_run_insert_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"x,y\n1,1\n2,2\n3,1\n4,4\n5,5\n6,7\n"
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=content,
+            filename="pearson-cleanup.csv",
+        )
+
+        def fail_insert(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("metadata insert failed")
+
+        monkeypatch.setattr(
+            "app.services.analysis_run_execution.insert_analysis_run_record_with_artifacts",
+            fail_insert,
+        )
+
+        x_column_id = version["columns"][0]["column_id"]
+        y_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.pearson",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "x": x_column_id,
+                    "y": y_column_id,
+                },
+                "options": {
+                    "x_column_id": x_column_id,
+                    "y_column_id": y_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+
+    assert response.status_code == 500
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/result.json"))
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
+
+
+def test_xy_correlation_result_file_is_removed_when_analysis_run_insert_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"x1,x2,y1,y2\n1,2,1,2\n2,1,2,1\n3,4,1,4\n4,8,4,3\n5,9,5,7\n6,13,7,8\n"
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=content,
+            filename="xy-correlation-cleanup.csv",
+        )
+
+        def fail_insert(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("metadata insert failed")
+
+        monkeypatch.setattr(
+            "app.services.analysis_run_execution.insert_analysis_run_record_with_artifacts",
+            fail_insert,
+        )
+
+        x_column_ids = [
+            version["columns"][0]["column_id"],
+            version["columns"][1]["column_id"],
+        ]
+        y_column_ids = [
+            version["columns"][2]["column_id"],
+            version["columns"][3]["column_id"],
+        ]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.xy_correlation",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "x": ",".join(x_column_ids),
+                    "y": ",".join(y_column_ids),
+                },
+                "options": {
+                    "x_column_ids": x_column_ids,
+                    "y_column_ids": y_column_ids,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "missing_policy": "pairwise_complete_case",
                 },
             },
         )
@@ -6145,9 +6642,65 @@ def test_linear_model_result_manifest_files_are_removed_when_metadata_insert_fai
             raise RuntimeError("metadata insert failed")
 
         monkeypatch.setattr(
-            "app.services.analysis_runs."
+            "app.services.analysis_runners_regression."
             "insert_analysis_run_record_with_artifacts_and_regression_model",
             fail_insert,
+        )
+
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.linear_model",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "predictors": predictor_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "predictor_column_ids": [predictor_column_id],
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "missing_policy": "complete_case",
+                    "include_intercept": True,
+                    "covariance_type": "standard",
+                },
+            },
+        )
+
+    assert response.status_code == 500
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/result.json"))
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/row_snapshot.json"))
+    assert not list(settings.workspace_root.glob("workspaces/analyses/*/model-*.json"))
+
+
+def test_linear_model_manifest_file_is_removed_when_result_write_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from app.storage.atomic import atomic_write_bytes as real_atomic_write_bytes
+
+    settings = Settings(workspace_root=tmp_path)
+    content = b"y,x\n2,1\n4,2\n5,3\n8,4\n9,5\n"
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=content,
+            filename="linear-result-write-cleanup.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        predictor_column_id = version["columns"][1]["column_id"]
+
+        def fail_result_write(path: object, payload: bytes) -> None:
+            if getattr(path, "name", None) == "result.json":
+                raise RuntimeError("result write failed")
+            real_atomic_write_bytes(path, payload)
+
+        monkeypatch.setattr(
+            "app.services.analysis_runners_regression.atomic_write_bytes",
+            fail_result_write,
         )
 
         response = client.post(

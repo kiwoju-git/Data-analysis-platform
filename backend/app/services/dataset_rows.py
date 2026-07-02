@@ -96,6 +96,16 @@ def iter_dataset_rows(context: DatasetRowsContext) -> Iterator[list[str | None]]
     )
 
 
+def verify_canonical_rows_artifact(context: DatasetRowsContext) -> None:
+    for _values in _iter_canonical_rows_jsonl(
+        path=context.canonical_rows_path,
+        artifact=context.canonical_rows_artifact,
+        expected_row_count=context.version.row_count,
+        column_count=len(context.columns),
+    ):
+        pass
+
+
 def _iter_canonical_rows_jsonl(
     *,
     path: Path,

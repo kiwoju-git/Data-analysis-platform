@@ -8,6 +8,19 @@ Gate B has completed the upload/version, paste-as-dataset intake, canonical JSON
 
 Gate D1 has started with DOE design-asset and response-entry slices. `doe.factorial_design` is available through dedicated `POST /api/v1/doe-designs/factorial`, `GET /api/v1/doe-designs/{design_id}`, `PUT /api/v1/doe-designs/{design_id}/responses`, and `GET /api/v1/doe-designs/{design_id}/responses` routes, stores schema v7 `experiment_designs`/`experiment_design_versions`/`experiment_runs` metadata plus schema v8 `experiment_run_responses`, and renders a minimal `FactorialDesignPanel` run-table preview/response-entry shell. It does not yet implement effects, OLS/ANOVA, diagnostics, alias structure, or DOE charts.
 
+Current stabilization update:
+
+- Paginated row preview now verifies the full canonical JSONL artifact before returning any preview page, so a small `limit` cannot bypass final row count, byte size, SHA-256, row-index, column-count, or value-type checks.
+- Schema PATCH now treats unchanged display name, measurement level, role, and unit payloads as no-ops. No-op PATCH keeps the same `schema_hash` and does not mark existing analysis runs stale; real schema changes still mark existing runs stale.
+- Generic analysis-run result envelopes now carry runtime/build provenance fields for Python version, platform, optional `DATALAB_GIT_COMMIT`, and NumPy/SciPy package versions without exposing raw paths or raw cell values.
+- Common analysis-run execution helpers for row snapshot artifacts, filter row freezing, provenance construction, canonical result/config JSON, result paths, successful result persistence, and compensating file cleanup now live in `services/analysis_run_execution.py` so method-family runner modules can be split without circular imports.
+- `analysis_runs.py` now dispatches the four EDA methods, all eight hypothesis methods, all three categorical methods, the three generic regression analysis-run methods, and all six current quality analysis-run methods through a shared `MethodExecutionHandler` registry. Handler metadata and missing-runner validation live in `services/analysis_method_handlers.py`; the four EDA runner functions and EDA-specific selection/warning helpers live in `services/analysis_runners_eda.py`; the eight hypothesis runner functions and hypothesis selection/warning helpers live in `services/analysis_runners_hypothesis.py`; the three categorical runner functions and categorical selection/warning helpers live in `services/analysis_runners_categorical.py`; the three generic regression runner functions, regression selection/warning helpers, and `regression.linear_model` safe JSON model-manifest persistence live in `services/analysis_runners_regression.py`; the six current quality runner functions plus quality-specific selection/warning helpers live in `services/analysis_runners_quality.py`; `regression.predict` remains on the dedicated stored-model API path, while `doe.factorial_design` remains on dedicated DOE design routes instead of the generic analysis-run endpoint.
+- `docs/statistical_method_audit_matrix.md` records the current registry, execution path, method-level tests, effect/provenance coverage, and known limitations for all 29 stable method IDs.
+- `docs/ci_status.md` records the Windows workflow trigger configuration and the current limitation that authenticated remote GitHub Actions run listing was not available from this environment.
+- Latest local Windows validation after the persistence boundary contract test: `scripts/check.ps1` passed with backend pytest 277 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+- EDA, categorical, hypothesis, quality, and simple generic regression runner modules now use the shared `store_succeeded_analysis_result` helper for result JSON writing, checksum calculation, analysis run/artifact metadata insertion, and result-file cleanup on metadata insert failure. `regression.linear_model` uses a regression-specific manifest-aware persistence wrapper that preserves `regression_model_manifest` artifact registration and cleanup.
+- Backend API contract tests now assert the persistence boundary explicitly: result-only runner modules must not import low-level metadata insert or file-write primitives, while `regression.linear_model` keeps the manifest-aware regression-model insert path.
+
 ## Checklist
 
 | Area | Status | Evidence |
@@ -76,6 +89,57 @@ Gate D1 has started with DOE design-asset and response-entry slices. `doe.factor
 
 Last validated on 2026-07-02:
 
+- Current linear model runner split: `regression.linear_model` now uses a
+  module-owned runner function in
+  `backend/app/services/analysis_runners_regression.py` alongside
+  `regression.pearson` and `regression.xy_correlation`. Linear-model-specific
+  safe JSON model-manifest payload construction, diagnostics redaction, and
+  manifest path helpers moved with the runner. The dedicated stored-model
+  prediction API path is unchanged. Statistical calculations, result schemas,
+  availability, storage paths, migrations, and frontend behavior were
+  unchanged. Targeted Windows pytest for regression-owned handler registry
+  coverage, representative linear-model executions, and manifest cleanup passed
+  with 7 selected tests. Backend ruff format, ruff check, and mypy passed.
+  Full Windows `scripts/check.ps1` passed with backend pytest 270 tests,
+  frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+- Current regression correlation runner split: `regression.pearson` and
+  `regression.xy_correlation` now use module-owned runner functions in
+  `backend/app/services/analysis_runners_regression.py`; `analysis_runs.py`
+  only wires those method IDs through the shared `MethodExecutionHandler`
+  registry. This intermediate state was superseded by the current linear model
+  runner split. Statistical calculations, result schemas, availability, storage
+  paths, migrations, and frontend behavior were unchanged. Targeted Windows
+  pytest for regression-owned handler registry coverage and representative
+  Pearson/X-Y executions passed with 3 selected tests. Backend ruff format,
+  ruff check, and mypy passed. Full Windows `scripts/check.ps1` passed with
+  backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck,
+  and frontend build.
+- Current hypothesis runner split: `hypothesis.one_sample_t`,
+  `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`,
+  `hypothesis.two_sample_t`, `hypothesis.mann_whitney`,
+  `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, and
+  `hypothesis.equivalence_tost` now use module-owned runner functions in
+  `backend/app/services/analysis_runners_hypothesis.py`; `analysis_runs.py`
+  only wires those method IDs through the shared `MethodExecutionHandler`
+  registry. Statistical calculations, result schemas, availability, storage
+  paths, migrations, and frontend behavior were unchanged. Targeted Windows
+  pytest for hypothesis-owned handler registry coverage and representative
+  hypothesis executions passed with 9 selected tests. Backend ruff format,
+  ruff check, and mypy passed. Full Windows `scripts/check.ps1` passed with
+  backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck,
+  and frontend build.
+- Current categorical runner split: `categorical.one_proportion`,
+  `categorical.two_proportion`, and `categorical.chi_square_association` now
+  use module-owned runner functions in
+  `backend/app/services/analysis_runners_categorical.py`; `analysis_runs.py`
+  only wires those method IDs through the shared `MethodExecutionHandler`
+  registry. Statistical calculations, result schemas, availability, storage
+  paths, migrations, and frontend behavior were unchanged. Targeted Windows
+  pytest for categorical-owned handler registry coverage and representative
+  categorical executions passed with 4 selected tests. Backend ruff format,
+  ruff check, and mypy passed. Full Windows `scripts/check.ps1` passed with
+  backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck,
+  and frontend build.
 - Current `quality.gage_run_chart` slice: balanced crossed Gage Run Chart is available for one numeric measurement column plus part/operator/replicate columns and an optional order column. The method reads canonical rows, persists row snapshot provenance and result JSON, supports checksum-validated result retrieval, and returns diagnostic-only warning metadata, balanced design counts, overall summary, per-part-index and per-operator-index summaries, capped indexed chart points, canonical row positions, and order-source metadata. It rejects unbalanced or underspecified Gage designs instead of downgrading to a simple run chart, and it redacts raw part/operator/replicate labels from result payloads. Frontend renders `GageRunChartPanel` with role selectors, optional order selector, inline SVG indexed diagnostic chart, and part/operator summary tables. Targeted backend pytest for `test_gage_run_chart.py` and selected Gage/API/catalog contracts passed with 7 selected tests. Backend ruff and mypy passed. Frontend lint, typecheck, and Vitest passed with 39 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 252 tests, frontend Vitest 39 tests, frontend lint/typecheck, and frontend build.
 - Current `doe.factorial_design` slice: 2-level full factorial design generation and response entry are available through dedicated DOE design routes, not through the generic analysis-run endpoint. The generator preserves standard order and run order, supports deterministic randomization seed, replicates, center points, optional blocks, factor low/high/unit metadata, explicit run-count rejection, and `design_sha256`. Schema v7 stores design/version/run records, schema v8 stores numeric run response records, and readback verifies the design checksum before returning payloads. Response saving requires exactly one finite numeric value for every current run_order and does not mutate factor/run metadata. Frontend renders `FactorialDesignPanel` with inputs, actual run-table preview, and response name/unit/value entry. Effects, OLS/ANOVA, diagnostics, alias structure, DOE charts, and export remain out of scope. WSL temporary backend targeted pytest for `test_metadata_store.py` and `test_api_contracts.py` passed with 95 tests; WSL temporary backend full ruff/mypy/pytest passed with 263 backend tests; WSL frontend lint, typecheck, Vitest with 40 tests, and build passed; Windows `scripts/check.ps1` passed with backend pytest 263 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
 

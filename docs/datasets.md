@@ -52,6 +52,8 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 `PATCH /api/v1/dataset-versions/{version_id}/schema`
 
 - Updates confirmed column display name, measurement level, role, and unit.
+- Treats requests that do not change any persisted display name, measurement level, role, or unit as no-ops; no-op requests keep the same `schema_hash` and do not mark existing analysis runs stale.
+- Marks existing analysis runs for the same dataset version stale only when the schema metadata actually changes.
 - Does not change raw bytes, original column names, inferred data types, row count, or source SHA-256.
 - Rejects duplicate display names and unknown column IDs without echoing raw row values.
 - The current UI includes a guarded helper for headerless 34-column Bayesian optimization samples: `column_1` as ID, `column_2` through `column_25` as features, and `column_26` through `column_34` as responses. It only updates schema metadata drafts; it does not edit cell values.
@@ -60,7 +62,8 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 
 - Returns a bounded row preview using `offset` and `limit`.
 - Enforces `offset >= 0`, `1 <= limit <= 100`.
-- Streams the validated canonical rows artifact and returns only the requested page.
+- Verifies the entire canonical rows artifact before returning a page, then streams canonical rows for the requested page.
+- Detects row count, file size, SHA-256, row-index order, column count, and value-type mismatches before exposing preview values.
 - For headerless datasets, row index `0` maps to the confirmed `data_start_row`.
 
 `GET /api/v1/dataset-versions/{version_id}/profile`
@@ -86,7 +89,9 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 
 `POST /api/v1/analysis-runs`
 
-- `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, and `categorical.chi_square_association` are currently executable methods.
+- `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` are currently executable generic analysis-run methods.
+- `doe.factorial_design` is registry-available but intentionally uses dedicated DOE design routes, not the generic analysis-run endpoint.
+- `regression.predict` remains disabled in the generic method registry; predictions are available only through the dedicated regression-model prediction API after a stored app-created model manifest is validated.
 - All executable dataset-backed methods require a confirmed `dataset_version_id` and stream the validated canonical rows artifact instead of reparsing the raw upload.
 - `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` use `options.column_ids` for selected numeric columns.
 - `eda.equal_variances` uses a numeric response role plus a grouping role from `roles` or method-specific options.
@@ -102,7 +107,7 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 - `categorical.two_proportion` uses one binary response column plus an exactly two-level grouping role and explicit `event_level`, computes a Fisher exact p-value, and reports Newcombe-Wilson CI for the proportion difference plus risk ratio and odds ratio where finite.
 - `categorical.chi_square_association` uses two categorical columns, computes a Pearson chi-square independence test without continuity correction, reports expected-count diagnostics plus Cramer's V, and recommends Fisher exact for sparse 2x2 tables without automatically switching methods.
 - `eda.descriptive` computes real descriptive statistics for selected numeric columns. The result records `n_total`, `n_used`, missing count, non-numeric exclusion count, mean, sample standard deviation, min, Q1, median, Q3, max, warning codes, and provenance.
-- `eda.graphical_summary` streams the same canonical row source and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads for selected numeric columns. It does not add an image/chart renderer yet.
+- `eda.graphical_summary` streams the same canonical row source and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads for selected numeric columns, with inline frontend rendering for the current UI slice.
 - `eda.normality` streams the same canonical row source and computes real SciPy-backed Shapiro-Wilk, Anderson-Darling, and Q-Q point payloads for selected numeric columns. It does not automatically choose a downstream parametric or nonparametric method.
 - `eda.equal_variances` streams the same canonical row source and computes real SciPy-backed Brown-Forsythe and Levene(mean) results for grouped numeric responses. It does not automatically choose pooled/Welch or ANOVA variants.
 - `hypothesis.one_sample_t` streams the same canonical row source and computes real one-sample mean comparison results with N/exclusions, sample summary, CI, p-value, Cohen dz, warnings, and provenance.
@@ -118,7 +123,7 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 - `categorical.chi_square_association` streams the same canonical row source and computes real Pearson chi-square association results with N/exclusions, observed/expected counts, row/column percentages, standardized residuals, p-value, Cramer's V, sparse-cell warnings, and provenance.
 - Filter snapshots are frozen into an `analysis_row_snapshot` artifact linked from `analysis_artifacts`; the snapshot records the filter hash, canonical artifact hash, row identity, row ranges, and included row count without raw cell values.
 - The current filter expression engine supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions.
-- The current Workbench UI exposes those supported AND filter conditions for dataset-backed method pages, and the current fifteen available methods serialize them into executable analysis requests.
+- The current Workbench UI exposes those supported AND filter conditions for dataset-backed method pages, and the current generic executable methods serialize them into executable analysis requests.
 - Other analysis methods remain unavailable and must not return mock results.
 
 ## Next Step

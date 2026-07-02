@@ -120,6 +120,10 @@ class AnalysisProvenance(BaseModel):
     row_count_total: int | None = Field(default=None, ge=0)
     row_count_included: int | None = Field(default=None, ge=0)
     app_version: str
+    python_version: str | None = None
+    platform: str | None = None
+    build_commit: str | None = None
+    package_versions: dict[str, str] | None = None
 
 
 class AnalysisResultEnvelope(BaseModel):

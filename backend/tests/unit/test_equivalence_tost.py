@@ -154,6 +154,25 @@ def test_equivalence_tost_reports_exclusions_without_equivalence_fallback() -> N
     ]
 
 
+def test_equivalence_tost_requires_both_one_sided_tests_to_reject() -> None:
+    result = calculate_equivalence_tost(
+        [["11.1"], ["11.2"], ["11.3"]],
+        _response_column(),
+        reference_mean=10.0,
+        lower_bound=-1.0,
+        upper_bound=1.0,
+        alpha=0.05,
+    )
+
+    assert result["estimate"]["value"] == pytest.approx(1.2, abs=1e-12)
+    assert result["tests"]["lower"]["reject_null"] is True
+    assert result["tests"]["upper"]["reject_null"] is False
+    assert result["tost"]["equivalent"] is False
+    assert result["tost"]["decision_rule"] == "both_one_sided_tests_reject_at_alpha"
+    assert result["tost"]["p_value"] == result["tests"]["upper"]["p_value"]
+    assert result["confidence_interval"]["inside_equivalence_bounds"] is False
+
+
 def test_equivalence_tost_rejects_invalid_inputs_without_fake_statistic() -> None:
     with pytest.raises(EquivalenceTostError, match="equivalence_tost_design_unsupported"):
         calculate_equivalence_tost(

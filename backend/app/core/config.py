@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     bind_host: str = "127.0.0.1"
     bind_port: int = 8000
+    git_commit: str | None = None
     max_upload_bytes: int = 100 * 1024 * 1024
     workspace_root: Path = Field(default_factory=default_workspace_root)
     cors_allowed_origins: list[str] = Field(
