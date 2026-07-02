@@ -1,0 +1,23 @@
+{
+  "fixture_id": "one_sample_wilcoxon_scipy_reference_v1",
+  "source_fixture_id": "one_sample_wilcoxon_reference_inputs_v1",
+  "generated_with": {
+    "numpy": "2.2.6",
+    "scipy": "1.15.3"
+  },
+  "cases": [
+    {
+      "case_id": "exact_two_sided_no_zeros_or_ties",
+      "n_used": 5,
+      "n_nonzero": 5,
+      "sample_median": 14.0,
+      "median_difference": 4.0,
+      "positive_rank_sum": 13.0,
+      "negative_rank_sum": 2.0,
+      "rank_sum_total": 15.0,
+      "w_statistic": 2.0,
+      "pvalue": 0.1875,
+      "rank_biserial": 0.7333333333333333
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "source": "scipy.stats.ttest_rel cross-check plus explicit t confidence interval/effect-size calculation",
+  "scipy_version": "1.15.3",
+  "cases": [
+    {
+      "case_id": "two_sided_reference",
+      "n": 6,
+      "before_mean": 13.333333333333334,
+      "after_mean": 15.0,
+      "mean_difference": 1.6666666666666667,
+      "median_difference": 1.5,
+      "difference_variance": 0.6666666666666666,
+      "difference_std": 0.816496580927726,
+      "standard_error": 0.33333333333333337,
+      "df": 5.0,
+      "statistic": 5.000000000000001,
+      "pvalue": 0.004104715980053319,
+      "ci_lower": 0.8098060547878952,
+      "ci_upper": 2.5235272785454383,
+      "effect_size": {
+        "cohen_dz": 2.041241452319315,
+        "hedges_g": 1.71894017037416,
+        "hedges_correction": 0.8421052631578947
+      }
+    },
+    {
+      "case_id": "greater_reference",
+      "n": 5,
+      "before_mean": 10.6,
+      "after_mean": 12.4,
+      "mean_difference": 1.8,
+      "median_difference": 2.0,
+      "difference_variance": 0.7,
+      "difference_std": 0.8366600265340756,
+      "standard_error": 0.3741657386773941,
+      "df": 4.0,
+      "statistic": 4.810702354423639,
+      "pvalue": 0.00429045936096239,
+      "ci_lower": 1.0023359724470606,
+      "ci_upper": null,
+      "effect_size": {
+        "cohen_dz": 2.1514114968019085,
+        "hedges_g": 1.7211291974415268,
+        "hedges_correction": 0.8
+      }
+    }
+  ]
+}

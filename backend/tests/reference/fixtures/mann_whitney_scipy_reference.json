@@ -1,0 +1,22 @@
+{
+  "fixture_id": "mann_whitney_scipy_reference_v1",
+  "source_fixture_id": "mann_whitney_reference_inputs_v1",
+  "generated_with": {
+    "numpy": "2.2.6",
+    "scipy": "1.15.3"
+  },
+  "cases": [
+    {
+      "case_id": "exact_two_sided_no_ties",
+      "group_order": ["A", "B"],
+      "group_sizes": [4, 5],
+      "group_medians": [9.5, 6.0],
+      "rank_sums": [26.0, 19.0],
+      "mean_ranks": [6.5, 3.8],
+      "u_statistic": 16.0,
+      "pvalue": 0.19047619047619047,
+      "rank_biserial": 0.6000000000000001,
+      "common_language_probability": 0.8
+    }
+  ]
+}

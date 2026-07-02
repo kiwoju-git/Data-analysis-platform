@@ -1,0 +1,20 @@
+{
+  "cases": [
+    {
+      "case_id": "equivalent_small_offset",
+      "values": [9.1, 9.8, 10.4, 10.2, 9.9, 10.1],
+      "reference_mean": 10.0,
+      "lower_bound": -0.8,
+      "upper_bound": 0.8,
+      "alpha": 0.05
+    },
+    {
+      "case_id": "not_equivalent_outside_bounds",
+      "values": [10.7, 10.9, 11.1, 10.8, 11.0, 10.9],
+      "reference_mean": 10.0,
+      "lower_bound": -0.5,
+      "upper_bound": 0.5,
+      "alpha": 0.05
+    }
+  ]
+}

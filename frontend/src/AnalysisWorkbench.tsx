@@ -8,12 +8,14 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import { getAnalysisMethodGuidance } from "./analysisMethodGuidance";
+import { getAnalysisRunErrorDetails } from "./analysisRunErrors";
 
 interface AnalysisWorkbenchProps {
   catalog: AnalysisMethodListResponse;
   selectedModuleId: AnalysisModuleId;
   selectedMethods: AnalysisMethodDescriptor[];
   selectedMethod: AnalysisMethodDescriptor | null;
+  analysisRunError: string | null;
   version: DatasetVersionResponse | null;
   profile: DatasetProfileResponse | null;
   onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
@@ -35,6 +37,7 @@ export function AnalysisWorkbench({
   selectedModuleId,
   selectedMethods,
   selectedMethod,
+  analysisRunError,
   version,
   profile,
   onSelectMethod,
@@ -44,7 +47,8 @@ export function AnalysisWorkbench({
   const selectedGuidance =
     selectedMethod === null ? null : getAnalysisMethodGuidance(selectedMethod.method_id);
   const executablePanel =
-    selectedMethod !== null && selectedMethod.availability === "available"
+    selectedMethod !== null &&
+    (selectedMethod.availability === "available" || selectedMethod.method_id === "quality.gage_rr")
       ? renderExecutableMethod(selectedMethod)
       : null;
 
@@ -151,48 +155,73 @@ export function AnalysisWorkbench({
           </div>
           {renderAnalysisFilters !== undefined ? renderAnalysisFilters(selectedMethod) : null}
           {selectedGuidance !== null ? (
-            <div className="guidance-grid" aria-label="메서드 입력 계약">
-              <section>
-                <h4>필요 역할</h4>
-                <ul className="guidance-list">
-                  {selectedGuidance.roleRequirements.map((role) => (
-                    <li key={`${role.label}-${role.detail}`}>
-                      <strong>{role.label}</strong>
-                      <span>{role.required ? "필수" : "선택"}</span>
-                      <p>{role.detail}</p>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-              <section>
-                <h4>옵션</h4>
-                <ul className="compact-list">
-                  {selectedGuidance.optionChecklist.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </section>
-              <section>
-                <h4>사전점검</h4>
-                <ul className="compact-list">
-                  {selectedGuidance.preflightChecks.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </section>
-              <section>
-                <h4>결과 초점</h4>
-                <ul className="compact-list">
-                  {selectedGuidance.resultFocus.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </section>
-            </div>
+            <>
+              {selectedGuidance.plainLanguage !== undefined ||
+              selectedGuidance.commonErrors !== undefined ? (
+                <section className="method-help-box" aria-label="메서드 쉬운 설명">
+                  {selectedGuidance.plainLanguage !== undefined ? (
+                    <>
+                      <h4>쉽게 말하면</h4>
+                      <p>{selectedGuidance.plainLanguage}</p>
+                    </>
+                  ) : null}
+                  {selectedGuidance.commonErrors !== undefined ? (
+                    <>
+                      <h4>오류가 자주 나는 이유</h4>
+                      <ul className="compact-list">
+                        {selectedGuidance.commonErrors.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </section>
+              ) : null}
+              <div className="guidance-grid" aria-label="메서드 입력 계약">
+                <section>
+                  <h4>필요 역할</h4>
+                  <ul className="guidance-list">
+                    {selectedGuidance.roleRequirements.map((role) => (
+                      <li key={`${role.label}-${role.detail}`}>
+                        <strong>{role.label}</strong>
+                        <span>{role.required ? "필수" : "선택"}</span>
+                        <p>{role.detail}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+                <section>
+                  <h4>옵션</h4>
+                  <ul className="compact-list">
+                    {selectedGuidance.optionChecklist.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+                <section>
+                  <h4>사전점검</h4>
+                  <ul className="compact-list">
+                    {selectedGuidance.preflightChecks.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+                <section>
+                  <h4>결과 초점</h4>
+                  <ul className="compact-list">
+                    {selectedGuidance.resultFocus.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+              </div>
+            </>
           ) : null}
-          {executablePanel !== null && executablePanel !== undefined ? (
-            executablePanel
-          ) : (
+          {executablePanel !== null && executablePanel !== undefined ? executablePanel : null}
+          {analysisRunError !== null ? (
+            <AnalysisRunErrorNotice errorCode={analysisRunError} />
+          ) : null}
+          {executablePanel === null || executablePanel === undefined ? (
             <section className="analysis-run-panel" aria-labelledby="method-status-title">
               <div className="panel-heading">
                 <div>
@@ -205,10 +234,24 @@ export function AnalysisWorkbench({
               </div>
               <div className="notice-box">{workbenchStatusMessage(selectedMethod)}</div>
             </section>
-          )}
+          ) : null}
         </section>
       ) : null}
     </>
+  );
+}
+
+function AnalysisRunErrorNotice({ errorCode }: { errorCode: string }) {
+  const details = getAnalysisRunErrorDetails(errorCode);
+  return (
+    <div className="error-box analysis-error-box" role="alert">
+      <h4>{details.title}</h4>
+      <p>{details.message}</p>
+      <p>
+        <strong>해결 방법:</strong> {details.action}
+      </p>
+      <code>오류 코드: {errorCode}</code>
+    </div>
   );
 }
 

@@ -86,15 +86,39 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 
 `POST /api/v1/analysis-runs`
 
-- `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` are currently executable methods.
-- Both require a confirmed `dataset_version_id` and `options.column_ids`.
-- It streams the validated canonical rows artifact and computes real descriptive statistics for selected numeric columns.
-- The result records `n_total`, `n_used`, missing count, non-numeric exclusion count, mean, sample standard deviation, min, Q1, median, Q3, max, warning codes, and provenance.
+- `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, and `categorical.chi_square_association` are currently executable methods.
+- All executable dataset-backed methods require a confirmed `dataset_version_id` and stream the validated canonical rows artifact instead of reparsing the raw upload.
+- `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` use `options.column_ids` for selected numeric columns.
+- `eda.equal_variances` uses a numeric response role plus a grouping role from `roles` or method-specific options.
+- `hypothesis.one_sample_t` uses a numeric response role plus an explicit `null_mean`, defaults to a two-sided test, and reports CI plus Cohen dz.
+- `hypothesis.paired_t` uses two numeric wide-format measurement columns, defines the pair difference as `after - before`, applies complete-pair exclusion, and reports CI plus Cohen dz.
+- `hypothesis.one_sample_wilcoxon` uses a numeric response role plus an explicit `null_location`, records zero/tie handling, and reports signed-rank p-value plus rank-biserial effect size.
+- `hypothesis.two_sample_t` uses a numeric response role plus an exactly two-level grouping role, defaults to Welch unequal-variance, and allows pooled Student only through explicit `variance_assumption="pooled"`.
+- `hypothesis.mann_whitney` uses a numeric response role plus an exactly two-level grouping role, records exact/asymptotic p-value handling, and reports rank-biserial plus common-language probability.
+- `hypothesis.kruskal_wallis` uses a numeric response role plus a 3-or-more-level grouping role, reports tie-corrected H/df/p, epsilon-squared, rank summaries, and Dunn/Holm post-hoc comparisons only when the overall test is significant.
+- `hypothesis.one_way_anova` uses a numeric response role plus a 2-or-more-level grouping role, reports a standard ANOVA table, F/p-value, eta/omega squared, and Tukey-Kramer post-hoc comparisons only when the overall test is significant.
+- `hypothesis.equivalence_tost` uses one numeric response column, an explicit reference mean, and user-defined raw-unit lower/upper equivalence bounds for one-sample mean TOST.
+- `categorical.one_proportion` uses one binary response column plus an explicit `event_level`, computes an exact binomial p-value, and reports Wilson or Clopper-Pearson CI plus Cohen h.
+- `categorical.two_proportion` uses one binary response column plus an exactly two-level grouping role and explicit `event_level`, computes a Fisher exact p-value, and reports Newcombe-Wilson CI for the proportion difference plus risk ratio and odds ratio where finite.
+- `categorical.chi_square_association` uses two categorical columns, computes a Pearson chi-square independence test without continuity correction, reports expected-count diagnostics plus Cramer's V, and recommends Fisher exact for sparse 2x2 tables without automatically switching methods.
+- `eda.descriptive` computes real descriptive statistics for selected numeric columns. The result records `n_total`, `n_used`, missing count, non-numeric exclusion count, mean, sample standard deviation, min, Q1, median, Q3, max, warning codes, and provenance.
 - `eda.graphical_summary` streams the same canonical row source and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads for selected numeric columns. It does not add an image/chart renderer yet.
 - `eda.normality` streams the same canonical row source and computes real SciPy-backed Shapiro-Wilk, Anderson-Darling, and Q-Q point payloads for selected numeric columns. It does not automatically choose a downstream parametric or nonparametric method.
+- `eda.equal_variances` streams the same canonical row source and computes real SciPy-backed Brown-Forsythe and Levene(mean) results for grouped numeric responses. It does not automatically choose pooled/Welch or ANOVA variants.
+- `hypothesis.one_sample_t` streams the same canonical row source and computes real one-sample mean comparison results with N/exclusions, sample summary, CI, p-value, Cohen dz, warnings, and provenance.
+- `hypothesis.paired_t` streams the same canonical row source and computes real paired mean-difference results with N/exclusions, before/after means, difference summary, CI, p-value, Cohen dz, warnings, and provenance.
+- `hypothesis.one_sample_wilcoxon` streams the same canonical row source and computes real signed-rank results with N/exclusions, zero/tie counts, signed rank sums, W statistic, p-value, rank-biserial effect size, warnings, and provenance.
+- `hypothesis.two_sample_t` streams the same canonical row source and computes real two-group mean comparison results with N/exclusions, group summaries, CI, p-value, Cohen's d, Hedges g, warnings, and provenance.
+- `hypothesis.mann_whitney` streams the same canonical row source and computes real two-group rank comparison results with N/exclusions, rank summaries, U statistic, p-value, rank-biserial effect size, common-language probability, tie warnings, and provenance.
+- `hypothesis.kruskal_wallis` streams the same canonical row source and computes real 3-or-more-group rank comparison results with N/exclusions, rank summaries, H statistic, p-value, epsilon-squared effect size, optional Dunn/Holm post-hoc details, tie warnings, and provenance.
+- `hypothesis.one_way_anova` streams the same canonical row source and computes real standard one-way ANOVA results with N/exclusions, group summaries, ANOVA table, F statistic, p-value, eta squared, omega squared, optional Tukey-Kramer post-hoc details, design warnings, and provenance.
+- `hypothesis.equivalence_tost` streams the same canonical row source and computes real one-sample mean TOST results with N/exclusions, two one-sided tests, TOST p-value, `1 - 2 * alpha` CI, Cohen dz, warnings, and provenance.
+- `categorical.one_proportion` streams the same canonical row source and computes real one-proportion exact binomial results with N/exclusions, event/non-event counts, sample proportion, CI, p-value, Cohen h, design warnings, and provenance.
+- `categorical.two_proportion` streams the same canonical row source and computes real two-proportion Fisher exact results with N/exclusions, group event/non-event counts, sample proportions, proportion difference CI, p-value, risk/odds ratios, design warnings, and provenance.
+- `categorical.chi_square_association` streams the same canonical row source and computes real Pearson chi-square association results with N/exclusions, observed/expected counts, row/column percentages, standardized residuals, p-value, Cramer's V, sparse-cell warnings, and provenance.
 - Filter snapshots are frozen into an `analysis_row_snapshot` artifact linked from `analysis_artifacts`; the snapshot records the filter hash, canonical artifact hash, row identity, row ranges, and included row count without raw cell values.
 - The current filter expression engine supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions.
-- The current Workbench UI exposes those supported AND filter conditions for dataset-backed method pages, and `eda.descriptive`, `eda.graphical_summary`, plus `eda.normality` serialize them into executable analysis requests.
+- The current Workbench UI exposes those supported AND filter conditions for dataset-backed method pages, and the current fifteen available methods serialize them into executable analysis requests.
 - Other analysis methods remain unavailable and must not return mock results.
 
 ## Next Step

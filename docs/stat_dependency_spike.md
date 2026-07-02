@@ -1,6 +1,6 @@
 # Statistical Dependency Spike
 
-This document records the opt-in NumPy/SciPy compatibility spike required before `eda.normality` or `eda.equal_variances` can become executable.
+This document records the opt-in NumPy/SciPy compatibility spike required before SciPy-backed statistical methods become executable.
 
 ## Scope
 
@@ -9,6 +9,17 @@ This document records the opt-in NumPy/SciPy compatibility spike required before
 - Methods gated by this spike:
   - `eda.normality`
   - `eda.equal_variances`
+  - `hypothesis.one_sample_t`
+  - `hypothesis.paired_t`
+  - `hypothesis.one_sample_wilcoxon`
+  - `hypothesis.two_sample_t`
+  - `hypothesis.mann_whitney`
+  - `hypothesis.kruskal_wallis`
+  - `hypothesis.one_way_anova`
+  - `hypothesis.equivalence_tost`
+  - `categorical.one_proportion`
+  - `categorical.two_proportion`
+  - `categorical.chi_square_association`
 - This spike does not approve pandas, statsmodels, PyTorch, GPU packages, or any external service.
 
 ## Commands
@@ -96,14 +107,21 @@ Decision:
   - Levene centered at mean
   - Brown-Forsythe via Levene centered at median
 - `scripts/check.ps1` passes from native Windows PowerShell after any dependency pin changes.
-- Reference fixtures are added before either gated method changes from `planned` to `available`.
+- Reference fixtures are added before gated methods change from `planned` to `available`.
 
 ## Current Status
 
 Native Windows dependency spike passed with candidate wheels on 2026-06-29 KST.
 The validated versions, NumPy 2.2.6 and SciPy 1.15.3, are now production-pinned
-for `eda.normality`. `eda.equal_variances` still needs its own reference-backed
-implementation before it can become executable.
+for `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`,
+`hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`,
+`hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`,
+`hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, and `categorical.chi_square_association`. `eda.equal_variances`,
+`hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`,
+`hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`,
+`hypothesis.equivalence_tost`,
+`categorical.one_proportion`, `categorical.two_proportion`, and `categorical.chi_square_association` each received their own reference-backed implementation
+slices before becoming executable.
 
 ## Recorded Result
 
@@ -129,7 +147,7 @@ implementation before it can become executable.
 - Offline runtime note: smoke and reference generation run locally after wheel install; no external runtime service is required.
 - Startup/import time note: not benchmarked in this spike.
 - Known warnings: SciPy emits the documented Shapiro-Wilk p-value accuracy warning for the synthetic `N=6001` reference case.
-- Decision: candidate dependency spike passed and supported the narrow production dependency pin plus `eda.normality` implementation. Re-run the smoke before changing these pins or adding the next SciPy-backed method.
+- Decision: candidate dependency spike passed and supported the narrow production dependency pin plus `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, and `categorical.chi_square_association` implementations. Re-run the smoke before changing these pins or adding another SciPy-backed method.
 
 ### Smoke Summary
 

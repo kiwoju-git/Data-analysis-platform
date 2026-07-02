@@ -1,0 +1,55 @@
+{
+  "source": "generated_with_scipy_stats_t_distribution",
+  "cases": [
+    {
+      "case_id": "equivalent_small_offset",
+      "n": 6,
+      "mean": 9.916666666666666,
+      "variance": 0.20566666666666666,
+      "std": 0.4535048695071164,
+      "estimate": -0.08333333333333393,
+      "standard_error": 0.18514258769331757,
+      "df": 5.0,
+      "lower_statistic": 3.8708904072022596,
+      "lower_pvalue": 0.005874834572812872,
+      "upper_statistic": -4.771097478644653,
+      "upper_pvalue": 0.0025049679692348533,
+      "tost_pvalue": 0.005874834572812872,
+      "equivalent": true,
+      "ci_level": 0.9,
+      "ci_lower": -0.45640460349942014,
+      "ci_upper": 0.2897379368327523,
+      "ci_inside_bounds": true,
+      "effect_size": {
+        "cohen_dz": -0.18375399898991882,
+        "hedges_g": -0.1547402096757211,
+        "hedges_correction": 0.8421052631578947
+      }
+    },
+    {
+      "case_id": "not_equivalent_outside_bounds",
+      "n": 6,
+      "mean": 10.9,
+      "variance": 0.019999999999999997,
+      "std": 0.1414213562373095,
+      "estimate": 0.9000000000000004,
+      "standard_error": 0.05773502691896258,
+      "df": 5.0,
+      "lower_statistic": 24.248711305964285,
+      "lower_pvalue": 0.0000011116022532584665,
+      "upper_statistic": 6.928203230275515,
+      "upper_pvalue": 0.999519373465525,
+      "tost_pvalue": 0.999519373465525,
+      "equivalent": false,
+      "ci_level": 0.9,
+      "ci_lower": 0.7836611279226064,
+      "ci_upper": 1.0163388720773943,
+      "ci_inside_bounds": false,
+      "effect_size": {
+        "cohen_dz": 6.36396103067893,
+        "hedges_g": 5.359125078466468,
+        "hedges_correction": 0.8421052631578947
+      }
+    }
+  ]
+}

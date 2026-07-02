@@ -12,7 +12,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 
 ## Migration Skeleton
 
-- Current schema version: `5`.
+- Current schema version: `8`.
 - Migration history is recorded in `schema_migrations`.
 - `PRAGMA user_version` is set to the current schema version after migrations run.
 - Startup initializes the metadata store during FastAPI lifespan startup.
@@ -20,26 +20,37 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - Version `3` adds `dataset_versions` and `dataset_columns`.
 - Version `4` adds `analysis_runs`, `analysis_artifacts`, and `jobs`.
 - Version `5` adds `dataset_artifacts`.
+- Version `6` adds `regression_models` for safe app-created regression model manifest metadata.
+- Version `7` adds `experiment_designs`, `experiment_design_versions`, and `experiment_runs` for DOE design assets.
+- Version `8` adds `experiment_run_responses` for numeric DOE response entry keyed to immutable design versions and run IDs.
 - `dataset_versions.parsing_options_json` stores confirmed parsing options as canonical JSON.
 - `dataset_columns` preserves the original header text separately from the unique display name.
 - `analysis_runs.config_json` stores request/config snapshots and must include `schema_version`.
-- `analysis_runs.result_path` and `result_sha256` are populated for succeeded inline `eda.descriptive` runs.
+- `analysis_runs.result_path` and `result_sha256` are populated for succeeded inline analysis runs.
 - `PATCH /api/v1/dataset-versions/{version_id}/schema` updates `dataset_versions`, `dataset_columns`, and marks existing `analysis_runs` for the same `dataset_version_id` as `stale=true` in one SQLite transaction.
 - `dataset_artifacts` stores relative workspace paths, hashes, media type, and byte size for app-owned dataset artifacts such as canonical rows, canonical manifests, and profile summaries.
-- `analysis_artifacts` stores relative workspace paths and hashes for app-owned artifacts, not raw result blobs. Inline `eda.descriptive` now records an `analysis_row_snapshot` artifact for the frozen row selection.
+- `analysis_artifacts` stores relative workspace paths and hashes for app-owned artifacts, not raw result blobs. Available inline analysis methods record an `analysis_row_snapshot` artifact for the frozen row selection.
+- `regression_models` stores model ID, source analysis ID, dataset version ID, method ID/version, schema hash, relative manifest path, manifest SHA-256, app version, and creation time for app-created regression models only.
+- `experiment_designs`, `experiment_design_versions`, and `experiment_runs` store DOE design assets, generated run order, factor settings, and design checksum metadata.
+- `experiment_run_responses` stores numeric DOE response values by design version and run ID; response saving updates the design status in the same SQLite transaction without mutating run metadata.
 - `jobs` stores job state, progress, cancellation request state, and sanitized error codes.
-- Upgrade from schema versions `1`, `2`, `3`, and `4` to `5` is covered by unit tests.
+- Upgrade from schema versions `1`, `2`, `3`, `4`, `5`, `6`, and `7` to `8` is covered by unit tests.
 
 ## Canonical Parsed Artifact Decision
 
 - The current stdlib canonical materialization writes UTF-8 JSONL rows plus a JSON manifest under `workspaces/datasets/{dataset_id}/versions/{version_id}/`.
 - SQLite records only relative artifact paths, SHA-256 hashes, media types, and byte sizes; raw row values are not stored in metadata tables.
 - `confirm-parsing` re-reads the preserved raw upload in streaming mode and compares SHA-256 plus byte size against `datasets` metadata before schema scan or canonical materialization.
-- Rows preview, profile, `eda.descriptive`, `eda.graphical_summary`, and `eda.normality` all read validated canonical rows after parsing confirmation. They do not reparse the raw upload as a fallback.
+- Rows preview, profile, `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, and `categorical.chi_square_association` all read validated canonical rows after parsing confirmation. They do not reparse the raw upload as a fallback.
 - Profile scans persist raw-value-free `profile_summary` JSON artifacts under the dataset version workspace and upsert the latest profile artifact metadata in `dataset_artifacts`.
 - Profile artifacts include `schema_hash`, `profile_schema_version`, and `source_canonical_artifact_sha256`; `GET /profile` reuses the latest artifact only when those values and the artifact checksums still match.
 - Succeeded inline analysis result JSON can be fetched through `GET /api/v1/analysis-runs/{analysis_id}/result`; the service validates the relative `result_path` and `result_sha256` before returning the stored envelope.
 - Available inline analysis methods freeze filter snapshots as `analysis_row_snapshot` JSON artifacts under `workspaces/analyses/{analysis_id}/row_snapshot.json`. The payload records the dataset version, source schema hash, source canonical artifact hash, filter snapshot hash, row identity, and included row count without raw cell values.
+- `regression.linear_model` also writes a safe JSON regression model manifest under the analysis workspace, records it as a `regression_model_manifest` analysis artifact, and stores a `regression_models` metadata row in the same SQLite transaction as the analysis run. The manifest contains the app-created OLS specification, coefficients, fit summary, diagnostic summary, dataset version, schema hash, canonical artifact hash, row snapshot hash, package versions, and OLS prediction basis. It does not use pickle/joblib or external model uploads.
+- `GET /api/v1/regression-models/{model_id}` validates the stored manifest relative path and SHA-256 before returning the manifest envelope. Missing, invalid, or checksum-mismatched manifests return explicit recovery errors and do not expose absolute filesystem paths.
+- `POST /api/v1/regression-models/{model_id}/prediction-preflight` validates the same manifest checksum, reads the source row snapshot when deriving numeric training ranges, and scans only the target dataset version's validated canonical rows. It returns schema/column/range/category issue counts without raw cell samples or absolute paths.
+- `POST /api/v1/regression-models/{model_id}/predictions` reuses that validation path, stores a `regression.predict` result envelope under the analysis workspace with SHA-256 metadata, caps inline prediction rows, and omits raw target cell values from the response and stored config.
+- `doe.factorial_design` design creation stores design/version/run metadata in SQLite and response entry stores only the app-entered numeric response series in `experiment_run_responses`; it does not create DOE effects, OLS, ANOVA, or fake analysis result artifacts.
 - The current filter expression engine supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions. Unsupported or invalid filters fail before row snapshot or result artifacts are written.
 - Parquet remains the preferred higher-performance canonical data format candidate for later slices.
 - Current Windows Python 3.10 environment check on 2026-06-24 found `pyarrow_available=False`.

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "yes_no_two_sided",
+      "event_count": 9,
+      "non_event_count": 3,
+      "total": 12,
+      "sample_proportion": 0.75,
+      "difference_from_null": 0.25,
+      "odds": 3.0,
+      "pvalue": 0.14599609375,
+      "ci_lower": 0.46769466506643426,
+      "ci_upper": 0.9110583316059453,
+      "cohen_h": 0.5235987755982985
+    },
+    {
+      "case_id": "pass_fail_less",
+      "event_count": 3,
+      "non_event_count": 7,
+      "total": 10,
+      "sample_proportion": 0.3,
+      "difference_from_null": -0.10000000000000003,
+      "odds": 0.42857142857142855,
+      "pvalue": 0.38228060159999994,
+      "ci_lower": 0.10779126740630099,
+      "ci_upper": 0.6032218525388546,
+      "cohen_h": -0.2101589252771574
+    }
+  ]
+}

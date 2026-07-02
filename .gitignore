@@ -26,6 +26,9 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+~$*.xlsx
+~$*.xlsm
+~$*.xls
 
 # DataLab Studio runtime artifacts
 /workspaces/

@@ -1,0 +1,50 @@
+{
+  "cases": [
+    {
+      "case_id": "yes_no_two_sided",
+      "event_level": "yes",
+      "alpha": 0.05,
+      "confidence_level": 0.95,
+      "alternative": "two_sided",
+      "rows": [
+        ["yes", "A"],
+        ["yes", "A"],
+        ["yes", "A"],
+        ["yes", "A"],
+        ["no", "A"],
+        ["no", "A"],
+        ["yes", "B"],
+        ["no", "B"],
+        ["no", "B"],
+        ["no", "B"],
+        ["no", "B"],
+        ["no", "B"]
+      ]
+    },
+    {
+      "case_id": "pass_fail_two_sided",
+      "event_level": "pass",
+      "alpha": 0.05,
+      "confidence_level": 0.95,
+      "alternative": "two_sided",
+      "rows": [
+        ["pass", "low"],
+        ["fail", "low"],
+        ["fail", "low"],
+        ["fail", "low"],
+        ["fail", "low"],
+        ["fail", "low"],
+        ["fail", "low"],
+        ["fail", "low"],
+        ["pass", "high"],
+        ["pass", "high"],
+        ["pass", "high"],
+        ["pass", "high"],
+        ["pass", "high"],
+        ["fail", "high"],
+        ["fail", "high"],
+        ["fail", "high"]
+      ]
+    }
+  ]
+}

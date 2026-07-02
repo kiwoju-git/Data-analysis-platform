@@ -1,0 +1,14 @@
+{
+  "fixture_id": "one_sample_wilcoxon_reference_inputs_v1",
+  "cases": [
+    {
+      "case_id": "exact_two_sided_no_zeros_or_ties",
+      "alpha": 0.05,
+      "alternative": "two_sided",
+      "method": "exact",
+      "zero_method": "wilcox",
+      "null_location": 10,
+      "values": [8, 11, 14, 18, 23]
+    }
+  ]
+}

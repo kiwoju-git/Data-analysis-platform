@@ -88,6 +88,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 -FrontendOnly
 - `eda.descriptive`: 기술통계
 - `eda.graphical_summary`: histogram, boxplot, Q-Q, ECDF용 chart-data 요약
 - `eda.normality`: Shapiro-Wilk, Anderson-Darling, Q-Q point payload
+- `eda.equal_variances`: Brown-Forsythe, Levene(mean), 그룹별 산포 요약
+- `hypothesis.one_sample_t`: 기준 평균 대비 1표본 t-검정, CI와 Cohen dz
+- `hypothesis.paired_t`: wide 전/후 측정 컬럼의 대응표본 t-검정, complete-pair 제외 수, CI와 Cohen dz
+- `hypothesis.one_sample_wilcoxon`: 기준 위치 대비 1표본 signed-rank, zero/tie 처리, rank-biserial
+- `hypothesis.two_sample_t`: Welch 기본 2표본 t-검정, 명시적 pooled Student 선택, CI와 Hedges g
+- `hypothesis.mann_whitney`: 독립 2그룹 Mann-Whitney U, rank-biserial, 공통언어 확률
+- `hypothesis.kruskal_wallis`: 독립 3그룹 이상 Kruskal-Wallis, epsilon-squared, 유의 시 Dunn/Holm
+- `hypothesis.one_way_anova`: 독립 2그룹 이상 표준 일원분산분석, eta/omega squared, 유의 시 Tukey-Kramer
+- `hypothesis.equivalence_tost`: 기준 평균 대비 1표본 평균 TOST, 사용자 지정 동등성 하한/상한, TOST p-value와 Cohen dz
+- `categorical.one_proportion`: 이진 반응 컬럼의 1-비율 exact binomial 검정, Wilson/Clopper-Pearson CI와 Cohen h
+- `categorical.two_proportion`: 이진 반응 컬럼과 정확히 2개 그룹의 Fisher exact 2-비율 검정, proportion difference CI, risk/odds ratio
+- `categorical.chi_square_association`: 두 범주형 컬럼의 Pearson 카이제곱 독립성 검정, 기대도수 진단과 Cramer's V
 
 아직 실행 불가인 메서드는 `planned` 또는 `disabled`로 표시되며, fake result를 만들지 않는다.
 
@@ -103,7 +115,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1 -FrontendOnly
 4. 스키마 저장
 5. 미리보기 확인
 6. 프로파일 확인
-7. `eda.descriptive`, `eda.graphical_summary`, `eda.normality` 순서로 실행
+7. `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association` 순서로 실행
 
 Excel 파일은 현재 기본 worksheet cached value를 읽는다. 수식 재계산, 병합 셀 확장, 표시 형식 복원은 아직 범위 밖이다.
 

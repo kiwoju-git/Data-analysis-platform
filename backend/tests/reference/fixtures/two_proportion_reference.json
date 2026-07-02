@@ -1,0 +1,42 @@
+{
+  "cases": [
+    {
+      "case_id": "yes_no_two_sided",
+      "method": "fisher_exact_2x2",
+      "group_labels": ["A", "B"],
+      "event_counts": [4, 1],
+      "non_event_counts": [2, 5],
+      "totals": [6, 6],
+      "sample_proportions": [0.6666666666666666, 0.16666666666666666],
+      "difference": 0.5,
+      "difference_ci_lower": -0.04030387843204997,
+      "difference_ci_upper": 0.7731752842826356,
+      "p_value": 0.24242424242424238,
+      "risk_ratio": 4.0,
+      "risk_ratio_ci_lower": 0.6124865549508227,
+      "risk_ratio_ci_upper": 26.12302240868726,
+      "odds_ratio": 10.0,
+      "odds_ratio_ci_lower": 0.6476818582168427,
+      "odds_ratio_ci_upper": 154.3967902317255
+    },
+    {
+      "case_id": "pass_fail_two_sided",
+      "method": "fisher_exact_2x2",
+      "group_labels": ["low", "high"],
+      "event_counts": [1, 5],
+      "non_event_counts": [7, 3],
+      "totals": [8, 8],
+      "sample_proportions": [0.125, 0.625],
+      "difference": -0.5,
+      "difference_ci_lower": -0.7593093042204069,
+      "difference_ci_upper": -0.02929409054211285,
+      "p_value": 0.11888111888111888,
+      "risk_ratio": 0.2,
+      "risk_ratio_ci_lower": 0.029606110578684966,
+      "risk_ratio_ci_upper": 1.3510724380256205,
+      "odds_ratio": 0.08571428571428572,
+      "odds_ratio_ci_lower": 0.0067767507366196895,
+      "odds_ratio_ci_upper": 1.0841388537148602
+    }
+  ]
+}
