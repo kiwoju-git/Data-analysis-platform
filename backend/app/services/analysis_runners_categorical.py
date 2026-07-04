@@ -3,11 +3,15 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import status
+from pydantic import ValidationError
 
 from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
     AnalysisRunRequest,
     AnalysisWarning,
+    ChiSquareAssociationOptions,
+    OneProportionOptions,
+    TwoProportionOptions,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -48,15 +52,16 @@ def run_one_proportion_analysis(
             message="1-비율 검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_one_proportion_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    response_column = _selected_one_proportion_column(context, request.options)
-    event_level = _one_proportion_event_level(request.options)
-    null_proportion = _one_proportion_null_proportion(request.options)
-    alpha = _one_proportion_alpha(request.options)
-    confidence_level = _one_proportion_confidence_level(request.options)
-    alternative = _one_proportion_alternative(request.options)
-    ci_method = _one_proportion_ci_method(request.options)
-    _one_proportion_missing_policy(request.options)
+    response_column = _selected_one_proportion_column(context, options)
+    event_level = _one_proportion_event_level(options)
+    null_proportion = _one_proportion_null_proportion(options)
+    alpha = _one_proportion_alpha(options)
+    confidence_level = _one_proportion_confidence_level(options)
+    alternative = _one_proportion_alternative(options)
+    ci_method = _one_proportion_ci_method(options)
+    _one_proportion_missing_policy(options)
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -94,6 +99,17 @@ def run_one_proportion_analysis(
     except Exception:
         remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_one_proportion_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return OneProportionOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_one_proportion_options",
+            message="1-비율 검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_one_proportion_column(
@@ -220,6 +236,7 @@ def _one_proportion_missing_policy(options: dict[str, Any]) -> str:
 
 def _one_proportion_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_one_proportion_options": "1-비율 검정 옵션 계약이 올바르지 않습니다.",
         "one_proportion_n_too_small": "1-비율 검정에는 최소 1개 사용 값이 필요합니다.",
         "one_proportion_requires_binary_column": (
             "1-비율 검정 반응 컬럼은 사건 수준과 하나의 비사건 수준만 포함해야 합니다."
@@ -313,16 +330,17 @@ def run_two_proportion_analysis(
             message="2-비율 검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_two_proportion_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     response_column, group_column = _selected_two_proportion_columns(
         context,
-        request.options,
+        options,
     )
-    event_level = _two_proportion_event_level(request.options)
-    alpha = _two_proportion_alpha(request.options)
-    confidence_level = _two_proportion_confidence_level(request.options)
-    alternative = _two_proportion_alternative(request.options)
-    _two_proportion_missing_policy(request.options)
+    event_level = _two_proportion_event_level(options)
+    alpha = _two_proportion_alpha(options)
+    confidence_level = _two_proportion_confidence_level(options)
+    alternative = _two_proportion_alternative(options)
+    _two_proportion_missing_policy(options)
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -359,6 +377,17 @@ def run_two_proportion_analysis(
     except Exception:
         remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_two_proportion_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return TwoProportionOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_two_proportion_options",
+            message="2-비율 검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_two_proportion_columns(
@@ -492,6 +521,7 @@ def _two_proportion_missing_policy(options: dict[str, Any]) -> str:
 
 def _two_proportion_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_two_proportion_options": "2-비율 검정 옵션 계약이 올바르지 않습니다.",
         "invalid_two_proportion_alternative": "2-비율 검정 대립가설이 올바르지 않습니다.",
         "invalid_two_proportion_alpha": "2-비율 검정 유의수준이 허용 범위를 벗어났습니다.",
         "invalid_two_proportion_confidence_level": (
@@ -610,13 +640,14 @@ def run_chi_square_association_analysis(
             message="카이제곱 독립성 검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_chi_square_association_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     row_column, column_column = _selected_chi_square_association_columns(
         context,
-        request.options,
+        options,
     )
-    alpha = _chi_square_association_alpha(request.options)
-    _chi_square_association_missing_policy(request.options)
+    alpha = _chi_square_association_alpha(options)
+    _chi_square_association_missing_policy(options)
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -650,6 +681,17 @@ def run_chi_square_association_analysis(
     except Exception:
         remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_chi_square_association_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return ChiSquareAssociationOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_chi_square_options",
+            message="카이제곱 독립성 검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_chi_square_association_columns(
@@ -751,6 +793,7 @@ def _chi_square_association_missing_policy(options: dict[str, Any]) -> str:
 
 def _chi_square_association_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_chi_square_options": "카이제곱 독립성 검정 옵션 계약이 올바르지 않습니다.",
         "invalid_chi_square_alpha": ("카이제곱 독립성 검정 유의수준이 허용 범위를 벗어났습니다."),
         "chi_square_requires_at_least_two_row_levels": (
             "카이제곱 독립성 검정에는 행 변수의 사용 가능한 수준이 최소 2개 필요합니다."

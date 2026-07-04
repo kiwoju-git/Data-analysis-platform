@@ -1,0 +1,40 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "gage_rr_reference_inputs_v1",
+  "cases": [
+    {
+      "case_id": "balanced_interaction",
+      "rows": [
+        ["9", "Part A", "Operator 1", "1"],
+        ["11", "Part A", "Operator 1", "2"],
+        ["15", "Part A", "Operator 2", "1"],
+        ["17", "Part A", "Operator 2", "2"],
+        ["20", "Part B", "Operator 1", "1"],
+        ["22", "Part B", "Operator 1", "2"],
+        ["24", "Part B", "Operator 2", "1"],
+        ["26", "Part B", "Operator 2", "2"],
+        ["31", "Part C", "Operator 1", "1"],
+        ["33", "Part C", "Operator 1", "2"],
+        ["33", "Part C", "Operator 2", "1"],
+        ["35", "Part C", "Operator 2", "2"]
+      ]
+    },
+    {
+      "case_id": "balanced_additive_negative_interaction",
+      "rows": [
+        ["10", "Part A", "Operator 1", "1"],
+        ["12", "Part A", "Operator 1", "2"],
+        ["14", "Part A", "Operator 2", "1"],
+        ["16", "Part A", "Operator 2", "2"],
+        ["20", "Part B", "Operator 1", "1"],
+        ["22", "Part B", "Operator 1", "2"],
+        ["24", "Part B", "Operator 2", "1"],
+        ["26", "Part B", "Operator 2", "2"],
+        ["30", "Part C", "Operator 1", "1"],
+        ["32", "Part C", "Operator 1", "2"],
+        ["34", "Part C", "Operator 2", "1"],
+        ["36", "Part C", "Operator 2", "2"]
+      ]
+    }
+  ]
+}

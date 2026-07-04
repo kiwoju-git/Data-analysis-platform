@@ -512,6 +512,7 @@ textarea {
 .paste-panel,
 .confirmation-panel,
 .version-panel,
+.analysis-export-panel,
 .analysis-run-panel {
   display: grid;
   gap: 16px;
@@ -620,6 +621,12 @@ textarea {
   cursor: not-allowed;
 }
 
+.compact-button {
+  min-height: 30px;
+  padding: 4px 9px;
+  font-size: 0.82rem;
+}
+
 .panel-heading {
   display: flex;
   align-items: flex-start;
@@ -678,6 +685,31 @@ textarea {
 
 .hash-text {
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.export-status-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #7cb99f;
+  border-radius: 6px;
+  background: #edf8f2;
+  color: #14553f;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+}
+
+.export-status-box strong {
+  color: #14553f;
+}
+
+.export-status-box code {
+  border-radius: 4px;
+  background: #ffffff;
+  color: #243044;
+  padding: 2px 6px;
   font-size: 0.82rem;
 }
 

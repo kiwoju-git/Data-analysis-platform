@@ -1,9 +1,13 @@
 import json
+from pathlib import Path
 
 import pytest
 
 from app.statistics.gage_rr import GageRrError, calculate_gage_rr_anova
 from app.statistics.gage_rr_preflight import GageRrColumn
+
+INPUT_FIXTURE = Path("backend/tests/reference/fixtures/gage_rr_input.json")
+REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/gage_rr_reference.json")
 
 
 def test_gage_rr_balanced_crossed_anova_matches_hand_checkable_fixture() -> None:
@@ -86,6 +90,51 @@ def test_gage_rr_reports_negative_raw_component_and_clamps_final_variance() -> N
     assert components["part_operator"]["final_variance"] == 0
     assert components["part_operator"]["clamped_to_zero"] is True
     assert "gage_rr_negative_variance_component_clamped" in result["warnings"]
+
+
+def test_gage_rr_matches_reference_fixture() -> None:
+    input_fixture = json.loads(INPUT_FIXTURE.read_text(encoding="utf-8"))
+    reference = json.loads(REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    cases_by_id = {case["case_id"]: case for case in reference["cases"]}
+
+    for case in input_fixture["cases"]:
+        result = calculate_gage_rr_anova(
+            case["rows"],
+            measurement_column=_column("measurement", 0, data_type="decimal"),
+            part_column=_column("part", 1, role="part_id"),
+            operator_column=_column("operator", 2, role="operator_id"),
+            replicate_column=_column("replicate", 3, role="replicate_id"),
+        )
+        expected = cases_by_id[case["case_id"]]
+        anova_rows = {row["source"]: row for row in result["anova_table"]}
+
+        for source, expected_row in expected["anova"].items():
+            actual_row = anova_rows[source]
+            assert actual_row["degrees_of_freedom"] == expected_row["df"]
+            assert actual_row["sum_of_squares"] == pytest.approx(
+                expected_row["ss"],
+                abs=1e-12,
+            )
+            if "ms" in expected_row:
+                assert actual_row["mean_square"] == pytest.approx(
+                    expected_row["ms"],
+                    abs=1e-12,
+                )
+            _assert_optional_approx(actual_row["f_statistic"], expected_row.get("f"))
+            _assert_optional_approx(actual_row["p_value"], expected_row.get("p"))
+
+        components = result["variance_components"]
+        for component_name, expected_component in expected["variance_components"].items():
+            if component_name == "ndc":
+                assert components["ndc"] == expected_component
+                continue
+            actual_component = components[component_name]
+            for key, expected_value in expected_component.items():
+                if isinstance(expected_value, bool):
+                    assert actual_component[key] is expected_value
+                else:
+                    assert actual_component[key] == pytest.approx(expected_value, abs=1e-12)
+        assert result["warnings"] == expected["warnings"]
 
 
 def test_gage_rr_rejects_invalid_designs_without_fake_components() -> None:
@@ -177,3 +226,10 @@ def _column(
         role=role,
         unit=None,
     )
+
+
+def _assert_optional_approx(actual: object, expected: object) -> None:
+    if expected is None:
+        assert actual is None
+    else:
+        assert actual == pytest.approx(expected, abs=1e-12)

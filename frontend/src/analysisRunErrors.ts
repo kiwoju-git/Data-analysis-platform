@@ -85,6 +85,61 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     message: "Y 컬럼의 사용 값이 모두 같으면 상관계수를 계산할 수 없습니다.",
     action: "값이 변하는 수치 컬럼을 Y 변수로 선택하세요.",
   },
+  invalid_descriptive_options: {
+    title: "기술통계 옵션 형식 오류",
+    message: "기술통계 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "분석할 숫자 컬럼 목록과 결측 처리 옵션을 다시 확인하세요.",
+  },
+  invalid_pearson_options: {
+    title: "Pearson 상관 옵션 형식 오류",
+    message: "Pearson 상관 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "X 컬럼, Y 컬럼, alpha, 신뢰수준, 결측 처리 옵션을 다시 확인하세요.",
+  },
+  invalid_xy_correlation_options: {
+    title: "X-Y 상관행렬 옵션 형식 오류",
+    message: "X-Y 상관행렬 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "X 컬럼 목록, Y 컬럼 목록, alpha, 신뢰수준, 결측 처리 옵션을 다시 확인하세요.",
+  },
+  invalid_one_sample_t_options: {
+    title: "1-표본 t 옵션 형식 오류",
+    message: "1-표본 t-검정 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, alpha, 신뢰수준, 기준 평균, 대립가설 선택을 다시 확인하세요.",
+  },
+  invalid_paired_t_options: {
+    title: "대응표본 t 옵션 형식 오류",
+    message: "대응표본 t-검정 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "before/after 컬럼, alpha, 신뢰수준, 기준 차이, 대립가설 선택을 다시 확인하세요.",
+  },
+  invalid_two_sample_t_options: {
+    title: "2-표본 t 옵션 형식 오류",
+    message: "2-표본 t-검정 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, 그룹 컬럼, alpha, 신뢰수준, 분산 가정, 기준 차이를 다시 확인하세요.",
+  },
+  invalid_one_sample_wilcoxon_options: {
+    title: "Wilcoxon 옵션 형식 오류",
+    message: "1-표본 Wilcoxon 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, alpha, 기준 위치, p-value 계산 방식, zero difference 처리 방식을 다시 확인하세요.",
+  },
+  invalid_mann_whitney_options: {
+    title: "Mann-Whitney 옵션 형식 오류",
+    message: "Mann-Whitney U 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, 그룹 컬럼, alpha, 대립가설, p-value 계산 방식을 다시 확인하세요.",
+  },
+  invalid_graphical_summary_options: {
+    title: "그래프 요약 옵션 형식 오류",
+    message: "그래프 요약 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "분석할 숫자 컬럼, 히스토그램 bin 수, Q-Q/ECDF 점 제한 값을 다시 확인하세요.",
+  },
+  invalid_normality_options: {
+    title: "정규성 검정 옵션 형식 오류",
+    message: "정규성 검정 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "분석할 숫자 컬럼, alpha, Q-Q 점 포함 여부와 점 제한 값을 다시 확인하세요.",
+  },
+  invalid_equal_variances_options: {
+    title: "등분산 검정 옵션 형식 오류",
+    message: "등분산 검정 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, 그룹 컬럼, alpha, 결측 처리 옵션을 다시 확인하세요.",
+  },
   two_sample_t_requires_exactly_two_groups: {
     title: "2개 그룹 필요",
     message:
@@ -102,6 +157,31 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     message: "선택한 두 그룹의 변동이 없어 t 통계량을 계산할 수 없습니다.",
     action: "상수값만 남지 않도록 반응 컬럼이나 필터 조건을 다시 확인하세요.",
   },
+  invalid_one_way_anova_options: {
+    title: "ANOVA 옵션 형식 오류",
+    message: "일원분산분석 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, 그룹 컬럼, alpha, 신뢰수준, ANOVA/사후검정 옵션을 다시 확인하세요.",
+  },
+  invalid_kruskal_wallis_options: {
+    title: "Kruskal-Wallis 옵션 형식 오류",
+    message: "Kruskal-Wallis 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, 그룹 컬럼, alpha, Dunn/Holm 사후검정 옵션을 다시 확인하세요.",
+  },
+  invalid_two_proportion_options: {
+    title: "2-비율 옵션 형식 오류",
+    message: "2-비율 검정 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, 그룹 컬럼, 사건 수준, alpha, 신뢰수준, 대립가설 선택을 다시 확인하세요.",
+  },
+  invalid_chi_square_options: {
+    title: "카이제곱 옵션 형식 오류",
+    message: "카이제곱 독립성 검정 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "행 변수, 열 변수, alpha 설정을 다시 확인하세요.",
+  },
+  invalid_one_proportion_options: {
+    title: "1-비율 옵션 형식 오류",
+    message: "1-비율 검정 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 컬럼, 사건 수준, 기준 비율, alpha, 신뢰수준, 신뢰구간 방식을 다시 확인하세요.",
+  },
   xy_correlation_columns_required: {
     title: "X/Y 변수 필요",
     message: "X-Y 상관행렬은 X 변수와 Y 변수를 각각 하나 이상 선택해야 합니다.",
@@ -116,6 +196,11 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     title: "신뢰수준 오류",
     message: "X-Y 상관행렬의 신뢰수준은 0보다 크고 1보다 작아야 합니다.",
     action: "보통 0.95를 사용합니다.",
+  },
+  invalid_linear_model_options: {
+    title: "회귀모형 옵션 형식 오류",
+    message: "회귀모형 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "반응 변수, 예측변수, alpha, 신뢰수준, 추가 항 선택을 다시 확인하세요.",
   },
   linear_model_response_column_required: {
     title: "반응 변수 필요",
@@ -232,6 +317,36 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     title: "표준오차 계산 불가",
     message: "회귀 계수 표준오차가 유한한 숫자로 계산되지 않았습니다.",
     action: "상수/중복/극단 스케일 예측변수를 제거하고 다시 실행하세요.",
+  },
+  invalid_gage_rr_options: {
+    title: "Gage R&R 옵션 형식 오류",
+    message: "Gage R&R 실행 옵션의 필수 컬럼 ID나 허용되지 않은 항목이 맞지 않습니다.",
+    action: "측정값, 부품, 측정자, 반복 컬럼을 다시 선택하고 preflight를 통과한 뒤 실행하세요.",
+  },
+  invalid_individuals_chart_options: {
+    title: "개별값 관리도 옵션 형식 오류",
+    message: "개별값 관리도 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "측정값 컬럼, 선택적 순서 컬럼, 규칙 길이, point limit을 다시 확인하세요.",
+  },
+  invalid_subgroup_chart_options: {
+    title: "부분군 관리도 옵션 형식 오류",
+    message: "부분군 관리도 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "측정값 컬럼, 부분군 컬럼, Xbar-R/Xbar-S 선택, point limit을 다시 확인하세요.",
+  },
+  invalid_gage_run_chart_options: {
+    title: "Gage Run Chart 옵션 형식 오류",
+    message: "Gage Run Chart 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "측정값, 부품, 측정자, 반복 컬럼, 선택적 순서 컬럼, point limit을 다시 확인하세요.",
+  },
+  invalid_capability_options: {
+    title: "공정능력 옵션 형식 오류",
+    message: "공정능력 분석 옵션의 필수 항목, spec limit 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "측정값 컬럼, LSL/USL/target, histogram bin limit을 다시 확인하세요.",
+  },
+  invalid_run_chart_options: {
+    title: "런 차트 옵션 형식 오류",
+    message: "런 차트 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    action: "측정값 컬럼, 순서 컬럼, trend/oscillation rule 길이, runs test alpha, point limit을 다시 확인하세요.",
   },
 };
 

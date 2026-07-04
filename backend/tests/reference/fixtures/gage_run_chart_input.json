@@ -1,0 +1,24 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "gage_run_chart_reference_inputs_v1",
+  "cases": [
+    {
+      "case_id": "balanced_ordered",
+      "rows": [
+        ["9", "Part A", "Operator 1", "1", "2"],
+        ["11", "Part A", "Operator 1", "2", "1"],
+        ["15", "Part A", "Operator 2", "1", "4"],
+        ["17", "Part A", "Operator 2", "2", "3"],
+        ["20", "Part B", "Operator 1", "1", "6"],
+        ["22", "Part B", "Operator 1", "2", "5"],
+        ["24", "Part B", "Operator 2", "1", "8"],
+        ["26", "Part B", "Operator 2", "2", "7"],
+        ["31", "Part C", "Operator 1", "1", "10"],
+        ["33", "Part C", "Operator 1", "2", "9"],
+        ["33", "Part C", "Operator 2", "1", "12"],
+        ["35", "Part C", "Operator 2", "2", "11"]
+      ],
+      "point_limit": 1000
+    }
+  ]
+}

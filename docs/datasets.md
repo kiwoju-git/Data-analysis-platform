@@ -65,6 +65,7 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 - Verifies the entire canonical rows artifact before returning a page, then streams canonical rows for the requested page.
 - Detects row count, file size, SHA-256, row-index order, column count, and value-type mismatches before exposing preview values.
 - For headerless datasets, row index `0` maps to the confirmed `data_start_row`.
+- Current performance tradeoff: every preview request pays a full canonical JSONL verification cost before paging, which favors corruption detection over speed for large datasets. Future optimization candidates are a verified-artifact cache keyed by artifact hash, a row offset index, chunk-level hashes, and a verified-session cache.
 
 `GET /api/v1/dataset-versions/{version_id}/profile`
 

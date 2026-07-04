@@ -8,6 +8,10 @@ import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { DatasetPreparationPage } from "./DatasetPreparationPage";
 import type {
   AnalysisMethodListResponse,
+  AnalysisResultCsvExportResponse,
+  AnalysisResultEnvelope,
+  AnalysisResultHtmlReportResponse,
+  AnalysisResultJsonExportResponse,
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
@@ -285,6 +289,168 @@ describe("App", () => {
     expect(html).toContain("해결 방법:");
     expect(html).toContain("오류 코드:");
     expect(html).toContain("filter_value_required");
+  });
+
+  it("shows a JSON export action for a succeeded analysis result", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const analysisResult = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedAnalysisResult={analysisResult}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onCreateAnalysisResultJsonExport={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("실행 패널");
+    expect(html).toContain("결과 내보내기");
+    expect(html).toContain("JSON 생성");
+    expect(html).toContain("CSV 생성");
+    expect(html).toContain("HTML 생성");
+    expect(html).toContain(selectedMethod.method_id);
+  });
+
+  it("shows JSON export metadata only for the matching analysis result", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const analysisResult = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const exportResult = analysisResultJsonExportTestResponse(analysisResult);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisResultJsonExport={exportResult}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedAnalysisResult={analysisResult}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onCreateAnalysisResultJsonExport={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("생성됨");
+    expect(html).toContain("2.0 KB");
+    expect(html).toContain("sha256");
+    expect(html).toContain("abcdef123456");
+    expect(html).toContain("JSON 다운로드");
+    expect(html).not.toContain("stale");
+  });
+
+  it("shows export download errors inside the export panel", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const analysisResult = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const exportResult = analysisResultJsonExportTestResponse(analysisResult);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisResultExportDownloadError="analysis_export_checksum_mismatch"
+        analysisResultJsonExport={exportResult}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedAnalysisResult={analysisResult}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onCreateAnalysisResultJsonExport={() => undefined}
+        onDownloadAnalysisResultExport={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("export 다운로드 실패");
+    expect(html).toContain("analysis_export_checksum_mismatch");
+  });
+
+  it("shows CSV export metadata only for the matching analysis result", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const analysisResult = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const exportResult = analysisResultCsvExportTestResponse(analysisResult);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisResultCsvExport={exportResult}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedAnalysisResult={analysisResult}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onCreateAnalysisResultCsvExport={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("생성됨");
+    expect(html).toContain("CSV");
+    expect(html).toContain("12");
+    expect(html).toContain("행");
+    expect(html).toContain("4.0 KB");
+    expect(html).toContain("sha256");
+    expect(html).toContain("123456abcdef");
+    expect(html).toContain("CSV 다운로드");
+    expect(html).not.toContain("stale");
+  });
+
+  it("shows HTML report metadata only for the matching analysis result", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const analysisResult = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const reportResult = analysisResultHtmlReportTestResponse(analysisResult);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisResultHtmlReport={reportResult}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedAnalysisResult={analysisResult}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onCreateAnalysisResultHtmlReport={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("생성됨");
+    expect(html).toContain("HTML");
+    expect(html).toContain("18");
+    expect(html).toContain("개 항목");
+    expect(html).toContain("8.0 KB");
+    expect(html).toContain("sha256");
+    expect(html).toContain("feedfacecafe");
+    expect(html).toContain("HTML 다운로드");
+    expect(html).not.toContain("stale");
   });
 
   it("renders the Pearson correlation execution panel for the first Gate C1 method", () => {
@@ -2745,6 +2911,98 @@ function gageRrTestColumns(): DatasetColumnResponse[] {
       unit: null,
     },
   ];
+}
+
+function analysisResultEnvelopeTestResponse(methodId = "eda.descriptive"): AnalysisResultEnvelope {
+  return {
+    analysis_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    method_id: methodId,
+    method_version: "0.1.0",
+    dataset_version_id: "version-1",
+    status: "succeeded",
+    warnings: [],
+    provenance: {
+      method_id: methodId,
+      method_version: "0.1.0",
+      dataset_version_id: "version-1",
+      source_schema_hash: "schema-hash",
+      app_version: "0.1.0",
+      python_version: "3.10.11",
+      platform: "Windows-11",
+      build_commit: "test",
+      package_versions: {
+        numpy: "2.2.6",
+        scipy: "1.15.3",
+      },
+    },
+    result: {
+      schema_version: 1,
+      summary_type: "ui_export_contract_test",
+    },
+  };
+}
+
+function analysisResultJsonExportTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisResultJsonExportResponse {
+  return {
+    schema_version: 1,
+    export_id: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+    analysis_id: result.analysis_id,
+    format: "analysis_result_json",
+    artifact_kind: "analysis_result_json_export",
+    media_type: "application/json",
+    sha256: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    size_bytes: 2048,
+    source_result_sha256: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    stale: false,
+    created_at: "2026-07-04T00:00:00Z",
+    result,
+  };
+}
+
+function analysisResultCsvExportTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisResultCsvExportResponse {
+  return {
+    schema_version: 1,
+    export_id: "cccccccc-dddd-eeee-ffff-000000000000",
+    analysis_id: result.analysis_id,
+    format: "analysis_result_csv",
+    artifact_kind: "analysis_result_csv_export",
+    media_type: "text/csv",
+    sha256: "123456abcdef7890123456abcdef7890123456abcdef7890123456abcdef7890",
+    size_bytes: 4096,
+    source_result_sha256: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    stale: false,
+    created_at: "2026-07-04T00:00:00Z",
+    columns: ["section", "path", "value"],
+    row_count: 12,
+    preview_rows: [
+      ["analysis_id", "analysis_id", result.analysis_id],
+      ["method_id", "method_id", result.method_id],
+    ],
+  };
+}
+
+function analysisResultHtmlReportTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisResultHtmlReportResponse {
+  return {
+    schema_version: 1,
+    export_id: "dddddddd-eeee-ffff-0000-111111111111",
+    analysis_id: result.analysis_id,
+    format: "analysis_result_html_report",
+    artifact_kind: "analysis_result_html_report",
+    media_type: "text/html",
+    sha256: "feedfacecafe7890feedfacecafe7890feedfacecafe7890feedfacecafe7890",
+    size_bytes: 8192,
+    source_result_sha256: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    stale: false,
+    created_at: "2026-07-04T00:00:00Z",
+    title: "DataLab Studio Analysis Report",
+    section_count: 18,
+  };
 }
 
 function analysisTestCatalog(): AnalysisMethodListResponse {

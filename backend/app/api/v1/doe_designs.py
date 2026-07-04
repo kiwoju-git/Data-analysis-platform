@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Request, Response, status
 
 from app.api.v1.schemas.doe import (
     DoeDesignResponsesResponse,
@@ -11,6 +11,7 @@ from app.api.v1.schemas.doe import (
 from app.services.doe_designs import (
     create_factorial_design,
     get_factorial_design,
+    get_factorial_design_html_report,
     list_factorial_design_responses,
     save_factorial_design_responses,
 )
@@ -41,6 +42,26 @@ def get_factorial_design_route(
     return get_factorial_design(
         settings=request.app.state.settings,
         design_id=design_id,
+    )
+
+
+@router.get("/{design_id}/report.html")
+def download_factorial_design_html_report_route(
+    request: Request,
+    design_id: UUID,
+) -> Response:
+    report = get_factorial_design_html_report(
+        settings=request.app.state.settings,
+        design_id=design_id,
+    )
+    return Response(
+        content=report.content,
+        media_type=report.media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{report.filename}"',
+            "ETag": f'"sha256:{report.sha256}"',
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

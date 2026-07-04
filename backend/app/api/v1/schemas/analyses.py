@@ -1,8 +1,9 @@
 from enum import Enum
+from math import isfinite
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AnalysisModuleId(str, Enum):
@@ -83,6 +84,618 @@ class AnalysisRunRequest(BaseModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
+class DescriptiveOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_ids: list[str] = Field(min_length=1)
+    missing_policy: Literal["available_case_by_column"] = "available_case_by_column"
+
+    @field_validator("column_ids", mode="before")
+    @classmethod
+    def require_column_ids(cls, value: object) -> object:
+        if not isinstance(value, list) or not value:
+            raise ValueError("must be a non-empty list")
+        if any(not isinstance(column_id, str) or not column_id for column_id in value):
+            raise ValueError("must contain non-empty string column IDs")
+        return value
+
+
+class GraphicalSummaryOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_ids: list[str] = Field(min_length=1)
+    histogram_bin_count: int | None = None
+    point_limit: int = 1000
+
+    @field_validator("column_ids", mode="before")
+    @classmethod
+    def require_column_ids(cls, value: object) -> object:
+        if not isinstance(value, list) or not value:
+            raise ValueError("must be a non-empty list")
+        if any(not isinstance(column_id, str) or not column_id for column_id in value):
+            raise ValueError("must contain non-empty string column IDs")
+        return value
+
+    @field_validator("histogram_bin_count", mode="before")
+    @classmethod
+    def require_optional_integer(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+    @field_validator("point_limit", mode="before")
+    @classmethod
+    def require_integer(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+
+class NormalityOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_ids: list[str] = Field(min_length=1)
+    group_column_id: str | None = None
+    alpha: float = 0.05
+    include_qq_points: bool = True
+    qq_point_limit: int = 1000
+    missing_policy: str = "available_case_by_column"
+
+    @field_validator("column_ids", mode="before")
+    @classmethod
+    def require_column_ids(cls, value: object) -> object:
+        if not isinstance(value, list) or not value:
+            raise ValueError("must be a non-empty list")
+        if any(not isinstance(column_id, str) or not column_id for column_id in value):
+            raise ValueError("must contain non-empty string column IDs")
+        return value
+
+    @field_validator("group_column_id", mode="before")
+    @classmethod
+    def require_optional_string(cls, value: object) -> object:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("must be a string")
+        return value
+
+    @field_validator("alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+    @field_validator("include_qq_points", mode="before")
+    @classmethod
+    def require_boolean(cls, value: object) -> object:
+        if not isinstance(value, bool):
+            raise ValueError("must be a boolean")
+        return value
+
+    @field_validator("qq_point_limit", mode="before")
+    @classmethod
+    def require_integer(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+
+class EqualVariancesOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    missing_policy: str = "complete_case"
+
+    @field_validator("response_column_id", "group_column_id", mode="before")
+    @classmethod
+    def require_column_id(cls, value: object) -> object:
+        if not isinstance(value, str) or not value:
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @field_validator("alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class OneSampleTOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    alternative: Literal["two_sided", "greater", "less"] = "two_sided"
+    null_mean: float = 0.0
+    missing_policy: str = "complete_case"
+
+    @field_validator("alpha", "confidence_level", "null_mean", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class PairedTOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    before_column_id: str = Field(min_length=1)
+    after_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    alternative: Literal["two_sided", "greater", "less"] = "two_sided"
+    null_difference: float = 0.0
+    missing_policy: str = "complete_pair"
+
+    @field_validator("alpha", "confidence_level", "null_difference", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class TwoSampleTOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    alternative: Literal["two_sided", "greater", "less"] = "two_sided"
+    variance_assumption: Literal["welch", "pooled"] = "welch"
+    null_difference: float = 0.0
+    missing_policy: str = "complete_case"
+
+    @field_validator("alpha", "confidence_level", "null_difference", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class EquivalenceTostOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str | None = Field(default=None, min_length=1)
+    design: str = Field(min_length=1)
+    reference_mean: float
+    lower_bound: float
+    upper_bound: float
+    alpha: float = 0.05
+    missing_policy: str = "complete_case"
+
+    @field_validator("reference_mean", "lower_bound", "upper_bound", "alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class OneSampleWilcoxonOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    alternative: Literal["two_sided", "greater", "less"] = "two_sided"
+    null_location: float = 0.0
+    method: Literal["auto", "exact", "asymptotic"] = "auto"
+    zero_method: Literal["wilcox", "pratt", "zsplit"] = "wilcox"
+    missing_policy: str = "complete_case"
+
+    @field_validator("alpha", "null_location", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class MannWhitneyOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    alternative: Literal["two_sided", "greater", "less"] = "two_sided"
+    method: Literal["auto", "exact", "asymptotic"] = "auto"
+    missing_policy: str = "complete_case"
+
+    @field_validator("alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class LinearModelInteractionTermOption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    left_column_id: str = Field(min_length=1)
+    right_column_id: str = Field(min_length=1)
+
+
+class PearsonOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x_column_id: str = Field(min_length=1)
+    y_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    missing_policy: Literal["complete_case"] = "complete_case"
+
+    @field_validator("x_column_id", "y_column_id", mode="before")
+    @classmethod
+    def require_column_id(cls, value: object) -> object:
+        if not isinstance(value, str) or not value:
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @field_validator("alpha", "confidence_level", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class XyCorrelationOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x_column_ids: list[str] = Field(min_length=1)
+    y_column_ids: list[str] = Field(min_length=1)
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    missing_policy: Literal["pairwise_complete_case"] = "pairwise_complete_case"
+
+    @field_validator("x_column_ids", "y_column_ids", mode="before")
+    @classmethod
+    def require_column_ids(cls, value: object) -> object:
+        if not isinstance(value, list) or not value:
+            raise ValueError("must be a non-empty list")
+        if any(not isinstance(column_id, str) or not column_id for column_id in value):
+            raise ValueError("must contain non-empty string column IDs")
+        return value
+
+    @field_validator("alpha", "confidence_level", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class LinearModelOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    predictor_column_ids: list[str] = Field(min_length=1)
+    quadratic_terms: list[str] | None = None
+    interaction_terms: list[LinearModelInteractionTermOption] | None = None
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    missing_policy: str = "complete_case"
+    include_intercept: bool = True
+    covariance_type: str = "standard"
+
+    @field_validator("alpha", "confidence_level", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+    @field_validator("include_intercept", mode="before")
+    @classmethod
+    def require_boolean(cls, value: object) -> object:
+        if not isinstance(value, bool):
+            raise ValueError("must be a boolean")
+        return value
+
+
+class GageRrOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    measurement_column_id: str = Field(min_length=1)
+    part_column_id: str = Field(min_length=1)
+    operator_column_id: str = Field(min_length=1)
+    replicate_column_id: str = Field(min_length=1)
+    missing_policy: str = "complete_case"
+
+
+class IndividualsChartOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value_column_id: str = Field(min_length=1)
+    order_column_id: str | None = None
+    missing_policy: str = "complete_case"
+    same_side_min_length: int = 9
+    trend_min_length: int = 6
+    point_limit: int = 1000
+
+    @field_validator("value_column_id", mode="before")
+    @classmethod
+    def require_column_id(cls, value: object) -> object:
+        if not isinstance(value, str) or not value:
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @field_validator("order_column_id", mode="before")
+    @classmethod
+    def require_optional_string(cls, value: object) -> object:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("must be a string")
+        return value
+
+    @field_validator("same_side_min_length", "trend_min_length", "point_limit", mode="before")
+    @classmethod
+    def require_integer(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+
+class SubgroupChartOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value_column_id: str = Field(min_length=1)
+    subgroup_column_id: str = Field(min_length=1)
+    chart_type: str = "xbar_r"
+    missing_policy: str = "complete_case"
+    point_limit: int = 1000
+
+    @field_validator("value_column_id", "subgroup_column_id", mode="before")
+    @classmethod
+    def require_column_id(cls, value: object) -> object:
+        if not isinstance(value, str) or not value:
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @field_validator("point_limit", mode="before")
+    @classmethod
+    def require_integer(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+
+class GageRunChartOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    measurement_column_id: str = Field(min_length=1)
+    part_column_id: str = Field(min_length=1)
+    operator_column_id: str = Field(min_length=1)
+    replicate_column_id: str = Field(min_length=1)
+    order_column_id: str | None = None
+    missing_policy: str = "complete_case"
+    point_limit: int = 1000
+
+    @field_validator(
+        "measurement_column_id",
+        "part_column_id",
+        "operator_column_id",
+        "replicate_column_id",
+        mode="before",
+    )
+    @classmethod
+    def require_column_id(cls, value: object) -> object:
+        if not isinstance(value, str) or not value:
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @field_validator("order_column_id", mode="before")
+    @classmethod
+    def require_optional_string(cls, value: object) -> object:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("must be a string")
+        return value
+
+    @field_validator("point_limit", mode="before")
+    @classmethod
+    def require_integer(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+
+class OneProportionOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    event_level: str = Field(min_length=1)
+    null_proportion: float = 0.5
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    alternative: Literal["two_sided", "greater", "less"] = "two_sided"
+    ci_method: Literal["wilson", "clopper_pearson"] = "wilson"
+    missing_policy: str = "complete_case"
+
+    @field_validator("null_proportion", "alpha", "confidence_level", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class TwoProportionOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    event_level: str = Field(min_length=1)
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    alternative: Literal["two_sided", "greater", "less"] = "two_sided"
+    missing_policy: str = "complete_case"
+
+    @field_validator("alpha", "confidence_level", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class ChiSquareAssociationOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row_column_id: str = Field(min_length=1)
+    column_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    missing_policy: str = "complete_case"
+
+    @field_validator("alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class CapabilityOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value_column_id: str = Field(min_length=1)
+    lsl: float | None = None
+    usl: float | None = None
+    target: float | None = None
+    missing_policy: str = "complete_case"
+    histogram_bin_limit: int = 30
+
+    @field_validator("lsl", "usl", "target", mode="before")
+    @classmethod
+    def require_optional_finite_number(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+    @field_validator("histogram_bin_limit", mode="before")
+    @classmethod
+    def require_integer(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+
+class OneWayAnovaOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    confidence_level: float = 0.95
+    anova_type: str = "standard"
+    posthoc_method: str = "tukey_kramer"
+    posthoc_policy: str = "after_significant"
+    missing_policy: str = "complete_case"
+
+    @field_validator("alpha", "confidence_level", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class KruskalWallisOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    alpha: float = 0.05
+    posthoc_method: str = "dunn_holm"
+    posthoc_policy: str = "after_significant"
+    missing_policy: str = "complete_case"
+
+    @field_validator("alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
+class RunChartOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value_column_id: str = Field(min_length=1)
+    order_column_id: str | None = None
+    center_method: str = "median"
+    missing_policy: str = "complete_case"
+    trend_min_length: int = 6
+    oscillation_min_length: int = 14
+    runs_test_alpha: float = 0.05
+    point_limit: int = 1000
+
+    @field_validator("trend_min_length", "oscillation_min_length", "point_limit", mode="before")
+    @classmethod
+    def require_integer(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+    @field_validator("runs_test_alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+
 class AnalysisRunStatusResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -137,6 +750,60 @@ class AnalysisResultEnvelope(BaseModel):
     warnings: list[AnalysisWarning]
     provenance: AnalysisProvenance
     result: dict[str, Any] | None = None
+
+
+class AnalysisResultJsonExportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = Field(ge=1)
+    export_id: UUID
+    analysis_id: UUID
+    format: Literal["analysis_result_json"]
+    artifact_kind: Literal["analysis_result_json_export"]
+    media_type: Literal["application/json"]
+    sha256: str = Field(min_length=64, max_length=64)
+    size_bytes: int = Field(ge=0)
+    source_result_sha256: str = Field(min_length=64, max_length=64)
+    stale: bool
+    created_at: str
+    result: AnalysisResultEnvelope
+
+
+class AnalysisResultCsvExportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = Field(ge=1)
+    export_id: UUID
+    analysis_id: UUID
+    format: Literal["analysis_result_csv"]
+    artifact_kind: Literal["analysis_result_csv_export"]
+    media_type: Literal["text/csv"]
+    sha256: str = Field(min_length=64, max_length=64)
+    size_bytes: int = Field(ge=0)
+    source_result_sha256: str = Field(min_length=64, max_length=64)
+    stale: bool
+    created_at: str
+    columns: list[str]
+    row_count: int = Field(ge=0)
+    preview_rows: list[list[str]]
+
+
+class AnalysisResultHtmlReportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = Field(ge=1)
+    export_id: UUID
+    analysis_id: UUID
+    format: Literal["analysis_result_html_report"]
+    artifact_kind: Literal["analysis_result_html_report"]
+    media_type: Literal["text/html"]
+    sha256: str = Field(min_length=64, max_length=64)
+    size_bytes: int = Field(ge=0)
+    source_result_sha256: str = Field(min_length=64, max_length=64)
+    stale: bool
+    created_at: str
+    title: str
+    section_count: int = Field(ge=0)
 
 
 class GageRrPreflightRequest(BaseModel):

@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from app.statistics.factorial_design import (
@@ -5,7 +8,11 @@ from app.statistics.factorial_design import (
     FactorialDesignOptions,
     FactorialFactor,
     generate_two_level_full_factorial_design,
+    run_to_payload,
 )
+
+INPUT_FIXTURE = Path("backend/tests/reference/fixtures/factorial_design_input.json")
+REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/factorial_design_reference.json")
 
 
 def test_two_level_full_factorial_standard_order_and_center_point() -> None:
@@ -58,6 +65,42 @@ def test_two_level_full_factorial_same_seed_reproduces_run_order() -> None:
     ]
     assert [run.block_index for run in first.runs[:4]] == [1, 2, 1, 2]
     assert first.design_sha256 == second.design_sha256
+
+
+def test_two_level_full_factorial_matches_reference_fixture() -> None:
+    input_fixture = json.loads(INPUT_FIXTURE.read_text(encoding="utf-8"))
+    reference = json.loads(REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    cases_by_id = {case["case_id"]: case for case in reference["cases"]}
+
+    for case in input_fixture["cases"]:
+        design = generate_two_level_full_factorial_design(
+            factors=[
+                FactorialFactor(
+                    name=factor["name"],
+                    low=factor["low"],
+                    high=factor["high"],
+                    unit=factor["unit"],
+                )
+                for factor in case["factors"]
+            ],
+            options=FactorialDesignOptions(**case["options"]),
+        )
+        expected = cases_by_id[case["case_id"]]
+
+        assert design.design_sha256 == expected["design_sha256"]
+        if "runs" in expected:
+            assert [run_to_payload(run) for run in design.runs] == expected["runs"]
+        if "run_order_summary" in expected:
+            assert [
+                {
+                    "run_order": run.run_order,
+                    "standard_order": run.standard_order,
+                    "replicate_index": run.replicate_index,
+                    "block_index": run.block_index,
+                    "center_point": run.center_point,
+                }
+                for run in design.runs
+            ] == expected["run_order_summary"]
 
 
 def test_two_level_full_factorial_rejects_invalid_designs() -> None:

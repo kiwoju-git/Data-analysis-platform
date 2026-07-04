@@ -161,6 +161,34 @@ def test_two_proportion_reports_missing_and_zero_cell_warnings_without_fake_ci()
     assert result["effect_sizes"]["odds_ratio"]["confidence_interval"] is None
 
 
+def test_two_proportion_handles_all_event_and_no_event_groups_without_fake_effect_ci() -> None:
+    result = calculate_two_proportion(
+        [
+            ["yes", "A"],
+            ["yes", "A"],
+            ["no", "B"],
+            ["no", "B"],
+        ],
+        _response_column(),
+        _group_column(),
+        event_level="yes",
+    )
+
+    assert [group["event_count"] for group in result["groups"]] == [2, 0]
+    assert [group["non_event_count"] for group in result["groups"]] == [0, 2]
+    assert result["groups"][0]["warnings"] == ["group_has_no_non_events"]
+    assert result["groups"][1]["warnings"] == ["group_has_no_events"]
+    assert result["test"]["p_value"] == pytest.approx(1.0 / 3.0, abs=1e-12)
+    assert result["test"]["exact"] is True
+    assert result["effect_sizes"]["risk_ratio"]["estimate"] is None
+    assert result["effect_sizes"]["risk_ratio"]["confidence_interval"] is None
+    assert result["effect_sizes"]["odds_ratio"]["estimate"] is None
+    assert result["effect_sizes"]["odds_ratio"]["confidence_interval"] is None
+    assert result["difference"]["confidence_interval"] is not None
+    assert "two_proportion_fisher_exact" in result["warnings"]
+    assert "zero_cell_effect_ci_unavailable" in result["warnings"]
+
+
 def test_two_proportion_rejects_invalid_inputs_without_fallback_statistic() -> None:
     with pytest.raises(TwoProportionError, match="invalid_two_proportion_alternative"):
         calculate_two_proportion(

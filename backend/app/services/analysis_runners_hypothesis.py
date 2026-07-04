@@ -3,11 +3,20 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import status
+from pydantic import ValidationError
 
 from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
     AnalysisRunRequest,
     AnalysisWarning,
+    EquivalenceTostOptions,
+    KruskalWallisOptions,
+    MannWhitneyOptions,
+    OneSampleTOptions,
+    OneSampleWilcoxonOptions,
+    OneWayAnovaOptions,
+    PairedTOptions,
+    TwoSampleTOptions,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -85,13 +94,14 @@ def run_one_sample_t_analysis(
             message="1-표본 t-검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_one_sample_t_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    response_column = _selected_one_sample_t_column(context, request.options)
-    alpha = _one_sample_t_alpha(request.options)
-    confidence_level = _one_sample_t_confidence_level(request.options)
-    alternative = _one_sample_t_alternative(request.options)
-    null_mean = _one_sample_t_null_mean(request.options)
-    _one_sample_t_missing_policy(request.options)
+    response_column = _selected_one_sample_t_column(context, options)
+    alpha = _one_sample_t_alpha(options)
+    confidence_level = _one_sample_t_confidence_level(options)
+    alternative = _one_sample_t_alternative(options)
+    null_mean = _one_sample_t_null_mean(options)
+    _one_sample_t_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -129,6 +139,17 @@ def run_one_sample_t_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_one_sample_t_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return OneSampleTOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_one_sample_t_options",
+            message="1-표본 t-검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_one_sample_t_column(
@@ -245,6 +266,7 @@ def _one_sample_t_missing_policy(options: dict[str, Any]) -> str:
 
 def _one_sample_t_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_one_sample_t_options": "1-표본 t-검정 옵션 계약이 올바르지 않습니다.",
         "one_sample_t_n_too_small": "1-표본 t-검정에는 최소 2개 사용 값이 필요합니다.",
         "one_sample_t_standard_error_zero": (
             "평균 차이의 표준오차가 0이어서 1-표본 t-검정을 계산할 수 없습니다."
@@ -308,14 +330,15 @@ def run_equivalence_tost_analysis(
             message="동등성 검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_equivalence_tost_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    response_column = _selected_equivalence_tost_column(context, request.options)
-    design = _equivalence_tost_design(request.options)
-    alpha = _equivalence_tost_alpha(request.options)
-    reference_mean = _equivalence_tost_reference_mean(request.options)
-    lower_bound = _equivalence_tost_lower_bound(request.options)
-    upper_bound = _equivalence_tost_upper_bound(request.options)
-    _equivalence_tost_missing_policy(request.options)
+    response_column = _selected_equivalence_tost_column(context, options)
+    design = _equivalence_tost_design(options)
+    alpha = _equivalence_tost_alpha(options)
+    reference_mean = _equivalence_tost_reference_mean(options)
+    lower_bound = _equivalence_tost_lower_bound(options)
+    upper_bound = _equivalence_tost_upper_bound(options)
+    _equivalence_tost_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -354,6 +377,17 @@ def run_equivalence_tost_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_equivalence_tost_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return EquivalenceTostOptions.model_validate(options).model_dump(exclude_none=True)
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_equivalence_tost_options",
+            message="동등성 검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_equivalence_tost_column(
@@ -481,6 +515,7 @@ def _equivalence_tost_missing_policy(options: dict[str, Any]) -> str:
 
 def _equivalence_tost_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_equivalence_tost_options": "동등성 검정 옵션 계약이 올바르지 않습니다.",
         "equivalence_tost_design_unsupported": "현재 동등성 검정은 1표본 평균 설계만 지원합니다.",
         "invalid_equivalence_tost_reference_mean": ("동등성 검정 기준 평균이 올바르지 않습니다."),
         "invalid_equivalence_tost_bounds": "동등성 검정 한계값이 올바르지 않습니다.",
@@ -558,13 +593,14 @@ def run_paired_t_analysis(
             message="대응표본 t-검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_paired_t_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    before_column, after_column = _selected_paired_t_columns(context, request.options)
-    alpha = _paired_t_alpha(request.options)
-    confidence_level = _paired_t_confidence_level(request.options)
-    alternative = _paired_t_alternative(request.options)
-    null_difference = _paired_t_null_difference(request.options)
-    _paired_t_missing_policy(request.options)
+    before_column, after_column = _selected_paired_t_columns(context, options)
+    alpha = _paired_t_alpha(options)
+    confidence_level = _paired_t_confidence_level(options)
+    alternative = _paired_t_alternative(options)
+    null_difference = _paired_t_null_difference(options)
+    _paired_t_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -603,6 +639,17 @@ def run_paired_t_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_paired_t_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return PairedTOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_paired_t_options",
+            message="대응표본 t-검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_paired_t_columns(
@@ -744,6 +791,7 @@ def _paired_t_missing_policy(options: dict[str, Any]) -> str:
 
 def _paired_t_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_paired_t_options": "대응표본 t-검정 옵션 계약이 올바르지 않습니다.",
         "paired_t_n_too_small": "대응표본 t-검정에는 최소 2개 완전한 pair가 필요합니다.",
         "paired_t_standard_error_zero": (
             "pair 차이의 표준오차가 0이어서 대응표본 t-검정을 계산할 수 없습니다."
@@ -810,14 +858,15 @@ def run_one_sample_wilcoxon_analysis(
             message="1-표본 Wilcoxon 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_one_sample_wilcoxon_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    response_column = _selected_one_sample_wilcoxon_column(context, request.options)
-    alpha = _one_sample_wilcoxon_alpha(request.options)
-    alternative = _one_sample_wilcoxon_alternative(request.options)
-    null_location = _one_sample_wilcoxon_null_location(request.options)
-    method = _one_sample_wilcoxon_method(request.options)
-    zero_method = _one_sample_wilcoxon_zero_method(request.options)
-    _one_sample_wilcoxon_missing_policy(request.options)
+    response_column = _selected_one_sample_wilcoxon_column(context, options)
+    alpha = _one_sample_wilcoxon_alpha(options)
+    alternative = _one_sample_wilcoxon_alternative(options)
+    null_location = _one_sample_wilcoxon_null_location(options)
+    method = _one_sample_wilcoxon_method(options)
+    zero_method = _one_sample_wilcoxon_zero_method(options)
+    _one_sample_wilcoxon_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -856,6 +905,17 @@ def run_one_sample_wilcoxon_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_one_sample_wilcoxon_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return OneSampleWilcoxonOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_one_sample_wilcoxon_options",
+            message="1-표본 Wilcoxon 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_one_sample_wilcoxon_column(
@@ -976,6 +1036,7 @@ def _one_sample_wilcoxon_missing_policy(options: dict[str, Any]) -> str:
 
 def _one_sample_wilcoxon_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_one_sample_wilcoxon_options": "1-표본 Wilcoxon 옵션 계약이 올바르지 않습니다.",
         "one_sample_wilcoxon_no_nonzero_differences": (
             "기준 위치와 다른 사용 값이 없어 1-표본 Wilcoxon을 계산할 수 없습니다."
         ),
@@ -1101,14 +1162,15 @@ def run_two_sample_t_analysis(
             message="2-표본 t-검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_two_sample_t_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    response_column, group_column = _selected_two_sample_t_columns(context, request.options)
-    alpha = _two_sample_t_alpha(request.options)
-    confidence_level = _two_sample_t_confidence_level(request.options)
-    alternative = _two_sample_t_alternative(request.options)
-    variance_assumption = _two_sample_t_variance_assumption(request.options)
-    null_difference = _two_sample_t_null_difference(request.options)
-    _two_sample_t_missing_policy(request.options)
+    response_column, group_column = _selected_two_sample_t_columns(context, options)
+    alpha = _two_sample_t_alpha(options)
+    confidence_level = _two_sample_t_confidence_level(options)
+    alternative = _two_sample_t_alternative(options)
+    variance_assumption = _two_sample_t_variance_assumption(options)
+    null_difference = _two_sample_t_null_difference(options)
+    _two_sample_t_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -1148,6 +1210,17 @@ def run_two_sample_t_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_two_sample_t_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return TwoSampleTOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_two_sample_t_options",
+            message="2-표본 t-검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_two_sample_t_columns(
@@ -1311,6 +1384,7 @@ def _two_sample_t_missing_policy(options: dict[str, Any]) -> str:
 
 def _two_sample_t_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_two_sample_t_options": "2-표본 t-검정 옵션 계약이 올바르지 않습니다.",
         "two_sample_t_requires_exactly_two_groups": (
             "2-표본 t-검정에는 사용 가능한 그룹이 정확히 2개 필요합니다."
         ),
@@ -1404,12 +1478,13 @@ def run_mann_whitney_analysis(
             message="Mann-Whitney U 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_mann_whitney_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    response_column, group_column = _selected_mann_whitney_columns(context, request.options)
-    alpha = _mann_whitney_alpha(request.options)
-    alternative = _mann_whitney_alternative(request.options)
-    method = _mann_whitney_method(request.options)
-    _mann_whitney_missing_policy(request.options)
+    response_column, group_column = _selected_mann_whitney_columns(context, options)
+    alpha = _mann_whitney_alpha(options)
+    alternative = _mann_whitney_alternative(options)
+    method = _mann_whitney_method(options)
+    _mann_whitney_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -1447,6 +1522,17 @@ def run_mann_whitney_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_mann_whitney_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return MannWhitneyOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_mann_whitney_options",
+            message="Mann-Whitney U 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_mann_whitney_columns(
@@ -1578,6 +1664,7 @@ def _mann_whitney_missing_policy(options: dict[str, Any]) -> str:
 
 def _mann_whitney_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_mann_whitney_options": "Mann-Whitney U 옵션 계약이 올바르지 않습니다.",
         "mann_whitney_requires_exactly_two_groups": (
             "Mann-Whitney U에는 사용 가능한 그룹이 정확히 2개 필요합니다."
         ),
@@ -1688,15 +1775,16 @@ def run_kruskal_wallis_analysis(
             message="Kruskal-Wallis 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_kruskal_wallis_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     response_column, group_column = _selected_kruskal_wallis_columns(
         context,
-        request.options,
+        options,
     )
-    alpha = _kruskal_wallis_alpha(request.options)
-    posthoc_method = _kruskal_wallis_posthoc_method(request.options)
-    posthoc_policy = _kruskal_wallis_posthoc_policy(request.options)
-    _kruskal_wallis_missing_policy(request.options)
+    alpha = _kruskal_wallis_alpha(options)
+    posthoc_method = _kruskal_wallis_posthoc_method(options)
+    posthoc_policy = _kruskal_wallis_posthoc_policy(options)
+    _kruskal_wallis_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -1734,6 +1822,17 @@ def run_kruskal_wallis_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_kruskal_wallis_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return KruskalWallisOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_kruskal_wallis_options",
+            message="Kruskal-Wallis 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_kruskal_wallis_columns(
@@ -1865,6 +1964,7 @@ def _kruskal_wallis_missing_policy(options: dict[str, Any]) -> str:
 
 def _kruskal_wallis_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_kruskal_wallis_options": "Kruskal-Wallis 옵션 계약이 올바르지 않습니다.",
         "kruskal_wallis_requires_at_least_three_groups": (
             "Kruskal-Wallis에는 사용 가능한 그룹이 최소 3개 필요합니다."
         ),
@@ -1990,17 +2090,18 @@ def run_one_way_anova_analysis(
             message="일원분산분석 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_one_way_anova_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     response_column, group_column = _selected_one_way_anova_columns(
         context,
-        request.options,
+        options,
     )
-    alpha = _one_way_anova_alpha(request.options)
-    confidence_level = _one_way_anova_confidence_level(request.options)
-    anova_type = _one_way_anova_type(request.options)
-    posthoc_method = _one_way_anova_posthoc_method(request.options)
-    posthoc_policy = _one_way_anova_posthoc_policy(request.options)
-    _one_way_anova_missing_policy(request.options)
+    alpha = _one_way_anova_alpha(options)
+    confidence_level = _one_way_anova_confidence_level(options)
+    anova_type = _one_way_anova_type(options)
+    posthoc_method = _one_way_anova_posthoc_method(options)
+    posthoc_policy = _one_way_anova_posthoc_policy(options)
+    _one_way_anova_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -2040,6 +2141,17 @@ def run_one_way_anova_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_one_way_anova_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return OneWayAnovaOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_one_way_anova_options",
+            message="일원분산분석 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_one_way_anova_columns(
@@ -2197,6 +2309,7 @@ def _one_way_anova_missing_policy(options: dict[str, Any]) -> str:
 
 def _one_way_anova_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_one_way_anova_options": "일원분산분석 옵션 계약이 올바르지 않습니다.",
         "invalid_one_way_anova_type": "이번 slice는 표준 일원분산분석만 지원합니다.",
         "invalid_one_way_anova_alpha": "일원분산분석 유의수준이 허용 범위를 벗어났습니다.",
         "invalid_one_way_anova_confidence_level": (

@@ -197,6 +197,58 @@ def test_one_way_anova_reports_exclusions_and_skips_posthoc_when_not_significant
     assert "posthoc_skipped_overall_not_significant" in result["warnings"]
 
 
+def test_one_way_anova_keeps_negative_omega_squared_and_skips_posthoc() -> None:
+    rows = [
+        ["1", "A"],
+        ["3", "A"],
+        ["1.9", "B"],
+        ["2.1", "B"],
+        ["1.8", "C"],
+        ["2.2", "C"],
+    ]
+
+    result = calculate_one_way_anova(rows, _response_column(), _group_column())
+
+    assert result["test"]["p_value"] == pytest.approx(1.0, abs=1e-12)
+    effect_size = result["test"]["effect_size"]
+    assert effect_size["eta_squared"] == pytest.approx(0.0, abs=1e-12)
+    assert effect_size["omega_squared"] == pytest.approx(-0.5, abs=1e-12)
+    assert "omega_squared=(SS_between-df_between*MSE)/(SS_total+MSE)" in effect_size["definition"]
+    assert result["posthoc"]["performed"] is False
+    assert result["posthoc"]["reason"] == "overall_not_significant"
+
+
+def test_one_way_anova_warns_on_group_size_imbalance_when_posthoc_runs() -> None:
+    rows = [
+        ["1", "A"],
+        ["2", "A"],
+        ["8", "B"],
+        ["9", "B"],
+        ["10", "B"],
+        ["11", "B"],
+        ["12", "B"],
+        ["13", "B"],
+        ["14", "B"],
+        ["15", "B"],
+        ["9", "C"],
+        ["10", "C"],
+        ["11", "C"],
+        ["12", "C"],
+        ["13", "C"],
+        ["14", "C"],
+        ["15", "C"],
+        ["16", "C"],
+    ]
+
+    result = calculate_one_way_anova(rows, _response_column(), _group_column())
+
+    assert [group["n"] for group in result["groups"]] == [2, 8, 8]
+    assert result["test"]["p_value"] == pytest.approx(0.00011112410768158681, abs=1e-15)
+    assert result["posthoc"]["performed"] is True
+    assert "group_size_imbalance" in result["warnings"]
+    assert "tukey_kramer_after_standard_anova" in result["warnings"]
+
+
 def test_one_way_anova_rejects_invalid_inputs_without_fallback_statistic() -> None:
     with pytest.raises(OneWayAnovaError, match="invalid_one_way_anova_type"):
         calculate_one_way_anova(

@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from app.statistics.capability import (
@@ -5,6 +8,9 @@ from app.statistics.capability import (
     CapabilityError,
     calculate_normal_capability,
 )
+
+INPUT_FIXTURE = Path("backend/tests/reference/fixtures/capability_input.json")
+REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/capability_reference.json")
 
 
 def test_normal_capability_is_hand_checkable_for_two_sided_specs() -> None:
@@ -94,8 +100,49 @@ def test_normal_capability_supports_one_sided_spec_and_exclusions() -> None:
     assert result["capability"]["overall"]["min_side"] == pytest.approx(0.8432740427115678)
     assert result["expected_nonconformance_normal"]["below_lsl_probability"] == 0.0
     assert "capability_one_sided_spec" in result["warnings"]
+    assert "capability_process_stability_not_proven" in result["warnings"]
     assert "missing_values_excluded" in result["warnings"]
     assert "non_numeric_values_excluded" in result["warnings"]
+
+
+def test_normal_capability_matches_reference_fixture() -> None:
+    input_fixture = json.loads(INPUT_FIXTURE.read_text(encoding="utf-8"))
+    reference = json.loads(REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    cases_by_id = {case["case_id"]: case for case in reference["cases"]}
+
+    for case in input_fixture["cases"]:
+        result = calculate_normal_capability(
+            case["rows"],
+            _value_column(),
+            lsl=case["lsl"],
+            usl=case["usl"],
+            target=case["target"],
+            histogram_bin_limit=case["histogram_bin_limit"],
+        )
+        expected = cases_by_id[case["case_id"]]
+
+        assert result["n_total"] == expected["n_total"]
+        assert result["n_used"] == expected["n_used"]
+        assert result["n_excluded_missing_value"] == expected["n_excluded_missing_value"]
+        assert result["n_excluded_non_numeric_value"] == (expected["n_excluded_non_numeric_value"])
+        _assert_optional_numeric_mapping(result["sample"], expected["sample"])
+        _assert_optional_numeric_mapping(
+            result["capability"]["within"],
+            expected["capability_within"],
+        )
+        _assert_optional_numeric_mapping(
+            result["capability"]["overall"],
+            expected["capability_overall"],
+        )
+        _assert_optional_numeric_mapping(
+            result["expected_nonconformance_normal"],
+            expected["expected_nonconformance_normal"],
+        )
+        _assert_optional_numeric_mapping(
+            result["observed_nonconformance"],
+            expected["observed_nonconformance"],
+        )
+        assert result["warnings"] == expected["warnings"]
 
 
 def test_normal_capability_rejects_invalid_inputs_without_fake_indices() -> None:
@@ -143,3 +190,12 @@ def _value_column() -> CapabilityColumn:
         role="response",
         unit="mm",
     )
+
+
+def _assert_optional_numeric_mapping(actual: object, expected: dict[str, object]) -> None:
+    assert isinstance(actual, dict)
+    for key, expected_value in expected.items():
+        if expected_value is None:
+            assert actual[key] is None
+        else:
+            assert actual[key] == pytest.approx(expected_value, abs=1e-12)

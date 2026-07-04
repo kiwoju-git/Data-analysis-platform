@@ -1281,6 +1281,34 @@ def count_analysis_artifact_records(workspace_root: Path, analysis_id: str) -> i
     return _row_int(row[0])
 
 
+def get_analysis_artifact_record(
+    workspace_root: Path,
+    analysis_id: str,
+    artifact_id: str,
+) -> AnalysisArtifactRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                artifact_id,
+                analysis_id,
+                kind,
+                path,
+                sha256,
+                media_type,
+                created_at
+            FROM analysis_artifacts
+            WHERE analysis_id = ? AND artifact_id = ?;
+            """,
+            (analysis_id, artifact_id),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return _analysis_artifact_from_row(row)
+
+
 def update_analysis_run_status_record(
     workspace_root: Path,
     analysis_id: str,
@@ -1602,6 +1630,18 @@ def _analysis_run_from_row(row: tuple[object, ...]) -> AnalysisRunRecord:
         updated_at=str(row[10]),
         completed_at=None if row[11] is None else str(row[11]),
         app_version=str(row[12]),
+    )
+
+
+def _analysis_artifact_from_row(row: tuple[object, ...]) -> AnalysisArtifactRecord:
+    return AnalysisArtifactRecord(
+        artifact_id=str(row[0]),
+        analysis_id=str(row[1]),
+        kind=str(row[2]),
+        path=str(row[3]),
+        sha256=str(row[4]),
+        media_type=str(row[5]),
+        created_at=str(row[6]),
     )
 
 

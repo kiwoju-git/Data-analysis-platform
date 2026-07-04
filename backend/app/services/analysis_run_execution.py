@@ -71,6 +71,7 @@ class FilterCondition:
 
 
 def analysis_provenance(
+    settings: Settings,
     request: AnalysisRunRequest,
     context: DatasetRowsContext,
     row_snapshot: RowSnapshotArtifact,
@@ -87,7 +88,7 @@ def analysis_provenance(
         app_version=APP_VERSION,
         python_version=_runtime_python_version(),
         platform=_runtime_platform(),
-        build_commit=_build_commit(),
+        build_commit=_build_commit(settings),
         package_versions=_dependency_versions(),
     )
 
@@ -446,7 +447,7 @@ def store_succeeded_analysis_result(
         dataset_version_id=request.dataset_version_id,
         status=AnalysisRunState.SUCCEEDED.value,
         warnings=warnings,
-        provenance=analysis_provenance(request, context, row_snapshot),
+        provenance=analysis_provenance(settings, request, context, row_snapshot),
         result=result,
     )
 
@@ -511,8 +512,8 @@ def _runtime_platform() -> str:
     return platform_module.platform()
 
 
-def _build_commit() -> str | None:
-    return os.environ.get("DATALAB_GIT_COMMIT") or None
+def _build_commit(settings: Settings) -> str | None:
+    return settings.git_commit or os.environ.get("DATALAB_GIT_COMMIT") or None
 
 
 @lru_cache(maxsize=1)

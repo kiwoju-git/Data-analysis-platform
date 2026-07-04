@@ -1,0 +1,64 @@
+{
+  "reference_tool": "hand balanced crossed ANOVA sums of squares plus SciPy F survival function",
+  "cases": [
+    {
+      "case_id": "balanced_interaction",
+      "anova": {
+        "part": {"df": 2, "ss": 800.0, "ms": 400.0, "f": 100.0, "p": 0.009900990099009901},
+        "operator": {"df": 1, "ss": 48.0, "ms": 48.0, "f": 12.0, "p": 0.07417990022744854},
+        "part_operator": {"df": 2, "ss": 8.0, "ms": 4.0, "f": 2.0, "p": 0.216},
+        "repeatability": {"df": 6, "ss": 12.0, "ms": 2.0},
+        "total": {"df": 11, "ss": 868.0}
+      },
+      "variance_components": {
+        "repeatability": {"raw_variance": 2.0, "final_variance": 2.0},
+        "operator": {"raw_variance": 7.333333333333333, "final_variance": 7.333333333333333},
+        "part_operator": {"raw_variance": 1.0, "final_variance": 1.0, "clamped_to_zero": false},
+        "total_gage_rr": {
+          "final_variance": 10.333333333333332,
+          "percent_contribution": 9.45121951219512,
+          "percent_study_variation": 30.742835770623245
+        },
+        "part_to_part": {"raw_variance": 99.0, "final_variance": 99.0},
+        "total_variation": {"final_variance": 109.33333333333333},
+        "ndc": 4
+      },
+      "warnings": [
+        "gage_rr_balanced_crossed_anova_assumed",
+        "gage_rr_interaction_not_pooled",
+        "gage_rr_independence_not_proven",
+        "gage_rr_labels_redacted"
+      ]
+    },
+    {
+      "case_id": "balanced_additive_negative_interaction",
+      "anova": {
+        "part": {"df": 2, "ss": 800.0, "ms": 400.0, "f": null, "p": null},
+        "operator": {"df": 1, "ss": 48.0, "ms": 48.0, "f": null, "p": null},
+        "part_operator": {"df": 2, "ss": 0.0, "ms": 0.0, "f": 0.0, "p": 1.0},
+        "repeatability": {"df": 6, "ss": 12.0, "ms": 2.0},
+        "total": {"df": 11, "ss": 860.0}
+      },
+      "variance_components": {
+        "repeatability": {"raw_variance": 2.0, "final_variance": 2.0},
+        "operator": {"raw_variance": 8.0, "final_variance": 8.0},
+        "part_operator": {"raw_variance": -1.0, "final_variance": 0.0, "clamped_to_zero": true},
+        "total_gage_rr": {
+          "final_variance": 10.0,
+          "percent_contribution": 9.090909090909092,
+          "percent_study_variation": 30.15113445777636
+        },
+        "part_to_part": {"raw_variance": 100.0, "final_variance": 100.0},
+        "total_variation": {"final_variance": 110.0},
+        "ndc": 4
+      },
+      "warnings": [
+        "gage_rr_balanced_crossed_anova_assumed",
+        "gage_rr_interaction_not_pooled",
+        "gage_rr_independence_not_proven",
+        "gage_rr_labels_redacted",
+        "gage_rr_negative_variance_component_clamped"
+      ]
+    }
+  ]
+}

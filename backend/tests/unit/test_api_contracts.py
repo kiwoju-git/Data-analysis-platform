@@ -1,4 +1,6 @@
+import csv
 import hashlib
+import io
 import json
 import sqlite3
 from uuid import UUID, uuid4
@@ -11,10 +13,13 @@ import app.services.analysis_runners_eda as analysis_runners_eda
 import app.services.analysis_runners_hypothesis as analysis_runners_hypothesis
 import app.services.analysis_runners_quality as analysis_runners_quality
 import app.services.analysis_runners_regression as analysis_runners_regression
-from app.analyses.registry import METHODS, MODULES, analysis_method_catalog
+from app.analyses.registry import METHOD_VERSIONS, METHODS, MODULES, analysis_method_catalog
 from app.api.v1.schemas.analyses import (
     AnalysisProvenance,
+    AnalysisResultCsvExportResponse,
     AnalysisResultEnvelope,
+    AnalysisResultHtmlReportResponse,
+    AnalysisResultJsonExportResponse,
     AnalysisRunStatusResponse,
     AnalysisWarning,
     GageRrPreflightResponse,
@@ -70,6 +75,8 @@ from app.storage.metadata import (
     METADATA_DB_RELATIVE_PATH,
     AnalysisRunRecord,
     JobRecord,
+    count_analysis_artifact_records,
+    get_analysis_artifact_record,
     get_analysis_run_record,
     get_dataset_record,
     get_regression_model_record,
@@ -155,6 +162,8 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "quality.gage_run_chart",
         "doe.factorial_design",
     ]
+    assert set(METHOD_VERSIONS) == set(method_ids)
+    assert all(METHOD_VERSIONS[method.method_id] == method.method_version for method in METHODS)
 
 
 def test_analysis_execution_handler_registry_covers_core_methods() -> None:
@@ -203,6 +212,10 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
     assert all(
         handler.method_version == methods_by_id[method_id].method_version
         for method_id, handler in _METHOD_EXECUTION_HANDLERS.items()
+    )
+    assert all(
+        spec.method_version == METHOD_VERSIONS[spec.method_id]
+        for spec in METHOD_EXECUTION_HANDLER_SPECS
     )
     assert _METHOD_EXECUTION_HANDLERS["eda.descriptive"].run is run_descriptive_analysis
     assert _METHOD_EXECUTION_HANDLERS["eda.graphical_summary"].run is run_graphical_summary_analysis
@@ -659,6 +672,99 @@ def test_factorial_design_response_api_saves_values_without_regenerating_runs(tm
     assert "statistic" not in save_response.text
 
 
+def test_factorial_design_html_report_download_renders_verified_design_and_responses(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "report <design>",
+                "factors": [
+                    {"name": "<Temperature>", "low": 60, "high": 80, "unit": "C"},
+                    {"name": "Pressure", "low": 5, "high": 15, "unit": "bar"},
+                ],
+                "replicates": 1,
+                "center_points": 0,
+                "randomize": False,
+                "randomization_seed": 20260702,
+                "block_count": 1,
+            },
+        )
+        design_payload = create_response.json()
+        values = [
+            {"run_order": run["run_order"], "value": 20.0 + run["run_order"]}
+            for run in design_payload["runs"]
+        ]
+        save_response = client.put(
+            f"/api/v1/doe-designs/{design_payload['design_id']}/responses",
+            json={"response_name": "Yield <kg>", "unit": "kg", "values": values},
+        )
+        report_response = client.get(
+            f"/api/v1/doe-designs/{design_payload['design_id']}/report.html",
+        )
+
+    assert create_response.status_code == 201
+    assert save_response.status_code == 200
+    assert report_response.status_code == 200
+    assert report_response.headers["content-type"].startswith("text/html")
+    assert report_response.headers["content-disposition"].startswith("attachment;")
+    assert report_response.headers["etag"].startswith('"sha256:')
+    html = report_response.text
+    assert "DOE Factorial Design Report" in html
+    assert "doe.factorial_design" in html
+    assert design_payload["design_sha256"] in html
+    assert "report &lt;design&gt;" in html
+    assert "&lt;Temperature&gt;" in html
+    assert "Yield &lt;kg&gt;" in html
+    assert "20.0" not in html
+    assert "21.0" in html
+    assert str(tmp_path) not in html
+    assert "workspace" not in html.lower()
+    assert "p_value" not in html
+    assert "statistic" not in html
+
+
+def test_factorial_design_html_report_download_rejects_checksum_mismatch(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "checksum report design",
+                "factors": [
+                    {"name": "Temperature", "low": 60, "high": 80},
+                    {"name": "Pressure", "low": 5, "high": 15},
+                ],
+                "replicates": 1,
+                "center_points": 0,
+                "randomize": False,
+                "randomization_seed": 20260702,
+                "block_count": 1,
+            },
+        )
+        design_payload = create_response.json()
+        with sqlite3.connect(settings.workspace_root / METADATA_DB_RELATIVE_PATH) as connection:
+            connection.execute(
+                """
+                UPDATE experiment_design_versions
+                SET design_sha256 = ?
+                WHERE design_version_id = ?;
+                """,
+                ("0" * 64, design_payload["design_version_id"]),
+            )
+        report_response = client.get(
+            f"/api/v1/doe-designs/{design_payload['design_id']}/report.html",
+        )
+
+    assert create_response.status_code == 201
+    assert report_response.status_code == 409
+    assert report_response.json()["error"]["code"] == "doe_design_checksum_mismatch"
+    assert "p_value" not in report_response.text
+    assert "statistic" not in report_response.text
+
+
 def test_factorial_design_response_api_rejects_incomplete_run_set(tmp_path) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         create_response = client.post(
@@ -774,12 +880,52 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     assert "p_value" not in response.text
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"column_ids": [123]}, "123"),
+        ({"_remove": "column_ids"}, "column_ids"),
+        ({"unexpected_descriptive_option": True}, "unexpected_descriptive_option"),
+    ],
+)
+def test_descriptive_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        options = {
+            "column_ids": [version["columns"][0]["column_id"]],
+            "missing_policy": "available_case_by_column",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_descriptive_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_provenance_includes_runtime_metadata_without_paths_or_values(
     tmp_path,
-    monkeypatch,
 ) -> None:
-    monkeypatch.setenv("DATALAB_GIT_COMMIT", "test-build-commit")
-    settings = Settings(workspace_root=tmp_path)
+    settings = Settings(workspace_root=tmp_path, git_commit="settings-build-commit")
 
     with TestClient(create_app(settings)) as client:
         version = _upload_confirmed_csv_dataset(
@@ -808,7 +954,7 @@ def test_analysis_provenance_includes_runtime_metadata_without_paths_or_values(
     provenance = response.json()["provenance"]
     assert provenance["python_version"]
     assert provenance["platform"]
-    assert provenance["build_commit"] == "test-build-commit"
+    assert provenance["build_commit"] == "settings-build-commit"
     assert "numpy" in provenance["package_versions"]
     assert "scipy" in provenance["package_versions"]
 
@@ -917,6 +1063,49 @@ def test_analysis_run_executes_graphical_summary_from_dataset_version(tmp_path) 
     }
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"histogram_bin_count": "bad-bin-count"}, "bad-bin-count"),
+        ({"_remove": "column_ids"}, "column_ids"),
+        ({"unexpected_graphical_summary_option": True}, "unexpected_graphical_summary_option"),
+    ],
+)
+def test_graphical_summary_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        options = {
+            "column_ids": [version["columns"][0]["column_id"]],
+            "histogram_bin_count": 2,
+            "point_limit": 10,
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.graphical_summary",
+                "method_version": METHOD_VERSIONS["eda.graphical_summary"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_graphical_summary_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_normality_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = (
@@ -1023,6 +1212,51 @@ def test_analysis_run_executes_normality_from_dataset_version(tmp_path) -> None:
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 10
     assert row_snapshot["row_count_included"] == 10
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "column_ids"}, "column_ids"),
+        ({"unexpected_normality_option": True}, "unexpected_normality_option"),
+    ],
+)
+def test_normality_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        options = {
+            "column_ids": [version["columns"][0]["column_id"]],
+            "alpha": 0.05,
+            "include_qq_points": True,
+            "qq_point_limit": 10,
+            "missing_policy": "available_case_by_column",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.normality",
+                "method_version": METHOD_VERSIONS["eda.normality"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_normality_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_equal_variances_from_dataset_version(tmp_path) -> None:
@@ -1141,6 +1375,54 @@ def test_analysis_run_executes_equal_variances_from_dataset_version(tmp_path) ->
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 9
     assert row_snapshot["row_count_included"] == 9
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "group_column_id"}, "group_column_id"),
+        ({"unexpected_equal_variances_option": True}, "unexpected_equal_variances_option"),
+    ],
+)
+def test_equal_variances_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n8,A\n9,A\n11,B\n13,B\n",
+            filename="equal-variances-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "group_column_id": version["columns"][1]["column_id"],
+            "alpha": 0.05,
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.equal_variances",
+                "method_version": METHOD_VERSIONS["eda.equal_variances"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_equal_variances_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_two_sample_t_from_dataset_version(tmp_path) -> None:
@@ -1274,6 +1556,58 @@ def test_analysis_run_executes_two_sample_t_from_dataset_version(tmp_path) -> No
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 11
     assert row_snapshot["row_count_included"] == 11
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "response_column_id"}, "response_column_id"),
+        ({"unexpected_two_sample_t_option": True}, "unexpected_two_sample_t_option"),
+    ],
+)
+def test_two_sample_t_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n1,A\n2,A\n3,B\n4,B\n",
+            filename="two-sample-t-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "group_column_id": version["columns"][1]["column_id"],
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "alternative": "two_sided",
+            "variance_assumption": "welch",
+            "null_difference": 0.0,
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.two_sample_t",
+                "method_version": METHOD_VERSIONS["hypothesis.two_sample_t"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_two_sample_t_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_one_way_anova_from_dataset_version(tmp_path) -> None:
@@ -1533,6 +1867,56 @@ def test_analysis_run_executes_mann_whitney_from_dataset_version(tmp_path) -> No
     assert row_snapshot["row_count_included"] == 9
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "group_column_id"}, "group_column_id"),
+        ({"unexpected_mann_whitney_option": True}, "unexpected_mann_whitney_option"),
+    ],
+)
+def test_mann_whitney_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n1,A\n2,A\n3,B\n4,B\n",
+            filename="mann-whitney-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "group_column_id": version["columns"][1]["column_id"],
+            "alpha": 0.05,
+            "alternative": "two_sided",
+            "method": "auto",
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.mann_whitney",
+                "method_version": METHOD_VERSIONS["hypothesis.mann_whitney"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_mann_whitney_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_one_sample_t_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"response\n10.2\n9.8\n10.5\n10.1\n9.9\n10.4\n"
@@ -1653,6 +2037,56 @@ def test_analysis_run_executes_one_sample_t_from_dataset_version(tmp_path) -> No
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 6
     assert row_snapshot["row_count_included"] == 6
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"null_mean": "bad-null-mean"}, "bad-null-mean"),
+        ({"_remove": "response_column_id"}, "response_column_id"),
+        ({"unexpected_one_sample_t_option": True}, "unexpected_one_sample_t_option"),
+    ],
+)
+def test_one_sample_t_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response\n9\n10\n11\n12\n",
+            filename="one-sample-t-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "alternative": "two_sided",
+            "null_mean": 10.0,
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_sample_t",
+                "method_version": METHOD_VERSIONS["hypothesis.one_sample_t"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_one_sample_t_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_equivalence_tost_from_dataset_version(tmp_path) -> None:
@@ -1789,6 +2223,60 @@ def test_analysis_run_executes_equivalence_tost_from_dataset_version(tmp_path) -
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 6
     assert row_snapshot["row_count_included"] == 6
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"lower_bound": "not-a-number"}, "not-a-number"),
+        ({"_remove": "lower_bound"}, "lower_bound"),
+        ({"unexpected_option": 1}, "unexpected_option"),
+    ],
+)
+def test_equivalence_tost_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value\n9.8\n10.1\n10.2\n9.9\n10.0\n10.1\n",
+            filename="equivalence-options.csv",
+        )
+        response_column = next(
+            column for column in version["columns"] if column["display_name"] == "value"
+        )
+        options = {
+            "design": "one_sample_mean",
+            "response_column_id": response_column["column_id"],
+            "reference_mean": 10,
+            "lower_bound": -0.8,
+            "upper_bound": 0.8,
+            "alpha": 0.05,
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.equivalence_tost",
+                "method_version": METHOD_VERSIONS["hypothesis.equivalence_tost"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_equivalence_tost_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_paired_t_from_dataset_version(tmp_path) -> None:
@@ -1933,6 +2421,57 @@ def test_analysis_run_executes_paired_t_from_dataset_version(tmp_path) -> None:
     assert row_snapshot["row_count_included"] == 6
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"null_difference": "bad-null-difference"}, "bad-null-difference"),
+        ({"_remove": "after_column_id"}, "after_column_id"),
+        ({"unexpected_paired_t_option": True}, "unexpected_paired_t_option"),
+    ],
+)
+def test_paired_t_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"before,after\n10,11\n12,13\n14,15\n",
+            filename="paired-t-options.csv",
+        )
+        options = {
+            "before_column_id": version["columns"][0]["column_id"],
+            "after_column_id": version["columns"][1]["column_id"],
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "alternative": "two_sided",
+            "null_difference": 0.0,
+            "missing_policy": "complete_pair",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.paired_t",
+                "method_version": METHOD_VERSIONS["hypothesis.paired_t"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_paired_t_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_one_sample_wilcoxon_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"response\n8\n11\n14\n18\n23\n"
@@ -2054,6 +2593,112 @@ def test_analysis_run_executes_one_sample_wilcoxon_from_dataset_version(tmp_path
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 5
     assert row_snapshot["row_count_included"] == 5
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"null_location": "bad-null-location"}, "bad-null-location"),
+        ({"_remove": "response_column_id"}, "response_column_id"),
+        (
+            {"unexpected_one_sample_wilcoxon_option": True},
+            "unexpected_one_sample_wilcoxon_option",
+        ),
+    ],
+)
+def test_one_sample_wilcoxon_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response\n1\n2\n3\n4\n",
+            filename="one-sample-wilcoxon-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "alpha": 0.05,
+            "alternative": "two_sided",
+            "null_location": 0.0,
+            "method": "auto",
+            "zero_method": "wilcox",
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_sample_wilcoxon",
+                "method_version": METHOD_VERSIONS["hypothesis.one_sample_wilcoxon"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_one_sample_wilcoxon_options"
+    assert forbidden_text not in response.text
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "response_column_id"}, "response_column_id"),
+        ({"unexpected_one_way_anova_option": True}, "unexpected_one_way_anova_option"),
+    ],
+)
+def test_one_way_anova_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n1,A\n2,A\n3,B\n4,B\n",
+            filename="one-way-anova-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "group_column_id": version["columns"][1]["column_id"],
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "anova_type": "standard",
+            "posthoc_method": "tukey_kramer",
+            "posthoc_policy": "after_significant",
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_way_anova",
+                "method_version": METHOD_VERSIONS["hypothesis.one_way_anova"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_one_way_anova_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_kruskal_wallis_from_dataset_version(tmp_path) -> None:
@@ -2189,6 +2834,56 @@ def test_analysis_run_executes_kruskal_wallis_from_dataset_version(tmp_path) -> 
     assert row_snapshot["row_count_included"] == 9
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "group_column_id"}, "group_column_id"),
+        ({"unexpected_kruskal_wallis_option": True}, "unexpected_kruskal_wallis_option"),
+    ],
+)
+def test_kruskal_wallis_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n1,A\n2,A\n3,B\n4,B\n5,C\n6,C\n",
+            filename="kruskal-wallis-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "group_column_id": version["columns"][1]["column_id"],
+            "alpha": 0.05,
+            "posthoc_method": "dunn_holm",
+            "posthoc_policy": "after_significant",
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.kruskal_wallis",
+                "method_version": METHOD_VERSIONS["hypothesis.kruskal_wallis"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_kruskal_wallis_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_one_proportion_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"outcome\n" b"yes\nyes\nyes\nyes\nyes\nyes\nyes\nyes\nyes\n" b"no\nno\nno\n"
@@ -2322,6 +3017,58 @@ def test_analysis_run_executes_one_proportion_from_dataset_version(tmp_path) -> 
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 12
     assert row_snapshot["row_count_included"] == 12
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"null_proportion": "bad-null-proportion"}, "bad-null-proportion"),
+        ({"_remove": "event_level"}, "event_level"),
+        ({"unexpected_one_proportion_option": True}, "unexpected_one_proportion_option"),
+    ],
+)
+def test_one_proportion_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"outcome\nyes\nno\nyes\nno\n",
+            filename="one-proportion-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "event_level": "yes",
+            "null_proportion": 0.5,
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "alternative": "two_sided",
+            "ci_method": "wilson",
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "categorical.one_proportion",
+                "method_version": METHOD_VERSIONS["categorical.one_proportion"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_one_proportion_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_two_proportion_from_dataset_version(tmp_path) -> None:
@@ -2471,6 +3218,57 @@ def test_analysis_run_executes_two_proportion_from_dataset_version(tmp_path) -> 
     assert row_snapshot["row_count_included"] == 12
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "event_level"}, "event_level"),
+        ({"unexpected_two_proportion_option": True}, "unexpected_two_proportion_option"),
+    ],
+)
+def test_two_proportion_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"outcome,group\nyes,A\nno,A\nyes,B\nno,B\n",
+            filename="two-proportion-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "group_column_id": version["columns"][1]["column_id"],
+            "event_level": "yes",
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "alternative": "two_sided",
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "categorical.two_proportion",
+                "method_version": METHOD_VERSIONS["categorical.two_proportion"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_two_proportion_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_chi_square_association_from_dataset_version(
     tmp_path,
 ) -> None:
@@ -2605,6 +3403,54 @@ def test_analysis_run_executes_chi_square_association_from_dataset_version(
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 120
     assert row_snapshot["row_count_included"] == 120
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "row_column_id"}, "row_column_id"),
+        ({"unexpected_chi_square_option": True}, "unexpected_chi_square_option"),
+    ],
+)
+def test_chi_square_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"row_factor,column_factor\nA,X\nA,Y\nB,X\nB,Y\n",
+            filename="chi-square-options.csv",
+        )
+        options = {
+            "row_column_id": version["columns"][0]["column_id"],
+            "column_column_id": version["columns"][1]["column_id"],
+            "alpha": 0.05,
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "categorical.chi_square_association",
+                "method_version": METHOD_VERSIONS["categorical.chi_square_association"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_chi_square_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_pearson_from_dataset_version(tmp_path) -> None:
@@ -2742,6 +3588,55 @@ def test_analysis_run_executes_pearson_from_dataset_version(tmp_path) -> None:
     assert row_snapshot["row_count_included"] == 6
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "x_column_id"}, "x_column_id"),
+        ({"unexpected_pearson_option": True}, "unexpected_pearson_option"),
+    ],
+)
+def test_pearson_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"x,y\n1,1\n2,2\n3,3\n4,4\n",
+            filename="pearson-options.csv",
+        )
+        options = {
+            "x_column_id": version["columns"][0]["column_id"],
+            "y_column_id": version["columns"][1]["column_id"],
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.pearson",
+                "method_version": METHOD_VERSIONS["regression.pearson"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_pearson_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_xy_correlation_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"x1,x2,y1,y2\n1,2,1,2\n2,1,2,1\n3,4,1,4\n4,8,4,3\n5,9,5,7\n6,13,7,8\n"
@@ -2862,6 +3757,61 @@ def test_analysis_run_executes_xy_correlation_from_dataset_version(tmp_path) -> 
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 6
     assert row_snapshot["row_count_included"] == 6
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"confidence_level": "bad-confidence"}, "bad-confidence"),
+        ({"_remove": "y_column_ids"}, "y_column_ids"),
+        ({"unexpected_xy_correlation_option": True}, "unexpected_xy_correlation_option"),
+    ],
+)
+def test_xy_correlation_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"x1,x2,y1,y2\n1,2,1,2\n2,1,2,1\n3,4,1,4\n4,8,4,3\n",
+            filename="xy-correlation-options.csv",
+        )
+        options = {
+            "x_column_ids": [
+                version["columns"][0]["column_id"],
+                version["columns"][1]["column_id"],
+            ],
+            "y_column_ids": [
+                version["columns"][2]["column_id"],
+                version["columns"][3]["column_id"],
+            ],
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "missing_policy": "pairwise_complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.xy_correlation",
+                "method_version": METHOD_VERSIONS["regression.xy_correlation"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_xy_correlation_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_executes_individuals_chart_from_dataset_version(tmp_path) -> None:
@@ -3560,6 +4510,55 @@ def test_analysis_run_rejects_individuals_chart_mixed_timezone_order_column(tmp_
     assert response.json()["error"]["code"] == "individuals_chart_order_mixed_timezone_awareness"
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"point_limit": "20"}, "point_limit"),
+        ({"_remove": "value_column_id"}, "value_column_id"),
+        ({"unexpected_individuals_chart_option": True}, "unexpected_individuals_chart_option"),
+    ],
+)
+def test_individuals_chart_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value\n10\n11\n12\n13\n",
+            filename="individuals-chart-options.csv",
+        )
+        options = {
+            "value_column_id": version["columns"][0]["column_id"],
+            "missing_policy": "complete_case",
+            "same_side_min_length": 9,
+            "trend_min_length": 6,
+            "point_limit": 20,
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": METHOD_VERSIONS["quality.individuals_chart"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_individuals_chart_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_subgroup_chart_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"value,lot\n10,A\n12,A\n11,B\n13,B\n9,C\n11,C\n"
@@ -3787,6 +4786,55 @@ def test_analysis_run_rejects_varying_size_subgroup_chart(tmp_path) -> None:
     assert response.json()["error"]["code"] == "subgroup_chart_varying_subgroup_size_unsupported"
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"point_limit": "20"}, "point_limit"),
+        ({"_remove": "subgroup_column_id"}, "subgroup_column_id"),
+        ({"unexpected_subgroup_chart_option": True}, "unexpected_subgroup_chart_option"),
+    ],
+)
+def test_subgroup_chart_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value,lot\n10,A\n12,A\n11,B\n13,B\n",
+            filename="subgroup-chart-options.csv",
+        )
+        options = {
+            "value_column_id": version["columns"][0]["column_id"],
+            "subgroup_column_id": version["columns"][1]["column_id"],
+            "chart_type": "xbar_r",
+            "missing_policy": "complete_case",
+            "point_limit": 20,
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.subgroup_chart",
+                "method_version": METHOD_VERSIONS["quality.subgroup_chart"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_subgroup_chart_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_capability_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"value\n10\n11\n12\n13\n14\n"
@@ -3869,6 +4917,57 @@ def test_analysis_run_executes_capability_from_dataset_version(tmp_path) -> None
     assert len(result["histogram"]["bins"]) == 5
     assert result_response.status_code == 200
     assert result_response.json() == payload
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"lsl": "bad-lsl"}, "bad-lsl"),
+        ({"_remove": "value_column_id"}, "value_column_id"),
+        ({"unexpected_capability_option": True}, "unexpected_capability_option"),
+        ({"histogram_bin_limit": "20"}, "histogram_bin_limit"),
+    ],
+)
+def test_capability_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value\n10\n11\n12\n13\n14\n",
+            filename="capability-options.csv",
+        )
+        options = {
+            "value_column_id": version["columns"][0]["column_id"],
+            "lsl": 8.0,
+            "usl": 16.0,
+            "target": 12.0,
+            "missing_policy": "complete_case",
+            "histogram_bin_limit": 20,
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.capability",
+                "method_version": METHOD_VERSIONS["quality.capability"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_capability_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_rejects_invalid_capability_spec_limits(tmp_path) -> None:
@@ -4191,6 +5290,65 @@ def test_analysis_run_executes_gage_rr_from_balanced_dataset_version(tmp_path) -
     assert result_response.json() == payload
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"measurement_column_id": 123}, "123"),
+        ({"_remove": "part_column_id"}, "part_column_id"),
+        ({"unexpected_gage_rr_option": True}, "unexpected_gage_rr_option"),
+    ],
+)
+def test_gage_rr_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"measurement,part,operator,replicate\n"
+                b"9,Part A,Operator 1,1\n"
+                b"11,Part A,Operator 1,2\n"
+                b"15,Part A,Operator 2,1\n"
+                b"17,Part A,Operator 2,2\n"
+                b"20,Part B,Operator 1,1\n"
+                b"22,Part B,Operator 1,2\n"
+                b"24,Part B,Operator 2,1\n"
+                b"26,Part B,Operator 2,2\n"
+            ),
+            filename="gage-rr-options.csv",
+        )
+        options = {
+            "measurement_column_id": version["columns"][0]["column_id"],
+            "part_column_id": version["columns"][1]["column_id"],
+            "operator_column_id": version["columns"][2]["column_id"],
+            "replicate_column_id": version["columns"][3]["column_id"],
+            "missing_policy": "complete_case",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_rr",
+                "method_version": METHOD_VERSIONS["quality.gage_rr"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_gage_rr_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_rejects_unbalanced_gage_rr_without_result_payload(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = (
@@ -4355,6 +5513,67 @@ def test_analysis_run_executes_gage_run_chart_from_balanced_dataset_version(tmp_
     assert "Operator 1" not in json.dumps(result)
     assert result_response.status_code == 200
     assert result_response.json() == payload
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"measurement_column_id": 123}, "123"),
+        ({"_remove": "part_column_id"}, "part_column_id"),
+        ({"unexpected_gage_run_chart_option": True}, "unexpected_gage_run_chart_option"),
+        ({"point_limit": "20"}, "point_limit"),
+    ],
+)
+def test_gage_run_chart_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"measurement,part,operator,replicate\n"
+                b"9,Part A,Operator 1,1\n"
+                b"11,Part A,Operator 1,2\n"
+                b"15,Part A,Operator 2,1\n"
+                b"17,Part A,Operator 2,2\n"
+                b"20,Part B,Operator 1,1\n"
+                b"22,Part B,Operator 1,2\n"
+                b"24,Part B,Operator 2,1\n"
+                b"26,Part B,Operator 2,2\n"
+            ),
+            filename="gage-run-chart-options.csv",
+        )
+        options = {
+            "measurement_column_id": version["columns"][0]["column_id"],
+            "part_column_id": version["columns"][1]["column_id"],
+            "operator_column_id": version["columns"][2]["column_id"],
+            "replicate_column_id": version["columns"][3]["column_id"],
+            "missing_policy": "complete_case",
+            "point_limit": 20,
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_run_chart",
+                "method_version": METHOD_VERSIONS["quality.gage_run_chart"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_gage_run_chart_options"
+    assert forbidden_text not in response.text
 
 
 def test_analysis_run_rejects_unbalanced_gage_run_chart_without_result_payload(tmp_path) -> None:
@@ -5090,6 +6309,58 @@ def test_analysis_run_rejects_invalid_run_chart_runs_test_alpha(tmp_path) -> Non
     assert response.json()["error"]["code"] == "invalid_run_chart_runs_test_alpha"
 
 
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"runs_test_alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "value_column_id"}, "value_column_id"),
+        ({"unexpected_run_chart_option": True}, "unexpected_run_chart_option"),
+        ({"point_limit": "20"}, "point_limit"),
+    ],
+)
+def test_run_chart_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value\n1\n2\n3\n4\n",
+            filename="run-chart-options.csv",
+        )
+        options = {
+            "value_column_id": version["columns"][0]["column_id"],
+            "center_method": "median",
+            "missing_policy": "complete_case",
+            "trend_min_length": 6,
+            "oscillation_min_length": 14,
+            "runs_test_alpha": 0.05,
+            "point_limit": 20,
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": METHOD_VERSIONS["quality.run_chart"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_run_chart_options"
+    assert forbidden_text not in response.text
+
+
 def test_analysis_run_executes_linear_model_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = (
@@ -5305,6 +6576,72 @@ def test_analysis_run_executes_linear_model_from_dataset_version(tmp_path) -> No
         == "regression_model_manifest_checksum_mismatch"
     )
     assert model_record.manifest_path not in tampered_model_response.text
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"alpha": "bad-alpha"}, "bad-alpha"),
+        ({"_remove": "predictor_column_ids"}, "predictor_column_ids"),
+        ({"unexpected_linear_model_option": True}, "unexpected_linear_model_option"),
+        (
+            {
+                "interaction_terms": [
+                    {
+                        "left_column_id": "placeholder-left",
+                        "right_column_id": "placeholder-right",
+                        "raw_level": "SECRET_LEVEL",
+                    },
+                ],
+            },
+            "SECRET_LEVEL",
+        ),
+    ],
+)
+def test_linear_model_typed_options_reject_invalid_contract(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=(b"y,x1,x2\n" b"10,1,3\n" b"13,2,2\n" b"15,3,4\n" b"18,4,3\n"),
+            filename="linear-model-options.csv",
+        )
+        options = {
+            "response_column_id": version["columns"][0]["column_id"],
+            "predictor_column_ids": [
+                version["columns"][1]["column_id"],
+                version["columns"][2]["column_id"],
+            ],
+            "alpha": 0.05,
+            "confidence_level": 0.95,
+            "missing_policy": "complete_case",
+            "include_intercept": True,
+            "covariance_type": "standard",
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.linear_model",
+                "method_version": METHOD_VERSIONS["regression.linear_model"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_linear_model_options"
+    assert forbidden_text not in response.text
 
 
 def test_regression_prediction_preflight_accepts_same_dataset_version(tmp_path) -> None:
@@ -6255,6 +7592,1235 @@ def test_analysis_result_api_returns_persisted_envelope_and_detects_checksum_mis
     assert record.result_path not in tampered_response.text
 
 
+def test_analysis_result_json_export_creates_checksum_validated_artifact(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/json")
+        status_response = client.get(f"/api/v1/analysis-runs/{analysis_id}")
+
+    assert response.status_code == 201
+    assert export_response.status_code == 201
+    payload = export_response.json()
+    AnalysisResultJsonExportResponse.model_validate(payload)
+    assert payload["schema_version"] == 1
+    assert payload["format"] == "analysis_result_json"
+    assert payload["artifact_kind"] == "analysis_result_json_export"
+    assert payload["media_type"] == "application/json"
+    assert payload["result"] == response.json()
+    assert payload["stale"] is False
+
+    record = get_analysis_run_record(settings.workspace_root, analysis_id)
+    assert record is not None
+    assert record.result_sha256 == payload["source_result_sha256"]
+    assert count_analysis_artifact_records(settings.workspace_root, analysis_id) == 2
+    assert status_response.json()["artifact_count"] == 2
+
+    export_files = list(
+        (settings.workspace_root / "workspaces" / "analyses" / analysis_id / "exports").glob(
+            "*.analysis-result.json",
+        ),
+    )
+    assert len(export_files) == 1
+    export_bytes = export_files[0].read_bytes()
+    assert hashlib.sha256(export_bytes).hexdigest() == payload["sha256"]
+    assert len(export_bytes) == payload["size_bytes"]
+    export_payload = json.loads(export_bytes.decode("utf-8"))
+    assert export_payload["result"] == response.json()
+    assert export_payload["source_result_sha256"] == record.result_sha256
+
+    serialized_response = json.dumps(payload, ensure_ascii=False)
+    serialized_export = json.dumps(export_payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized_response
+    assert str(tmp_path) not in serialized_export
+    assert "result_path" not in serialized_response
+    assert "result_path" not in serialized_export
+    assert "workspaces/analyses" not in serialized_response
+    assert "workspaces/analyses" not in serialized_export
+
+
+def test_analysis_result_json_export_detects_result_checksum_mismatch_without_artifact(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        record = get_analysis_run_record(settings.workspace_root, analysis_id)
+        assert record is not None
+        assert record.result_path is not None
+        (settings.workspace_root / record.result_path).write_bytes(b'{"tampered":true}\n')
+        export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/json")
+
+    assert response.status_code == 201
+    assert export_response.status_code == 409
+    assert export_response.json()["error"]["code"] == "analysis_result_checksum_mismatch"
+    assert record.result_path not in export_response.text
+    assert count_analysis_artifact_records(settings.workspace_root, analysis_id) == 1
+    assert not (
+        settings.workspace_root / "workspaces" / "analyses" / analysis_id / "exports"
+    ).exists()
+
+
+def test_analysis_result_csv_export_creates_safe_checksum_validated_artifact(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"alpha,beta\n1,10\n2,20\n",
+            filename="formula-safe.csv",
+            columns=[
+                {
+                    "column_index": 0,
+                    "display_name": "=SUM(1,1)",
+                    "data_type": "decimal",
+                    "measurement_level": "continuous",
+                    "role": "feature",
+                    "unit": None,
+                },
+            ],
+        )
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/csv")
+        status_response = client.get(f"/api/v1/analysis-runs/{analysis_id}")
+
+    assert response.status_code == 201
+    assert export_response.status_code == 201
+    payload = export_response.json()
+    AnalysisResultCsvExportResponse.model_validate(payload)
+    assert payload["schema_version"] == 1
+    assert payload["format"] == "analysis_result_csv"
+    assert payload["artifact_kind"] == "analysis_result_csv_export"
+    assert payload["media_type"] == "text/csv"
+    assert payload["columns"] == ["section", "path", "value"]
+    assert payload["row_count"] >= 1
+    assert payload["preview_rows"]
+    assert payload["stale"] is False
+
+    record = get_analysis_run_record(settings.workspace_root, analysis_id)
+    assert record is not None
+    assert record.result_sha256 == payload["source_result_sha256"]
+    assert count_analysis_artifact_records(settings.workspace_root, analysis_id) == 2
+    assert status_response.json()["artifact_count"] == 2
+
+    export_files = list(
+        (settings.workspace_root / "workspaces" / "analyses" / analysis_id / "exports").glob(
+            "*.analysis-result.csv",
+        ),
+    )
+    assert len(export_files) == 1
+    export_bytes = export_files[0].read_bytes()
+    assert hashlib.sha256(export_bytes).hexdigest() == payload["sha256"]
+    assert len(export_bytes) == payload["size_bytes"]
+    export_text = export_bytes.decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(export_text)))
+    assert rows[0] == ["section", "path", "value"]
+    assert ["result", "result.columns[0].display_name", "'=SUM(1,1)"] in rows
+    assert ["result", "result.columns[0].display_name", "=SUM(1,1)"] not in rows
+
+    serialized_response = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized_response
+    assert str(tmp_path) not in export_text
+    assert "result_path" not in serialized_response
+    assert "result_path" not in export_text
+    assert "workspaces/analyses" not in serialized_response
+    assert "workspaces/analyses" not in export_text
+
+
+def test_analysis_result_csv_export_detects_result_checksum_mismatch_without_artifact(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        record = get_analysis_run_record(settings.workspace_root, analysis_id)
+        assert record is not None
+        assert record.result_path is not None
+        (settings.workspace_root / record.result_path).write_bytes(b'{"tampered":true}\n')
+        export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/csv")
+
+    assert response.status_code == 201
+    assert export_response.status_code == 409
+    assert export_response.json()["error"]["code"] == "analysis_result_checksum_mismatch"
+    assert record.result_path not in export_response.text
+    assert count_analysis_artifact_records(settings.workspace_root, analysis_id) == 1
+    assert not (
+        settings.workspace_root / "workspaces" / "analyses" / analysis_id / "exports"
+    ).exists()
+
+
+def test_analysis_result_html_report_export_creates_escaped_downloadable_artifact(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"alpha,beta\n1,10\n2,20\n",
+            filename="html-report.csv",
+            columns=[
+                {
+                    "column_index": 0,
+                    "display_name": "<script>alert(1)</script>",
+                    "data_type": "decimal",
+                    "measurement_level": "continuous",
+                    "role": "feature",
+                    "unit": None,
+                },
+            ],
+        )
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/html")
+        export_payload = export_response.json()
+        download_response = client.get(
+            f"/api/v1/analysis-runs/{analysis_id}/exports/{export_payload['export_id']}/download",
+        )
+
+    assert response.status_code == 201
+    assert export_response.status_code == 201
+    AnalysisResultHtmlReportResponse.model_validate(export_payload)
+    assert export_payload["schema_version"] == 1
+    assert export_payload["format"] == "analysis_result_html_report"
+    assert export_payload["artifact_kind"] == "analysis_result_html_report"
+    assert export_payload["media_type"] == "text/html"
+    assert export_payload["title"] == "DataLab Studio Analysis Report"
+    assert export_payload["section_count"] >= 1
+    assert export_payload["stale"] is False
+
+    artifact = get_analysis_artifact_record(
+        settings.workspace_root,
+        analysis_id,
+        export_payload["export_id"],
+    )
+    assert artifact is not None
+    assert artifact.kind == "analysis_result_html_report"
+    assert artifact.media_type == "text/html"
+
+    export_bytes = (settings.workspace_root / artifact.path).read_bytes()
+    assert hashlib.sha256(export_bytes).hexdigest() == export_payload["sha256"]
+    assert len(export_bytes) == export_payload["size_bytes"]
+    export_text = export_bytes.decode("utf-8")
+    assert "기술통계 요약" in export_text
+    assert "<th>Mean</th>" in export_text
+    assert "<td>1.5</td>" in export_text
+    assert "<td>0.7071067811865476</td>" in export_text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in export_text
+    assert "<script>alert(1)</script>" not in export_text
+    assert str(tmp_path) not in export_text
+    assert "workspaces/analyses" not in export_text
+    assert "result_path" not in export_text
+
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"].startswith("text/html")
+    assert "attachment" in download_response.headers["content-disposition"]
+    assert export_payload["export_id"] in download_response.headers["content-disposition"]
+    assert hashlib.sha256(download_response.content).hexdigest() == export_payload["sha256"]
+    assert download_response.text == export_text
+
+
+def test_analysis_result_html_report_export_renders_eda_method_specific_sections(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        graph_version = _upload_confirmed_numeric_dataset(client)
+        graph_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.graphical_summary",
+                "method_version": METHOD_VERSIONS["eda.graphical_summary"],
+                "dataset_version_id": graph_version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [graph_version["columns"][0]["column_id"]],
+                    "histogram_bin_count": 2,
+                    "point_limit": 10,
+                },
+            },
+        )
+        assert graph_response.status_code == 201
+        graph_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            graph_response.json()["analysis_id"],
+        )
+
+        normality_version = _upload_confirmed_numeric_dataset(client)
+        normality_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.normality",
+                "method_version": METHOD_VERSIONS["eda.normality"],
+                "dataset_version_id": normality_version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [normality_version["columns"][0]["column_id"]],
+                    "alpha": 0.05,
+                    "include_qq_points": True,
+                    "qq_point_limit": 10,
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        assert normality_response.status_code == 201
+        normality_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            normality_response.json()["analysis_id"],
+        )
+
+        equal_variances_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n8,A\n9,A\n11,B\n13,B\n",
+            filename="html-equal-variances.csv",
+        )
+        response_column_id = equal_variances_version["columns"][0]["column_id"]
+        group_column_id = equal_variances_version["columns"][1]["column_id"]
+        equal_variances_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.equal_variances",
+                "method_version": METHOD_VERSIONS["eda.equal_variances"],
+                "dataset_version_id": equal_variances_version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "group": group_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "group_column_id": group_column_id,
+                    "alpha": 0.05,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert equal_variances_response.status_code == 201
+        equal_variances_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            equal_variances_response.json()["analysis_id"],
+        )
+
+    assert "그래프 요약" in graph_text
+    assert "<th>Histogram bins</th>" in graph_text
+    assert "<th>Q-Q points</th>" in graph_text
+    assert "<th>ECDF points</th>" in graph_text
+    assert "<td>alpha</td>" in graph_text
+    assert "<td>2</td>" in graph_text
+
+    assert "정규성 검정 요약" in normality_text
+    assert "<th>Shapiro W</th>" in normality_text
+    assert "<th>Anderson statistic</th>" in normality_text
+    assert "normality_insufficient_observations" in normality_text
+
+    assert "등분산 검정 요약" in equal_variances_text
+    assert "Response: response / Group: group" in equal_variances_text
+    assert "brown_forsythe" in equal_variances_text
+    assert "levene_mean" in equal_variances_text
+    assert "등분산 그룹 요약" in equal_variances_text
+
+
+def test_analysis_result_html_report_export_renders_hypothesis_method_sections(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        one_sample_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response\n10.1\n9.9\n10.2\n10.4\n9.8\n10.5\n",
+            filename="html-one-sample-t.csv",
+        )
+        one_sample_column_id = one_sample_version["columns"][0]["column_id"]
+        one_sample_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_sample_t",
+                "method_version": METHOD_VERSIONS["hypothesis.one_sample_t"],
+                "dataset_version_id": one_sample_version["version_id"],
+                "roles": {"response": one_sample_column_id},
+                "options": {
+                    "response_column_id": one_sample_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "null_mean": 10,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert one_sample_response.status_code == 201
+        one_sample_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            one_sample_response.json()["analysis_id"],
+        )
+
+        anova_version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"response,group\n"
+                b"6,A\n7,A\n8,A\n9,A\n"
+                b"9,B\n10,B\n11,B\n12,B\n"
+                b"12,C\n13,C\n14,C\n15,C\n"
+            ),
+            filename="html-one-way-anova.csv",
+        )
+        anova_response_column_id = anova_version["columns"][0]["column_id"]
+        anova_group_column_id = anova_version["columns"][1]["column_id"]
+        anova_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_way_anova",
+                "method_version": METHOD_VERSIONS["hypothesis.one_way_anova"],
+                "dataset_version_id": anova_version["version_id"],
+                "roles": {
+                    "response": anova_response_column_id,
+                    "group": anova_group_column_id,
+                },
+                "options": {
+                    "response_column_id": anova_response_column_id,
+                    "group_column_id": anova_group_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "anova_type": "standard",
+                    "posthoc_method": "tukey_kramer",
+                    "posthoc_policy": "after_significant",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert anova_response.status_code == 201
+        anova_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            anova_response.json()["analysis_id"],
+        )
+
+        tost_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response\n9.8\n9.9\n10.0\n10.1\n10.2\n10.1\n",
+            filename="html-equivalence-tost.csv",
+        )
+        tost_column_id = tost_version["columns"][0]["column_id"]
+        tost_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.equivalence_tost",
+                "method_version": METHOD_VERSIONS["hypothesis.equivalence_tost"],
+                "dataset_version_id": tost_version["version_id"],
+                "roles": {"response": tost_column_id},
+                "options": {
+                    "design": "one_sample_mean",
+                    "response_column_id": tost_column_id,
+                    "reference_mean": 10,
+                    "lower_bound": -0.5,
+                    "upper_bound": 0.5,
+                    "alpha": 0.05,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert tost_response.status_code == 201
+        tost_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            tost_response.json()["analysis_id"],
+        )
+
+    assert "가설 검정 요약" in one_sample_text
+    assert "one_sample_t_test" in one_sample_text
+    assert "<td>Estimate</td>" in one_sample_text
+    assert "<td>P value</td>" in one_sample_text
+    assert "cohen_dz" in one_sample_text
+
+    assert "가설 검정 요약" in anova_text
+    assert "one_way_anova" in anova_text
+    assert "가설 검정 그룹 요약" in anova_text
+    assert "가설 검정 사후 비교" in anova_text
+    assert "eta_squared" in anova_text
+    assert "<th>Adjusted p</th>" in anova_text
+
+    assert "가설 검정 요약" in tost_text
+    assert "equivalence_tost" in tost_text
+    assert "<td>Lower one-sided p</td>" in tost_text
+    assert "<td>Upper one-sided p</td>" in tost_text
+    assert "<td>Equivalent</td>" in tost_text
+    assert "<td>CI inside equivalence bounds</td>" in tost_text
+
+
+def test_analysis_result_html_report_export_renders_categorical_method_sections(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        one_proportion_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"outcome\nyes\nyes\nyes\nyes\nno\nno\nyes\nno\nyes\nyes\nyes\nyes\n",
+            filename="html-one-proportion.csv",
+        )
+        one_proportion_column_id = one_proportion_version["columns"][0]["column_id"]
+        one_proportion_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "categorical.one_proportion",
+                "method_version": METHOD_VERSIONS["categorical.one_proportion"],
+                "dataset_version_id": one_proportion_version["version_id"],
+                "roles": {"response": one_proportion_column_id},
+                "options": {
+                    "response_column_id": one_proportion_column_id,
+                    "event_level": "yes",
+                    "null_proportion": 0.5,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "ci_method": "wilson",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert one_proportion_response.status_code == 201
+        one_proportion_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            one_proportion_response.json()["analysis_id"],
+        )
+
+        two_proportion_version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"outcome,group\n"
+                b"yes,A\nyes,A\nyes,A\nyes,A\nno,A\nno,A\n"
+                b"yes,B\nno,B\nno,B\nno,B\nno,B\nno,B\n"
+            ),
+            filename="html-two-proportion.csv",
+        )
+        two_response_column_id = two_proportion_version["columns"][0]["column_id"]
+        two_group_column_id = two_proportion_version["columns"][1]["column_id"]
+        two_proportion_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "categorical.two_proportion",
+                "method_version": METHOD_VERSIONS["categorical.two_proportion"],
+                "dataset_version_id": two_proportion_version["version_id"],
+                "roles": {
+                    "response": two_response_column_id,
+                    "group": two_group_column_id,
+                },
+                "options": {
+                    "response_column_id": two_response_column_id,
+                    "group_column_id": two_group_column_id,
+                    "event_level": "yes",
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert two_proportion_response.status_code == 201
+        two_proportion_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            two_proportion_response.json()["analysis_id"],
+        )
+
+        chi_square_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"row_factor,column_factor\n"
+            + b"".join(
+                [
+                    b"A,X\n" * 20,
+                    b"A,Y\n" * 15,
+                    b"A,Z\n" * 5,
+                    b"B,X\n" * 10,
+                    b"B,Y\n" * 20,
+                    b"B,Z\n" * 10,
+                    b"C,X\n" * 5,
+                    b"C,Y\n" * 10,
+                    b"C,Z\n" * 25,
+                ],
+            ),
+            filename="html-chi-square.csv",
+        )
+        row_column_id = chi_square_version["columns"][0]["column_id"]
+        column_column_id = chi_square_version["columns"][1]["column_id"]
+        chi_square_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "categorical.chi_square_association",
+                "method_version": METHOD_VERSIONS["categorical.chi_square_association"],
+                "dataset_version_id": chi_square_version["version_id"],
+                "roles": {
+                    "row": row_column_id,
+                    "column": column_column_id,
+                },
+                "options": {
+                    "row_column_id": row_column_id,
+                    "column_column_id": column_column_id,
+                    "alpha": 0.05,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert chi_square_response.status_code == 201
+        chi_square_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            chi_square_response.json()["analysis_id"],
+        )
+
+    assert "범주형 분석 요약" in one_proportion_text
+    assert "one_proportion_test" in one_proportion_text
+    assert "<td>Event count</td>" in one_proportion_text
+    assert "cohen_h" in one_proportion_text
+
+    assert "범주형 분석 요약" in two_proportion_text
+    assert "two_proportion_test" in two_proportion_text
+    assert "범주형 그룹 요약" in two_proportion_text
+    assert "<td>Difference estimate</td>" in two_proportion_text
+    assert "risk_ratio" in two_proportion_text
+
+    assert "범주형 분석 요약" in chi_square_text
+    assert "chi_square_association" in chi_square_text
+    assert "cramers_v" in chi_square_text
+    assert "Expected count diagnostics" in chi_square_text
+    assert "범주형 교차표 요약" in chi_square_text
+    assert "X=20" in chi_square_text
+
+
+def test_analysis_result_html_report_export_renders_regression_method_sections(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        pearson_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"x,y\n1,1\n2,2\n3,1\n4,4\n5,5\n6,7\n",
+            filename="html-pearson.csv",
+        )
+        pearson_x_column_id = pearson_version["columns"][0]["column_id"]
+        pearson_y_column_id = pearson_version["columns"][1]["column_id"]
+        pearson_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.pearson",
+                "method_version": METHOD_VERSIONS["regression.pearson"],
+                "dataset_version_id": pearson_version["version_id"],
+                "roles": {
+                    "x": pearson_x_column_id,
+                    "y": pearson_y_column_id,
+                },
+                "options": {
+                    "x_column_id": pearson_x_column_id,
+                    "y_column_id": pearson_y_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert pearson_response.status_code == 201
+        pearson_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            pearson_response.json()["analysis_id"],
+        )
+
+        xy_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"x1,x2,y1,y2\n1,2,1,2\n2,1,2,1\n3,4,1,4\n4,8,4,3\n5,9,5,7\n6,13,7,8\n",
+            filename="html-xy-correlation.csv",
+        )
+        x_column_ids = [
+            xy_version["columns"][0]["column_id"],
+            xy_version["columns"][1]["column_id"],
+        ]
+        y_column_ids = [
+            xy_version["columns"][2]["column_id"],
+            xy_version["columns"][3]["column_id"],
+        ]
+        xy_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.xy_correlation",
+                "method_version": METHOD_VERSIONS["regression.xy_correlation"],
+                "dataset_version_id": xy_version["version_id"],
+                "roles": {
+                    "x": ",".join(x_column_ids),
+                    "y": ",".join(y_column_ids),
+                },
+                "options": {
+                    "x_column_ids": x_column_ids,
+                    "y_column_ids": y_column_ids,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "missing_policy": "pairwise_complete_case",
+                },
+            },
+        )
+        assert xy_response.status_code == 201
+        xy_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            xy_response.json()["analysis_id"],
+        )
+
+        linear_version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"y,x1,x2\n" b"10,1,3\n13,2,2\n15,3,4\n18,4,3\n" b"21,5,5\n23,6,4\n26,7,6\n29,8,5\n"
+            ),
+            filename="html-linear-model.csv",
+        )
+        response_column_id = linear_version["columns"][0]["column_id"]
+        predictor_column_ids = [
+            linear_version["columns"][1]["column_id"],
+            linear_version["columns"][2]["column_id"],
+        ]
+        linear_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.linear_model",
+                "method_version": METHOD_VERSIONS["regression.linear_model"],
+                "dataset_version_id": linear_version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "predictors": ",".join(predictor_column_ids),
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "predictor_column_ids": predictor_column_ids,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "missing_policy": "complete_case",
+                    "include_intercept": True,
+                    "covariance_type": "standard",
+                },
+            },
+        )
+        assert linear_response.status_code == 201
+        linear_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            linear_response.json()["analysis_id"],
+        )
+
+    assert "상관/회귀 분석 요약" in pearson_text
+    assert "pearson_correlation" in pearson_text
+    assert "<td>Correlation</td>" in pearson_text
+    assert "<td>Scatter points</td>" in pearson_text
+
+    assert "상관/회귀 분석 요약" in xy_text
+    assert "xy_correlation_matrix" in xy_text
+    assert "상관 쌍 요약" in xy_text
+    assert "<td>x1</td>" in xy_text
+    assert "<td>y2</td>" in xy_text
+
+    assert "상관/회귀 분석 요약" in linear_text
+    assert "linear_model" in linear_text
+    assert "<td>Model R squared</td>" in linear_text
+    assert "<td>F p value</td>" in linear_text
+    assert "선형모델 계수 요약" in linear_text
+    assert "<td>Intercept</td>" in linear_text
+    assert "<td>x1</td>" in linear_text
+
+
+def test_analysis_result_html_report_export_renders_quality_chart_sections(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        individuals_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value\n10\n11\n10\n12\n11\n13\n",
+            filename="html-individuals-chart.csv",
+        )
+        individuals_column_id = individuals_version["columns"][0]["column_id"]
+        individuals_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.individuals_chart",
+                "method_version": METHOD_VERSIONS["quality.individuals_chart"],
+                "dataset_version_id": individuals_version["version_id"],
+                "roles": {"value": individuals_column_id},
+                "options": {
+                    "value_column_id": individuals_column_id,
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert individuals_response.status_code == 201
+        individuals_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            individuals_response.json()["analysis_id"],
+        )
+
+        subgroup_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value,subgroup\n10,A\n12,A\n11,B\n13,B\n9,C\n11,C\n",
+            filename="html-subgroup-chart.csv",
+        )
+        subgroup_value_column_id = subgroup_version["columns"][0]["column_id"]
+        subgroup_column_id = subgroup_version["columns"][1]["column_id"]
+        subgroup_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.subgroup_chart",
+                "method_version": METHOD_VERSIONS["quality.subgroup_chart"],
+                "dataset_version_id": subgroup_version["version_id"],
+                "roles": {
+                    "value": subgroup_value_column_id,
+                    "subgroup": subgroup_column_id,
+                },
+                "options": {
+                    "value_column_id": subgroup_value_column_id,
+                    "subgroup_column_id": subgroup_column_id,
+                    "chart_type": "xbar_r",
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert subgroup_response.status_code == 201
+        subgroup_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            subgroup_response.json()["analysis_id"],
+        )
+
+        run_chart_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value\n1\n2\n3\n4\n5\n6\n4\n3\n",
+            filename="html-run-chart.csv",
+        )
+        run_value_column_id = run_chart_version["columns"][0]["column_id"]
+        run_chart_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.run_chart",
+                "method_version": METHOD_VERSIONS["quality.run_chart"],
+                "dataset_version_id": run_chart_version["version_id"],
+                "roles": {"value": run_value_column_id},
+                "options": {
+                    "value_column_id": run_value_column_id,
+                    "center_method": "median",
+                    "trend_min_length": 6,
+                    "point_limit": 20,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert run_chart_response.status_code == 201
+        run_chart_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            run_chart_response.json()["analysis_id"],
+        )
+
+    assert "품질 관리 요약" in individuals_text
+    assert "individuals_chart" in individuals_text
+    assert "품질 차트 요약" in individuals_text
+    assert "Individuals" in individuals_text
+    assert "Moving range" in individuals_text
+    assert "<td>Signal count</td>" in individuals_text
+
+    assert "품질 관리 요약" in subgroup_text
+    assert "subgroup_chart" in subgroup_text
+    assert "Xbar" in subgroup_text
+    assert "<td>Subgroup size</td>" in subgroup_text
+    assert "<td>Subgroup count</td>" in subgroup_text
+
+    assert "품질 관리 요약" in run_chart_text
+    assert "run_chart" in run_chart_text
+    assert "<td>Run count</td>" in run_chart_text
+    assert "품질 신호 요약" in run_chart_text
+    assert "run_chart_trend" in run_chart_text
+    assert "control_limit" not in run_chart_text
+
+
+def test_analysis_result_html_report_export_renders_quality_capability_and_gage_sections(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        capability_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"value\n10\n11\n12\n13\n14\n",
+            filename="html-capability.csv",
+        )
+        capability_column_id = capability_version["columns"][0]["column_id"]
+        capability_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.capability",
+                "method_version": METHOD_VERSIONS["quality.capability"],
+                "dataset_version_id": capability_version["version_id"],
+                "roles": {"value": capability_column_id},
+                "options": {
+                    "value_column_id": capability_column_id,
+                    "lsl": 8.0,
+                    "usl": 16.0,
+                    "target": 12.0,
+                    "missing_policy": "complete_case",
+                    "histogram_bin_limit": 20,
+                },
+            },
+        )
+        assert capability_response.status_code == 201
+        capability_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            capability_response.json()["analysis_id"],
+        )
+
+        gage_content = (
+            b"measurement,part,operator,replicate\n"
+            b"9,Part A,Operator 1,1\n"
+            b"11,Part A,Operator 1,2\n"
+            b"15,Part A,Operator 2,1\n"
+            b"17,Part A,Operator 2,2\n"
+            b"20,Part B,Operator 1,1\n"
+            b"22,Part B,Operator 1,2\n"
+            b"24,Part B,Operator 2,1\n"
+            b"26,Part B,Operator 2,2\n"
+            b"31,Part C,Operator 1,1\n"
+            b"33,Part C,Operator 1,2\n"
+            b"33,Part C,Operator 2,1\n"
+            b"35,Part C,Operator 2,2\n"
+        )
+        gage_version = _upload_confirmed_csv_dataset(
+            client,
+            content=gage_content,
+            filename="html-gage-rr.csv",
+        )
+        gage_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_rr",
+                "method_version": METHOD_VERSIONS["quality.gage_rr"],
+                "dataset_version_id": gage_version["version_id"],
+                "roles": {
+                    "measurement": gage_version["columns"][0]["column_id"],
+                    "part": gage_version["columns"][1]["column_id"],
+                    "operator": gage_version["columns"][2]["column_id"],
+                    "replicate": gage_version["columns"][3]["column_id"],
+                },
+                "options": {
+                    "measurement_column_id": gage_version["columns"][0]["column_id"],
+                    "part_column_id": gage_version["columns"][1]["column_id"],
+                    "operator_column_id": gage_version["columns"][2]["column_id"],
+                    "replicate_column_id": gage_version["columns"][3]["column_id"],
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert gage_response.status_code == 201
+        gage_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            gage_response.json()["analysis_id"],
+        )
+
+        gage_run_version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"measurement,part,operator,replicate,run\n"
+                b"9,Part A,Operator 1,1,2\n"
+                b"11,Part A,Operator 1,2,1\n"
+                b"15,Part A,Operator 2,1,4\n"
+                b"17,Part A,Operator 2,2,3\n"
+                b"20,Part B,Operator 1,1,6\n"
+                b"22,Part B,Operator 1,2,5\n"
+                b"24,Part B,Operator 2,1,8\n"
+                b"26,Part B,Operator 2,2,7\n"
+                b"31,Part C,Operator 1,1,10\n"
+                b"33,Part C,Operator 1,2,9\n"
+                b"33,Part C,Operator 2,1,12\n"
+                b"35,Part C,Operator 2,2,11\n"
+            ),
+            filename="html-gage-run-chart.csv",
+        )
+        gage_run_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_run_chart",
+                "method_version": METHOD_VERSIONS["quality.gage_run_chart"],
+                "dataset_version_id": gage_run_version["version_id"],
+                "roles": {
+                    "measurement": gage_run_version["columns"][0]["column_id"],
+                    "part": gage_run_version["columns"][1]["column_id"],
+                    "operator": gage_run_version["columns"][2]["column_id"],
+                    "replicate": gage_run_version["columns"][3]["column_id"],
+                    "order": gage_run_version["columns"][4]["column_id"],
+                },
+                "options": {
+                    "measurement_column_id": gage_run_version["columns"][0]["column_id"],
+                    "part_column_id": gage_run_version["columns"][1]["column_id"],
+                    "operator_column_id": gage_run_version["columns"][2]["column_id"],
+                    "replicate_column_id": gage_run_version["columns"][3]["column_id"],
+                    "order_column_id": gage_run_version["columns"][4]["column_id"],
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        assert gage_run_response.status_code == 201
+        gage_run_text = _export_analysis_html_report_text(
+            settings,
+            client,
+            gage_run_response.json()["analysis_id"],
+        )
+
+    assert "품질 관리 요약" in capability_text
+    assert "capability_analysis" in capability_text
+    assert "공정능력 요약" in capability_text
+    assert "<td>Spec LSL</td>" in capability_text
+    assert "<td>Expected nonconformance ppm</td>" in capability_text
+
+    assert "품질 관리 요약" in gage_text
+    assert "gage_rr" in gage_text
+    assert "Gage R&amp;R 분산 요약" in gage_text
+    assert "total_gage_rr" in gage_text
+    assert "<td>Part count</td>" in gage_text
+    assert "Part A" not in gage_text
+    assert "Operator 1" not in gage_text
+
+    assert "품질 관리 요약" in gage_run_text
+    assert "gage_run_chart" in gage_run_text
+    assert "<td>Measurement mean</td>" in gage_run_text
+    assert "<td>Chart point count</td>" in gage_run_text
+    assert "품질 차트 요약" in gage_run_text
+    assert "Part A" not in gage_run_text
+    assert "Operator 1" not in gage_run_text
+
+
+def test_analysis_result_html_report_export_detects_result_checksum_mismatch_without_artifact(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        record = get_analysis_run_record(settings.workspace_root, analysis_id)
+        assert record is not None
+        assert record.result_path is not None
+        (settings.workspace_root / record.result_path).write_bytes(b'{"tampered":true}\n')
+        export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/html")
+
+    assert response.status_code == 201
+    assert export_response.status_code == 409
+    assert export_response.json()["error"]["code"] == "analysis_result_checksum_mismatch"
+    assert record.result_path not in export_response.text
+    assert count_analysis_artifact_records(settings.workspace_root, analysis_id) == 1
+    assert not (
+        settings.workspace_root / "workspaces" / "analyses" / analysis_id / "exports"
+    ).exists()
+
+
+def test_analysis_result_export_downloads_checksum_validated_json_and_csv_artifacts(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        json_export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/json")
+        csv_export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/csv")
+        json_export = json_export_response.json()
+        csv_export = csv_export_response.json()
+        json_download_response = client.get(
+            f"/api/v1/analysis-runs/{analysis_id}/exports/{json_export['export_id']}/download",
+        )
+        csv_download_response = client.get(
+            f"/api/v1/analysis-runs/{analysis_id}/exports/{csv_export['export_id']}/download",
+        )
+        missing_download_response = client.get(
+            f"/api/v1/analysis-runs/{analysis_id}/exports/{uuid4()}/download",
+        )
+
+    assert response.status_code == 201
+    assert json_export_response.status_code == 201
+    assert csv_export_response.status_code == 201
+    assert json_download_response.status_code == 200
+    assert csv_download_response.status_code == 200
+    assert missing_download_response.status_code == 404
+    assert missing_download_response.json()["error"]["code"] == "analysis_export_not_found"
+
+    assert json_download_response.headers["content-type"].startswith("application/json")
+    assert "attachment" in json_download_response.headers["content-disposition"]
+    assert json_export["export_id"] in json_download_response.headers["content-disposition"]
+    assert str(tmp_path) not in json_download_response.headers["content-disposition"]
+    assert hashlib.sha256(json_download_response.content).hexdigest() == json_export["sha256"]
+    downloaded_json = json.loads(json_download_response.content.decode("utf-8"))
+    assert downloaded_json["result"] == response.json()
+    assert downloaded_json["source_result_sha256"] == json_export["source_result_sha256"]
+    assert str(tmp_path) not in json.dumps(downloaded_json, ensure_ascii=False)
+    assert "workspaces/analyses" not in json.dumps(downloaded_json, ensure_ascii=False)
+
+    assert csv_download_response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in csv_download_response.headers["content-disposition"]
+    assert csv_export["export_id"] in csv_download_response.headers["content-disposition"]
+    assert str(tmp_path) not in csv_download_response.headers["content-disposition"]
+    assert hashlib.sha256(csv_download_response.content).hexdigest() == csv_export["sha256"]
+    rows = list(csv.reader(io.StringIO(csv_download_response.content.decode("utf-8-sig"))))
+    assert rows[0] == ["section", "path", "value"]
+    assert str(tmp_path) not in csv_download_response.text
+    assert "workspaces/analyses" not in csv_download_response.text
+
+
+def test_analysis_result_export_download_detects_artifact_checksum_mismatch(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/json")
+        export_payload = export_response.json()
+        artifact = get_analysis_artifact_record(
+            settings.workspace_root,
+            analysis_id,
+            export_payload["export_id"],
+        )
+        assert artifact is not None
+        (settings.workspace_root / artifact.path).write_bytes(b'{"tampered":true}\n')
+        download_response = client.get(
+            f"/api/v1/analysis-runs/{analysis_id}/exports/{export_payload['export_id']}/download",
+        )
+
+    assert response.status_code == 201
+    assert export_response.status_code == 201
+    assert download_response.status_code == 409
+    assert download_response.json()["error"]["code"] == "analysis_export_checksum_mismatch"
+    assert str(tmp_path) not in download_response.text
+    assert artifact.path not in download_response.text
+
+
 def test_dataset_schema_update_marks_existing_analysis_run_stale(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
 
@@ -6903,6 +9469,25 @@ def _upload_confirmed_numeric_dataset(client: TestClient) -> dict[str, object]:
     )
     assert confirm_response.status_code == 201
     return confirm_response.json()
+
+
+def _export_analysis_html_report_text(
+    settings: Settings,
+    client: TestClient,
+    analysis_id: str,
+) -> str:
+    export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/html")
+    assert export_response.status_code == 201
+    export_payload = export_response.json()
+    artifact = get_analysis_artifact_record(
+        settings.workspace_root,
+        analysis_id,
+        export_payload["export_id"],
+    )
+    assert artifact is not None
+    export_bytes = (settings.workspace_root / artifact.path).read_bytes()
+    assert hashlib.sha256(export_bytes).hexdigest() == export_payload["sha256"]
+    return export_bytes.decode("utf-8")
 
 
 def test_analysis_result_envelope_allows_empty_result_only_as_schema_contract() -> None:

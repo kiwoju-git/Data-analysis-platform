@@ -1,0 +1,32 @@
+{
+  "reference_tool": "hand summaries and deterministic run-order sorting",
+  "cases": [
+    {
+      "case_id": "balanced_ordered",
+      "summary": {"mean": 23.0, "minimum": 9.0, "maximum": 35.0, "range": 26.0},
+      "part_summaries": [
+        {"index": 1, "n": 4, "mean": 13.0, "minimum": 9.0, "maximum": 17.0, "range": 8.0},
+        {"index": 2, "n": 4, "mean": 23.0, "minimum": 20.0, "maximum": 26.0, "range": 6.0},
+        {"index": 3, "n": 4, "mean": 33.0, "minimum": 31.0, "maximum": 35.0, "range": 4.0}
+      ],
+      "operator_summaries": [
+        {"index": 1, "n": 6, "mean": 21.0, "minimum": 9.0, "maximum": 33.0, "range": 24.0},
+        {"index": 2, "n": 6, "mean": 25.0, "minimum": 15.0, "maximum": 35.0, "range": 20.0}
+      ],
+      "first_chart_point": {
+        "position": 1,
+        "canonical_position": 2,
+        "value": 11.0,
+        "part_index": 1,
+        "operator_index": 1,
+        "replicate_index": 2
+      },
+      "warnings": [
+        "gage_run_chart_diagnostic_only",
+        "gage_run_chart_requires_gage_design",
+        "gage_run_chart_labels_redacted",
+        "gage_run_chart_uses_order_column"
+      ]
+    }
+  ]
+}

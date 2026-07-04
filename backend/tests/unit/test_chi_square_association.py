@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from math import isfinite
 from pathlib import Path
 
 import pytest
@@ -121,6 +122,11 @@ def test_chi_square_association_reports_exclusions_and_sparse_2x2_warning() -> N
             "implemented": False,
         },
     ]
+    assert result["method"] == "pearson_chi_square_independence"
+    assert result["test"]["statistic_name"] == "chi_square"
+    for row in result["contingency_table"]["rows"]:
+        for cell in row["cells"]:
+            assert isfinite(cell["standardized_residual"])
 
 
 def test_chi_square_association_rejects_invalid_inputs_without_fallback() -> None:

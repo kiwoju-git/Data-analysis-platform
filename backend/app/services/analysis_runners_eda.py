@@ -1,10 +1,17 @@
 from typing import Any
 from uuid import uuid4
 
+from fastapi import status
+from pydantic import ValidationError
+
 from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
     AnalysisRunRequest,
     AnalysisWarning,
+    DescriptiveOptions,
+    EqualVariancesOptions,
+    GraphicalSummaryOptions,
+    NormalityOptions,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -48,8 +55,9 @@ def run_descriptive_analysis(
             message="기술통계 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_descriptive_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    selected_columns = _selected_descriptive_columns(context, request.options)
+    selected_columns = _selected_descriptive_columns(context, options)
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -80,6 +88,17 @@ def run_descriptive_analysis(
     except Exception:
         remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_descriptive_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return DescriptiveOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_descriptive_options",
+            message="기술통계 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_descriptive_columns(
@@ -198,10 +217,11 @@ def run_graphical_summary_analysis(
             message="그래프 요약 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_graphical_summary_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    selected_columns = _selected_graphical_summary_columns(context, request.options)
-    histogram_bin_count = _graphical_histogram_bin_count(request.options)
-    point_limit = _graphical_point_limit(request.options)
+    selected_columns = _selected_graphical_summary_columns(context, options)
+    histogram_bin_count = _graphical_histogram_bin_count(options)
+    point_limit = _graphical_point_limit(options)
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -234,6 +254,17 @@ def run_graphical_summary_analysis(
     except Exception:
         remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_graphical_summary_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return GraphicalSummaryOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_graphical_summary_options",
+            message="그래프 요약 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_graphical_summary_columns(
@@ -392,13 +423,14 @@ def run_normality_analysis(
             message="정규성 검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
-    _reject_normality_grouping(request)
+    options = _validate_normality_options(request.options)
+    _reject_normality_grouping(request, options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    selected_columns = _selected_normality_columns(context, request.options)
-    alpha = _normality_alpha(request.options)
-    include_qq_points = _normality_include_qq_points(request.options)
-    qq_point_limit = _normality_qq_point_limit(request.options)
-    _normality_missing_policy(request.options)
+    selected_columns = _selected_normality_columns(context, options)
+    alpha = _normality_alpha(options)
+    include_qq_points = _normality_include_qq_points(options)
+    qq_point_limit = _normality_qq_point_limit(options)
+    _normality_missing_policy(options)
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -432,6 +464,17 @@ def run_normality_analysis(
     except Exception:
         remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_normality_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return NormalityOptions.model_validate(options).model_dump(exclude_none=True)
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_normality_options",
+            message="정규성 검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_normality_columns(
@@ -500,8 +543,11 @@ def _validate_normality_column(column: DatasetColumnRecord) -> None:
         )
 
 
-def _reject_normality_grouping(request: AnalysisRunRequest) -> None:
-    if "group" in request.roles or request.options.get("group_column_id") is not None:
+def _reject_normality_grouping(
+    request: AnalysisRunRequest,
+    options: dict[str, Any],
+) -> None:
+    if "group" in request.roles or options.get("group_column_id") is not None:
         raise ApiError(
             code="normality_grouping_not_supported",
             message="이번 정규성 검정 slice는 그룹별 실행을 아직 지원하지 않습니다.",
@@ -648,13 +694,14 @@ def run_equal_variances_analysis(
             message="등분산 검정 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_equal_variances_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     response_column, group_column = _selected_equal_variances_columns(
         context,
-        request.options,
+        options,
     )
-    alpha = _equal_variances_alpha(request.options)
-    _equal_variances_missing_policy(request.options)
+    alpha = _equal_variances_alpha(options)
+    _equal_variances_missing_policy(options)
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -687,6 +734,17 @@ def run_equal_variances_analysis(
     except Exception:
         remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_equal_variances_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return EqualVariancesOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_equal_variances_options",
+            message="등분산 검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_equal_variances_columns(

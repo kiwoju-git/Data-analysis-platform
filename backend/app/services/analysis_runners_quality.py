@@ -3,11 +3,18 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import status
+from pydantic import ValidationError
 
 from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
     AnalysisRunRequest,
     AnalysisWarning,
+    CapabilityOptions,
+    GageRrOptions,
+    GageRunChartOptions,
+    IndividualsChartOptions,
+    RunChartOptions,
+    SubgroupChartOptions,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -80,17 +87,18 @@ def run_individuals_chart_analysis(
             message="개별값 관리도 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_individuals_chart_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    value_column = _selected_individuals_chart_column(context, request.options)
+    value_column = _selected_individuals_chart_column(context, options)
     order_column = _selected_individuals_chart_order_column(
         context,
-        request.options,
+        options,
         value_column,
     )
-    missing_policy = _individuals_chart_missing_policy(request.options)
-    same_side_min_length = _individuals_chart_same_side_min_length(request.options)
-    trend_min_length = _individuals_chart_trend_min_length(request.options)
-    point_limit = _individuals_chart_point_limit(request.options)
+    missing_policy = _individuals_chart_missing_policy(options)
+    same_side_min_length = _individuals_chart_same_side_min_length(options)
+    trend_min_length = _individuals_chart_trend_min_length(options)
+    point_limit = _individuals_chart_point_limit(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -129,6 +137,17 @@ def run_individuals_chart_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_individuals_chart_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return IndividualsChartOptions.model_validate(options).model_dump(exclude_none=True)
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_individuals_chart_options",
+            message="개별값 관리도 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_individuals_chart_column(
@@ -413,16 +432,17 @@ def run_subgroup_chart_analysis(
             message="부분군 관리도 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_subgroup_chart_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    value_column = _selected_subgroup_chart_value_column(context, request.options)
+    value_column = _selected_subgroup_chart_value_column(context, options)
     subgroup_column = _selected_subgroup_chart_subgroup_column(
         context,
-        request.options,
+        options,
         value_column,
     )
-    chart_type = _subgroup_chart_type(request.options)
-    missing_policy = _subgroup_chart_missing_policy(request.options)
-    point_limit = _subgroup_chart_point_limit(request.options)
+    chart_type = _subgroup_chart_type(options)
+    missing_policy = _subgroup_chart_missing_policy(options)
+    point_limit = _subgroup_chart_point_limit(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -460,6 +480,17 @@ def run_subgroup_chart_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_subgroup_chart_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return SubgroupChartOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_subgroup_chart_options",
+            message="부분군 관리도 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_subgroup_chart_value_column(
@@ -683,13 +714,14 @@ def run_capability_analysis(
             message="공정능력 분석 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_capability_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    value_column = _selected_capability_column(context, request.options)
-    lsl = _optional_capability_spec_limit(request.options, "lsl")
-    usl = _optional_capability_spec_limit(request.options, "usl")
-    target = _optional_capability_spec_limit(request.options, "target")
-    missing_policy = _capability_missing_policy(request.options)
-    histogram_bin_limit = _capability_histogram_bin_limit(request.options)
+    value_column = _selected_capability_column(context, options)
+    lsl = _optional_capability_spec_limit(options, "lsl")
+    usl = _optional_capability_spec_limit(options, "usl")
+    target = _optional_capability_spec_limit(options, "target")
+    missing_policy = _capability_missing_policy(options)
+    histogram_bin_limit = _capability_histogram_bin_limit(options)
     if lsl is None and usl is None:
         raise ApiError(
             code="capability_spec_limit_required",
@@ -738,6 +770,17 @@ def run_capability_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_capability_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return CapabilityOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_capability_options",
+            message="공정능력 분석 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_capability_column(
@@ -824,6 +867,7 @@ def _capability_histogram_bin_limit(options: dict[str, Any]) -> int:
 
 def _capability_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_capability_options": "공정능력 분석 옵션 계약이 올바르지 않습니다.",
         "capability_missing_policy_unsupported": (
             "공정능력 분석은 현재 complete-case 결측 처리만 지원합니다."
         ),
@@ -917,12 +961,13 @@ def run_gage_rr_analysis(
             message="Gage R&R 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_gage_rr_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    measurement_column_id = _gage_rr_required_column_id(request.options, "measurement_column_id")
-    part_column_id = _gage_rr_required_column_id(request.options, "part_column_id")
-    operator_column_id = _gage_rr_required_column_id(request.options, "operator_column_id")
-    replicate_column_id = _gage_rr_required_column_id(request.options, "replicate_column_id")
-    missing_policy = _gage_rr_missing_policy(request.options)
+    measurement_column_id = _gage_rr_required_column_id(options, "measurement_column_id")
+    part_column_id = _gage_rr_required_column_id(options, "part_column_id")
+    operator_column_id = _gage_rr_required_column_id(options, "operator_column_id")
+    replicate_column_id = _gage_rr_required_column_id(options, "replicate_column_id")
+    missing_policy = _gage_rr_missing_policy(options)
     (
         measurement_column,
         part_column,
@@ -972,6 +1017,17 @@ def run_gage_rr_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_gage_rr_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return GageRrOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_gage_rr_options",
+            message="Gage R&R 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _gage_rr_required_column_id(options: dict[str, Any], key: str) -> str:
@@ -1067,16 +1123,17 @@ def run_gage_run_chart_analysis(
             message="Gage Run Chart 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_gage_run_chart_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     measurement_column_id = _gage_run_chart_required_column_id(
-        request.options,
+        options,
         "measurement_column_id",
     )
-    part_column_id = _gage_run_chart_required_column_id(request.options, "part_column_id")
-    operator_column_id = _gage_run_chart_required_column_id(request.options, "operator_column_id")
-    replicate_column_id = _gage_run_chart_required_column_id(request.options, "replicate_column_id")
-    missing_policy = _gage_run_chart_missing_policy(request.options)
-    point_limit = _gage_run_chart_point_limit(request.options)
+    part_column_id = _gage_run_chart_required_column_id(options, "part_column_id")
+    operator_column_id = _gage_run_chart_required_column_id(options, "operator_column_id")
+    replicate_column_id = _gage_run_chart_required_column_id(options, "replicate_column_id")
+    missing_policy = _gage_run_chart_missing_policy(options)
+    point_limit = _gage_run_chart_point_limit(options)
     measurement_column, part_column, operator_column, replicate_column = select_gage_rr_columns(
         context.columns,
         measurement_column_id=measurement_column_id,
@@ -1086,7 +1143,7 @@ def run_gage_run_chart_analysis(
     )
     order_column = _selected_gage_run_chart_order_column(
         context,
-        request.options,
+        options,
         excluded_column_ids={
             measurement_column.column_id,
             part_column.column_id,
@@ -1137,6 +1194,17 @@ def run_gage_run_chart_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_gage_run_chart_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return GageRunChartOptions.model_validate(options).model_dump(exclude_none=True)
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_gage_run_chart_options",
+            message="Gage Run Chart 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _select_gage_run_chart_columns(
@@ -1410,15 +1478,16 @@ def run_run_chart_analysis(
             message="런 차트 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_run_chart_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    value_column = _selected_run_chart_column(context, request.options)
-    order_column = _selected_run_chart_order_column(context, request.options, value_column)
-    center_method = _run_chart_center_method(request.options)
-    missing_policy = _run_chart_missing_policy(request.options)
-    trend_min_length = _run_chart_trend_min_length(request.options)
-    oscillation_min_length = _run_chart_oscillation_min_length(request.options)
-    runs_test_alpha = _run_chart_runs_test_alpha(request.options)
-    point_limit = _run_chart_point_limit(request.options)
+    value_column = _selected_run_chart_column(context, options)
+    order_column = _selected_run_chart_order_column(context, options, value_column)
+    center_method = _run_chart_center_method(options)
+    missing_policy = _run_chart_missing_policy(options)
+    trend_min_length = _run_chart_trend_min_length(options)
+    oscillation_min_length = _run_chart_oscillation_min_length(options)
+    runs_test_alpha = _run_chart_runs_test_alpha(options)
+    point_limit = _run_chart_point_limit(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -1459,6 +1528,17 @@ def run_run_chart_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_run_chart_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return RunChartOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_run_chart_options",
+            message="런 차트 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_run_chart_column(
@@ -1625,6 +1705,7 @@ def _run_chart_point_limit(options: dict[str, Any]) -> int:
 
 def _run_chart_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_run_chart_options": "런 차트 옵션 계약이 올바르지 않습니다.",
         "invalid_run_chart_center_method": "런 차트 중심선은 현재 median만 지원합니다.",
         "run_chart_missing_policy_unsupported": (
             "런 차트는 현재 complete-case 결측 처리만 지원합니다."

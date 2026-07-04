@@ -1,23 +1,40 @@
 # Gate B Progress
 
-Last updated: 2026-07-02
+Last updated: 2026-07-03
 
 ## Summary
 
 Gate B has completed the upload/version, paste-as-dataset intake, canonical JSONL artifact materialization, canonical row reader adoption for preview/profile/current executable methods, schema/preview, profile/preflight with duplicate-row and memory estimates, persisted profile summary artifacts, conservative date/time preflight, analysis catalog, storage/run foundation, selected-method six-module Workbench shell, shared Workbench component split, route-level selected-analysis restore, route-selected dataset/analysis page rendering, filter snapshot row freezing, a narrow filter expression engine and Workbench-level frontend filter controls, basic XLSX parsing confirmation, the first four real exploration-method slices, the first eight real Gate B2 hypothesis slices, the first three categorical slices, the first three Gate C1 correlation/regression slices, the current Gate D quality-control slices, and the first two Gate C3 measurement-system slices in the working tree. The app can accept a local multipart dataset upload or pasted spreadsheet text, validate the file/text envelope, preserve raw bytes unchanged, store SHA-256 provenance in SQLite metadata, return parsing-option candidates, revalidate raw upload integrity before parsing confirmation, confirm delimited-text and basic XLSX parsing, create immutable dataset version `v1`, materialize canonical rows plus a manifest under the workspace, store dataset columns and artifact metadata, retrieve version metadata, update confirmed column metadata while marking dependent analysis runs stale, return paginated row preview from canonical rows, return aggregate profile/preflight counts and warnings from validated canonical rows, summarize date/time format candidates and timezone-awareness risks without raw samples, persist and reuse raw-value-free `profile_summary` artifacts tied to schema/canonical hashes, expose the 6-module analysis method catalog, show planned/disabled methods in a route-restorable Workbench shell with legacy hash fallback, initialize analysis run/artifact/job/regression-model metadata tables with status/cancel API skeletons, execute `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` with real calculations from validated canonical rows, persist an `analysis_row_snapshot` artifact for each executed row selection, persist a safe JSON model manifest for `regression.linear_model`, run backend OLS predictions from app-created manifests through `regression.predict`, and re-read stored analysis results and regression model manifests after checksum validation. The frontend app chrome is split into `AppChrome` for sidebar/topbar/context layout, dataset workflow state and API handlers are split into `useDatasetWorkflow`, and the frontend dataset preparation area is split into `DatasetPreparationPage`, `DatasetParsingPanel`, `DatasetVersionPanel`, `DatasetProfileSection`, `DatasetSchemaSection`, `DatasetPreviewSection`, and shared `datasetDisplay` helpers. The frontend analysis area is split into `AnalysisPage`, `AnalysisShell`, `AnalysisWorkbench`, `DescriptiveAnalysisPanel`, `GraphicalSummaryPanel`, `NormalityAnalysisPanel`, `EqualVariancesPanel`, `OneSampleTPanel`, `PairedTPanel`, `EquivalenceTostPanel`, `OneSampleWilcoxonPanel`, `TwoSampleTPanel`, `MannWhitneyPanel`, `KruskalWallisPanel`, `OneWayAnovaPanel`, `OneProportionPanel`, `TwoProportionPanel`, `ChiSquareAssociationPanel`, `PearsonCorrelationPanel`, `XyCorrelationPanel`, `LinearModelPanel`, `IndividualsChartPanel`, `SubgroupChartPanel`, `RunChartPanel`, `CapabilityPanel`, `GageRrPreflightPanel`, and `GageRunChartPanel`, with route selection state handled by `useAnalysisSelection` and app page routing handled by `appRoute` plus `WorkspaceRouter`, so the app chrome, dataset workflow, dataset page, analysis page, method shell, common filter surface, and executable panels have separate component boundaries. LinearModelPanel now supports stored-model preflight followed by active-dataset prediction execution and a capped raw-value-free prediction result table. GageRrPreflightPanel now supports balanced crossed design preflight followed by Gage R&R ANOVA execution and result rendering. GageRunChartPanel now supports balanced crossed diagnostic chart execution and indexed redacted result rendering. Delimited-text parsing also handles leading preamble plus headerless tabular data through explicit `has_header=false` and `data_start_row` confirmation. The schema UI includes a guarded 34-column Bayesian sample role preset for headerless generated columns. It does not yet provide cell-level data edits, generated chart artifacts, formula recalculation/display-format restoration for XLSX, paired/two-sample TOST, event/trial summary-count categorical input, Fisher exact association p-values, chi-square aggregate-count input, categorical/interaction regression modeling, prediction target dataset selection UI, paged prediction result retrieval, Gage R&R component/interaction plots, or Gage Run Chart export artifacts.
 
-Gate D1 has started with DOE design-asset and response-entry slices. `doe.factorial_design` is available through dedicated `POST /api/v1/doe-designs/factorial`, `GET /api/v1/doe-designs/{design_id}`, `PUT /api/v1/doe-designs/{design_id}/responses`, and `GET /api/v1/doe-designs/{design_id}/responses` routes, stores schema v7 `experiment_designs`/`experiment_design_versions`/`experiment_runs` metadata plus schema v8 `experiment_run_responses`, and renders a minimal `FactorialDesignPanel` run-table preview/response-entry shell. It does not yet implement effects, OLS/ANOVA, diagnostics, alias structure, or DOE charts.
+Gate D1 has started with DOE design-asset and response-entry slices. `doe.factorial_design` is available through dedicated `POST /api/v1/doe-designs/factorial`, `GET /api/v1/doe-designs/{design_id}`, `PUT /api/v1/doe-designs/{design_id}/responses`, `GET /api/v1/doe-designs/{design_id}/responses`, and `GET /api/v1/doe-designs/{design_id}/report.html` routes, stores schema v7 `experiment_designs`/`experiment_design_versions`/`experiment_runs` metadata plus schema v8 `experiment_run_responses`, and renders a minimal `FactorialDesignPanel` run-table preview/response-entry shell. The DOE HTML report renders only checksum-verified stored design metadata and entered response values. It does not yet implement effects, OLS/ANOVA, diagnostics, alias structure, or DOE charts.
 
 Current stabilization update:
 
+- High-risk statistical QA coverage was strengthened without adding new executable methods. New tests pin one-way ANOVA significant-only posthoc behavior, non-significant posthoc skip, negative omega-squared handling, group-size imbalance warnings, TOST one-sided decision logic, non-significance-not-equivalence behavior, two-proportion zero-cell/all-event handling, sparse chi-square diagnostics, and capability stability-warning visibility.
+- Method versions now have a shared `METHOD_VERSIONS` map covering all 29 stable method IDs. The catalog descriptors and generic `MethodExecutionHandler` specs read from the same source, and API contract tests assert catalog/handler version alignment.
+- `hypothesis.equivalence_tost` now validates its runner-boundary options through typed `EquivalenceTostOptions`, rejecting invalid numeric types, missing required bounds, and unknown option fields with `invalid_equivalence_tost_options` before row snapshot or result artifacts are written.
+- `hypothesis.one_sample_t`, `hypothesis.paired_t`, and `hypothesis.two_sample_t` now validate runner-boundary options through typed contracts. They reject malformed payloads with `invalid_one_sample_t_options`, `invalid_paired_t_options`, or `invalid_two_sample_t_options` before row snapshot/result artifacts are written, and frontend analysis error guidance now explains these codes.
+- `hypothesis.one_sample_wilcoxon`, `hypothesis.mann_whitney`, and `categorical.one_proportion` now validate runner-boundary options through typed contracts. They reject malformed payloads with `invalid_one_sample_wilcoxon_options`, `invalid_mann_whitney_options`, or `invalid_one_proportion_options` before row snapshot/result artifacts are written, and frontend analysis error guidance now explains these codes.
+- `eda.graphical_summary`, `eda.normality`, and `eda.equal_variances` now validate runner-boundary options through typed contracts. They reject malformed payloads with `invalid_graphical_summary_options`, `invalid_normality_options`, or `invalid_equal_variances_options` before row snapshot/result artifacts are written, and frontend analysis error guidance now explains these codes.
+- `regression.linear_model` and `quality.gage_rr` now also validate runner-boundary options through typed contracts. Linear model rejects invalid numeric option types, missing predictor IDs, unknown top-level fields, and unknown nested interaction fields with `invalid_linear_model_options`; Gage R&R rejects invalid column ID types, missing required IDs, and unknown fields with `invalid_gage_rr_options`. Frontend analysis error guidance now explains both codes.
+- `categorical.two_proportion`, `categorical.chi_square_association`, and `quality.capability` now validate runner-boundary options through typed contracts. They reject malformed payloads with `invalid_two_proportion_options`, `invalid_chi_square_options`, or `invalid_capability_options` before row snapshot/result artifacts are written, and frontend analysis error guidance now explains these codes.
+- `hypothesis.one_way_anova`, `hypothesis.kruskal_wallis`, and `quality.run_chart` now validate runner-boundary options through typed contracts. They reject malformed payloads with `invalid_one_way_anova_options`, `invalid_kruskal_wallis_options`, or `invalid_run_chart_options` before row snapshot/result artifacts are written, and frontend analysis error guidance now explains these codes.
+- `quality.individuals_chart`, `quality.subgroup_chart`, and `quality.gage_run_chart` now validate runner-boundary options through typed contracts. They reject malformed payloads with `invalid_individuals_chart_options`, `invalid_subgroup_chart_options`, or `invalid_gage_run_chart_options` before row snapshot/result artifacts are written, and frontend analysis error guidance now explains these codes.
+- `eda.descriptive`, `regression.pearson`, and `regression.xy_correlation` now validate runner-boundary options through typed contracts. They reject malformed payloads with `invalid_descriptive_options`, `invalid_pearson_options`, or `invalid_xy_correlation_options` before row snapshot/result artifacts are written, and frontend analysis error guidance now explains these codes.
+- Quality/DOE partial reference coverage was strengthened without adding new executable methods. `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`, and `doe.factorial_design` now have fixture-backed regression tests for existing formulas, warnings, redaction behavior, design SHA-256, and deterministic run ordering; independent industrial package fixtures for capability and Gage R&R remain future work.
+- The first report/export stabilization slice is available for stored analysis results. `POST /api/v1/analysis-runs/{analysis_id}/exports/json` revalidates the stored result checksum, writes an atomic `analysis_result_json_export` artifact, records it in `analysis_artifacts`, returns a typed frontend-synchronized response, and does not expose internal workspace paths.
+- Dedicated DOE design reports are available through `GET /api/v1/doe-designs/{design_id}/report.html`. The response is a self-contained static HTML download built from verified design metadata plus stored response series, with escaped text and no internal path exposure; it does not create or imply DOE effects, OLS, ANOVA, diagnostics, or chart results.
+- Analysis provenance now builds `build_commit` consistently by preferring `Settings.git_commit` and falling back to `DATALAB_GIT_COMMIT`; provenance tests continue to assert that raw paths, original filenames, and raw cell values are not exposed.
+- `docs/statistical_method_audit_matrix.md` now includes method-by-method verification depth for reference fixtures, hand tests, API contract coverage, edge/failure tests, effect/CI definitions, and known limitation visibility. Partial coverage for `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`, and `doe.factorial_design` is recorded explicitly.
+- Rows preview remains intentionally conservative: each paginated preview verifies the full canonical JSONL artifact before returning a page. `docs/datasets.md` and `docs/storage.md` now record the large-dataset cost and future cache/index/hash improvement candidates.
 - Paginated row preview now verifies the full canonical JSONL artifact before returning any preview page, so a small `limit` cannot bypass final row count, byte size, SHA-256, row-index, column-count, or value-type checks.
 - Schema PATCH now treats unchanged display name, measurement level, role, and unit payloads as no-ops. No-op PATCH keeps the same `schema_hash` and does not mark existing analysis runs stale; real schema changes still mark existing runs stale.
-- Generic analysis-run result envelopes now carry runtime/build provenance fields for Python version, platform, optional `DATALAB_GIT_COMMIT`, and NumPy/SciPy package versions without exposing raw paths or raw cell values.
+- Generic analysis-run result envelopes now carry runtime/build provenance fields for Python version, platform, `Settings.git_commit` with `DATALAB_GIT_COMMIT` fallback, and NumPy/SciPy package versions without exposing raw paths or raw cell values.
 - Common analysis-run execution helpers for row snapshot artifacts, filter row freezing, provenance construction, canonical result/config JSON, result paths, successful result persistence, and compensating file cleanup now live in `services/analysis_run_execution.py` so method-family runner modules can be split without circular imports.
 - `analysis_runs.py` now dispatches the four EDA methods, all eight hypothesis methods, all three categorical methods, the three generic regression analysis-run methods, and all six current quality analysis-run methods through a shared `MethodExecutionHandler` registry. Handler metadata and missing-runner validation live in `services/analysis_method_handlers.py`; the four EDA runner functions and EDA-specific selection/warning helpers live in `services/analysis_runners_eda.py`; the eight hypothesis runner functions and hypothesis selection/warning helpers live in `services/analysis_runners_hypothesis.py`; the three categorical runner functions and categorical selection/warning helpers live in `services/analysis_runners_categorical.py`; the three generic regression runner functions, regression selection/warning helpers, and `regression.linear_model` safe JSON model-manifest persistence live in `services/analysis_runners_regression.py`; the six current quality runner functions plus quality-specific selection/warning helpers live in `services/analysis_runners_quality.py`; `regression.predict` remains on the dedicated stored-model API path, while `doe.factorial_design` remains on dedicated DOE design routes instead of the generic analysis-run endpoint.
 - `docs/statistical_method_audit_matrix.md` records the current registry, execution path, method-level tests, effect/provenance coverage, and known limitations for all 29 stable method IDs.
 - `docs/ci_status.md` records the Windows workflow trigger configuration and the current limitation that authenticated remote GitHub Actions run listing was not available from this environment.
-- Latest local Windows validation after the persistence boundary contract test: `scripts/check.ps1` passed with backend pytest 277 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+- Latest local Windows validation after the high-risk statistical QA and method-contract stabilization slice: `scripts/check.ps1` passed with backend pytest 363 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
 - EDA, categorical, hypothesis, quality, and simple generic regression runner modules now use the shared `store_succeeded_analysis_result` helper for result JSON writing, checksum calculation, analysis run/artifact metadata insertion, and result-file cleanup on metadata insert failure. `regression.linear_model` uses a regression-specific manifest-aware persistence wrapper that preserves `regression_model_manifest` artifact registration and cleanup.
 - Backend API contract tests now assert the persistence boundary explicitly: result-only runner modules must not import low-level metadata insert or file-write primitives, while `regression.linear_model` keeps the manifest-aware regression-model insert path.
 
@@ -76,7 +93,7 @@ Current stabilization update:
 | `quality.capability` | Done for D1 normal capability first slice | stdlib normal capability for one numeric measurement column with LSL and/or USL plus optional target; complete-case exclusions; overall sample SD, within sigma from canonical adjacent `MRbar/d2`; Cp/Cpk and Pp/Ppk side indices, one-sided spec handling, observed nonconformance counts/ppm, expected normal-model nonconformance probabilities/ppm, histogram/fitted-normal/spec-line payload, canonical row reader, persisted result JSON, row snapshot provenance, unit/API tests, and inline SVG histogram UI; Cpm, confidence intervals, non-normal capability, transformations, subgroup pooled sigma, automatic stability approval, and chart export artifacts remain out of scope |
 | `quality.gage_rr` | Done for C3 balanced crossed ANOVA first slice | SciPy-backed balanced crossed ANOVA Gage R&R for one numeric measurement column plus part/operator/replicate columns; complete-case exclusions; strict balanced crossed design validation; ANOVA table; raw and final variance components; repeatability, reproducibility, total Gage R&R, part-to-part, total variation; % contribution; % study variation; ndc; negative raw variance component reporting with final variance clamped to zero; no part/operator/replicate raw labels; canonical row reader; persisted result JSON; row snapshot provenance; unit/API tests; minimal frontend preflight/run/result table UI. Nested, unbalanced, expanded Gage R&R, tolerance/process variation, pooling selection, component/interaction plots, and chart export artifacts remain out of scope. |
 | `quality.gage_run_chart` | Done for C3 diagnostic chart first slice | stdlib balanced crossed Gage Run Chart for one numeric measurement column plus part/operator/replicate columns and optional numeric/datetime order column; complete-case exclusions; strict balanced crossed design validation; capped indexed chart points; overall, part-index, and operator-index summaries; diagnostic-only warnings; no part/operator/replicate raw labels; canonical row reader; persisted result JSON; row snapshot provenance; unit/API tests; minimal inline SVG frontend chart UI. Component/interaction plots, faceting, exported chart artifacts, variance components, and paged chart payloads remain out of scope. |
-| `doe.factorial_design` | Done for D1 design-asset plus response-entry slices | stdlib 2-level full factorial design generation for 2-6 factors with low/high/unit, replicates, center points, optional blocks, randomization on/off and seed, preserved standard/run order, deterministic design SHA-256, schema v7 design/version/run metadata, schema v8 run response metadata, dedicated create/read/response API, generic analysis-run guard, unit/API/migration tests, and minimal Workbench run-table preview/response-entry UI. Effects, OLS/ANOVA, diagnostics, alias structure, DOE charts, and export remain out of scope. |
+| `doe.factorial_design` | Done for D1 design-asset plus response-entry/report slices | stdlib 2-level full factorial design generation for 2-6 factors with low/high/unit, replicates, center points, optional blocks, randomization on/off and seed, preserved standard/run order, deterministic design SHA-256, schema v7 design/version/run metadata, schema v8 run response metadata, dedicated create/read/response/report API, generic analysis-run guard, unit/API/migration tests, and minimal Workbench run-table preview/response-entry UI. Effects, OLS/ANOVA, diagnostics, alias structure, DOE charts, and stored export artifacts remain out of scope. |
 | Analysis stale handling | Done for schema edits | schema PATCH marks existing runs for the same dataset version `stale=true` in the same SQLite transaction |
 | Metadata migration | Done | schema version `8`, `datasets`, `dataset_versions`, `dataset_columns`, `dataset_artifacts`, `analysis_runs`, `analysis_artifacts`, `jobs`, `regression_models`, `experiment_designs`, `experiment_design_versions`, `experiment_runs`, `experiment_run_responses`, upgrade tests from versions 1, 2, 3, 4, 5, 6, and 7 |
 | Canonical parsed artifact | Done for stdlib delimited-text slice | UTF-8 JSONL canonical rows plus JSON manifest are materialized with SHA-256 metadata; Parquet remains candidate after `pyarrow` review |
@@ -141,7 +158,7 @@ Last validated on 2026-07-02:
   backend pytest 270 tests, frontend Vitest 40 tests, frontend lint/typecheck,
   and frontend build.
 - Current `quality.gage_run_chart` slice: balanced crossed Gage Run Chart is available for one numeric measurement column plus part/operator/replicate columns and an optional order column. The method reads canonical rows, persists row snapshot provenance and result JSON, supports checksum-validated result retrieval, and returns diagnostic-only warning metadata, balanced design counts, overall summary, per-part-index and per-operator-index summaries, capped indexed chart points, canonical row positions, and order-source metadata. It rejects unbalanced or underspecified Gage designs instead of downgrading to a simple run chart, and it redacts raw part/operator/replicate labels from result payloads. Frontend renders `GageRunChartPanel` with role selectors, optional order selector, inline SVG indexed diagnostic chart, and part/operator summary tables. Targeted backend pytest for `test_gage_run_chart.py` and selected Gage/API/catalog contracts passed with 7 selected tests. Backend ruff and mypy passed. Frontend lint, typecheck, and Vitest passed with 39 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 252 tests, frontend Vitest 39 tests, frontend lint/typecheck, and frontend build.
-- Current `doe.factorial_design` slice: 2-level full factorial design generation and response entry are available through dedicated DOE design routes, not through the generic analysis-run endpoint. The generator preserves standard order and run order, supports deterministic randomization seed, replicates, center points, optional blocks, factor low/high/unit metadata, explicit run-count rejection, and `design_sha256`. Schema v7 stores design/version/run records, schema v8 stores numeric run response records, and readback verifies the design checksum before returning payloads. Response saving requires exactly one finite numeric value for every current run_order and does not mutate factor/run metadata. Frontend renders `FactorialDesignPanel` with inputs, actual run-table preview, and response name/unit/value entry. Effects, OLS/ANOVA, diagnostics, alias structure, DOE charts, and export remain out of scope. WSL temporary backend targeted pytest for `test_metadata_store.py` and `test_api_contracts.py` passed with 95 tests; WSL temporary backend full ruff/mypy/pytest passed with 263 backend tests; WSL frontend lint, typecheck, Vitest with 40 tests, and build passed; Windows `scripts/check.ps1` passed with backend pytest 263 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+- Current `doe.factorial_design` slice: 2-level full factorial design generation, response entry, and a checksum-verified static HTML design report are available through dedicated DOE design routes, not through the generic analysis-run endpoint. The generator preserves standard order and run order, supports deterministic randomization seed, replicates, center points, optional blocks, factor low/high/unit metadata, explicit run-count rejection, and `design_sha256`. Schema v7 stores design/version/run records, schema v8 stores numeric run response records, and readback/report rendering verifies the design checksum before returning payloads. Response saving requires exactly one finite numeric value for every current run_order and does not mutate factor/run metadata. Frontend renders `FactorialDesignPanel` with inputs, actual run-table preview, and response name/unit/value entry. Effects, OLS/ANOVA, diagnostics, alias structure, DOE charts, and stored export artifacts remain out of scope. WSL temporary backend targeted pytest for `test_metadata_store.py` and `test_api_contracts.py` passed with 95 tests; WSL temporary backend full ruff/mypy/pytest passed with 263 backend tests; WSL frontend lint, typecheck, Vitest with 40 tests, and build passed; Windows `scripts/check.ps1` passed with backend pytest 263 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
 
 - Current `quality.gage_rr` slice: balanced crossed ANOVA Gage R&R is available for one numeric measurement column plus part/operator/replicate columns. The preflight API still reports design readiness without raw identifier labels, and `POST /api/v1/analysis-runs` now executes the validated design from canonical rows, persists row snapshot provenance and result JSON, and supports checksum-validated result retrieval. The method returns an ANOVA table, raw/final variance components, repeatability, reproducibility, total Gage R&R, part-to-part, total variation, % contribution, % study variation, ndc, negative variance component clamp policy, interaction no-pooling policy, and persistent design/independence/redaction warnings. It rejects unbalanced designs and zero total variation instead of fabricating output. Frontend renders `GageRrPreflightPanel` with role selectors, readiness summary, execution control, ANOVA table, variance component table, and headline %Study/NDC values. Targeted backend pytest for `test_gage_rr.py`, `test_gage_rr_preflight.py`, and selected Gage/API/catalog contracts passed with 12 selected tests. Frontend typecheck and Vitest passed with 38 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 247 tests, frontend Vitest 38 tests, frontend lint/typecheck, and frontend build.
 - Current `quality.capability` slice: normal capability analysis is available for one numeric measurement column with LSL and/or USL plus optional target. The method reads canonical rows, applies complete-case exclusions, computes overall sample SD, within sigma from canonical adjacent `MRbar/d2`, Cp/Cpk and Pp/Ppk side indices, observed below/above/total nonconformance counts and ppm, expected normal-model nonconformance probabilities and ppm, row snapshot provenance, and histogram/fitted-normal/spec-line payloads. It rejects missing spec limits, invalid spec ordering, target outside spec, too-small N, and zero sigma instead of fabricating indices. Frontend renders LSL/USL/target controls, inline SVG histogram with fitted normal curve and spec lines, capability index table, and observed/expected nonconformance table. Targeted backend pytest for `test_capability.py` and selected capability API/catalog contracts passed with 6 selected tests. Frontend typecheck and Vitest passed with 37 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 237 tests, frontend Vitest 37 tests, frontend lint/typecheck, and frontend build.
@@ -224,3 +241,495 @@ The next slice should stay narrow and avoid mock statistics:
 1. Implement the next real method only after its statistical dependency, reference fixtures, warning metadata, and provenance contract are ready.
 2. Keep every method except the current twenty-four analysis-run methods and dedicated `doe.factorial_design` design API non-executable until it has real code and tests.
 3. Keep Bayesian optimization, DOE response/effects/ANOVA, response optimizer, general ML, and broader quality-control methods out of the next slice unless the user explicitly changes gates.
+
+## Progress Update 94 - Analysis Result JSON Export UI
+
+Completed in current working tree:
+
+- Added a minimal frontend JSON export action for succeeded saved analysis
+  results.
+- The Workbench now shows the export action directly under the selected
+  method's execution panel and keeps export failures in the same local analysis
+  area.
+- The UI calls the existing checksum-validating
+  `POST /api/v1/analysis-runs/{analysis_id}/exports/json` API and displays
+  matching export size, short SHA-256, and stale status metadata.
+- Export status is matched by `analysis_id` so a previous method's export is
+  not shown for the newly selected result.
+- Added frontend render tests for the JSON export action and matching export
+  metadata.
+- Kept CSV, HTML, PDF, chart image export, report composition, file download
+  response, and code export out of scope for this slice.
+
+Validation:
+
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 42 tests after
+  stabilizing the SSR hash assertion.
+- WSL `npm --prefix ./frontend run lint`: passed.
+- `git diff --check`: passed.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 363 tests, frontend lint/typecheck, frontend Vitest 42 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- The UI creates a JSON export artifact and shows its metadata, but does not yet
+  download the file.
+- CSV/HTML/PDF/report/code exports remain unimplemented.
+- Export retention/deletion policy is still inherited from generic analysis
+  artifact storage.
+
+Next PR:
+
+- Define CSV table export and HTML report contracts, including formula
+  injection protection and path-exposure tests, before adding broader report
+  UI.
+
+## Progress Update 95 - Analysis Result CSV Export Contract
+
+Completed in current working tree:
+
+- Added `POST /api/v1/analysis-runs/{analysis_id}/exports/csv`.
+- The CSV export service reloads the stored analysis result through the same
+  checksum-validated path as result retrieval and JSON export.
+- The first CSV artifact contract is a generic long-form `section,path,value`
+  table over the stored result envelope, so it adds no new statistics and works
+  across current methods.
+- CSV cells are escaped for spreadsheet formula injection when they start, after
+  leading whitespace, with `=`, `+`, `-`, or `@`, or begin with tab/newline
+  control characters.
+- The API response exposes export ID, media type, SHA-256, size, source result
+  SHA-256, stale flag, row count, columns, and preview rows without exposing
+  internal artifact paths.
+- Added frontend API type/client wiring and a minimal CSV action/status next to
+  the existing JSON export action.
+- Kept HTML/PDF report composition, file download responses, method-specific
+  CSV report tables, chart image export, and code export out of scope.
+
+Validation:
+
+- Targeted Windows pytest for JSON/CSV export contract tests passed with 4
+  selected tests.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 43 tests after
+  stabilizing the SSR row-count assertion.
+- WSL `npm --prefix ./frontend run lint`: passed.
+- Targeted backend ruff check and backend mypy passed.
+- `git diff --check`: passed.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 365 tests, frontend lint/typecheck, frontend Vitest 43 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- CSV export is a generic envelope table, not a polished method-specific report
+  table.
+- The UI creates JSON/CSV export artifacts and shows metadata, but does not yet
+  download the files.
+- HTML report composition remains unimplemented.
+
+Next PR:
+
+- Add artifact download responses for created JSON/CSV exports, or define the
+  first HTML report envelope with path-exposure and formula-injection tests.
+
+## Progress Update 96 - Analysis Result Export Download
+
+Completed in current working tree:
+
+- Added `GET /api/v1/analysis-runs/{analysis_id}/exports/{export_id}/download`
+  for stored JSON/CSV analysis-result exports.
+- Download lookup uses `analysis_artifacts` by `analysis_id` and `export_id`,
+  accepts only `analysis_result_json_export` and `analysis_result_csv_export`,
+  validates the stored relative path, file existence, and SHA-256 before
+  returning bytes, and does not expose internal workspace paths.
+- Download responses use attachment filenames derived only from analysis/export
+  IDs and set `X-Content-Type-Options: nosniff`.
+- Added stable recovery errors for download failures:
+  `analysis_export_not_found`, `analysis_export_path_invalid`,
+  `analysis_export_file_missing`, and `analysis_export_checksum_mismatch`.
+- Added frontend download wiring for the existing JSON/CSV export metadata cards,
+  with download failures shown inside the export panel instead of the global page
+  header.
+- Kept HTML/PDF report composition, method-specific CSV report tables, chart
+  image export, and code export out of scope.
+
+Validation:
+
+- Targeted Windows pytest for the export download route passed with 2 selected
+  tests.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 44 tests.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 367 tests, frontend lint/typecheck, frontend Vitest 44 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- CSV export remains a generic envelope table, not a method-specific report
+  table.
+- HTML/PDF report composition and chart artifact export remain unimplemented.
+- Export retention/deletion policy is still inherited from generic analysis
+  artifact storage.
+
+Next PR:
+
+- Define the first HTML report envelope or method-specific CSV/table export
+  contract with path-exposure, checksum, and formula-injection tests.
+
+## Progress Update 97 - Analysis Result HTML Report Export
+
+Completed in current working tree:
+
+- Added `POST /api/v1/analysis-runs/{analysis_id}/exports/html` for the first
+  stored analysis-result HTML report artifact.
+- The HTML report export reloads the stored result through the existing
+  checksum-validated result path before writing any artifact.
+- The report artifact is recorded as `analysis_result_html_report` with media
+  type `text/html`, SHA-256, size, stale flag, source result SHA-256, and a
+  minimal section count response.
+- The first report is a static self-contained HTML envelope over the stored
+  result, with escaped text values, no scripts, no external resources, no
+  external services, and no internal workspace path exposure.
+- Existing export download now supports JSON, CSV, and HTML report artifacts
+  through the same metadata/path/checksum validation path.
+- The Workbench export panel now offers `HTML 생성` and `HTML 다운로드` beside
+  the JSON/CSV export actions.
+- No new statistical calculation, fake statistic, or chart artifact was added.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  passed with 2 selected tests on Python 3.10.11 / win32.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 45 tests.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 369 tests, frontend lint/typecheck, frontend Vitest 45 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- The HTML report is a generic result-envelope report, not a polished
+  method-specific statistical narrative or branded report template.
+- PDF, chart image export, report composition across multiple analyses, and
+  reproducible Python code export remain unimplemented.
+- Export retention/deletion policy is still inherited from generic analysis
+  artifact storage.
+
+Next PR:
+
+- Add method-specific report sections for one narrow method family, or define
+  reproducible Python code export with path-exposure and provenance tests.
+
+## Progress Update 98 - Descriptive HTML Report Section
+
+Completed in current working tree:
+
+- Added the first method-specific HTML report section for stored
+  `eda.descriptive` results.
+- The report now renders a dedicated "기술통계 요약" table with stored column
+  names, N totals, N used, missing/non-numeric counts, mean, standard
+  deviation, min, quartiles, median, max, and warning codes.
+- The method-specific section reads only the persisted analysis result envelope;
+  it does not recalculate statistics, read raw rows, or change analysis result
+  schemas.
+- The generic result-envelope table remains as fallback for all methods and as
+  the full-detail section for descriptive reports.
+- HTML escaping, no-script/no-external-resource behavior, export artifact
+  checksum recording, and download checksum validation remain unchanged.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  passed with 2 selected tests on Python 3.10.11 / win32.
+- Targeted backend ruff check and backend mypy passed.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 45 tests.
+- WSL `npm --prefix ./frontend run lint`: passed.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 369 tests, frontend lint/typecheck, frontend Vitest 45 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- Only `eda.descriptive` has a method-specific HTML section.
+- HTML report styling is still basic and local/static; PDF, chart image export,
+  multi-analysis report composition, and Python code export remain out of
+  scope.
+
+Next PR:
+
+- Add method-specific report sections for one more narrow family, or begin the
+  reproducible Python code export contract.
+
+## Progress Update 99 - EDA HTML Report Sections
+
+Completed in current working tree:
+
+- Expanded the stored-result HTML report from `eda.descriptive` only to the
+  first EDA method family slice:
+  - `eda.graphical_summary`;
+  - `eda.normality`;
+  - `eda.equal_variances`.
+- Added a `그래프 요약` section with stored N, missing/non-numeric counts,
+  quartiles, histogram bin count, boxplot outlier count, Q-Q point count, and
+  ECDF point count.
+- Added a `정규성 검정 요약` section with stored shape statistics,
+  Shapiro-Wilk values, Anderson-Darling values, Q-Q point count, and warning
+  codes.
+- Added `등분산 검정 요약` and `등분산 그룹 요약` sections with stored Levene /
+  Brown-Forsythe results and group summary statistics.
+- These sections read only the persisted analysis result envelope. They do not
+  re-read canonical rows, regenerate charts, recalculate statistics, or add new
+  method availability.
+- Generic result-envelope fallback, HTML escaping, checksum validation, static
+  no-script/no-external-resource behavior, and internal path hiding remain
+  unchanged.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  passed with 3 selected tests on Python 3.10.11 / win32.
+- Targeted backend ruff check passed for `analysis_runs.py` and
+  `test_api_contracts.py`.
+- Targeted backend mypy passed for `analysis_runs.py`.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed after applying
+  ruff formatting, with backend ruff check, backend ruff format check, backend
+  mypy over 75 source files, backend pytest 370 tests, frontend lint/typecheck,
+  frontend Vitest 45 tests, and frontend build.
+
+Remaining limitations:
+
+- HTML report sections are summary tables over stored JSON payloads, not
+  generated chart images or a polished narrative report.
+- Only EDA descriptive/graphical/normality/equal-variances methods have
+  method-specific HTML sections.
+- PDF, chart image export, multi-analysis report composition, and reproducible
+  Python code export remain out of scope.
+
+Next PR:
+
+- Continue method-specific HTML sections for one narrow method family, or start
+  the reproducible Python code export contract with provenance/checksum tests.
+
+## Progress Update 100 - Hypothesis HTML Report Sections
+
+Completed in current working tree:
+
+- Added stored-result-only HTML report sections for the current generic
+  `hypothesis.*` analysis-run methods:
+  - `hypothesis.one_sample_t`;
+  - `hypothesis.paired_t`;
+  - `hypothesis.one_sample_wilcoxon`;
+  - `hypothesis.two_sample_t`;
+  - `hypothesis.mann_whitney`;
+  - `hypothesis.kruskal_wallis`;
+  - `hypothesis.one_way_anova`;
+  - `hypothesis.equivalence_tost`.
+- The report now renders a `가설 검정 요약` table with stored method, N,
+  alpha, confidence level, alternative, missing policy, estimate, statistic,
+  p-value, confidence interval, effect size, and equivalence-specific TOST
+  fields when present.
+- Added optional stored-result group and post-hoc comparison tables for methods
+  whose payload includes `groups` or `posthoc.comparisons`.
+- The renderer reads only the persisted result envelope. It does not re-read
+  canonical rows, recalculate statistics, reinterpret hypotheses, add chart
+  artifacts, or change method availability.
+- Generic result-envelope fallback, HTML escaping, checksum validation, static
+  no-script/no-external-resource behavior, and internal path hiding remain
+  unchanged.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  passed with 4 selected tests on Python 3.10.11 / win32.
+- Targeted backend ruff check passed for `analysis_runs.py` and
+  `test_api_contracts.py`.
+- Targeted backend mypy passed for `analysis_runs.py`.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 371 tests, frontend lint/typecheck, frontend Vitest 45 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- Hypothesis HTML sections are summary tables over stored JSON payloads, not
+  a polished statistical narrative.
+- Post-hoc tables are generic across ANOVA/Kruskal payloads and intentionally
+  do not recalculate or reshape method-specific multiple-comparison statistics.
+- PDF, chart image export, multi-analysis report composition, and reproducible
+  Python code export remain out of scope.
+
+Next PR:
+
+- Add method-specific HTML sections for categorical or regression methods, or
+  start reproducible Python code export with provenance/checksum tests.
+
+## Progress Update 101 - Categorical And Regression HTML Report Sections
+
+Completed in current working tree:
+
+- Added stored-result-only HTML report sections for categorical methods:
+  - `categorical.one_proportion`;
+  - `categorical.two_proportion`;
+  - `categorical.chi_square_association`.
+- Added stored-result-only HTML report sections for correlation/regression
+  methods:
+  - `regression.pearson`;
+  - `regression.xy_correlation`;
+  - `regression.linear_model`.
+- The categorical section renders N, alpha, confidence level, event level,
+  event/non-event counts, sample proportion, difference estimate/CI, test
+  p-value, effect size, expected-count diagnostics, group summaries, and
+  aggregate contingency table counts when present.
+- The regression section renders correlation metrics, pairwise X/Y correlation
+  summaries, linear-model fit metrics, model ID, and coefficient estimates,
+  standard errors, p-values, confidence intervals, and VIF values when present.
+- These sections read only the persisted analysis result envelope. They do not
+  re-read canonical rows, expose internal paths, regenerate scatter points,
+  recalculate statistics, add chart artifacts, or change method availability.
+- Generic result-envelope fallback, HTML escaping, checksum validation, static
+  no-script/no-external-resource behavior, and internal path hiding remain
+  unchanged.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  passed with 6 selected tests on Python 3.10.11 / win32.
+- Targeted backend ruff check passed for `analysis_runs.py` and
+  `test_api_contracts.py`.
+- Targeted backend mypy passed for `analysis_runs.py`.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 373 tests, frontend lint/typecheck, frontend Vitest 45 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- Categorical and regression HTML sections are summary tables over stored JSON
+  payloads, not polished statistical narratives.
+- The regression section intentionally does not render raw scatterplot point
+  rows or diagnostic point rows in the method-specific section.
+- PDF, chart image export, multi-analysis report composition, and reproducible
+  Python code export remain out of scope.
+
+Next PR:
+
+- Add method-specific HTML sections for quality-control methods, or start
+  reproducible Python code export with provenance/checksum tests.
+
+## Progress Update 102 - Quality HTML Report Sections
+
+Completed in current working tree:
+
+- Added stored-result-only HTML report sections for quality-control methods:
+  - `quality.individuals_chart`;
+  - `quality.subgroup_chart`;
+  - `quality.run_chart`;
+  - `quality.capability`;
+  - `quality.gage_rr`;
+  - `quality.gage_run_chart`.
+- The quality section renders N, missing policy, order source, chart type,
+  subgroup size/count, centerline, sigma/MR-bar, run counts, process capability
+  spec/nonconformance summaries, Gage design counts, measurement summary, chart
+  point counts, signal counts, and control-rule counts when present.
+- Added optional quality chart, signal, capability, and Gage R&R variance
+  tables over the persisted payload.
+- These sections read only the persisted analysis result envelope. They do not
+  re-read canonical rows, regenerate chart images, recalculate control limits,
+  expose redacted Gage labels, add fake chart artifacts, or change method
+  availability.
+- Generic result-envelope fallback, HTML escaping, checksum validation, static
+  no-script/no-external-resource behavior, and internal path hiding remain
+  unchanged.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  passed with 8 selected tests on Python 3.10.11 / win32.
+- Targeted backend ruff check passed for `analysis_runs.py` and
+  `test_api_contracts.py`.
+- Targeted backend mypy passed for `analysis_runs.py`.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 375 tests, frontend lint/typecheck, frontend Vitest 45 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- Quality HTML sections are summary tables over stored JSON payloads, not
+  polished statistical narratives or image-based chart reports.
+- The method-specific section intentionally avoids rendering full chart points
+  and diagnostic point rows.
+- PDF, chart image export, multi-analysis report composition, DOE report
+  sections, and reproducible Python code export remain out of scope.
+
+Next PR:
+
+- Add a DOE design HTML report section, or start reproducible Python code
+  export with provenance/checksum tests.
+
+## Progress Update 103 - DOE Design HTML Report Download
+
+Completed in current working tree:
+
+- Added `GET /api/v1/doe-designs/{design_id}/report.html` for dedicated
+  factorial DOE design reports.
+- The report reuses the existing DOE design checksum verification path before
+  rendering, then includes stored design metadata, factor levels, run order,
+  options, and entered response series.
+- The HTML is static and self-contained, escapes all text values, includes no
+  scripts or external resources, and does not expose internal workspace paths.
+- Kept DOE effects, OLS, ANOVA, diagnostics, alias structure, chart payloads,
+  analysis-run result artifacts, fake statistics, and mock charts out of scope.
+- Added API contract coverage for successful report download, escaped factor
+  and response labels, path non-exposure, and checksum mismatch rejection.
+
+Validation:
+
+- Targeted pytest:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "factorial_design"`:
+  passed with 7 selected tests on Python 3.10.11 / win32.
+- Targeted backend ruff check passed for `doe_designs.py`,
+  `api/v1/doe_designs.py`, and `test_api_contracts.py`.
+- Targeted backend mypy passed for `doe_designs.py` and
+  `api/v1/doe_designs.py`.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 377 tests, frontend lint/typecheck, frontend Vitest 45 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- DOE report is a design/response report only, not an effects or analysis
+  report.
+- The report is generated dynamically from verified metadata and is not yet a
+  persisted export artifact.
+- Frontend DOE report download wiring is not added in this slice.
+
+Next PR:
+
+- Add a small frontend DOE report download action, or start reproducible Python
+  code export for stored analysis results.

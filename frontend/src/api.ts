@@ -2657,6 +2657,54 @@ export interface AnalysisResultEnvelope {
     | null;
 }
 
+export interface AnalysisResultJsonExportResponse {
+  schema_version: number;
+  export_id: string;
+  analysis_id: string;
+  format: "analysis_result_json";
+  artifact_kind: "analysis_result_json_export";
+  media_type: "application/json";
+  sha256: string;
+  size_bytes: number;
+  source_result_sha256: string;
+  stale: boolean;
+  created_at: string;
+  result: AnalysisResultEnvelope;
+}
+
+export interface AnalysisResultCsvExportResponse {
+  schema_version: number;
+  export_id: string;
+  analysis_id: string;
+  format: "analysis_result_csv";
+  artifact_kind: "analysis_result_csv_export";
+  media_type: "text/csv";
+  sha256: string;
+  size_bytes: number;
+  source_result_sha256: string;
+  stale: boolean;
+  created_at: string;
+  columns: string[];
+  row_count: number;
+  preview_rows: string[][];
+}
+
+export interface AnalysisResultHtmlReportResponse {
+  schema_version: number;
+  export_id: string;
+  analysis_id: string;
+  format: "analysis_result_html_report";
+  artifact_kind: "analysis_result_html_report";
+  media_type: "text/html";
+  sha256: string;
+  size_bytes: number;
+  source_result_sha256: string;
+  stale: boolean;
+  created_at: string;
+  title: string;
+  section_count: number;
+}
+
 export function getApiBaseUrl(): string {
   const configuredBaseUrl: unknown = import.meta.env.VITE_API_BASE_URL;
   if (typeof configuredBaseUrl === "string" && configuredBaseUrl.length > 0) {
@@ -2923,6 +2971,88 @@ export async function createAnalysisRun(
   return (await response.json()) as AnalysisResultEnvelope;
 }
 
+export async function createAnalysisResultJsonExport(
+  analysisId: string,
+): Promise<AnalysisResultJsonExportResponse> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/analysis-runs/${analysisId}/exports/json`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_result_json_export_failed"));
+  }
+
+  return (await response.json()) as AnalysisResultJsonExportResponse;
+}
+
+export async function createAnalysisResultCsvExport(
+  analysisId: string,
+): Promise<AnalysisResultCsvExportResponse> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/analysis-runs/${analysisId}/exports/csv`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_result_csv_export_failed"));
+  }
+
+  return (await response.json()) as AnalysisResultCsvExportResponse;
+}
+
+export async function createAnalysisResultHtmlReport(
+  analysisId: string,
+): Promise<AnalysisResultHtmlReportResponse> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/analysis-runs/${analysisId}/exports/html`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_result_html_report_failed"));
+  }
+
+  return (await response.json()) as AnalysisResultHtmlReportResponse;
+}
+
+export async function downloadAnalysisResultExport(
+  analysisId: string,
+  exportId: string,
+): Promise<void> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/analysis-runs/${analysisId}/exports/${exportId}/download`,
+    {
+      method: "GET",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_result_export_download_failed"));
+  }
+
+  const blob = await response.blob();
+  const filename =
+    filenameFromContentDisposition(response.headers.get("content-disposition")) ??
+    `datalab-analysis-${analysisId}-export-${exportId}`;
+  triggerBrowserDownload(blob, filename);
+}
+
 export async function fetchRegressionPredictionPreflight(
   modelId: string,
   request: RegressionPredictionPreflightRequest,
@@ -3015,4 +3145,35 @@ async function apiErrorCode(response: Response, fallback: string): Promise<strin
     return fallback;
   }
   return fallback;
+}
+
+function filenameFromContentDisposition(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  const quoted = /filename="([^"]+)"/i.exec(value);
+  if (quoted !== null) {
+    return quoted[1];
+  }
+  const unquoted = /filename=([^;]+)/i.exec(value);
+  return unquoted === null ? null : unquoted[1].trim();
+}
+
+function triggerBrowserDownload(blob: Blob, filename: string): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.rel = "noopener";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }

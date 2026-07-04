@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -7,6 +8,9 @@ from app.statistics.gage_run_chart import (
     GageRunChartError,
     calculate_gage_run_chart,
 )
+
+INPUT_FIXTURE = Path("backend/tests/reference/fixtures/gage_run_chart_input.json")
+REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/gage_run_chart_reference.json")
 
 
 def test_gage_run_chart_balanced_design_redacts_labels_and_summarizes_patterns() -> None:
@@ -77,6 +81,36 @@ def test_gage_run_chart_uses_canonical_order_and_caps_points() -> None:
     assert "gage_run_chart_points_truncated" in result["warnings"]
 
 
+def test_gage_run_chart_matches_reference_fixture() -> None:
+    input_fixture = json.loads(INPUT_FIXTURE.read_text(encoding="utf-8"))
+    reference = json.loads(REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    cases_by_id = {case["case_id"]: case for case in reference["cases"]}
+
+    for case in input_fixture["cases"]:
+        result = calculate_gage_run_chart(
+            case["rows"],
+            measurement_column=_column("measurement", 0, data_type="decimal"),
+            part_column=_column("part", 1, role="part_id"),
+            operator_column=_column("operator", 2, role="operator_id"),
+            replicate_column=_column("replicate", 3, role="replicate_id"),
+            order_column=_column("run", 4, data_type="integer", role="order"),
+            point_limit=case["point_limit"],
+        )
+        expected = cases_by_id[case["case_id"]]
+
+        _assert_numeric_mapping(result["summary"], expected["summary"])
+        _assert_summary_rows(result["part_summaries"], expected["part_summaries"])
+        _assert_summary_rows(result["operator_summaries"], expected["operator_summaries"])
+        _assert_numeric_mapping(
+            result["chart"]["points"][0],
+            expected["first_chart_point"],
+        )
+        assert result["warnings"] == expected["warnings"]
+        serialized = json.dumps(result, ensure_ascii=False)
+        assert "Part A" not in serialized
+        assert "Operator 1" not in serialized
+
+
 def test_gage_run_chart_rejects_invalid_designs_without_fake_points() -> None:
     with pytest.raises(GageRunChartError, match="gage_run_chart_unbalanced_crossed_design"):
         calculate_gage_run_chart(
@@ -145,3 +179,19 @@ def _column(
         role=role,
         unit=None,
     )
+
+
+def _assert_summary_rows(
+    actual_rows: object,
+    expected_rows: list[dict[str, object]],
+) -> None:
+    assert isinstance(actual_rows, list)
+    assert len(actual_rows) == len(expected_rows)
+    for actual_row, expected_row in zip(actual_rows, expected_rows, strict=True):
+        _assert_numeric_mapping(actual_row, expected_row)
+
+
+def _assert_numeric_mapping(actual: object, expected: dict[str, object]) -> None:
+    assert isinstance(actual, dict)
+    for key, expected_value in expected.items():
+        assert actual[key] == pytest.approx(expected_value, abs=1e-12)

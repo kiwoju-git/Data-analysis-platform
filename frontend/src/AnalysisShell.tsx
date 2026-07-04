@@ -29,7 +29,10 @@ import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
   AnalysisModuleId,
+  AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
+  AnalysisResultHtmlReportResponse,
+  AnalysisResultJsonExportResponse,
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
@@ -69,6 +72,33 @@ import type { AnalysisFilterDraft } from "./analysisFilters";
 
 type SubgroupChartType = "xbar_r" | "xbar_s";
 
+interface AnalysisResultByMethod {
+  analysisResult: AnalysisResultEnvelope | null;
+  graphicalSummaryAnalysisResult: AnalysisResultEnvelope | null;
+  normalityAnalysisResult: AnalysisResultEnvelope | null;
+  equalVariancesAnalysisResult: AnalysisResultEnvelope | null;
+  oneSampleTAnalysisResult: AnalysisResultEnvelope | null;
+  equivalenceTostAnalysisResult: AnalysisResultEnvelope | null;
+  pairedTAnalysisResult: AnalysisResultEnvelope | null;
+  oneSampleWilcoxonAnalysisResult: AnalysisResultEnvelope | null;
+  twoSampleTAnalysisResult: AnalysisResultEnvelope | null;
+  mannWhitneyAnalysisResult: AnalysisResultEnvelope | null;
+  kruskalWallisAnalysisResult: AnalysisResultEnvelope | null;
+  oneWayAnovaAnalysisResult: AnalysisResultEnvelope | null;
+  oneProportionAnalysisResult: AnalysisResultEnvelope | null;
+  twoProportionAnalysisResult: AnalysisResultEnvelope | null;
+  chiSquareAssociationAnalysisResult: AnalysisResultEnvelope | null;
+  pearsonAnalysisResult: AnalysisResultEnvelope | null;
+  xyCorrelationAnalysisResult: AnalysisResultEnvelope | null;
+  linearModelAnalysisResult: AnalysisResultEnvelope | null;
+  individualsChartAnalysisResult: AnalysisResultEnvelope | null;
+  subgroupChartAnalysisResult: AnalysisResultEnvelope | null;
+  runChartAnalysisResult: AnalysisResultEnvelope | null;
+  capabilityAnalysisResult: AnalysisResultEnvelope | null;
+  gageRrAnalysisResult: AnalysisResultEnvelope | null;
+  gageRunChartAnalysisResult: AnalysisResultEnvelope | null;
+}
+
 export interface AnalysisShellProps {
   analysisCatalog: AnalysisMethodListResponse | null;
   analysisCatalogError: string | null;
@@ -77,6 +107,13 @@ export interface AnalysisShellProps {
   analysisFilterValidationMessage: string | null;
   analysisRunError: string | null;
   analysisResult: AnalysisResultEnvelope | null;
+  analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
+  analysisResultCsvExportError?: string | null;
+  analysisResultExportDownloadError?: string | null;
+  analysisResultHtmlReport?: AnalysisResultHtmlReportResponse | null;
+  analysisResultHtmlReportError?: string | null;
+  analysisResultJsonExport?: AnalysisResultJsonExportResponse | null;
+  analysisResultJsonExportError?: string | null;
   capabilityAnalysisResult?: AnalysisResultEnvelope | null;
   capabilityLsl?: string;
   capabilityResult?: CapabilityResult | null;
@@ -137,7 +174,11 @@ export interface AnalysisShellProps {
   individualsChartResult?: IndividualsChartResult | null;
   individualsChartValueColumnId?: string | null;
   individualsChartValueColumns?: DatasetColumnResponse[];
+  isCreatingAnalysisResultCsvExport?: boolean;
   isCreatingFactorialDesign?: boolean;
+  isCreatingAnalysisResultHtmlReport?: boolean;
+  isCreatingAnalysisResultJsonExport?: boolean;
+  isDownloadingAnalysisResultExport?: boolean;
   isSavingFactorialDesignResponses?: boolean;
   isRunningAnalysis: boolean;
   kruskalWallisAlpha: number;
@@ -288,7 +329,11 @@ export interface AnalysisShellProps {
   onGageRrPartColumnChange?: (columnId: string) => void;
   onGageRrReplicateColumnChange?: (columnId: string) => void;
   onGageRunChartOrderColumnChange?: (columnId: string) => void;
+  onCreateAnalysisResultCsvExport?: (analysisId: string) => void;
   onCreateFactorialDesign?: (request: FactorialDesignCreateRequest) => void;
+  onCreateAnalysisResultHtmlReport?: (analysisId: string) => void;
+  onCreateAnalysisResultJsonExport?: (analysisId: string) => void;
+  onDownloadAnalysisResultExport?: (analysisId: string, exportId: string) => void;
   onSaveFactorialDesignResponses?: (
     designId: string,
     request: DoeDesignResponsesUpsertRequest,
@@ -415,6 +460,13 @@ export function AnalysisShell({
   analysisFilterValidationMessage,
   analysisRunError,
   analysisResult,
+  analysisResultCsvExport = null,
+  analysisResultCsvExportError = null,
+  analysisResultExportDownloadError = null,
+  analysisResultHtmlReport = null,
+  analysisResultHtmlReportError = null,
+  analysisResultJsonExport = null,
+  analysisResultJsonExportError = null,
   capabilityAnalysisResult = null,
   capabilityLsl = "",
   capabilityResult = null,
@@ -469,7 +521,11 @@ export function AnalysisShell({
   gageRunChartOrderColumnId = null,
   gageRunChartOrderColumns = [],
   gageRunChartResult = null,
+  isCreatingAnalysisResultCsvExport = false,
+  isCreatingAnalysisResultHtmlReport = false,
+  isCreatingAnalysisResultJsonExport = false,
   isCreatingFactorialDesign = false,
+  isDownloadingAnalysisResultExport = false,
   isSavingFactorialDesignResponses = false,
   isRunningAnalysis,
   kruskalWallisAlpha,
@@ -626,6 +682,10 @@ export function AnalysisShell({
   onGageRrPartColumnChange = () => undefined,
   onGageRrReplicateColumnChange = () => undefined,
   onGageRunChartOrderColumnChange = () => undefined,
+  onCreateAnalysisResultCsvExport = () => undefined,
+  onCreateAnalysisResultHtmlReport = () => undefined,
+  onCreateAnalysisResultJsonExport = () => undefined,
+  onDownloadAnalysisResultExport = () => undefined,
   onCreateFactorialDesign = () => undefined,
   onSaveFactorialDesignResponses = () => undefined,
   onRunChiSquareAssociationAnalysis,
@@ -743,6 +803,35 @@ export function AnalysisShell({
 }: AnalysisShellProps) {
   const selectedModule =
     analysisCatalog?.modules.find((module) => module.module_id === selectedModuleId) ?? null;
+  const selectedAnalysisResult =
+    selectedMethod === null
+      ? null
+      : selectedAnalysisResultForMethod(selectedMethod.method_id, {
+          analysisResult,
+          graphicalSummaryAnalysisResult,
+          normalityAnalysisResult,
+          equalVariancesAnalysisResult,
+          oneSampleTAnalysisResult,
+          equivalenceTostAnalysisResult,
+          pairedTAnalysisResult,
+          oneSampleWilcoxonAnalysisResult,
+          twoSampleTAnalysisResult,
+          mannWhitneyAnalysisResult,
+          kruskalWallisAnalysisResult,
+          oneWayAnovaAnalysisResult,
+          oneProportionAnalysisResult,
+          twoProportionAnalysisResult,
+          chiSquareAssociationAnalysisResult,
+          pearsonAnalysisResult,
+          xyCorrelationAnalysisResult,
+          linearModelAnalysisResult,
+          individualsChartAnalysisResult,
+          subgroupChartAnalysisResult,
+          runChartAnalysisResult,
+          capabilityAnalysisResult,
+          gageRrAnalysisResult,
+          gageRunChartAnalysisResult,
+        });
 
   return (
     <section className="analysis-shell" aria-labelledby="analysis-modules-title">
@@ -766,12 +855,28 @@ export function AnalysisShell({
       {analysisCatalog !== null ? (
         <AnalysisWorkbench
           analysisRunError={analysisRunError}
+          analysisResultCsvExport={analysisResultCsvExport}
+          analysisResultCsvExportError={analysisResultCsvExportError}
+          analysisResultExportDownloadError={analysisResultExportDownloadError}
+          analysisResultHtmlReport={analysisResultHtmlReport}
+          analysisResultHtmlReportError={analysisResultHtmlReportError}
+          analysisResultJsonExport={analysisResultJsonExport}
+          analysisResultJsonExportError={analysisResultJsonExportError}
           catalog={analysisCatalog}
+          isCreatingAnalysisResultCsvExport={isCreatingAnalysisResultCsvExport}
+          isCreatingAnalysisResultHtmlReport={isCreatingAnalysisResultHtmlReport}
+          isCreatingAnalysisResultJsonExport={isCreatingAnalysisResultJsonExport}
+          isDownloadingAnalysisResultExport={isDownloadingAnalysisResultExport}
           profile={profile}
+          selectedAnalysisResult={selectedAnalysisResult}
           selectedMethod={selectedMethod}
           selectedMethods={selectedMethods}
           selectedModuleId={selectedModuleId}
           version={version}
+          onCreateAnalysisResultCsvExport={onCreateAnalysisResultCsvExport}
+          onCreateAnalysisResultHtmlReport={onCreateAnalysisResultHtmlReport}
+          onCreateAnalysisResultJsonExport={onCreateAnalysisResultJsonExport}
+          onDownloadAnalysisResultExport={onDownloadAnalysisResultExport}
           onSelectMethod={onSelectMethod}
           renderAnalysisFilters={(method) =>
             method.requires_dataset && version !== null ? (
@@ -1428,4 +1533,62 @@ export function AnalysisShell({
       ) : null}
     </section>
   );
+}
+
+function selectedAnalysisResultForMethod(
+  methodId: string,
+  results: AnalysisResultByMethod,
+): AnalysisResultEnvelope | null {
+  switch (methodId) {
+    case "eda.descriptive":
+      return results.analysisResult;
+    case "eda.graphical_summary":
+      return results.graphicalSummaryAnalysisResult;
+    case "eda.normality":
+      return results.normalityAnalysisResult;
+    case "eda.equal_variances":
+      return results.equalVariancesAnalysisResult;
+    case "hypothesis.one_sample_t":
+      return results.oneSampleTAnalysisResult;
+    case "hypothesis.equivalence_tost":
+      return results.equivalenceTostAnalysisResult;
+    case "hypothesis.paired_t":
+      return results.pairedTAnalysisResult;
+    case "hypothesis.one_sample_wilcoxon":
+      return results.oneSampleWilcoxonAnalysisResult;
+    case "hypothesis.two_sample_t":
+      return results.twoSampleTAnalysisResult;
+    case "hypothesis.mann_whitney":
+      return results.mannWhitneyAnalysisResult;
+    case "hypothesis.kruskal_wallis":
+      return results.kruskalWallisAnalysisResult;
+    case "hypothesis.one_way_anova":
+      return results.oneWayAnovaAnalysisResult;
+    case "categorical.one_proportion":
+      return results.oneProportionAnalysisResult;
+    case "categorical.two_proportion":
+      return results.twoProportionAnalysisResult;
+    case "categorical.chi_square_association":
+      return results.chiSquareAssociationAnalysisResult;
+    case "regression.pearson":
+      return results.pearsonAnalysisResult;
+    case "regression.xy_correlation":
+      return results.xyCorrelationAnalysisResult;
+    case "regression.linear_model":
+      return results.linearModelAnalysisResult;
+    case "quality.individuals_chart":
+      return results.individualsChartAnalysisResult;
+    case "quality.subgroup_chart":
+      return results.subgroupChartAnalysisResult;
+    case "quality.run_chart":
+      return results.runChartAnalysisResult;
+    case "quality.capability":
+      return results.capabilityAnalysisResult;
+    case "quality.gage_rr":
+      return results.gageRrAnalysisResult;
+    case "quality.gage_run_chart":
+      return results.gageRunChartAnalysisResult;
+    default:
+      return null;
+  }
 }

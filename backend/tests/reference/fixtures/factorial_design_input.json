@@ -1,0 +1,35 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "factorial_design_reference_inputs_v1",
+  "cases": [
+    {
+      "case_id": "two_factor_standard_with_center",
+      "factors": [
+        {"name": "Temperature", "low": 100.0, "high": 120.0, "unit": "C"},
+        {"name": "Pressure", "low": 10.0, "high": 30.0, "unit": "bar"}
+      ],
+      "options": {
+        "replicates": 1,
+        "center_points": 1,
+        "randomize": false,
+        "randomization_seed": 42,
+        "block_count": 1
+      }
+    },
+    {
+      "case_id": "three_factor_seeded_random_blocks",
+      "factors": [
+        {"name": "A", "low": -1.0, "high": 1.0, "unit": null},
+        {"name": "B", "low": 5.0, "high": 9.0, "unit": null},
+        {"name": "C", "low": 0.0, "high": 10.0, "unit": null}
+      ],
+      "options": {
+        "replicates": 2,
+        "center_points": 2,
+        "randomize": true,
+        "randomization_seed": 20260702,
+        "block_count": 2
+      }
+    }
+  ]
+}

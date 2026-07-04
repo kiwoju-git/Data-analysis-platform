@@ -1,0 +1,107 @@
+{
+  "reference_tool": "hand calculation: sample standard deviation, moving range / d2, normal CDF",
+  "cases": [
+    {
+      "case_id": "two_sided_target",
+      "n_total": 5,
+      "n_used": 5,
+      "n_excluded_missing_value": 0,
+      "n_excluded_non_numeric_value": 0,
+      "sample": {
+        "mean": 12.0,
+        "std_overall": 1.5811388300841898,
+        "std_within": 0.8865248226950355,
+        "min": 10.0,
+        "max": 14.0
+      },
+      "capability_within": {
+        "two_sided": 1.5039999999999998,
+        "lower": 1.5039999999999998,
+        "upper": 1.5039999999999998,
+        "min_side": 1.5039999999999998
+      },
+      "capability_overall": {
+        "two_sided": 0.8432740427115678,
+        "lower": 0.8432740427115678,
+        "upper": 0.8432740427115678,
+        "min_side": 0.8432740427115678
+      },
+      "expected_nonconformance_normal": {
+        "below_lsl_probability": 0.005706018193000817,
+        "above_usl_probability": 0.005706018193000872,
+        "total_probability": 0.01141203638600169,
+        "total_ppm": 11412.03638600169
+      },
+      "observed_nonconformance": {
+        "below_lsl_count": 0,
+        "above_usl_count": 0,
+        "total_count": 0,
+        "below_lsl_proportion": 0.0,
+        "above_usl_proportion": 0.0,
+        "total_proportion": 0.0,
+        "total_ppm": 0.0
+      },
+      "warnings": [
+        "capability_normal_model_assumed",
+        "capability_control_limits_not_spec_limits",
+        "capability_process_stability_not_proven",
+        "capability_measurement_system_not_verified",
+        "capability_within_sigma_uses_canonical_moving_range",
+        "capability_point_estimates_without_ci",
+        "capability_target_recorded_cpm_not_computed"
+      ]
+    },
+    {
+      "case_id": "one_sided_with_exclusions",
+      "n_total": 7,
+      "n_used": 5,
+      "n_excluded_missing_value": 1,
+      "n_excluded_non_numeric_value": 1,
+      "sample": {
+        "mean": 12.0,
+        "std_overall": 1.5811388300841898,
+        "std_within": 0.8865248226950355,
+        "min": 10.0,
+        "max": 14.0
+      },
+      "capability_within": {
+        "two_sided": null,
+        "lower": null,
+        "upper": 1.5039999999999998,
+        "min_side": 1.5039999999999998
+      },
+      "capability_overall": {
+        "two_sided": null,
+        "lower": null,
+        "upper": 0.8432740427115678,
+        "min_side": 0.8432740427115678
+      },
+      "expected_nonconformance_normal": {
+        "below_lsl_probability": 0.0,
+        "above_usl_probability": 0.005706018193000872,
+        "total_probability": 0.005706018193000872,
+        "total_ppm": 5706.018193000872
+      },
+      "observed_nonconformance": {
+        "below_lsl_count": 0,
+        "above_usl_count": 0,
+        "total_count": 0,
+        "below_lsl_proportion": 0.0,
+        "above_usl_proportion": 0.0,
+        "total_proportion": 0.0,
+        "total_ppm": 0.0
+      },
+      "warnings": [
+        "capability_normal_model_assumed",
+        "capability_control_limits_not_spec_limits",
+        "capability_process_stability_not_proven",
+        "capability_measurement_system_not_verified",
+        "capability_within_sigma_uses_canonical_moving_range",
+        "capability_point_estimates_without_ci",
+        "capability_one_sided_spec",
+        "missing_values_excluded",
+        "non_numeric_values_excluded"
+      ]
+    }
+  ]
+}

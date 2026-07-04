@@ -1654,7 +1654,7 @@ Changed files:
 - `docs/six_module_implementation_guide.md`
 - `to_do_list.md`
 
-Validation so far:
+Validation:
 
 - Targeted backend pytest for `test_equal_variances.py` and `test_api_contracts.py`: passed with 26 tests.
 - Backend ruff check on touched backend files: passed.
@@ -1708,7 +1708,7 @@ Changed files:
 - `docs/datasets.md`
 - `docs/storage.md`
 
-Validation so far:
+Validation:
 
 - Targeted backend pytest for `test_two_sample_t.py` and `test_api_contracts.py`: passed with 27 tests.
 - Backend ruff check on touched backend files: passed.
@@ -1763,7 +1763,7 @@ Changed files:
 - `docs/dependency_review.md`
 - `docs/stat_dependency_spike.md`
 
-Validation so far:
+Validation:
 
 - Targeted backend pytest for `test_one_sample_t.py` and `test_api_contracts.py`: passed with 28 tests.
 - Frontend `npm --prefix ./frontend run typecheck`: passed.
@@ -4544,3 +4544,983 @@ Next PR:
 
 - Continue with a small documentation/contract cleanup pass, or start the next
   reference-backed statistical Gate slice.
+
+## Progress Update 83 - High-Risk Statistical QA and Method Contract Stabilization
+
+Completed in current working tree:
+
+- Added a shared `METHOD_VERSIONS` map for all 29 stable method IDs and wired
+  the analysis catalog plus generic execution handler specs to that same
+  source.
+- Added API contract coverage that asserts method version mapping completeness
+  and catalog/handler version alignment.
+- Added typed runner-boundary option validation for
+  `hypothesis.equivalence_tost` through `EquivalenceTostOptions`.
+- Added API contract coverage for invalid TOST option type, missing required
+  bound, and unknown option field rejection with
+  `invalid_equivalence_tost_options`.
+- Consolidated analysis provenance commit metadata so the shared provenance
+  helper prefers `Settings.git_commit` and falls back to
+  `DATALAB_GIT_COMMIT`.
+- Added or strengthened high-risk statistical QA tests:
+  - `hypothesis.one_way_anova`: significant-only Tukey-Kramer posthoc,
+    non-significant posthoc skip, negative omega squared retained from the
+    documented formula, and group-size imbalance warning.
+  - `hypothesis.equivalence_tost`: one-sided TOST decision logic and
+    non-significant difference not being treated as equivalence.
+  - `categorical.two_proportion`: all-event/no-event zero-cell RR/OR handling
+    without fake effect CIs.
+  - `categorical.chi_square_association`: sparse 2x2 Fisher recommendation
+    without automatic fallback and finite standardized residuals.
+  - `quality.capability`: one-sided spec still carries the process-stability
+    warning.
+- Updated `docs/statistical_method_audit_matrix.md` with method-level
+  verification depth, including honest partial coverage notes for capability,
+  Gage R&R, Gage Run Chart, and DOE factorial design.
+- Updated CI and Gate B progress docs to record the latest local validation
+  count and the current GitHub Actions inspection limitation.
+- Added dataset/storage performance notes for full canonical preview
+  verification before paging.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and frontend behavior unchanged.
+
+Validation:
+
+- Targeted Windows pytest for API contracts plus high-risk statistical QA files:
+  passed with 124 tests.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 284
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- `hypothesis.equivalence_tost` received the first typed options adapter in this
+  slice; other high-risk methods still need the same runner-boundary contract
+  treatment.
+- `quality.capability` still lacks an independent external reference fixture and
+  index confidence intervals.
+- `quality.gage_rr` and `quality.gage_run_chart` still rely on hand fixtures,
+  not independent external reference fixtures.
+- `doe.factorial_design` remains a design-asset API only; effects, OLS, ANOVA,
+  diagnostics, and DOE charts remain out of scope.
+
+Next PR:
+
+- Add typed option adapters for `regression.linear_model` and/or
+  `quality.gage_rr`.
+- Add independent reference fixtures for capability and Gage R&R where feasible.
+- Continue auditing high-risk statistical formulas before adding any new
+  available method.
+
+## Progress Update 84 - Linear Model and Gage R&R Option Contract Expansion
+
+Completed in current working tree:
+
+- Added `LinearModelOptions` and nested `LinearModelInteractionTermOption` typed
+  request adapters for `regression.linear_model`.
+- Added `GageRrOptions` typed request adapter for `quality.gage_rr`.
+- Wired both adapters at runner entry before row snapshot or result artifact
+  creation.
+- Added stable sanitized error codes:
+  - `invalid_linear_model_options`
+  - `invalid_gage_rr_options`
+- Added API contract tests that malformed option payloads fail without echoing
+  invalid raw option values or unknown field names in the response.
+- Added frontend analysis error guidance for the two new error codes so users
+  see actionable Korean guidance instead of only machine-readable codes.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and normal frontend payloads unchanged.
+
+Validation so far:
+
+- Targeted Windows pytest for method-version/provenance/typed-option contracts:
+  passed with 11 selected tests.
+- Frontend typecheck passed.
+- Frontend lint passed.
+- Frontend Vitest passed with 40 tests.
+- Targeted backend ruff format/check for touched backend files passed after
+  formatting `test_api_contracts.py`.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 291
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Other high-risk methods still use generic `options` dictionaries plus
+  method-local validators.
+- Capability and Gage R&R still need independent external reference fixtures
+  where feasible.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Continue typed adapter coverage for capability, chi-square, and two-proportion
+  payloads, or add independent reference fixtures for capability/Gage R&R before
+  expanding new methods.
+
+## Progress Update 85 - Categorical and Capability Option Contract Expansion
+
+Completed in current working tree:
+
+- Added `TwoProportionOptions` typed request adapter for
+  `categorical.two_proportion`.
+- Added `ChiSquareAssociationOptions` typed request adapter for
+  `categorical.chi_square_association`.
+- Added `CapabilityOptions` typed request adapter for `quality.capability`.
+- Wired all three adapters at runner entry before row snapshot or result
+  artifact creation.
+- Added stable sanitized error codes:
+  - `invalid_two_proportion_options`
+  - `invalid_chi_square_options`
+  - `invalid_capability_options`
+- Added API contract tests that invalid option types, missing required options,
+  and unknown option fields fail without echoing raw invalid values or unknown
+  field names in the response.
+- Added frontend analysis error guidance for all three new error codes.
+- Updated the statistical method audit matrix and Gate B progress notes to
+  record typed contract coverage.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and normal frontend payloads unchanged.
+
+Validation so far:
+
+- Targeted Windows pytest for typed-option contracts across TOST, categorical,
+  linear model, capability, and Gage R&R: passed with 20 selected tests.
+- Targeted backend ruff format/check for touched backend files passed.
+- Frontend typecheck passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 301
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Several other methods still use generic `options` dictionaries plus
+  method-local validators.
+- Capability and Gage R&R still need independent external reference fixtures
+  where feasible.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Continue typed adapter coverage for remaining high-risk request payloads, or
+  switch to independent reference fixture work for capability/Gage R&R.
+
+## Progress Update 86 - ANOVA, Kruskal-Wallis, and Run Chart Option Contract Expansion
+
+Completed in current working tree:
+
+- Added `OneWayAnovaOptions` typed request adapter for
+  `hypothesis.one_way_anova`.
+- Added `KruskalWallisOptions` typed request adapter for
+  `hypothesis.kruskal_wallis`.
+- Added `RunChartOptions` typed request adapter for `quality.run_chart`.
+- Wired all three adapters at runner entry before row snapshot or result
+  artifact creation.
+- Added stable sanitized error codes:
+  - `invalid_one_way_anova_options`
+  - `invalid_kruskal_wallis_options`
+  - `invalid_run_chart_options`
+- Added API contract tests that invalid option types, missing required options,
+  and unknown option fields fail without echoing raw invalid values or unknown
+  field names in the response.
+- Added frontend analysis error guidance for all three new error codes.
+- Updated the statistical method audit matrix, Gate B progress notes, and CI
+  status to record typed contract coverage and the latest validation count.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and normal frontend payloads unchanged.
+
+Validation:
+
+- Targeted Windows pytest for the three new typed-option contracts: passed with
+  10 selected tests.
+- Targeted backend ruff format/check for touched backend files passed.
+- Frontend typecheck passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 311
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Several other methods still use generic `options` dictionaries plus
+  method-local validators.
+- Capability, Gage R&R, Gage Run Chart, and DOE factorial design still need
+  stronger independent reference fixture coverage where feasible.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Continue typed adapter coverage for remaining request payloads, especially
+  EDA chart/normality/equal-variance and remaining hypothesis methods, or add
+  independent reference fixtures for the currently partial quality methods.
+
+## Progress Update 87 - Core t-Test Option Contract Expansion
+
+Completed in current working tree:
+
+- Added `OneSampleTOptions` typed request adapter for
+  `hypothesis.one_sample_t`.
+- Added `PairedTOptions` typed request adapter for `hypothesis.paired_t`.
+- Added `TwoSampleTOptions` typed request adapter for
+  `hypothesis.two_sample_t`.
+- Wired all three adapters at runner entry before row snapshot or result
+  artifact creation.
+- Added stable sanitized error codes:
+  - `invalid_one_sample_t_options`
+  - `invalid_paired_t_options`
+  - `invalid_two_sample_t_options`
+- Added API contract tests that invalid option types, missing required options,
+  and unknown option fields fail without echoing raw invalid values or unknown
+  field names in the response.
+- Added frontend analysis error guidance for all three new error codes.
+- Updated the statistical method audit matrix, Gate B progress notes, and CI
+  status to record typed contract coverage.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and normal frontend payloads unchanged.
+
+Validation:
+
+- Targeted Windows pytest for the three new typed-option contracts: passed with
+  9 selected tests.
+- Targeted backend ruff format/check for touched backend files passed.
+- Frontend typecheck passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 320
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Several other methods still use generic `options` dictionaries plus
+  method-local validators.
+- Capability, Gage R&R, Gage Run Chart, and DOE factorial design still need
+  stronger independent reference fixture coverage where feasible.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Continue typed adapter coverage for remaining request payloads, especially
+  EDA chart/normality/equal-variance, one-sample Wilcoxon, and Mann-Whitney, or
+  add independent reference fixtures for the currently partial quality methods.
+
+## Progress Update 88 - Rank and One-Proportion Option Contract Expansion
+
+Completed in current working tree:
+
+- Added `OneSampleWilcoxonOptions` typed request adapter for
+  `hypothesis.one_sample_wilcoxon`.
+- Added `MannWhitneyOptions` typed request adapter for
+  `hypothesis.mann_whitney`.
+- Added `OneProportionOptions` typed request adapter for
+  `categorical.one_proportion`.
+- Wired all three adapters at runner entry before row snapshot or result
+  artifact creation.
+- Added stable sanitized error codes:
+  - `invalid_one_sample_wilcoxon_options`
+  - `invalid_mann_whitney_options`
+  - `invalid_one_proportion_options`
+- Added API contract tests that invalid option types, missing required options,
+  and unknown option fields fail without echoing raw invalid values or unknown
+  field names in the response.
+- Added frontend analysis error guidance for all three new error codes.
+- Updated the statistical method audit matrix, Gate B progress notes, and CI
+  status to record typed contract coverage.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and normal frontend payloads unchanged.
+
+Validation:
+
+- Targeted Windows pytest for the three new typed-option contracts: passed with
+  9 selected tests.
+- Targeted backend ruff format/check for touched backend files passed.
+- Frontend typecheck passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 329
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Capability, Gage R&R, Gage Run Chart, and DOE factorial design still need
+  stronger independent reference fixture coverage where feasible.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Add independent reference fixtures for the currently partial quality/DOE
+  methods, or continue contract hardening for remaining regression correlation
+  payloads.
+
+## Progress Update 90 - Quality Chart Option Contract Expansion
+
+Completed in current working tree:
+
+- Added `IndividualsChartOptions` typed request adapter for
+  `quality.individuals_chart`.
+- Added `SubgroupChartOptions` typed request adapter for
+  `quality.subgroup_chart`.
+- Added `GageRunChartOptions` typed request adapter for
+  `quality.gage_run_chart`.
+- Wired all three adapters at runner entry before row snapshot or result
+  artifact creation.
+- Added stable sanitized error codes:
+  - `invalid_individuals_chart_options`
+  - `invalid_subgroup_chart_options`
+  - `invalid_gage_run_chart_options`
+- Added API contract tests that invalid option types, missing required options,
+  and unknown option fields fail without echoing raw invalid values or unknown
+  field names in the response.
+- Added frontend analysis error guidance for all three new error codes.
+- Updated the statistical method audit matrix, Gate B progress notes, and CI
+  status to record typed contract coverage.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and normal frontend payloads unchanged.
+
+Validation:
+
+- Targeted Windows pytest for the three new typed-option contracts: passed with
+  10 selected tests.
+- Targeted backend ruff format/check for touched backend files passed after
+  import sorting.
+- Frontend typecheck passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 348
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Capability, Gage R&R, Gage Run Chart, and DOE factorial design still need
+  stronger independent reference fixture coverage where feasible.
+- Pearson and X-Y correlation still rely on generic option dictionaries plus
+  method-local validators.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Add independent reference fixtures for partial quality/DOE methods, or add
+  typed adapters for `regression.pearson` and `regression.xy_correlation`.
+
+## Progress Update 89 - EDA Option Contract Expansion
+
+Completed in current working tree:
+
+- Added `GraphicalSummaryOptions` typed request adapter for
+  `eda.graphical_summary`.
+- Added `NormalityOptions` typed request adapter for `eda.normality`.
+- Added `EqualVariancesOptions` typed request adapter for
+  `eda.equal_variances`.
+- Wired all three adapters at runner entry before row snapshot or result
+  artifact creation.
+- Added stable sanitized error codes:
+  - `invalid_graphical_summary_options`
+  - `invalid_normality_options`
+  - `invalid_equal_variances_options`
+- Added API contract tests that invalid option types, missing required options,
+  and unknown option fields fail without echoing raw invalid values or unknown
+  field names in the response.
+- Added frontend analysis error guidance for all three new error codes.
+- Updated the statistical method audit matrix, Gate B progress notes, and CI
+  status to record typed contract coverage.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and normal frontend payloads unchanged.
+
+Validation:
+
+- Targeted Windows pytest for the three new typed-option contracts: passed with
+  9 selected tests.
+- Targeted backend ruff format/check for touched backend files passed.
+- Frontend typecheck passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 338
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Several quality chart methods still use generic `options` dictionaries plus
+  method-local validators.
+- Capability, Gage R&R, Gage Run Chart, and DOE factorial design still need
+  stronger independent reference fixture coverage where feasible.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Continue typed adapter coverage for remaining quality chart payloads, or add
+  independent reference fixtures for the currently partial quality methods.
+
+## Progress Update 91 - Descriptive and Correlation Option Contract Expansion
+
+Completed in current working tree:
+
+- Added `DescriptiveOptions` typed request adapter for `eda.descriptive`.
+- Added `PearsonOptions` typed request adapter for `regression.pearson`.
+- Added `XyCorrelationOptions` typed request adapter for
+  `regression.xy_correlation`.
+- Wired all three adapters at runner entry before row snapshot or result
+  artifact creation.
+- Added stable sanitized error codes:
+  - `invalid_descriptive_options`
+  - `invalid_pearson_options`
+  - `invalid_xy_correlation_options`
+- Added API contract tests that invalid option types, missing required options,
+  and unknown option fields fail without echoing raw invalid values or unknown
+  field names in the response.
+- Added frontend analysis error guidance for all three new error codes.
+- Updated the statistical method audit matrix, Gate B progress notes, and CI
+  status to record typed contract coverage.
+- Kept statistical calculations, method availability, result schemas,
+  migrations, storage paths, and normal frontend payloads unchanged.
+
+Validation:
+
+- Targeted Windows pytest for the three new typed-option contracts: passed with
+  9 selected tests.
+- Targeted backend ruff format/check for touched backend files passed.
+- Frontend typecheck passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 357
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Capability, Gage R&R, Gage Run Chart, and DOE factorial design still need
+  stronger independent reference fixture coverage where feasible.
+- DOE design/response routes use dedicated request schemas rather than generic
+  analysis-run option adapters.
+- No new statistical method or fake result was added.
+
+Next PR:
+
+- Add independent reference fixtures for partial quality/DOE methods, or start
+  stabilizing report/export contracts.
+
+## Progress Update 92 - Quality and DOE Fixture Coverage Expansion
+
+Completed in current working tree:
+
+- Added fixture-backed regression coverage for `quality.capability`.
+  - Covers two-sided target and one-sided/exclusion cases.
+  - Pins hand-calculated sample SD, moving-range within sigma, capability
+    indices, observed/expected nonconformance, and warnings.
+- Added fixture-backed regression coverage for `quality.gage_rr`.
+  - Covers balanced crossed ANOVA with positive interaction variance.
+  - Covers additive data where raw part-operator variance is negative and final
+    variance is clamped to zero.
+  - Pins ANOVA SS/MS/F/p fields, variance components, ndc, warnings, and label
+    redaction behavior.
+- Added fixture-backed regression coverage for `quality.gage_run_chart`.
+  - Pins balanced diagnostic summaries, order-column sorting, first chart point
+    indexes, warnings, and raw label redaction.
+- Added fixture-backed regression coverage for `doe.factorial_design`.
+  - Pins 2-factor standard order plus center point levels.
+  - Pins design SHA-256 and seeded randomized/block run ordering for a
+    3-factor design.
+- Updated the statistical method audit matrix and Gate B progress notes to
+  record the stronger-but-still-partial quality/DOE fixture coverage.
+- Kept all method availability, calculation formulas, result schemas, API
+  routes, migrations, and frontend behavior unchanged.
+- Added no new statistical method, DOE effects, fake result, fake chart, or mock
+  statistic.
+
+Validation:
+
+- Targeted Windows pytest for `test_capability.py`, `test_gage_rr.py`,
+  `test_gage_run_chart.py`, and `test_factorial_design.py`: passed with 16
+  tests.
+- Targeted backend ruff check passed for the four touched test files.
+- Targeted backend ruff format check passed after formatting
+  `test_capability.py`.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 361
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- Capability and Gage R&R still lack independent industrial software reference
+  fixture comparison.
+- `doe.factorial_design` fixture covers design assets only; DOE effects,
+  OLS/ANOVA, diagnostics, alias structure, and DOE charts remain out of scope.
+- Gage Run Chart remains a diagnostic chart payload and does not replace Gage
+  R&R variance components.
+
+Next PR:
+
+- Start report/export contract stabilization, or continue quality reference
+  hardening with an approved independent benchmark source for capability and
+  Gage R&R.
+
+## Progress Update 93 - Analysis Result JSON Export Contract
+
+Completed in current working tree:
+
+- Added a typed `AnalysisResultJsonExportResponse` API schema.
+- Added `POST /api/v1/analysis-runs/{analysis_id}/exports/json`.
+- The export service:
+  - reloads and checksum-validates the stored analysis result before exporting;
+  - writes an atomic JSON export artifact under the analysis workspace;
+  - records the artifact as `analysis_result_json_export` in
+    `analysis_artifacts`;
+  - returns export ID, media type, SHA-256, byte size, source result SHA-256,
+    stale flag, created time, and the exported result envelope;
+  - omits internal relative paths, absolute paths, and raw workspace locations
+    from the API response.
+- Added frontend API type and typed client function
+  `createAnalysisResultJsonExport` without adding UI surface yet.
+- Added API contract tests for successful JSON export artifact creation and
+  checksum-mismatch rejection without creating an export artifact.
+- Kept CSV, HTML, PDF, chart image export, report composition, and code export
+  out of scope for this slice.
+
+Validation:
+
+- Targeted Windows pytest for the new export route: passed with 2 selected
+  tests.
+- Targeted backend ruff format/check for touched backend files passed after
+  import sorting.
+- Frontend typecheck passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 75 source files, backend pytest 363
+  tests, frontend lint/typecheck, frontend Vitest 40 tests, and frontend build.
+
+Remaining limitations:
+
+- The route creates JSON export artifacts but does not yet provide a browser UI
+  button or file download response.
+- CSV/HTML/PDF/report/code exports are still unimplemented.
+- Export retention/deletion policy is still inherited from generic analysis
+  artifact storage and needs a dedicated report/export lifecycle slice.
+
+Next PR:
+
+- Add a minimal frontend export action for saved result JSON, then define CSV
+  table export and HTML report contracts with formula-injection and path
+  exposure tests.
+
+## Progress Update 94 - Analysis Result JSON Export UI
+
+Completed in current working tree:
+
+- Added a minimal frontend JSON export action for succeeded saved analysis
+  results.
+- The Workbench now shows the export action directly under the selected
+  method's execution panel and keeps export failures in the same local analysis
+  area.
+- The UI calls the existing checksum-validating
+  `POST /api/v1/analysis-runs/{analysis_id}/exports/json` API and displays
+  matching export size, short SHA-256, and stale status metadata.
+- Export status is matched by `analysis_id` so a previous method's export is
+  not shown for the newly selected result.
+- Added frontend render tests for the JSON export action and matching export
+  metadata.
+- Kept CSV, HTML, PDF, chart image export, report composition, file download
+  response, and code export out of scope for this slice.
+
+Validation:
+
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 42 tests after
+  stabilizing the SSR hash assertion.
+- WSL `npm --prefix ./frontend run lint`: passed.
+- `git diff --check`: passed.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 363 tests, frontend lint/typecheck, frontend Vitest 42 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- The UI creates a JSON export artifact and shows its metadata, but does not yet
+  download the file.
+- CSV/HTML/PDF/report/code exports remain unimplemented.
+- Export retention/deletion policy is still inherited from generic analysis
+  artifact storage.
+
+Next PR:
+
+- Define CSV table export and HTML report contracts, including formula
+  injection protection and path-exposure tests, before adding broader report
+  UI.
+
+## Progress Update 95 - Analysis Result CSV Export Contract
+
+Completed in current working tree:
+
+- Added `POST /api/v1/analysis-runs/{analysis_id}/exports/csv`.
+- The CSV export service reloads the stored analysis result through the same
+  checksum-validated path as result retrieval and JSON export.
+- The first CSV artifact contract is a generic long-form `section,path,value`
+  table over the stored result envelope, so it adds no new statistics and works
+  across current methods.
+- CSV cells are escaped for spreadsheet formula injection when they start, after
+  leading whitespace, with `=`, `+`, `-`, or `@`, or begin with tab/newline
+  control characters.
+- The API response exposes export ID, media type, SHA-256, size, source result
+  SHA-256, stale flag, row count, columns, and preview rows without exposing
+  internal artifact paths.
+- Added frontend API type/client wiring and a minimal CSV action/status next to
+  the existing JSON export action.
+- Kept HTML/PDF report composition, file download responses, method-specific
+  CSV report tables, chart image export, and code export out of scope.
+
+Validation:
+
+- Targeted Windows pytest for JSON/CSV export contract tests passed with 4
+  selected tests.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 43 tests after
+  stabilizing the SSR row-count assertion.
+- WSL `npm --prefix ./frontend run lint`: passed.
+- Targeted backend ruff check and backend mypy passed.
+- `git diff --check`: passed.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 365 tests, frontend lint/typecheck, frontend Vitest 43 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- CSV export is a generic envelope table, not a polished method-specific report
+  table.
+- The UI creates JSON/CSV export artifacts and shows metadata, but does not yet
+  download the files.
+- HTML report composition remains unimplemented.
+
+Next PR:
+
+- Add artifact download responses for created JSON/CSV exports, or define the
+  first HTML report envelope with path-exposure and formula-injection tests.
+
+## Progress Update 96 - Analysis Result Export Download
+
+Completed in current working tree:
+
+- Added `GET /api/v1/analysis-runs/{analysis_id}/exports/{export_id}/download`
+  for created JSON/CSV result export artifacts.
+- Added metadata lookup for a single `analysis_artifacts` record by
+  `analysis_id` and `artifact_id`.
+- The download service accepts only JSON/CSV result export artifact kinds,
+  validates relative path safety, file existence, and SHA-256 before returning
+  bytes, and keeps internal relative/absolute workspace paths out of responses.
+- Added stable recovery errors:
+  - `analysis_export_not_found`
+  - `analysis_export_path_invalid`
+  - `analysis_export_file_missing`
+  - `analysis_export_checksum_mismatch`
+- Added frontend download buttons to matching JSON/CSV export metadata cards and
+  displays download failures inside the export panel.
+- No new statistical method, fake statistic, fake chart, HTML/PDF report, or
+  chart export artifact was added.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_result_export"`:
+  passed with 2 selected tests on Python 3.10.11 / win32.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 44 tests.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 367 tests, frontend lint/typecheck, frontend Vitest 44 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- CSV export is still a generic result-envelope table, not a method-specific
+  statistical report table.
+- HTML/PDF report composition, code export, and chart artifact export remain out
+  of scope.
+- Export retention/deletion policy still uses the generic analysis artifact
+  lifecycle.
+
+Next PR:
+
+- Define the first HTML report envelope or method-specific CSV/table export
+  contract with checksum validation, no path exposure, and spreadsheet
+  formula-injection tests.
+
+## Progress Update 97 - Analysis Result HTML Report Export
+
+Completed in current working tree:
+
+- Added `POST /api/v1/analysis-runs/{analysis_id}/exports/html`.
+- The service reloads and checksum-validates the stored result envelope before
+  writing the HTML report artifact.
+- The report is stored as `analysis_result_html_report` with `text/html`
+  metadata, SHA-256, size, stale flag, source result SHA-256, and section count.
+- The generated report is static and self-contained:
+  - all result text is HTML-escaped;
+  - no script tag or external resource is required;
+  - no relative/absolute workspace path is exposed;
+  - no new statistical calculation is performed.
+- Existing export download now supports JSON, CSV, and HTML report artifacts
+  through the same analysis artifact lookup, relative path validation, file
+  existence check, and SHA-256 verification path.
+- Added frontend API type/client wiring plus `HTML 생성` and `HTML 다운로드`
+  controls in the Workbench export panel.
+- Added API contract tests for escaped HTML report creation/download and stored
+  result checksum mismatch rejection without creating an HTML artifact.
+- Added frontend render coverage for HTML report action/metadata.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  passed with 2 selected tests on Python 3.10.11 / win32.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 45 tests.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 369 tests, frontend lint/typecheck, frontend Vitest 45 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- HTML report is a generic result-envelope report, not a method-specific
+  narrative/report template.
+- PDF, multi-analysis report composition, chart image export, and reproducible
+  Python code export remain out of scope.
+- Export retention/deletion policy still uses the generic analysis artifact
+  lifecycle.
+
+Next PR:
+
+- Add method-specific report sections for one narrow method family, or define
+  reproducible Python code export with provenance, checksum, and path-exposure
+  tests.
+
+## Progress Update 98 - Descriptive HTML Report Section
+
+Completed in current working tree:
+
+- Added the first method-specific HTML report section for `eda.descriptive`.
+- The HTML report now includes a dedicated `기술통계 요약` table before the
+  generic result-envelope table.
+- The section displays stored result values only:
+  - display name;
+  - N total / N used;
+  - missing and non-numeric counts;
+  - mean, sample standard deviation, min, Q1, median, Q3, max;
+  - warning codes.
+- The section does not read canonical rows, re-run descriptive statistics, or
+  alter the analysis result schema.
+- Generic envelope fallback remains for every method, including descriptive.
+- Existing XSS/path-exposure protections stay in place by HTML-escaping every
+  rendered value and keeping internal workspace paths out of the report.
+
+Validation:
+
+- Targeted pytest through the Windows Python venv from WSL:
+  `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  passed with 2 selected tests on Python 3.10.11 / win32.
+- Targeted backend ruff check and backend mypy passed.
+- WSL `npm --prefix ./frontend run typecheck`: passed.
+- WSL `npm --prefix ./frontend run test -- --run`: passed with 45 tests.
+- WSL `npm --prefix ./frontend run lint`: passed.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`: passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 369 tests, frontend lint/typecheck, frontend Vitest 45 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- Only `eda.descriptive` has a method-specific HTML section.
+- Report styling remains basic and local/static.
+- PDF, chart image export, multi-analysis report composition, and reproducible
+  Python code export remain out of scope.
+
+Next PR:
+
+- Add method-specific report sections for one more narrow method family, or
+  start the reproducible Python code export contract with provenance and
+  checksum tests.
+
+## Progress Update 99 - EDA HTML Report Sections
+
+Completed:
+
+- Added method-specific HTML report sections for stored `eda.graphical_summary`,
+  `eda.normality`, and `eda.equal_variances` results.
+- Kept all report sections stored-result-only: no canonical row reads, no
+  statistical recalculation, no fake chart artifact, and no new available
+  methods.
+- Added API contract coverage that creates each EDA result through
+  `/api/v1/analysis-runs`, exports HTML through
+  `/api/v1/analysis-runs/{analysis_id}/exports/html`, and verifies the rendered
+  section text/key values from the checksum-recorded artifact.
+- Updated storage documentation to list the supported method-specific HTML
+  report sections.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  3 passed, 173 deselected.
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/services/analysis_runs.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed after applying ruff formatting; backend pytest 370 passed, frontend
+  Vitest 45 passed, frontend build passed.
+
+Next:
+
+- Add method-specific HTML sections for the next narrow family, likely
+  hypothesis tests, or begin reproducible Python code export.
+
+## Progress Update 100 - Hypothesis HTML Report Sections
+
+Completed:
+
+- Added method-specific HTML report sections for stored generic
+  `hypothesis.*` analysis-run results.
+- Covered the current available hypothesis summary types:
+  - `one_sample_t_test`;
+  - `paired_t_test`;
+  - `one_sample_wilcoxon_signed_rank_test`;
+  - `two_sample_t_test`;
+  - `mann_whitney_u_test`;
+  - `kruskal_wallis_test`;
+  - `one_way_anova`;
+  - `equivalence_tost`.
+- The sections render stored result values only: N, alpha, confidence level,
+  estimate, statistic, p-value, confidence interval, effect size, equivalence
+  bounds/TOST p-values, group summaries, and post-hoc comparisons when present.
+- Added API contract coverage for representative contrast, post-hoc, and TOST
+  payload paths through the existing HTML export endpoint.
+- Updated storage documentation to include hypothesis method-specific HTML
+  report sections.
+
+Validation so far:
+
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  4 passed, 173 deselected.
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/services/analysis_runs.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 371 passed, frontend Vitest 45 passed, frontend
+  build passed.
+
+Next:
+
+- Continue with categorical/regression HTML sections or reproducible Python code
+  export.
+
+## Progress Update 101 - Categorical And Regression HTML Report Sections
+
+Completed:
+
+- Added method-specific HTML report sections for stored categorical results:
+  `one_proportion_test`, `two_proportion_test`, and
+  `chi_square_association`.
+- Added method-specific HTML report sections for stored regression/correlation
+  results: `pearson_correlation`, `xy_correlation_matrix`, and `linear_model`.
+- Added aggregate categorical tables for group/event counts and contingency
+  table observed counts.
+- Added regression tables for pairwise correlations and linear-model
+  coefficients.
+- Kept all sections stored-result-only: no canonical row reads, no statistical
+  recalculation, no fake chart artifact, and no new available methods.
+- Added API contract coverage for representative categorical and regression
+  payloads through `/api/v1/analysis-runs/{analysis_id}/exports/html`.
+- Updated storage documentation to list the new method-specific HTML report
+  sections.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  6 passed, 173 deselected.
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/services/analysis_runs.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 373 passed, frontend Vitest 45 passed, frontend
+  build passed.
+
+Next:
+
+- Continue with quality-control HTML sections or reproducible Python code
+  export.
+
+## Progress Update 102 - Quality HTML Report Sections
+
+Completed:
+
+- Added method-specific HTML report sections for stored quality-control
+  results: `individuals_chart`, `subgroup_chart`, `run_chart`,
+  `capability_analysis`, `gage_rr`, and `gage_run_chart`.
+- Added aggregate quality tables for chart summaries, control/run signals,
+  process capability indices, and Gage R&R variance components.
+- Kept all sections stored-result-only: no canonical row reads, no control-limit
+  recalculation, no fake chart artifact, no raw Gage label exposure, and no new
+  available methods.
+- Added API contract coverage for representative quality chart, capability,
+  Gage R&R, and Gage run-chart payloads through
+  `/api/v1/analysis-runs/{analysis_id}/exports/html`.
+- Updated storage documentation to list quality method-specific HTML report
+  sections.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "html_report_export"`:
+  8 passed, 173 deselected.
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/services/analysis_runs.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 375 passed, frontend Vitest 45 passed, frontend
+  build passed.
+
+Next:
+
+- Add a DOE design HTML report section or start reproducible Python code
+  export.
+
+## Progress Update 103 - DOE Design HTML Report Download
+
+Completed:
+
+- Added `GET /api/v1/doe-designs/{design_id}/report.html` for dedicated
+  DOE factorial design reports.
+- The report reads the stored DOE design metadata and response series only
+  after existing `design_sha256` verification succeeds.
+- The generated HTML is static and self-contained:
+  - text content is HTML-escaped;
+  - no scripts or external resources are referenced;
+  - internal workspace paths are not exposed;
+  - attachment filename is derived from the design ID only.
+- Kept DOE effects, OLS, ANOVA, diagnostics, alias structure, chart payloads,
+  analysis-run artifacts, fake statistics, and mock charts out of scope.
+- Added API contract coverage for normal report download, response rendering,
+  escaping/path non-exposure, and checksum mismatch rejection.
+- Updated storage/progress documentation to distinguish DOE design reports from
+  generic analysis-run result exports.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "factorial_design"`:
+  7 passed, 176 deselected.
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/doe_designs.py ./backend/app/services/doe_designs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/doe_designs.py ./backend/app/services/doe_designs.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 377 passed, frontend Vitest 45 passed, frontend
+  build passed.
+
+Limitations:
+
+- DOE report is a design/response report only; it is not an effects or
+  analysis report.
+- The report is generated dynamically from verified metadata and is not yet
+  persisted as an export artifact.
+- Frontend download wiring is not added in this slice.
+
+Next:
+
+- Add a small frontend button for DOE report download, or start reproducible
+  Python code export for stored analysis results.

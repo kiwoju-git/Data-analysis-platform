@@ -6,12 +6,16 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import status
+from pydantic import ValidationError
 
 from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
     AnalysisRunRequest,
     AnalysisRunState,
     AnalysisWarning,
+    LinearModelOptions,
+    PearsonOptions,
+    XyCorrelationOptions,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -92,11 +96,12 @@ def run_pearson_analysis(
             message="Pearson 상관 분석 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_pearson_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    x_column, y_column = _selected_pearson_columns(context, request.options)
-    alpha = _pearson_alpha(request.options)
-    confidence_level = _pearson_confidence_level(request.options)
-    _pearson_missing_policy(request.options)
+    x_column, y_column = _selected_pearson_columns(context, options)
+    alpha = _pearson_alpha(options)
+    confidence_level = _pearson_confidence_level(options)
+    _pearson_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -133,6 +138,17 @@ def run_pearson_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_pearson_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return PearsonOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_pearson_options",
+            message="Pearson 상관 분석 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_pearson_columns(
@@ -341,11 +357,12 @@ def run_xy_correlation_analysis(
             message="X-Y 상관행렬 실행에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_xy_correlation_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    x_columns, y_columns = _selected_xy_correlation_columns(context, request.options)
-    alpha = _xy_correlation_alpha(request.options)
-    confidence_level = _xy_correlation_confidence_level(request.options)
-    _xy_correlation_missing_policy(request.options)
+    x_columns, y_columns = _selected_xy_correlation_columns(context, options)
+    alpha = _xy_correlation_alpha(options)
+    confidence_level = _xy_correlation_confidence_level(options)
+    _xy_correlation_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -382,6 +399,17 @@ def run_xy_correlation_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_xy_correlation_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return XyCorrelationOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_xy_correlation_options",
+            message="X-Y 상관행렬 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _selected_xy_correlation_columns(
@@ -617,15 +645,16 @@ def run_linear_model_analysis(
             message="회귀모형 적합에는 데이터셋 버전이 필요합니다.",
         )
 
+    options = _validate_linear_model_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    response_column, predictor_columns = _selected_linear_model_columns(context, request.options)
-    alpha = _linear_model_alpha(request.options)
-    confidence_level = _linear_model_confidence_level(request.options)
-    quadratic_terms = _linear_model_quadratic_terms(request.options, predictor_columns)
-    interaction_terms = _linear_model_interaction_terms(request.options, predictor_columns)
-    _linear_model_missing_policy(request.options)
-    _linear_model_include_intercept(request.options)
-    _linear_model_covariance_type(request.options)
+    response_column, predictor_columns = _selected_linear_model_columns(context, options)
+    alpha = _linear_model_alpha(options)
+    confidence_level = _linear_model_confidence_level(options)
+    quadratic_terms = _linear_model_quadratic_terms(options, predictor_columns)
+    interaction_terms = _linear_model_interaction_terms(options, predictor_columns)
+    _linear_model_missing_policy(options)
+    _linear_model_include_intercept(options)
+    _linear_model_covariance_type(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -664,6 +693,17 @@ def run_linear_model_analysis(
     except Exception:
         _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
         raise
+
+
+def _validate_linear_model_options(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return LinearModelOptions.model_validate(options).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_linear_model_options",
+            message="회귀모형 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
 
 
 def _store_succeeded_linear_model_result(
@@ -706,7 +746,7 @@ def _store_succeeded_linear_model_result(
             "manifest_schema_version": REGRESSION_MODEL_MANIFEST_SCHEMA_VERSION,
             "manifest_sha256": manifest_sha256,
         }
-        provenance = _analysis_provenance(request, context, row_snapshot)
+        provenance = _analysis_provenance(settings, request, context, row_snapshot)
         envelope = AnalysisResultEnvelope(
             analysis_id=analysis_id,
             method_id=request.method_id,
@@ -1082,6 +1122,7 @@ def _linear_model_numeric_predictor(column: LinearModelColumn) -> bool:
 
 def _linear_model_api_error(code: str) -> ApiError:
     messages = {
+        "invalid_linear_model_options": "회귀모형 옵션 계약이 올바르지 않습니다.",
         "invalid_linear_model_alpha": "회귀모형 유의수준이 허용 범위를 벗어났습니다.",
         "invalid_linear_model_confidence_level": "회귀모형 신뢰수준이 허용 범위를 벗어났습니다.",
         "linear_model_predictors_required": "회귀모형 예측 컬럼을 하나 이상 선택해야 합니다.",

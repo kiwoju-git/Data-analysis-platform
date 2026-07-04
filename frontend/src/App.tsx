@@ -3,14 +3,21 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
   createAnalysisRun,
+  createAnalysisResultCsvExport,
+  createAnalysisResultHtmlReport,
+  createAnalysisResultJsonExport,
   createFactorialDesign,
+  downloadAnalysisResultExport,
   fetchAnalysisMethods,
   fetchGageRrPreflight,
   fetchHealth,
   fetchRegressionPredictions,
   fetchRegressionPredictionPreflight,
   saveFactorialDesignResponses,
+  type AnalysisResultCsvExportResponse,
   type AnalysisResultEnvelope,
+  type AnalysisResultHtmlReportResponse,
+  type AnalysisResultJsonExportResponse,
   type AnalysisMethodListResponse,
   type AnalysisModuleId,
   type CapabilityResult,
@@ -274,6 +281,32 @@ export default function App() {
   const [isRunningLinearModelPrediction, setIsRunningLinearModelPrediction] = useState(false);
   const [analysisFilterDrafts, setAnalysisFilterDrafts] = useState<AnalysisFilterDraft[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
+  const [analysisResultJsonExport, setAnalysisResultJsonExport] =
+    useState<AnalysisResultJsonExportResponse | null>(null);
+  const [analysisResultJsonExportError, setAnalysisResultJsonExportError] = useState<
+    string | null
+  >(null);
+  const [isCreatingAnalysisResultJsonExport, setIsCreatingAnalysisResultJsonExport] =
+    useState(false);
+  const [analysisResultCsvExport, setAnalysisResultCsvExport] =
+    useState<AnalysisResultCsvExportResponse | null>(null);
+  const [analysisResultCsvExportError, setAnalysisResultCsvExportError] = useState<string | null>(
+    null,
+  );
+  const [isCreatingAnalysisResultCsvExport, setIsCreatingAnalysisResultCsvExport] =
+    useState(false);
+  const [analysisResultHtmlReport, setAnalysisResultHtmlReport] =
+    useState<AnalysisResultHtmlReportResponse | null>(null);
+  const [analysisResultHtmlReportError, setAnalysisResultHtmlReportError] = useState<
+    string | null
+  >(null);
+  const [isCreatingAnalysisResultHtmlReport, setIsCreatingAnalysisResultHtmlReport] =
+    useState(false);
+  const [analysisResultExportDownloadError, setAnalysisResultExportDownloadError] = useState<
+    string | null
+  >(null);
+  const [isDownloadingAnalysisResultExport, setIsDownloadingAnalysisResultExport] =
+    useState(false);
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
   const [factorialDesign, setFactorialDesign] = useState<FactorialDesignResponse | null>(null);
   const [factorialDesignError, setFactorialDesignError] = useState<string | null>(null);
@@ -519,6 +552,16 @@ export default function App() {
       controller.abort();
     };
   }, []);
+
+  useEffect(() => {
+    setAnalysisResultJsonExport(null);
+    setAnalysisResultJsonExportError(null);
+    setAnalysisResultCsvExport(null);
+    setAnalysisResultCsvExportError(null);
+    setAnalysisResultHtmlReport(null);
+    setAnalysisResultHtmlReportError(null);
+    setAnalysisResultExportDownloadError(null);
+  }, [analysisResult?.analysis_id]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -3147,6 +3190,71 @@ export default function App() {
     }
   }
 
+  async function handleCreateAnalysisResultJsonExport(analysisId: string) {
+    setIsCreatingAnalysisResultJsonExport(true);
+    setAnalysisResultJsonExportError(null);
+    setAnalysisResultExportDownloadError(null);
+    try {
+      const response = await createAnalysisResultJsonExport(analysisId);
+      setAnalysisResultJsonExport(response);
+    } catch (error) {
+      setAnalysisResultJsonExport(null);
+      setAnalysisResultJsonExportError(
+        error instanceof Error ? error.message : "analysis_result_json_export_failed",
+      );
+    } finally {
+      setIsCreatingAnalysisResultJsonExport(false);
+    }
+  }
+
+  async function handleCreateAnalysisResultCsvExport(analysisId: string) {
+    setIsCreatingAnalysisResultCsvExport(true);
+    setAnalysisResultCsvExportError(null);
+    setAnalysisResultExportDownloadError(null);
+    try {
+      const response = await createAnalysisResultCsvExport(analysisId);
+      setAnalysisResultCsvExport(response);
+    } catch (error) {
+      setAnalysisResultCsvExport(null);
+      setAnalysisResultCsvExportError(
+        error instanceof Error ? error.message : "analysis_result_csv_export_failed",
+      );
+    } finally {
+      setIsCreatingAnalysisResultCsvExport(false);
+    }
+  }
+
+  async function handleCreateAnalysisResultHtmlReport(analysisId: string) {
+    setIsCreatingAnalysisResultHtmlReport(true);
+    setAnalysisResultHtmlReportError(null);
+    setAnalysisResultExportDownloadError(null);
+    try {
+      const response = await createAnalysisResultHtmlReport(analysisId);
+      setAnalysisResultHtmlReport(response);
+    } catch (error) {
+      setAnalysisResultHtmlReport(null);
+      setAnalysisResultHtmlReportError(
+        error instanceof Error ? error.message : "analysis_result_html_report_failed",
+      );
+    } finally {
+      setIsCreatingAnalysisResultHtmlReport(false);
+    }
+  }
+
+  async function handleDownloadAnalysisResultExport(analysisId: string, exportId: string) {
+    setIsDownloadingAnalysisResultExport(true);
+    setAnalysisResultExportDownloadError(null);
+    try {
+      await downloadAnalysisResultExport(analysisId, exportId);
+    } catch (error) {
+      setAnalysisResultExportDownloadError(
+        error instanceof Error ? error.message : "analysis_result_export_download_failed",
+      );
+    } finally {
+      setIsDownloadingAnalysisResultExport(false);
+    }
+  }
+
   function handleOpenDatasetPage() {
     if (typeof window !== "undefined") {
       window.history.pushState(null, "", "/");
@@ -3157,6 +3265,10 @@ export default function App() {
   }
 
   function handleSelectAnalysisMethod(moduleId: AnalysisModuleId, methodId: string | null) {
+    setAnalysisResultJsonExportError(null);
+    setAnalysisResultCsvExportError(null);
+    setAnalysisResultHtmlReportError(null);
+    setAnalysisResultExportDownloadError(null);
     selectAnalysisMethod(moduleId, methodId);
     if (methodId !== null) {
       setAppRoute({
@@ -3186,6 +3298,17 @@ export default function App() {
     analysisFilterValidationMessage,
     analysisRunError: flowError,
     analysisResult: descriptiveAnalysisResult,
+    analysisResultCsvExport,
+    analysisResultCsvExportError,
+    analysisResultExportDownloadError,
+    analysisResultHtmlReport,
+    analysisResultHtmlReportError,
+    analysisResultJsonExport,
+    analysisResultJsonExportError,
+    isCreatingAnalysisResultCsvExport,
+    isCreatingAnalysisResultHtmlReport,
+    isCreatingAnalysisResultJsonExport,
+    isDownloadingAnalysisResultExport,
     chiSquareAssociationAlpha,
     chiSquareAssociationAnalysisResult,
     chiSquareAssociationColumnColumnId: selectedChiSquareAssociationColumnColumnId,
@@ -3405,6 +3528,18 @@ export default function App() {
       request: DoeDesignResponsesUpsertRequest,
     ) => {
       void handleSaveFactorialDesignResponses(designId, request);
+    },
+    onCreateAnalysisResultCsvExport: (analysisId: string) => {
+      void handleCreateAnalysisResultCsvExport(analysisId);
+    },
+    onCreateAnalysisResultHtmlReport: (analysisId: string) => {
+      void handleCreateAnalysisResultHtmlReport(analysisId);
+    },
+    onCreateAnalysisResultJsonExport: (analysisId: string) => {
+      void handleCreateAnalysisResultJsonExport(analysisId);
+    },
+    onDownloadAnalysisResultExport: (analysisId: string, exportId: string) => {
+      void handleDownloadAnalysisResultExport(analysisId, exportId);
     },
     onRunChiSquareAssociationAnalysis: () => {
       void handleRunChiSquareAssociationAnalysis();

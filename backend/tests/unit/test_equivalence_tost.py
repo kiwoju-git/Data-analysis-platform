@@ -173,6 +173,32 @@ def test_equivalence_tost_requires_both_one_sided_tests_to_reject() -> None:
     assert result["confidence_interval"]["inside_equivalence_bounds"] is False
 
 
+def test_equivalence_tost_does_not_treat_nonsignificant_difference_as_equivalence() -> None:
+    result = calculate_equivalence_tost(
+        [["8"], ["10"], ["12"]],
+        _response_column(),
+        reference_mean=10.0,
+        lower_bound=-0.5,
+        upper_bound=0.5,
+        alpha=0.05,
+    )
+
+    assert result["estimate"]["value"] == pytest.approx(0.0, abs=1e-12)
+    assert result["tests"]["lower"]["p_value"] == pytest.approx(
+        0.35361498905772004,
+        abs=1e-12,
+    )
+    assert result["tests"]["upper"]["p_value"] == pytest.approx(
+        0.35361498905772004,
+        abs=1e-12,
+    )
+    assert result["tests"]["lower"]["reject_null"] is False
+    assert result["tests"]["upper"]["reject_null"] is False
+    assert result["tost"]["equivalent"] is False
+    assert result["confidence_interval"]["inside_equivalence_bounds"] is False
+    assert "non_significance_is_not_equivalence" in result["warnings"]
+
+
 def test_equivalence_tost_rejects_invalid_inputs_without_fake_statistic() -> None:
     with pytest.raises(EquivalenceTostError, match="equivalence_tost_design_unsupported"):
         calculate_equivalence_tost(

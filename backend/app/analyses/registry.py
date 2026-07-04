@@ -8,6 +8,37 @@ from app.api.v1.schemas.analyses import (
 )
 
 METHOD_VERSION = "0.1.0"
+METHOD_VERSIONS: dict[str, str] = {
+    "eda.descriptive": METHOD_VERSION,
+    "eda.graphical_summary": METHOD_VERSION,
+    "eda.normality": METHOD_VERSION,
+    "eda.equal_variances": METHOD_VERSION,
+    "hypothesis.one_sample_t": METHOD_VERSION,
+    "hypothesis.paired_t": METHOD_VERSION,
+    "hypothesis.two_sample_t": METHOD_VERSION,
+    "hypothesis.one_way_anova": METHOD_VERSION,
+    "hypothesis.equivalence_tost": METHOD_VERSION,
+    "hypothesis.one_sample_wilcoxon": METHOD_VERSION,
+    "hypothesis.mann_whitney": METHOD_VERSION,
+    "hypothesis.kruskal_wallis": METHOD_VERSION,
+    "categorical.one_proportion": METHOD_VERSION,
+    "categorical.two_proportion": METHOD_VERSION,
+    "categorical.chi_square_association": METHOD_VERSION,
+    "regression.pearson": METHOD_VERSION,
+    "regression.xy_correlation": METHOD_VERSION,
+    "regression.linear_model": METHOD_VERSION,
+    "regression.predict": METHOD_VERSION,
+    "regression.response_optimizer": METHOD_VERSION,
+    "quality.attribute_control_chart": METHOD_VERSION,
+    "quality.individuals_chart": METHOD_VERSION,
+    "quality.subgroup_chart": METHOD_VERSION,
+    "quality.run_chart": METHOD_VERSION,
+    "quality.capability": METHOD_VERSION,
+    "quality.gage_rr": METHOD_VERSION,
+    "quality.gage_run_chart": METHOD_VERSION,
+    "doe.factorial_design": METHOD_VERSION,
+    "doe.response_surface": METHOD_VERSION,
+}
 
 MODULES: tuple[AnalysisModuleDescriptor, ...] = (
     AnalysisModuleDescriptor(
@@ -61,6 +92,10 @@ def get_analysis_method(method_id: str) -> AnalysisMethodDescriptor | None:
     return METHOD_BY_ID.get(method_id)
 
 
+def get_method_version(method_id: str) -> str:
+    return METHOD_VERSIONS[method_id]
+
+
 def _planned(
     *,
     method_id: str,
@@ -73,7 +108,7 @@ def _planned(
 ) -> AnalysisMethodDescriptor:
     return AnalysisMethodDescriptor(
         method_id=method_id,
-        method_version=METHOD_VERSION,
+        method_version=get_method_version(method_id),
         module_id=module_id,
         label_ko=label_ko,
         label_en=label_en,
@@ -96,7 +131,7 @@ def _available(
 ) -> AnalysisMethodDescriptor:
     return AnalysisMethodDescriptor(
         method_id=method_id,
-        method_version=METHOD_VERSION,
+        method_version=get_method_version(method_id),
         module_id=module_id,
         label_ko=label_ko,
         label_en=label_en,
@@ -120,7 +155,7 @@ def _disabled(
 ) -> AnalysisMethodDescriptor:
     return AnalysisMethodDescriptor(
         method_id=method_id,
-        method_version=METHOD_VERSION,
+        method_version=get_method_version(method_id),
         module_id=module_id,
         label_ko=label_ko,
         label_en=label_en,
