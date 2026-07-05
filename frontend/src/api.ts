@@ -2620,6 +2620,278 @@ export interface OneSampleWilcoxonResult {
   test: OneSampleWilcoxonTestResult;
 }
 
+export type AnalysisRunState =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancel_requested"
+  | "cancelled";
+
+export interface AnalysisRunListItem {
+  analysis_id: string;
+  method_id: string;
+  method_version: string;
+  dataset_version_id: string | null;
+  status: AnalysisRunState;
+  stale: boolean;
+  result_available: boolean;
+  artifact_count: number;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface AnalysisRunListResponse {
+  dataset_version_id: string | null;
+  method_id: string | null;
+  status: AnalysisRunState | null;
+  stale: boolean | null;
+  result_available: boolean | null;
+  limit: number;
+  offset: number;
+  returned_count: number;
+  has_more: boolean;
+  runs: AnalysisRunListItem[];
+}
+
+export interface AnalysisRunComparisonSide {
+  analysis_id: string;
+  method_id: string;
+  method_version: string;
+  dataset_version_id: string | null;
+  status: "succeeded" | "failed" | "cancelled";
+  stale: boolean;
+  result_sha256: string;
+  warning_count: number;
+  summary_type: string | null;
+  row_count_total: number | null;
+  row_count_included: number | null;
+  source_schema_hash: string | null;
+  filter_snapshot_sha256: string | null;
+  row_snapshot_sha256: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface AnalysisRunComparisonCompatibility {
+  same_method_id: boolean;
+  same_method_version: boolean;
+  same_dataset_version_id: boolean;
+  same_summary_type: boolean;
+}
+
+export interface AnalysisRunComparisonDifference {
+  field: string;
+  left: string | number | boolean | null;
+  right: string | number | boolean | null;
+}
+
+export interface DescriptiveMetricComparison {
+  metric: string;
+  left: number | null;
+  right: number | null;
+  delta: number | null;
+}
+
+export interface DescriptiveColumnComparison {
+  column_id: string;
+  display_name: string;
+  metrics: DescriptiveMetricComparison[];
+}
+
+export interface DescriptiveStatisticsComparison {
+  summary_type: "descriptive_statistics";
+  columns: DescriptiveColumnComparison[];
+  left_only_column_ids: string[];
+  right_only_column_ids: string[];
+}
+
+export interface OneSampleTMetricComparison {
+  metric: string;
+  left: number | null;
+  right: number | null;
+  delta: number | null;
+}
+
+export interface OneSampleTSettingComparison {
+  setting: string;
+  left: string | number | boolean | null;
+  right: string | number | boolean | null;
+  same: boolean;
+}
+
+export interface OneSampleTTestComparison {
+  summary_type: "one_sample_t_test";
+  left_response_column_id: string | null;
+  right_response_column_id: string | null;
+  response_display_name: string | null;
+  same_response_column: boolean;
+  settings: OneSampleTSettingComparison[];
+  metrics: OneSampleTMetricComparison[];
+}
+
+export interface TwoSampleTMetricComparison {
+  metric: string;
+  left: number | null;
+  right: number | null;
+  delta: number | null;
+}
+
+export interface TwoSampleTSettingComparison {
+  setting: string;
+  left: string | number | boolean | null;
+  right: string | number | boolean | null;
+  same: boolean;
+}
+
+export interface TwoSampleTTestComparison {
+  summary_type: "two_sample_t_test";
+  left_response_column_id: string | null;
+  right_response_column_id: string | null;
+  response_display_name: string | null;
+  same_response_column: boolean;
+  left_group_column_id: string | null;
+  right_group_column_id: string | null;
+  group_display_name: string | null;
+  same_group_column: boolean;
+  same_group_label_set: boolean;
+  same_group_label_order: boolean;
+  settings: TwoSampleTSettingComparison[];
+  metrics: TwoSampleTMetricComparison[];
+}
+
+export interface PairedTMetricComparison {
+  metric: string;
+  left: number | null;
+  right: number | null;
+  delta: number | null;
+}
+
+export interface PairedTSettingComparison {
+  setting: string;
+  left: string | number | boolean | null;
+  right: string | number | boolean | null;
+  same: boolean;
+}
+
+export interface PairedTTestComparison {
+  summary_type: "paired_t_test";
+  left_before_column_id: string | null;
+  right_before_column_id: string | null;
+  before_display_name: string | null;
+  same_before_column: boolean;
+  left_after_column_id: string | null;
+  right_after_column_id: string | null;
+  after_display_name: string | null;
+  same_after_column: boolean;
+  settings: PairedTSettingComparison[];
+  metrics: PairedTMetricComparison[];
+}
+
+export interface EquivalenceTostMetricComparison {
+  metric: string;
+  left: number | null;
+  right: number | null;
+  delta: number | null;
+}
+
+export interface EquivalenceTostSettingComparison {
+  setting: string;
+  left: string | number | boolean | null;
+  right: string | number | boolean | null;
+  same: boolean;
+}
+
+export interface EquivalenceTostComparison {
+  summary_type: "equivalence_tost";
+  left_response_column_id: string | null;
+  right_response_column_id: string | null;
+  response_display_name: string | null;
+  same_response_column: boolean;
+  settings: EquivalenceTostSettingComparison[];
+  metrics: EquivalenceTostMetricComparison[];
+}
+
+export interface OneWayAnovaMetricComparison {
+  metric: string;
+  left: number | null;
+  right: number | null;
+  delta: number | null;
+}
+
+export interface OneWayAnovaSettingComparison {
+  setting: string;
+  left: string | number | boolean | null;
+  right: string | number | boolean | null;
+  same: boolean;
+}
+
+export interface OneWayAnovaComparison {
+  summary_type: "one_way_anova";
+  left_response_column_id: string | null;
+  right_response_column_id: string | null;
+  response_display_name: string | null;
+  same_response_column: boolean;
+  left_group_column_id: string | null;
+  right_group_column_id: string | null;
+  group_display_name: string | null;
+  same_group_column: boolean;
+  same_group_label_set: boolean;
+  same_group_label_order: boolean;
+  settings: OneWayAnovaSettingComparison[];
+  metrics: OneWayAnovaMetricComparison[];
+}
+
+export interface KruskalWallisMetricComparison {
+  metric: string;
+  left: number | null;
+  right: number | null;
+  delta: number | null;
+}
+
+export interface KruskalWallisSettingComparison {
+  setting: string;
+  left: string | number | boolean | null;
+  right: string | number | boolean | null;
+  same: boolean;
+}
+
+export interface KruskalWallisComparison {
+  summary_type: "kruskal_wallis_test";
+  left_response_column_id: string | null;
+  right_response_column_id: string | null;
+  response_display_name: string | null;
+  same_response_column: boolean;
+  left_group_column_id: string | null;
+  right_group_column_id: string | null;
+  group_display_name: string | null;
+  same_group_column: boolean;
+  same_group_label_set: boolean;
+  same_group_label_order: boolean;
+  settings: KruskalWallisSettingComparison[];
+  metrics: KruskalWallisMetricComparison[];
+}
+
+export interface AnalysisRunMethodSpecificComparison {
+  descriptive_statistics: DescriptiveStatisticsComparison | null;
+  one_sample_t_test: OneSampleTTestComparison | null;
+  two_sample_t_test: TwoSampleTTestComparison | null;
+  paired_t_test: PairedTTestComparison | null;
+  equivalence_tost: EquivalenceTostComparison | null;
+  one_way_anova: OneWayAnovaComparison | null;
+  kruskal_wallis: KruskalWallisComparison | null;
+}
+
+export interface AnalysisRunComparisonResponse {
+  left: AnalysisRunComparisonSide;
+  right: AnalysisRunComparisonSide;
+  comparable: boolean;
+  compatibility: AnalysisRunComparisonCompatibility;
+  differences: AnalysisRunComparisonDifference[];
+  method_specific: AnalysisRunMethodSpecificComparison | null;
+}
+
 export interface AnalysisResultEnvelope {
   analysis_id: string;
   method_id: string;
@@ -2703,6 +2975,21 @@ export interface AnalysisResultHtmlReportResponse {
   created_at: string;
   title: string;
   section_count: number;
+}
+
+export interface AnalysisResultExportListItem {
+  export_id: string;
+  analysis_id: string;
+  artifact_kind: string;
+  media_type: string;
+  sha256: string;
+  created_at: string;
+  download_url: string;
+}
+
+export interface AnalysisResultExportListResponse {
+  analysis_id: string;
+  exports: AnalysisResultExportListItem[];
 }
 
 export function getApiBaseUrl(): string {
@@ -2952,6 +3239,76 @@ export async function fetchFactorialDesignResponses(
   return (await response.json()) as DoeDesignResponsesResponse;
 }
 
+export async function fetchAnalysisRuns({
+  datasetVersionId,
+  methodId,
+  resultAvailable,
+  limit = 50,
+  offset = 0,
+  stale,
+  status,
+}: {
+  datasetVersionId?: string | null;
+  methodId?: string | null;
+  resultAvailable?: boolean | null;
+  limit?: number;
+  offset?: number;
+  stale?: boolean | null;
+  status?: AnalysisRunState | null;
+} = {}): Promise<AnalysisRunListResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (datasetVersionId !== undefined && datasetVersionId !== null) {
+    params.set("dataset_version_id", datasetVersionId);
+  }
+  if (methodId !== undefined && methodId !== null && methodId.length > 0) {
+    params.set("method_id", methodId);
+  }
+  if (status !== undefined && status !== null) {
+    params.set("status", status);
+  }
+  if (stale !== undefined && stale !== null) {
+    params.set("stale", String(stale));
+  }
+  if (resultAvailable !== undefined && resultAvailable !== null) {
+    params.set("result_available", String(resultAvailable));
+  }
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/analysis-runs?${params}`, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_history_fetch_failed"));
+  }
+
+  return (await response.json()) as AnalysisRunListResponse;
+}
+
+export async function fetchAnalysisRunComparison(
+  leftAnalysisId: string,
+  rightAnalysisId: string,
+): Promise<AnalysisRunComparisonResponse> {
+  const params = new URLSearchParams({
+    left_analysis_id: leftAnalysisId,
+    right_analysis_id: rightAnalysisId,
+  });
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/analysis-runs/comparison?${params}`, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_comparison_failed"));
+  }
+
+  return (await response.json()) as AnalysisRunComparisonResponse;
+}
+
 export async function createAnalysisRun(
   request: AnalysisRunRequest,
 ): Promise<AnalysisResultEnvelope> {
@@ -2966,6 +3323,20 @@ export async function createAnalysisRun(
 
   if (!response.ok) {
     throw new Error(await apiErrorCode(response, "analysis_run_failed"));
+  }
+
+  return (await response.json()) as AnalysisResultEnvelope;
+}
+
+export async function fetchAnalysisRunResult(analysisId: string): Promise<AnalysisResultEnvelope> {
+  const response = await fetchApi(`${getApiBaseUrl()}/api/v1/analysis-runs/${analysisId}/result`, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_result_fetch_failed"));
   }
 
   return (await response.json()) as AnalysisResultEnvelope;
@@ -3029,6 +3400,26 @@ export async function createAnalysisResultHtmlReport(
   }
 
   return (await response.json()) as AnalysisResultHtmlReportResponse;
+}
+
+export async function fetchAnalysisResultExports(
+  analysisId: string,
+): Promise<AnalysisResultExportListResponse> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/v1/analysis-runs/${analysisId}/exports`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_result_exports_fetch_failed"));
+  }
+
+  return (await response.json()) as AnalysisResultExportListResponse;
 }
 
 export async function downloadAnalysisResultExport(

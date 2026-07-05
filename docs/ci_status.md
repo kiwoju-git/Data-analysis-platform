@@ -1,6 +1,6 @@
 # CI Status
 
-Last updated: 2026-07-04
+Last updated: 2026-07-06
 
 ## Workflow Configuration
 
@@ -14,9 +14,9 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Local Validation
 
-- Full local Windows validation for the current DOE design report and statistical QA working tree passed on 2026-07-04 with `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
-- The run passed backend ruff check, backend ruff format check, backend mypy over 75 source files, backend pytest with 377 tests, frontend lint, frontend typecheck, frontend Vitest with 45 tests, and frontend production build.
-- The previous documentation mismatch between 267/277/301/311/320/329/338/348/357/361/363/375 backend tests is resolved; the latest recorded backend pytest count is 377.
+- Full local Windows validation for the current Kruskal-Wallis stored-result comparison working tree passed on 2026-07-06 with `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
+- The run passed backend ruff check, backend ruff format check, backend mypy over 75 source files, backend pytest with 387 tests, frontend lint, frontend typecheck, frontend Vitest with 53 tests, and frontend production build.
+- The previous documentation mismatch between 267/277/301/311/320/329/338/348/357/361/363/375/377/380/381/382/383/384/385/386 backend tests is resolved; the latest recorded backend pytest count is 387.
 
 ## Remote GitHub Actions Verification
 

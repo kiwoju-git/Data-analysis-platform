@@ -18,8 +18,11 @@ from app.api.v1.schemas.analyses import (
     AnalysisProvenance,
     AnalysisResultCsvExportResponse,
     AnalysisResultEnvelope,
+    AnalysisResultExportListResponse,
     AnalysisResultHtmlReportResponse,
     AnalysisResultJsonExportResponse,
+    AnalysisRunComparisonResponse,
+    AnalysisRunListResponse,
     AnalysisRunStatusResponse,
     AnalysisWarning,
     GageRrPreflightResponse,
@@ -919,7 +922,8 @@ def test_descriptive_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_descriptive_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in error["message"]
+    assert forbidden_text not in (error["developer_detail"] or "")
 
 
 def test_analysis_provenance_includes_runtime_metadata_without_paths_or_values(
@@ -7592,6 +7596,1052 @@ def test_analysis_result_api_returns_persisted_envelope_and_detects_checksum_mis
     assert record.result_path not in tampered_response.text
 
 
+def test_analysis_run_list_api_returns_paginated_history_without_internal_paths(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        first_version = _upload_confirmed_numeric_dataset(client)
+        second_version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"gamma,delta\n3,30\n4,40\n",
+            filename="second.csv",
+        )
+        first_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": first_version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [first_version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        second_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.graphical_summary",
+                "method_version": "0.1.0",
+                "dataset_version_id": first_version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [first_version["columns"][1]["column_id"]],
+                    "point_limit": 20,
+                },
+            },
+        )
+        other_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": second_version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [second_version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        first_column = first_version["columns"][0]
+        patch_response = client.patch(
+            f"/api/v1/dataset-versions/{first_version['version_id']}/schema",
+            json={
+                "columns": [
+                    {
+                        "column_id": first_column["column_id"],
+                        "display_name": "stale source",
+                        "measurement_level": "continuous",
+                        "role": "feature",
+                        "unit": "kg",
+                    },
+                ],
+            },
+        )
+        all_history_response = client.get("/api/v1/analysis-runs?limit=10&offset=0")
+        filtered_response = client.get(
+            f"/api/v1/analysis-runs?dataset_version_id={first_version['version_id']}&limit=10",
+        )
+        page_response = client.get("/api/v1/analysis-runs?limit=1&offset=1")
+        method_filtered_response = client.get(
+            "/api/v1/analysis-runs?method_id=eda.graphical_summary&limit=10",
+        )
+        stale_filtered_response = client.get(
+            "/api/v1/analysis-runs?stale=true&result_available=true&limit=10",
+        )
+        status_filtered_response = client.get(
+            "/api/v1/analysis-runs?status=succeeded&limit=10",
+        )
+
+    assert first_run.status_code == 201
+    assert second_run.status_code == 201
+    assert other_run.status_code == 201
+    assert patch_response.status_code == 200
+    assert all_history_response.status_code == 200
+    all_payload = all_history_response.json()
+    AnalysisRunListResponse.model_validate(all_payload)
+    assert all_payload["limit"] == 10
+    assert all_payload["offset"] == 0
+    assert all_payload["returned_count"] == 3
+    assert all_payload["has_more"] is False
+    assert [run["analysis_id"] for run in all_payload["runs"]] == [
+        other_run.json()["analysis_id"],
+        second_run.json()["analysis_id"],
+        first_run.json()["analysis_id"],
+    ]
+    serialized_all = json.dumps(all_payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized_all
+    assert "result_path" not in serialized_all
+    assert "workspaces/analyses" not in serialized_all
+    assert "result" not in all_payload["runs"][0]
+
+    assert filtered_response.status_code == 200
+    filtered_payload = filtered_response.json()
+    AnalysisRunListResponse.model_validate(filtered_payload)
+    assert filtered_payload["dataset_version_id"] == first_version["version_id"]
+    assert filtered_payload["returned_count"] == 2
+    assert {run["analysis_id"] for run in filtered_payload["runs"]} == {
+        first_run.json()["analysis_id"],
+        second_run.json()["analysis_id"],
+    }
+    assert all(
+        run["dataset_version_id"] == first_version["version_id"] for run in filtered_payload["runs"]
+    )
+    assert all(run["stale"] is True for run in filtered_payload["runs"])
+    assert all(run["result_available"] is True for run in filtered_payload["runs"])
+    assert all(run["artifact_count"] >= 1 for run in filtered_payload["runs"])
+
+    assert page_response.status_code == 200
+    page_payload = page_response.json()
+    assert page_payload["limit"] == 1
+    assert page_payload["offset"] == 1
+    assert page_payload["returned_count"] == 1
+    assert page_payload["has_more"] is True
+    assert page_payload["runs"][0]["analysis_id"] == second_run.json()["analysis_id"]
+
+    assert method_filtered_response.status_code == 200
+    method_payload = method_filtered_response.json()
+    assert method_payload["method_id"] == "eda.graphical_summary"
+    assert method_payload["returned_count"] == 1
+    assert method_payload["runs"][0]["analysis_id"] == second_run.json()["analysis_id"]
+
+    assert stale_filtered_response.status_code == 200
+    stale_payload = stale_filtered_response.json()
+    assert stale_payload["stale"] is True
+    assert stale_payload["result_available"] is True
+    assert {run["analysis_id"] for run in stale_payload["runs"]} == {
+        first_run.json()["analysis_id"],
+        second_run.json()["analysis_id"],
+    }
+
+    assert status_filtered_response.status_code == 200
+    status_payload = status_filtered_response.json()
+    assert status_payload["status"] == "succeeded"
+    assert status_payload["returned_count"] == 3
+
+
+def test_analysis_run_comparison_api_returns_metadata_only_comparison(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        first_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        second_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "filter_snapshot": {
+                    "expression_version": 1,
+                    "conditions": [
+                        {
+                            "column_id": version["columns"][0]["column_id"],
+                            "operator": "gt",
+                            "value": 1,
+                        },
+                    ],
+                },
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        other_method_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.graphical_summary",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "point_limit": 20,
+                },
+            },
+        )
+        comparison_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={second_run.json()['analysis_id']}",
+        )
+        incompatible_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={other_method_run.json()['analysis_id']}",
+        )
+        same_id_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={first_run.json()['analysis_id']}",
+        )
+
+    assert first_run.status_code == 201
+    assert second_run.status_code == 201
+    assert other_method_run.status_code == 201
+
+    assert comparison_response.status_code == 200
+    payload = comparison_response.json()
+    AnalysisRunComparisonResponse.model_validate(payload)
+    assert payload["comparable"] is True
+    assert payload["compatibility"] == {
+        "same_method_id": True,
+        "same_method_version": True,
+        "same_dataset_version_id": True,
+        "same_summary_type": True,
+    }
+    assert payload["left"]["method_id"] == "eda.descriptive"
+    assert payload["right"]["method_id"] == "eda.descriptive"
+    assert payload["left"]["summary_type"] == "descriptive_statistics"
+    assert payload["right"]["summary_type"] == "descriptive_statistics"
+    assert payload["left"]["result_sha256"] != payload["right"]["result_sha256"]
+    assert {difference["field"] for difference in payload["differences"]} >= {
+        "result_sha256",
+        "row_count_included",
+        "row_snapshot_sha256",
+    }
+    method_specific = payload["method_specific"]
+    assert method_specific is not None
+    descriptive = method_specific["descriptive_statistics"]
+    assert descriptive["summary_type"] == "descriptive_statistics"
+    assert descriptive["left_only_column_ids"] == []
+    assert descriptive["right_only_column_ids"] == []
+    assert len(descriptive["columns"]) == 1
+    column_comparison = descriptive["columns"][0]
+    assert column_comparison["column_id"] == version["columns"][0]["column_id"]
+    mean_delta = next(
+        metric for metric in column_comparison["metrics"] if metric["metric"] == "mean"
+    )
+    assert mean_delta == {"metric": "mean", "left": 1.5, "right": 2.0, "delta": 0.5}
+    n_used_delta = next(
+        metric for metric in column_comparison["metrics"] if metric["metric"] == "n_used"
+    )
+    assert n_used_delta == {"metric": "n_used", "left": 2, "right": 1, "delta": -1.0}
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized
+    assert "result_path" not in serialized
+    assert "workspaces/analyses" not in serialized
+    assert '"result"' not in serialized
+
+    assert incompatible_response.status_code == 200
+    incompatible_payload = incompatible_response.json()
+    AnalysisRunComparisonResponse.model_validate(incompatible_payload)
+    assert incompatible_payload["comparable"] is False
+    assert incompatible_payload["compatibility"]["same_method_id"] is False
+    assert incompatible_payload["compatibility"]["same_summary_type"] is False
+    assert incompatible_payload["method_specific"] is None
+
+    assert same_id_response.status_code == 400
+    assert same_id_response.json()["error"]["code"] == "analysis_comparison_requires_two_runs"
+
+
+def test_analysis_run_comparison_api_returns_one_sample_t_stored_metrics(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response\n9\n10\n11\n12\n",
+            filename="one-sample-t-comparison.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        first_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_sample_t",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {"response": response_column_id},
+                "options": {
+                    "response_column_id": response_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "null_mean": 10.0,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        second_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_sample_t",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {"response": response_column_id},
+                "options": {
+                    "response_column_id": response_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "null_mean": 10.25,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        comparison_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={second_run.json()['analysis_id']}",
+        )
+
+    assert first_run.status_code == 201
+    assert second_run.status_code == 201
+    assert comparison_response.status_code == 200
+    payload = comparison_response.json()
+    AnalysisRunComparisonResponse.model_validate(payload)
+    assert payload["comparable"] is True
+    assert payload["left"]["method_id"] == "hypothesis.one_sample_t"
+    assert payload["right"]["summary_type"] == "one_sample_t_test"
+    method_specific = payload["method_specific"]
+    assert method_specific is not None
+    comparison = method_specific["one_sample_t_test"]
+    assert comparison["summary_type"] == "one_sample_t_test"
+    assert comparison["same_response_column"] is True
+    assert comparison["left_response_column_id"] == response_column_id
+    assert comparison["right_response_column_id"] == response_column_id
+    settings_by_name = {item["setting"]: item for item in comparison["settings"]}
+    assert settings_by_name["null_mean"] == {
+        "setting": "null_mean",
+        "left": 10.0,
+        "right": 10.25,
+        "same": False,
+    }
+    metrics_by_name = {item["metric"]: item for item in comparison["metrics"]}
+    assert metrics_by_name["sample.mean"] == {
+        "metric": "sample.mean",
+        "left": 10.5,
+        "right": 10.5,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["contrast.estimate"] == {
+        "metric": "contrast.estimate",
+        "left": 0.5,
+        "right": 0.25,
+        "delta": -0.25,
+    }
+    assert metrics_by_name["n_used"] == {
+        "metric": "n_used",
+        "left": 4,
+        "right": 4,
+        "delta": 0.0,
+    }
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized
+    assert "result_path" not in serialized
+    assert "workspaces/analyses" not in serialized
+    assert '"result"' not in serialized
+
+
+def test_analysis_run_comparison_api_returns_two_sample_t_stored_metrics(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n1,A\n2,A\n4,B\n5,B\n",
+            filename="two-sample-t-comparison.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        group_column_id = version["columns"][1]["column_id"]
+        first_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.two_sample_t",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "group": group_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "group_column_id": group_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "variance_assumption": "welch",
+                    "null_difference": 0.0,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        second_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.two_sample_t",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "group": group_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "group_column_id": group_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "variance_assumption": "welch",
+                    "null_difference": -1.0,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        comparison_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={second_run.json()['analysis_id']}",
+        )
+
+    assert first_run.status_code == 201
+    assert second_run.status_code == 201
+    assert comparison_response.status_code == 200
+    payload = comparison_response.json()
+    AnalysisRunComparisonResponse.model_validate(payload)
+    assert payload["comparable"] is True
+    assert payload["left"]["method_id"] == "hypothesis.two_sample_t"
+    assert payload["right"]["summary_type"] == "two_sample_t_test"
+    method_specific = payload["method_specific"]
+    assert method_specific is not None
+    comparison = method_specific["two_sample_t_test"]
+    assert comparison["summary_type"] == "two_sample_t_test"
+    assert comparison["same_response_column"] is True
+    assert comparison["same_group_column"] is True
+    assert comparison["same_group_label_set"] is True
+    assert comparison["same_group_label_order"] is True
+    assert comparison["left_response_column_id"] == response_column_id
+    assert comparison["right_group_column_id"] == group_column_id
+    settings_by_name = {item["setting"]: item for item in comparison["settings"]}
+    assert settings_by_name["null_difference"] == {
+        "setting": "null_difference",
+        "left": 0.0,
+        "right": -1.0,
+        "same": False,
+    }
+    metrics_by_name = {item["metric"]: item for item in comparison["metrics"]}
+    assert metrics_by_name["n_used"] == {
+        "metric": "n_used",
+        "left": 4,
+        "right": 4,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["groups.0.mean"] == {
+        "metric": "groups.0.mean",
+        "left": 1.5,
+        "right": 1.5,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["groups.1.mean"] == {
+        "metric": "groups.1.mean",
+        "left": 4.5,
+        "right": 4.5,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["contrast.estimate"] == {
+        "metric": "contrast.estimate",
+        "left": -3.0,
+        "right": -3.0,
+        "delta": 0.0,
+    }
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized
+    assert "result_path" not in serialized
+    assert "workspaces/analyses" not in serialized
+    assert '"result"' not in serialized
+    assert "group_1_label" not in serialized
+    assert "group_2_label" not in serialized
+
+
+def test_analysis_run_comparison_api_returns_paired_t_stored_metrics(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"before,after\n1,2\n2,4\n3,5\n4,7\n",
+            filename="paired-t-comparison.csv",
+        )
+        before_column_id = version["columns"][0]["column_id"]
+        after_column_id = version["columns"][1]["column_id"]
+        first_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.paired_t",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "before": before_column_id,
+                    "after": after_column_id,
+                },
+                "options": {
+                    "before_column_id": before_column_id,
+                    "after_column_id": after_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "null_difference": 0.0,
+                    "missing_policy": "complete_pair",
+                },
+            },
+        )
+        second_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.paired_t",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "before": before_column_id,
+                    "after": after_column_id,
+                },
+                "options": {
+                    "before_column_id": before_column_id,
+                    "after_column_id": after_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "alternative": "two_sided",
+                    "null_difference": 0.5,
+                    "missing_policy": "complete_pair",
+                },
+            },
+        )
+        comparison_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={second_run.json()['analysis_id']}",
+        )
+
+    assert first_run.status_code == 201
+    assert second_run.status_code == 201
+    assert comparison_response.status_code == 200
+    payload = comparison_response.json()
+    AnalysisRunComparisonResponse.model_validate(payload)
+    assert payload["comparable"] is True
+    assert payload["left"]["method_id"] == "hypothesis.paired_t"
+    assert payload["right"]["summary_type"] == "paired_t_test"
+    method_specific = payload["method_specific"]
+    assert method_specific is not None
+    comparison = method_specific["paired_t_test"]
+    assert comparison["summary_type"] == "paired_t_test"
+    assert comparison["same_before_column"] is True
+    assert comparison["same_after_column"] is True
+    assert comparison["left_before_column_id"] == before_column_id
+    assert comparison["right_after_column_id"] == after_column_id
+    settings_by_name = {item["setting"]: item for item in comparison["settings"]}
+    assert settings_by_name["null_difference"] == {
+        "setting": "null_difference",
+        "left": 0.0,
+        "right": 0.5,
+        "same": False,
+    }
+    metrics_by_name = {item["metric"]: item for item in comparison["metrics"]}
+    assert metrics_by_name["n_used"] == {
+        "metric": "n_used",
+        "left": 4,
+        "right": 4,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["paired_sample.mean_difference"] == {
+        "metric": "paired_sample.mean_difference",
+        "left": 2.0,
+        "right": 2.0,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["contrast.estimate"] == {
+        "metric": "contrast.estimate",
+        "left": 2.0,
+        "right": 1.5,
+        "delta": -0.5,
+    }
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized
+    assert "result_path" not in serialized
+    assert "workspaces/analyses" not in serialized
+    assert '"result"' not in serialized
+
+
+def test_analysis_run_comparison_api_returns_equivalence_tost_stored_metrics(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response\n9.1\n9.8\n10.4\n10.2\n9.9\n10.1\n",
+            filename="equivalence-tost-comparison.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        first_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.equivalence_tost",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {"response": response_column_id},
+                "options": {
+                    "design": "one_sample_mean",
+                    "response_column_id": response_column_id,
+                    "reference_mean": 10.0,
+                    "lower_bound": -0.8,
+                    "upper_bound": 0.8,
+                    "alpha": 0.05,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        second_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.equivalence_tost",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {"response": response_column_id},
+                "options": {
+                    "design": "one_sample_mean",
+                    "response_column_id": response_column_id,
+                    "reference_mean": 10.0,
+                    "lower_bound": -0.25,
+                    "upper_bound": 0.25,
+                    "alpha": 0.05,
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        comparison_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={second_run.json()['analysis_id']}",
+        )
+
+    assert first_run.status_code == 201
+    assert second_run.status_code == 201
+    assert comparison_response.status_code == 200
+    payload = comparison_response.json()
+    AnalysisRunComparisonResponse.model_validate(payload)
+    assert payload["comparable"] is True
+    assert payload["left"]["method_id"] == "hypothesis.equivalence_tost"
+    assert payload["right"]["summary_type"] == "equivalence_tost"
+    method_specific = payload["method_specific"]
+    assert method_specific is not None
+    comparison = method_specific["equivalence_tost"]
+    assert comparison["summary_type"] == "equivalence_tost"
+    assert comparison["same_response_column"] is True
+    assert comparison["left_response_column_id"] == response_column_id
+    assert comparison["right_response_column_id"] == response_column_id
+    settings_by_name = {item["setting"]: item for item in comparison["settings"]}
+    assert settings_by_name["equivalence_bounds.lower"] == {
+        "setting": "equivalence_bounds.lower",
+        "left": -0.8,
+        "right": -0.25,
+        "same": False,
+    }
+    assert settings_by_name["equivalence_bounds.upper"] == {
+        "setting": "equivalence_bounds.upper",
+        "left": 0.8,
+        "right": 0.25,
+        "same": False,
+    }
+    assert settings_by_name["tost.equivalent"]["same"] is False
+    metrics_by_name = {item["metric"]: item for item in comparison["metrics"]}
+    assert metrics_by_name["sample.mean"] == {
+        "metric": "sample.mean",
+        "left": 9.916666666666666,
+        "right": 9.916666666666666,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["estimate.value"] == {
+        "metric": "estimate.value",
+        "left": -0.08333333333333393,
+        "right": -0.08333333333333393,
+        "delta": 0.0,
+    }
+    assert (
+        metrics_by_name["tests.upper.p_value"]["right"]
+        > metrics_by_name["tests.upper.p_value"]["left"]
+    )
+    assert metrics_by_name["tost.p_value"]["right"] > metrics_by_name["tost.p_value"]["left"]
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized
+    assert "result_path" not in serialized
+    assert "workspaces/analyses" not in serialized
+    assert '"result"' not in serialized
+
+
+def test_analysis_run_comparison_api_returns_one_way_anova_stored_metrics(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"response,group\n"
+                b"8,secret-dose-low\n"
+                b"9,secret-dose-low\n"
+                b"6,secret-dose-low\n"
+                b"7,secret-dose-low\n"
+                b"10,secret-dose-mid\n"
+                b"12,secret-dose-mid\n"
+                b"9,secret-dose-mid\n"
+                b"11,secret-dose-mid\n"
+                b"13,secret-dose-high\n"
+                b"14,secret-dose-high\n"
+                b"12,secret-dose-high\n"
+                b"15,secret-dose-high\n"
+            ),
+            filename="one-way-anova-comparison.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        group_column_id = version["columns"][1]["column_id"]
+        first_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_way_anova",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "group": group_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "group_column_id": group_column_id,
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "anova_type": "standard",
+                    "posthoc_method": "tukey_kramer",
+                    "posthoc_policy": "after_significant",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        second_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.one_way_anova",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "group": group_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "group_column_id": group_column_id,
+                    "alpha": 0.01,
+                    "confidence_level": 0.95,
+                    "anova_type": "standard",
+                    "posthoc_method": "tukey_kramer",
+                    "posthoc_policy": "after_significant",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        comparison_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={second_run.json()['analysis_id']}",
+        )
+
+    assert first_run.status_code == 201
+    assert second_run.status_code == 201
+    assert comparison_response.status_code == 200
+    payload = comparison_response.json()
+    AnalysisRunComparisonResponse.model_validate(payload)
+    assert payload["comparable"] is True
+    assert payload["left"]["method_id"] == "hypothesis.one_way_anova"
+    assert payload["right"]["summary_type"] == "one_way_anova"
+    method_specific = payload["method_specific"]
+    assert method_specific is not None
+    comparison = method_specific["one_way_anova"]
+    assert comparison["summary_type"] == "one_way_anova"
+    assert comparison["same_response_column"] is True
+    assert comparison["same_group_column"] is True
+    assert comparison["same_group_label_set"] is True
+    assert comparison["same_group_label_order"] is True
+    assert comparison["left_response_column_id"] == response_column_id
+    assert comparison["right_group_column_id"] == group_column_id
+    settings_by_name = {item["setting"]: item for item in comparison["settings"]}
+    assert settings_by_name["alpha"] == {
+        "setting": "alpha",
+        "left": 0.05,
+        "right": 0.01,
+        "same": False,
+    }
+    assert settings_by_name["posthoc.performed"] == {
+        "setting": "posthoc.performed",
+        "left": True,
+        "right": True,
+        "same": True,
+    }
+    metrics_by_name = {item["metric"]: item for item in comparison["metrics"]}
+    assert metrics_by_name["group_count"] == {
+        "metric": "group_count",
+        "left": 3,
+        "right": 3,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["groups.0.mean"] == {
+        "metric": "groups.0.mean",
+        "left": 7.5,
+        "right": 7.5,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["groups.2.mean"] == {
+        "metric": "groups.2.mean",
+        "left": 13.5,
+        "right": 13.5,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["test.f_statistic"]["metric"] == "test.f_statistic"
+    assert metrics_by_name["test.f_statistic"]["left"] == pytest.approx(21.6, abs=1e-12)
+    assert metrics_by_name["test.f_statistic"]["right"] == pytest.approx(21.6, abs=1e-12)
+    assert metrics_by_name["test.f_statistic"]["delta"] == pytest.approx(0.0, abs=1e-12)
+    assert (
+        metrics_by_name["test.effect_size.omega_squared"]["metric"]
+        == "test.effect_size.omega_squared"
+    )
+    assert metrics_by_name["test.effect_size.omega_squared"]["left"] == pytest.approx(
+        0.7744360902255639,
+        abs=1e-12,
+    )
+    assert metrics_by_name["test.effect_size.omega_squared"]["right"] == pytest.approx(
+        0.7744360902255639,
+        abs=1e-12,
+    )
+    assert metrics_by_name["test.effect_size.omega_squared"]["delta"] == pytest.approx(
+        0.0,
+        abs=1e-12,
+    )
+    assert metrics_by_name["posthoc.comparison_count"] == {
+        "metric": "posthoc.comparison_count",
+        "left": 3,
+        "right": 3,
+        "delta": 0.0,
+    }
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized
+    assert "result_path" not in serialized
+    assert "workspaces/analyses" not in serialized
+    assert '"result"' not in serialized
+    assert '"group_label"' not in serialized
+    assert "group_1_label" not in serialized
+    assert "group_2_label" not in serialized
+    assert "secret-dose-low" not in serialized
+    assert "secret-dose-mid" not in serialized
+    assert "secret-dose-high" not in serialized
+
+
+def test_analysis_run_comparison_api_returns_kruskal_wallis_stored_metrics(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"response,group\n"
+                b"1,secret-rank-low\n"
+                b"2,secret-rank-low\n"
+                b"3,secret-rank-low\n"
+                b"4,secret-rank-mid\n"
+                b"5,secret-rank-mid\n"
+                b"6,secret-rank-mid\n"
+                b"7,secret-rank-high\n"
+                b"8,secret-rank-high\n"
+                b"9,secret-rank-high\n"
+            ),
+            filename="kruskal-wallis-comparison.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        group_column_id = version["columns"][1]["column_id"]
+        first_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.kruskal_wallis",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "group": group_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "group_column_id": group_column_id,
+                    "alpha": 0.05,
+                    "posthoc_method": "dunn_holm",
+                    "posthoc_policy": "after_significant",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        second_run = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.kruskal_wallis",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "group": group_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "group_column_id": group_column_id,
+                    "alpha": 0.01,
+                    "posthoc_method": "dunn_holm",
+                    "posthoc_policy": "after_significant",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        comparison_response = client.get(
+            "/api/v1/analysis-runs/comparison"
+            f"?left_analysis_id={first_run.json()['analysis_id']}"
+            f"&right_analysis_id={second_run.json()['analysis_id']}",
+        )
+
+    assert first_run.status_code == 201
+    assert second_run.status_code == 201
+    assert comparison_response.status_code == 200
+    payload = comparison_response.json()
+    AnalysisRunComparisonResponse.model_validate(payload)
+    assert payload["comparable"] is True
+    assert payload["left"]["method_id"] == "hypothesis.kruskal_wallis"
+    assert payload["right"]["summary_type"] == "kruskal_wallis_test"
+    method_specific = payload["method_specific"]
+    assert method_specific is not None
+    comparison = method_specific["kruskal_wallis"]
+    assert comparison["summary_type"] == "kruskal_wallis_test"
+    assert comparison["same_response_column"] is True
+    assert comparison["same_group_column"] is True
+    assert comparison["same_group_label_set"] is True
+    assert comparison["same_group_label_order"] is True
+    assert comparison["left_response_column_id"] == response_column_id
+    assert comparison["right_group_column_id"] == group_column_id
+    settings_by_name = {item["setting"]: item for item in comparison["settings"]}
+    assert settings_by_name["alpha"] == {
+        "setting": "alpha",
+        "left": 0.05,
+        "right": 0.01,
+        "same": False,
+    }
+    assert settings_by_name["posthoc.performed"] == {
+        "setting": "posthoc.performed",
+        "left": True,
+        "right": False,
+        "same": False,
+    }
+    assert settings_by_name["posthoc.reason"] == {
+        "setting": "posthoc.reason",
+        "left": None,
+        "right": "overall_not_significant",
+        "same": False,
+    }
+    metrics_by_name = {item["metric"]: item for item in comparison["metrics"]}
+    assert metrics_by_name["group_count"] == {
+        "metric": "group_count",
+        "left": 3,
+        "right": 3,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["groups.0.mean_rank"] == {
+        "metric": "groups.0.mean_rank",
+        "left": 2.0,
+        "right": 2.0,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["groups.2.rank_sum"] == {
+        "metric": "groups.2.rank_sum",
+        "left": 24.0,
+        "right": 24.0,
+        "delta": 0.0,
+    }
+    assert metrics_by_name["test.h_statistic"]["metric"] == "test.h_statistic"
+    assert metrics_by_name["test.h_statistic"]["left"] == pytest.approx(7.2, abs=1e-12)
+    assert metrics_by_name["test.h_statistic"]["right"] == pytest.approx(7.2, abs=1e-12)
+    assert metrics_by_name["test.h_statistic"]["delta"] == pytest.approx(0.0, abs=1e-12)
+    assert (
+        metrics_by_name["test.effect_size.epsilon_squared"]["metric"]
+        == "test.effect_size.epsilon_squared"
+    )
+    assert metrics_by_name["test.effect_size.epsilon_squared"]["left"] == pytest.approx(
+        0.8666666666666667,
+        abs=1e-12,
+    )
+    assert metrics_by_name["test.effect_size.epsilon_squared"]["right"] == pytest.approx(
+        0.8666666666666667,
+        abs=1e-12,
+    )
+    assert metrics_by_name["posthoc.comparison_count"] == {
+        "metric": "posthoc.comparison_count",
+        "left": 3,
+        "right": 0,
+        "delta": -3.0,
+    }
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized
+    assert "result_path" not in serialized
+    assert "workspaces/analyses" not in serialized
+    assert '"result"' not in serialized
+    assert '"group_label"' not in serialized
+    assert "group_1_label" not in serialized
+    assert "group_2_label" not in serialized
+    assert "secret-rank-low" not in serialized
+    assert "secret-rank-mid" not in serialized
+    assert "secret-rank-high" not in serialized
+
+
 def test_analysis_result_json_export_creates_checksum_validated_artifact(
     tmp_path,
 ) -> None:
@@ -7774,6 +8824,19 @@ def test_analysis_result_csv_export_creates_safe_checksum_validated_artifact(
     assert "workspaces/analyses" not in export_text
 
 
+def test_analysis_result_csv_export_sanitizes_formula_like_values_explicitly() -> None:
+    from app.services.analysis_runs import _sanitize_csv_cell
+
+    assert _sanitize_csv_cell("=1+1") == "'=1+1"
+    assert _sanitize_csv_cell("+CMD") == "'+CMD"
+    assert _sanitize_csv_cell("-10") == "'-10"
+    assert _sanitize_csv_cell("@cmd") == "'@cmd"
+    assert _sanitize_csv_cell("\tcmd") == "'\tcmd"
+    assert _sanitize_csv_cell("\ncmd") == "'\ncmd"
+    assert _sanitize_csv_cell("  =1+1") == "'  =1+1"
+    assert _sanitize_csv_cell("plain text") == "plain text"
+
+
 def test_analysis_result_csv_export_detects_result_checksum_mismatch_without_artifact(
     tmp_path,
 ) -> None:
@@ -7877,6 +8940,8 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert len(export_bytes) == export_payload["size_bytes"]
     export_text = export_bytes.decode("utf-8")
     assert "기술통계 요약" in export_text
+    assert "Content-Security-Policy" in export_text
+    assert "default-src 'none'" in export_text
     assert "<th>Mean</th>" in export_text
     assert "<td>1.5</td>" in export_text
     assert "<td>0.7071067811865476</td>" in export_text
@@ -7888,6 +8953,8 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
 
     assert download_response.status_code == 200
     assert download_response.headers["content-type"].startswith("text/html")
+    assert download_response.headers["x-content-type-options"] == "nosniff"
+    assert download_response.headers["etag"] == f"\"sha256:{export_payload['sha256']}\""
     assert "attachment" in download_response.headers["content-disposition"]
     assert export_payload["export_id"] in download_response.headers["content-disposition"]
     assert hashlib.sha256(download_response.content).hexdigest() == export_payload["sha256"]
@@ -8758,6 +9825,8 @@ def test_analysis_result_export_downloads_checksum_validated_json_and_csv_artifa
     assert missing_download_response.json()["error"]["code"] == "analysis_export_not_found"
 
     assert json_download_response.headers["content-type"].startswith("application/json")
+    assert json_download_response.headers["x-content-type-options"] == "nosniff"
+    assert json_download_response.headers["etag"] == f"\"sha256:{json_export['sha256']}\""
     assert "attachment" in json_download_response.headers["content-disposition"]
     assert json_export["export_id"] in json_download_response.headers["content-disposition"]
     assert str(tmp_path) not in json_download_response.headers["content-disposition"]
@@ -8769,6 +9838,8 @@ def test_analysis_result_export_downloads_checksum_validated_json_and_csv_artifa
     assert "workspaces/analyses" not in json.dumps(downloaded_json, ensure_ascii=False)
 
     assert csv_download_response.headers["content-type"].startswith("text/csv")
+    assert csv_download_response.headers["x-content-type-options"] == "nosniff"
+    assert csv_download_response.headers["etag"] == f"\"sha256:{csv_export['sha256']}\""
     assert "attachment" in csv_download_response.headers["content-disposition"]
     assert csv_export["export_id"] in csv_download_response.headers["content-disposition"]
     assert str(tmp_path) not in csv_download_response.headers["content-disposition"]
@@ -8777,6 +9848,67 @@ def test_analysis_result_export_downloads_checksum_validated_json_and_csv_artifa
     assert rows[0] == ["section", "path", "value"]
     assert str(tmp_path) not in csv_download_response.text
     assert "workspaces/analyses" not in csv_download_response.text
+
+
+def test_analysis_result_export_list_returns_created_exports_without_internal_paths(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_numeric_dataset(client)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "eda.descriptive",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "column_ids": [version["columns"][0]["column_id"]],
+                    "missing_policy": "available_case_by_column",
+                },
+            },
+        )
+        analysis_id = response.json()["analysis_id"]
+        json_export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/json")
+        csv_export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/csv")
+        html_export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/html")
+        export_list_response = client.get(f"/api/v1/analysis-runs/{analysis_id}/exports")
+        missing_list_response = client.get(f"/api/v1/analysis-runs/{uuid4()}/exports")
+
+    assert response.status_code == 201
+    assert json_export_response.status_code == 201
+    assert csv_export_response.status_code == 201
+    assert html_export_response.status_code == 201
+    assert export_list_response.status_code == 200
+    payload = export_list_response.json()
+    AnalysisResultExportListResponse.model_validate(payload)
+    assert payload["analysis_id"] == analysis_id
+    assert len(payload["exports"]) == 3
+    export_ids = {export["export_id"] for export in payload["exports"]}
+    assert export_ids == {
+        json_export_response.json()["export_id"],
+        csv_export_response.json()["export_id"],
+        html_export_response.json()["export_id"],
+    }
+    assert {export["artifact_kind"] for export in payload["exports"]} == {
+        "analysis_result_json_export",
+        "analysis_result_csv_export",
+        "analysis_result_html_report",
+    }
+    download_url_prefix = f"/api/v1/analysis-runs/{analysis_id}/exports/"
+    assert all(
+        export["download_url"].startswith(download_url_prefix) for export in payload["exports"]
+    )
+    assert all(export["download_url"].endswith("/download") for export in payload["exports"])
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert str(tmp_path) not in serialized
+    assert "path" not in serialized
+    assert "workspaces/analyses" not in serialized
+
+    assert missing_list_response.status_code == 404
+    assert missing_list_response.json()["error"]["code"] == "analysis_run_not_found"
 
 
 def test_analysis_result_export_download_detects_artifact_checksum_mismatch(

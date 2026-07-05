@@ -1235,6 +1235,71 @@ def get_analysis_run_record(
     return _analysis_run_from_row(row)
 
 
+def list_analysis_run_records(
+    workspace_root: Path,
+    *,
+    dataset_version_id: str | None,
+    method_id: str | None,
+    status: str | None,
+    stale: bool | None,
+    result_available: bool | None,
+    limit: int,
+    offset: int,
+) -> list[AnalysisRunRecord]:
+    where_conditions: list[str] = []
+    parameters: list[object] = []
+
+    if dataset_version_id is not None:
+        where_conditions.append("dataset_version_id = ?")
+        parameters.append(dataset_version_id)
+    if method_id is not None:
+        where_conditions.append("method_id = ?")
+        parameters.append(method_id)
+    if status is not None:
+        where_conditions.append("status = ?")
+        parameters.append(status)
+    if stale is not None:
+        where_conditions.append("stale = ?")
+        parameters.append(1 if stale else 0)
+    if result_available is not None:
+        if result_available:
+            where_conditions.append("result_path IS NOT NULL AND result_sha256 IS NOT NULL")
+        else:
+            where_conditions.append("(result_path IS NULL OR result_sha256 IS NULL)")
+
+    where_clause = ""
+    if where_conditions:
+        where_clause = "WHERE " + " AND ".join(f"({condition})" for condition in where_conditions)
+    parameters.extend([limit, offset])
+
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            f"""
+            SELECT
+                analysis_id,
+                method_id,
+                method_version,
+                dataset_version_id,
+                config_json,
+                status,
+                result_path,
+                result_sha256,
+                stale,
+                created_at,
+                updated_at,
+                completed_at,
+                app_version
+            FROM analysis_runs
+            {where_clause}
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT ? OFFSET ?;
+            """,
+            tuple(parameters),
+        ).fetchall()
+
+    return [_analysis_run_from_row(row) for row in rows]
+
+
 def get_regression_model_record(
     workspace_root: Path,
     model_id: str,
@@ -1307,6 +1372,31 @@ def get_analysis_artifact_record(
         return None
 
     return _analysis_artifact_from_row(row)
+
+
+def list_analysis_artifact_records(
+    workspace_root: Path,
+    analysis_id: str,
+) -> list[AnalysisArtifactRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                artifact_id,
+                analysis_id,
+                kind,
+                path,
+                sha256,
+                media_type,
+                created_at
+            FROM analysis_artifacts
+            WHERE analysis_id = ?
+            ORDER BY created_at DESC, rowid DESC;
+            """,
+            (analysis_id,),
+        ).fetchall()
+
+    return [_analysis_artifact_from_row(row) for row in rows]
 
 
 def update_analysis_run_status_record(

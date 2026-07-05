@@ -5524,3 +5524,560 @@ Next:
 
 - Add a small frontend button for DOE report download, or start reproducible
   Python code export for stored analysis results.
+
+## Progress Update 104 - Analysis History, Export Listing, And Method Version Policy
+
+Completed:
+
+- Added a metadata-only saved analysis history API:
+  `GET /api/v1/analysis-runs?dataset_version_id={id}&limit=50&offset=0`.
+  The response is paginated, newest-first, includes stale/result/artifact
+  status, and excludes raw result payloads, raw cell values, and internal
+  workspace paths.
+- Added `GET /api/v1/analysis-runs/{analysis_id}/exports` for listing created
+  JSON/CSV/HTML export artifacts with export ID, kind, media type, SHA-256,
+  created time, and download URL only.
+- Added a minimal Workbench saved-analysis section that refreshes stored runs,
+  shows stale badges, restores a stored result through the checksum-validated
+  result API, and shows recent export artifacts with download buttons.
+- Added `docs/method_versioning.md` to document patch/minor/major bump rules,
+  frontend-only change handling, reference fixture update expectations, and
+  no-silent-migration behavior for stored result envelopes.
+- Updated `docs/statistical_method_audit_matrix.md` with an independent
+  reference backlog for partial-coverage high-risk methods:
+  `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`,
+  `doe.factorial_design`, and `regression.linear_model`.
+- Strengthened export/report security tests for CSV formula-injection
+  sanitization, HTML escaping/CSP, download `nosniff`, SHA-256 ETag metadata,
+  checksum mismatch recovery, and internal-path non-exposure.
+- Kept new statistical methods, method-version bumps, fake statistics, DOE
+  effects/ANOVA, PDF/code exports, and chart export artifacts out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_run_list or export_list or formula_like or export_downloads or html_report_export_creates"`:
+  5 passed, 181 deselected.
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/analysis_runs.py ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/app/storage/metadata.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/analysis_runs.py ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/app/storage/metadata.py`:
+  passed.
+- `npm --prefix ./frontend run lint`: passed.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 47 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 380 tests, frontend lint/typecheck, frontend
+  Vitest 47 tests, and frontend build.
+
+Limitations:
+
+- Saved-analysis history is intentionally metadata-only and has no search,
+  grouping, comparison, or bulk deletion UI yet.
+- Export listing covers created JSON/CSV/HTML analysis-run exports only; DOE
+  design reports remain dedicated dynamic downloads, not stored analysis export
+  artifacts.
+- CSV export remains a generic result-envelope table. Method-specific CSV
+  tables, PDF reports, reproducible code export, and chart artifact exports are
+  still planned.
+- Method-version policy is documented, but current stable method versions
+  remain `0.1.0`.
+- Remote GitHub Actions run/status is still not verified from this environment.
+
+Next:
+
+- Add user-facing comparison/filtering for saved analysis history, or start a
+  reproducible Python code export contract with provenance, checksum, and
+  path-exposure tests.
+
+## Progress Update 105 - Saved Analysis History Filtering And Paging
+
+Completed:
+
+- Extended `GET /api/v1/analysis-runs` with metadata-only filters for
+  `method_id`, `status`, `stale`, and `result_available`.
+- Added `has_more` to the analysis history response so the frontend can page
+  without requiring a total count query.
+- Kept filtering limited to analysis-run metadata. The endpoint still excludes
+  raw result payloads, raw cell values, `result_path`, and internal workspace
+  paths.
+- Added Workbench history controls for method, status, stale state, and result
+  availability, plus previous/next page buttons.
+- Kept browser state bounded to the current page of history and the selected
+  restored result; no full analysis history or raw dataset is loaded into the
+  browser.
+- Updated frontend API wrappers and render tests for the filtered history query
+  contract.
+- Kept new statistical methods, method-version bumps, report composition, PDF
+  export, reproducible code export, and chart export artifacts out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/analysis_runs.py ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/app/storage/metadata.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/analysis_runs.py ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/app/storage/metadata.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_run_list or export_list or formula_like or export_downloads or html_report_export_creates"`:
+  5 passed, 181 deselected.
+- `npm --prefix ./frontend run lint`: passed.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 47 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 380 tests, frontend lint/typecheck, frontend
+  Vitest 47 tests, and frontend build.
+
+Limitations:
+
+- History still has no text search, method-family grouping, result comparison,
+  favorite/pin state, bulk deletion, or export bundle generation.
+- The response does not return a total count; `has_more` is enough for current
+  previous/next paging but not for numbered pages.
+- Reproducible Python code export remains planned and should be designed
+  separately so it does not imply statistical recomputation without the exact
+  dataset/version contract.
+
+Next:
+
+- Add saved-result comparison for two compatible history entries, or begin the
+  reproducible Python code export contract with explicit data-version,
+  provenance, checksum, and path-exposure tests.
+
+## Progress Update 106 - Saved Analysis Result Comparison
+
+Completed:
+
+- Added `GET /api/v1/analysis-runs/comparison` for comparing two stored
+  analysis results by `left_analysis_id` and `right_analysis_id`.
+- The comparison service uses the same checksum-validated stored result loading
+  path as result restore/export. It does not recalculate statistics.
+- The response is metadata-only: method/version/dataset/summary compatibility,
+  stale flags, result SHA-256, warning counts, row-count provenance,
+  schema/filter/row snapshot hashes, and field-level metadata differences.
+- The comparison response excludes raw result payloads, raw cell values,
+  `result_path`, and internal workspace paths.
+- Same-analysis comparison is rejected with
+  `analysis_comparison_requires_two_runs`.
+- Different method/summary comparisons return `comparable=false` instead of
+  fabricating a cross-method result comparison.
+- Added Workbench controls to choose left/right saved runs from the current
+  history page and display comparison compatibility plus metadata differences.
+- Updated frontend API wrappers, types, and render/API tests for the comparison
+  route.
+- Kept new statistical methods, method-version bumps, result recomputation,
+  PDF export, reproducible code export, and chart export artifacts out of
+  scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/analysis_runs.py ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/analysis_runs.py ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_run_comparison or analysis_run_list or export_list"`:
+  3 passed, 184 deselected.
+- `npm --prefix ./frontend run lint`: passed.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 47 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 381 tests, frontend lint/typecheck, frontend
+  Vitest 47 tests, and frontend build.
+
+Limitations:
+
+- Comparison is metadata/provenance/result-hash comparison only. It does not
+  compute method-specific numeric deltas yet.
+- The UI compares runs on the current history page only; search and pinned
+  comparison selections across pages are still planned.
+- Cross-method comparisons are intentionally marked incompatible rather than
+  interpreted.
+
+Next:
+
+- Add method-specific safe comparison renderers for a narrow method such as
+  `eda.descriptive`, or start the reproducible Python code export contract with
+  explicit data-version, provenance, checksum, and path-exposure tests.
+
+## Progress Update 107 - Descriptive Stored-Result Comparison
+
+Completed:
+
+- Extended the stored analysis comparison response with optional
+  method-specific comparison payloads.
+- Added the first method-specific comparison for compatible `eda.descriptive`
+  stored results.
+- The descriptive comparison matches common columns by `column_id` and returns
+  left/right/delta for saved summary metrics: `n_total`, `n_used`,
+  `n_missing`, `n_non_numeric`, `mean`, `std`, `min`, `q1`, `median`, `q3`,
+  and `max`.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, or recompute descriptive statistics.
+- The response records left-only and right-only column IDs for column-set drift.
+- The Workbench comparison panel now renders a 기술통계 비교 table when the
+  comparison payload contains descriptive metrics.
+- Updated backend API contract tests and frontend render/API fixtures for the
+  descriptive comparison payload.
+- Kept new statistical methods, method-version bumps, cross-method numeric
+  interpretation, PDF export, reproducible code export, and chart export
+  artifacts out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed after import sorting.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_run_comparison"`:
+  1 passed, 186 deselected.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 47 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 381 tests, frontend lint/typecheck, frontend
+  Vitest 47 tests, and frontend build.
+
+Limitations:
+
+- Method-specific numeric comparison is currently implemented only for
+  `eda.descriptive`.
+- The descriptive comparison reports simple stored-summary deltas; it does not
+  perform statistical tests on differences or infer practical significance.
+- Column matching uses `column_id`; renamed display labels do not create a new
+  match key.
+
+Next:
+
+- Add a similarly stored-result-only comparison for a narrow inferential method
+  such as `hypothesis.one_sample_t`, or begin the reproducible Python code
+  export contract with explicit data-version, provenance, checksum, and
+  path-exposure tests.
+
+## Progress Update 108 - One-Sample T Stored-Result Comparison
+
+Completed:
+
+- Extended the stored analysis comparison method-specific payload with
+  `one_sample_t_test`.
+- Added stored-result-only comparison for compatible `hypothesis.one_sample_t`
+  runs.
+- The one-sample t comparison reports response-column identity, saved setting
+  differences (`alternative`, `alpha`, `confidence_level`, `null_mean`,
+  `missing_policy`), and left/right/delta for saved sample and contrast
+  metrics.
+- The compared metrics include N/exclusion counts, sample mean/std/min/max,
+  contrast estimate, standard error, degrees of freedom, statistic, p-value,
+  confidence interval bounds, and effect-size fields.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, or recompute t-tests.
+- The Workbench comparison panel now renders a `1-표본 t-검정 비교` table when
+  the comparison payload contains one-sample t metrics.
+- Updated backend API contract tests and frontend render fixtures for the
+  one-sample t comparison payload.
+- Kept new statistical methods, method-version bumps, cross-method numeric
+  interpretation, PDF export, reproducible code export, chart export artifacts,
+  and new t-test calculations out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_run_comparison"`:
+  2 passed, 186 deselected.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 48 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 382 tests, frontend lint/typecheck, frontend
+  Vitest 48 tests, and frontend build.
+
+Limitations:
+
+- Method-specific numeric comparison is currently implemented only for
+  `eda.descriptive` and `hypothesis.one_sample_t`.
+- The one-sample t comparison reports stored-result deltas only; it does not
+  test whether two estimates differ from each other or infer practical
+  significance.
+- The UI compares runs on the current history page only; search and pinned
+  comparison selections across pages are still planned.
+
+Next:
+
+- Add another stored-result-only comparison for a narrow method such as
+  `hypothesis.two_sample_t` or start the reproducible Python code export
+  contract with explicit data-version, provenance, checksum, and path-exposure
+  tests.
+
+## Progress Update 109 - Two-Sample T Stored-Result Comparison
+
+Completed:
+
+- Extended the stored analysis comparison method-specific payload with
+  `two_sample_t_test`.
+- Added stored-result-only comparison for compatible `hypothesis.two_sample_t`
+  runs.
+- The two-sample t comparison reports response/group column identity, group
+  set/order compatibility, saved setting differences (`alternative`, `alpha`,
+  `confidence_level`, `variance_assumption`, `null_difference`,
+  `missing_policy`), and left/right/delta for saved group summary and contrast
+  metrics.
+- The compared metrics include N/exclusion counts, stored group-index
+  mean/std/N summaries, contrast estimate, standard error, degrees of freedom,
+  statistic, p-value, confidence interval bounds, and effect-size fields.
+- The comparison intentionally does not expose group-label values because they
+  can be raw dataset cell values; it only reports group-set/order compatibility.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, or recompute t-tests.
+- The Workbench comparison panel now renders a `2-표본 t-검정 비교` table when
+  the comparison payload contains two-sample t metrics.
+- Updated backend API contract tests and frontend render fixtures for the
+  two-sample t comparison payload.
+- Kept new statistical methods, method-version bumps, cross-method numeric
+  interpretation, PDF export, reproducible code export, chart export artifacts,
+  and new t-test calculations out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_run_comparison"`:
+  3 passed, 186 deselected.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 49 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 383 tests, frontend lint/typecheck, frontend
+  Vitest 49 tests, and frontend build.
+
+Limitations:
+
+- Method-specific numeric comparison is currently implemented for
+  `eda.descriptive`, `hypothesis.one_sample_t`, and `hypothesis.two_sample_t`.
+- The two-sample t comparison reports stored-result deltas only; it does not
+  test whether two saved contrasts differ from each other or infer practical
+  significance.
+- Group summary metrics are keyed by stored group order. The response reports
+  whether group-label order is identical but does not expose the label values.
+- The UI compares runs on the current history page only; search and pinned
+  comparison selections across pages are still planned.
+
+Next:
+
+- Add another stored-result-only comparison for a narrow method such as
+  `hypothesis.paired_t`, or start the reproducible Python code export contract
+  with explicit data-version, provenance, checksum, and path-exposure tests.
+
+## Progress Update 110 - Paired T Stored-Result Comparison
+
+Completed:
+
+- Extended the stored analysis comparison method-specific payload with
+  `paired_t_test`.
+- Added stored-result-only comparison for compatible `hypothesis.paired_t`
+  runs.
+- The paired t comparison reports before/after column identity, saved setting
+  differences (`alternative`, `alpha`, `confidence_level`, `null_difference`,
+  `missing_policy`, `difference_definition`), and left/right/delta for saved
+  complete-pair, paired-sample, contrast, and effect-size metrics.
+- The compared metrics include total/used N, incomplete and non-numeric pair
+  exclusions, before/after means, mean/median/std/min/max pair differences,
+  signed difference counts, contrast statistic/p-value/CI, and effect-size
+  fields.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, or recompute t-tests.
+- The Workbench comparison panel now renders a `대응표본 t-검정 비교` table when
+  the comparison payload contains paired t metrics.
+- Updated backend API contract tests and frontend render fixtures for the
+  paired t comparison payload.
+- Kept new statistical methods, method-version bumps, cross-method numeric
+  interpretation, PDF export, reproducible code export, chart export artifacts,
+  and new t-test calculations out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_run_comparison"`:
+  4 passed, 186 deselected.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 50 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 384 tests, frontend lint/typecheck, frontend
+  Vitest 50 tests, and frontend build.
+
+Limitations:
+
+- Method-specific numeric comparison is currently implemented for
+  `eda.descriptive`, `hypothesis.one_sample_t`, `hypothesis.two_sample_t`, and
+  `hypothesis.paired_t`.
+- The paired t comparison reports stored-result deltas only; it does not test
+  whether two saved paired contrasts differ from each other or infer practical
+  significance.
+- The UI compares runs on the current history page only; search and pinned
+  comparison selections across pages are still planned.
+
+Next:
+
+- Add another stored-result-only comparison for a narrow method such as
+  `hypothesis.equivalence_tost`, or start the reproducible Python code export
+  contract with explicit data-version, provenance, checksum, and path-exposure
+  tests.
+
+## Progress Update 111 - Equivalence TOST Stored-Result Comparison
+
+Completed:
+
+- Extended the stored analysis comparison method-specific payload with
+  `equivalence_tost`.
+- Added stored-result-only comparison for compatible
+  `hypothesis.equivalence_tost` runs.
+- The TOST comparison reports response-column identity, saved equivalence
+  bounds/reference/alpha settings, lower/upper one-sided test decisions, TOST
+  decision fields, and left/right/delta for saved sample, estimate, one-sided
+  p-value, TOST p-value, confidence interval, and effect-size metrics.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, or recompute TOST statistics.
+- The Workbench comparison panel now renders a `동등성 TOST 비교` table when
+  the comparison payload contains TOST metrics.
+- Updated backend API contract tests and frontend render fixtures for the
+  TOST comparison payload.
+- Kept new statistical methods, method-version bumps, cross-method numeric
+  interpretation, PDF export, reproducible code export, chart export artifacts,
+  and new TOST calculations out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m mypy ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py`:
+  passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "analysis_run_comparison"`:
+  5 passed, 186 deselected.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 51 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 385 tests, frontend lint/typecheck, frontend
+  Vitest 51 tests, and frontend build.
+
+Limitations:
+
+- Method-specific numeric comparison is currently implemented for
+  `eda.descriptive`, `hypothesis.one_sample_t`, `hypothesis.two_sample_t`,
+  `hypothesis.paired_t`, and `hypothesis.equivalence_tost`.
+- The TOST comparison reports stored-result deltas only; it does not infer
+  whether two saved equivalence decisions differ in a practically meaningful
+  way beyond the recorded settings/results.
+- The UI compares runs on the current history page only; search and pinned
+  comparison selections across pages are still planned.
+
+Next:
+
+- Add another stored-result-only comparison for a narrow method such as
+  `hypothesis.one_way_anova`, or start the reproducible Python code export
+  contract with explicit data-version, provenance, checksum, and path-exposure
+  tests.
+
+## Progress Update 112 - One-Way ANOVA Stored-Result Comparison
+
+Completed:
+
+- Extended the stored analysis comparison method-specific payload with
+  `one_way_anova`.
+- Added stored-result-only comparison for compatible
+  `hypothesis.one_way_anova` runs.
+- The ANOVA comparison reports response/group column identity, group-set/order
+  compatibility without raw group-label values, saved method/alpha/posthoc
+  settings, group summary deltas by stored group index, ANOVA table/test/effect
+  deltas, and post-hoc comparison-count metadata.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, recompute ANOVA statistics, or expose
+  stored result payloads/internal paths.
+- The Workbench comparison panel now renders an `일원분산분석 비교` table when the
+  comparison payload contains ANOVA metrics.
+- Updated backend API contract tests and frontend render fixtures for the ANOVA
+  comparison payload.
+- Kept Welch ANOVA, Games-Howell, two-way/repeated/ANCOVA, method-version
+  bumps, new statistical calculations, PDF export, reproducible code export,
+  and chart export artifacts out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "comparison_api_returns_one_way_anova or analysis_run_comparison"`:
+  6 passed, 186 deselected.
+- `npm --prefix ./frontend run test -- --run`: passed with 52 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 386 tests, frontend lint/typecheck, frontend
+  Vitest 52 tests, and frontend build.
+
+Limitations:
+
+- Method-specific numeric comparison is currently implemented for
+  `eda.descriptive`, `hypothesis.one_sample_t`, `hypothesis.two_sample_t`,
+  `hypothesis.paired_t`, `hypothesis.equivalence_tost`, and
+  `hypothesis.one_way_anova`.
+- The ANOVA comparison reports stored-result deltas only; it does not infer
+  practical significance or compare post-hoc group labels by name.
+- Group summaries are compared by stored group index to avoid raw group-label
+  exposure.
+
+Next:
+
+- Add another stored-result-only comparison for a narrow method such as
+  `hypothesis.kruskal_wallis`, or start the reproducible Python code export
+  contract with explicit data-version, provenance, checksum, and path-exposure
+  tests.
+
+## Progress Update 113 - Kruskal-Wallis Stored-Result Comparison
+
+Completed:
+
+- Extended the stored analysis comparison method-specific payload with
+  `kruskal_wallis`.
+- Added stored-result-only comparison for compatible
+  `hypothesis.kruskal_wallis` runs.
+- The Kruskal-Wallis comparison reports response/group column identity,
+  group-set/order compatibility without raw group-label values, saved
+  method/alpha/posthoc/tie settings, group rank-summary deltas by stored group
+  index, H-test/effect deltas, and post-hoc comparison-count metadata.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, recompute Kruskal-Wallis statistics,
+  or expose stored result payloads/internal paths.
+- The Workbench comparison panel now renders a `Kruskal-Wallis 비교` table when
+  the comparison payload contains Kruskal-Wallis metrics.
+- Updated backend API contract tests and frontend render fixtures for the
+  Kruskal-Wallis comparison payload.
+- Kept new statistical calculations, Mann-Whitney comparison, Wilcoxon
+  comparison, method-version bumps, PDF export, reproducible code export, and
+  chart export artifacts out of scope.
+
+Validation:
+
+- `./.venv/Scripts/python.exe -m ruff check ./backend/app/api/v1/schemas/analyses.py ./backend/app/services/analysis_runs.py ./backend/tests/unit/test_api_contracts.py`:
+  passed.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `./.venv/Scripts/python.exe -m pytest ./backend/tests/unit/test_api_contracts.py -k "comparison_api_returns_kruskal_wallis or analysis_run_comparison"`:
+  7 passed, 186 deselected.
+- `npm --prefix ./frontend run test -- --run`: passed with 53 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 387 tests, frontend lint/typecheck, frontend
+  Vitest 53 tests, and frontend build.
+
+Limitations:
+
+- Method-specific numeric comparison is currently implemented for
+  `eda.descriptive`, `hypothesis.one_sample_t`, `hypothesis.two_sample_t`,
+  `hypothesis.paired_t`, `hypothesis.equivalence_tost`,
+  `hypothesis.one_way_anova`, and `hypothesis.kruskal_wallis`.
+- The Kruskal-Wallis comparison reports stored-result deltas only; it does not
+  infer practical significance or compare post-hoc group labels by name.
+- Group summaries are compared by stored group index to avoid raw group-label
+  exposure.
+
+Next:
+
+- Add another stored-result-only comparison for a narrow method such as
+  `hypothesis.mann_whitney`, or start the reproducible Python code export
+  contract with explicit data-version, provenance, checksum, and path-exposure
+  tests.

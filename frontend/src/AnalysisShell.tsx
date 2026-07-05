@@ -29,10 +29,14 @@ import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
   AnalysisModuleId,
+  AnalysisRunComparisonResponse,
+  AnalysisResultExportListResponse,
   AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
   AnalysisResultHtmlReportResponse,
   AnalysisResultJsonExportResponse,
+  AnalysisRunListResponse,
+  AnalysisRunState,
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
@@ -110,10 +114,23 @@ export interface AnalysisShellProps {
   analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
   analysisResultCsvExportError?: string | null;
   analysisResultExportDownloadError?: string | null;
+  analysisResultExportList?: AnalysisResultExportListResponse | null;
+  analysisResultExportListError?: string | null;
   analysisResultHtmlReport?: AnalysisResultHtmlReportResponse | null;
   analysisResultHtmlReportError?: string | null;
   analysisResultJsonExport?: AnalysisResultJsonExportResponse | null;
   analysisResultJsonExportError?: string | null;
+  analysisHistory?: AnalysisRunListResponse | null;
+  analysisHistoryError?: string | null;
+  analysisHistoryMethodId?: string;
+  analysisHistoryOffset?: number;
+  analysisHistoryResultAvailabilityFilter?: "all" | "available" | "unavailable";
+  analysisHistoryStaleFilter?: "all" | "stale" | "fresh";
+  analysisHistoryStatus?: AnalysisRunState | "";
+  analysisComparison?: AnalysisRunComparisonResponse | null;
+  analysisComparisonError?: string | null;
+  analysisComparisonLeftId?: string | null;
+  analysisComparisonRightId?: string | null;
   capabilityAnalysisResult?: AnalysisResultEnvelope | null;
   capabilityLsl?: string;
   capabilityResult?: CapabilityResult | null;
@@ -179,6 +196,10 @@ export interface AnalysisShellProps {
   isCreatingAnalysisResultHtmlReport?: boolean;
   isCreatingAnalysisResultJsonExport?: boolean;
   isDownloadingAnalysisResultExport?: boolean;
+  isLoadingAnalysisHistory?: boolean;
+  isLoadingAnalysisResultExportList?: boolean;
+  isComparingAnalysisRuns?: boolean;
+  isRestoringAnalysisResult?: boolean;
   isSavingFactorialDesignResponses?: boolean;
   isRunningAnalysis: boolean;
   kruskalWallisAlpha: number;
@@ -292,6 +313,8 @@ export interface AnalysisShellProps {
   xyCorrelationYColumnIds?: string[];
   xyCorrelationYColumns?: DatasetColumnResponse[];
   profile: DatasetProfileResponse | null;
+  restoredAnalysisResult?: AnalysisResultEnvelope | null;
+  restoredAnalysisResultError?: string | null;
   selectedDescriptiveColumnIds: string[];
   selectedGraphicalSummaryColumnIds: string[];
   selectedNormalityColumnIds: string[];
@@ -333,7 +356,18 @@ export interface AnalysisShellProps {
   onCreateFactorialDesign?: (request: FactorialDesignCreateRequest) => void;
   onCreateAnalysisResultHtmlReport?: (analysisId: string) => void;
   onCreateAnalysisResultJsonExport?: (analysisId: string) => void;
+  onChangeAnalysisHistoryFilters?: (filters: {
+    methodId: string;
+    resultAvailability: "all" | "available" | "unavailable";
+    stale: "all" | "stale" | "fresh";
+    status: AnalysisRunState | "";
+  }) => void;
+  onChangeAnalysisHistoryPage?: (offset: number) => void;
+  onCompareAnalysisRuns?: () => void;
   onDownloadAnalysisResultExport?: (analysisId: string, exportId: string) => void;
+  onRefreshAnalysisHistory?: () => void;
+  onRestoreAnalysisRun?: (analysisId: string) => void;
+  onSelectAnalysisComparisonRun?: (side: "left" | "right", analysisId: string) => void;
   onSaveFactorialDesignResponses?: (
     designId: string,
     request: DoeDesignResponsesUpsertRequest,
@@ -463,10 +497,23 @@ export function AnalysisShell({
   analysisResultCsvExport = null,
   analysisResultCsvExportError = null,
   analysisResultExportDownloadError = null,
+  analysisResultExportList = null,
+  analysisResultExportListError = null,
   analysisResultHtmlReport = null,
   analysisResultHtmlReportError = null,
   analysisResultJsonExport = null,
   analysisResultJsonExportError = null,
+  analysisHistory = null,
+  analysisHistoryError = null,
+  analysisHistoryMethodId = "",
+  analysisHistoryOffset = 0,
+  analysisHistoryResultAvailabilityFilter = "all",
+  analysisHistoryStaleFilter = "all",
+  analysisHistoryStatus = "",
+  analysisComparison = null,
+  analysisComparisonError = null,
+  analysisComparisonLeftId = null,
+  analysisComparisonRightId = null,
   capabilityAnalysisResult = null,
   capabilityLsl = "",
   capabilityResult = null,
@@ -526,6 +573,10 @@ export function AnalysisShell({
   isCreatingAnalysisResultJsonExport = false,
   isCreatingFactorialDesign = false,
   isDownloadingAnalysisResultExport = false,
+  isLoadingAnalysisHistory = false,
+  isLoadingAnalysisResultExportList = false,
+  isComparingAnalysisRuns = false,
+  isRestoringAnalysisResult = false,
   isSavingFactorialDesignResponses = false,
   isRunningAnalysis,
   kruskalWallisAlpha,
@@ -645,6 +696,8 @@ export function AnalysisShell({
   xyCorrelationYColumnIds = [],
   xyCorrelationYColumns = [],
   profile,
+  restoredAnalysisResult = null,
+  restoredAnalysisResultError = null,
   selectedDescriptiveColumnIds,
   selectedGraphicalSummaryColumnIds,
   selectedNormalityColumnIds,
@@ -685,7 +738,13 @@ export function AnalysisShell({
   onCreateAnalysisResultCsvExport = () => undefined,
   onCreateAnalysisResultHtmlReport = () => undefined,
   onCreateAnalysisResultJsonExport = () => undefined,
+  onChangeAnalysisHistoryFilters = () => undefined,
+  onChangeAnalysisHistoryPage = () => undefined,
+  onCompareAnalysisRuns = () => undefined,
   onDownloadAnalysisResultExport = () => undefined,
+  onRefreshAnalysisHistory = () => undefined,
+  onRestoreAnalysisRun = () => undefined,
+  onSelectAnalysisComparisonRun = () => undefined,
   onCreateFactorialDesign = () => undefined,
   onSaveFactorialDesignResponses = () => undefined,
   onRunChiSquareAssociationAnalysis,
@@ -858,16 +917,35 @@ export function AnalysisShell({
           analysisResultCsvExport={analysisResultCsvExport}
           analysisResultCsvExportError={analysisResultCsvExportError}
           analysisResultExportDownloadError={analysisResultExportDownloadError}
+          analysisResultExportList={analysisResultExportList}
+          analysisResultExportListError={analysisResultExportListError}
           analysisResultHtmlReport={analysisResultHtmlReport}
           analysisResultHtmlReportError={analysisResultHtmlReportError}
           analysisResultJsonExport={analysisResultJsonExport}
           analysisResultJsonExportError={analysisResultJsonExportError}
+          analysisHistory={analysisHistory}
+          analysisHistoryError={analysisHistoryError}
+          analysisHistoryMethodId={analysisHistoryMethodId}
+          analysisHistoryOffset={analysisHistoryOffset}
+          analysisHistoryResultAvailabilityFilter={analysisHistoryResultAvailabilityFilter}
+          analysisHistoryStaleFilter={analysisHistoryStaleFilter}
+          analysisHistoryStatus={analysisHistoryStatus}
+          analysisComparison={analysisComparison}
+          analysisComparisonError={analysisComparisonError}
+          analysisComparisonLeftId={analysisComparisonLeftId}
+          analysisComparisonRightId={analysisComparisonRightId}
           catalog={analysisCatalog}
           isCreatingAnalysisResultCsvExport={isCreatingAnalysisResultCsvExport}
           isCreatingAnalysisResultHtmlReport={isCreatingAnalysisResultHtmlReport}
           isCreatingAnalysisResultJsonExport={isCreatingAnalysisResultJsonExport}
           isDownloadingAnalysisResultExport={isDownloadingAnalysisResultExport}
+          isLoadingAnalysisHistory={isLoadingAnalysisHistory}
+          isLoadingAnalysisResultExportList={isLoadingAnalysisResultExportList}
+          isComparingAnalysisRuns={isComparingAnalysisRuns}
+          isRestoringAnalysisResult={isRestoringAnalysisResult}
           profile={profile}
+          restoredAnalysisResult={restoredAnalysisResult}
+          restoredAnalysisResultError={restoredAnalysisResultError}
           selectedAnalysisResult={selectedAnalysisResult}
           selectedMethod={selectedMethod}
           selectedMethods={selectedMethods}
@@ -876,7 +954,13 @@ export function AnalysisShell({
           onCreateAnalysisResultCsvExport={onCreateAnalysisResultCsvExport}
           onCreateAnalysisResultHtmlReport={onCreateAnalysisResultHtmlReport}
           onCreateAnalysisResultJsonExport={onCreateAnalysisResultJsonExport}
+          onChangeAnalysisHistoryFilters={onChangeAnalysisHistoryFilters}
+          onChangeAnalysisHistoryPage={onChangeAnalysisHistoryPage}
+          onCompareAnalysisRuns={onCompareAnalysisRuns}
           onDownloadAnalysisResultExport={onDownloadAnalysisResultExport}
+          onRefreshAnalysisHistory={onRefreshAnalysisHistory}
+          onRestoreAnalysisRun={onRestoreAnalysisRun}
+          onSelectAnalysisComparisonRun={onSelectAnalysisComparisonRun}
           onSelectMethod={onSelectMethod}
           renderAnalysisFilters={(method) =>
             method.requires_dataset && version !== null ? (

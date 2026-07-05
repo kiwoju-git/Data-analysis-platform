@@ -1,17 +1,26 @@
 import type { ComponentProps } from "react";
 import { renderToString } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 import { AnalysisPage } from "./AnalysisPage";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { DatasetPreparationPage } from "./DatasetPreparationPage";
+import {
+  fetchAnalysisResultExports,
+  fetchAnalysisRunComparison,
+  fetchAnalysisRunResult,
+  fetchAnalysisRuns,
+} from "./api";
 import type {
   AnalysisMethodListResponse,
+  AnalysisRunComparisonResponse,
+  AnalysisResultExportListResponse,
   AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
   AnalysisResultHtmlReportResponse,
   AnalysisResultJsonExportResponse,
+  AnalysisRunListResponse,
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
@@ -60,6 +69,10 @@ import { WorkspaceRouter } from "./WorkspaceRouter";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
 
 describe("App", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("renders the DataLab Studio shell", () => {
     const html = renderToString(<App />);
 
@@ -321,6 +334,361 @@ describe("App", () => {
     expect(html).toContain(selectedMethod.method_id);
   });
 
+  it("renders saved analysis history with stale badge, restore summary, and export list", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const history = analysisRunListTestResponse(restored);
+    const exportList = analysisResultExportListTestResponse(restored);
+    const comparison = analysisRunComparisonTestResponse(restored);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisComparison={comparison}
+        analysisComparisonLeftId={comparison.left.analysis_id}
+        analysisComparisonRightId={comparison.right.analysis_id}
+        analysisHistory={history}
+        analysisResultExportList={exportList}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        restoredAnalysisResult={restored}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        analysisHistoryMethodId={restored.method_id}
+        analysisHistoryResultAvailabilityFilter="available"
+        analysisHistoryStaleFilter="stale"
+        analysisHistoryStatus="succeeded"
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("저장된 분석");
+    expect(html).toContain("method");
+    expect(html).toContain("status");
+    expect(html).toContain("result");
+    expect(html).toContain("이전");
+    expect(html).toContain("다음");
+    expect(html).toContain("왼쪽");
+    expect(html).toContain("오른쪽");
+    expect(html).toContain("비교 결과");
+    expect(html).toContain("compatible");
+    expect(html).toContain("기술통계 비교");
+    expect(html).toContain("delta");
+    expect(html).toContain("mean");
+    expect(html).toContain("result_sha256");
+    expect(html).toContain("stale");
+    expect(html).toContain("결과 불러오기");
+    expect(html).toContain("불러온 결과");
+    expect(html).toContain("ui_export_contract_test");
+    expect(html).toContain("최근 export");
+    expect(html).toContain("JSON");
+    expect(html).toContain("CSV");
+    expect(html).toContain("다운로드");
+  });
+
+  it("renders one-sample t stored result comparison metrics", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod =
+      catalog.methods.find((method) => method.method_id === "hypothesis.one_sample_t") ??
+      catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse("hypothesis.one_sample_t");
+    const history = analysisRunListTestResponse(restored);
+    const comparison = oneSampleTAnalysisRunComparisonTestResponse(restored);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisComparison={comparison}
+        analysisComparisonLeftId={comparison.left.analysis_id}
+        analysisComparisonRightId={comparison.right.analysis_id}
+        analysisHistory={history}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="hypothesis"
+        version={datasetVersionTestResponse()}
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("1-표본 t-검정 비교");
+    expect(html).toContain("response-alpha");
+    expect(html).toContain("null_mean");
+    expect(html).toContain("contrast.estimate");
+    expect(html).toContain("-0.25");
+  });
+
+  it("renders two-sample t stored result comparison metrics", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod =
+      catalog.methods.find((method) => method.method_id === "hypothesis.two_sample_t") ??
+      catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse("hypothesis.two_sample_t");
+    const history = analysisRunListTestResponse(restored);
+    const comparison = twoSampleTAnalysisRunComparisonTestResponse(restored);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisComparison={comparison}
+        analysisComparisonLeftId={comparison.left.analysis_id}
+        analysisComparisonRightId={comparison.right.analysis_id}
+        analysisHistory={history}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="hypothesis"
+        version={datasetVersionTestResponse()}
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("2-표본 t-검정 비교");
+    expect(html).toContain("response-alpha");
+    expect(html).toContain("group-beta");
+    expect(html).toContain("null_difference");
+    expect(html).toContain("contrast.estimate");
+    expect(html).toContain("group set");
+  });
+
+  it("renders paired t stored result comparison metrics", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod =
+      catalog.methods.find((method) => method.method_id === "hypothesis.paired_t") ??
+      catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse("hypothesis.paired_t");
+    const history = analysisRunListTestResponse(restored);
+    const comparison = pairedTAnalysisRunComparisonTestResponse(restored);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisComparison={comparison}
+        analysisComparisonLeftId={comparison.left.analysis_id}
+        analysisComparisonRightId={comparison.right.analysis_id}
+        analysisHistory={history}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="hypothesis"
+        version={datasetVersionTestResponse()}
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("대응표본 t-검정 비교");
+    expect(html).toContain("before-alpha");
+    expect(html).toContain("after-beta");
+    expect(html).toContain("null_difference");
+    expect(html).toContain("paired_sample.mean_difference");
+    expect(html).toContain("contrast.estimate");
+  });
+
+  it("renders equivalence TOST stored result comparison metrics", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod =
+      catalog.methods.find((method) => method.method_id === "hypothesis.equivalence_tost") ??
+      catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse("hypothesis.equivalence_tost");
+    const history = analysisRunListTestResponse(restored);
+    const comparison = equivalenceTostAnalysisRunComparisonTestResponse(restored);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisComparison={comparison}
+        analysisComparisonLeftId={comparison.left.analysis_id}
+        analysisComparisonRightId={comparison.right.analysis_id}
+        analysisHistory={history}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="hypothesis"
+        version={datasetVersionTestResponse()}
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("동등성 TOST 비교");
+    expect(html).toContain("response-alpha");
+    expect(html).toContain("equivalence_bounds.lower");
+    expect(html).toContain("tost.equivalent");
+    expect(html).toContain("tests.upper.p_value");
+    expect(html).toContain("estimate.value");
+  });
+
+  it("renders one-way ANOVA stored result comparison metrics", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod =
+      catalog.methods.find((method) => method.method_id === "hypothesis.one_way_anova") ??
+      catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse("hypothesis.one_way_anova");
+    const history = analysisRunListTestResponse(restored);
+    const comparison = oneWayAnovaAnalysisRunComparisonTestResponse(restored);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisComparison={comparison}
+        analysisComparisonLeftId={comparison.left.analysis_id}
+        analysisComparisonRightId={comparison.right.analysis_id}
+        analysisHistory={history}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="hypothesis"
+        version={datasetVersionTestResponse()}
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("일원분산분석 비교");
+    expect(html).toContain("response-alpha");
+    expect(html).toContain("group-beta");
+    expect(html).toContain("alpha");
+    expect(html).toContain("posthoc.performed");
+    expect(html).toContain("groups.2.mean");
+    expect(html).toContain("test.f_statistic");
+    expect(html).toContain("posthoc.comparison_count");
+    expect(html).toContain("group set");
+  });
+
+  it("renders Kruskal-Wallis stored result comparison metrics", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod =
+      catalog.methods.find((method) => method.method_id === "hypothesis.kruskal_wallis") ??
+      catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse("hypothesis.kruskal_wallis");
+    const history = analysisRunListTestResponse(restored);
+    const comparison = kruskalWallisAnalysisRunComparisonTestResponse(restored);
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisComparison={comparison}
+        analysisComparisonLeftId={comparison.left.analysis_id}
+        analysisComparisonRightId={comparison.right.analysis_id}
+        analysisHistory={history}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="hypothesis"
+        version={datasetVersionTestResponse()}
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("Kruskal-Wallis 비교");
+    expect(html).toContain("response-alpha");
+    expect(html).toContain("group-beta");
+    expect(html).toContain("posthoc.performed");
+    expect(html).toContain("groups.2.mean_rank");
+    expect(html).toContain("test.h_statistic");
+    expect(html).toContain("test.effect_size.epsilon_squared");
+    expect(html).toContain("posthoc.comparison_count");
+    expect(html).toContain("group set");
+  });
+
+  it("calls analysis history, result restore, and export list API wrappers", async () => {
+    const restored = analysisResultEnvelopeTestResponse();
+    const history = analysisRunListTestResponse(restored);
+    const exportList = analysisResultExportListTestResponse(restored);
+    const comparison = analysisRunComparisonTestResponse(restored);
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(history))
+      .mockResolvedValueOnce(jsonResponse(restored))
+      .mockResolvedValueOnce(jsonResponse(exportList))
+      .mockResolvedValueOnce(jsonResponse(comparison));
+
+    const historyResponse = await fetchAnalysisRuns({
+      datasetVersionId: "version-1",
+      methodId: "eda.descriptive",
+      resultAvailable: true,
+      limit: 20,
+      offset: 0,
+      stale: false,
+      status: "succeeded",
+    });
+    const resultResponse = await fetchAnalysisRunResult(restored.analysis_id);
+    const exportListResponse = await fetchAnalysisResultExports(restored.analysis_id);
+    const comparisonResponse = await fetchAnalysisRunComparison(
+      comparison.left.analysis_id,
+      comparison.right.analysis_id,
+    );
+
+    expect(historyResponse).toEqual(history);
+    expect(resultResponse).toEqual(restored);
+    expect(exportListResponse).toEqual(exportList);
+    expect(comparisonResponse).toEqual(comparison);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:8000/api/v1/analysis-runs?limit=20&offset=0&dataset_version_id=version-1&method_id=eda.descriptive&status=succeeded&stale=false&result_available=true",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `http://127.0.0.1:8000/api/v1/analysis-runs/${restored.analysis_id}/result`,
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `http://127.0.0.1:8000/api/v1/analysis-runs/${restored.analysis_id}/exports`,
+      expect.objectContaining({
+        method: "GET",
+        headers: { Accept: "application/json" },
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      `http://127.0.0.1:8000/api/v1/analysis-runs/comparison?left_analysis_id=${comparison.left.analysis_id}&right_analysis_id=${comparison.right.analysis_id}`,
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
   it("shows JSON export metadata only for the matching analysis result", () => {
     const catalog = analysisTestCatalog();
     const selectedMethod = catalog.methods[0];
@@ -350,7 +718,7 @@ describe("App", () => {
     expect(html).toContain("sha256");
     expect(html).toContain("abcdef123456");
     expect(html).toContain("JSON 다운로드");
-    expect(html).not.toContain("stale");
+    expect(html).not.toContain("stale-badge");
   });
 
   it("shows export download errors inside the export panel", () => {
@@ -415,7 +783,7 @@ describe("App", () => {
     expect(html).toContain("sha256");
     expect(html).toContain("123456abcdef");
     expect(html).toContain("CSV 다운로드");
-    expect(html).not.toContain("stale");
+    expect(html).not.toContain("stale-badge");
   });
 
   it("shows HTML report metadata only for the matching analysis result", () => {
@@ -450,7 +818,7 @@ describe("App", () => {
     expect(html).toContain("sha256");
     expect(html).toContain("feedfacecafe");
     expect(html).toContain("HTML 다운로드");
-    expect(html).not.toContain("stale");
+    expect(html).not.toContain("stale-badge");
   });
 
   it("renders the Pearson correlation execution panel for the first Gate C1 method", () => {
@@ -3098,6 +3466,673 @@ function datasetUploadTestResponse(): DatasetUploadResponse {
     warnings: [],
     next_step: "confirm_schema",
   };
+}
+
+function analysisRunListTestResponse(result: AnalysisResultEnvelope): AnalysisRunListResponse {
+  return {
+    dataset_version_id: result.dataset_version_id,
+    method_id: result.method_id,
+    status: "succeeded",
+    stale: true,
+    result_available: true,
+    limit: 20,
+    offset: 0,
+    returned_count: 1,
+    has_more: false,
+    runs: [
+      {
+        analysis_id: result.analysis_id,
+        method_id: result.method_id,
+        method_version: result.method_version,
+        dataset_version_id: result.dataset_version_id,
+        status: "succeeded",
+        stale: true,
+        result_available: true,
+        artifact_count: 3,
+        created_at: "2026-07-04T00:00:00Z",
+        updated_at: "2026-07-04T00:00:01Z",
+        completed_at: "2026-07-04T00:00:01Z",
+      },
+    ],
+  };
+}
+
+function analysisResultExportListTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisResultExportListResponse {
+  return {
+    analysis_id: result.analysis_id,
+    exports: [
+      {
+        export_id: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+        analysis_id: result.analysis_id,
+        artifact_kind: "analysis_result_json_export",
+        media_type: "application/json",
+        sha256: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        created_at: "2026-07-04T00:00:00Z",
+        download_url: `/api/v1/analysis-runs/${result.analysis_id}/exports/bbbbbbbb-cccc-dddd-eeee-ffffffffffff/download`,
+      },
+      {
+        export_id: "cccccccc-dddd-eeee-ffff-000000000000",
+        analysis_id: result.analysis_id,
+        artifact_kind: "analysis_result_csv_export",
+        media_type: "text/csv",
+        sha256: "123456abcdef7890123456abcdef7890123456abcdef7890123456abcdef7890",
+        created_at: "2026-07-04T00:00:01Z",
+        download_url: `/api/v1/analysis-runs/${result.analysis_id}/exports/cccccccc-dddd-eeee-ffff-000000000000/download`,
+      },
+    ],
+  };
+}
+
+function analysisRunComparisonTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisRunComparisonResponse {
+  return {
+    left: {
+      analysis_id: result.analysis_id,
+      method_id: result.method_id,
+      method_version: result.method_version,
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: true,
+      result_sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      warning_count: result.warnings.length,
+      summary_type:
+        typeof result.result?.summary_type === "string" ? result.result.summary_type : null,
+      row_count_total: result.provenance.row_count_total ?? null,
+      row_count_included: result.provenance.row_count_included ?? null,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: result.provenance.filter_snapshot_sha256 ?? null,
+      row_snapshot_sha256: result.provenance.row_snapshot_sha256 ?? null,
+      created_at: "2026-07-04T00:00:00Z",
+      completed_at: "2026-07-04T00:00:01Z",
+    },
+    right: {
+      analysis_id: "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb",
+      method_id: result.method_id,
+      method_version: result.method_version,
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      warning_count: 0,
+      summary_type:
+        typeof result.result?.summary_type === "string" ? result.result.summary_type : null,
+      row_count_total: result.provenance.row_count_total ?? null,
+      row_count_included: result.provenance.row_count_included ?? null,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: result.provenance.filter_snapshot_sha256 ?? null,
+      row_snapshot_sha256: "3333333333333333333333333333333333333333333333333333333333333333",
+      created_at: "2026-07-04T00:02:00Z",
+      completed_at: "2026-07-04T00:02:01Z",
+    },
+    comparable: true,
+    compatibility: {
+      same_method_id: true,
+      same_method_version: true,
+      same_dataset_version_id: true,
+      same_summary_type: true,
+    },
+    differences: [
+      {
+        field: "result_sha256",
+        left: "1111111111111111111111111111111111111111111111111111111111111111",
+        right: "2222222222222222222222222222222222222222222222222222222222222222",
+      },
+      {
+        field: "stale",
+        left: true,
+        right: false,
+      },
+    ],
+    method_specific: {
+      descriptive_statistics: {
+        summary_type: "descriptive_statistics",
+        columns: [
+          {
+            column_id: "column-alpha",
+            display_name: "alpha",
+            metrics: [
+              { metric: "n_used", left: 2, right: 1, delta: -1 },
+              { metric: "mean", left: 1.5, right: 2, delta: 0.5 },
+            ],
+          },
+        ],
+        left_only_column_ids: [],
+        right_only_column_ids: [],
+      },
+      one_sample_t_test: null,
+      two_sample_t_test: null,
+      paired_t_test: null,
+      equivalence_tost: null,
+      one_way_anova: null,
+      kruskal_wallis: null,
+    },
+  };
+}
+
+function oneSampleTAnalysisRunComparisonTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisRunComparisonResponse {
+  return {
+    left: {
+      analysis_id: result.analysis_id,
+      method_id: "hypothesis.one_sample_t",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      warning_count: 0,
+      summary_type: "one_sample_t_test",
+      row_count_total: 4,
+      row_count_included: 4,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      created_at: "2026-07-04T00:00:00Z",
+      completed_at: "2026-07-04T00:00:01Z",
+    },
+    right: {
+      analysis_id: "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb",
+      method_id: "hypothesis.one_sample_t",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      warning_count: 0,
+      summary_type: "one_sample_t_test",
+      row_count_total: 4,
+      row_count_included: 4,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      created_at: "2026-07-04T00:02:00Z",
+      completed_at: "2026-07-04T00:02:01Z",
+    },
+    comparable: true,
+    compatibility: {
+      same_method_id: true,
+      same_method_version: true,
+      same_dataset_version_id: true,
+      same_summary_type: true,
+    },
+    differences: [
+      {
+        field: "result_sha256",
+        left: "1111111111111111111111111111111111111111111111111111111111111111",
+        right: "2222222222222222222222222222222222222222222222222222222222222222",
+      },
+    ],
+    method_specific: {
+      descriptive_statistics: null,
+      one_sample_t_test: {
+        summary_type: "one_sample_t_test",
+        left_response_column_id: "column-alpha",
+        right_response_column_id: "column-alpha",
+        response_display_name: "response-alpha",
+        same_response_column: true,
+        settings: [
+          { setting: "null_mean", left: 10, right: 10.25, same: false },
+          { setting: "alpha", left: 0.05, right: 0.05, same: true },
+        ],
+        metrics: [
+          { metric: "sample.mean", left: 10.5, right: 10.5, delta: 0 },
+          { metric: "contrast.estimate", left: 0.5, right: 0.25, delta: -0.25 },
+        ],
+      },
+      two_sample_t_test: null,
+      paired_t_test: null,
+      equivalence_tost: null,
+      one_way_anova: null,
+      kruskal_wallis: null,
+    },
+  };
+}
+
+function twoSampleTAnalysisRunComparisonTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisRunComparisonResponse {
+  return {
+    left: {
+      analysis_id: result.analysis_id,
+      method_id: "hypothesis.two_sample_t",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      warning_count: 0,
+      summary_type: "two_sample_t_test",
+      row_count_total: 4,
+      row_count_included: 4,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      created_at: "2026-07-04T00:00:00Z",
+      completed_at: "2026-07-04T00:00:01Z",
+    },
+    right: {
+      analysis_id: "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb",
+      method_id: "hypothesis.two_sample_t",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      warning_count: 0,
+      summary_type: "two_sample_t_test",
+      row_count_total: 4,
+      row_count_included: 4,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      created_at: "2026-07-04T00:02:00Z",
+      completed_at: "2026-07-04T00:02:01Z",
+    },
+    comparable: true,
+    compatibility: {
+      same_method_id: true,
+      same_method_version: true,
+      same_dataset_version_id: true,
+      same_summary_type: true,
+    },
+    differences: [
+      {
+        field: "result_sha256",
+        left: "1111111111111111111111111111111111111111111111111111111111111111",
+        right: "2222222222222222222222222222222222222222222222222222222222222222",
+      },
+    ],
+    method_specific: {
+      descriptive_statistics: null,
+      one_sample_t_test: null,
+      two_sample_t_test: {
+        summary_type: "two_sample_t_test",
+        left_response_column_id: "column-alpha",
+        right_response_column_id: "column-alpha",
+        response_display_name: "response-alpha",
+        same_response_column: true,
+        left_group_column_id: "column-beta",
+        right_group_column_id: "column-beta",
+        group_display_name: "group-beta",
+        same_group_column: true,
+        same_group_label_set: true,
+        same_group_label_order: true,
+        settings: [
+          { setting: "null_difference", left: 0, right: -1, same: false },
+          { setting: "variance_assumption", left: "welch", right: "welch", same: true },
+        ],
+        metrics: [
+          { metric: "groups.0.mean", left: 1.5, right: 1.5, delta: 0 },
+          { metric: "groups.1.mean", left: 4.5, right: 4.5, delta: 0 },
+          { metric: "contrast.estimate", left: -3, right: -3, delta: 0 },
+        ],
+      },
+      paired_t_test: null,
+      equivalence_tost: null,
+      one_way_anova: null,
+      kruskal_wallis: null,
+    },
+  };
+}
+
+function pairedTAnalysisRunComparisonTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisRunComparisonResponse {
+  return {
+    left: {
+      analysis_id: result.analysis_id,
+      method_id: "hypothesis.paired_t",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      warning_count: 0,
+      summary_type: "paired_t_test",
+      row_count_total: 4,
+      row_count_included: 4,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      created_at: "2026-07-04T00:00:00Z",
+      completed_at: "2026-07-04T00:00:01Z",
+    },
+    right: {
+      analysis_id: "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb",
+      method_id: "hypothesis.paired_t",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      warning_count: 0,
+      summary_type: "paired_t_test",
+      row_count_total: 4,
+      row_count_included: 4,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      created_at: "2026-07-04T00:02:00Z",
+      completed_at: "2026-07-04T00:02:01Z",
+    },
+    comparable: true,
+    compatibility: {
+      same_method_id: true,
+      same_method_version: true,
+      same_dataset_version_id: true,
+      same_summary_type: true,
+    },
+    differences: [
+      {
+        field: "result_sha256",
+        left: "1111111111111111111111111111111111111111111111111111111111111111",
+        right: "2222222222222222222222222222222222222222222222222222222222222222",
+      },
+    ],
+    method_specific: {
+      descriptive_statistics: null,
+      one_sample_t_test: null,
+      two_sample_t_test: null,
+      paired_t_test: {
+        summary_type: "paired_t_test",
+        left_before_column_id: "column-alpha",
+        right_before_column_id: "column-alpha",
+        before_display_name: "before-alpha",
+        same_before_column: true,
+        left_after_column_id: "column-beta",
+        right_after_column_id: "column-beta",
+        after_display_name: "after-beta",
+        same_after_column: true,
+        settings: [
+          { setting: "null_difference", left: 0, right: 0.5, same: false },
+          { setting: "difference_definition", left: "after_minus_before", right: "after_minus_before", same: true },
+        ],
+        metrics: [
+          { metric: "paired_sample.mean_difference", left: 2, right: 2, delta: 0 },
+          { metric: "contrast.estimate", left: 2, right: 1.5, delta: -0.5 },
+        ],
+      },
+      equivalence_tost: null,
+      one_way_anova: null,
+      kruskal_wallis: null,
+    },
+  };
+}
+
+function equivalenceTostAnalysisRunComparisonTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisRunComparisonResponse {
+  return {
+    left: {
+      analysis_id: result.analysis_id,
+      method_id: "hypothesis.equivalence_tost",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      warning_count: 0,
+      summary_type: "equivalence_tost",
+      row_count_total: 6,
+      row_count_included: 6,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      created_at: "2026-07-04T00:00:00Z",
+      completed_at: "2026-07-04T00:00:01Z",
+    },
+    right: {
+      analysis_id: "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb",
+      method_id: "hypothesis.equivalence_tost",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      warning_count: 0,
+      summary_type: "equivalence_tost",
+      row_count_total: 6,
+      row_count_included: 6,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      created_at: "2026-07-04T00:02:00Z",
+      completed_at: "2026-07-04T00:02:01Z",
+    },
+    comparable: true,
+    compatibility: {
+      same_method_id: true,
+      same_method_version: true,
+      same_dataset_version_id: true,
+      same_summary_type: true,
+    },
+    differences: [
+      {
+        field: "result_sha256",
+        left: "1111111111111111111111111111111111111111111111111111111111111111",
+        right: "2222222222222222222222222222222222222222222222222222222222222222",
+      },
+    ],
+    method_specific: {
+      descriptive_statistics: null,
+      one_sample_t_test: null,
+      two_sample_t_test: null,
+      paired_t_test: null,
+      equivalence_tost: {
+        summary_type: "equivalence_tost",
+        left_response_column_id: "column-alpha",
+        right_response_column_id: "column-alpha",
+        response_display_name: "response-alpha",
+        same_response_column: true,
+        settings: [
+          { setting: "equivalence_bounds.lower", left: -0.8, right: -0.25, same: false },
+          { setting: "equivalence_bounds.upper", left: 0.8, right: 0.25, same: false },
+          { setting: "tost.equivalent", left: true, right: false, same: false },
+        ],
+        metrics: [
+          { metric: "estimate.value", left: -0.0833333333333339, right: -0.0833333333333339, delta: 0 },
+          { metric: "tests.upper.p_value", left: 0.002505, right: 0.041, delta: 0.038495 },
+        ],
+      },
+      one_way_anova: null,
+      kruskal_wallis: null,
+    },
+  };
+}
+
+function oneWayAnovaAnalysisRunComparisonTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisRunComparisonResponse {
+  return {
+    left: {
+      analysis_id: result.analysis_id,
+      method_id: "hypothesis.one_way_anova",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      warning_count: 0,
+      summary_type: "one_way_anova",
+      row_count_total: 12,
+      row_count_included: 12,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      created_at: "2026-07-04T00:00:00Z",
+      completed_at: "2026-07-04T00:00:01Z",
+    },
+    right: {
+      analysis_id: "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb",
+      method_id: "hypothesis.one_way_anova",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      warning_count: 0,
+      summary_type: "one_way_anova",
+      row_count_total: 12,
+      row_count_included: 12,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      created_at: "2026-07-04T00:02:00Z",
+      completed_at: "2026-07-04T00:02:01Z",
+    },
+    comparable: true,
+    compatibility: {
+      same_method_id: true,
+      same_method_version: true,
+      same_dataset_version_id: true,
+      same_summary_type: true,
+    },
+    differences: [
+      {
+        field: "result_sha256",
+        left: "1111111111111111111111111111111111111111111111111111111111111111",
+        right: "2222222222222222222222222222222222222222222222222222222222222222",
+      },
+    ],
+    method_specific: {
+      descriptive_statistics: null,
+      one_sample_t_test: null,
+      two_sample_t_test: null,
+      paired_t_test: null,
+      equivalence_tost: null,
+      one_way_anova: {
+        summary_type: "one_way_anova",
+        left_response_column_id: "column-alpha",
+        right_response_column_id: "column-alpha",
+        response_display_name: "response-alpha",
+        same_response_column: true,
+        left_group_column_id: "column-beta",
+        right_group_column_id: "column-beta",
+        group_display_name: "group-beta",
+        same_group_column: true,
+        same_group_label_set: true,
+        same_group_label_order: true,
+        settings: [
+          { setting: "alpha", left: 0.05, right: 0.01, same: false },
+          { setting: "posthoc.performed", left: true, right: true, same: true },
+        ],
+        metrics: [
+          { metric: "groups.0.mean", left: 7.5, right: 7.5, delta: 0 },
+          { metric: "groups.2.mean", left: 13.5, right: 13.5, delta: 0 },
+          { metric: "test.f_statistic", left: 21.6, right: 21.6, delta: 0 },
+          { metric: "posthoc.comparison_count", left: 3, right: 3, delta: 0 },
+        ],
+      },
+      kruskal_wallis: null,
+    },
+  };
+}
+
+function kruskalWallisAnalysisRunComparisonTestResponse(
+  result: AnalysisResultEnvelope,
+): AnalysisRunComparisonResponse {
+  return {
+    left: {
+      analysis_id: result.analysis_id,
+      method_id: "hypothesis.kruskal_wallis",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      warning_count: 0,
+      summary_type: "kruskal_wallis_test",
+      row_count_total: 9,
+      row_count_included: 9,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      created_at: "2026-07-04T00:00:00Z",
+      completed_at: "2026-07-04T00:00:01Z",
+    },
+    right: {
+      analysis_id: "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb",
+      method_id: "hypothesis.kruskal_wallis",
+      method_version: "0.1.0",
+      dataset_version_id: result.dataset_version_id,
+      status: "succeeded",
+      stale: false,
+      result_sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      warning_count: 0,
+      summary_type: "kruskal_wallis_test",
+      row_count_total: 9,
+      row_count_included: 9,
+      source_schema_hash: result.provenance.source_schema_hash ?? null,
+      filter_snapshot_sha256: null,
+      row_snapshot_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      created_at: "2026-07-04T00:02:00Z",
+      completed_at: "2026-07-04T00:02:01Z",
+    },
+    comparable: true,
+    compatibility: {
+      same_method_id: true,
+      same_method_version: true,
+      same_dataset_version_id: true,
+      same_summary_type: true,
+    },
+    differences: [
+      {
+        field: "result_sha256",
+        left: "1111111111111111111111111111111111111111111111111111111111111111",
+        right: "2222222222222222222222222222222222222222222222222222222222222222",
+      },
+    ],
+    method_specific: {
+      descriptive_statistics: null,
+      one_sample_t_test: null,
+      two_sample_t_test: null,
+      paired_t_test: null,
+      equivalence_tost: null,
+      one_way_anova: null,
+      kruskal_wallis: {
+        summary_type: "kruskal_wallis_test",
+        left_response_column_id: "column-alpha",
+        right_response_column_id: "column-alpha",
+        response_display_name: "response-alpha",
+        same_response_column: true,
+        left_group_column_id: "column-beta",
+        right_group_column_id: "column-beta",
+        group_display_name: "group-beta",
+        same_group_column: true,
+        same_group_label_set: true,
+        same_group_label_order: true,
+        settings: [
+          { setting: "alpha", left: 0.05, right: 0.01, same: false },
+          { setting: "posthoc.performed", left: true, right: false, same: false },
+        ],
+        metrics: [
+          { metric: "groups.0.mean_rank", left: 2, right: 2, delta: 0 },
+          { metric: "groups.2.mean_rank", left: 8, right: 8, delta: 0 },
+          { metric: "test.h_statistic", left: 7.2, right: 7.2, delta: 0 },
+          {
+            metric: "test.effect_size.epsilon_squared",
+            left: 0.8666666666666667,
+            right: 0.8666666666666667,
+            delta: 0,
+          },
+          { metric: "posthoc.comparison_count", left: 3, right: 0, delta: -3 },
+        ],
+      },
+    },
+  };
+}
+
+function jsonResponse(payload: unknown): Response {
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }
 
 function datasetVersionTestResponse(): DatasetVersionResponse {

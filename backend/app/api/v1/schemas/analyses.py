@@ -713,6 +713,326 @@ class AnalysisRunStatusResponse(BaseModel):
     completed_at: str | None
 
 
+class AnalysisRunListItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_id: UUID
+    method_id: str
+    method_version: str
+    dataset_version_id: UUID | None
+    status: AnalysisRunState
+    stale: bool
+    result_available: bool
+    artifact_count: int = Field(ge=0)
+    created_at: str
+    updated_at: str
+    completed_at: str | None
+
+
+class AnalysisRunListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version_id: UUID | None
+    method_id: str | None = None
+    status: AnalysisRunState | None = None
+    stale: bool | None = None
+    result_available: bool | None = None
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+    returned_count: int = Field(ge=0)
+    has_more: bool
+    runs: list[AnalysisRunListItemResponse]
+
+
+class AnalysisRunComparisonSideResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_id: UUID
+    method_id: str
+    method_version: str
+    dataset_version_id: UUID | None
+    status: Literal["succeeded", "failed", "cancelled"]
+    stale: bool
+    result_sha256: str = Field(min_length=64, max_length=64)
+    warning_count: int = Field(ge=0)
+    summary_type: str | None = None
+    row_count_total: int | None = Field(default=None, ge=0)
+    row_count_included: int | None = Field(default=None, ge=0)
+    source_schema_hash: str | None = None
+    filter_snapshot_sha256: str | None = None
+    row_snapshot_sha256: str | None = None
+    created_at: str
+    completed_at: str | None
+
+
+class AnalysisRunComparisonCompatibility(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    same_method_id: bool
+    same_method_version: bool
+    same_dataset_version_id: bool
+    same_summary_type: bool
+
+
+class AnalysisRunComparisonDifference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    left: str | int | bool | None
+    right: str | int | bool | None
+
+
+class DescriptiveMetricComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric: str
+    left: int | float | None
+    right: int | float | None
+    delta: float | None
+
+
+class DescriptiveColumnComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_id: str
+    display_name: str
+    metrics: list[DescriptiveMetricComparison]
+
+
+class DescriptiveStatisticsComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_type: Literal["descriptive_statistics"]
+    columns: list[DescriptiveColumnComparison]
+    left_only_column_ids: list[str]
+    right_only_column_ids: list[str]
+
+
+class OneSampleTMetricComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric: str
+    left: int | float | None
+    right: int | float | None
+    delta: float | None
+
+
+class OneSampleTSettingComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    setting: str
+    left: str | int | float | bool | None
+    right: str | int | float | bool | None
+    same: bool
+
+
+class OneSampleTTestComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_type: Literal["one_sample_t_test"]
+    left_response_column_id: str | None
+    right_response_column_id: str | None
+    response_display_name: str | None
+    same_response_column: bool
+    settings: list[OneSampleTSettingComparison]
+    metrics: list[OneSampleTMetricComparison]
+
+
+class TwoSampleTMetricComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric: str
+    left: int | float | None
+    right: int | float | None
+    delta: float | None
+
+
+class TwoSampleTSettingComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    setting: str
+    left: str | int | float | bool | None
+    right: str | int | float | bool | None
+    same: bool
+
+
+class TwoSampleTTestComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_type: Literal["two_sample_t_test"]
+    left_response_column_id: str | None
+    right_response_column_id: str | None
+    response_display_name: str | None
+    same_response_column: bool
+    left_group_column_id: str | None
+    right_group_column_id: str | None
+    group_display_name: str | None
+    same_group_column: bool
+    same_group_label_set: bool
+    same_group_label_order: bool
+    settings: list[TwoSampleTSettingComparison]
+    metrics: list[TwoSampleTMetricComparison]
+
+
+class PairedTMetricComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric: str
+    left: int | float | None
+    right: int | float | None
+    delta: float | None
+
+
+class PairedTSettingComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    setting: str
+    left: str | int | float | bool | None
+    right: str | int | float | bool | None
+    same: bool
+
+
+class PairedTTestComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_type: Literal["paired_t_test"]
+    left_before_column_id: str | None
+    right_before_column_id: str | None
+    before_display_name: str | None
+    same_before_column: bool
+    left_after_column_id: str | None
+    right_after_column_id: str | None
+    after_display_name: str | None
+    same_after_column: bool
+    settings: list[PairedTSettingComparison]
+    metrics: list[PairedTMetricComparison]
+
+
+class EquivalenceTostMetricComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric: str
+    left: int | float | None
+    right: int | float | None
+    delta: float | None
+
+
+class EquivalenceTostSettingComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    setting: str
+    left: str | int | float | bool | None
+    right: str | int | float | bool | None
+    same: bool
+
+
+class EquivalenceTostComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_type: Literal["equivalence_tost"]
+    left_response_column_id: str | None
+    right_response_column_id: str | None
+    response_display_name: str | None
+    same_response_column: bool
+    settings: list[EquivalenceTostSettingComparison]
+    metrics: list[EquivalenceTostMetricComparison]
+
+
+class OneWayAnovaMetricComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric: str
+    left: int | float | None
+    right: int | float | None
+    delta: float | None
+
+
+class OneWayAnovaSettingComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    setting: str
+    left: str | int | float | bool | None
+    right: str | int | float | bool | None
+    same: bool
+
+
+class OneWayAnovaComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_type: Literal["one_way_anova"]
+    left_response_column_id: str | None
+    right_response_column_id: str | None
+    response_display_name: str | None
+    same_response_column: bool
+    left_group_column_id: str | None
+    right_group_column_id: str | None
+    group_display_name: str | None
+    same_group_column: bool
+    same_group_label_set: bool
+    same_group_label_order: bool
+    settings: list[OneWayAnovaSettingComparison]
+    metrics: list[OneWayAnovaMetricComparison]
+
+
+class KruskalWallisMetricComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric: str
+    left: int | float | None
+    right: int | float | None
+    delta: float | None
+
+
+class KruskalWallisSettingComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    setting: str
+    left: str | int | float | bool | None
+    right: str | int | float | bool | None
+    same: bool
+
+
+class KruskalWallisComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary_type: Literal["kruskal_wallis_test"]
+    left_response_column_id: str | None
+    right_response_column_id: str | None
+    response_display_name: str | None
+    same_response_column: bool
+    left_group_column_id: str | None
+    right_group_column_id: str | None
+    group_display_name: str | None
+    same_group_column: bool
+    same_group_label_set: bool
+    same_group_label_order: bool
+    settings: list[KruskalWallisSettingComparison]
+    metrics: list[KruskalWallisMetricComparison]
+
+
+class AnalysisRunMethodSpecificComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    descriptive_statistics: DescriptiveStatisticsComparison | None = None
+    one_sample_t_test: OneSampleTTestComparison | None = None
+    two_sample_t_test: TwoSampleTTestComparison | None = None
+    paired_t_test: PairedTTestComparison | None = None
+    equivalence_tost: EquivalenceTostComparison | None = None
+    one_way_anova: OneWayAnovaComparison | None = None
+    kruskal_wallis: KruskalWallisComparison | None = None
+
+
+class AnalysisRunComparisonResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    left: AnalysisRunComparisonSideResponse
+    right: AnalysisRunComparisonSideResponse
+    comparable: bool
+    compatibility: AnalysisRunComparisonCompatibility
+    differences: list[AnalysisRunComparisonDifference]
+    method_specific: AnalysisRunMethodSpecificComparison | None = None
+
+
 class AnalysisWarning(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -804,6 +1124,25 @@ class AnalysisResultHtmlReportResponse(BaseModel):
     created_at: str
     title: str
     section_count: int = Field(ge=0)
+
+
+class AnalysisResultExportListItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    export_id: UUID
+    analysis_id: UUID
+    artifact_kind: str
+    media_type: str
+    sha256: str = Field(min_length=64, max_length=64)
+    created_at: str
+    download_url: str
+
+
+class AnalysisResultExportListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_id: UUID
+    exports: list[AnalysisResultExportListItemResponse]
 
 
 class GageRrPreflightRequest(BaseModel):

@@ -1,6 +1,6 @@
 # Gate B Progress
 
-Last updated: 2026-07-03
+Last updated: 2026-07-04
 
 ## Summary
 
@@ -23,7 +23,16 @@ Current stabilization update:
 - `eda.descriptive`, `regression.pearson`, and `regression.xy_correlation` now validate runner-boundary options through typed contracts. They reject malformed payloads with `invalid_descriptive_options`, `invalid_pearson_options`, or `invalid_xy_correlation_options` before row snapshot/result artifacts are written, and frontend analysis error guidance now explains these codes.
 - Quality/DOE partial reference coverage was strengthened without adding new executable methods. `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`, and `doe.factorial_design` now have fixture-backed regression tests for existing formulas, warnings, redaction behavior, design SHA-256, and deterministic run ordering; independent industrial package fixtures for capability and Gage R&R remain future work.
 - The first report/export stabilization slice is available for stored analysis results. `POST /api/v1/analysis-runs/{analysis_id}/exports/json` revalidates the stored result checksum, writes an atomic `analysis_result_json_export` artifact, records it in `analysis_artifacts`, returns a typed frontend-synchronized response, and does not expose internal workspace paths.
+- Stored analysis history is available through `GET /api/v1/analysis-runs?dataset_version_id={id}&limit=50&offset=0`. The response is metadata-only, paginated, newest-first, includes stale/result/artifact counts plus `has_more`, and does not expose result payloads, raw cell values, or internal paths. The endpoint supports metadata-only `method_id`, `status`, `stale`, and `result_available` filters. The frontend Workbench now has a saved-analysis section that refreshes history, filters by method/status/stale/result availability, pages through stored runs, marks stale runs, and restores a stored result through the checksum-validated result API.
+- Stored analysis comparison is available through `GET /api/v1/analysis-runs/comparison?left_analysis_id={left_id}&right_analysis_id={right_id}`. The endpoint checksum-validates both stored result envelopes and returns metadata-only compatibility/difference output without exposing result payloads, raw cell values, or internal paths. The Workbench history panel now lets users select left/right saved runs and view method/version/dataset/summary compatibility plus provenance/result-hash differences.
+- Compatible stored `eda.descriptive` comparisons now include method-specific saved-summary deltas for common columns. The comparison uses only the already persisted descriptive result payloads, reports left/right/delta for N and numeric summary metrics, and does not reread canonical rows or recompute statistics.
+- Compatible stored `hypothesis.one_sample_t` comparisons now include method-specific saved-result deltas for response identity, run settings, sample summary metrics, contrast statistic/p-value/CI, and effect-size fields. The comparison uses only checksum-validated stored result envelopes and does not reread canonical rows or recompute t-tests.
+- Compatible stored `hypothesis.two_sample_t` comparisons now include method-specific saved-result deltas for response/group identity, group set/order compatibility, run settings, group summary metrics by stored group index, contrast statistic/p-value/CI, and effect-size fields. The comparison does not expose group-label values, reread canonical rows, or recompute t-tests.
+- Compatible stored `hypothesis.paired_t` comparisons now include method-specific saved-result deltas for before/after identity, run settings, complete-pair exclusion counts, paired-sample summaries, contrast statistic/p-value/CI, and effect-size fields. The comparison uses only stored result envelopes and does not reread canonical rows or recompute t-tests.
+- Compatible stored `hypothesis.equivalence_tost` comparisons now include method-specific saved-result deltas for response identity, equivalence bounds/reference settings, lower/upper one-sided tests, TOST decision/p-value, confidence interval, and effect-size fields. The comparison uses only stored result envelopes and does not reread canonical rows or recompute TOST statistics.
+- Created JSON/CSV/HTML analysis result exports can be listed through `GET /api/v1/analysis-runs/{analysis_id}/exports`. The response exposes export IDs, kind, media type, SHA-256, creation time, and a download endpoint only. The Workbench export panel now shows recent exports with download actions. Export security tests cover HTML escaping/CSP, CSV formula-injection sanitization, nosniff download headers, ETag SHA-256 metadata, checksum mismatch recovery, and no internal path exposure.
 - Dedicated DOE design reports are available through `GET /api/v1/doe-designs/{design_id}/report.html`. The response is a self-contained static HTML download built from verified design metadata plus stored response series, with escaped text and no internal path exposure; it does not create or imply DOE effects, OLS, ANOVA, diagnostics, or chart results.
+- `docs/method_versioning.md` now defines the method-version operating policy for patch/minor/major bumps, frontend-only changes, reference fixture updates, and no-silent-migration behavior. `docs/statistical_method_audit_matrix.md` records the independent reference backlog for partial-coverage methods including `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`, `doe.factorial_design`, and `regression.linear_model`.
 - Analysis provenance now builds `build_commit` consistently by preferring `Settings.git_commit` and falling back to `DATALAB_GIT_COMMIT`; provenance tests continue to assert that raw paths, original filenames, and raw cell values are not exposed.
 - `docs/statistical_method_audit_matrix.md` now includes method-by-method verification depth for reference fixtures, hand tests, API contract coverage, edge/failure tests, effect/CI definitions, and known limitation visibility. Partial coverage for `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`, and `doe.factorial_design` is recorded explicitly.
 - Rows preview remains intentionally conservative: each paginated preview verifies the full canonical JSONL artifact before returning a page. `docs/datasets.md` and `docs/storage.md` now record the large-dataset cost and future cache/index/hash improvement candidates.
@@ -34,7 +43,7 @@ Current stabilization update:
 - `analysis_runs.py` now dispatches the four EDA methods, all eight hypothesis methods, all three categorical methods, the three generic regression analysis-run methods, and all six current quality analysis-run methods through a shared `MethodExecutionHandler` registry. Handler metadata and missing-runner validation live in `services/analysis_method_handlers.py`; the four EDA runner functions and EDA-specific selection/warning helpers live in `services/analysis_runners_eda.py`; the eight hypothesis runner functions and hypothesis selection/warning helpers live in `services/analysis_runners_hypothesis.py`; the three categorical runner functions and categorical selection/warning helpers live in `services/analysis_runners_categorical.py`; the three generic regression runner functions, regression selection/warning helpers, and `regression.linear_model` safe JSON model-manifest persistence live in `services/analysis_runners_regression.py`; the six current quality runner functions plus quality-specific selection/warning helpers live in `services/analysis_runners_quality.py`; `regression.predict` remains on the dedicated stored-model API path, while `doe.factorial_design` remains on dedicated DOE design routes instead of the generic analysis-run endpoint.
 - `docs/statistical_method_audit_matrix.md` records the current registry, execution path, method-level tests, effect/provenance coverage, and known limitations for all 29 stable method IDs.
 - `docs/ci_status.md` records the Windows workflow trigger configuration and the current limitation that authenticated remote GitHub Actions run listing was not available from this environment.
-- Latest local Windows validation after the high-risk statistical QA and method-contract stabilization slice: `scripts/check.ps1` passed with backend pytest 363 tests, frontend Vitest 40 tests, frontend lint/typecheck, and frontend build.
+- Latest local Windows validation after the equivalence TOST stored-result comparison slice: `scripts/check.ps1` passed with backend pytest 385 tests, frontend Vitest 51 tests, frontend lint/typecheck, and frontend build.
 - EDA, categorical, hypothesis, quality, and simple generic regression runner modules now use the shared `store_succeeded_analysis_result` helper for result JSON writing, checksum calculation, analysis run/artifact metadata insertion, and result-file cleanup on metadata insert failure. `regression.linear_model` uses a regression-specific manifest-aware persistence wrapper that preserves `regression_model_manifest` artifact registration and cleanup.
 - Backend API contract tests now assert the persistence boundary explicitly: result-only runner modules must not import low-level metadata insert or file-write primitives, while `regression.linear_model` keeps the manifest-aware regression-model insert path.
 
@@ -733,3 +742,110 @@ Next PR:
 
 - Add a small frontend DOE report download action, or start reproducible Python
   code export for stored analysis results.
+
+## Progress Update 112 - One-Way ANOVA Stored-Result Comparison
+
+Completed in current working tree:
+
+- Extended the stored analysis comparison method-specific payload with
+  `one_way_anova`.
+- Added stored-result-only comparison for compatible
+  `hypothesis.one_way_anova` runs.
+- The comparison reports response/group column identity, group set/order
+  compatibility without exposing raw group-label values, saved ANOVA settings,
+  group summary deltas by stored group index, ANOVA table/test/effect-size
+  deltas, and post-hoc comparison count metadata.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, recompute ANOVA statistics, or expose
+  post-hoc `group_1_label`/`group_2_label` values.
+- The Workbench comparison panel now renders an `일원분산분석 비교` section when
+  the comparison payload contains one-way ANOVA metrics.
+- Kept Welch ANOVA, Games-Howell, two-way/repeated/ANCOVA, new statistical
+  calculations, method-version bumps, chart export artifacts, PDF export, and
+  reproducible code export out of scope.
+
+Validation:
+
+- Targeted backend ruff check for the touched analysis schema/service/test
+  files passed.
+- Targeted frontend typecheck passed.
+- Targeted backend pytest for stored comparison API contracts passed with
+  6 selected tests.
+- Frontend Vitest passed with 52 tests.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 386 tests, frontend lint/typecheck, frontend Vitest 52 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- Method-specific numeric comparison is currently implemented for
+  `eda.descriptive`, `hypothesis.one_sample_t`, `hypothesis.two_sample_t`,
+  `hypothesis.paired_t`, `hypothesis.equivalence_tost`, and
+  `hypothesis.one_way_anova`.
+- The one-way ANOVA comparison reports stored-result deltas only; it does not
+  infer whether two saved ANOVA decisions differ in practical or statistical
+  meaning beyond the recorded settings/results.
+- Group comparisons are index based and deliberately avoid raw group labels;
+  clearer redacted group handles can be added later if users need a more
+  readable comparison table.
+
+Next PR:
+
+- Add another stored-result-only comparison for a narrow method such as
+  `hypothesis.kruskal_wallis`, or start reproducible Python code export with
+  explicit data-version, provenance, checksum, and path-exposure tests.
+
+## Progress Update 113 - Kruskal-Wallis Stored-Result Comparison
+
+Completed in current working tree:
+
+- Extended the stored analysis comparison method-specific payload with
+  `kruskal_wallis`.
+- Added stored-result-only comparison for compatible
+  `hypothesis.kruskal_wallis` runs.
+- The comparison reports response/group column identity, group set/order
+  compatibility without exposing raw group-label values, saved rank-test
+  settings, group rank-summary deltas by stored group index, H-test/effect-size
+  deltas, tie-correction deltas, and post-hoc comparison count metadata.
+- The service uses only checksum-validated stored result envelopes. It does not
+  reread canonical rows, reparse uploads, recompute Kruskal-Wallis statistics,
+  or expose Dunn post-hoc `group_1_label`/`group_2_label` values.
+- The Workbench comparison panel now renders a `Kruskal-Wallis 비교` section
+  when the comparison payload contains Kruskal-Wallis metrics.
+- Kept new statistical calculations, Mann-Whitney comparison, Wilcoxon
+  comparison, method-version bumps, chart export artifacts, PDF export, and
+  reproducible code export out of scope.
+
+Validation:
+
+- Targeted backend ruff check for the touched analysis schema/service/test
+  files passed.
+- Targeted frontend typecheck passed.
+- Targeted backend pytest for stored comparison API contracts passed with
+  7 selected tests.
+- Frontend Vitest passed with 53 tests.
+- Full Windows `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+  "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend
+  ruff check, backend ruff format check, backend mypy over 75 source files,
+  backend pytest 387 tests, frontend lint/typecheck, frontend Vitest 53 tests,
+  and frontend build.
+
+Remaining limitations:
+
+- Method-specific numeric comparison is currently implemented for
+  `eda.descriptive`, `hypothesis.one_sample_t`, `hypothesis.two_sample_t`,
+  `hypothesis.paired_t`, `hypothesis.equivalence_tost`,
+  `hypothesis.one_way_anova`, and `hypothesis.kruskal_wallis`.
+- The Kruskal-Wallis comparison reports stored-result deltas only; it does not
+  infer whether two saved rank-test decisions differ in practical or
+  statistical meaning beyond the recorded settings/results.
+- Group and post-hoc comparisons are index/count based and deliberately avoid
+  raw group labels.
+
+Next PR:
+
+- Add another stored-result-only comparison for a narrow method such as
+  `hypothesis.mann_whitney` or start reproducible Python code export with
+  explicit data-version, provenance, checksum, and path-exposure tests.
