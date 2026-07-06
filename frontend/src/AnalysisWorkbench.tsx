@@ -89,6 +89,128 @@ const workbenchSteps = [
   "결과",
 ] as const;
 
+const roleGuideItems = [
+  {
+    title: "Response / 반응값 / Y",
+    description: "비교하거나 예측하고 싶은 값입니다. 예: 강도, 수율, 측정값, 온도, 압력",
+    risk: "반응값 대신 ID나 그룹 컬럼을 고르면 평균, 효과크기, 회귀계수가 의미 없는 값이 됩니다.",
+  },
+  {
+    title: "Group / 그룹",
+    description: "반응값을 나누어 비교할 범주입니다. 예: A라인/B라인, 공급업체, 조건1/조건2",
+    risk: "전후 측정인데 group으로 넣으면 독립 2표본 검정이 되어 잘못된 결과가 나올 수 있습니다.",
+  },
+  {
+    title: "Predictor / 설명변수 / X",
+    description: "반응값을 설명하거나 예측하는 변수입니다. 예: 온도, 시간, 압력",
+    risk: "결과를 만든 뒤에야 알 수 있는 변수를 X로 넣으면 누수 때문에 모델이 과하게 좋아 보입니다.",
+  },
+  {
+    title: "Event level / 사건 수준",
+    description: "관심 있는 결과값입니다. 예: Pass, Fail, Defect, Yes",
+    risk: "사건 수준을 반대로 고르면 비율, risk ratio, odds ratio 해석이 반대로 바뀝니다.",
+  },
+  {
+    title: "Order / 순서",
+    description: "시간 또는 실행 순서입니다. 예: 생산 순서, 측정 순서, timestamp",
+    risk: "실제 시간 순서가 아닌 컬럼을 넣으면 추세나 공정 안정성 신호를 잘못 읽을 수 있습니다.",
+  },
+  {
+    title: "Subgroup / 부분군",
+    description: "같은 조건에서 묶인 반복 측정 단위입니다. 예: 같은 시간대의 5개 샘플",
+    risk: "부분군을 임의로 묶으면 Xbar/R, Xbar/S 관리한계가 공정 구조를 반영하지 못합니다.",
+  },
+  {
+    title: "Part / 부품",
+    description: "Gage R&R에서 반복 측정되는 제품 또는 샘플입니다.",
+    risk: "부품 ID가 중복되거나 빠지면 반복성/재현성 분산성분을 분리할 수 없습니다.",
+  },
+  {
+    title: "Operator / 측정자",
+    description: "Gage R&R에서 측정한 사람 또는 장비입니다.",
+    risk: "측정자를 다른 그룹 변수와 혼동하면 재현성 변동을 잘못 추정합니다.",
+  },
+  {
+    title: "Replicate / 반복",
+    description: "같은 부품/측정자의 반복 측정 번호입니다.",
+    risk: "반복 번호가 균형을 이루지 않으면 현재 balanced crossed Gage R&R은 실행할 수 없습니다.",
+  },
+  {
+    title: "LSL/USL/Target",
+    description: "규격 하한, 규격 상한, 목표값입니다.",
+    risk: "규격을 관리한계처럼 넣으면 capability 결과를 공정 안정성 판단으로 오해할 수 있습니다.",
+  },
+] as const;
+
+const purposeGuideItems = [
+  {
+    question: "한 컬럼의 분포와 이상치를 보고 싶다",
+    methods: ["eda.graphical_summary", "eda.descriptive"],
+    reason: "분포 모양, 요약 통계, 이상 후보를 먼저 확인합니다.",
+    roles: "Response 또는 분석 변수",
+  },
+  {
+    question: "평균이 기준값과 다른지 보고 싶다",
+    methods: ["hypothesis.one_sample_t"],
+    reason: "한 숫자 컬럼의 평균을 사용자가 정한 기준 평균과 비교합니다.",
+    roles: "Response, 기준값",
+  },
+  {
+    question: "두 그룹의 평균을 비교하고 싶다",
+    methods: ["hypothesis.two_sample_t"],
+    reason: "서로 독립인 두 그룹의 평균 차이를 Welch 기본값으로 봅니다.",
+    roles: "Response, Group",
+  },
+  {
+    question: "같은 대상의 전후를 비교하고 싶다",
+    methods: ["hypothesis.paired_t"],
+    reason: "같은 대상에서 나온 전/후 또는 조건 A/B 차이의 평균을 봅니다.",
+    roles: "Before response, After response",
+  },
+  {
+    question: "세 그룹 이상을 비교하고 싶다",
+    methods: ["hypothesis.one_way_anova", "hypothesis.kruskal_wallis"],
+    reason: "여러 독립 그룹의 차이를 평균 기반 또는 순위 기반으로 비교합니다.",
+    roles: "Response, Group",
+  },
+  {
+    question: "두 범주형 변수가 관련 있는지 보고 싶다",
+    methods: ["categorical.chi_square_association"],
+    reason: "분할표의 기대도수와 카이제곱 통계량으로 관련성을 점검합니다.",
+    roles: "Row category, Column category",
+  },
+  {
+    question: "두 숫자 변수가 관련 있는지 보고 싶다",
+    methods: ["regression.pearson"],
+    reason: "두 연속형 숫자 컬럼의 선형 상관과 신뢰구간을 봅니다.",
+    roles: "Predictor X, Response Y",
+  },
+  {
+    question: "공정이 안정적인지 보고 싶다",
+    methods: ["quality.individuals_chart", "quality.subgroup_chart", "quality.run_chart"],
+    reason: "시간/실행 순서 또는 부분군 구조에서 공정 신호를 확인합니다.",
+    roles: "Response, Order 또는 Subgroup",
+  },
+  {
+    question: "규격을 만족하는지 보고 싶다",
+    methods: ["quality.capability"],
+    reason: "측정값이 LSL/USL/Target 기준으로 얼마나 규격 안에 들어오는지 봅니다.",
+    roles: "Response, LSL, USL, Target",
+  },
+  {
+    question: "측정시스템이 믿을 만한지 보고 싶다",
+    methods: ["quality.gage_rr"],
+    reason: "반복성, 재현성, 부품 간 변동을 balanced crossed 설계에서 분리합니다.",
+    roles: "Response, Part, Operator, Replicate",
+  },
+  {
+    question: "실험 조건표를 만들고 싶다",
+    methods: ["doe.factorial_design"],
+    reason: "2-level full factorial 실행 순서와 재현 가능한 설계표를 만듭니다.",
+    roles: "Factor, level, run order",
+  },
+] as const;
+
 export function AnalysisWorkbench({
   catalog,
   selectedModuleId,
@@ -153,6 +275,8 @@ export function AnalysisWorkbench({
 
   return (
     <>
+      <MethodPurposeHelper catalog={catalog} onSelectMethod={onSelectMethod} />
+      <StatisticalRoleGuide />
       <nav className="module-nav" aria-label="분석 모듈">
         {catalog.modules.map((module) => (
           <button
@@ -252,6 +376,12 @@ export function AnalysisWorkbench({
               <strong>{selectedMethod.execution_mode}</strong>
             </div>
           </div>
+          <PreflightExplanationPanel
+            guidance={selectedGuidance}
+            method={selectedMethod}
+            profile={profile}
+            version={version}
+          />
           {renderAnalysisFilters !== undefined ? renderAnalysisFilters(selectedMethod) : null}
           {selectedGuidance !== null ? (
             <>
@@ -384,6 +514,169 @@ export function AnalysisWorkbench({
         </section>
       ) : null}
     </>
+  );
+}
+
+function MethodPurposeHelper({
+  catalog,
+  onSelectMethod,
+}: {
+  catalog: AnalysisMethodListResponse;
+  onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
+}) {
+  const methodsById = new Map(catalog.methods.map((method) => [method.method_id, method]));
+
+  return (
+    <section className="method-purpose-helper" aria-labelledby="method-purpose-helper-title">
+      <div className="panel-heading">
+        <div>
+          <h3 id="method-purpose-helper-title">무엇을 알고 싶나요?</h3>
+          <p>질문에서 출발해 후보 method와 필요한 역할을 확인합니다. 선택해도 분석은 자동 실행되지 않습니다.</p>
+        </div>
+      </div>
+      <div className="purpose-card-grid">
+        {purposeGuideItems.map((item) => (
+          <article className="purpose-card" key={item.question}>
+            <h4>{item.question}</h4>
+            <p>{item.reason}</p>
+            <div className="purpose-role-line">
+              <strong>필요 역할</strong>
+              <span>{item.roles}</span>
+            </div>
+            <div className="purpose-method-list">
+              {item.methods.map((methodId) => {
+                const method = methodsById.get(methodId) ?? null;
+                const canSelect = method !== null && method.availability === "available";
+                return (
+                  <button
+                    aria-label={`${methodId} 메서드 보기`}
+                    className={
+                      canSelect
+                        ? "purpose-method-button"
+                        : "purpose-method-button purpose-method-button-muted"
+                    }
+                    disabled={!canSelect}
+                    key={methodId}
+                    onClick={() => {
+                      if (method !== null) {
+                        onSelectMethod(method.module_id, method.method_id);
+                      }
+                    }}
+                    type="button"
+                  >
+                    <code>{methodId}</code>
+                    <span>
+                      {method === null
+                        ? "catalog 없음"
+                        : method.availability === "available"
+                          ? "메서드 보기"
+                          : availabilityLabel(method)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StatisticalRoleGuide() {
+  return (
+    <section className="role-guide-panel" aria-labelledby="role-guide-title">
+      <div className="panel-heading">
+        <div>
+          <h3 id="role-guide-title">역할 설명</h3>
+          <p>분석은 column의 통계 역할을 기준으로 실행됩니다. 같은 컬럼이라도 역할 선택이 달라지면 질문과 가정이 달라집니다.</p>
+        </div>
+      </div>
+      <div className="role-guide-grid">
+        {roleGuideItems.map((item) => (
+          <article className="role-guide-item" key={item.title}>
+            <h4>{item.title}</h4>
+            <p>{item.description}</p>
+            <small>{item.risk}</small>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PreflightExplanationPanel({
+  guidance,
+  method,
+  profile,
+  version,
+}: {
+  guidance: ReturnType<typeof getAnalysisMethodGuidance> | null;
+  method: AnalysisMethodDescriptor;
+  profile: DatasetProfileResponse | null;
+  version: DatasetVersionResponse | null;
+}) {
+  const roleLabels =
+    guidance === null
+      ? []
+      : guidance.roleRequirements.map((role) => `${role.label}(${role.required ? "필수" : "선택"})`);
+
+  return (
+    <section className="preflight-explanation-panel" aria-labelledby="preflight-explanation-title">
+      <div className="panel-heading compact-heading">
+        <div>
+          <h4 id="preflight-explanation-title">사전점검 해설</h4>
+          <p>{method.method_id}</p>
+        </div>
+      </div>
+      <div className="preflight-explanation-grid">
+        <div>
+          <strong>사용 행 수</strong>
+          <span>
+            {version === null
+              ? "데이터셋 확정 후 실행 시 계산"
+              : `${version.row_count.toLocaleString()}행 중 filter와 complete-case 기준으로 계산`}
+          </span>
+        </div>
+        <div>
+          <strong>제외 행 수</strong>
+          <span>
+            {profile === null
+              ? "실행 전 profile 또는 method preflight에서 확인"
+              : "결측, 비수치 값, 설계 불일치가 있으면 result에 exclusions로 기록"}
+          </span>
+        </div>
+        <div>
+          <strong>결측 처리</strong>
+          <span>현재 inferential analysis는 명시적 complete-case 처리와 제외 수 표시를 기본으로 합니다.</span>
+        </div>
+        <div>
+          <strong>선택된 역할</strong>
+          <span>{roleLabels.length === 0 ? "method별 역할 계약 확인" : roleLabels.join(", ")}</span>
+        </div>
+        <div>
+          <strong>선택된 method</strong>
+          <span>
+            {method.label_ko} · v{method.method_version}
+          </span>
+        </div>
+        <div>
+          <strong>주요 가정</strong>
+          <span>독립성은 데이터만으로 자동 검증할 수 없습니다. 실험/측정 설계를 확인해야 합니다.</span>
+        </div>
+        <div>
+          <strong>말할 수 있는 것</strong>
+          <span>선택한 method, 역할, filter, 결측 정책에서의 추정값, 신뢰구간, 효과크기, 경고입니다.</span>
+        </div>
+        <div>
+          <strong>말할 수 없는 것</strong>
+          <span>p-value만으로 차이의 크기, 실무 중요성, 인과관계, 공정 안정성을 자동 결론내릴 수 없습니다.</span>
+        </div>
+      </div>
+      <p className="preflight-note">
+        p-value는 차이가 있는지의 근거이며, 차이가 얼마나 큰지는 effect size와 confidence interval을 함께 봐야 합니다.
+      </p>
+    </section>
   );
 }
 

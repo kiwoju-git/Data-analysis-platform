@@ -6081,3 +6081,52 @@ Next:
   `hypothesis.mann_whitney`, or start the reproducible Python code export
   contract with explicit data-version, provenance, checksum, and path-exposure
   tests.
+
+## Progress Update 114 - Beginner Role Guidance And Purpose Helper
+
+Completed:
+
+- Added always-visible beginner role guidance to the Workbench for
+  Response/Y, Group, Predictor/X, Event level, Order, Subgroup, Part,
+  Operator, Replicate, and LSL/USL/Target.
+- Each role guide entry includes what the role means, common examples, and a
+  one-line risk explaining how the analysis can go wrong if the role is
+  misassigned.
+- Added a purpose-based helper section, `무엇을 알고 싶나요?`, that maps common
+  beginner questions to existing method IDs such as `eda.graphical_summary`,
+  `hypothesis.two_sample_t`, `regression.pearson`, `quality.capability`,
+  `quality.gage_rr`, and `doe.factorial_design`.
+- Helper cards only move the user to a method for review. They do not auto-run
+  analyses, and planned/disabled/catalog-missing methods are not shown as
+  executable actions.
+- Added a common preflight explanation panel that clarifies use-row counts,
+  exclusions, complete-case missingness, selected role requirements, selected
+  method/version, independence assumptions, what the analysis can support, and
+  what it cannot conclude from p-values alone.
+- Kept backend API behavior, method availability, statistical formulas, method
+  versions, fake results, new methods, and large UI redesigns out of scope.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run lint`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 54 tests.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 387 tests, frontend lint/typecheck, frontend
+  Vitest 54 tests, and frontend build.
+
+Limitations:
+
+- The helper is guidance-only. It does not inspect the currently selected
+  column controls or infer the correct method automatically.
+- Preflight explanation is common copy plus method role requirements; detailed
+  method-specific N/exclusion numbers still come from each actual result or
+  preflight payload.
+- Chart export artifacts, reproducible code export, and additional stored
+  result comparisons remain out of scope.
+
+Next:
+
+- Add a lightweight method-choice wizard that can read selected column roles
+  and suggest candidate methods without executing them, or continue stored
+  result comparison coverage for one more existing method.

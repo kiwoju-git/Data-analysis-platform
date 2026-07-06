@@ -278,6 +278,40 @@ describe("App", () => {
     expect(html).toContain("계산 코드, 기준 데이터, 수치 검증 테스트");
   });
 
+  it("renders beginner role guidance, purpose helper cards, and readable preflight copy", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("무엇을 알고 싶나요?");
+    expect(html).toContain("한 컬럼의 분포와 이상치를 보고 싶다");
+    expect(html).toContain("eda.graphical_summary");
+    expect(html).toContain("두 그룹의 평균을 비교하고 싶다");
+    expect(html).toContain("<code>hypothesis.two_sample_t</code><span>계획됨</span>");
+    expect(html).toContain("선택해도 분석은 자동 실행되지 않습니다.");
+    expect(html).toContain("역할 설명");
+    expect(html).toContain("Response / 반응값 / Y");
+    expect(html).toContain("전후 측정인데 group으로 넣으면 독립 2표본 검정");
+    expect(html).toContain("LSL/USL/Target");
+    expect(html).toContain("사전점검 해설");
+    expect(html).toContain("독립성은 데이터만으로 자동 검증할 수 없습니다.");
+    expect(html).toContain("p-value는 차이가 있는지의 근거");
+  });
+
   it("shows analysis run errors under the selected execution panel with a readable action", () => {
     const catalog = analysisTestCatalog();
     const selectedMethod = catalog.methods[0];

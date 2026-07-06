@@ -1,6 +1,6 @@
 # Gate B Progress
 
-Last updated: 2026-07-04
+Last updated: 2026-07-06
 
 ## Summary
 
@@ -31,6 +31,7 @@ Current stabilization update:
 - Compatible stored `hypothesis.paired_t` comparisons now include method-specific saved-result deltas for before/after identity, run settings, complete-pair exclusion counts, paired-sample summaries, contrast statistic/p-value/CI, and effect-size fields. The comparison uses only stored result envelopes and does not reread canonical rows or recompute t-tests.
 - Compatible stored `hypothesis.equivalence_tost` comparisons now include method-specific saved-result deltas for response identity, equivalence bounds/reference settings, lower/upper one-sided tests, TOST decision/p-value, confidence interval, and effect-size fields. The comparison uses only stored result envelopes and does not reread canonical rows or recompute TOST statistics.
 - Created JSON/CSV/HTML analysis result exports can be listed through `GET /api/v1/analysis-runs/{analysis_id}/exports`. The response exposes export IDs, kind, media type, SHA-256, creation time, and a download endpoint only. The Workbench export panel now shows recent exports with download actions. Export security tests cover HTML escaping/CSP, CSV formula-injection sanitization, nosniff download headers, ETag SHA-256 metadata, checksum mismatch recovery, and no internal path exposure.
+- The Workbench now includes beginner-facing statistical role guidance, purpose-based method helper cards, and a common preflight explanation panel. These sections explain Response/Group/Predictor/Event/Order/Subgroup/Gage/spec roles, show what can go wrong if a role is misassigned, map user questions to candidate method IDs, and clarify N/exclusions/missingness/assumptions before execution. Helper cards only select a method for review; they do not auto-run analyses, and planned/disabled methods remain visually non-executable.
 - Dedicated DOE design reports are available through `GET /api/v1/doe-designs/{design_id}/report.html`. The response is a self-contained static HTML download built from verified design metadata plus stored response series, with escaped text and no internal path exposure; it does not create or imply DOE effects, OLS, ANOVA, diagnostics, or chart results.
 - `docs/method_versioning.md` now defines the method-version operating policy for patch/minor/major bumps, frontend-only changes, reference fixture updates, and no-silent-migration behavior. `docs/statistical_method_audit_matrix.md` records the independent reference backlog for partial-coverage methods including `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`, `doe.factorial_design`, and `regression.linear_model`.
 - Analysis provenance now builds `build_commit` consistently by preferring `Settings.git_commit` and falling back to `DATALAB_GIT_COMMIT`; provenance tests continue to assert that raw paths, original filenames, and raw cell values are not exposed.
@@ -43,7 +44,7 @@ Current stabilization update:
 - `analysis_runs.py` now dispatches the four EDA methods, all eight hypothesis methods, all three categorical methods, the three generic regression analysis-run methods, and all six current quality analysis-run methods through a shared `MethodExecutionHandler` registry. Handler metadata and missing-runner validation live in `services/analysis_method_handlers.py`; the four EDA runner functions and EDA-specific selection/warning helpers live in `services/analysis_runners_eda.py`; the eight hypothesis runner functions and hypothesis selection/warning helpers live in `services/analysis_runners_hypothesis.py`; the three categorical runner functions and categorical selection/warning helpers live in `services/analysis_runners_categorical.py`; the three generic regression runner functions, regression selection/warning helpers, and `regression.linear_model` safe JSON model-manifest persistence live in `services/analysis_runners_regression.py`; the six current quality runner functions plus quality-specific selection/warning helpers live in `services/analysis_runners_quality.py`; `regression.predict` remains on the dedicated stored-model API path, while `doe.factorial_design` remains on dedicated DOE design routes instead of the generic analysis-run endpoint.
 - `docs/statistical_method_audit_matrix.md` records the current registry, execution path, method-level tests, effect/provenance coverage, and known limitations for all 29 stable method IDs.
 - `docs/ci_status.md` records the Windows workflow trigger configuration and the current limitation that authenticated remote GitHub Actions run listing was not available from this environment.
-- Latest local Windows validation after the equivalence TOST stored-result comparison slice: `scripts/check.ps1` passed with backend pytest 385 tests, frontend Vitest 51 tests, frontend lint/typecheck, and frontend build.
+- Latest local Windows validation after the beginner role guidance and purpose-helper slice: `scripts/check.ps1` passed with backend pytest 387 tests, frontend Vitest 54 tests, frontend lint/typecheck, and frontend build.
 - EDA, categorical, hypothesis, quality, and simple generic regression runner modules now use the shared `store_succeeded_analysis_result` helper for result JSON writing, checksum calculation, analysis run/artifact metadata insertion, and result-file cleanup on metadata insert failure. `regression.linear_model` uses a regression-specific manifest-aware persistence wrapper that preserves `regression_model_manifest` artifact registration and cleanup.
 - Backend API contract tests now assert the persistence boundary explicitly: result-only runner modules must not import low-level metadata insert or file-write primitives, while `regression.linear_model` keeps the manifest-aware regression-model insert path.
 
@@ -113,8 +114,16 @@ Current stabilization update:
 
 ## Latest Validation
 
-Last validated on 2026-07-02:
+Last validated on 2026-07-06:
 
+- Current beginner role guidance and purpose-helper slice: the Workbench now
+  renders always-visible statistical role guidance, purpose-based method helper
+  cards, and a common preflight explanation panel. The helper maps beginner
+  questions to existing method IDs without adding calculations or auto-running
+  analyses, and planned/disabled methods are shown as non-executable. WSL
+  frontend typecheck, lint, and Vitest passed with 54 tests. Full Windows
+  `scripts/check.ps1` passed with backend pytest 387 tests, frontend Vitest 54
+  tests, frontend lint/typecheck, and frontend build.
 - Current linear model runner split: `regression.linear_model` now uses a
   module-owned runner function in
   `backend/app/services/analysis_runners_regression.py` alongside
