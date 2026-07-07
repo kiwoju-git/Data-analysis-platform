@@ -449,6 +449,12 @@ textarea {
 }
 
 .purpose-method-button span {
+  white-space: normal;
+}
+
+.purpose-method-button small {
+  color: inherit;
+  font-size: 0.76rem;
   white-space: nowrap;
 }
 
@@ -496,6 +502,27 @@ textarea {
   color: #7a4c19;
   font-size: 0.82rem;
   line-height: 1.45;
+}
+
+.role-focus-box {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #7cb99f;
+  border-radius: 6px;
+  background: #edf8f2;
+  color: #14553f;
+  padding: 11px 12px;
+}
+
+.role-focus-box p {
+  margin: 0;
+  color: #14553f;
+  line-height: 1.55;
+}
+
+.role-guide-item-highlight {
+  border-color: #7cb99f;
+  background: #edf8f2;
 }
 
 .workbench-heading {
@@ -898,10 +925,49 @@ textarea {
   font-size: 0.82rem;
 }
 
+.export-format-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.export-format-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid #d8dde5;
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.export-format-card p {
+  margin: 0;
+  color: #576174;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .analysis-history-list,
 .export-list-box {
   display: grid;
   gap: 10px;
+}
+
+.history-filter-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 1px solid #d8dde5;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #384457;
+  padding: 10px 12px;
+  font-size: 0.86rem;
+}
+
+.history-filter-summary strong {
+  color: #172033;
 }
 
 .analysis-history-controls {
@@ -998,6 +1064,28 @@ textarea {
   border-radius: 6px;
   background: #f8fafc;
   padding: 12px;
+}
+
+.comparison-explanation-box {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #b8c7da;
+  border-radius: 6px;
+  background: #f7fbff;
+  color: #20304a;
+  padding: 10px 12px;
+}
+
+.comparison-explanation-box p {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.compact-status-pill {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
 }
 
 .comparison-side-grid {
@@ -1722,6 +1810,7 @@ td select {
   .purpose-card-grid,
   .role-guide-grid,
   .preflight-explanation-grid,
+  .export-format-grid,
   .guidance-grid,
   .chart-grid {
     grid-template-columns: 1fr;

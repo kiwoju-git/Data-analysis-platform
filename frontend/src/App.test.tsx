@@ -301,7 +301,10 @@ describe("App", () => {
     expect(html).toContain("한 컬럼의 분포와 이상치를 보고 싶다");
     expect(html).toContain("eda.graphical_summary");
     expect(html).toContain("두 그룹의 평균을 비교하고 싶다");
-    expect(html).toContain("<code>hypothesis.two_sample_t</code><span>계획됨</span>");
+    expect(html).toContain("두 표본 t 검정");
+    expect(html).toContain("<code>hypothesis.two_sample_t</code>");
+    expect(html).toContain("<small>계획됨</small>");
+    expect(html).toContain("catalog 없음");
     expect(html).toContain("선택해도 분석은 자동 실행되지 않습니다.");
     expect(html).toContain("역할 설명");
     expect(html).toContain("Response / 반응값 / Y");
@@ -310,6 +313,73 @@ describe("App", () => {
     expect(html).toContain("사전점검 해설");
     expect(html).toContain("독립성은 데이터만으로 자동 검증할 수 없습니다.");
     expect(html).toContain("p-value는 차이가 있는지의 근거");
+  });
+
+  it("highlights role guidance for the selected statistical method", () => {
+    const catalog = analysisTestCatalog();
+
+    const renderSelectedMethod = (
+      methodId: string,
+      moduleId: "hypothesis" | "quality" | "doe",
+      labelKo: string,
+    ) => {
+      const selectedMethod = {
+        ...catalog.methods[0],
+        availability: "available" as const,
+        label_en: labelKo,
+        label_ko: labelKo,
+        method_id: methodId,
+        module_id: moduleId,
+      };
+
+      return renderToString(
+        <AnalysisWorkbench
+          analysisRunError={null}
+          catalog={catalog}
+          profile={null}
+          selectedMethod={selectedMethod}
+          selectedMethods={[selectedMethod]}
+          selectedModuleId={moduleId}
+          version={datasetVersionTestResponse()}
+          onSelectMethod={() => undefined}
+          renderAnalysisFilters={() => <div>분석 필터</div>}
+          renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+        />,
+      );
+    };
+
+    const twoSampleHtml = renderSelectedMethod(
+      "hypothesis.two_sample_t",
+      "hypothesis",
+      "2-표본 t-검정",
+    );
+    expect(twoSampleHtml).toContain("2-표본 t-검정 핵심 역할");
+    expect(twoSampleHtml).toContain("독립성은 데이터만으로 검증되지 않으므로");
+
+    const pairedHtml = renderSelectedMethod(
+      "hypothesis.paired_t",
+      "hypothesis",
+      "대응표본 t-검정",
+    );
+    expect(pairedHtml).toContain("대응표본 t-검정 핵심 역할");
+    expect(pairedHtml).toContain("Before/After");
+    expect(pairedHtml).toContain("독립 2표본 검정");
+
+    const capabilityHtml = renderSelectedMethod(
+      "quality.capability",
+      "quality",
+      "공정능력",
+    );
+    expect(capabilityHtml).toContain("Capability 핵심 역할");
+    expect(capabilityHtml).toContain("Spec limit은 고객/공정 규격이고 control limit이 아니므로");
+
+    const gageHtml = renderSelectedMethod("quality.gage_rr", "quality", "Gage R&R");
+    expect(gageHtml).toContain("Gage R&amp;R 핵심 역할");
+    expect(gageHtml).toContain("balanced crossed design");
+
+    const doeHtml = renderSelectedMethod("doe.factorial_design", "doe", "요인배치 설계");
+    expect(doeHtml).toContain("DOE 설계 핵심 역할");
+    expect(doeHtml).toContain("Factor 이름, low/high level, run order, random seed");
   });
 
   it("shows analysis run errors under the selected execution panel with a readable action", () => {
@@ -362,6 +432,9 @@ describe("App", () => {
 
     expect(html).toContain("실행 패널");
     expect(html).toContain("결과 내보내기");
+    expect(html).toContain("재현과 기계처리에 적합한 전체 result envelope입니다.");
+    expect(html).toContain("표 형태로 검토하기 쉬운 long-form CSV입니다.");
+    expect(html).toContain("사람에게 공유하기 좋은 self-contained 정적 보고서입니다.");
     expect(html).toContain("JSON 생성");
     expect(html).toContain("CSV 생성");
     expect(html).toContain("HTML 생성");
@@ -403,28 +476,127 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("저장된 분석");
-    expect(html).toContain("method");
-    expect(html).toContain("status");
-    expect(html).toContain("result");
+    const text = html.replace(/<!-- -->/g, "");
+
+    expect(text).toContain("현재 데이터셋의 저장된 분석");
+    expect(text).toContain("필터 상태");
+    expect(text).toContain("method");
+    expect(text).toContain("status");
+    expect(text).toContain("result");
     expect(html).toContain("이전");
     expect(html).toContain("다음");
     expect(html).toContain("왼쪽");
     expect(html).toContain("오른쪽");
     expect(html).toContain("비교 결과");
     expect(html).toContain("compatible");
+    expect(html).toContain("같은 method/version일 때만 자세한 비교가 가능합니다.");
     expect(html).toContain("기술통계 비교");
     expect(html).toContain("delta");
+    expect(html).toContain("delta는 right - left입니다.");
+    expect(html).toContain("p-value delta");
     expect(html).toContain("mean");
     expect(html).toContain("result_sha256");
-    expect(html).toContain("stale");
+    expect(html).toContain("stale · 재검토 필요");
     expect(html).toContain("결과 불러오기");
     expect(html).toContain("불러온 결과");
     expect(html).toContain("ui_export_contract_test");
+    expect(text).toContain("1개 표시 · 1-1 · 다음 페이지 없음");
     expect(html).toContain("최근 export");
     expect(html).toContain("JSON");
     expect(html).toContain("CSV");
     expect(html).toContain("다운로드");
+  });
+
+  it("renders saved analysis history unavailable-result and pagination states", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const history = analysisRunListTestResponse(restored);
+    const unavailableHistory: AnalysisRunListResponse = {
+      ...history,
+      has_more: true,
+      result_available: false,
+      runs: history.runs.map((run) => ({
+        ...run,
+        artifact_count: 0,
+        result_available: false,
+        stale: false,
+      })),
+    };
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisHistory={unavailableHistory}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        analysisHistoryResultAvailabilityFilter="unavailable"
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    const text = html.replace(/<!-- -->/g, "");
+
+    expect(text).toContain("현재 데이터셋의 저장된 분석");
+    expect(text).toContain("result unavailable");
+    expect(text).toContain("result 없음");
+    expect(text).toContain("결과 없음");
+    expect(text).toContain("1개 표시 · 1-1 · 다음 페이지 있음");
+  });
+
+  it("explains incompatible stored result comparisons", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const restored = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const baseComparison = analysisRunComparisonTestResponse(restored);
+    const comparison: AnalysisRunComparisonResponse = {
+      ...baseComparison,
+      comparable: false,
+      compatibility: {
+        ...baseComparison.compatibility,
+        same_dataset_version_id: false,
+        same_method_version: false,
+      },
+      right: {
+        ...baseComparison.right,
+        dataset_version_id: "version-2",
+        method_version: "0.2.0",
+      },
+    };
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisComparison={comparison}
+        analysisComparisonLeftId={comparison.left.analysis_id}
+        analysisComparisonRightId={comparison.right.analysis_id}
+        analysisHistory={analysisRunListTestResponse(restored)}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onRefreshAnalysisHistory={() => undefined}
+        onRestoreAnalysisRun={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("incompatible comparison");
+    expect(html).toContain("method version mismatch");
+    expect(html).toContain("dataset version mismatch");
+    expect(html).toContain("different");
   });
 
   it("renders one-sample t stored result comparison metrics", () => {
@@ -750,9 +922,42 @@ describe("App", () => {
     expect(html).toContain("생성됨");
     expect(html).toContain("2.0 KB");
     expect(html).toContain("sha256");
+    expect(html).toContain("sha256:");
     expect(html).toContain("abcdef123456");
     expect(html).toContain("JSON 다운로드");
     expect(html).not.toContain("stale-badge");
+  });
+
+  it("warns before exporting stale stored results", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const analysisResult = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const exportResult: AnalysisResultJsonExportResponse = {
+      ...analysisResultJsonExportTestResponse(analysisResult),
+      stale: true,
+    };
+
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisResultJsonExport={exportResult}
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedAnalysisResult={analysisResult}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onCreateAnalysisResultJsonExport={() => undefined}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>분석 필터</div>}
+        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("stale result export입니다.");
+    expect(html).toContain("공유 전 재실행 여부를 확인하세요.");
+    expect(html).toContain("stale · 재검토 필요");
   });
 
   it("shows export download errors inside the export panel", () => {
@@ -782,6 +987,8 @@ describe("App", () => {
     );
 
     expect(html).toContain("export 다운로드 실패");
+    expect(html).toContain("저장된 export 파일 또는 checksum이 맞지 않습니다.");
+    expect(html).toContain("export를 다시 생성하세요");
     expect(html).toContain("analysis_export_checksum_mismatch");
   });
 

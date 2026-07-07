@@ -1,6 +1,6 @@
 # Dependency Review
 
-Last reviewed: 2026-06-29
+Last reviewed: 2026-07-06
 
 This file records direct dependencies introduced for the Gate A scaffold. Transitive dependency and vulnerability review must be refreshed when lockfiles are generated or dependency versions change.
 
@@ -21,6 +21,7 @@ This file records direct dependencies introduced for the Gate A scaffold. Transi
 | --- | --- | --- | --- | --- |
 | `httpx` | `0.28.1` | FastAPI `TestClient` support. | Python 3.10 compatible. | BSD-3-Clause |
 | `mypy` | `1.13.0` | Static type checking. | Python 3.10 compatible. | MIT |
+| `playwright` | `1.61.0` | Local browser E2E smoke tests for upload/paste, parsing confirmation, analysis, saved-result restore, comparison, and export flows. | Python 3.10 compatible; browser binaries are installed explicitly with `python -m playwright install chromium`; CPU-only and localhost-only in this project. | Apache-2.0 |
 | `pytest` | `8.3.4` | Unit and integration tests. | Python 3.10 compatible. | MIT |
 | `ruff` | `0.8.4` | Linting and format checks. | Windows binary available; CPU-only. | MIT |
 
@@ -40,6 +41,7 @@ This file records direct dependencies introduced for the Gate A scaffold. Transi
 
 - Standard library alone is insufficient for the required FastAPI backend and React/Vite frontend.
 - No dependency is added for telemetry, external data upload, GPU, PyTorch, PyCaret, Optuna, SHAP, LIME, Docker, Redis, or a CDN.
+- Playwright is a development-only dependency. It starts local backend/frontend servers on loopback ports, uses a temporary workspace, and does not send data to an external service. Browser binaries are intentionally not installed by `scripts/check.ps1`.
 - No GPL, AGPL, SSPL, commercial, or evaluation-only direct dependency is introduced.
 - Direct dependency versions are pinned. `frontend/package-lock.json` must be generated with `npm --prefix .\frontend install --package-lock-only --ignore-scripts` before using `npm ci`.
 

@@ -1,6 +1,7 @@
 name: ci
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -9,6 +10,7 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,3 +27,42 @@ jobs:
       - name: Check
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
+
+  e2e:
+    runs-on: windows-latest
+    needs: windows
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}\ms-playwright
+      DATALAB_E2E_ROOT: ${{ runner.temp }}\datalab-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: playwright-chromium-windows-${{ hashFiles('backend/pyproject.toml') }}
+      - name: Bootstrap
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe -m playwright install chromium
+      - name: Browser E2E Smoke
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -WorkspaceRoot "${{ env.DATALAB_E2E_ROOT }}" -KeepWorkspace
+      - name: Upload E2E logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: ${{ env.DATALAB_E2E_ROOT }}\**\logs\*.log
+          if-no-files-found: ignore

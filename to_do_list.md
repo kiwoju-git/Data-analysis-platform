@@ -6130,3 +6130,476 @@ Next:
 - Add a lightweight method-choice wizard that can read selected column roles
   and suggest candidate methods without executing them, or continue stored
   result comparison coverage for one more existing method.
+
+## Progress Update 115 - Workbench Maintainability And Saved-Result UX Refinement
+
+Completed:
+
+- Split the large Workbench UI into focused components:
+  `StatisticalRoleGuide.tsx`, `MethodPurposeHelper.tsx`,
+  `PreflightExplanationPanel.tsx`, `AnalysisHistoryPanel.tsx`,
+  `AnalysisComparisonPanel.tsx`, and `AnalysisResultExportPanel.tsx`.
+- Added shared Workbench types and formatting utilities for history filters,
+  availability labels, short hashes, dates, bytes, and comparison values.
+- Improved selected-method beginner guidance for two-sample t, paired t,
+  capability, Gage R&R, and DOE factorial design without adding new statistical
+  methods or fake results.
+- Reworked the purpose helper card order so user questions and Korean method
+  names come before method IDs; planned/disabled/catalog-missing methods remain
+  non-executable.
+- Refined saved analysis history copy and states for current dataset context,
+  filter status, stale badges, unavailable result restore disabling,
+  pagination, and restore summaries.
+- Refined export copy and states for JSON/CSV/HTML use cases, stale export
+  warnings, download recovery, and SHA display.
+- Refined saved-result comparison copy for same/different compatibility,
+  method-version mismatch, dataset-version mismatch, delta meaning, and p-value
+  caveats.
+- Documented the upload/paste -> confirm parsing -> schema role update -> run
+  `eda.descriptive` -> run `hypothesis.two_sample_t` -> restore -> compare ->
+  export JSON/CSV/HTML -> reload/restore E2E-like plan in
+  `docs/progress_gate_b.md`.
+
+Validation:
+
+- `npm --prefix ./frontend run test -- --run`: passed with 58 tests.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run lint`: passed.
+- `npm --prefix ./frontend run build`: passed with Vite's existing chunk-size
+  warning.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 387 tests, frontend lint/typecheck, frontend
+  Vitest 58 tests, and frontend build.
+
+Limitations:
+
+- Playwright E2E is still a documented next step, not implemented in this PR.
+- The purpose helper does not infer the right method from selected columns.
+- Frontend bundle code splitting is still future work; Vite reports the
+  existing large chunk warning.
+
+Next:
+
+- Implement the documented Playwright critical path, or add the next narrow
+  saved-result/export hardening slice such as reproducible code export.
+
+## Progress Update 116 - Playwright Browser Critical Path
+
+Completed:
+
+- Added `playwright==1.61.0` to backend dev dependencies for local-only browser
+  E2E smoke testing.
+- Added `scripts/e2e.ps1` with opt-in Chromium installation and loopback-only
+  E2E execution on separate test ports.
+- Added `tests/e2e/critical_path.py`, which starts isolated backend/frontend
+  servers, uses a temporary workspace, and drives Chromium through the critical
+  workflow.
+- Covered the first browser critical path:
+  pasted TSV intake, parsing confirmation, dataset version creation,
+  `eda.descriptive`, `hypothesis.two_sample_t`, JSON/CSV/HTML export creation,
+  JSON download, saved-result restore, and saved-result comparison messaging.
+- Updated `docs/setup.md`, `docs/dependency_review.md`,
+  `docs/progress_gate_b.md`, and `docs/ci_status.md`.
+- Kept new statistical methods, fake results, full Playwright suite expansion,
+  and CI browser execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m pip install -e ".\backend[dev]"`: passed.
+- `.\.venv\Scripts\python.exe -m playwright install chromium`: passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend pytest 387 tests, frontend lint/typecheck, frontend
+  Vitest 58 tests, and frontend build.
+
+Limitations:
+
+- Browser E2E is opt-in and not yet included in `scripts/check.ps1` or GitHub
+  Actions.
+- The browser smoke uses pasted TSV data. Browser file upload/XLSX and schema
+  no-op stale behavior remain future E2E slices.
+- Vite still reports the existing production chunk-size warning.
+
+Next:
+
+- Add a schema-update/no-op-stale browser E2E, or wire Playwright into CI with a
+  controlled browser cache/install step.
+
+## Progress Update 117 - Schema No-Op Stale Browser Coverage
+
+Completed:
+
+- Extended the Playwright critical path to cover schema stale behavior after
+  stored analyses exist.
+- Verified no-op `스키마 저장` does not show stale badges in saved analysis
+  history.
+- Verified changing the `Value` display name to `Measurement Value` and saving
+  schema marks both stored analysis runs as `stale · 재검토 필요`.
+- Tightened sidebar navigation selectors to exact-match `데이터셋` and `분석`.
+- Kept backend stale logic, new statistical methods, fake results, method
+  version changes, and CI browser execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend ruff check, backend ruff format check, backend mypy over
+  75 source files, backend pytest 387 tests, frontend lint/typecheck, frontend
+  Vitest 58 tests, and frontend build.
+
+Limitations:
+
+- E2E remains opt-in and is not yet included in `scripts/check.ps1`.
+- File upload and XLSX browser E2E are still future work.
+- The browser test asserts UI stale badges; API stale payload coverage remains
+  in backend tests.
+
+Next:
+
+- Add file upload/XLSX browser coverage, or add a CI workflow step for opt-in
+  Playwright with browser caching.
+
+## Progress Update 118 - XLSX File Upload Browser Coverage
+
+Completed:
+
+- Added browser E2E coverage for the actual file upload path using a synthetic
+  `.xlsx` workbook.
+- Verified the upload form, parsing options screen, parsing confirmation,
+  dataset version creation, `2행` / `3컬럼` context, and preview column headers.
+- Reused the existing opt-in Playwright script and temporary workspace
+  isolation.
+- Kept parser feature expansion, new statistical methods, fake results, and CI
+  browser execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend ruff check, backend ruff format check, backend mypy over
+  75 source files, backend pytest 387 tests, frontend lint/typecheck, frontend
+  Vitest 58 tests, and frontend build.
+
+Limitations:
+
+- E2E remains opt-in and is not included in `scripts/check.ps1`.
+- Browser CSV upload and multi-sheet XLSX selection are not part of this E2E
+  slice.
+
+Next:
+
+- Add browser CSV upload/error recovery coverage or prepare the opt-in E2E for
+  CI execution with browser caching.
+
+## Progress Update 119 - CSV Upload And Empty-File Recovery Browser Coverage
+
+Completed:
+
+- Added browser E2E coverage for CSV file upload through the actual file input.
+- Added upload failure recovery coverage: an empty `.csv` upload shows the
+  stable `empty_file` code, then a valid CSV can be selected and confirmed
+  without reloading the app.
+- Used a Korean CSV filename to keep Unicode filename handling inside the
+  browser smoke.
+- Verified valid CSV parsing creates a dataset version with `3행`, `2컬럼`, and
+  preview headers for `Batch` and `Measurement`.
+- Kept parser feature expansion, new statistical methods, fake results, and CI
+  browser execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend ruff check, backend ruff format check, backend mypy over
+  75 source files, backend pytest 387 tests, frontend lint/typecheck, frontend
+  Vitest 58 tests, and frontend build.
+
+Limitations:
+
+- E2E remains opt-in and is not included in `scripts/check.ps1`.
+- Parser option editing, malformed-row recovery, and multi-sheet XLSX selection
+  are not part of this E2E slice.
+
+Next:
+
+- Prepare the opt-in E2E for CI execution with browser caching or add
+  parser-option editing coverage.
+
+## Progress Update 120 - Parser Option Editing Browser Coverage
+
+Completed:
+
+- Added browser E2E coverage for editing parsing options before confirmation.
+- The test uploads a CSV with a preamble row, turns on header-row parsing, sets
+  `헤더 행` to `2`, and adds `MISSING` to the missing-token list.
+- Verified the resulting dataset version uses `Alpha` and `Beta` as headers,
+  has `2행` / `2컬럼` in the dataset context, and renders `MISSING` as
+  `(missing)` in preview.
+- Tightened E2E row/column count assertions to the dataset context bar instead
+  of page-wide text, avoiding strict-mode collisions with metadata grids.
+- Kept parser feature expansion, new statistical methods, fake results, and CI
+  browser execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`:
+  passed with backend ruff check, backend ruff format check, backend mypy over
+  75 source files, backend pytest 387 tests, frontend lint/typecheck, frontend
+  Vitest 58 tests, and frontend build.
+
+Limitations:
+
+- E2E remains opt-in and is not included in `scripts/check.ps1`.
+- Delimiter editing, encoding changes, malformed-row recovery, and multi-sheet
+  XLSX selection are not part of this E2E slice.
+
+Next:
+
+- Prepare the opt-in E2E for CI execution with browser caching or add
+  delimiter-editing coverage.
+
+## Progress Update 121 - Delimiter Editing Browser Coverage
+
+Completed:
+
+- Added browser E2E coverage for editing the delimiter before parsing
+  confirmation.
+- The test uploads a `.csv` file whose content is semicolon-delimited, then
+  changes `구분자` to `semicolon` before confirming.
+- Verified the resulting dataset version has `2행` / `2컬럼` in the dataset
+  context and preview headers for `Category` and `Value`.
+- Verified representative preview cells with table-cell scoped selectors to
+  avoid UUID/text collisions.
+- Kept parser feature expansion, new statistical methods, fake results, and CI
+  browser execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- Full Windows `scripts/check.ps1`: passed after delimiter browser coverage with
+  backend pytest 387 tests, frontend Vitest 58 tests, frontend lint/typecheck,
+  and frontend build.
+
+Limitations:
+
+- E2E remains opt-in and is not included in `scripts/check.ps1`.
+- Encoding changes, malformed-row recovery, and multi-sheet XLSX selection are
+  not part of this E2E slice.
+
+Next:
+
+- Prepare the opt-in E2E for CI execution with browser caching or add
+  multi-sheet XLSX browser coverage.
+
+## Progress Update 122 - Multi-Sheet XLSX Browser Coverage
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Added browser E2E coverage for uploading a multi-sheet XLSX workbook and
+  selecting a named sheet before parsing confirmation.
+- The synthetic workbook contains `Summary` and `Measurements` sheets. The test
+  fills `시트명` with `Measurements` and verifies that canonical preview data
+  comes from that sheet.
+- Verified the resulting dataset version has `2행` / `2컬럼`, preview headers
+  `Station` and `Reading`, and representative cells `S2` and `43`.
+- Kept parser feature expansion, new statistical methods, fake results, and CI
+  browser execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- Full Windows `scripts/check.ps1`: passed after multi-sheet XLSX browser
+  coverage with backend pytest 387 tests, frontend Vitest 58 tests, frontend
+  lint/typecheck, and frontend build.
+
+Limitations:
+
+- E2E remains opt-in and is not included in `scripts/check.ps1`.
+- Encoding changes and malformed-row recovery are not part of this E2E slice.
+
+Next:
+
+- Prepare the opt-in E2E for CI execution with browser caching or add
+  malformed-row/encoding browser coverage.
+
+## Progress Update 123 - Text Encoding Browser Coverage
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Added browser E2E coverage for selecting a text encoding before parsing
+  confirmation.
+- The test uploads a CP949-encoded CSV file with Korean headers and values,
+  selects `cp949` from `인코딩`, confirms parsing, and verifies the decoded
+  preview.
+- Tightened Playwright selectors to use exact Korean header matching and
+  representative text cells instead of duplicate numeric cells.
+- Kept parser feature expansion, new statistical methods, fake results, and CI
+  browser execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- First browser E2E attempt failed on duplicate numeric cell text; second failed
+  on partial header matching. Both were selector issues and were fixed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- Full Windows `scripts/check.ps1`: passed after text encoding browser coverage
+  with backend pytest 387 tests, frontend Vitest 58 tests, frontend
+  lint/typecheck, and frontend build.
+
+Limitations:
+
+- E2E remains opt-in and is not included in `scripts/check.ps1`.
+- Malformed-row recovery is not part of this E2E slice.
+
+Next:
+
+- Prepare the opt-in E2E for CI execution with browser caching or add
+  malformed-row browser coverage.
+
+## Progress Update 124 - Parser Error-Recovery Browser Coverage
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Added browser E2E coverage for recovering from parser option errors on the
+  same parsing screen.
+- The XLSX sheet-selection test now enters a missing sheet name, verifies
+  `xlsx_sheet_not_found`, then corrects the sheet to `Measurements` and confirms
+  successfully.
+- The text encoding test now uses a CP949 fixture with an ASCII sniffing prefix,
+  verifies `text_decoding_failed` when the user confirms with `utf-8`, then
+  switches to `cp949` and verifies decoded Korean preview headers and cells.
+- Kept parser semantics, new statistical methods, fake results, and CI browser
+  execution out of scope.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- First E2E attempt failed because the original CP949 fixture started with
+  Korean text, so `utf-8` was correctly absent from detected encoding
+  candidates. The fixture was changed to use an ASCII sniffing prefix.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- Full Windows `scripts/check.ps1`: passed after parser error-recovery browser
+  coverage with backend pytest 387 tests, frontend Vitest 58 tests, frontend
+  lint/typecheck, and frontend build.
+
+Limitations:
+
+- E2E remains opt-in and is not included in `scripts/check.ps1`.
+- General malformed-row behavior remains lower-level/parser coverage because
+  the canonical row reader intentionally pads short rows.
+
+Next:
+
+- Prepare the opt-in E2E for CI execution with browser caching or add another
+  parser validation recovery case.
+
+## Progress Update 125 - Browser E2E GitHub Actions Job
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Added a separate `e2e` job to `.github/workflows/ci.yml`.
+- Kept the existing `windows` job as the main local-equivalent quality gate.
+- Configured the `e2e` job to run after `windows`, bootstrap Python 3.10 and
+  Node 22 dependencies, install Playwright Chromium, and run
+  `.\scripts\e2e.ps1`.
+- Set `PLAYWRIGHT_BROWSERS_PATH` to `${{ runner.temp }}\ms-playwright` and added
+  `actions/cache@v4` for that path.
+- Kept local `scripts/check.ps1` browser-free.
+
+Validation:
+
+- Workflow syntax was reviewed as a text change. Remote Actions execution
+  cannot be observed from this environment until the change is pushed or opened
+  as a PR.
+- `git diff --check`: passed.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"`:
+  passed.
+- Full Windows `scripts/check.ps1`: passed after GitHub Actions E2E job wiring
+  with backend pytest 387 tests, frontend Vitest 58 tests, frontend
+  lint/typecheck, and frontend build.
+
+Limitations:
+
+- The new remote `e2e` job still needs to be verified in GitHub Actions after
+  push.
+- Browser install/cache behavior may need adjustment after the first hosted
+  Windows run.
+
+Next:
+
+- Push and verify the new `e2e` job in GitHub Actions, then decide whether it
+  should become a required branch-protection check.
+
+## Progress Update 126 - Browser E2E CI Diagnostics
+
+Status: completed in the current working tree with local validation limitations noted.
+
+Completed:
+
+- Added `workflow_dispatch` to the CI workflow.
+- Added job timeouts to the `windows` and `e2e` jobs.
+- Added `-WorkspaceRoot` support to `scripts/e2e.ps1`.
+- Added `--workspace-root` support to `tests/e2e/critical_path.py`; each run
+  creates a unique child directory below the supplied parent path.
+- Updated the GitHub Actions `e2e` job to keep the E2E workspace under
+  `${{ runner.temp }}\datalab-e2e` and upload only `logs\*.log` files as an
+  `e2e-logs` artifact.
+- Kept temporary data workspaces and raw dataset artifacts out of CI artifacts.
+
+Validation:
+
+- `python3 -m py_compile tests/e2e/critical_path.py`: passed under WSL as a
+  syntax check for the updated Python runner.
+- `git diff --check`: passed.
+- Native Windows `.venv\Scripts\python.exe`, `powershell.exe`, `cmd.exe`,
+  `scripts\e2e.ps1`, and full `scripts\check.ps1` could not be rerun from this
+  WSL session after the diagnostics update because WSL Windows interop failed
+  before command execution with `UtilAcceptVsock: accept4 failed 110`.
+- The last successful native Windows `scripts\e2e.ps1` and `scripts\check.ps1`
+  runs were before this diagnostics wiring update, after the initial GitHub
+  Actions E2E job wiring.
+
+Limitations:
+
+- Remote artifact upload behavior still needs verification after push.
+- Native Windows local rerun is still needed once the WSL/Windows interop issue
+  clears.
+- Screenshots and full browser traces are not collected yet.
+
+Next:
+
+- Rerun native Windows `scripts\e2e.ps1` and `scripts\check.ps1`, then verify
+  `e2e-logs` on the first remote Actions run and consider adding
+  screenshots/traces only if needed.
