@@ -26,6 +26,97 @@ stored results remain comparable:
 Frontend-only changes do not require a method-version bump unless they alter the
 request sent to the backend or reinterpret a stored result field.
 
+## Frontend API Type Drift
+
+The frontend typed client now keeps manually maintained API types under
+`frontend/src/api/types/`:
+
+- `common.ts`
+- `datasets.ts`
+- `analyses.ts`
+- `analysisResultsExploration.ts`
+- `analysisResultsCategorical.ts`
+- `analysisResultsRegression.ts`
+- `analysisResultsQuality.ts`
+- `analysisResultsHypothesis.ts`
+- `analysisRuns.ts`
+- `analysisExports.ts`
+- `doe.ts`
+- `regression.ts`
+
+`frontend/src/api.ts` remains the public client and re-exports those types so
+existing imports from `./api` continue to work. This reduces merge conflicts and
+makes schema review more explicit, but it is still manual and does not replace a
+generated OpenAPI contract.
+
+`analyses.ts` keeps the method catalog, run request/filter, provenance/warning,
+and the result envelope.
+`analysisResultsExploration.ts` owns exploratory analysis result types
+(`eda.descriptive`, `eda.graphical_summary`, `eda.normality`, and
+`eda.equal_variances`). `analysisResultsCategorical.ts` owns categorical result
+types (`categorical.one_proportion`, `categorical.two_proportion`, and
+`categorical.chi_square_association`). `analysisResultsRegression.ts` owns
+correlation and regression result types (`regression.pearson`,
+`regression.xy_correlation`, and `regression.linear_model`).
+`analysisResultsQuality.ts` owns quality result and preflight types
+(`quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`,
+`quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`, and the Gage
+R&R balanced-crossed preflight contract). `analysisResultsHypothesis.ts` owns
+hypothesis-test result types (`hypothesis.one_sample_t`,
+`hypothesis.paired_t`, `hypothesis.two_sample_t`,
+`hypothesis.one_way_anova`, `hypothesis.equivalence_tost`,
+`hypothesis.one_sample_wilcoxon`, `hypothesis.mann_whitney`, and
+`hypothesis.kruskal_wallis`). `analysisRuns.ts` owns saved analysis history and
+comparison types. `analysisExports.ts` owns analysis result export response and
+export-list types. The public re-export surface remains
+`frontend/src/api.ts` and `frontend/src/api/types/index.ts`, so components can
+continue importing from `./api`.
+
+The frontend API function implementations are split by domain under
+`frontend/src/api/` while `frontend/src/api.ts` remains the public facade:
+
+- `client.ts` for base URL, fetch/error helpers, and browser download helpers.
+- `health.ts` for the health endpoint.
+- `datasets.ts` for dataset upload/paste/parsing/schema/preview/profile calls.
+- `analyses.ts` for analysis method catalog, runs, history, comparison,
+  result restore, and export calls.
+- `doe.ts` for factorial design calls.
+- `regression.ts` for regression model prediction calls.
+- `quality.ts` for quality preflight calls.
+- `routes.ts` for centralized `/api/v1` endpoint paths, query-key ordering,
+  and encoded path IDs. Domain clients call this route map instead of
+  constructing endpoint strings inline, which reduces endpoint drift while the
+  project still uses manual frontend types.
+
+The backend test `backend/tests/unit/test_openapi_frontend_contract.py` now
+checks the `frontend/src/api/routes.ts` surface against the generated FastAPI
+OpenAPI schema. It verifies the expected path, HTTP method, path/query
+parameters, request media type, success status, and response schema component
+for every route currently used by the typed frontend client.
+
+The same test also checks a high-value subset of schema component fields used by
+the frontend typed client: required field subsets, enum values, const values,
+direct schema refs, and array item refs for health, dataset preview/version,
+analysis method catalog, analysis history, stored result envelope, provenance,
+warnings, and export list schemas.
+
+The contract test also reads the frontend result type files and checks that
+their `summary_type` string literals match the backend
+`MethodExecutionHandlerSpec.result_summary_type` values. The guard is
+file-owned by result family, so moving or adding result payload types requires
+updating the corresponding expected summary-type set. `quality.gage_rr`
+preflight is tracked as a non-analysis-run result summary type because it uses
+the quality preflight endpoint rather than the generic analysis-run endpoint.
+
+This is a drift guard, not full type generation. It does not prove that every
+field inside each TypeScript interface matches Pydantic exactly, and it permits
+backend schema additions that do not remove or rename frontend-used fields. Next
+schema-stability work should add OpenAPI type generation or a deeper schema
+diff that compares the full FastAPI response/request field shapes with
+`frontend/src/api/types/*`. A frontend label/layout-only change does not require
+a method-version bump; changing request payload semantics, summary-type
+semantics, or stored result field interpretation does.
+
 ## Minor Version
 
 Use a minor bump when the method remains the same broad analysis but a stored

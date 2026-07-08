@@ -41,6 +41,7 @@ import type {
   SubgroupChartResult,
   XyCorrelationResult,
 } from "./api";
+import { apiRoutes } from "./api/routes";
 import { AppChrome } from "./AppChrome";
 import {
   analysisMethodGuidanceIds,
@@ -892,6 +893,34 @@ describe("App", () => {
       expect.objectContaining({
         headers: { Accept: "application/json" },
       }),
+    );
+  });
+
+  it("builds API routes from a central route map and encodes path ids", () => {
+    expect(apiRoutes.datasetConfirmParsing("dataset/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/datasets/dataset%2F1/confirm-parsing",
+    );
+    expect(apiRoutes.datasetVersionRows("version/1", 5, 10)).toBe(
+      "http://127.0.0.1:8000/api/v1/dataset-versions/version%2F1/rows?limit=10&offset=5",
+    );
+    expect(apiRoutes.analysisRunsBase()).toBe(
+      "http://127.0.0.1:8000/api/v1/analysis-runs",
+    );
+    expect(
+      apiRoutes.analysisRuns({
+        datasetVersionId: "version-1",
+        methodId: "eda.descriptive",
+        resultAvailable: true,
+        limit: 20,
+        offset: 0,
+        stale: false,
+        status: "succeeded",
+      }),
+    ).toBe(
+      "http://127.0.0.1:8000/api/v1/analysis-runs?limit=20&offset=0&dataset_version_id=version-1&method_id=eda.descriptive&status=succeeded&stale=false&result_available=true",
+    );
+    expect(apiRoutes.analysisRunExportDownload("analysis/1", "export/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/exports/export%2F1/download",
     );
   });
 

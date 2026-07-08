@@ -1418,3 +1418,499 @@ Next PR:
 - Rerun native Windows `scripts\e2e.ps1` and `scripts\check.ps1`, then verify
   the remote `e2e-logs` artifact behavior on the first hosted Windows run and
   adjust retention/path handling if needed.
+
+## Progress Update 127 - Workbench/Service Decomposition And Type Drift Guard
+
+Completed in current working tree:
+
+- Kept the already-split frontend Workbench component boundary in place:
+  `StatisticalRoleGuide`, `MethodPurposeHelper`, `PreflightExplanationPanel`,
+  `AnalysisHistoryPanel`, `AnalysisComparisonPanel`, and
+  `AnalysisResultExportPanel` remain separate from `AnalysisWorkbench`.
+- Split the large backend analysis-run service by responsibility:
+  - `analysis_run_results.py`: stored result loading and SHA-256 validation.
+  - `analysis_run_history.py`: status, list, pagination metadata, and cancel.
+  - `analysis_run_exports.py`: JSON/CSV/HTML export creation, export listing,
+    download validation, CSV formula sanitization, and static HTML rendering.
+  - `analysis_run_comparisons.py`: stored-result comparison and method-specific
+    comparison helpers.
+- Reduced `analysis_runs.py` to the create/run dispatcher plus compatibility
+  re-exports for existing callers and tests.
+- Updated the API route module to import history/result/export/comparison
+  behavior from the new service modules directly.
+- Split frontend API types out of the large `api.ts` client into
+  `frontend/src/api/types/common.ts`, `datasets.ts`, `analyses.ts`, `doe.ts`,
+  `regression.ts`, and `index.ts`; `api.ts` remains the public typed client and
+  re-exports those types so existing imports from `./api` keep working.
+- Preserved beginner UX behavior from the previous slice: selected-method role
+  emphasis still covers 2-sample t, paired t, capability, Gage R&R, and DOE
+  factorial design; purpose-helper cards still show the question/easy
+  explanation/Korean method name before the method ID and do not auto-run.
+- Added a backend service-boundary test to guard that the public analysis-run
+  facade still points at the split result/history/export/comparison modules.
+- Added no statistical method, fake result, or mock chart.
+
+Validation:
+
+- `.venv/Scripts/python.exe -m py_compile backend/app/services/analysis_runs.py backend/app/services/analysis_run_results.py backend/app/services/analysis_run_history.py backend/app/services/analysis_run_exports.py backend/app/services/analysis_run_comparisons.py tests/e2e/critical_path.py`: passed.
+- `git diff --check`: passed.
+- Targeted backend ruff check for the split analysis-run modules, route, and
+  API contract test: passed after formatting `analysis_run_history.py`.
+- Targeted backend pytest for service boundary, handler registry, export,
+  comparison, and export-list contracts: 5 passed.
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 58 tests.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  388 tests, frontend lint, frontend typecheck, frontend Vitest with 58 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- Frontend/backend API schema alignment is still manually maintained. The new
+  `frontend/src/api/types/*` layout reduces the drift surface but does not yet
+  generate types from OpenAPI.
+- The remote GitHub Actions run/status still needs to be checked in GitHub UI
+  or through authenticated `gh` after pushing.
+- Vite production build reports the existing single-chunk size warning; no
+  code-splitting change was made in this PR.
+
+Next PR:
+
+- Add an OpenAPI type-generation spike or schema drift check that compares the
+  FastAPI schema to `frontend/src/api/types/*` without adding heavy runtime
+  dependencies.
+- Verify the latest remote `windows` and `e2e` GitHub Actions jobs after push.
+
+## Progress Update 128 - Frontend API Client Facade Split
+
+Completed in current working tree:
+
+- Reduced `frontend/src/api.ts` to a public facade that re-exports client
+  functions and API types.
+- Split frontend API client implementation by backend domain:
+  - `frontend/src/api/client.ts`: base URL, fetch wrapper, error-code parsing,
+    content-disposition filename parsing, and browser download helper.
+  - `frontend/src/api/health.ts`: health check response validation and fetch.
+  - `frontend/src/api/datasets.ts`: upload, paste, parsing confirmation,
+    schema update, rows preview, and profile fetch.
+  - `frontend/src/api/analyses.ts`: method catalog, analysis history, restore,
+    comparison, analysis run creation, export create/list/download.
+  - `frontend/src/api/doe.ts`: factorial design and response entry client calls.
+  - `frontend/src/api/regression.ts`: regression model prediction preflight and
+    prediction calls.
+  - `frontend/src/api/quality.ts`: Gage R&R preflight client call.
+- Kept all existing component imports from `./api` working through the facade.
+- Kept the previously split `frontend/src/api/types/*` as the manual schema
+  boundary. No new dependency or OpenAPI generator was added.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 58 tests.
+- `npm --prefix ./frontend run lint`: passed.
+- Targeted backend ruff/mypy/pytest for the analysis-run service split remained
+  green after the frontend client split:
+  - ruff check: passed.
+  - mypy over 6 backend source files: passed.
+  - selected API contract pytest: 5 passed.
+
+Remaining limitations:
+
+- `frontend/src/api/types/*` is still manually maintained. The client split
+  reduces file size and review conflicts, but does not yet prove schema parity
+  against FastAPI OpenAPI.
+- Components still intentionally import from `./api`; migrating component-level
+  imports directly to domain clients is optional and not needed for behavior.
+
+Next PR:
+
+- Add a lightweight OpenAPI schema drift check or type-generation spike.
+- Consider splitting method-specific result types within
+  `frontend/src/api/types/analyses.ts` only if that file becomes a review
+  bottleneck.
+
+## Progress Update 129 - Frontend API Route Drift Guard
+
+Completed in current working tree:
+
+- Added `frontend/src/api/routes.ts` as the centralized route map for frontend
+  API calls.
+- Moved `/api/v1` endpoint construction, path-ID encoding, analysis-run create
+  base path, and analysis history query-key ordering into the route map.
+- Updated domain clients (`health`, `datasets`, `analyses`, `doe`,
+  `regression`, and `quality`) to call `apiRoutes` instead of building endpoint
+  strings inline.
+- Removed a stray runtime `getApiBaseUrl` implementation from
+  `frontend/src/api/types/analyses.ts` so type files stay type-only.
+- Added a frontend test that verifies encoded path IDs and preserves the
+  history query-string order expected by the existing API wrapper tests.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 59 tests.
+- `npm --prefix ./frontend run lint`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  388 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- Frontend request/response types are still manually maintained; this route map
+  reduces endpoint drift but does not replace an OpenAPI schema drift check.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this maintenance step.
+
+Next:
+
+- In the next PR, add an OpenAPI schema drift check or type-generation spike
+  without adding runtime dependencies.
+
+## Progress Update 130 - OpenAPI Frontend Route Contract Guard
+
+Completed in current working tree:
+
+- Added `backend/tests/unit/test_openapi_frontend_contract.py`.
+- The new test instantiates the FastAPI app, reads the generated OpenAPI schema,
+  and verifies the route surface used by `frontend/src/api/routes.ts`.
+- The checked contract covers frontend-used path, HTTP method, path/query
+  parameters, request media types, success statuses, and response schema
+  component refs.
+- The check is included in normal backend pytest, so `scripts/check.ps1` runs it
+  without a new script, dependency, or generator.
+- No API behavior, statistical method, fake result, or frontend UI behavior was
+  added.
+
+Validation:
+
+- `.venv/Scripts/python.exe -m ruff check backend/tests/unit/test_openapi_frontend_contract.py`:
+  passed.
+- `.venv/Scripts/python.exe -m pytest backend/tests/unit/test_openapi_frontend_contract.py`:
+  24 passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  412 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- This is a route/schema-component drift guard, not full TypeScript generation.
+  It does not deeply compare every Pydantic field to every frontend TypeScript
+  interface field.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this maintenance step.
+
+Next:
+
+- Consider a deeper OpenAPI field-shape diff or generated frontend types in a
+  later bounded PR.
+
+## Progress Update 131 - OpenAPI Frontend Schema Field Guard
+
+Completed in current working tree:
+
+- Extended `backend/tests/unit/test_openapi_frontend_contract.py` with
+  frontend schema component contracts.
+- The test now guards high-value frontend-used schema fields in addition to
+  route/method contracts.
+- Covered schema surfaces include health, dataset upload/version/rows preview,
+  dataset columns/artifacts, analysis method catalog, analysis history, stored
+  result envelope, analysis provenance, warnings, and export list metadata.
+- The guard verifies field presence, required field subsets, enum values,
+  const values, direct schema refs, and array item refs.
+- The check remains dependency-free and runs as part of backend pytest.
+- No API behavior, frontend UI, statistical method, fake result, or generated
+  type pipeline was added.
+
+Validation:
+
+- `.venv/Scripts/python.exe -m ruff check backend/tests/unit/test_openapi_frontend_contract.py`:
+  passed.
+- `.venv/Scripts/python.exe -m ruff format --check backend/tests/unit/test_openapi_frontend_contract.py`:
+  passed.
+- `.venv/Scripts/python.exe -m pytest backend/tests/unit/test_openapi_frontend_contract.py`:
+  41 passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  429 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- This is still a curated subset guard, not full Pydantic-to-TypeScript field
+  parity. It intentionally allows additive backend schema fields.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this maintenance step.
+
+Next:
+
+- Consider generated frontend types or a deeper OpenAPI field-shape diff in a
+  later bounded PR.
+
+## Progress Update 132 - Frontend Analysis API Type Split
+
+Completed in current working tree:
+
+- Split saved analysis history and comparison types out of
+  `frontend/src/api/types/analyses.ts` into
+  `frontend/src/api/types/analysisRuns.ts`.
+- Split analysis result export response/list types into
+  `frontend/src/api/types/analysisExports.ts`.
+- Updated `frontend/src/api/types/index.ts` so the public `./api` type import
+  surface remains unchanged for components and tests.
+- Kept `AnalysisResultEnvelope` in `analyses.ts` because it depends on the
+  large method-result union.
+- Reduced `analyses.ts` from 2562 lines to 2227 lines without changing runtime
+  API behavior, UI behavior, statistical methods, fake results, or generated
+  type tooling.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 59 tests.
+- `npm --prefix ./frontend run lint`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  429 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- Method-specific result types still live in `analyses.ts`; splitting them by
+  analysis family remains optional and should be done only if review bottlenecks
+  continue.
+
+Next:
+
+- Consider a later generated type spike or family-level method-result type
+  split.
+
+## Progress Update 133 - Frontend Exploration Result Type Split
+
+Completed in current working tree:
+
+- Added `frontend/src/api/types/analysisResultsExploration.ts`.
+- Moved exploratory analysis result types for `eda.descriptive`,
+  `eda.graphical_summary`, `eda.normality`, and `eda.equal_variances` out of
+  `frontend/src/api/types/analyses.ts`.
+- Updated `AnalysisResultEnvelope` in `analyses.ts` to import those result
+  types from the new exploration type module.
+- Updated `frontend/src/api/types/index.ts` so the public `./api` type import
+  surface remains unchanged.
+- Reduced `analyses.ts` from 2227 lines to 2005 lines without changing runtime
+  API behavior, UI behavior, statistical methods, fake results, or generated
+  type tooling.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 59 tests.
+- `npm --prefix ./frontend run lint`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  429 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- Hypothesis, categorical, regression, and quality method-result types still
+  live in `analyses.ts`.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this maintenance step.
+
+Next:
+
+- Continue family-level result type splitting only if it keeps reducing review
+  risk without obscuring the result envelope contract.
+
+## Progress Update 134 - Frontend Categorical Result Type Split
+
+Completed in current working tree:
+
+- Added `frontend/src/api/types/analysisResultsCategorical.ts`.
+- Moved categorical analysis result types for `categorical.one_proportion`,
+  `categorical.two_proportion`, and `categorical.chi_square_association` out of
+  `frontend/src/api/types/analyses.ts`.
+- Updated `AnalysisResultEnvelope` in `analyses.ts` to import those result
+  types from the new categorical type module.
+- Updated `frontend/src/api/types/index.ts` so the public `./api` type import
+  surface remains unchanged.
+- Reduced `analyses.ts` from 2005 lines to 1738 lines without changing runtime
+  API behavior, UI behavior, statistical methods, fake results, or generated
+  type tooling.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 59 tests.
+- `npm --prefix ./frontend run lint`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  429 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- Hypothesis, regression, and quality method-result types still live in
+  `analyses.ts`.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this maintenance step.
+
+Next:
+
+- Continue family-level result type splitting in bounded slices only.
+
+## Progress Update 135 - Frontend Regression Result Type Split
+
+Completed in current working tree:
+
+- Added `frontend/src/api/types/analysisResultsRegression.ts`.
+- Moved correlation/regression result types for `regression.pearson`,
+  `regression.xy_correlation`, and `regression.linear_model` out of
+  `frontend/src/api/types/analyses.ts`.
+- Updated `AnalysisResultEnvelope` in `analyses.ts` to import those result
+  types from the new regression type module.
+- Updated `frontend/src/api/types/index.ts` so the public `./api` type import
+  surface remains unchanged.
+- Reduced `analyses.ts` from 1738 lines to 1449 lines without changing runtime
+  API behavior, UI behavior, statistical methods, fake results, or generated
+  type tooling.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 59 tests.
+- `npm --prefix ./frontend run lint`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  429 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- Hypothesis and quality method-result types still live in `analyses.ts`.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this maintenance step.
+
+Next:
+
+- Continue family-level result type splitting in bounded slices only.
+
+## Progress Update 136 - Frontend Quality Result Type Split
+
+Completed in current working tree:
+
+- Added `frontend/src/api/types/analysisResultsQuality.ts`.
+- Moved quality result and preflight types for `quality.individuals_chart`,
+  `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`,
+  `quality.gage_rr`, and `quality.gage_run_chart` out of
+  `frontend/src/api/types/analyses.ts`.
+- Updated `AnalysisResultEnvelope` in `analyses.ts` to import quality result
+  types from the new quality type module.
+- Updated `frontend/src/api/types/index.ts` so the public `./api` type import
+  surface remains unchanged.
+- Reduced `analyses.ts` from 1449 lines to 817 lines without changing runtime
+  API behavior, UI behavior, statistical methods, fake results, or generated
+  type tooling.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 59 tests.
+- `npm --prefix ./frontend run lint`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  429 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- Hypothesis method-result types still live in `analyses.ts`.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this maintenance step.
+
+Next:
+
+- Split hypothesis result types only if the next bounded slice keeps the result
+  envelope easier to review.
+
+## Progress Update 137 - Frontend Hypothesis Result Type Split
+
+Completed in current working tree:
+
+- Added `frontend/src/api/types/analysisResultsHypothesis.ts`.
+- Moved hypothesis-test result types for `hypothesis.one_sample_t`,
+  `hypothesis.paired_t`, `hypothesis.two_sample_t`,
+  `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`,
+  `hypothesis.one_sample_wilcoxon`, `hypothesis.mann_whitney`, and
+  `hypothesis.kruskal_wallis` out of `frontend/src/api/types/analyses.ts`.
+- Updated `AnalysisResultEnvelope` in `analyses.ts` to import hypothesis
+  result types from the new hypothesis type module.
+- Updated `frontend/src/api/types/index.ts` so the public `./api` type import
+  surface remains unchanged.
+- Reduced `analyses.ts` from 817 lines to 160 lines without changing runtime
+  API behavior, UI behavior, statistical methods, fake results, or generated
+  type tooling.
+
+Validation:
+
+- `npm --prefix ./frontend run typecheck`: passed.
+- `npm --prefix ./frontend run test -- --run`: passed with 59 tests.
+- `npm --prefix ./frontend run lint`: passed.
+- Full Windows `scripts/check.ps1`: passed with backend ruff check, backend
+  ruff format check, backend mypy over 79 source files, backend pytest with
+  429 tests, frontend lint, frontend typecheck, frontend Vitest with 59 tests,
+  and frontend production build.
+
+Remaining limitations:
+
+- API types are still manually maintained; OpenAPI type generation remains a
+  later hardening task.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this maintenance step.
+
+Next:
+
+- Continue with schema drift hardening or OpenAPI type-generation planning
+  rather than further result-type splitting.
+
+## Progress Update 138 - Frontend Result Summary-Type Drift Guard
+
+Completed in current working tree:
+
+- Corrected `MethodExecutionHandlerSpec.result_summary_type` for
+  `eda.normality` from `normality` to `normality_test`.
+- Corrected `MethodExecutionHandlerSpec.result_summary_type` for
+  `eda.equal_variances` from `equal_variances` to `equal_variances_test`.
+- Added frontend result type file ownership checks to
+  `backend/tests/unit/test_openapi_frontend_contract.py`.
+- Added a backend/frontend summary-type drift guard that compares every
+  frontend `analysisResults*.ts` `summary_type` literal with backend generic
+  analysis-run handler specs, plus the non-analysis-run Gage R&R preflight
+  summary type.
+- Updated method versioning documentation to explain the summary-type guard and
+  the current non-analysis-run exception.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 47 tests.
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_api_contracts.py::test_analysis_execution_handler_registry_covers_core_methods`:
+  passed.
+- Full Windows `scripts/check.ps1`: passed on 2026-07-09 with backend ruff
+  check, backend ruff format check, backend mypy over 79 source files, backend
+  pytest with 435 tests, frontend lint, frontend typecheck, frontend Vitest
+  with 59 tests, and frontend production build.
+
+Remaining limitations:
+
+- The guard checks summary-type literal alignment and file ownership, not full
+  field-level TypeScript/Pydantic parity.
+- Full OpenAPI type generation remains a later task.
+
+Next:
+
+- Consider a deeper schema diff or generated type spike once this manual guard
+  proves stable.

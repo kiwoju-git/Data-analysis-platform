@@ -89,6 +89,19 @@ from app.storage.metadata import (
 )
 
 
+def _public_error_text(response) -> str:
+    error = response.json()["error"]
+    return json.dumps(
+        {
+            "code": error["code"],
+            "message": error["message"],
+            "developer_detail": error["developer_detail"],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
 def test_job_state_values_are_stable() -> None:
     assert [state.value for state in JobState] == [
         "queued",
@@ -180,8 +193,8 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
     } == {
         "eda.descriptive": "descriptive_statistics",
         "eda.graphical_summary": "graphical_summary",
-        "eda.normality": "normality",
-        "eda.equal_variances": "equal_variances",
+        "eda.normality": "normality_test",
+        "eda.equal_variances": "equal_variances_test",
         "hypothesis.one_sample_t": "one_sample_t_test",
         "hypothesis.paired_t": "paired_t_test",
         "hypothesis.one_sample_wilcoxon": "one_sample_wilcoxon_signed_rank_test",
@@ -264,6 +277,27 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
     assert _METHOD_EXECUTION_HANDLERS["quality.capability"].run is run_capability_analysis
     assert _METHOD_EXECUTION_HANDLERS["quality.gage_rr"].run is run_gage_rr_analysis
     assert _METHOD_EXECUTION_HANDLERS["quality.gage_run_chart"].run is run_gage_run_chart_analysis
+
+
+def test_analysis_run_service_boundaries_are_split_without_api_drift() -> None:
+    import app.services.analysis_run_comparisons as analysis_run_comparisons
+    import app.services.analysis_run_exports as analysis_run_exports
+    import app.services.analysis_run_history as analysis_run_history
+    import app.services.analysis_run_results as analysis_run_results
+    import app.services.analysis_runs as analysis_runs
+
+    assert analysis_runs.get_analysis_run_result is analysis_run_results.get_analysis_run_result
+    assert analysis_runs.list_analysis_runs is analysis_run_history.list_analysis_runs
+    assert analysis_runs.compare_analysis_runs is analysis_run_comparisons.compare_analysis_runs
+    assert (
+        analysis_runs.create_analysis_result_json_export
+        is analysis_run_exports.create_analysis_result_json_export
+    )
+    assert (
+        analysis_runs.get_analysis_result_export_download
+        is analysis_run_exports.get_analysis_result_export_download
+    )
+    assert analysis_runs._sanitize_csv_cell is analysis_run_exports._sanitize_csv_cell
 
 
 def test_analysis_execution_handler_builder_rejects_missing_runner() -> None:
@@ -1107,7 +1141,7 @@ def test_graphical_summary_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_graphical_summary_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_normality_from_dataset_version(tmp_path) -> None:
@@ -1260,7 +1294,7 @@ def test_normality_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_normality_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_equal_variances_from_dataset_version(tmp_path) -> None:
@@ -1426,7 +1460,7 @@ def test_equal_variances_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_equal_variances_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_two_sample_t_from_dataset_version(tmp_path) -> None:
@@ -1611,7 +1645,7 @@ def test_two_sample_t_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_two_sample_t_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_one_way_anova_from_dataset_version(tmp_path) -> None:
@@ -1918,7 +1952,7 @@ def test_mann_whitney_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_mann_whitney_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_one_sample_t_from_dataset_version(tmp_path) -> None:
@@ -2090,7 +2124,7 @@ def test_one_sample_t_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_one_sample_t_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_equivalence_tost_from_dataset_version(tmp_path) -> None:
@@ -2280,7 +2314,7 @@ def test_equivalence_tost_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_equivalence_tost_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_paired_t_from_dataset_version(tmp_path) -> None:
@@ -2473,7 +2507,7 @@ def test_paired_t_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_paired_t_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_one_sample_wilcoxon_from_dataset_version(tmp_path) -> None:
@@ -2650,7 +2684,7 @@ def test_one_sample_wilcoxon_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_one_sample_wilcoxon_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 @pytest.mark.parametrize(
@@ -2702,7 +2736,7 @@ def test_one_way_anova_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_one_way_anova_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_kruskal_wallis_from_dataset_version(tmp_path) -> None:
@@ -2885,7 +2919,7 @@ def test_kruskal_wallis_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_kruskal_wallis_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_one_proportion_from_dataset_version(tmp_path) -> None:
@@ -3072,7 +3106,7 @@ def test_one_proportion_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_one_proportion_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_two_proportion_from_dataset_version(tmp_path) -> None:
@@ -3270,7 +3304,7 @@ def test_two_proportion_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_two_proportion_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_chi_square_association_from_dataset_version(
@@ -3454,7 +3488,7 @@ def test_chi_square_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_chi_square_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_pearson_from_dataset_version(tmp_path) -> None:
@@ -3638,7 +3672,7 @@ def test_pearson_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_pearson_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_xy_correlation_from_dataset_version(tmp_path) -> None:
@@ -3815,7 +3849,7 @@ def test_xy_correlation_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_xy_correlation_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_individuals_chart_from_dataset_version(tmp_path) -> None:
@@ -4560,7 +4594,7 @@ def test_individuals_chart_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_individuals_chart_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_subgroup_chart_from_dataset_version(tmp_path) -> None:
@@ -4836,7 +4870,7 @@ def test_subgroup_chart_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_subgroup_chart_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_capability_from_dataset_version(tmp_path) -> None:
@@ -4971,7 +5005,7 @@ def test_capability_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_capability_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_rejects_invalid_capability_spec_limits(tmp_path) -> None:
@@ -5350,7 +5384,7 @@ def test_gage_rr_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_gage_rr_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_rejects_unbalanced_gage_rr_without_result_payload(tmp_path) -> None:
@@ -5577,7 +5611,7 @@ def test_gage_run_chart_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_gage_run_chart_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_rejects_unbalanced_gage_run_chart_without_result_payload(tmp_path) -> None:
@@ -6362,7 +6396,7 @@ def test_run_chart_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_run_chart_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_analysis_run_executes_linear_model_from_dataset_version(tmp_path) -> None:
@@ -6645,7 +6679,7 @@ def test_linear_model_typed_options_reject_invalid_contract(
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_linear_model_options"
-    assert forbidden_text not in response.text
+    assert forbidden_text not in _public_error_text(response)
 
 
 def test_regression_prediction_preflight_accepts_same_dataset_version(tmp_path) -> None:

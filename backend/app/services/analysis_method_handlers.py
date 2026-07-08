@@ -37,12 +37,12 @@ METHOD_EXECUTION_HANDLER_SPECS: tuple[MethodExecutionHandlerSpec, ...] = (
     MethodExecutionHandlerSpec(
         method_id="eda.normality",
         method_version=METHOD_VERSIONS["eda.normality"],
-        result_summary_type="normality",
+        result_summary_type="normality_test",
     ),
     MethodExecutionHandlerSpec(
         method_id="eda.equal_variances",
         method_version=METHOD_VERSIONS["eda.equal_variances"],
-        result_summary_type="equal_variances",
+        result_summary_type="equal_variances_test",
     ),
     MethodExecutionHandlerSpec(
         method_id="hypothesis.one_sample_t",

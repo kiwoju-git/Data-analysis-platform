@@ -1,6 +1,6 @@
 # CI Status
 
-Last updated: 2026-07-07
+Last updated: 2026-07-09
 
 ## Workflow Configuration
 
@@ -18,9 +18,28 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Local Validation
 
+- Full local Windows validation for the current Workbench/service
+  decomposition, frontend API type split, frontend API client facade split, and
+  centralized frontend API route map plus OpenAPI frontend route/schema field
+  contract guards and the frontend analysis history/export/exploration result
+  plus categorical/regression/quality/hypothesis result type splits and
+  summary-type drift guards passed on 2026-07-09 with
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
+- The latest run passed backend ruff check, backend ruff format check, backend
+  mypy over 79 source files, backend pytest with 435 tests, frontend lint,
+  frontend typecheck, frontend Vitest with 59 tests, and frontend production
+  build.
+- Full local Windows validation for the current Workbench/service
+  decomposition, frontend API type split, and frontend API client facade split
+  passed on 2026-07-07 with
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
+- The latest run passed backend ruff check, backend ruff format check, backend
+  mypy over 79 source files, backend pytest with 388 tests, frontend lint,
+  frontend typecheck, frontend Vitest with 58 tests, and frontend production
+  build.
 - Full local Windows validation for the current Workbench component split, UX refinement, Playwright E2E smoke, XLSX browser upload coverage, CSV upload/error-recovery coverage, parser option editing coverage, named XLSX sheet selection coverage, CP949 text encoding selection coverage, parser error-recovery coverage, and GitHub Actions E2E job wiring working tree passed on 2026-07-07 with `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
 - The run passed backend ruff check, backend ruff format check, backend mypy over 75 source files, backend pytest with 387 tests, frontend lint, frontend typecheck, frontend Vitest with 58 tests, and frontend production build.
-- The previous documentation mismatch between 267/277/301/311/320/329/338/348/357/361/363/375/377/380/381/382/383/384/385/386/387 backend tests is resolved; the latest recorded backend pytest count is 387 and the latest recorded frontend Vitest count is 58.
+- The previous documentation mismatch between 267/277/301/311/320/329/338/348/357/361/363/375/377/380/381/382/383/384/385/386/387/388/412/429 backend tests is resolved; the latest recorded backend pytest count is 435 and the latest recorded frontend Vitest count is 59.
 - Opt-in browser E2E validation also passed on 2026-07-07 with `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"` after installing Chromium with `.\scripts\e2e.ps1 -InstallBrowsers`.
 - The current E2E smoke covers pasted TSV intake, parsing confirmation, dataset version creation, `eda.descriptive`, `hypothesis.two_sample_t`, JSON/CSV/HTML export creation, JSON download, saved-result restore/comparison, schema no-op save without stale marking, actual schema display-name change with stale marking, browser XLSX file upload with parsing confirmation, browser CSV file upload, empty-file upload error recovery, parser option editing for header row, missing tokens, and delimiter selection, named XLSX sheet selection, CP949 text encoding selection, missing XLSX sheet recovery, and text decoding failure recovery.
 - `scripts/check.ps1` still does not run the browser E2E smoke locally. GitHub Actions now runs the smoke in a separate `e2e` job after the Windows check job.
