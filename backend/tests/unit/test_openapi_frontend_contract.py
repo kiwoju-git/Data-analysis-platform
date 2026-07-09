@@ -11,6 +11,7 @@ from app.services.analysis_method_handlers import METHOD_EXECUTION_HANDLER_SPECS
 
 @dataclass(frozen=True)
 class OperationContract:
+    route_name: str
     method: str
     path: str
     success_status: str
@@ -39,14 +40,18 @@ class FrontendResultTypeFileContract:
 
 # This is the backend-side contract for frontend/src/api/routes.ts.
 # It intentionally tracks only the routes used by the typed frontend client.
+# When a frontend API route is added to `apiRoutes`, add the matching
+# OperationContract here in the same change so backend pytest catches route drift.
 FRONTEND_ROUTE_CONTRACTS = [
     OperationContract(
+        route_name="health",
         method="get",
         path="/api/v1/health",
         success_status="200",
         response_schema="HealthResponse",
     ),
     OperationContract(
+        route_name="datasets",
         method="post",
         path="/api/v1/datasets",
         success_status="201",
@@ -54,6 +59,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"multipart/form-data"}),
     ),
     OperationContract(
+        route_name="datasetPaste",
         method="post",
         path="/api/v1/datasets/paste",
         success_status="201",
@@ -61,6 +67,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="datasetConfirmParsing",
         method="post",
         path="/api/v1/datasets/{dataset_id}/confirm-parsing",
         success_status="201",
@@ -69,6 +76,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="datasetVersionSchema",
         method="patch",
         path="/api/v1/dataset-versions/{version_id}/schema",
         success_status="200",
@@ -77,6 +85,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="datasetVersionRows",
         method="get",
         path="/api/v1/dataset-versions/{version_id}/rows",
         success_status="200",
@@ -84,6 +93,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("version_id", "path"), ("offset", "query"), ("limit", "query")}),
     ),
     OperationContract(
+        route_name="datasetVersionProfile",
         method="get",
         path="/api/v1/dataset-versions/{version_id}/profile",
         success_status="200",
@@ -91,12 +101,14 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("version_id", "path")}),
     ),
     OperationContract(
+        route_name="analysisMethods",
         method="get",
         path="/api/v1/analysis-methods",
         success_status="200",
         response_schema="AnalysisMethodListResponse",
     ),
     OperationContract(
+        route_name="analysisRuns",
         method="get",
         path="/api/v1/analysis-runs",
         success_status="200",
@@ -114,6 +126,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         ),
     ),
     OperationContract(
+        route_name="analysisRunsBase",
         method="post",
         path="/api/v1/analysis-runs",
         success_status="201",
@@ -121,6 +134,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="analysisRunComparison",
         method="get",
         path="/api/v1/analysis-runs/comparison",
         success_status="200",
@@ -128,6 +142,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("left_analysis_id", "query"), ("right_analysis_id", "query")}),
     ),
     OperationContract(
+        route_name="analysisRunResult",
         method="get",
         path="/api/v1/analysis-runs/{analysis_id}/result",
         success_status="200",
@@ -135,6 +150,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("analysis_id", "path")}),
     ),
     OperationContract(
+        route_name="analysisRunExportJson",
         method="post",
         path="/api/v1/analysis-runs/{analysis_id}/exports/json",
         success_status="201",
@@ -142,6 +158,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("analysis_id", "path")}),
     ),
     OperationContract(
+        route_name="analysisRunExportCsv",
         method="post",
         path="/api/v1/analysis-runs/{analysis_id}/exports/csv",
         success_status="201",
@@ -149,6 +166,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("analysis_id", "path")}),
     ),
     OperationContract(
+        route_name="analysisRunExportHtml",
         method="post",
         path="/api/v1/analysis-runs/{analysis_id}/exports/html",
         success_status="201",
@@ -156,6 +174,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("analysis_id", "path")}),
     ),
     OperationContract(
+        route_name="analysisRunExports",
         method="get",
         path="/api/v1/analysis-runs/{analysis_id}/exports",
         success_status="200",
@@ -163,6 +182,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("analysis_id", "path")}),
     ),
     OperationContract(
+        route_name="analysisRunExportDownload",
         method="get",
         path="/api/v1/analysis-runs/{analysis_id}/exports/{export_id}/download",
         success_status="200",
@@ -170,6 +190,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("analysis_id", "path"), ("export_id", "path")}),
     ),
     OperationContract(
+        route_name="doeFactorialDesign",
         method="post",
         path="/api/v1/doe-designs/factorial",
         success_status="201",
@@ -177,6 +198,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="doeDesign",
         method="get",
         path="/api/v1/doe-designs/{design_id}",
         success_status="200",
@@ -184,6 +206,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("design_id", "path")}),
     ),
     OperationContract(
+        route_name="doeDesignResponses",
         method="put",
         path="/api/v1/doe-designs/{design_id}/responses",
         success_status="200",
@@ -192,6 +215,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="doeDesignResponses",
         method="get",
         path="/api/v1/doe-designs/{design_id}/responses",
         success_status="200",
@@ -199,6 +223,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("design_id", "path")}),
     ),
     OperationContract(
+        route_name="regressionPredictionPreflight",
         method="post",
         path="/api/v1/regression-models/{model_id}/prediction-preflight",
         success_status="200",
@@ -207,6 +232,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="regressionPredictions",
         method="post",
         path="/api/v1/regression-models/{model_id}/predictions",
         success_status="200",
@@ -215,6 +241,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="gageRrPreflight",
         method="post",
         path="/api/v1/quality/gage-rr/preflight",
         success_status="200",
@@ -225,8 +252,9 @@ FRONTEND_ROUTE_CONTRACTS = [
 
 
 # This is a field-level guard for the frontend/src/api/types/* surface.
-# It intentionally checks only high-value fields the UI relies on; full
-# TypeScript generation remains a separate, larger task.
+# It intentionally checks only high-value fields the UI relies on. It is not
+# full Pydantic-to-TypeScript generation and it permits additive backend fields;
+# broader schema generation/diffing remains a separate hardening task.
 FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
     SchemaComponentContract(
         name="HealthResponse",
@@ -631,6 +659,15 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _frontend_api_route_names() -> frozenset[str]:
+    text = (_repo_root() / "frontend/src/api/routes.ts").read_text(encoding="utf-8")
+    route_map_match = re.search(r"export const apiRoutes = \{(?P<body>.*)\n\};", text, re.DOTALL)
+    assert route_map_match is not None
+    return frozenset(
+        re.findall(r"^\s{2}([A-Za-z][A-Za-z0-9]*)\(", route_map_match.group("body"), re.MULTILINE)
+    )
+
+
 def _frontend_summary_type_literals(relative_path: str) -> frozenset[str]:
     text = (_repo_root() / relative_path).read_text(encoding="utf-8")
     return frozenset(re.findall(r'summary_type:\s*"([^"]+)";', text))
@@ -711,6 +748,26 @@ def test_frontend_route_contract_is_present_in_openapi(
     expected_ref = f"#/components/schemas/{contract.response_schema}"
     assert _json_response_ref(operation, contract.success_status) == expected_ref
     assert contract.response_schema in openapi_schema["components"]["schemas"]
+
+
+def test_frontend_route_map_names_are_covered_by_openapi_contracts() -> None:
+    route_map_names = _frontend_api_route_names()
+    contracted_route_names = frozenset(contract.route_name for contract in FRONTEND_ROUTE_CONTRACTS)
+
+    assert route_map_names == contracted_route_names
+
+
+def test_frontend_api_modules_use_central_route_map() -> None:
+    frontend_api_root = _repo_root() / "frontend/src/api"
+    direct_endpoint_files = []
+    for path in sorted(frontend_api_root.glob("*.ts")):
+        if path.name == "routes.ts":
+            continue
+        text = path.read_text(encoding="utf-8")
+        if re.search(r"""["'`]/api/v1""", text):
+            direct_endpoint_files.append(path.relative_to(_repo_root()).as_posix())
+
+    assert direct_endpoint_files == []
 
 
 @pytest.mark.parametrize(

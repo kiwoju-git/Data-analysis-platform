@@ -280,6 +280,9 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
 
 
 def test_analysis_run_service_boundaries_are_split_without_api_drift() -> None:
+    # `analysis_runs.py` is the create/run dispatcher plus compatibility facade.
+    # Keep stored-result loading, history, exports, and comparison owned by the
+    # sibling modules below instead of growing this facade back into a monolith.
     import app.services.analysis_run_comparisons as analysis_run_comparisons
     import app.services.analysis_run_exports as analysis_run_exports
     import app.services.analysis_run_history as analysis_run_history

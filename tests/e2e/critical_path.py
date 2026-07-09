@@ -14,6 +14,8 @@ import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
@@ -37,6 +39,7 @@ def main() -> int:
     parser.add_argument("--backend-port", type=int, default=8011)
     parser.add_argument("--frontend-port", type=int, default=5199)
     parser.add_argument("--workspace-root", type=Path, default=None)
+    parser.add_argument("--diagnostics-root", type=Path, default=None)
     parser.add_argument("--keep-workspace", action="store_true")
     args = parser.parse_args()
 
@@ -46,8 +49,9 @@ def main() -> int:
     else:
         args.workspace_root.mkdir(parents=True, exist_ok=True)
         workspace_root = Path(tempfile.mkdtemp(prefix="run-", dir=args.workspace_root))
-    log_root = workspace_root / "logs"
-    log_root.mkdir(parents=True, exist_ok=True)
+    diagnostics_root = args.diagnostics_root if args.diagnostics_root is not None else workspace_root
+    diagnostics = E2EDiagnostics(diagnostics_root)
+    log_root = diagnostics.log_root
     processes: list[subprocess.Popen[bytes]] = []
     log_handles = []
 
@@ -117,9 +121,11 @@ def main() -> int:
             ),
         )
 
+        diagnostics.step("wait for backend health")
         wait_for_url(f"{backend_base_url}/api/v1/health", "backend health", processes)
+        diagnostics.step("wait for frontend dev server")
         wait_for_url(frontend_base_url, "frontend dev server", processes)
-        run_browser_flow(frontend_base_url)
+        run_browser_flow(frontend_base_url, diagnostics)
         print("E2E critical path passed")
         return 0
     except Exception as exc:
@@ -133,6 +139,7 @@ def main() -> int:
             handle.close()
         if args.keep_workspace:
             print(f"Kept E2E workspace: {workspace_root}")
+            print(f"Kept E2E diagnostics: {diagnostics.root}")
         else:
             shutil.rmtree(workspace_root, ignore_errors=True)
 
@@ -164,16 +171,68 @@ def wait_for_url(
     raise TimeoutError(f"{label} did not become ready at {url}: {last_error}")
 
 
-def run_browser_flow(frontend_base_url: str) -> None:
+@dataclass(frozen=True)
+class E2EDiagnostics:
+    root: Path
+
+    def __post_init__(self) -> None:
+        self.log_root.mkdir(parents=True, exist_ok=True)
+        self.screenshot_root.mkdir(parents=True, exist_ok=True)
+        self.html_root.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def log_root(self) -> Path:
+        return self.root / "logs"
+
+    @property
+    def screenshot_root(self) -> Path:
+        return self.root / "screenshots"
+
+    @property
+    def html_root(self) -> Path:
+        return self.root / "html"
+
+    def step(self, label: str) -> None:
+        print(f"[e2e] {label}")
+
+    def capture_page_failure(self, page: Page | None) -> None:
+        if page is None:
+            print("[e2e] no browser page was created before failure", file=sys.stderr)
+            return
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        screenshot_path = self.screenshot_root / f"failure-{timestamp}.png"
+        html_path = self.html_root / f"failure-{timestamp}.html"
+        try:
+            print(f"[e2e] failure current URL: {page.url}", file=sys.stderr)
+            print(f"[e2e] failure page title: {page.title()}", file=sys.stderr)
+        except Exception as exc:
+            print(f"[e2e] could not read page location/title: {exc}", file=sys.stderr)
+        try:
+            page.screenshot(path=str(screenshot_path), full_page=True)
+            print(f"[e2e] failure screenshot: {screenshot_path}", file=sys.stderr)
+        except Exception as exc:
+            print(f"[e2e] could not write failure screenshot: {exc}", file=sys.stderr)
+        try:
+            html_path.write_text(page.content(), encoding="utf-8")
+            print(f"[e2e] failure HTML snapshot: {html_path}", file=sys.stderr)
+        except Exception as exc:
+            print(f"[e2e] could not write failure HTML snapshot: {exc}", file=sys.stderr)
+
+
+def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
+        page: Page | None = None
         try:
             context = browser.new_context(accept_downloads=True)
             page = context.new_page()
+            diagnostics.step("open Workbench")
             page.goto(frontend_base_url, wait_until="networkidle")
 
             expect(page.get_by_text("DataLab Studio")).to_be_visible()
             expect(page.get_by_text("API ready")).to_be_visible(timeout=15_000)
+            diagnostics.step("paste synthetic TSV and confirm schema")
 
             page.get_by_label("복사한 표 붙여넣기").fill(SAMPLE_DATA)
             page.get_by_role("button", name="붙여넣기 데이터 등록").click()
@@ -188,6 +247,7 @@ def run_browser_flow(frontend_base_url: str) -> None:
             page.get_by_role("button", name="분석", exact=True).click()
             expect(page.get_by_role("heading", name="기술통계 실행")).to_be_visible()
             page.get_by_role("button", name="기술통계 실행").click()
+            diagnostics.step("run descriptive statistics")
             expect(page.locator(".result-table").filter(has_text="Value")).to_be_visible(
                 timeout=20_000,
             )
@@ -195,34 +255,47 @@ def run_browser_flow(frontend_base_url: str) -> None:
             page.get_by_role("button", name=re.compile(r"2-표본 t-검정 메서드 보기")).click()
             expect(page.get_by_role("heading", name="2-표본 t-검정 실행")).to_be_visible()
             page.get_by_role("button", name="2-표본 t-검정 실행").click()
+            diagnostics.step("run two-sample t test")
             expect(page.locator(".result-table").filter(has_text="Hedges g")).to_be_visible(
                 timeout=20_000,
             )
 
+            diagnostics.step("create and download exports")
             create_exports(page)
+            diagnostics.step("restore and compare saved results")
             restore_and_compare_saved_results(page)
+            diagnostics.step("verify schema stale behavior")
             verify_schema_stale_behavior(page)
+            diagnostics.step("verify XLSX browser upload")
             verify_xlsx_file_upload(page, Path(tempfile.mkdtemp(prefix="datalab-e2e-upload-")))
+            diagnostics.step("verify CSV upload and upload error recovery")
             verify_csv_file_upload_and_error_recovery(
                 page,
                 Path(tempfile.mkdtemp(prefix="datalab-e2e-csv-upload-")),
             )
+            diagnostics.step("verify parser option editing")
             verify_parser_option_editing(
                 page,
                 Path(tempfile.mkdtemp(prefix="datalab-e2e-parser-options-")),
             )
+            diagnostics.step("verify delimiter option editing")
             verify_delimiter_option_editing(
                 page,
                 Path(tempfile.mkdtemp(prefix="datalab-e2e-delimiter-options-")),
             )
+            diagnostics.step("verify XLSX sheet selection recovery")
             verify_xlsx_sheet_selection(
                 page,
                 Path(tempfile.mkdtemp(prefix="datalab-e2e-xlsx-sheet-")),
             )
+            diagnostics.step("verify CP949 encoding selection recovery")
             verify_text_encoding_selection(
                 page,
                 Path(tempfile.mkdtemp(prefix="datalab-e2e-encoding-options-")),
             )
+        except Exception:
+            diagnostics.capture_page_failure(page)
+            raise
         finally:
             browser.close()
 

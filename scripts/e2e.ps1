@@ -2,6 +2,7 @@ param(
     [int]$BackendPort = 8011,
     [int]$FrontendPort = 5199,
     [string]$WorkspaceRoot = "",
+    [string]$DiagnosticsRoot = "",
     [switch]$InstallBrowsers,
     [switch]$KeepWorkspace
 )
@@ -39,6 +40,9 @@ try {
     )
     if ($WorkspaceRoot -ne "") {
         $Args += @("--workspace-root", "$WorkspaceRoot")
+    }
+    if ($DiagnosticsRoot -ne "") {
+        $Args += @("--diagnostics-root", "$DiagnosticsRoot")
     }
     if ($KeepWorkspace) {
         $Args += "--keep-workspace"

@@ -1914,3 +1914,100 @@ Next:
 
 - Consider a deeper schema diff or generated type spike once this manual guard
   proves stable.
+
+## Progress Update 139 - E2E, CI, Workbench Ownership Stabilization
+
+Completed in current working tree:
+
+- Added failure diagnostics to `tests/e2e/critical_path.py`: step markers,
+  current URL and page title reporting, failure screenshots, and failure HTML
+  snapshots.
+- Added `-DiagnosticsRoot` to `scripts/e2e.ps1` so local and CI runs can keep
+  diagnostic logs/screenshots/html separate from the temporary workspace.
+- Limited the GitHub Actions `e2e-logs` artifact to E2E logs, screenshots, and
+  HTML snapshots.
+- Split Workbench history, export, comparison, and restored-result state into
+  dedicated frontend hooks while preserving existing UI behavior and prop names
+  consumed by the Workbench shell.
+- Added `docs/e2e_coverage.md` to describe the current browser smoke coverage,
+  non-covered flows, known flake risks, local execution, browser install,
+  diagnostics inspection, and workspace retention.
+- Added `docs/beginner_usability_walkthrough.md` as a UX QA checklist for
+  beginner-facing role guide, purpose helper, preflight, and result-reading
+  flows.
+- Clarified OpenAPI/frontend contract guard scope: this is a high-value route
+  and field guard, not full TypeScript generation.
+- Documented the intended `analysis_runs.py` facade boundary so stored result,
+  history, export, and comparison behavior remain owned by sibling service
+  modules.
+
+Validation:
+
+- `npm --prefix .\frontend run lint`: passed.
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py .\backend\tests\unit\test_api_contracts.py::test_analysis_run_service_boundaries_are_split_without_api_drift`:
+  passed with 48 tests.
+- `npm --prefix .\frontend run typecheck`: passed.
+- `npm --prefix .\frontend run test -- --run`: passed with 59 tests.
+- Full Windows `scripts/check.ps1`: passed on 2026-07-09 with backend ruff
+  check, backend ruff format check, backend mypy over 79 source files, backend
+  pytest with 435 tests, frontend lint, frontend typecheck, frontend Vitest
+  with 59 tests, and frontend production build.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed.
+
+Remaining limitations:
+
+- Remote GitHub Actions status for this working-tree change was not observed in
+  this environment.
+- OpenAPI/frontend parity is still guarded manually for high-value routes and
+  fields only; generated TypeScript clients remain a later task.
+- The existing Vite production chunk-size warning remains; no code-splitting
+  change was made in this stabilization step.
+
+Next:
+
+- After the change is pushed, verify the `windows` and `e2e` jobs, dependency
+  order, `e2e-logs` artifact, and `workflow_dispatch` button in GitHub UI.
+- Consider generated OpenAPI TypeScript types or a broader schema-diff guard in
+  a separate hardening PR.
+
+## Progress Update 140 - Frontend Route Contract Coverage Guard
+
+Completed in current working tree:
+
+- Extended `OperationContract` in
+  `backend/tests/unit/test_openapi_frontend_contract.py` with the owning
+  `frontend/src/api/routes.ts` route helper name.
+- Added a contract test that extracts the frontend `apiRoutes` helper names and
+  requires an exact match with `FRONTEND_ROUTE_CONTRACTS`, so adding a frontend
+  API route now requires adding the matching backend OpenAPI contract entry.
+- Added a boundary guard that fails if frontend API domain modules embed direct
+  `/api/v1` endpoint literals outside the centralized route map.
+- Updated `docs/method_versioning.md` to describe the route-name coverage guard
+  and route-map bypass guard.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 49 tests.
+- Full Windows `scripts/check.ps1`: passed on 2026-07-10 with backend ruff
+  check, backend ruff format check, backend mypy over 79 source files, backend
+  pytest with 437 tests, frontend lint, frontend typecheck, frontend Vitest
+  with 59 tests, and frontend production build.
+- Browser E2E smoke
+  `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed on 2026-07-10.
+
+Remaining limitations:
+
+- This still is not full OpenAPI TypeScript generation and does not prove every
+  nested TypeScript field exactly matches Pydantic.
+- The guard is route-map and high-value schema focused; broader request/response
+  shape diffing remains a later hardening task.
+
+Next:
+
+- Consider full OpenAPI TypeScript generation or a deeper request/response
+  field-shape diff in a separate hardening PR.

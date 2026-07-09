@@ -94,6 +94,19 @@ OpenAPI schema. It verifies the expected path, HTTP method, path/query
 parameters, request media type, success status, and response schema component
 for every route currently used by the typed frontend client.
 
+When `frontend/src/api/routes.ts` adds a route, the same change must update
+`FRONTEND_ROUTE_CONTRACTS` in
+`backend/tests/unit/test_openapi_frontend_contract.py`. This keeps new frontend
+API calls from bypassing backend OpenAPI coverage while the project still avoids
+introducing a generated TypeScript client.
+
+The contract test also extracts the route function names from
+`frontend/src/api/routes.ts` and requires an exact match with
+`FRONTEND_ROUTE_CONTRACTS`. If a frontend route helper is added without a
+backend OpenAPI operation contract, backend pytest fails. A companion boundary
+guard checks that frontend API domain modules do not embed direct `/api/v1`
+endpoint literals outside the centralized route map.
+
 The same test also checks a high-value subset of schema component fields used by
 the frontend typed client: required field subsets, enum values, const values,
 direct schema refs, and array item refs for health, dataset preview/version,

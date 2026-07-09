@@ -1,3 +1,11 @@
+"""Create-run dispatcher and compatibility facade for analysis-run services.
+
+Stored result loading, history/list/cancel, result exports, and saved-run
+comparison are intentionally owned by sibling `analysis_run_*` modules. Keep
+this module focused on generic `create_analysis_run` dispatch and public
+compatibility re-exports for older imports.
+"""
+
 from fastapi import status
 
 from app.analyses.registry import get_analysis_method

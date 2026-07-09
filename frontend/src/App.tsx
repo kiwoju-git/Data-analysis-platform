@@ -3,29 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
   createAnalysisRun,
-  createAnalysisResultCsvExport,
-  createAnalysisResultHtmlReport,
-  createAnalysisResultJsonExport,
   createFactorialDesign,
-  downloadAnalysisResultExport,
-  fetchAnalysisResultExports,
-  fetchAnalysisRunComparison,
-  fetchAnalysisRunResult,
-  fetchAnalysisRuns,
   fetchAnalysisMethods,
   fetchGageRrPreflight,
   fetchHealth,
   fetchRegressionPredictions,
   fetchRegressionPredictionPreflight,
   saveFactorialDesignResponses,
-  type AnalysisResultExportListResponse,
-  type AnalysisResultCsvExportResponse,
   type AnalysisResultEnvelope,
-  type AnalysisResultHtmlReportResponse,
-  type AnalysisResultJsonExportResponse,
-  type AnalysisRunComparisonResponse,
-  type AnalysisRunListResponse,
-  type AnalysisRunState,
   type AnalysisMethodListResponse,
   type AnalysisModuleId,
   type CapabilityResult,
@@ -71,7 +56,11 @@ import {
 } from "./analysisFilters";
 import { useAnalysisSelection } from "./analysisSelection";
 import { currentAppRoute } from "./appRoute";
+import { useAnalysisComparisonState } from "./useAnalysisComparisonState";
+import { useAnalysisExportState } from "./useAnalysisExportState";
+import { useAnalysisHistoryState } from "./useAnalysisHistoryState";
 import { useDatasetWorkflow } from "./useDatasetWorkflow";
+import { useRestoredAnalysisResultState } from "./useRestoredAnalysisResultState";
 import { WorkspaceRouter } from "./WorkspaceRouter";
 
 type HealthState =
@@ -80,37 +69,8 @@ type HealthState =
   | { kind: "error"; message: string };
 
 type SubgroupChartType = "xbar_r" | "xbar_s";
-type AnalysisHistoryStaleFilter = "all" | "stale" | "fresh";
-type AnalysisHistoryResultAvailabilityFilter = "all" | "available" | "unavailable";
 
 const numericDataTypes = new Set<DatasetColumnResponse["data_type"]>(["integer", "decimal"]);
-const ANALYSIS_HISTORY_PAGE_SIZE = 20;
-
-function historyStaleFilterValue(filter: AnalysisHistoryStaleFilter): boolean | null {
-  if (filter === "stale") {
-    return true;
-  }
-  if (filter === "fresh") {
-    return false;
-  }
-  return null;
-}
-
-function historyResultAvailabilityFilterValue(
-  filter: AnalysisHistoryResultAvailabilityFilter,
-): boolean | null {
-  if (filter === "available") {
-    return true;
-  }
-  if (filter === "unavailable") {
-    return false;
-  }
-  return null;
-}
-
-function historyStatusFilterValue(status: AnalysisRunState | ""): AnalysisRunState | null {
-  return status === "" ? null : status;
-}
 
 function statusLabel(health: HealthState): string {
   if (health.kind === "ready") {
@@ -318,61 +278,7 @@ export default function App() {
   const [isRunningLinearModelPrediction, setIsRunningLinearModelPrediction] = useState(false);
   const [analysisFilterDrafts, setAnalysisFilterDrafts] = useState<AnalysisFilterDraft[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
-  const [analysisResultJsonExport, setAnalysisResultJsonExport] =
-    useState<AnalysisResultJsonExportResponse | null>(null);
-  const [analysisResultJsonExportError, setAnalysisResultJsonExportError] = useState<
-    string | null
-  >(null);
-  const [isCreatingAnalysisResultJsonExport, setIsCreatingAnalysisResultJsonExport] =
-    useState(false);
-  const [analysisResultCsvExport, setAnalysisResultCsvExport] =
-    useState<AnalysisResultCsvExportResponse | null>(null);
-  const [analysisResultCsvExportError, setAnalysisResultCsvExportError] = useState<string | null>(
-    null,
-  );
-  const [isCreatingAnalysisResultCsvExport, setIsCreatingAnalysisResultCsvExport] =
-    useState(false);
-  const [analysisResultHtmlReport, setAnalysisResultHtmlReport] =
-    useState<AnalysisResultHtmlReportResponse | null>(null);
-  const [analysisResultHtmlReportError, setAnalysisResultHtmlReportError] = useState<
-    string | null
-  >(null);
-  const [isCreatingAnalysisResultHtmlReport, setIsCreatingAnalysisResultHtmlReport] =
-    useState(false);
-  const [analysisResultExportDownloadError, setAnalysisResultExportDownloadError] = useState<
-    string | null
-  >(null);
-  const [isDownloadingAnalysisResultExport, setIsDownloadingAnalysisResultExport] =
-    useState(false);
-  const [analysisHistory, setAnalysisHistory] = useState<AnalysisRunListResponse | null>(null);
-  const [analysisHistoryError, setAnalysisHistoryError] = useState<string | null>(null);
-  const [isLoadingAnalysisHistory, setIsLoadingAnalysisHistory] = useState(false);
-  const [analysisHistoryMethodId, setAnalysisHistoryMethodId] = useState("");
-  const [analysisHistoryStatus, setAnalysisHistoryStatus] = useState<AnalysisRunState | "">("");
-  const [analysisHistoryStaleFilter, setAnalysisHistoryStaleFilter] =
-    useState<AnalysisHistoryStaleFilter>("all");
-  const [analysisHistoryResultAvailabilityFilter, setAnalysisHistoryResultAvailabilityFilter] =
-    useState<AnalysisHistoryResultAvailabilityFilter>("all");
-  const [analysisHistoryOffset, setAnalysisHistoryOffset] = useState(0);
-  const [analysisComparisonLeftId, setAnalysisComparisonLeftId] = useState<string | null>(null);
-  const [analysisComparisonRightId, setAnalysisComparisonRightId] = useState<string | null>(null);
-  const [analysisComparison, setAnalysisComparison] =
-    useState<AnalysisRunComparisonResponse | null>(null);
-  const [analysisComparisonError, setAnalysisComparisonError] = useState<string | null>(null);
-  const [isComparingAnalysisRuns, setIsComparingAnalysisRuns] = useState(false);
-  const [restoredAnalysisResult, setRestoredAnalysisResult] =
-    useState<AnalysisResultEnvelope | null>(null);
-  const [restoredAnalysisResultError, setRestoredAnalysisResultError] = useState<string | null>(
-    null,
-  );
-  const [isRestoringAnalysisResult, setIsRestoringAnalysisResult] = useState(false);
-  const [analysisResultExportList, setAnalysisResultExportList] =
-    useState<AnalysisResultExportListResponse | null>(null);
-  const [analysisResultExportListError, setAnalysisResultExportListError] = useState<string | null>(
-    null,
-  );
-  const [isLoadingAnalysisResultExportList, setIsLoadingAnalysisResultExportList] =
-    useState(false);
+  const [datasetStateRevision, setDatasetStateRevision] = useState(0);
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
   const [factorialDesign, setFactorialDesign] = useState<FactorialDesignResponse | null>(null);
   const [factorialDesignError, setFactorialDesignError] = useState<string | null>(null);
@@ -392,6 +298,7 @@ export default function App() {
     version,
   } = useDatasetWorkflow({
     onDatasetReset: () => {
+      setDatasetStateRevision((revision) => revision + 1);
       setSelectedDescriptiveColumnIds([]);
       setSelectedGraphicalSummaryColumnIds([]);
       setSelectedNormalityColumnIds([]);
@@ -509,6 +416,7 @@ export default function App() {
       setAnalysisResult(null);
     },
     onSchemaChanged: (columns) => {
+      setDatasetStateRevision((revision) => revision + 1);
       setSelectedDescriptiveColumnIds(defaultDescriptiveColumnIds(columns));
       setSelectedGraphicalSummaryColumnIds(defaultGraphicalSummaryColumnIds(columns));
       setSelectedNormalityColumnIds(defaultNormalityColumnIds(columns));
@@ -586,25 +494,31 @@ export default function App() {
       setSelectedLinearModelQuadraticColumnIds([]);
       setSelectedLinearModelInteractionKeys([]);
       setAnalysisResult(null);
-      setRestoredAnalysisResult(null);
-      setRestoredAnalysisResultError(null);
-      setAnalysisHistory(null);
-      setAnalysisHistoryError(null);
-      setAnalysisHistoryMethodId("");
-      setAnalysisHistoryStatus("");
-      setAnalysisHistoryStaleFilter("all");
-      setAnalysisHistoryResultAvailabilityFilter("all");
-      setAnalysisHistoryOffset(0);
-      setAnalysisComparisonLeftId(null);
-      setAnalysisComparisonRightId(null);
-      setAnalysisComparison(null);
-      setAnalysisComparisonError(null);
-      setAnalysisResultExportList(null);
-      setAnalysisResultExportListError(null);
     },
   });
   const currentAnalysisId = analysisResult?.analysis_id ?? null;
   const currentDatasetVersionId = version?.version_id ?? null;
+  const analysisExportState = useAnalysisExportState({
+    currentAnalysisId,
+    currentDatasetVersionId,
+    resetKey: datasetStateRevision,
+  });
+  const analysisHistoryState = useAnalysisHistoryState({
+    currentDatasetVersionId,
+    refreshKey: currentAnalysisId,
+    resetKey: datasetStateRevision,
+  });
+  const analysisComparisonState = useAnalysisComparisonState({
+    resetKey: datasetStateRevision,
+  });
+  const restoredAnalysisResultState = useRestoredAnalysisResultState({
+    analysisCatalog,
+    currentAnalysisId,
+    currentDatasetVersionId,
+    onRefreshAnalysisResultExports: analysisExportState.onRefreshAnalysisResultExports,
+    onSelectMethod: handleSelectAnalysisMethod,
+    resetKey: datasetStateRevision,
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -635,95 +549,6 @@ export default function App() {
       controller.abort();
     };
   }, []);
-
-  useEffect(() => {
-    setAnalysisResultJsonExport(null);
-    setAnalysisResultJsonExportError(null);
-    setAnalysisResultCsvExport(null);
-    setAnalysisResultCsvExportError(null);
-    setAnalysisResultHtmlReport(null);
-    setAnalysisResultHtmlReportError(null);
-    setAnalysisResultExportDownloadError(null);
-    setAnalysisResultExportList(null);
-    setAnalysisResultExportListError(null);
-    if (currentAnalysisId !== null) {
-      setRestoredAnalysisResult(null);
-      setRestoredAnalysisResultError(null);
-      void fetchAnalysisResultExports(currentAnalysisId)
-        .then((response) => {
-          setAnalysisResultExportList(response);
-          setAnalysisResultExportListError(null);
-        })
-        .catch((error) => {
-          setAnalysisResultExportList(null);
-          setAnalysisResultExportListError(
-            error instanceof Error ? error.message : "analysis_result_exports_fetch_failed",
-          );
-        });
-    }
-  }, [currentAnalysisId, currentDatasetVersionId]);
-
-  useEffect(() => {
-    if (currentDatasetVersionId === null) {
-      setAnalysisHistory(null);
-      setAnalysisHistoryError(null);
-      setRestoredAnalysisResult(null);
-      setRestoredAnalysisResultError(null);
-      setAnalysisResultExportList(null);
-      setAnalysisResultExportListError(null);
-      setAnalysisHistoryOffset(0);
-      setAnalysisComparisonLeftId(null);
-      setAnalysisComparisonRightId(null);
-      setAnalysisComparison(null);
-      setAnalysisComparisonError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingAnalysisHistory(true);
-    fetchAnalysisRuns({
-      datasetVersionId: currentDatasetVersionId,
-      methodId: analysisHistoryMethodId.length > 0 ? analysisHistoryMethodId : null,
-      status: historyStatusFilterValue(analysisHistoryStatus),
-      stale: historyStaleFilterValue(analysisHistoryStaleFilter),
-      resultAvailable: historyResultAvailabilityFilterValue(
-        analysisHistoryResultAvailabilityFilter,
-      ),
-      limit: ANALYSIS_HISTORY_PAGE_SIZE,
-      offset: analysisHistoryOffset,
-    })
-      .then((response) => {
-        if (!cancelled) {
-          setAnalysisHistory(response);
-          setAnalysisHistoryError(null);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setAnalysisHistory(null);
-          setAnalysisHistoryError(
-            error instanceof Error ? error.message : "analysis_history_fetch_failed",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoadingAnalysisHistory(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    analysisHistoryMethodId,
-    analysisHistoryOffset,
-    analysisHistoryResultAvailabilityFilter,
-    analysisHistoryStaleFilter,
-    analysisHistoryStatus,
-    currentAnalysisId,
-    currentDatasetVersionId,
-  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -3352,202 +3177,6 @@ export default function App() {
     }
   }
 
-  async function handleCreateAnalysisResultJsonExport(analysisId: string) {
-    setIsCreatingAnalysisResultJsonExport(true);
-    setAnalysisResultJsonExportError(null);
-    setAnalysisResultExportDownloadError(null);
-    try {
-      const response = await createAnalysisResultJsonExport(analysisId);
-      setAnalysisResultJsonExport(response);
-      await handleRefreshAnalysisResultExports(analysisId);
-    } catch (error) {
-      setAnalysisResultJsonExport(null);
-      setAnalysisResultJsonExportError(
-        error instanceof Error ? error.message : "analysis_result_json_export_failed",
-      );
-    } finally {
-      setIsCreatingAnalysisResultJsonExport(false);
-    }
-  }
-
-  async function handleCreateAnalysisResultCsvExport(analysisId: string) {
-    setIsCreatingAnalysisResultCsvExport(true);
-    setAnalysisResultCsvExportError(null);
-    setAnalysisResultExportDownloadError(null);
-    try {
-      const response = await createAnalysisResultCsvExport(analysisId);
-      setAnalysisResultCsvExport(response);
-      await handleRefreshAnalysisResultExports(analysisId);
-    } catch (error) {
-      setAnalysisResultCsvExport(null);
-      setAnalysisResultCsvExportError(
-        error instanceof Error ? error.message : "analysis_result_csv_export_failed",
-      );
-    } finally {
-      setIsCreatingAnalysisResultCsvExport(false);
-    }
-  }
-
-  async function handleCreateAnalysisResultHtmlReport(analysisId: string) {
-    setIsCreatingAnalysisResultHtmlReport(true);
-    setAnalysisResultHtmlReportError(null);
-    setAnalysisResultExportDownloadError(null);
-    try {
-      const response = await createAnalysisResultHtmlReport(analysisId);
-      setAnalysisResultHtmlReport(response);
-      await handleRefreshAnalysisResultExports(analysisId);
-    } catch (error) {
-      setAnalysisResultHtmlReport(null);
-      setAnalysisResultHtmlReportError(
-        error instanceof Error ? error.message : "analysis_result_html_report_failed",
-      );
-    } finally {
-      setIsCreatingAnalysisResultHtmlReport(false);
-    }
-  }
-
-  async function handleDownloadAnalysisResultExport(analysisId: string, exportId: string) {
-    setIsDownloadingAnalysisResultExport(true);
-    setAnalysisResultExportDownloadError(null);
-    try {
-      await downloadAnalysisResultExport(analysisId, exportId);
-    } catch (error) {
-      setAnalysisResultExportDownloadError(
-        error instanceof Error ? error.message : "analysis_result_export_download_failed",
-      );
-    } finally {
-      setIsDownloadingAnalysisResultExport(false);
-    }
-  }
-
-  async function handleRefreshAnalysisHistory() {
-    if (currentDatasetVersionId === null) {
-      setAnalysisHistory(null);
-      setAnalysisHistoryError(null);
-      return;
-    }
-
-    setIsLoadingAnalysisHistory(true);
-    setAnalysisHistoryError(null);
-    try {
-      const response = await fetchAnalysisRuns({
-        datasetVersionId: currentDatasetVersionId,
-        methodId: analysisHistoryMethodId.length > 0 ? analysisHistoryMethodId : null,
-        status: historyStatusFilterValue(analysisHistoryStatus),
-        stale: historyStaleFilterValue(analysisHistoryStaleFilter),
-        resultAvailable: historyResultAvailabilityFilterValue(
-          analysisHistoryResultAvailabilityFilter,
-        ),
-        limit: ANALYSIS_HISTORY_PAGE_SIZE,
-        offset: analysisHistoryOffset,
-      });
-      setAnalysisHistory(response);
-    } catch (error) {
-      setAnalysisHistory(null);
-      setAnalysisHistoryError(
-        error instanceof Error ? error.message : "analysis_history_fetch_failed",
-      );
-    } finally {
-      setIsLoadingAnalysisHistory(false);
-    }
-  }
-
-  function handleChangeAnalysisHistoryFilters({
-    methodId,
-    resultAvailability,
-    stale,
-    status,
-  }: {
-    methodId: string;
-    resultAvailability: AnalysisHistoryResultAvailabilityFilter;
-    stale: AnalysisHistoryStaleFilter;
-    status: AnalysisRunState | "";
-  }) {
-    setAnalysisHistoryMethodId(methodId);
-    setAnalysisHistoryStatus(status);
-    setAnalysisHistoryStaleFilter(stale);
-    setAnalysisHistoryResultAvailabilityFilter(resultAvailability);
-    setAnalysisHistoryOffset(0);
-  }
-
-  function handleChangeAnalysisHistoryPage(nextOffset: number) {
-    setAnalysisHistoryOffset(Math.max(0, nextOffset));
-  }
-
-  function handleSelectAnalysisComparisonRun(side: "left" | "right", analysisId: string) {
-    setAnalysisComparison(null);
-    setAnalysisComparisonError(null);
-    if (side === "left") {
-      setAnalysisComparisonLeftId(analysisId);
-      return;
-    }
-    setAnalysisComparisonRightId(analysisId);
-  }
-
-  async function handleCompareAnalysisRuns() {
-    if (analysisComparisonLeftId === null || analysisComparisonRightId === null) {
-      setAnalysisComparisonError("analysis_comparison_requires_two_runs");
-      return;
-    }
-
-    setIsComparingAnalysisRuns(true);
-    setAnalysisComparisonError(null);
-    try {
-      const response = await fetchAnalysisRunComparison(
-        analysisComparisonLeftId,
-        analysisComparisonRightId,
-      );
-      setAnalysisComparison(response);
-    } catch (error) {
-      setAnalysisComparison(null);
-      setAnalysisComparisonError(
-        error instanceof Error ? error.message : "analysis_comparison_failed",
-      );
-    } finally {
-      setIsComparingAnalysisRuns(false);
-    }
-  }
-
-  async function handleRefreshAnalysisResultExports(analysisId: string) {
-    setIsLoadingAnalysisResultExportList(true);
-    setAnalysisResultExportListError(null);
-    try {
-      const response = await fetchAnalysisResultExports(analysisId);
-      setAnalysisResultExportList(response);
-    } catch (error) {
-      setAnalysisResultExportList(null);
-      setAnalysisResultExportListError(
-        error instanceof Error ? error.message : "analysis_result_exports_fetch_failed",
-      );
-    } finally {
-      setIsLoadingAnalysisResultExportList(false);
-    }
-  }
-
-  async function handleRestoreAnalysisRun(analysisId: string) {
-    setIsRestoringAnalysisResult(true);
-    setRestoredAnalysisResultError(null);
-    setAnalysisResultExportDownloadError(null);
-    try {
-      const response = await fetchAnalysisRunResult(analysisId);
-      setRestoredAnalysisResult(response);
-      const method = analysisCatalog?.methods.find(
-        (candidate) => candidate.method_id === response.method_id,
-      );
-      if (method !== undefined) {
-        handleSelectAnalysisMethod(method.module_id, method.method_id);
-      }
-      await handleRefreshAnalysisResultExports(analysisId);
-    } catch (error) {
-      setRestoredAnalysisResult(null);
-      setRestoredAnalysisResultError(
-        error instanceof Error ? error.message : "analysis_result_fetch_failed",
-      );
-    } finally {
-      setIsRestoringAnalysisResult(false);
-    }
-  }
-
   function handleOpenDatasetPage() {
     if (typeof window !== "undefined") {
       window.history.pushState(null, "", "/");
@@ -3558,10 +3187,7 @@ export default function App() {
   }
 
   function handleSelectAnalysisMethod(moduleId: AnalysisModuleId, methodId: string | null) {
-    setAnalysisResultJsonExportError(null);
-    setAnalysisResultCsvExportError(null);
-    setAnalysisResultHtmlReportError(null);
-    setAnalysisResultExportDownloadError(null);
+    analysisExportState.clearAnalysisExportErrors();
     selectAnalysisMethod(moduleId, methodId);
     if (methodId !== null) {
       setAppRoute({
@@ -3591,34 +3217,10 @@ export default function App() {
     analysisFilterValidationMessage,
     analysisRunError: flowError,
     analysisResult: descriptiveAnalysisResult,
-    analysisResultCsvExport,
-    analysisResultCsvExportError,
-    analysisResultExportDownloadError,
-    analysisResultExportList,
-    analysisResultExportListError,
-    analysisResultHtmlReport,
-    analysisResultHtmlReportError,
-    analysisResultJsonExport,
-    analysisResultJsonExportError,
-    analysisHistory,
-    analysisHistoryError,
-    analysisHistoryMethodId,
-    analysisHistoryOffset,
-    analysisHistoryResultAvailabilityFilter,
-    analysisHistoryStaleFilter,
-    analysisHistoryStatus,
-    analysisComparison,
-    analysisComparisonError,
-    analysisComparisonLeftId,
-    analysisComparisonRightId,
-    isCreatingAnalysisResultCsvExport,
-    isCreatingAnalysisResultHtmlReport,
-    isCreatingAnalysisResultJsonExport,
-    isDownloadingAnalysisResultExport,
-    isLoadingAnalysisHistory,
-    isLoadingAnalysisResultExportList,
-    isComparingAnalysisRuns,
-    isRestoringAnalysisResult,
+    ...analysisExportState,
+    ...analysisHistoryState,
+    ...analysisComparisonState,
+    ...restoredAnalysisResultState,
     chiSquareAssociationAlpha,
     chiSquareAssociationAnalysisResult,
     chiSquareAssociationColumnColumnId: selectedChiSquareAssociationColumnColumnId,
@@ -3793,8 +3395,6 @@ export default function App() {
     isRunningLinearModelPrediction,
     isRunningLinearModelPredictionPreflight,
     profile,
-    restoredAnalysisResult,
-    restoredAnalysisResultError,
     selectedDescriptiveColumnIds,
     selectedGraphicalSummaryColumnIds,
     selectedNormalityColumnIds,
@@ -3841,30 +3441,6 @@ export default function App() {
     ) => {
       void handleSaveFactorialDesignResponses(designId, request);
     },
-    onCreateAnalysisResultCsvExport: (analysisId: string) => {
-      void handleCreateAnalysisResultCsvExport(analysisId);
-    },
-    onCreateAnalysisResultHtmlReport: (analysisId: string) => {
-      void handleCreateAnalysisResultHtmlReport(analysisId);
-    },
-    onCreateAnalysisResultJsonExport: (analysisId: string) => {
-      void handleCreateAnalysisResultJsonExport(analysisId);
-    },
-    onChangeAnalysisHistoryFilters: handleChangeAnalysisHistoryFilters,
-    onChangeAnalysisHistoryPage: handleChangeAnalysisHistoryPage,
-    onCompareAnalysisRuns: () => {
-      void handleCompareAnalysisRuns();
-    },
-    onDownloadAnalysisResultExport: (analysisId: string, exportId: string) => {
-      void handleDownloadAnalysisResultExport(analysisId, exportId);
-    },
-    onRefreshAnalysisHistory: () => {
-      void handleRefreshAnalysisHistory();
-    },
-    onRestoreAnalysisRun: (analysisId: string) => {
-      void handleRestoreAnalysisRun(analysisId);
-    },
-    onSelectAnalysisComparisonRun: handleSelectAnalysisComparisonRun,
     onRunChiSquareAssociationAnalysis: () => {
       void handleRunChiSquareAssociationAnalysis();
     },
