@@ -1,5 +1,11 @@
 import { AnalysisFilterControls } from "./AnalysisFilterControls";
-import { AnalysisWorkbench } from "./AnalysisWorkbench";
+import {
+  AnalysisWorkbench,
+  type AnalysisWorkbenchComparisonState,
+  type AnalysisWorkbenchExportState,
+  type AnalysisWorkbenchHistoryState,
+  type AnalysisWorkbenchRestoredState,
+} from "./AnalysisWorkbench";
 import { CapabilityPanel } from "./CapabilityPanel";
 import { ChiSquareAssociationPanel } from "./ChiSquareAssociationPanel";
 import { DescriptiveAnalysisPanel } from "./DescriptiveAnalysisPanel";
@@ -111,6 +117,10 @@ export interface AnalysisShellProps {
   analysisFilterValidationMessage: string | null;
   analysisRunError: string | null;
   analysisResult: AnalysisResultEnvelope | null;
+  workbenchComparisonState?: AnalysisWorkbenchComparisonState;
+  workbenchExportState?: AnalysisWorkbenchExportState;
+  workbenchHistoryState?: AnalysisWorkbenchHistoryState;
+  workbenchRestoredState?: AnalysisWorkbenchRestoredState;
   analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
   analysisResultCsvExportError?: string | null;
   analysisResultExportDownloadError?: string | null;
@@ -494,6 +504,10 @@ export function AnalysisShell({
   analysisFilterValidationMessage,
   analysisRunError,
   analysisResult,
+  workbenchComparisonState,
+  workbenchExportState,
+  workbenchHistoryState,
+  workbenchRestoredState,
   analysisResultCsvExport = null,
   analysisResultCsvExportError = null,
   analysisResultExportDownloadError = null,
@@ -891,6 +905,54 @@ export function AnalysisShell({
           gageRrAnalysisResult,
           gageRunChartAnalysisResult,
         });
+  const effectiveWorkbenchExportState = workbenchExportState ?? {
+    analysisResultCsvExport,
+    analysisResultCsvExportError,
+    analysisResultExportDownloadError,
+    analysisResultExportList,
+    analysisResultExportListError,
+    analysisResultHtmlReport,
+    analysisResultHtmlReportError,
+    analysisResultJsonExport,
+    analysisResultJsonExportError,
+    isCreatingAnalysisResultCsvExport,
+    isCreatingAnalysisResultHtmlReport,
+    isCreatingAnalysisResultJsonExport,
+    isDownloadingAnalysisResultExport,
+    isLoadingAnalysisResultExportList,
+    onCreateAnalysisResultCsvExport,
+    onCreateAnalysisResultHtmlReport,
+    onCreateAnalysisResultJsonExport,
+    onDownloadAnalysisResultExport,
+  };
+  const effectiveWorkbenchHistoryState = workbenchHistoryState ?? {
+    analysisHistory,
+    analysisHistoryError,
+    analysisHistoryMethodId,
+    analysisHistoryOffset,
+    analysisHistoryResultAvailabilityFilter,
+    analysisHistoryStaleFilter,
+    analysisHistoryStatus,
+    isLoadingAnalysisHistory,
+    onChangeAnalysisHistoryFilters,
+    onChangeAnalysisHistoryPage,
+    onRefreshAnalysisHistory,
+  };
+  const effectiveWorkbenchComparisonState = workbenchComparisonState ?? {
+    analysisComparison,
+    analysisComparisonError,
+    analysisComparisonLeftId,
+    analysisComparisonRightId,
+    isComparingAnalysisRuns,
+    onCompareAnalysisRuns,
+    onSelectAnalysisComparisonRun,
+  };
+  const effectiveWorkbenchRestoredState = workbenchRestoredState ?? {
+    isRestoringAnalysisResult,
+    restoredAnalysisResult,
+    restoredAnalysisResultError,
+    onRestoreAnalysisRun,
+  };
 
   return (
     <section className="analysis-shell" aria-labelledby="analysis-modules-title">
@@ -914,53 +976,17 @@ export function AnalysisShell({
       {analysisCatalog !== null ? (
         <AnalysisWorkbench
           analysisRunError={analysisRunError}
-          analysisResultCsvExport={analysisResultCsvExport}
-          analysisResultCsvExportError={analysisResultCsvExportError}
-          analysisResultExportDownloadError={analysisResultExportDownloadError}
-          analysisResultExportList={analysisResultExportList}
-          analysisResultExportListError={analysisResultExportListError}
-          analysisResultHtmlReport={analysisResultHtmlReport}
-          analysisResultHtmlReportError={analysisResultHtmlReportError}
-          analysisResultJsonExport={analysisResultJsonExport}
-          analysisResultJsonExportError={analysisResultJsonExportError}
-          analysisHistory={analysisHistory}
-          analysisHistoryError={analysisHistoryError}
-          analysisHistoryMethodId={analysisHistoryMethodId}
-          analysisHistoryOffset={analysisHistoryOffset}
-          analysisHistoryResultAvailabilityFilter={analysisHistoryResultAvailabilityFilter}
-          analysisHistoryStaleFilter={analysisHistoryStaleFilter}
-          analysisHistoryStatus={analysisHistoryStatus}
-          analysisComparison={analysisComparison}
-          analysisComparisonError={analysisComparisonError}
-          analysisComparisonLeftId={analysisComparisonLeftId}
-          analysisComparisonRightId={analysisComparisonRightId}
           catalog={analysisCatalog}
-          isCreatingAnalysisResultCsvExport={isCreatingAnalysisResultCsvExport}
-          isCreatingAnalysisResultHtmlReport={isCreatingAnalysisResultHtmlReport}
-          isCreatingAnalysisResultJsonExport={isCreatingAnalysisResultJsonExport}
-          isDownloadingAnalysisResultExport={isDownloadingAnalysisResultExport}
-          isLoadingAnalysisHistory={isLoadingAnalysisHistory}
-          isLoadingAnalysisResultExportList={isLoadingAnalysisResultExportList}
-          isComparingAnalysisRuns={isComparingAnalysisRuns}
-          isRestoringAnalysisResult={isRestoringAnalysisResult}
+          comparisonState={effectiveWorkbenchComparisonState}
+          exportState={effectiveWorkbenchExportState}
+          historyState={effectiveWorkbenchHistoryState}
           profile={profile}
-          restoredAnalysisResult={restoredAnalysisResult}
-          restoredAnalysisResultError={restoredAnalysisResultError}
+          restoredState={effectiveWorkbenchRestoredState}
           selectedAnalysisResult={selectedAnalysisResult}
           selectedMethod={selectedMethod}
           selectedMethods={selectedMethods}
           selectedModuleId={selectedModuleId}
           version={version}
-          onCreateAnalysisResultCsvExport={onCreateAnalysisResultCsvExport}
-          onCreateAnalysisResultHtmlReport={onCreateAnalysisResultHtmlReport}
-          onCreateAnalysisResultJsonExport={onCreateAnalysisResultJsonExport}
-          onChangeAnalysisHistoryFilters={onChangeAnalysisHistoryFilters}
-          onChangeAnalysisHistoryPage={onChangeAnalysisHistoryPage}
-          onCompareAnalysisRuns={onCompareAnalysisRuns}
-          onDownloadAnalysisResultExport={onDownloadAnalysisResultExport}
-          onRefreshAnalysisHistory={onRefreshAnalysisHistory}
-          onRestoreAnalysisRun={onRestoreAnalysisRun}
-          onSelectAnalysisComparisonRun={onSelectAnalysisComparisonRun}
           onSelectMethod={onSelectMethod}
           renderAnalysisFilters={(method) =>
             method.requires_dataset && version !== null ? (

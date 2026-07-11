@@ -1,6 +1,6 @@
 # CI Status
 
-Last updated: 2026-07-09
+Last updated: 2026-07-11
 
 ## Workflow Configuration
 
@@ -12,7 +12,7 @@ Last updated: 2026-07-09
 - Browser E2E job command in file: `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1`
 - Browser E2E job dependency: runs after the Windows check job succeeds
 - Browser install/cache: the `e2e` job sets `PLAYWRIGHT_BROWSERS_PATH` to `${{ runner.temp }}\ms-playwright`, caches that path with `actions/cache@v4`, and installs Chromium with `.\.venv\Scripts\python.exe -m playwright install chromium`
-- Browser E2E diagnostics: the `e2e` job runs with `-WorkspaceRoot "${{ runner.temp }}\datalab-e2e" -KeepWorkspace`. The E2E runner writes step markers, backend/frontend logs, and on browser-flow failure the current URL, page title, screenshot, and HTML snapshot. GitHub uploads only `logs\*.log`, `screenshots\*.png`, and `html\*.html` files as the `e2e-logs` artifact with `if: always()`.
+- Browser E2E diagnostics: the `e2e` job runs with `-WorkspaceRoot "${{ runner.temp }}\datalab-e2e" -DiagnosticsRoot "${{ runner.temp }}\datalab-e2e-diagnostics" -KeepWorkspace`. The E2E runner writes step markers to `logs\e2e-diagnostics.log`, records backend/frontend logs, and on browser-flow failure records the current URL, page title, screenshot, and HTML snapshot. Failure screenshot and HTML filenames include the current step slug. Playwright wait timeouts include the current step, URL, and page title. Backend/frontend readiness failures print the exited process name plus recent log tail, and readiness URL timeouts print recent backend/frontend log tails even when the processes are still running. GitHub uploads only diagnostics-root `logs\*.log`, `screenshots\*.png`, and `html\*.html` files as the `e2e-logs` artifact with `if: always()`.
 
 This satisfies the current repository-side requirement that main pushes should start the Windows CI workflow and the browser E2E smoke workflow job.
 
@@ -23,10 +23,31 @@ This satisfies the current repository-side requirement that main pushes should s
   split, OpenAPI frontend route/schema field contract guards, and analysis-run
   service boundary guard passed on 2026-07-09 with
   `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`.
-- The latest run passed backend ruff check, backend ruff format check, backend
-  mypy over 79 source files, backend pytest with 437 tests, frontend lint,
-  frontend typecheck, frontend Vitest with 59 tests, and frontend production
-  build.
+- That 2026-07-09 run passed backend ruff check, backend ruff format check,
+  backend mypy over 79 source files, backend pytest with 438 tests, frontend
+  lint, frontend typecheck, frontend Vitest with 59 tests, and frontend
+  production build.
+- Remote-CI/E2E reliability hardening, CI artifact-scope regression guard,
+  remote CI verification checklist and stale-validation wording guards,
+  OpenAPI TypeScript generation planning guard, UX/reference documentation
+  guard, analysis-run facade boundary guard, and Workbench grouped hook/state
+  ownership validation record now includes:
+  `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`,
+  `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`
+  with 56 tests,
+  `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_api_contracts.py -k "analysis_run_service_boundaries or analysis_runs_facade_keeps_create_dispatch_only"`
+  with 2 selected tests, full `scripts\check.ps1` with backend pytest 445 tests and
+  frontend Vitest 59 tests, and browser E2E smoke with
+  `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`.
+- Workbench hook ownership guard expansion also passed on 2026-07-11:
+  `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`
+  with 56 tests and full `scripts\check.ps1` with backend pytest 445 tests and
+  frontend Vitest 59 tests. This expanded the existing guard without changing
+  frontend UI behavior.
+- Targeted stability validation for CI status wording and run-chart datetime
+  order redaction passed on 2026-07-10:
+  `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_api_contracts.py::test_analysis_run_executes_run_chart_with_datetime_order_column .\backend\tests\unit\test_openapi_frontend_contract.py`
+  with 56 tests.
 - Targeted validation also passed on 2026-07-09:
   `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`,
   `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py .\backend\tests\unit\test_api_contracts.py::test_analysis_run_service_boundaries_are_split_without_api_drift`,
@@ -41,13 +62,13 @@ This satisfies the current repository-side requirement that main pushes should s
   decomposition, frontend API type split, and frontend API client facade split
   passed on 2026-07-07 with
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
-- The latest run passed backend ruff check, backend ruff format check, backend
-  mypy over 79 source files, backend pytest with 388 tests, frontend lint,
-  frontend typecheck, frontend Vitest with 58 tests, and frontend production
-  build.
+- That 2026-07-07 run passed backend ruff check, backend ruff format check,
+  backend mypy over 79 source files, backend pytest with 388 tests, frontend
+  lint, frontend typecheck, frontend Vitest with 58 tests, and frontend
+  production build.
 - Full local Windows validation for the current Workbench component split, UX refinement, Playwright E2E smoke, XLSX browser upload coverage, CSV upload/error-recovery coverage, parser option editing coverage, named XLSX sheet selection coverage, CP949 text encoding selection coverage, parser error-recovery coverage, and GitHub Actions E2E job wiring working tree passed on 2026-07-07 with `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
 - The run passed backend ruff check, backend ruff format check, backend mypy over 75 source files, backend pytest with 387 tests, frontend lint, frontend typecheck, frontend Vitest with 58 tests, and frontend production build.
-- The previous documentation mismatch between 267/277/301/311/320/329/338/348/357/361/363/375/377/380/381/382/383/384/385/386/387/388/412/429/435 backend tests is resolved; the latest recorded backend pytest count is 437 and the latest recorded frontend Vitest count is 59.
+- The previous documentation mismatch between 267/277/301/311/320/329/338/348/357/361/363/375/377/380/381/382/383/384/385/386/387/388/412/429/435/437/438/439/440/442/443/444 backend tests is resolved; the latest recorded backend pytest count is 445 and the latest recorded frontend Vitest count is 59.
 - Opt-in browser E2E validation also passed on 2026-07-10 with
   `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`.
   The run printed stage markers and passed without producing failure
@@ -63,16 +84,51 @@ This satisfies the current repository-side requirement that main pushes should s
 ## Remote GitHub Actions Verification
 
 - Remote GitHub Actions execution has not been directly verified from this
-  environment for this working-tree change because it has not been observed in a
-  pushed workflow run here.
-- GitHub app checks against the current `origin/main` commit
-  `73770ad3cf54af756394301f9e14a2d9c7db7d24` returned no PR-filtered workflow
-  runs and no legacy commit statuses. That result is not sufficient to confirm
-  push-triggered Actions or the new `e2e` job.
-- Public browser/API access to `https://github.com/kiwoju-git/Data-analysis-platform/actions` previously returned no inspectable workflow run here, consistent with a private repository or unauthenticated access boundary.
-- `gh`/`gh.exe` is not installed in the current environment, so authenticated run listing could not be performed here.
+  environment for the latest pushed `main` commit
+  `49266a365bbfffcecdf32a008bdb4c02739f2742`.
+- GitHub app checks against that commit returned no PR-filtered workflow runs
+  and no legacy commit statuses on 2026-07-10. The available connector endpoint
+  is PR-run oriented, so that result is not sufficient to confirm push-triggered
+  Actions or the new `e2e` job.
+- Unauthenticated GitHub REST access to
+  `https://api.github.com/repos/kiwoju-git/Data-analysis-platform/actions/runs?branch=main&per_page=5`
+  returned `404 Not Found` again on 2026-07-10, consistent with a private
+  repository or unauthenticated access boundary.
+- `gh`/`gh.exe` is not installed in the current environment, and no `GH*` or
+  `GITHUB*` token environment variable is present, so authenticated run listing
+  could not be performed here.
 - Branch protection and repository settings were not changed in this PR.
-- The new `e2e` workflow job has not been observed remotely yet because it requires a push or pull request workflow run after this working-tree change.
+- The remote `windows` job, remote `e2e` job, `needs: windows` execution order,
+  `e2e-logs` artifact upload, and GitHub UI `workflow_dispatch` manual-run
+  control have not been observed remotely yet from this environment. The
+  workflow file contains `workflow_dispatch`; the UI control still needs
+  authenticated GitHub UI or `gh` confirmation.
+
+Authenticated GitHub CLI verification commands:
+
+```powershell
+gh auth status --hostname github.com
+gh run list --repo kiwoju-git/Data-analysis-platform --branch main --workflow ci.yml --limit 5
+gh run view <run-id> --repo kiwoju-git/Data-analysis-platform --json status,conclusion,headSha,workflowName,jobs
+gh run download <run-id> --repo kiwoju-git/Data-analysis-platform --name e2e-logs --dir "$env:TEMP\datalab-e2e-logs"
+```
+
+When inspecting the `gh run view <run-id> --json ...` output or the GitHub run
+graph, verify that the `windows` job reached `success`, the `e2e` job exists,
+and the `e2e` job started only after `windows` completed successfully. The
+workflow encodes that ordering through `needs: windows`; hosted Actions still
+needs real-run confirmation.
+
+Manual dispatch can be checked from the GitHub Actions UI by opening the `ci`
+workflow and confirming the Run workflow button is available for `main`.
+If intentionally testing the trigger from the CLI, use:
+
+```powershell
+gh workflow run ci.yml --repo kiwoju-git/Data-analysis-platform --ref main
+```
+
+Do not change repository settings, Actions settings, branch protection, or
+required checks as part of this PR.
 
 After push, verify these items in GitHub UI:
 

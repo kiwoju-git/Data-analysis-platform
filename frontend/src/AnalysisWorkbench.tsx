@@ -28,6 +28,63 @@ import type {
 } from "./analysisWorkbenchTypes";
 import { availabilityLabel } from "./analysisWorkbenchUtils";
 
+export interface AnalysisWorkbenchExportState {
+  analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
+  analysisResultCsvExportError?: string | null;
+  analysisResultExportDownloadError?: string | null;
+  analysisResultExportList?: AnalysisResultExportListResponse | null;
+  analysisResultExportListError?: string | null;
+  analysisResultHtmlReport?: AnalysisResultHtmlReportResponse | null;
+  analysisResultHtmlReportError?: string | null;
+  analysisResultJsonExport?: AnalysisResultJsonExportResponse | null;
+  analysisResultJsonExportError?: string | null;
+  isCreatingAnalysisResultCsvExport?: boolean;
+  isCreatingAnalysisResultHtmlReport?: boolean;
+  isCreatingAnalysisResultJsonExport?: boolean;
+  isDownloadingAnalysisResultExport?: boolean;
+  isLoadingAnalysisResultExportList?: boolean;
+  onCreateAnalysisResultCsvExport?: (analysisId: string) => void;
+  onCreateAnalysisResultHtmlReport?: (analysisId: string) => void;
+  onCreateAnalysisResultJsonExport?: (analysisId: string) => void;
+  onDownloadAnalysisResultExport?: (analysisId: string, exportId: string) => void;
+}
+
+export interface AnalysisWorkbenchHistoryState {
+  analysisHistory?: AnalysisRunListResponse | null;
+  analysisHistoryError?: string | null;
+  analysisHistoryMethodId?: string;
+  analysisHistoryOffset?: number;
+  analysisHistoryResultAvailabilityFilter?: AnalysisHistoryResultAvailabilityFilter;
+  analysisHistoryStaleFilter?: AnalysisHistoryStaleFilter;
+  analysisHistoryStatus?: AnalysisRunState | "";
+  isLoadingAnalysisHistory?: boolean;
+  onChangeAnalysisHistoryFilters?: (filters: {
+    methodId: string;
+    resultAvailability: AnalysisHistoryResultAvailabilityFilter;
+    stale: AnalysisHistoryStaleFilter;
+    status: AnalysisRunState | "";
+  }) => void;
+  onChangeAnalysisHistoryPage?: (offset: number) => void;
+  onRefreshAnalysisHistory?: () => void;
+}
+
+export interface AnalysisWorkbenchComparisonState {
+  analysisComparison?: AnalysisRunComparisonResponse | null;
+  analysisComparisonError?: string | null;
+  analysisComparisonLeftId?: string | null;
+  analysisComparisonRightId?: string | null;
+  isComparingAnalysisRuns?: boolean;
+  onCompareAnalysisRuns?: () => void;
+  onSelectAnalysisComparisonRun?: (side: "left" | "right", analysisId: string) => void;
+}
+
+export interface AnalysisWorkbenchRestoredState {
+  isRestoringAnalysisResult?: boolean;
+  restoredAnalysisResult?: AnalysisResultEnvelope | null;
+  restoredAnalysisResultError?: string | null;
+  onRestoreAnalysisRun?: (analysisId: string) => void;
+}
+
 interface AnalysisWorkbenchProps {
   catalog: AnalysisMethodListResponse;
   selectedModuleId: AnalysisModuleId;
@@ -35,6 +92,10 @@ interface AnalysisWorkbenchProps {
   selectedMethod: AnalysisMethodDescriptor | null;
   selectedAnalysisResult?: AnalysisResultEnvelope | null;
   analysisRunError: string | null;
+  comparisonState?: AnalysisWorkbenchComparisonState;
+  exportState?: AnalysisWorkbenchExportState;
+  historyState?: AnalysisWorkbenchHistoryState;
+  restoredState?: AnalysisWorkbenchRestoredState;
   analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
   analysisResultCsvExportError?: string | null;
   analysisResultExportDownloadError?: string | null;
@@ -103,6 +164,10 @@ export function AnalysisWorkbench({
   selectedMethod,
   selectedAnalysisResult = null,
   analysisRunError,
+  comparisonState,
+  exportState,
+  historyState,
+  restoredState,
   analysisResultCsvExport = null,
   analysisResultCsvExportError = null,
   analysisResultExportDownloadError = null,
@@ -156,7 +221,89 @@ export function AnalysisWorkbench({
     (selectedMethod.availability === "available" || selectedMethod.method_id === "quality.gage_rr")
       ? renderExecutableMethod(selectedMethod)
       : null;
-  const analysisResultForExport = restoredAnalysisResult ?? selectedAnalysisResult;
+  const effectiveExportState = {
+    analysisResultCsvExport:
+      exportState?.analysisResultCsvExport ?? analysisResultCsvExport,
+    analysisResultCsvExportError:
+      exportState?.analysisResultCsvExportError ?? analysisResultCsvExportError,
+    analysisResultExportDownloadError:
+      exportState?.analysisResultExportDownloadError ?? analysisResultExportDownloadError,
+    analysisResultExportList:
+      exportState?.analysisResultExportList ?? analysisResultExportList,
+    analysisResultExportListError:
+      exportState?.analysisResultExportListError ?? analysisResultExportListError,
+    analysisResultHtmlReport:
+      exportState?.analysisResultHtmlReport ?? analysisResultHtmlReport,
+    analysisResultHtmlReportError:
+      exportState?.analysisResultHtmlReportError ?? analysisResultHtmlReportError,
+    analysisResultJsonExport:
+      exportState?.analysisResultJsonExport ?? analysisResultJsonExport,
+    analysisResultJsonExportError:
+      exportState?.analysisResultJsonExportError ?? analysisResultJsonExportError,
+    isCreatingAnalysisResultCsvExport:
+      exportState?.isCreatingAnalysisResultCsvExport ?? isCreatingAnalysisResultCsvExport,
+    isCreatingAnalysisResultHtmlReport:
+      exportState?.isCreatingAnalysisResultHtmlReport ?? isCreatingAnalysisResultHtmlReport,
+    isCreatingAnalysisResultJsonExport:
+      exportState?.isCreatingAnalysisResultJsonExport ?? isCreatingAnalysisResultJsonExport,
+    isDownloadingAnalysisResultExport:
+      exportState?.isDownloadingAnalysisResultExport ?? isDownloadingAnalysisResultExport,
+    isLoadingAnalysisResultExportList:
+      exportState?.isLoadingAnalysisResultExportList ?? isLoadingAnalysisResultExportList,
+    onCreateAnalysisResultCsvExport:
+      exportState?.onCreateAnalysisResultCsvExport ?? onCreateAnalysisResultCsvExport,
+    onCreateAnalysisResultHtmlReport:
+      exportState?.onCreateAnalysisResultHtmlReport ?? onCreateAnalysisResultHtmlReport,
+    onCreateAnalysisResultJsonExport:
+      exportState?.onCreateAnalysisResultJsonExport ?? onCreateAnalysisResultJsonExport,
+    onDownloadAnalysisResultExport:
+      exportState?.onDownloadAnalysisResultExport ?? onDownloadAnalysisResultExport,
+  };
+  const effectiveHistoryState = {
+    analysisHistory: historyState?.analysisHistory ?? analysisHistory,
+    analysisHistoryError: historyState?.analysisHistoryError ?? analysisHistoryError,
+    analysisHistoryMethodId: historyState?.analysisHistoryMethodId ?? analysisHistoryMethodId,
+    analysisHistoryOffset: historyState?.analysisHistoryOffset ?? analysisHistoryOffset,
+    analysisHistoryResultAvailabilityFilter:
+      historyState?.analysisHistoryResultAvailabilityFilter ??
+      analysisHistoryResultAvailabilityFilter,
+    analysisHistoryStaleFilter:
+      historyState?.analysisHistoryStaleFilter ?? analysisHistoryStaleFilter,
+    analysisHistoryStatus: historyState?.analysisHistoryStatus ?? analysisHistoryStatus,
+    isLoadingAnalysisHistory:
+      historyState?.isLoadingAnalysisHistory ?? isLoadingAnalysisHistory,
+    onChangeAnalysisHistoryFilters:
+      historyState?.onChangeAnalysisHistoryFilters ?? onChangeAnalysisHistoryFilters,
+    onChangeAnalysisHistoryPage:
+      historyState?.onChangeAnalysisHistoryPage ?? onChangeAnalysisHistoryPage,
+    onRefreshAnalysisHistory:
+      historyState?.onRefreshAnalysisHistory ?? onRefreshAnalysisHistory,
+  };
+  const effectiveComparisonState = {
+    analysisComparison: comparisonState?.analysisComparison ?? analysisComparison,
+    analysisComparisonError:
+      comparisonState?.analysisComparisonError ?? analysisComparisonError,
+    analysisComparisonLeftId:
+      comparisonState?.analysisComparisonLeftId ?? analysisComparisonLeftId,
+    analysisComparisonRightId:
+      comparisonState?.analysisComparisonRightId ?? analysisComparisonRightId,
+    isComparingAnalysisRuns:
+      comparisonState?.isComparingAnalysisRuns ?? isComparingAnalysisRuns,
+    onCompareAnalysisRuns: comparisonState?.onCompareAnalysisRuns ?? onCompareAnalysisRuns,
+    onSelectAnalysisComparisonRun:
+      comparisonState?.onSelectAnalysisComparisonRun ?? onSelectAnalysisComparisonRun,
+  };
+  const effectiveRestoredState = {
+    isRestoringAnalysisResult:
+      restoredState?.isRestoringAnalysisResult ?? isRestoringAnalysisResult,
+    restoredAnalysisResult:
+      restoredState?.restoredAnalysisResult ?? restoredAnalysisResult,
+    restoredAnalysisResultError:
+      restoredState?.restoredAnalysisResultError ?? restoredAnalysisResultError,
+    onRestoreAnalysisRun: restoredState?.onRestoreAnalysisRun ?? onRestoreAnalysisRun,
+  };
+  const analysisResultForExport =
+    effectiveRestoredState.restoredAnalysisResult ?? selectedAnalysisResult;
 
   return (
     <>
@@ -334,50 +481,52 @@ export function AnalysisWorkbench({
           {executablePanel !== null && executablePanel !== undefined ? executablePanel : null}
           <AnalysisHistoryPanel
             catalog={catalog}
-            history={analysisHistory}
-            methodIdFilter={analysisHistoryMethodId}
-            offset={analysisHistoryOffset}
-            resultAvailabilityFilter={analysisHistoryResultAvailabilityFilter}
-            staleFilter={analysisHistoryStaleFilter}
-            statusFilter={analysisHistoryStatus}
-            isLoading={isLoadingAnalysisHistory}
-            isRestoring={isRestoringAnalysisResult}
-            restoreError={restoredAnalysisResultError}
-            fetchError={analysisHistoryError}
-            comparison={analysisComparison}
-            comparisonError={analysisComparisonError}
-            comparisonLeftId={analysisComparisonLeftId}
-            comparisonRightId={analysisComparisonRightId}
-            isComparing={isComparingAnalysisRuns}
-            restoredResult={restoredAnalysisResult}
+            history={effectiveHistoryState.analysisHistory}
+            methodIdFilter={effectiveHistoryState.analysisHistoryMethodId}
+            offset={effectiveHistoryState.analysisHistoryOffset}
+            resultAvailabilityFilter={
+              effectiveHistoryState.analysisHistoryResultAvailabilityFilter
+            }
+            staleFilter={effectiveHistoryState.analysisHistoryStaleFilter}
+            statusFilter={effectiveHistoryState.analysisHistoryStatus}
+            isLoading={effectiveHistoryState.isLoadingAnalysisHistory}
+            isRestoring={effectiveRestoredState.isRestoringAnalysisResult}
+            restoreError={effectiveRestoredState.restoredAnalysisResultError}
+            fetchError={effectiveHistoryState.analysisHistoryError}
+            comparison={effectiveComparisonState.analysisComparison}
+            comparisonError={effectiveComparisonState.analysisComparisonError}
+            comparisonLeftId={effectiveComparisonState.analysisComparisonLeftId}
+            comparisonRightId={effectiveComparisonState.analysisComparisonRightId}
+            isComparing={effectiveComparisonState.isComparingAnalysisRuns}
+            restoredResult={effectiveRestoredState.restoredAnalysisResult}
             version={version}
-            onChangeFilters={onChangeAnalysisHistoryFilters}
-            onCompare={onCompareAnalysisRuns}
-            onPageChange={onChangeAnalysisHistoryPage}
-            onRefresh={onRefreshAnalysisHistory}
-            onRestore={onRestoreAnalysisRun}
-            onSelectComparisonRun={onSelectAnalysisComparisonRun}
+            onChangeFilters={effectiveHistoryState.onChangeAnalysisHistoryFilters}
+            onCompare={effectiveComparisonState.onCompareAnalysisRuns}
+            onPageChange={effectiveHistoryState.onChangeAnalysisHistoryPage}
+            onRefresh={effectiveHistoryState.onRefreshAnalysisHistory}
+            onRestore={effectiveRestoredState.onRestoreAnalysisRun}
+            onSelectComparisonRun={effectiveComparisonState.onSelectAnalysisComparisonRun}
           />
           <AnalysisResultExportPanel
             analysisResult={analysisResultForExport}
-            csvExportError={analysisResultCsvExportError}
-            csvExportResult={analysisResultCsvExport}
-            downloadError={analysisResultExportDownloadError}
-            exportList={analysisResultExportList}
-            exportListError={analysisResultExportListError}
-            htmlReportError={analysisResultHtmlReportError}
-            htmlReportResult={analysisResultHtmlReport}
-            isExportingCsv={isCreatingAnalysisResultCsvExport}
-            isExportingHtml={isCreatingAnalysisResultHtmlReport}
-            isExportingJson={isCreatingAnalysisResultJsonExport}
-            isDownloadingExport={isDownloadingAnalysisResultExport}
-            isLoadingExportList={isLoadingAnalysisResultExportList}
-            exportError={analysisResultJsonExportError}
-            exportResult={analysisResultJsonExport}
-            onCreateCsvExport={onCreateAnalysisResultCsvExport}
-            onCreateExport={onCreateAnalysisResultJsonExport}
-            onCreateHtmlReport={onCreateAnalysisResultHtmlReport}
-            onDownloadExport={onDownloadAnalysisResultExport}
+            csvExportError={effectiveExportState.analysisResultCsvExportError}
+            csvExportResult={effectiveExportState.analysisResultCsvExport}
+            downloadError={effectiveExportState.analysisResultExportDownloadError}
+            exportList={effectiveExportState.analysisResultExportList}
+            exportListError={effectiveExportState.analysisResultExportListError}
+            htmlReportError={effectiveExportState.analysisResultHtmlReportError}
+            htmlReportResult={effectiveExportState.analysisResultHtmlReport}
+            isExportingCsv={effectiveExportState.isCreatingAnalysisResultCsvExport}
+            isExportingHtml={effectiveExportState.isCreatingAnalysisResultHtmlReport}
+            isExportingJson={effectiveExportState.isCreatingAnalysisResultJsonExport}
+            isDownloadingExport={effectiveExportState.isDownloadingAnalysisResultExport}
+            isLoadingExportList={effectiveExportState.isLoadingAnalysisResultExportList}
+            exportError={effectiveExportState.analysisResultJsonExportError}
+            exportResult={effectiveExportState.analysisResultJsonExport}
+            onCreateCsvExport={effectiveExportState.onCreateAnalysisResultCsvExport}
+            onCreateExport={effectiveExportState.onCreateAnalysisResultJsonExport}
+            onCreateHtmlReport={effectiveExportState.onCreateAnalysisResultHtmlReport}
+            onDownloadExport={effectiveExportState.onDownloadAnalysisResultExport}
           />
           {analysisRunError !== null ? (
             <AnalysisRunErrorNotice errorCode={analysisRunError} />

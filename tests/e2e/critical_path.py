@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -51,8 +51,9 @@ def main() -> int:
         workspace_root = Path(tempfile.mkdtemp(prefix="run-", dir=args.workspace_root))
     diagnostics_root = args.diagnostics_root if args.diagnostics_root is not None else workspace_root
     diagnostics = E2EDiagnostics(diagnostics_root)
+    diagnostics.record("E2E diagnostics initialized")
     log_root = diagnostics.log_root
-    processes: list[subprocess.Popen[bytes]] = []
+    managed_processes: list[ManagedProcess] = []
     log_handles = []
 
     backend_base_url = f"http://127.0.0.1:{args.backend_port}"
@@ -75,56 +76,61 @@ def main() -> int:
             },
         )
 
-        backend_log = (log_root / "backend.log").open("wb")
-        frontend_log = (log_root / "frontend.log").open("wb")
+        backend_log_path = log_root / "backend.log"
+        frontend_log_path = log_root / "frontend.log"
+        backend_log = backend_log_path.open("wb")
+        frontend_log = frontend_log_path.open("wb")
         log_handles.extend([backend_log, frontend_log])
 
-        processes.append(
-            subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "uvicorn",
-                    "app.main:app",
-                    "--app-dir",
-                    "backend",
-                    "--host",
-                    "127.0.0.1",
-                    "--port",
-                    str(args.backend_port),
-                ],
-                cwd=repo_root,
-                env=backend_env,
-                stdout=backend_log,
-                stderr=subprocess.STDOUT,
-            ),
+        backend_process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "app.main:app",
+                "--app-dir",
+                "backend",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(args.backend_port),
+            ],
+            cwd=repo_root,
+            env=backend_env,
+            stdout=backend_log,
+            stderr=subprocess.STDOUT,
         )
-        processes.append(
-            subprocess.Popen(
-                [
-                    npm_command(),
-                    "--prefix",
-                    "frontend",
-                    "run",
-                    "dev",
-                    "--",
-                    "--host",
-                    "127.0.0.1",
-                    "--port",
-                    str(args.frontend_port),
-                    "--strictPort",
-                ],
-                cwd=repo_root,
-                env=frontend_env,
-                stdout=frontend_log,
-                stderr=subprocess.STDOUT,
-            ),
+        managed_processes.append(ManagedProcess("backend", backend_process, backend_log_path))
+        frontend_process = subprocess.Popen(
+            [
+                npm_command(),
+                "--prefix",
+                "frontend",
+                "run",
+                "dev",
+                "--",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(args.frontend_port),
+                "--strictPort",
+            ],
+            cwd=repo_root,
+            env=frontend_env,
+            stdout=frontend_log,
+            stderr=subprocess.STDOUT,
         )
+        managed_processes.append(ManagedProcess("frontend", frontend_process, frontend_log_path))
 
         diagnostics.step("wait for backend health")
-        wait_for_url(f"{backend_base_url}/api/v1/health", "backend health", processes)
+        wait_for_url(
+            f"{backend_base_url}/api/v1/health",
+            "backend health",
+            managed_processes,
+            diagnostics,
+        )
         diagnostics.step("wait for frontend dev server")
-        wait_for_url(frontend_base_url, "frontend dev server", processes)
+        wait_for_url(frontend_base_url, "frontend dev server", managed_processes, diagnostics)
         run_browser_flow(frontend_base_url, diagnostics)
         print("E2E critical path passed")
         return 0
@@ -133,8 +139,8 @@ def main() -> int:
         print_recent_logs(log_root)
         return 1
     finally:
-        for process in processes:
-            terminate_process(process)
+        for managed_process in managed_processes:
+            terminate_process(managed_process.process)
         for handle in log_handles:
             handle.close()
         if args.keep_workspace:
@@ -144,6 +150,13 @@ def main() -> int:
             shutil.rmtree(workspace_root, ignore_errors=True)
 
 
+@dataclass(frozen=True)
+class ManagedProcess:
+    label: str
+    process: subprocess.Popen[bytes]
+    log_path: Path
+
+
 def npm_command() -> str:
     return "npm.cmd" if os.name == "nt" else "npm"
 
@@ -151,16 +164,27 @@ def npm_command() -> str:
 def wait_for_url(
     url: str,
     label: str,
-    processes: Sequence[subprocess.Popen[bytes]],
+    managed_processes: Sequence[ManagedProcess],
+    diagnostics: "E2EDiagnostics",
     timeout_seconds: float = 60.0,
 ) -> None:
     deadline = time.monotonic() + timeout_seconds
     last_error: Exception | None = None
     while time.monotonic() < deadline:
-        for process in processes:
-            return_code = process.poll()
+        for managed_process in managed_processes:
+            return_code = managed_process.process.poll()
             if return_code is not None:
-                raise RuntimeError(f"{label} dependency exited early with {return_code}")
+                message = (
+                    f"[e2e] {managed_process.label} process exited early while waiting for "
+                    f"{label} with exit code {return_code}"
+                )
+                print(message, file=sys.stderr)
+                diagnostics.record(message)
+                print_log_tail(managed_process.log_path, managed_process.label)
+                raise RuntimeError(
+                    f"{label} dependency {managed_process.label} exited early with "
+                    f"{return_code}; see logs/{managed_process.log_path.name}"
+                )
         try:
             with urllib.request.urlopen(url, timeout=2) as response:
                 if 200 <= response.status < 500:
@@ -168,12 +192,18 @@ def wait_for_url(
         except (urllib.error.URLError, TimeoutError) as exc:
             last_error = exc
         time.sleep(0.5)
+    message = f"[e2e] {label} readiness timed out at {url}; printing recent process logs"
+    print(message, file=sys.stderr)
+    diagnostics.record(message)
+    for managed_process in managed_processes:
+        print_log_tail(managed_process.log_path, managed_process.label)
     raise TimeoutError(f"{label} did not become ready at {url}: {last_error}")
 
 
 @dataclass(frozen=True)
 class E2EDiagnostics:
     root: Path
+    current_step_label: str = field(default="startup", init=False, compare=False)
 
     def __post_init__(self) -> None:
         self.log_root.mkdir(parents=True, exist_ok=True)
@@ -192,32 +222,72 @@ class E2EDiagnostics:
     def html_root(self) -> Path:
         return self.root / "html"
 
+    @property
+    def summary_log_path(self) -> Path:
+        return self.log_root / "e2e-diagnostics.log"
+
+    def record(self, message: str) -> None:
+        timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with self.summary_log_path.open("a", encoding="utf-8") as summary_log:
+            summary_log.write(f"{timestamp} {message}\n")
+
     def step(self, label: str) -> None:
-        print(f"[e2e] {label}")
+        object.__setattr__(self, "current_step_label", label)
+        message = f"[e2e] {label}"
+        print(message)
+        self.record(message)
+
+    def current_step_slug(self) -> str:
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", self.current_step_label.lower()).strip("-")
+        return slug[:64] if slug else "unknown-step"
+
+    def artifact_label(self, path: Path) -> str:
+        try:
+            return path.relative_to(self.root).as_posix()
+        except ValueError:
+            return path.name
 
     def capture_page_failure(self, page: Page | None) -> None:
         if page is None:
-            print("[e2e] no browser page was created before failure", file=sys.stderr)
+            message = "[e2e] no browser page was created before failure"
+            print(message, file=sys.stderr)
+            self.record(message)
             return
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        screenshot_path = self.screenshot_root / f"failure-{timestamp}.png"
-        html_path = self.html_root / f"failure-{timestamp}.html"
+        step_slug = self.current_step_slug()
+        screenshot_path = self.screenshot_root / f"failure-{step_slug}-{timestamp}.png"
+        html_path = self.html_root / f"failure-{step_slug}-{timestamp}.html"
         try:
-            print(f"[e2e] failure current URL: {page.url}", file=sys.stderr)
-            print(f"[e2e] failure page title: {page.title()}", file=sys.stderr)
+            messages = [
+                f"[e2e] failure current URL: {page.url}",
+                f"[e2e] failure page title: {page.title()}",
+            ]
+            for message in messages:
+                print(message, file=sys.stderr)
+                self.record(message)
         except Exception as exc:
-            print(f"[e2e] could not read page location/title: {exc}", file=sys.stderr)
+            message = f"[e2e] could not read page location/title: {exc}"
+            print(message, file=sys.stderr)
+            self.record(message)
         try:
             page.screenshot(path=str(screenshot_path), full_page=True)
-            print(f"[e2e] failure screenshot: {screenshot_path}", file=sys.stderr)
+            message = f"[e2e] failure screenshot: {self.artifact_label(screenshot_path)}"
+            print(message, file=sys.stderr)
+            self.record(message)
         except Exception as exc:
-            print(f"[e2e] could not write failure screenshot: {exc}", file=sys.stderr)
+            message = f"[e2e] could not write failure screenshot: {exc}"
+            print(message, file=sys.stderr)
+            self.record(message)
         try:
             html_path.write_text(page.content(), encoding="utf-8")
-            print(f"[e2e] failure HTML snapshot: {html_path}", file=sys.stderr)
+            message = f"[e2e] failure HTML snapshot: {self.artifact_label(html_path)}"
+            print(message, file=sys.stderr)
+            self.record(message)
         except Exception as exc:
-            print(f"[e2e] could not write failure HTML snapshot: {exc}", file=sys.stderr)
+            message = f"[e2e] could not write failure HTML snapshot: {exc}"
+            print(message, file=sys.stderr)
+            self.record(message)
 
 
 def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> None:
@@ -293,11 +363,30 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
                 page,
                 Path(tempfile.mkdtemp(prefix="datalab-e2e-encoding-options-")),
             )
+        except PlaywrightTimeoutError as exc:
+            message = (
+                f"Playwright wait timed out during '{diagnostics.current_step_label}': "
+                f"{describe_page(page)}"
+            )
+            diagnostics.record(f"[e2e] {message}")
+            diagnostics.capture_page_failure(page)
+            raise AssertionError(message) from exc
         except Exception:
             diagnostics.capture_page_failure(page)
             raise
         finally:
             browser.close()
+
+
+def describe_page(page: Page | None) -> str:
+    if page is None:
+        return "browser page was not created"
+    title = "<unavailable>"
+    try:
+        title = page.title()
+    except Exception as exc:
+        title = f"<unavailable: {exc}>"
+    return f"current URL: {page.url}; page title: {title}"
 
 
 def create_exports(page: Page) -> None:
@@ -760,16 +849,20 @@ def terminate_process(process: subprocess.Popen[bytes]) -> None:
         process.wait(timeout=10)
 
 
+def print_log_tail(log_path: Path, label: str, max_bytes: int = 8000) -> None:
+    print(f"\n--- {label} log tail ({log_path.name}) ---", file=sys.stderr)
+    try:
+        data = log_path.read_bytes()
+    except OSError as exc:
+        print(f"could not read log: {exc}", file=sys.stderr)
+        return
+    tail = data[-max_bytes:]
+    print(tail.decode("utf-8", errors="replace"), file=sys.stderr)
+
+
 def print_recent_logs(log_root: Path, max_bytes: int = 8000) -> None:
     for log_path in sorted(log_root.glob("*.log")):
-        print(f"\n--- {log_path.name} tail ---", file=sys.stderr)
-        try:
-            data = log_path.read_bytes()
-        except OSError as exc:
-            print(f"could not read log: {exc}", file=sys.stderr)
-            continue
-        tail = data[-max_bytes:]
-        print(tail.decode("utf-8", errors="replace"), file=sys.stderr)
+        print_log_tail(log_path, log_path.stem, max_bytes=max_bytes)
 
 
 if __name__ == "__main__":

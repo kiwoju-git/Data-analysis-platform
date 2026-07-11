@@ -7026,3 +7026,311 @@ Remaining:
 
 - Full field-level TypeScript/Pydantic parity still needs OpenAPI generation or
   a deeper schema diff.
+
+## Progress Update 139 - OpenAPI TypeScript Generation Review Plan
+
+Status: planning only in the current working tree.
+
+Current guard coverage:
+
+- `backend/tests/unit/test_openapi_frontend_contract.py` instantiates the FastAPI
+  app and checks `frontend/src/api/routes.ts` route names against
+  `FRONTEND_ROUTE_CONTRACTS`.
+- It verifies frontend-used route path, HTTP method, path/query parameters,
+  request media type, success response status, and response schema component
+  refs.
+- It also checks curated high-value schema fields the UI relies on, including
+  dataset/version/profile, method catalog, analysis-run history/result/export,
+  provenance, warnings, and selected result-shape fields.
+- The route-map exact-match guard means a new frontend route should require a
+  matching contract entry instead of silently bypassing OpenAPI validation.
+
+Not covered:
+
+- This is not full OpenAPI-to-TypeScript generation.
+- It does not prove every nested Pydantic field exactly matches every frontend
+  TypeScript type.
+- It permits additive backend response fields when they are outside the curated
+  high-value guard list.
+- It does not generate a typed fetch client, runtime validators, or schema-name
+  stability checks.
+
+Candidate tools for a later spike:
+
+- `openapi-typescript` for lightweight TypeScript type generation.
+- `openapi-fetch` if a generated typed fetch layer is wanted without a larger
+  client framework.
+- `orval` if generated request functions and React-query style integration are
+  later desired.
+- `@openapitools/openapi-generator-cli` only if the team accepts the larger Java
+  based toolchain and generated-client footprint.
+
+Review before adoption:
+
+- Windows and current Node LTS compatibility.
+- Whether adding the generator changes `package-lock.json` and CI install time.
+- Generated file commit policy: checked-in generated types versus generated in
+  CI and diff-checked.
+- Schema naming stability for Pydantic/FastAPI component names.
+- How to handle manually curated domain types during migration.
+- Whether generated request types should replace or only cross-check the
+  existing `frontend/src/api/*` facade.
+- No generator dependency is added in this PR.
+
+## Progress Update 140 - CI/E2E Diagnostics Contract Guard
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Added a CI/E2E wiring regression guard to
+  `backend/tests/unit/test_openapi_frontend_contract.py`.
+- The guard verifies that `.github/workflows/ci.yml` keeps manual
+  `workflow_dispatch`, keeps `e2e` dependent on `windows`, passes separate
+  workspace and diagnostics roots to `scripts/e2e.ps1`, and uploads only
+  diagnostics-root `logs`, `screenshots`, and `html` paths as `e2e-logs`.
+- The guard also checks that `tests/e2e/critical_path.py` retains the
+  diagnostics root option, step-slugged failure artifacts, URL/title timeout
+  context, and backend/frontend early-exit log-tail support.
+- Added a maintenance checklist to `docs/e2e_coverage.md` for future smoke-test
+  extensions.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 51 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 439 tests and frontend Vitest 59 tests.
+
+Remaining:
+
+- Remote GitHub Actions still needs authenticated confirmation after push for
+  the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
+  `workflow_dispatch` UI control.
+
+## Progress Update 146 - OpenAPI TypeScript Generation Planning Guard
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Added a guard to `backend/tests/unit/test_openapi_frontend_contract.py` for
+  the OpenAPI TypeScript generation review plan.
+- The guard verifies the review still documents current guard coverage,
+  non-coverage, candidate tools, Windows/Node compatibility, package-lock and
+  CI install-time impact, generated-file commit policy, schema naming stability,
+  curated domain type migration, and the no-generator-dependency PR scope.
+- The guard also checks `frontend/package.json` and `frontend/package-lock.json`
+  so `openapi-typescript`, `openapi-fetch`, `orval`, and
+  `@openapitools/openapi-generator-cli` are not accidentally introduced in this
+  stabilization PR.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 56 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 445 tests and frontend Vitest 59 tests.
+
+Remaining:
+
+- OpenAPI TypeScript generation remains a later spike; no dependency,
+  generated client, generated type file, or lockfile change was added.
+- Remote GitHub Actions still needs authenticated confirmation after push for
+  the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
+  `workflow_dispatch` UI control.
+
+## Progress Update 147 - Workbench Hook Ownership Guard Expansion
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Expanded the Workbench saved-result state ownership guard in
+  `backend/tests/unit/test_openapi_frontend_contract.py`.
+- The guard now asserts that history, export, comparison, and restored-result
+  hooks each own only their matching saved-result API calls and do not import
+  sibling saved-result API calls.
+- The guard also checks hook-level reset/effect markers, refresh handlers,
+  comparison validation, export-error clearing, restore-driven method selection,
+  and export-list refresh after restore.
+- No frontend UI behavior, statistical method, API route, response schema,
+  dependency, or method version changed.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 56 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 445 tests and frontend Vitest 59 tests.
+
+Remaining:
+
+- Remote GitHub Actions still needs authenticated confirmation after push for
+  the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
+  `workflow_dispatch` UI control.
+
+## Progress Update 145 - CI Status Wording And Datetime-Order Test Stabilization
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Clarified `docs/ci_status.md` so older validation entries no longer call
+  themselves "latest" runs.
+- Extended the CI status documentation guard in
+  `backend/tests/unit/test_openapi_frontend_contract.py` so the Local Validation
+  section keeps the current latest 444/59 record and does not regress to stale
+  "latest run" wording for older counts.
+- Stabilized
+  `test_analysis_run_executes_run_chart_with_datetime_order_column` by checking
+  for the exact raw datetime input strings instead of rejecting every `2024`
+  substring in the full JSON payload, which can be present in a generated UUID.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_api_contracts.py::test_analysis_run_executes_run_chart_with_datetime_order_column .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 56 tests.
+- First full `scripts/check.ps1` run exposed the UUID-sensitive assertion.
+- Second `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1` run
+  passed with backend pytest 444 tests and frontend Vitest 59 tests.
+
+Remaining:
+
+- Remote GitHub Actions still needs authenticated confirmation after push for
+  the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
+  `workflow_dispatch` UI control.
+
+## Progress Update 144 - Remote CI Verification Checklist Guard
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Expanded `docs/ci_status.md` with authenticated GitHub CLI commands for
+  checking remote Actions runs:
+  `gh auth status`, `gh run list`, `gh run view`, `gh run download`, and
+  optional `gh workflow run`.
+- Added a documentation consistency guard to
+  `backend/tests/unit/test_openapi_frontend_contract.py` so the CI status
+  document keeps workflow triggers, Windows runner, Python/Node versions,
+  `scripts/check.ps1`, `scripts/e2e.ps1`, `e2e-logs`, authenticated `gh`
+  verification commands, manual dispatch guidance, and repository-settings
+  non-change guidance.
+- Kept the remote CI state as unverified from this environment.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 55 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 444 tests and frontend Vitest 59 tests.
+
+Remaining:
+
+- Remote GitHub Actions still needs authenticated confirmation after push for
+  the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
+  `workflow_dispatch` UI control.
+
+## Progress Update 142 - UX And Reference QA Documentation Guards
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Added a beginner usability walkthrough regression guard to
+  `backend/tests/unit/test_openapi_frontend_contract.py`.
+- The guard verifies that `docs/beginner_usability_walkthrough.md` keeps the
+  five required beginner QA scenarios and their required checklist fields:
+  user question, purpose helper card, needed roles, easy wrong roles, preflight
+  checks, first result-reading target, non-claims, pass criteria, fail examples,
+  visible UX copy, UI element to inspect, and wrong-role recovery.
+- Added an independent reference backlog regression guard for
+  `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`,
+  `doe.factorial_design`, and `regression.linear_model`.
+- The reference backlog guard checks fixture filename, expected output source,
+  tolerance, fields to verify, and license/source review content without adding
+  fixtures or dependencies.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 54 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 442 tests and frontend Vitest 59 tests.
+
+Remaining:
+
+- Remote GitHub Actions still needs authenticated confirmation after push for
+  the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
+  `workflow_dispatch` UI control.
+- Independent reference fixtures remain a next PR implementation task.
+
+## Progress Update 143 - Analysis Run Facade Boundary Guard
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Added an AST-based boundary guard to
+  `backend/tests/unit/test_api_contracts.py` for
+  `backend/app/services/analysis_runs.py`.
+- The guard verifies that `analysis_runs.py` keeps only `create_analysis_run`
+  as a top-level function, defines no classes, imports the split
+  result/history/export/comparison service modules, and does not regain direct
+  storage metadata or result-execution persistence imports.
+- Updated `docs/storage.md` to document `analysis_runs.py` as the create/run
+  dispatcher plus compatibility facade.
+- Updated `docs/ci_status.md` and `docs/progress_gate_b.md` with the latest
+  validation counts.
+
+Validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_api_contracts.py -k "analysis_run_service_boundaries or analysis_runs_facade_keeps_create_dispatch_only"`:
+  passed with 2 selected tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 443 tests and frontend Vitest 59 tests.
+
+Remaining:
+
+- Remote GitHub Actions still needs authenticated confirmation after push for
+  the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
+  `workflow_dispatch` UI control.
+
+## Progress Update 141 - E2E Step Marker Documentation Guard
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Reran the browser E2E smoke with `-DiagnosticsRoot` after the diagnostics
+  contract guard changes.
+- Added `Current Step Markers` to `docs/e2e_coverage.md` so the documented E2E
+  operation sequence is explicit.
+- Added a regression guard to
+  `backend/tests/unit/test_openapi_frontend_contract.py` that compares
+  `diagnostics.step(...)` markers in `tests/e2e/critical_path.py` with the
+  documented marker list.
+- Updated `docs/ci_status.md` and `docs/progress_gate_b.md` with the latest
+  local validation counts.
+
+Validation:
+
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed.
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py`:
+  passed with 52 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 440 tests and frontend Vitest 59 tests.
+
+Remaining:
+
+- Remote GitHub Actions still needs authenticated confirmation after push for
+  the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
+  `workflow_dispatch` UI control.

@@ -1,8 +1,10 @@
+import ast
 import csv
 import hashlib
 import io
 import json
 import sqlite3
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -301,6 +303,32 @@ def test_analysis_run_service_boundaries_are_split_without_api_drift() -> None:
         is analysis_run_exports.get_analysis_result_export_download
     )
     assert analysis_runs._sanitize_csv_cell is analysis_run_exports._sanitize_csv_cell
+
+
+def test_analysis_runs_facade_keeps_create_dispatch_only() -> None:
+    service_path = Path(__file__).resolve().parents[2] / "app" / "services" / "analysis_runs.py"
+    tree = ast.parse(service_path.read_text(encoding="utf-8"))
+
+    top_level_functions = {
+        node.name for node in tree.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    top_level_classes = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
+    imported_modules = {
+        node.module
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module is not None
+    }
+
+    assert top_level_functions == {"create_analysis_run"}
+    assert top_level_classes == set()
+    assert {
+        "app.services.analysis_run_comparisons",
+        "app.services.analysis_run_exports",
+        "app.services.analysis_run_history",
+        "app.services.analysis_run_results",
+    } <= imported_modules
+    assert "app.storage.metadata" not in imported_modules
+    assert "app.services.analysis_run_execution" not in imported_modules
 
 
 def test_analysis_execution_handler_builder_rejects_missing_runner() -> None:
@@ -4443,7 +4471,14 @@ def test_analysis_run_executes_individuals_chart_with_datetime_order_column(tmp_
         6,
     ]
     result_json = json.dumps(result)
-    assert "2024" not in result_json
+    for raw_order_value in (
+        "2024-01-01",
+        "2024-01-02",
+        "2024-01-03",
+        "2024-01-04",
+        "2024-01-05",
+    ):
+        assert raw_order_value not in result_json
     assert "order_value" not in result_json
 
 
