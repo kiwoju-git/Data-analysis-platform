@@ -26,6 +26,13 @@ stored results remain comparable:
 Frontend-only changes do not require a method-version bump unless they alter the
 request sent to the backend or reinterpret a stored result field.
 
+The Workbench saved-result hooks (`history`, `export`, `comparison`, and
+`restore`) use latest-request guards and pass their state through grouped props.
+Ignoring an obsolete response, keeping loading state owned by the latest
+request, or removing the duplicate field-by-field prop fallback preserves the
+backend request and stored-result contracts, so this stabilization does not
+require a method-version bump.
+
 ## Frontend API Type Drift
 
 The frontend typed client now keeps manually maintained API types under
@@ -129,6 +136,17 @@ diff that compares the full FastAPI response/request field shapes with
 `frontend/src/api/types/*`. A frontend label/layout-only change does not require
 a method-version bump; changing request payload semantics, summary-type
 semantics, or stored result field interpretation does.
+
+`regression.predict` paged row retrieval is an additive storage/access contract:
+it preserves the `0.1.0` calculation and persisted result fields while moving
+all valid raw-predictor-free rows into a checksum-recorded app-owned artifact.
+Its internal config schema is version `2`; this addition does not rewrite old
+results, and older prediction runs without the artifact return an explicit
+recovery error from the page endpoint.
+
+The dedicated `regression_prediction_csv_export` format has its own schema
+version. Adding this raw-predictor-free export does not change stored prediction
+statistics or interpretation, so it does not bump `regression.predict`.
 
 ## Minor Version
 

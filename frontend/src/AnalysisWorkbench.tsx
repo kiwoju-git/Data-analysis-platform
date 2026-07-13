@@ -96,53 +96,8 @@ interface AnalysisWorkbenchProps {
   exportState?: AnalysisWorkbenchExportState;
   historyState?: AnalysisWorkbenchHistoryState;
   restoredState?: AnalysisWorkbenchRestoredState;
-  analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
-  analysisResultCsvExportError?: string | null;
-  analysisResultExportDownloadError?: string | null;
-  analysisResultExportList?: AnalysisResultExportListResponse | null;
-  analysisResultExportListError?: string | null;
-  analysisResultHtmlReport?: AnalysisResultHtmlReportResponse | null;
-  analysisResultHtmlReportError?: string | null;
-  analysisResultJsonExport?: AnalysisResultJsonExportResponse | null;
-  analysisResultJsonExportError?: string | null;
-  analysisHistory?: AnalysisRunListResponse | null;
-  analysisHistoryError?: string | null;
-  analysisHistoryMethodId?: string;
-  analysisHistoryOffset?: number;
-  analysisHistoryResultAvailabilityFilter?: AnalysisHistoryResultAvailabilityFilter;
-  analysisHistoryStaleFilter?: AnalysisHistoryStaleFilter;
-  analysisHistoryStatus?: AnalysisRunState | "";
-  analysisComparison?: AnalysisRunComparisonResponse | null;
-  analysisComparisonError?: string | null;
-  analysisComparisonLeftId?: string | null;
-  analysisComparisonRightId?: string | null;
-  isCreatingAnalysisResultCsvExport?: boolean;
-  isCreatingAnalysisResultHtmlReport?: boolean;
-  isCreatingAnalysisResultJsonExport?: boolean;
-  isDownloadingAnalysisResultExport?: boolean;
-  isLoadingAnalysisHistory?: boolean;
-  isLoadingAnalysisResultExportList?: boolean;
-  isComparingAnalysisRuns?: boolean;
-  isRestoringAnalysisResult?: boolean;
-  restoredAnalysisResult?: AnalysisResultEnvelope | null;
-  restoredAnalysisResultError?: string | null;
   version: DatasetVersionResponse | null;
   profile: DatasetProfileResponse | null;
-  onCreateAnalysisResultCsvExport?: (analysisId: string) => void;
-  onCreateAnalysisResultHtmlReport?: (analysisId: string) => void;
-  onCreateAnalysisResultJsonExport?: (analysisId: string) => void;
-  onChangeAnalysisHistoryFilters?: (filters: {
-    methodId: string;
-    resultAvailability: AnalysisHistoryResultAvailabilityFilter;
-    stale: AnalysisHistoryStaleFilter;
-    status: AnalysisRunState | "";
-  }) => void;
-  onChangeAnalysisHistoryPage?: (offset: number) => void;
-  onCompareAnalysisRuns?: () => void;
-  onDownloadAnalysisResultExport?: (analysisId: string, exportId: string) => void;
-  onRefreshAnalysisHistory?: () => void;
-  onRestoreAnalysisRun?: (analysisId: string) => void;
-  onSelectAnalysisComparisonRun?: (side: "left" | "right", analysisId: string) => void;
   onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
   renderAnalysisFilters?: (method: AnalysisMethodDescriptor) => ReactNode;
   renderExecutableMethod: (method: AnalysisMethodDescriptor) => ReactNode;
@@ -168,48 +123,8 @@ export function AnalysisWorkbench({
   exportState,
   historyState,
   restoredState,
-  analysisResultCsvExport = null,
-  analysisResultCsvExportError = null,
-  analysisResultExportDownloadError = null,
-  analysisResultExportList = null,
-  analysisResultExportListError = null,
-  analysisResultHtmlReport = null,
-  analysisResultHtmlReportError = null,
-  analysisResultJsonExport = null,
-  analysisResultJsonExportError = null,
-  analysisHistory = null,
-  analysisHistoryError = null,
-  analysisHistoryMethodId = "",
-  analysisHistoryOffset = 0,
-  analysisHistoryResultAvailabilityFilter = "all",
-  analysisHistoryStaleFilter = "all",
-  analysisHistoryStatus = "",
-  analysisComparison = null,
-  analysisComparisonError = null,
-  analysisComparisonLeftId = null,
-  analysisComparisonRightId = null,
-  isCreatingAnalysisResultCsvExport = false,
-  isCreatingAnalysisResultHtmlReport = false,
-  isCreatingAnalysisResultJsonExport = false,
-  isDownloadingAnalysisResultExport = false,
-  isLoadingAnalysisHistory = false,
-  isLoadingAnalysisResultExportList = false,
-  isComparingAnalysisRuns = false,
-  isRestoringAnalysisResult = false,
-  restoredAnalysisResult = null,
-  restoredAnalysisResultError = null,
   version,
   profile,
-  onCreateAnalysisResultCsvExport = () => undefined,
-  onCreateAnalysisResultHtmlReport = () => undefined,
-  onCreateAnalysisResultJsonExport = () => undefined,
-  onChangeAnalysisHistoryFilters = () => undefined,
-  onChangeAnalysisHistoryPage = () => undefined,
-  onCompareAnalysisRuns = () => undefined,
-  onDownloadAnalysisResultExport = () => undefined,
-  onRefreshAnalysisHistory = () => undefined,
-  onRestoreAnalysisRun = () => undefined,
-  onSelectAnalysisComparisonRun = () => undefined,
   onSelectMethod,
   renderAnalysisFilters,
   renderExecutableMethod,
@@ -222,85 +137,60 @@ export function AnalysisWorkbench({
       ? renderExecutableMethod(selectedMethod)
       : null;
   const effectiveExportState = {
-    analysisResultCsvExport:
-      exportState?.analysisResultCsvExport ?? analysisResultCsvExport,
-    analysisResultCsvExportError:
-      exportState?.analysisResultCsvExportError ?? analysisResultCsvExportError,
-    analysisResultExportDownloadError:
-      exportState?.analysisResultExportDownloadError ?? analysisResultExportDownloadError,
-    analysisResultExportList:
-      exportState?.analysisResultExportList ?? analysisResultExportList,
-    analysisResultExportListError:
-      exportState?.analysisResultExportListError ?? analysisResultExportListError,
-    analysisResultHtmlReport:
-      exportState?.analysisResultHtmlReport ?? analysisResultHtmlReport,
-    analysisResultHtmlReportError:
-      exportState?.analysisResultHtmlReportError ?? analysisResultHtmlReportError,
-    analysisResultJsonExport:
-      exportState?.analysisResultJsonExport ?? analysisResultJsonExport,
-    analysisResultJsonExportError:
-      exportState?.analysisResultJsonExportError ?? analysisResultJsonExportError,
-    isCreatingAnalysisResultCsvExport:
-      exportState?.isCreatingAnalysisResultCsvExport ?? isCreatingAnalysisResultCsvExport,
-    isCreatingAnalysisResultHtmlReport:
-      exportState?.isCreatingAnalysisResultHtmlReport ?? isCreatingAnalysisResultHtmlReport,
-    isCreatingAnalysisResultJsonExport:
-      exportState?.isCreatingAnalysisResultJsonExport ?? isCreatingAnalysisResultJsonExport,
-    isDownloadingAnalysisResultExport:
-      exportState?.isDownloadingAnalysisResultExport ?? isDownloadingAnalysisResultExport,
-    isLoadingAnalysisResultExportList:
-      exportState?.isLoadingAnalysisResultExportList ?? isLoadingAnalysisResultExportList,
+    analysisResultCsvExport: exportState?.analysisResultCsvExport ?? null,
+    analysisResultCsvExportError: exportState?.analysisResultCsvExportError ?? null,
+    analysisResultExportDownloadError: exportState?.analysisResultExportDownloadError ?? null,
+    analysisResultExportList: exportState?.analysisResultExportList ?? null,
+    analysisResultExportListError: exportState?.analysisResultExportListError ?? null,
+    analysisResultHtmlReport: exportState?.analysisResultHtmlReport ?? null,
+    analysisResultHtmlReportError: exportState?.analysisResultHtmlReportError ?? null,
+    analysisResultJsonExport: exportState?.analysisResultJsonExport ?? null,
+    analysisResultJsonExportError: exportState?.analysisResultJsonExportError ?? null,
+    isCreatingAnalysisResultCsvExport: exportState?.isCreatingAnalysisResultCsvExport ?? false,
+    isCreatingAnalysisResultHtmlReport: exportState?.isCreatingAnalysisResultHtmlReport ?? false,
+    isCreatingAnalysisResultJsonExport: exportState?.isCreatingAnalysisResultJsonExport ?? false,
+    isDownloadingAnalysisResultExport: exportState?.isDownloadingAnalysisResultExport ?? false,
+    isLoadingAnalysisResultExportList: exportState?.isLoadingAnalysisResultExportList ?? false,
     onCreateAnalysisResultCsvExport:
-      exportState?.onCreateAnalysisResultCsvExport ?? onCreateAnalysisResultCsvExport,
+      exportState?.onCreateAnalysisResultCsvExport ?? (() => undefined),
     onCreateAnalysisResultHtmlReport:
-      exportState?.onCreateAnalysisResultHtmlReport ?? onCreateAnalysisResultHtmlReport,
+      exportState?.onCreateAnalysisResultHtmlReport ?? (() => undefined),
     onCreateAnalysisResultJsonExport:
-      exportState?.onCreateAnalysisResultJsonExport ?? onCreateAnalysisResultJsonExport,
+      exportState?.onCreateAnalysisResultJsonExport ?? (() => undefined),
     onDownloadAnalysisResultExport:
-      exportState?.onDownloadAnalysisResultExport ?? onDownloadAnalysisResultExport,
+      exportState?.onDownloadAnalysisResultExport ?? (() => undefined),
   };
   const effectiveHistoryState = {
-    analysisHistory: historyState?.analysisHistory ?? analysisHistory,
-    analysisHistoryError: historyState?.analysisHistoryError ?? analysisHistoryError,
-    analysisHistoryMethodId: historyState?.analysisHistoryMethodId ?? analysisHistoryMethodId,
-    analysisHistoryOffset: historyState?.analysisHistoryOffset ?? analysisHistoryOffset,
+    analysisHistory: historyState?.analysisHistory ?? null,
+    analysisHistoryError: historyState?.analysisHistoryError ?? null,
+    analysisHistoryMethodId: historyState?.analysisHistoryMethodId ?? "",
+    analysisHistoryOffset: historyState?.analysisHistoryOffset ?? 0,
     analysisHistoryResultAvailabilityFilter:
-      historyState?.analysisHistoryResultAvailabilityFilter ??
-      analysisHistoryResultAvailabilityFilter,
-    analysisHistoryStaleFilter:
-      historyState?.analysisHistoryStaleFilter ?? analysisHistoryStaleFilter,
-    analysisHistoryStatus: historyState?.analysisHistoryStatus ?? analysisHistoryStatus,
-    isLoadingAnalysisHistory:
-      historyState?.isLoadingAnalysisHistory ?? isLoadingAnalysisHistory,
+      historyState?.analysisHistoryResultAvailabilityFilter ?? "all",
+    analysisHistoryStaleFilter: historyState?.analysisHistoryStaleFilter ?? "all",
+    analysisHistoryStatus: historyState?.analysisHistoryStatus ?? "",
+    isLoadingAnalysisHistory: historyState?.isLoadingAnalysisHistory ?? false,
     onChangeAnalysisHistoryFilters:
-      historyState?.onChangeAnalysisHistoryFilters ?? onChangeAnalysisHistoryFilters,
+      historyState?.onChangeAnalysisHistoryFilters ?? (() => undefined),
     onChangeAnalysisHistoryPage:
-      historyState?.onChangeAnalysisHistoryPage ?? onChangeAnalysisHistoryPage,
-    onRefreshAnalysisHistory:
-      historyState?.onRefreshAnalysisHistory ?? onRefreshAnalysisHistory,
+      historyState?.onChangeAnalysisHistoryPage ?? (() => undefined),
+    onRefreshAnalysisHistory: historyState?.onRefreshAnalysisHistory ?? (() => undefined),
   };
   const effectiveComparisonState = {
-    analysisComparison: comparisonState?.analysisComparison ?? analysisComparison,
-    analysisComparisonError:
-      comparisonState?.analysisComparisonError ?? analysisComparisonError,
-    analysisComparisonLeftId:
-      comparisonState?.analysisComparisonLeftId ?? analysisComparisonLeftId,
-    analysisComparisonRightId:
-      comparisonState?.analysisComparisonRightId ?? analysisComparisonRightId,
-    isComparingAnalysisRuns:
-      comparisonState?.isComparingAnalysisRuns ?? isComparingAnalysisRuns,
-    onCompareAnalysisRuns: comparisonState?.onCompareAnalysisRuns ?? onCompareAnalysisRuns,
+    analysisComparison: comparisonState?.analysisComparison ?? null,
+    analysisComparisonError: comparisonState?.analysisComparisonError ?? null,
+    analysisComparisonLeftId: comparisonState?.analysisComparisonLeftId ?? null,
+    analysisComparisonRightId: comparisonState?.analysisComparisonRightId ?? null,
+    isComparingAnalysisRuns: comparisonState?.isComparingAnalysisRuns ?? false,
+    onCompareAnalysisRuns: comparisonState?.onCompareAnalysisRuns ?? (() => undefined),
     onSelectAnalysisComparisonRun:
-      comparisonState?.onSelectAnalysisComparisonRun ?? onSelectAnalysisComparisonRun,
+      comparisonState?.onSelectAnalysisComparisonRun ?? (() => undefined),
   };
   const effectiveRestoredState = {
-    isRestoringAnalysisResult:
-      restoredState?.isRestoringAnalysisResult ?? isRestoringAnalysisResult,
-    restoredAnalysisResult:
-      restoredState?.restoredAnalysisResult ?? restoredAnalysisResult,
-    restoredAnalysisResultError:
-      restoredState?.restoredAnalysisResultError ?? restoredAnalysisResultError,
-    onRestoreAnalysisRun: restoredState?.onRestoreAnalysisRun ?? onRestoreAnalysisRun,
+    isRestoringAnalysisResult: restoredState?.isRestoringAnalysisResult ?? false,
+    restoredAnalysisResult: restoredState?.restoredAnalysisResult ?? null,
+    restoredAnalysisResultError: restoredState?.restoredAnalysisResultError ?? null,
+    onRestoreAnalysisRun: restoredState?.onRestoreAnalysisRun ?? (() => undefined),
   };
   const analysisResultForExport =
     effectiveRestoredState.restoredAnalysisResult ?? selectedAnalysisResult;

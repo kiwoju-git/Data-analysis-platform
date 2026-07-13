@@ -1,8 +1,18 @@
+import csv
+import hashlib
 import json
+from math import sqrt
 from pathlib import Path
 
 import pytest
+from scipy import stats  # type: ignore[import-untyped]
 
+from app.services.regression_models import (
+    _design_vector_for_manifest,
+    _dot,
+    _prediction_interval,
+    _quadratic_form,
+)
 from app.statistics.linear_model import (
     LinearModelColumn,
     LinearModelError,
@@ -11,6 +21,12 @@ from app.statistics.linear_model import (
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/linear_model_input.json")
 REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/linear_model_numpy_reference.json")
+STATSMODELS_REFERENCE_FIXTURE = Path(
+    "backend/tests/reference/fixtures/regression_linear_model_reference.json",
+)
+STATSMODELS_REFERENCE_CSV = Path(
+    "backend/tests/reference/fixtures/regression_linear_model_reference.csv",
+)
 
 
 def test_linear_model_is_hand_checkable_for_shape_and_fit() -> None:
@@ -255,6 +271,155 @@ def test_linear_model_matches_numpy_reference_fixture() -> None:
         _assert_nested_approx(diagnostics[key], expected)
 
 
+def test_linear_model_matches_statsmodels_treatment_and_prediction_reference() -> None:
+    fixture = json.loads(STATSMODELS_REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    tolerance = fixture["tolerances"]["statsmodels_absolute"]
+    expected = fixture["expected"]
+
+    assert fixture["source"]["tool"] == "statsmodels"
+    assert fixture["source"]["version"] == "0.14.6"
+    assert "temporary reference-generation environment" in (fixture["source"]["license_review"])
+    assert "fully synthetic" in fixture["source"]["data_review"]
+    assert "not pinned" in fixture["conventions"]["manifest_checksum_contract"]
+    assert (
+        hashlib.sha256(STATSMODELS_REFERENCE_CSV.read_bytes()).hexdigest()
+        == (fixture["input"]["csv_sha256"])
+    )
+
+    with STATSMODELS_REFERENCE_CSV.open(encoding="utf-8", newline="") as handle:
+        rows = [[row["y"], row["x"], row["group"]] for row in csv.DictReader(handle)]
+    result = calculate_linear_model(
+        rows,
+        _response_column(),
+        [_x1_named_x_column(), _group_column_index_2()],
+        alpha=0.05,
+        confidence_level=0.95,
+    )
+
+    assert result["sample"] == expected["sample"]
+    specification = result["model_specification"]
+    assert isinstance(specification, dict)
+    assert specification["terms"][1] == {
+        "term": "group",
+        "kind": "categorical_main_effect",
+        "column_id": "group",
+        "coding": "treatment",
+        "reference_level": fixture["input"]["reference_level"],
+        "levels": fixture["input"]["categorical_levels"],
+    }
+
+    fit = result["fit"]
+    assert isinstance(fit, dict)
+    for key, expected_value in expected["fit"].items():
+        assert fit[key] == pytest.approx(expected_value, abs=tolerance)
+
+    coefficients = _coefficients_by_term(result)
+    assert list(coefficients) == expected["application_coefficient_order"]
+    assert (
+        result["prediction_basis"]["coefficient_order"]
+        == (expected["application_coefficient_order"])
+    )
+    for term, expected_coefficient in expected["coefficients"].items():
+        assert (
+            fixture["conventions"]["term_mapping"][term]
+            == (expected_coefficient["statsmodels_term"])
+        )
+        coefficient = coefficients[term]
+        for field in ("estimate", "standard_error", "statistic", "p_value"):
+            assert coefficient[field] == pytest.approx(
+                expected_coefficient[field],
+                abs=tolerance,
+            )
+        interval = coefficient["confidence_interval"]
+        assert isinstance(interval, dict)
+        assert interval["lower"] == pytest.approx(
+            expected_coefficient["ci_lower"],
+            abs=tolerance,
+        )
+        assert interval["upper"] == pytest.approx(
+            expected_coefficient["ci_upper"],
+            abs=tolerance,
+        )
+        if expected_coefficient["vif"] is None:
+            assert coefficient["vif"] is None
+        else:
+            assert coefficient["vif"] == pytest.approx(
+                expected_coefficient["vif"],
+                abs=tolerance,
+            )
+
+    diagnostics = result["diagnostics"]
+    assert isinstance(diagnostics, dict)
+    assert diagnostics["condition_number"] == pytest.approx(
+        expected["condition_number"],
+        abs=tolerance,
+    )
+    assert result["warnings"] == expected["warnings"]
+
+    basis = result["prediction_basis"]
+    assert isinstance(basis, dict)
+    coefficient_estimates = [
+        float(coefficients[term]["estimate"]) for term in basis["coefficient_order"]
+    ]
+    t_critical = float(
+        stats.t.ppf(0.975, df=basis["df_residual"]),
+    )
+    for prediction in expected["predictions"]:
+        design_vector = _design_vector_for_manifest(
+            manifest={"model_specification": specification},
+            values_by_source_column_id={
+                "x": float(prediction["x"]),
+                "group": prediction["group"],
+            },
+        )
+        predicted_mean = _dot(design_vector, coefficient_estimates)
+        leverage = _quadratic_form(design_vector, basis["xtx_inverse"])
+        mean_interval = _prediction_interval(
+            center=predicted_mean,
+            standard_error=sqrt(basis["sigma_squared"] * leverage),
+            t_critical=t_critical,
+            confidence_level=0.95,
+        )
+        observation_interval = _prediction_interval(
+            center=predicted_mean,
+            standard_error=sqrt(basis["sigma_squared"] * (1.0 + leverage)),
+            t_critical=t_critical,
+            confidence_level=0.95,
+        )
+        assert predicted_mean == pytest.approx(
+            prediction["predicted_mean"],
+            abs=tolerance,
+        )
+        assert mean_interval.lower == pytest.approx(
+            prediction["mean_ci_lower"],
+            abs=tolerance,
+        )
+        assert mean_interval.upper == pytest.approx(
+            prediction["mean_ci_upper"],
+            abs=tolerance,
+        )
+        assert observation_interval.lower == pytest.approx(
+            prediction["prediction_interval_lower"],
+            abs=tolerance,
+        )
+        assert observation_interval.upper == pytest.approx(
+            prediction["prediction_interval_upper"],
+            abs=tolerance,
+        )
+
+
+def test_linear_model_statsmodels_fixture_rejects_single_factor_level() -> None:
+    fixture = json.loads(STATSMODELS_REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    case = fixture["failure_case"]
+
+    with pytest.raises(LinearModelError, match=case["expected_error"]):
+        calculate_linear_model(
+            case["rows"],
+            _response_column(),
+            [_x1_named_x_column(), _group_column_index_2()],
+        )
+
+
 def test_linear_model_reports_complete_case_exclusions_and_warnings() -> None:
     result = calculate_linear_model(
         [
@@ -405,6 +570,18 @@ def _x1_column() -> LinearModelColumn:
         column_id="x1",
         column_index=1,
         display_name="x1",
+        data_type="decimal",
+        measurement_level="continuous",
+        role="feature",
+        unit=None,
+    )
+
+
+def _x1_named_x_column() -> LinearModelColumn:
+    return LinearModelColumn(
+        column_id="x",
+        column_index=1,
+        display_name="x",
         data_type="decimal",
         measurement_level="continuous",
         role="feature",

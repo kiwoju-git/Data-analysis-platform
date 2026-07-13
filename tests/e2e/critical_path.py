@@ -31,6 +31,28 @@ B\t16
 B\t17
 """
 
+REGRESSION_SAMPLE_DATA = """y\tx\tgroup
+5.2\t0\tA
+7.9\t2\tA
+11.3\t4\tA
+13.8\t6\tA
+8.3\t1\tB
+11.6\t3\tB
+14.2\t5\tB
+17.7\t7\tB
+4.85\t0.5\tC
+7.55\t2.5\tC
+10.95\t4.5\tC
+13.65\t6.5\tC
+"""
+
+REGRESSION_TARGET_DATA = """y\tx\tgroup
+0\t1\tA
+0\t3.5\tB
+0\t5.5\tC
+0\t6\tA
+"""
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -336,6 +358,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             restore_and_compare_saved_results(page)
             diagnostics.step("verify schema stale behavior")
             verify_schema_stale_behavior(page)
+            diagnostics.step("verify linear model fit and prediction")
+            verify_linear_model_fit_and_prediction(page)
             diagnostics.step("verify XLSX browser upload")
             verify_xlsx_file_upload(page, Path(tempfile.mkdtemp(prefix="datalab-e2e-upload-")))
             diagnostics.step("verify CSV upload and upload error recovery")
@@ -452,6 +476,94 @@ def verify_schema_stale_behavior(page: Page) -> None:
     expect(page.locator(".analysis-history-item")).to_have_count(2, timeout=15_000)
     expect(page.locator(".analysis-history-panel .stale-badge")).to_have_count(2)
     expect(page.get_by_text("stale · 재검토 필요").first).to_be_visible()
+
+
+def verify_linear_model_fit_and_prediction(page: Page) -> None:
+    page.get_by_role("button", name="데이터셋", exact=True).click()
+    page.get_by_label("복사한 표 붙여넣기").fill(REGRESSION_TARGET_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect_dataset_context_counts(page, row_label="4행", column_label="3컬럼")
+
+    page.get_by_label("복사한 표 붙여넣기").fill(REGRESSION_SAMPLE_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect_dataset_context_counts(page, row_label="12행", column_label="3컬럼")
+    page.get_by_role("button", name="분석", exact=True).click()
+    page.get_by_role(
+        "button",
+        name=re.compile(r"상관관계 및 회귀분석"),
+    ).click()
+    page.get_by_label("분석 메서드").get_by_role(
+        "button",
+        name=re.compile(r"회귀모형 적합"),
+    ).click()
+    expect(page.get_by_role("heading", name="회귀모형 적합 실행")).to_be_visible()
+
+    page.get_by_label("반응 변수").select_option(label="y")
+    predictor_options = page.get_by_label("예측변수")
+    x_predictor = predictor_options.get_by_role("checkbox", name=re.compile(r"^x"))
+    group_predictor = predictor_options.get_by_role(
+        "checkbox",
+        name=re.compile(r"^group"),
+    )
+    x_predictor.check()
+    expect(x_predictor).to_be_checked()
+    expect(group_predictor).to_be_checked()
+
+    page.get_by_role("button", name="회귀모형 적합 실행").click()
+    model_summary = page.get_by_label("회귀모형 요약")
+    expect(model_summary).to_be_visible(timeout=20_000)
+    expect(model_summary).to_contain_text("12 / 12")
+    expect(model_summary).to_contain_text("Model ID")
+    expect(model_summary).to_contain_text("Manifest")
+    expect(page.get_by_role("heading", name="예측 사전점검")).to_be_visible()
+
+    target_selector = page.get_by_label("예측 대상 데이터셋 버전")
+    target_option = target_selector.locator("option").filter(has_text="4행 × 3열")
+    expect(target_option).to_have_count(1, timeout=15_000)
+    target_version_id = target_option.get_attribute("value")
+    if target_version_id is None:
+        raise AssertionError("Prediction target option did not expose a dataset version ID")
+    target_selector.select_option(target_version_id)
+    expect(target_selector).to_have_value(target_version_id)
+
+    page.get_by_role("button", name="사전점검 실행").click()
+    preflight_summary = page.get_by_label("예측 사전점검 요약")
+    expect(preflight_summary).to_be_visible(timeout=20_000)
+    expect(preflight_summary).to_contain_text("예측 준비 가능")
+    expect(preflight_summary).to_contain_text("4 / 4")
+    expect(preflight_summary).to_contain_text("다름")
+
+    page.get_by_role("button", name="예측 실행").click()
+    prediction_summary = page.get_by_label("예측 결과 요약")
+    expect(prediction_summary).to_be_visible(timeout=20_000)
+    expect(prediction_summary).to_contain_text("4 / 4")
+    expect(prediction_summary).to_contain_text("Prediction ID")
+    expect(page.get_by_role("heading", name="예측 구간 차트")).to_be_visible()
+    expect(page.locator(".prediction-interval-line")).to_have_count(4)
+    prediction_table = page.locator(".result-table").filter(has_text="Prediction interval")
+    expect(prediction_table).to_be_visible()
+    expect(prediction_table.get_by_role("columnheader", name="Mean CI")).to_be_visible()
+    expect(prediction_table.locator("tbody tr")).to_have_count(4)
+
+    page.get_by_role("button", name="전체 예측 CSV 생성").click()
+    csv_download_button = page.get_by_role("button", name="전체 예측 CSV 다운로드")
+    expect(csv_download_button).to_be_visible(timeout=15_000)
+    expect(page.get_by_label("전체 예측 CSV export")).to_contain_text("4행")
+    try:
+        with page.expect_download(timeout=10_000) as download_info:
+            csv_download_button.click()
+        download = download_info.value
+        if not download.suggested_filename.endswith(".csv"):
+            raise AssertionError(
+                f"unexpected prediction CSV download name: {download.suggested_filename}",
+            )
+    except PlaywrightTimeoutError as exc:
+        raise AssertionError("Prediction CSV export download did not start") from exc
 
 
 def verify_xlsx_file_upload(page: Page, temp_dir: Path) -> None:

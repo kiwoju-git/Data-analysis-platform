@@ -1,10 +1,10 @@
 # Gate B Progress
 
-Last updated: 2026-07-06
+Last updated: 2026-07-13
 
 ## Summary
 
-Gate B has completed the upload/version, paste-as-dataset intake, canonical JSONL artifact materialization, canonical row reader adoption for preview/profile/current executable methods, schema/preview, profile/preflight with duplicate-row and memory estimates, persisted profile summary artifacts, conservative date/time preflight, analysis catalog, storage/run foundation, selected-method six-module Workbench shell, shared Workbench component split, route-level selected-analysis restore, route-selected dataset/analysis page rendering, filter snapshot row freezing, a narrow filter expression engine and Workbench-level frontend filter controls, basic XLSX parsing confirmation, the first four real exploration-method slices, the first eight real Gate B2 hypothesis slices, the first three categorical slices, the first three Gate C1 correlation/regression slices, the current Gate D quality-control slices, and the first two Gate C3 measurement-system slices in the working tree. The app can accept a local multipart dataset upload or pasted spreadsheet text, validate the file/text envelope, preserve raw bytes unchanged, store SHA-256 provenance in SQLite metadata, return parsing-option candidates, revalidate raw upload integrity before parsing confirmation, confirm delimited-text and basic XLSX parsing, create immutable dataset version `v1`, materialize canonical rows plus a manifest under the workspace, store dataset columns and artifact metadata, retrieve version metadata, update confirmed column metadata while marking dependent analysis runs stale, return paginated row preview from canonical rows, return aggregate profile/preflight counts and warnings from validated canonical rows, summarize date/time format candidates and timezone-awareness risks without raw samples, persist and reuse raw-value-free `profile_summary` artifacts tied to schema/canonical hashes, expose the 6-module analysis method catalog, show planned/disabled methods in a route-restorable Workbench shell with legacy hash fallback, initialize analysis run/artifact/job/regression-model metadata tables with status/cancel API skeletons, execute `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` with real calculations from validated canonical rows, persist an `analysis_row_snapshot` artifact for each executed row selection, persist a safe JSON model manifest for `regression.linear_model`, run backend OLS predictions from app-created manifests through `regression.predict`, and re-read stored analysis results and regression model manifests after checksum validation. The frontend app chrome is split into `AppChrome` for sidebar/topbar/context layout, dataset workflow state and API handlers are split into `useDatasetWorkflow`, and the frontend dataset preparation area is split into `DatasetPreparationPage`, `DatasetParsingPanel`, `DatasetVersionPanel`, `DatasetProfileSection`, `DatasetSchemaSection`, `DatasetPreviewSection`, and shared `datasetDisplay` helpers. The frontend analysis area is split into `AnalysisPage`, `AnalysisShell`, `AnalysisWorkbench`, `DescriptiveAnalysisPanel`, `GraphicalSummaryPanel`, `NormalityAnalysisPanel`, `EqualVariancesPanel`, `OneSampleTPanel`, `PairedTPanel`, `EquivalenceTostPanel`, `OneSampleWilcoxonPanel`, `TwoSampleTPanel`, `MannWhitneyPanel`, `KruskalWallisPanel`, `OneWayAnovaPanel`, `OneProportionPanel`, `TwoProportionPanel`, `ChiSquareAssociationPanel`, `PearsonCorrelationPanel`, `XyCorrelationPanel`, `LinearModelPanel`, `IndividualsChartPanel`, `SubgroupChartPanel`, `RunChartPanel`, `CapabilityPanel`, `GageRrPreflightPanel`, and `GageRunChartPanel`, with route selection state handled by `useAnalysisSelection` and app page routing handled by `appRoute` plus `WorkspaceRouter`, so the app chrome, dataset workflow, dataset page, analysis page, method shell, common filter surface, and executable panels have separate component boundaries. LinearModelPanel now supports stored-model preflight followed by active-dataset prediction execution and a capped raw-value-free prediction result table. GageRrPreflightPanel now supports balanced crossed design preflight followed by Gage R&R ANOVA execution and result rendering. GageRunChartPanel now supports balanced crossed diagnostic chart execution and indexed redacted result rendering. Delimited-text parsing also handles leading preamble plus headerless tabular data through explicit `has_header=false` and `data_start_row` confirmation. The schema UI includes a guarded 34-column Bayesian sample role preset for headerless generated columns. It does not yet provide cell-level data edits, generated chart artifacts, formula recalculation/display-format restoration for XLSX, paired/two-sample TOST, event/trial summary-count categorical input, Fisher exact association p-values, chi-square aggregate-count input, categorical/interaction regression modeling, prediction target dataset selection UI, paged prediction result retrieval, Gage R&R component/interaction plots, or Gage Run Chart export artifacts.
+Gate B has completed the upload/version, paste-as-dataset intake, canonical JSONL artifact materialization, canonical row reader adoption for preview/profile/current executable methods, schema/preview, profile/preflight with duplicate-row and memory estimates, persisted profile summary artifacts, conservative date/time preflight, analysis catalog, storage/run foundation, selected-method six-module Workbench shell, shared Workbench component split, route-level selected-analysis restore, route-selected dataset/analysis page rendering, filter snapshot row freezing, a narrow filter expression engine and Workbench-level frontend filter controls, basic XLSX parsing confirmation, the first four real exploration-method slices, the first eight real Gate B2 hypothesis slices, the first three categorical slices, the first three Gate C1 correlation/regression slices, the current Gate D quality-control slices, and the first two Gate C3 measurement-system slices in the working tree. The app can accept a local multipart dataset upload or pasted spreadsheet text, validate the file/text envelope, preserve raw bytes unchanged, store SHA-256 provenance in SQLite metadata, return parsing-option candidates, revalidate raw upload integrity before parsing confirmation, confirm delimited-text and basic XLSX parsing, create immutable dataset version `v1`, materialize canonical rows plus a manifest under the workspace, store dataset columns and artifact metadata, retrieve version metadata, update confirmed column metadata while marking dependent analysis runs stale, return paginated row preview from canonical rows, return aggregate profile/preflight counts and warnings from validated canonical rows, summarize date/time format candidates and timezone-awareness risks without raw samples, persist and reuse raw-value-free `profile_summary` artifacts tied to schema/canonical hashes, expose the 6-module analysis method catalog, show planned/disabled methods in a route-restorable Workbench shell with legacy hash fallback, initialize analysis run/artifact/job/regression-model metadata tables with status/cancel API skeletons, execute `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` with real calculations from validated canonical rows, persist an `analysis_row_snapshot` artifact for each executed row selection, persist a safe JSON model manifest for `regression.linear_model`, run backend OLS predictions from app-created manifests through `regression.predict`, store all valid prediction rows in checksum-recorded NDJSON, retrieve them through a paged API, list confirmed target versions without raw rows or storage metadata, and re-read stored analysis results and regression model manifests after checksum validation. The frontend app chrome is split into `AppChrome` for sidebar/topbar/context layout, dataset workflow state and API handlers are split into `useDatasetWorkflow`, and the frontend dataset preparation area is split into `DatasetPreparationPage`, `DatasetParsingPanel`, `DatasetVersionPanel`, `DatasetProfileSection`, `DatasetSchemaSection`, `DatasetPreviewSection`, and shared `datasetDisplay` helpers. The frontend analysis area is split into `AnalysisPage`, `AnalysisShell`, `AnalysisWorkbench`, `DescriptiveAnalysisPanel`, `GraphicalSummaryPanel`, `NormalityAnalysisPanel`, `EqualVariancesPanel`, `OneSampleTPanel`, `PairedTPanel`, `EquivalenceTostPanel`, `OneSampleWilcoxonPanel`, `TwoSampleTPanel`, `MannWhitneyPanel`, `KruskalWallisPanel`, `OneWayAnovaPanel`, `OneProportionPanel`, `TwoProportionPanel`, `ChiSquareAssociationPanel`, `PearsonCorrelationPanel`, `XyCorrelationPanel`, `LinearModelPanel`, `IndividualsChartPanel`, `SubgroupChartPanel`, `RunChartPanel`, `CapabilityPanel`, `GageRrPreflightPanel`, and `GageRunChartPanel`, with route selection state handled by `useAnalysisSelection` and app page routing handled by `appRoute` plus `WorkspaceRouter`, so the app chrome, dataset workflow, dataset page, analysis page, method shell, common filter surface, and executable panels have separate component boundaries. LinearModelPanel now supports stored-model preflight followed by explicit target-version prediction execution and a paged raw-value-free prediction result table. GageRrPreflightPanel now supports balanced crossed design preflight followed by Gage R&R ANOVA execution and result rendering. GageRunChartPanel now supports balanced crossed diagnostic chart execution and indexed redacted result rendering. Delimited-text parsing also handles leading preamble plus headerless tabular data through explicit `has_header=false` and `data_start_row` confirmation. The schema UI includes a guarded 34-column Bayesian sample role preset for headerless generated columns. It does not yet provide cell-level data edits, generated chart artifacts, formula recalculation/display-format restoration for XLSX, paired/two-sample TOST, event/trial summary-count categorical input, Fisher exact association p-values, chi-square aggregate-count input, categorical/interaction regression modeling, Gage R&R component/interaction plots, or Gage Run Chart export artifacts.
 
 Gate D1 has started with DOE design-asset and response-entry slices. `doe.factorial_design` is available through dedicated `POST /api/v1/doe-designs/factorial`, `GET /api/v1/doe-designs/{design_id}`, `PUT /api/v1/doe-designs/{design_id}/responses`, `GET /api/v1/doe-designs/{design_id}/responses`, and `GET /api/v1/doe-designs/{design_id}/report.html` routes, stores schema v7 `experiment_designs`/`experiment_design_versions`/`experiment_runs` metadata plus schema v8 `experiment_run_responses`, and renders a minimal `FactorialDesignPanel` run-table preview/response-entry shell. The DOE HTML report renders only checksum-verified stored design metadata and entered response values. It does not yet implement effects, OLS/ANOVA, diagnostics, alias structure, or DOE charts.
 
@@ -96,7 +96,7 @@ Current stabilization update:
 | `categorical.chi_square_association` | Done for current B2 slice plus frontend residual heatmap | SciPy-backed Pearson chi-square independence test for two categorical columns; observed/expected counts, row/column/total percentages, standardized residuals, p-value, Cramer's V, expected-count diagnostics, sparse 2x2 Fisher recommendation without automatic fallback; canonical row reader; persisted result JSON; row snapshot provenance; reference fixture; inline standardized residual heatmap UI plus result tables; summary-count input and Fisher exact p-value remain out of scope |
 | `regression.pearson` | Done for first C1 slice plus frontend scatter renderer | SciPy-backed Pearson product-moment correlation for two numeric columns; complete-case exclusions, sample summaries, covariance, r, r-squared, p-value, Fisher z CI, capped raw-string-free scatterplot point payload, non-causation/linearity/outlier warnings, canonical row reader, persisted result JSON, row snapshot provenance, reference fixture, inline SVG scatter plot UI, and result table; Spearman/Kendall, generated scatterplot artifact export, model fitting, and prediction remain out of scope |
 | `regression.xy_correlation` | Done for second C1 slice plus frontend heatmap renderer | SciPy-backed pairwise Pearson X-Y correlation matrix for numeric X/Y column sets; pair-level N/exclusions, covariance, r, r-squared, p-value, Fisher z CI, failed-cell error codes, non-causation/linearity/outlier warnings, canonical row reader, persisted result JSON, row snapshot provenance, reference fixture, inline correlation heatmap UI, and result table; Spearman/Kendall, p-value adjustment, scatterplot artifact, model fitting, and prediction remain out of scope |
-| `regression.linear_model` | Done for third C1 slice plus safe model-manifest/preflight/backend-prediction/frontend-prediction/chart hardening | NumPy/SciPy-backed OLS for one numeric response and numeric/categorical main-effect predictors plus selected numeric quadratic and numeric-by-numeric interaction terms; categorical predictors use deterministic treatment coding with reference levels; complete-case exclusions, coefficient SE/t/p/CI, R², adjusted R², residual standard error, F test, VIF/condition diagnostics, residual/leverage/Cook's distance diagnostics, capped diagnostic points, non-causation and assumption warnings, canonical row reader, persisted result JSON, row snapshot provenance, safe JSON `regression_model_manifest` storage with prediction basis, checksum-validated `GET /api/v1/regression-models/{model_id}`, `POST /api/v1/regression-models/{model_id}/prediction-preflight` for schema/column/range/category checks, `POST /api/v1/regression-models/{model_id}/predictions` for capped backend predicted means plus mean-response and individual prediction intervals, frontend preflight/result display, inline residual/fitted and leverage/Cook diagnostic charts, inline prediction interval chart, reference fixture, and result tables; categorical interactions, robust covariance, exported diagnostic chart artifacts, prediction target dataset selection UI, and paged prediction result retrieval remain out of scope |
+| `regression.linear_model` | Done for third C1 slice plus safe model-manifest/preflight/backend-prediction/frontend-prediction/chart hardening | NumPy/SciPy-backed OLS for one numeric response and numeric/categorical main-effect predictors plus selected numeric quadratic and numeric-by-numeric interaction terms; categorical predictors use deterministic treatment coding with reference levels; complete-case exclusions, coefficient SE/t/p/CI, R², adjusted R², residual standard error, F test, VIF/condition diagnostics, residual/leverage/Cook's distance diagnostics, capped diagnostic points, non-causation and assumption warnings, canonical row reader, persisted result JSON, row snapshot provenance, safe JSON `regression_model_manifest` storage with prediction basis, checksum-validated `GET /api/v1/regression-models/{model_id}`, `POST /api/v1/regression-models/{model_id}/prediction-preflight` for schema/column/range/category checks, `POST /api/v1/regression-models/{model_id}/predictions` for backend predicted means plus mean-response and individual prediction intervals, checksum-recorded NDJSON storage, paged prediction row retrieval, full checksum-validated prediction CSV export, paged confirmed-version target catalog and explicit target selection, frontend preflight/paged-result display, inline residual/fitted and leverage/Cook diagnostic charts, inline prediction interval chart, reference fixture, and result tables; categorical interactions, robust covariance, and exported diagnostic chart artifacts remain out of scope |
 | `quality.individuals_chart` | Done for D1 I-MR slice plus numeric/datetime order-column and explicit I-chart rules | stdlib I-MR chart for one numeric measurement column using canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks; timezone-aware datetime order values compare in UTC and mixed timezone awareness is rejected; complete-case exclusions for value/order columns, arithmetic mean center line, moving-range sigma estimate with `MRbar / d2`, I chart 3-sigma limits, MR chart `D3/D4` limits, I/MR limit signals, I chart same-side centerline signal, I chart strict trend signal, I chart alternating signal, I chart 2-of-3 beyond 2-sigma zone signal, I chart 4-of-5 beyond 1-sigma zone signal, I chart 15-within-1-sigma signal, I chart 8-outside-1-sigma signal, zero moving-range rejection, canonical row reader, persisted result JSON, row snapshot provenance, unit/API tests, and inline SVG I/MR chart UI; full Nelson/Western Electric rules, subgroup charts, capability analysis, and chart export artifacts remain out of scope |
 | `quality.subgroup_chart` | Done for D1 Xbar-R/Xbar-S fixed-subgroup slice | stdlib Xbar-R/Xbar-S chart for one numeric measurement column and one subgroup ID column using canonical first-seen subgroup order; fixed subgroup size 2-10 only; complete-case exclusions for value/subgroup columns; Xbar center as mean of subgroup means, R center as average subgroup range, S center as average subgroup sample standard deviation, standard `A2/D3/D4` and `A3/B3/B4` constants, Xbar/R/S control limits, Xbar/R/S single-point limit signals, zero average range/stddev rejection, varying subgroup-size rejection, canonical row reader, persisted result JSON, row snapshot provenance, unit/API tests, and inline SVG Xbar/R/S chart UI with Xbar-R/Xbar-S selector; varying-size limits, full Nelson/Western Electric rules, capability analysis, Gage R&R, and chart export artifacts remain out of scope |
 | `quality.run_chart` | Done for D1 slice plus numeric/datetime order-column, oscillation, and exact run-count signals | stdlib median run chart for one numeric measurement column using canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks; timezone-aware datetime order values compare in UTC and mixed timezone awareness is rejected; complete-case exclusions for value/order columns, median center line, above/below median run count, tie-to-median exclusion policy, strict 6-point trend signal, strict 14-point oscillation signal, exact conditional run-count clustering/mixture signals, no control limits, canonical row reader, persisted result JSON, row snapshot provenance, unit/API tests, inline SVG run chart UI, and run/signal tables; control chart rules and chart export artifacts remain out of scope |
@@ -185,7 +185,7 @@ Last validated on 2026-07-06:
 - Current `quality.run_chart` slice: median run chart is available for one numeric measurement column using canonical row order by default or an optional numeric/datetime order column. Numeric and datetime order columns sort ascending, use canonical row position as the stable tie-breaker, record order exclusions/tie counts, and do not expose raw order or datetime values in chart payloads. Timezone-aware datetime values compare in UTC; mixed aware/naive datetime order values are rejected with a stable error. The method computes complete-case exclusions, median center line, above/below median run count, tie-to-median exclusion policy, strict 6-point trend signals, strict 14-point oscillation signals, and exact conditional run-count clustering/mixture signals, with row snapshot provenance and a capped chart payload without control limits or fake signals. Frontend renders the run chart as inline SVG with value/order selectors, trend/oscillation/clustering/mixture signal counts, and run/signal tables. Targeted backend pytest for `test_run_chart.py` and selected run-chart API contracts passed with 22 selected tests. Frontend typecheck and Vitest passed with 34 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 196 tests, frontend Vitest 34 tests, frontend lint/typecheck, and frontend build.
 - Current chi-square/regression chart renderer slice: `categorical.chi_square_association` renders existing observed/expected/standardized residual payloads as a standardized residual heatmap. `regression.linear_model` renders existing diagnostic points as residual/fitted and leverage/Cook charts, and existing prediction rows as a predicted mean/CI/prediction interval chart. No new statistical calculations, fake chart values, chart dependencies, CDN calls, or exported chart artifacts were added. Frontend `typecheck`, `lint`, Vitest, and build passed. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 174 tests, frontend Vitest 33 tests, and frontend build.
 - Current visualization renderer slice: `eda.normality` now renders its real Q-Q point payload as inline SVG Q-Q plots, `regression.pearson` now returns a capped deterministic scatterplot point payload and renders it as an inline SVG scatter plot, and `regression.xy_correlation` now renders existing pairwise Pearson r values as a heatmap. Pearson scatter payloads omit row indices, raw strings, and source paths; no fake chart values or new statistical methods were added. Targeted backend pytest for `test_pearson.py` and `test_api_contracts.py -k "pearson"` passed with 6 selected tests. Frontend `typecheck`, `lint`, Vitest, and build passed. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 174 tests, frontend Vitest 33 tests, and frontend build.
-- Current `regression.linear_model` slice: OLS linear model fitting is available for one numeric response and numeric/categorical main-effect predictors with complete-case handling, treatment-coded categorical reference levels, selected numeric quadratic terms, selected numeric-by-numeric interaction terms, coefficient standard errors, t statistics, p-values, confidence intervals, R², adjusted R², residual standard error, F test, VIF/condition diagnostics, residual/leverage/Cook's distance diagnostics, capped diagnostic points, safe JSON model manifest storage with OLS prediction basis, checksum-validated model manifest retrieval, stored-model prediction preflight, backend `regression.predict` prediction values and intervals, frontend preflight plus prediction result display, and persistent warnings for non-causation and OLS assumptions. Prediction preflight validates manifest checksum, source row snapshot, target canonical rows, schema hash mismatch, display-name fallback mapping, missing/non-numeric values, numeric extrapolation, and unseen categorical levels. Prediction execution reuses that preflight path, rejects error-severity issues, reconstructs the design matrix from the stored manifest, returns capped predicted means plus mean-response confidence intervals and individual prediction intervals, and stores a checksum-compatible result envelope without raw cell values. The UI enables prediction only after preflight is ready for the active dataset version, then renders warning metadata and a capped row-index/prediction/interval table without target cell values. Backend API coverage now includes stored prediction result checksum mismatch, categorical treatment-coded prediction reconstruction, numeric quadratic/interaction prediction reconstruction, and missing prediction-basis recovery. Categorical interactions, factor-by-numeric interactions, robust covariance, diagnostic chart artifacts, prediction target dataset selection UI, and paged prediction result retrieval remain out of scope. Targeted backend pytest for `test_api_contracts.py -k "regression_prediction"` passed with 7 tests. Frontend `typecheck`, `lint`, and Vitest passed with 33 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 173 tests, frontend Vitest 33 tests, and frontend build.
+- Current `regression.linear_model` slice: OLS linear model fitting is available for one numeric response and numeric/categorical main-effect predictors with complete-case handling, treatment-coded categorical reference levels, selected numeric quadratic terms, selected numeric-by-numeric interaction terms, coefficient standard errors, t statistics, p-values, confidence intervals, R², adjusted R², residual standard error, F test, VIF/condition diagnostics, residual/leverage/Cook's distance diagnostics, capped diagnostic points, safe JSON model manifest storage with OLS prediction basis, checksum-validated model manifest retrieval, stored-model prediction preflight, backend `regression.predict` prediction values and intervals, frontend target selection plus preflight and paged prediction result display, and persistent warnings for non-causation and OLS assumptions. Prediction preflight validates manifest checksum, source row snapshot, target canonical rows, schema hash mismatch, display-name fallback mapping, missing/non-numeric values, numeric extrapolation, and unseen categorical levels. Prediction execution reuses that preflight path, rejects error-severity issues, reconstructs the design matrix from the stored manifest, keeps the first 1,000 predicted rows in the compatible POST response, and atomically stores all valid rows in a checksum-recorded NDJSON artifact without raw predictor values. The paged row endpoint validates checksum, row schema, and expected count before returning up to 200 rows; the dedicated streaming wide CSV export includes every verified prediction row without raw predictors. A paged confirmed-version catalog returns display metadata without raw rows, paths, or hashes; the UI defaults to the active version, permits explicit cross-dataset target selection, invalidates stale prediction state on changes, and renders 25-row result pages. Backend API/browser coverage includes cross-dataset execution, the 1,005-row boundary, artifact tampering, metadata-failure cleanup, stored result checksum mismatch, categorical treatment-coded reconstruction, numeric quadratic/interaction reconstruction, and missing prediction-basis recovery. Categorical interactions, factor-by-numeric interactions, robust covariance, and diagnostic chart artifacts remain out of scope. Earlier validation counts in this historical section are superseded by the latest CI status and Progress Update entries below.
 - Current `regression.pearson` slice: Pearson product-moment correlation is available for two numeric columns with complete-case handling, sample summaries, covariance, r, r-squared, p-value, Fisher z confidence interval, and persistent warnings that correlation is not causation, Pearson summarizes linear association, and outliers can dominate the result. Spearman/Kendall, scatterplot artifacts, expanded OLS modeling, model manifests, and prediction remain out of scope. Targeted backend pytest for `test_pearson.py` and `test_api_contracts.py` passed with 38 tests. Backend ruff for touched Pearson backend files passed. Frontend typecheck, lint, and Vitest passed with 31 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/check.ps1` passed with backend pytest 149 tests, frontend Vitest 31 tests, and frontend build.
 - Current `regression.xy_correlation` and analysis error-placement slice: X-Y pairwise Pearson correlation is available for numeric X/Y column sets with pair-level N/exclusions, covariance, r, r-squared, p-value, Fisher z confidence interval, cell-level failure codes instead of fake statistics, persistent correlation warnings, and stored result retrieval from canonical rows. Analysis execution errors no longer route through the dataset-preparation top error box on analysis pages, and `two_sample_t_requires_exactly_two_groups` has a readable action message. Spearman/Kendall, p-value adjustment, scatterplot artifacts, expanded OLS modeling, model manifests, and prediction remain out of scope. Targeted backend pytest for `test_xy_correlation.py` and `test_api_contracts.py` passed with 39 tests. Backend ruff and mypy passed. Frontend typecheck, lint, and Vitest passed with 32 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/check.ps1` passed with backend pytest 154 tests, frontend Vitest 32 tests, and frontend build.
 - Current `hypothesis.equivalence_tost` slice: one-sample mean TOST is available for one numeric response column with an explicit reference mean and user-defined raw-unit lower/upper equivalence bounds. The method computes complete-case exclusions, sample summary, lower/upper one-sided tests, TOST p-value, `1 - 2 * alpha` CI, Cohen dz, Hedges-corrected effect, equivalence-bound warnings, and provenance from validated canonical rows. Paired/two-sample TOST, standardized-margin input, automatic bound suggestions, and automatic method switching remain out of scope. Targeted backend pytest for `test_equivalence_tost.py` and `test_api_contracts.py` passed with 37 tests. Backend ruff for touched TOST files passed. Frontend lint, typecheck, and Vitest passed with 29 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/check.ps1` passed with backend pytest 144 tests, frontend Vitest 29 tests, and frontend build.
@@ -2256,6 +2256,7 @@ Remaining limitations:
 
 - Remote GitHub Actions status is still unverified here because authenticated
   GitHub UI or `gh` access is required after push.
+
 - No repository settings, branch protection, workflow requirements, statistical
   methods, method versions, or generated types changed in this slice.
 
@@ -2357,3 +2358,345 @@ Remaining limitations:
   redesign.
 - Remote GitHub Actions status is still unverified here because authenticated
   GitHub UI or `gh` access is required after push.
+
+## Progress Update 150 - Post-Reboot Workbench Async Stabilization
+
+Completed in current working tree:
+
+- Revalidated the clean repository at
+  `02d5d4e4fb2e1d8a0ec802177e2ecdf62116a3fa` after the reboot before
+  changing code.
+- Added a shared latest-request guard for Workbench saved-result history,
+  export list/create/download, comparison, and restore flows.
+- Reset, selection, and component unmount paths now invalidate in-flight
+  requests. Reset paths clear their loading states, and only the latest request
+  may write response/error state or clear its loading flag.
+- Removed the duplicate field-by-field saved-result prop fallback from
+  `AnalysisShell` and `AnalysisWorkbench`. The four grouped history, export,
+  comparison, and restored-result state props are now the only contract.
+- Confirmed the registry boundary against code: 29 stable catalog IDs, 25
+  available IDs, 24 generic `MethodExecutionHandler` entries, dedicated
+  `doe.factorial_design` routes, and a dedicated stored-model prediction path
+  while `regression.predict` remains disabled in the generic catalog path.
+- Updated setup guidance to use a separate E2E diagnostics root and to describe
+  the actual CI `e2e-logs` scope: logs, failure screenshots, and failure HTML,
+  never the temporary data workspace.
+- No statistical calculation, request/result schema, method version,
+  dependency, migration, or availability changed.
+
+Targeted validation:
+
+- `npm --prefix .\frontend run typecheck`: passed.
+- `npm --prefix .\frontend run lint`: passed with no warnings.
+- `npm --prefix .\frontend run test -- --run`: passed with 63 tests.
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_openapi_frontend_contract.py -q`:
+  passed with 57 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 446 tests, frontend Vitest 63 tests, lint, typecheck, and the
+  production build.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed after the Workbench prop and async-state changes.
+
+Remaining limitations:
+
+- The browser E2E smoke covers saved-result restore/comparison and export flows,
+  but does not deliberately delay two HTTP responses to exercise a race in a
+  real browser. The latest-request token behavior is covered by focused
+  frontend tests and the hook integration is protected by the ownership guard.
+- Remote GitHub Actions status still requires authenticated verification after
+  push.
+
+## Progress Update 151 - Capability Independent NIST Reference Slice
+
+Completed in current working tree:
+
+- Added
+  `backend/tests/reference/fixtures/quality_capability_normal_reference.json`
+  with source URL, access date, license/source review, estimator mapping,
+  tolerances, synthetic summary-matching rows, expected metadata, and explicit
+  interpretation limits.
+- Cross-checked the application's overall sample-SD capability indices against
+  the official NIST/SEMATECH section 6.1.6 example: LSL 8, USL 20, mean 16,
+  sample SD 2, Cp 1.0, Cpk/Cpu 0.6667, and Cpl 1.3333.
+- Kept the application-specific adjacent-moving-range `MRbar/d2` within sigma
+  as a separate hand-check instead of attributing it to the NIST example.
+- Added assertions for source metadata, convention disclosure, tolerances,
+  N/exclusions, sample sigma, overall and within indices, and persistent warning
+  codes.
+- Updated the capability method contract and statistical audit matrix. No
+  runtime formula, result schema, method version, API, dependency, migration,
+  or frontend behavior changed.
+
+Targeted validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_capability.py -q`:
+  passed with 5 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 447 tests, frontend Vitest 63 tests, lint, typecheck, and the
+  production build.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed after the reference-only changes.
+
+Remaining limitations:
+
+- NIST publishes summary statistics rather than raw rows for this example. The
+  fixture's `[14, 16, 18]` rows are synthetic and only reproduce mean 16 and
+  sample SD 2 for formula verification.
+- Independent raw-data coverage for expected nonconformance/ppm and an
+  industrial-software within-sigma convention remains backlog.
+- NIST notes that capability estimates require substantially larger samples;
+  this three-row formula fixture cannot support a process capability decision.
+
+## Progress Update 152 - Gage R&R Independent Minitab Summary Slice
+
+Completed in current working tree:
+
+- Added
+  `backend/tests/reference/fixtures/quality_gage_rr_crossed_reference.json`
+  with official Minitab example/formula URLs, access date, license review,
+  balanced design counts, published full-model ANOVA summary, published
+  reduced-model results, tolerances, and explicit policy mapping.
+- Cross-checked the published 10-part, 3-operator, 3-replicate interaction ANOVA
+  summary. The interaction row calculated from published rounded mean squares
+  matches Minitab's rounded `F=0.434` and `p=0.974`.
+- Derived repeatability, operator, part-operator, reproducibility, total Gage
+  R&R, part-to-part, total variation, contribution, study variation, and ndc
+  under the application's explicit no-pooling policy.
+- Preserved the negative raw interaction component and verified its visible
+  clamp-to-zero warning policy.
+- Documented that Minitab removes the nonsignificant interaction and therefore
+  its reduced-model final variance table is not a direct parity target for this
+  application.
+- Updated the Gage R&R method contract and statistical audit matrix. No runtime
+  formula, result schema, method version, API, dependency, migration, or
+  frontend behavior changed.
+
+Targeted validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_gage_rr.py -q`:
+  passed with 5 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 448 tests, frontend Vitest 63 tests, lint, typecheck, and the
+  production build.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed after the reference-only changes.
+
+Remaining limitations:
+
+- A redistributable raw-row crossed study with the same no-pooling interaction
+  policy remains needed for end-to-end independent ANOVA parity.
+- Minitab's worksheet, screenshots, and raw measurements are not copied into
+  the repository; the fixture records only the small published summary needed
+  for convention-aware validation.
+
+## Progress Update 153 - Gage Run Chart Ordering Reference Slice
+
+Completed in current working tree:
+
+- Added
+  `backend/tests/reference/fixtures/quality_gage_run_chart_ordering_reference.json`
+  as a fully synthetic, internally hand-reviewed diagnostic fixture with source
+  classification, license review, conventions, tolerances, and interpretation
+  limits.
+- Fixed numeric order-column sorting, canonical row position as the stable tie
+  breaker, and every displayed point's value and redacted
+  part/operator/replicate index.
+- Verified that the inline five-point cap does not change the eight-observation
+  design, sample, or measurement summaries.
+- Added exact missing measurement, nonnumeric measurement, missing identifier,
+  missing order, and invalid order exclusion counts and warning assertions.
+- Checked every synthetic raw label against the complete serialized result and
+  added a duplicate-replicate failure case that returns no fake chart payload.
+- Updated the Gage Run Chart method contract and statistical audit matrix. No
+  runtime calculation, result schema, method version, API, dependency,
+  migration, or frontend behavior changed.
+
+Targeted validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_gage_run_chart.py -q`:
+  passed with 6 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 450 tests, frontend Vitest 63 tests, lint, typecheck, and the
+  production build.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed after the reference-only changes.
+
+Remaining limitations:
+
+- The fixture validates deterministic chart payload construction, not browser
+  chart rendering or an exported chart artifact.
+- It does not calculate variance components or establish measurement-system
+  acceptability; `quality.gage_rr` remains the relevant inferential workflow.
+
+## Progress Update 154 - DOE Factorial NIST Standard-Order Reference Slice
+
+Completed in current working tree:
+
+- Added
+  `backend/tests/reference/fixtures/doe_factorial_design_reference.json` with
+  official NIST/SEMATECH source URLs, access date, license review, convention
+  boundaries, tolerances, and design-asset interpretation limits.
+- Cross-checked the published three-factor `2^3` Yates coded order and the
+  actual Speed/Feed/Depth low/high settings for all eight combinations.
+- Verified the published two-replicate sequence as 16 immutable runs with the
+  same eight standard-order combinations per replicate.
+- Recorded the application-derived canonical design SHA-256 while explicitly
+  noting that NIST does not publish that checksum or the application's seeded
+  shuffle/block conventions.
+- Added an invalid low/high range failure case with no fallback design.
+- Updated the DOE method contract and statistical audit matrix. No runtime
+  generator, API schema, storage migration, method version, dependency, or
+  frontend behavior changed.
+
+Targeted validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_factorial_design.py -q`:
+  passed with 6 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 452 tests, frontend Vitest 63 tests, lint, typecheck, and the
+  production build.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed after the reference-only changes.
+
+Remaining limitations:
+
+- The fixture validates the current immutable design-asset slice only; it has
+  no response measurements or downstream DOE statistics.
+- Effects, OLS/ANOVA, alias analysis, diagnostics, response surfaces, and
+  optimization remain unimplemented rather than represented by placeholders.
+
+## Progress Update 155 - Linear Model Independent Statsmodels Reference Slice
+
+Completed in current working tree:
+
+- Added a compact synthetic
+  `regression_linear_model_reference.csv` with a recorded SHA-256 and
+  `regression_linear_model_reference.json` with statsmodels 0.14.6 source,
+  generator versions/options, license review, tolerances, and interpretation
+  limits.
+- Generated the independent reference in a temporary Python 3.10 environment
+  outside the repository; statsmodels and its dependencies were not added to
+  the product or test environment.
+- Cross-checked treatment coding with reference level `A`, mapped term names,
+  coefficients, SE/t/p/CI, residual sigma, R-squared/adjusted R-squared, model
+  F test, VIF, condition number, and persistent warning codes.
+- Cross-checked three predicted means, mean-response confidence intervals, and
+  individual prediction intervals against statsmodels `get_prediction` output.
+- Added a single-level categorical failure case without fallback statistics.
+- Kept manifest SHA-256 validation in existing API tests because generated IDs
+  and provenance make a fixed fixture hash inappropriate; metadata equality,
+  retrieval, tamper recovery, and row-snapshot provenance remain covered.
+- Updated linear-model/prediction contracts and the statistical audit matrix.
+  No runtime calculation, API/schema, manifest version, dependency, migration,
+  or frontend behavior changed.
+
+Targeted validation:
+
+- `.\.venv\Scripts\python.exe -m pytest .\backend\tests\unit\test_linear_model.py -q`:
+  passed with 8 tests.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 454 tests, frontend Vitest 63 tests, lint, typecheck, and the
+  production build after the temporary reference environment was removed.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed after the reference-only changes.
+
+Remaining limitations:
+
+- The reference validates standard OLS arithmetic and treatment coding only;
+  robust covariance, categorical interactions, and arbitrary formulas remain
+  unsupported.
+- Interactive browser E2E does not yet cover the complete upload-fit-preflight-
+  predict workflow, and prediction results remain inline-capped.
+
+## Progress Update 156 - Linear Model Browser Fit And Prediction Slice
+
+Completed in current working tree:
+
+- Extended `tests/e2e/critical_path.py` with a second fully synthetic 12-row
+  `y`/`x`/`group` TSV workflow after the saved-result stale checks and before
+  the existing upload/parser matrix.
+- Verified dataset creation and the `12행`/`3컬럼` active-version context, then
+  navigated through the regression module/method grid to
+  `regression.linear_model`.
+- Explicitly selected response `y` and predictors `x` plus categorical `group`
+  before executing a real treatment-coded OLS fit and checking Model ID and
+  manifest presence.
+- Executed same-version prediction preflight and verified all 12 rows were
+  usable, the schema hash matched, and prediction was ready.
+- Executed real backend prediction and verified the 12-row result summary,
+  Prediction ID, mean-CI/prediction-interval table, a reference predicted value,
+  and all 12 SVG interval-line elements.
+- Added a static contract guard for the critical selectors/assertions and
+  synchronized E2E and regression method/prediction documentation.
+- Kept runtime calculations, APIs, schemas, method/manifest versions,
+  dependencies, migrations, and production frontend behavior unchanged.
+
+Targeted validation:
+
+- `.\.venv\Scripts\python.exe -m py_compile .\tests\e2e\critical_path.py`:
+  passed.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`:
+  passed with the new `verify linear model fit and prediction` step.
+- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: passed with
+  backend pytest 455 tests, frontend Vitest 63 tests, lint, typecheck, and the
+  production build.
+- The browser E2E passed again after the full check and documentation/guard
+  synchronization.
+
+Remaining limitations:
+
+- Prediction output is still inline-capped and has no paged retrieval endpoint.
+- The browser smoke uses the active training dataset for prediction; selecting
+  a different target dataset version remains outside the current UI.
+
+## Progress Update 158 - Cross-Dataset Regression Prediction Target Selection
+
+Completed in current working tree:
+
+- Added paged confirmed dataset-version catalog retrieval without raw rows,
+  storage paths, or hashes.
+- Added a typed target catalog client and dedicated target-selection state hook.
+- Added explicit Linear Model target selection with active-version default and
+  stale preflight/prediction/page invalidation on target changes.
+- Verified a real 12-row OLS fit predicting a separately registered four-row
+  target dataset in backend contracts and browser E2E.
+- Preserved the `regression.predict` calculation/method version, existing
+  preflight gate, local-only behavior, and raw-value-free result contract.
+
+Validation:
+
+- OpenAPI/frontend contract tests passed with 60 tests.
+- Full `scripts\check.ps1` passed with backend pytest 460 tests and frontend
+  Vitest 63 tests.
+- Browser E2E passed with explicit cross-dataset target selection.
+
+Remaining limitations:
+
+- Manual single-row prediction input and stored prediction export remain out of
+  scope.
+- The production build retains the existing Vite main-chunk size warning.
+
+## Progress Update 159 - Full Regression Prediction CSV Export
+
+Completed in current working tree:
+
+- Added checksum/schema/count-verified streaming of every stored prediction row
+  into a dedicated wide CSV export artifact.
+- Preserved full prediction/model/source-target/interval provenance without raw
+  predictor columns or target cell values.
+- Added grouped frontend creation/download state with stale-response guards and
+  browser coverage for cross-dataset prediction CSV download.
+- Kept generic analysis CSV semantics, prediction calculations, method version,
+  dependencies, and migrations unchanged.
+
+Validation:
+
+- Targeted backend/OpenAPI tests passed with 62 tests.
+- Full `scripts\check.ps1` passed with backend pytest 461 tests and frontend
+  Vitest 63 tests.
+- Browser E2E passed through prediction CSV generation and `.csv` download.
+
+Remaining limitations:
+
+- Manual single-row prediction input remains out of scope.
+- The production build retains the existing Vite main-chunk size warning.

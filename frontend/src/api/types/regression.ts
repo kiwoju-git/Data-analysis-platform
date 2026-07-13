@@ -109,3 +109,32 @@ export interface RegressionPredictionResponse {
   columns: RegressionPredictionColumnMapping[];
   rows: RegressionPredictionRow[];
 }
+
+export interface RegressionPredictionRowsPageResponse {
+  prediction_id: string;
+  model_id: string;
+  offset: number;
+  limit: number;
+  total: number;
+  returned: number;
+  has_previous: boolean;
+  has_next: boolean;
+  rows: RegressionPredictionRow[];
+}
+
+export interface RegressionPredictionCsvExportResponse {
+  schema_version: number;
+  export_id: string;
+  prediction_id: string;
+  format: "regression_prediction_csv";
+  artifact_kind: "regression_prediction_csv_export";
+  media_type: "text/csv";
+  sha256: string;
+  size_bytes: number;
+  source_result_sha256: string;
+  stale: boolean;
+  created_at: string;
+  columns: string[];
+  row_count: number;
+  preview_rows: string[][];
+}

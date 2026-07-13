@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import "./App.css";
 import {
@@ -9,6 +9,7 @@ import {
   fetchHealth,
   fetchRegressionPredictions,
   fetchRegressionPredictionPreflight,
+  fetchRegressionPredictionRows,
   saveFactorialDesignResponses,
   type AnalysisResultEnvelope,
   type AnalysisMethodListResponse,
@@ -41,6 +42,7 @@ import {
   type PearsonCorrelationResult,
   type RegressionPredictionPreflightResponse,
   type RegressionPredictionResponse,
+  type RegressionPredictionRowsPageResponse,
   type RunChartResult,
   type SubgroupChartResult,
   type TwoSampleTResult,
@@ -56,11 +58,14 @@ import {
 } from "./analysisFilters";
 import { useAnalysisSelection } from "./analysisSelection";
 import { currentAppRoute } from "./appRoute";
+import { createLatestRequestGuard } from "./latestRequest";
 import { useAnalysisComparisonState } from "./useAnalysisComparisonState";
 import { useAnalysisExportState } from "./useAnalysisExportState";
 import { useAnalysisHistoryState } from "./useAnalysisHistoryState";
 import { useDatasetWorkflow } from "./useDatasetWorkflow";
 import { useRestoredAnalysisResultState } from "./useRestoredAnalysisResultState";
+import { useRegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
+import { useRegressionPredictionExportState } from "./useRegressionPredictionExportState";
 import { WorkspaceRouter } from "./WorkspaceRouter";
 
 type HealthState =
@@ -71,6 +76,7 @@ type HealthState =
 type SubgroupChartType = "xbar_r" | "xbar_s";
 
 const numericDataTypes = new Set<DatasetColumnResponse["data_type"]>(["integer", "decimal"]);
+const linearModelPredictionPageSize = 25;
 
 function statusLabel(health: HealthState): string {
   if (health.kind === "ready") {
@@ -272,10 +278,22 @@ export default function App() {
     useState<string | null>(null);
   const [isRunningLinearModelPredictionPreflight, setIsRunningLinearModelPredictionPreflight] =
     useState(false);
+  const linearModelPredictionPreflightRequest = useRef(createLatestRequestGuard()).current;
   const [linearModelPrediction, setLinearModelPrediction] =
     useState<RegressionPredictionResponse | null>(null);
   const [linearModelPredictionError, setLinearModelPredictionError] = useState<string | null>(null);
   const [isRunningLinearModelPrediction, setIsRunningLinearModelPrediction] = useState(false);
+  const linearModelPredictionRequest = useRef(createLatestRequestGuard()).current;
+  const [linearModelPredictionRowsPage, setLinearModelPredictionRowsPage] =
+    useState<RegressionPredictionRowsPageResponse | null>(null);
+  const [linearModelPredictionRowsError, setLinearModelPredictionRowsError] =
+    useState<string | null>(null);
+  const [isLoadingLinearModelPredictionRows, setIsLoadingLinearModelPredictionRows] =
+    useState(false);
+  const linearModelPredictionRowsRequest = useRef(createLatestRequestGuard()).current;
+  const linearModelPredictionExportState = useRegressionPredictionExportState(
+    linearModelPrediction?.prediction_id ?? null,
+  );
   const [analysisFilterDrafts, setAnalysisFilterDrafts] = useState<AnalysisFilterDraft[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
   const [datasetStateRevision, setDatasetStateRevision] = useState(0);
@@ -899,13 +917,34 @@ export default function App() {
     ? gageRunChartAnalysisResult.result
     : null;
   const activeLinearModelModelId = linearModelResult?.model_manifest?.model_id ?? null;
+  const linearModelPredictionTargetState = useRegressionPredictionTargetState({
+    activeModelId: activeLinearModelModelId,
+    currentVersionId: version?.version_id ?? null,
+  });
+  const linearModelPredictionTargetVersionId =
+    linearModelPredictionTargetState.selectedTargetVersionId;
 
   useEffect(() => {
+    linearModelPredictionPreflightRequest.cancel();
+    linearModelPredictionRequest.cancel();
+    linearModelPredictionRowsRequest.cancel();
     setLinearModelPredictionPreflight(null);
     setLinearModelPredictionPreflightError(null);
     setLinearModelPrediction(null);
     setLinearModelPredictionError(null);
-  }, [activeLinearModelModelId, version?.version_id]);
+    setLinearModelPredictionRowsPage(null);
+    setLinearModelPredictionRowsError(null);
+    setIsRunningLinearModelPredictionPreflight(false);
+    setIsRunningLinearModelPrediction(false);
+    setIsLoadingLinearModelPredictionRows(false);
+  }, [
+    activeLinearModelModelId,
+    linearModelPredictionPreflightRequest,
+    linearModelPredictionRequest,
+    linearModelPredictionRowsRequest,
+    linearModelPredictionTargetVersionId,
+    version?.version_id,
+  ]);
 
   const analysisFilterValidationError = useMemo(
     () =>
@@ -3110,37 +3149,56 @@ export default function App() {
   }
 
   async function handleRunLinearModelPredictionPreflight() {
-    if (version === null || linearModelResult?.model_manifest === undefined) {
+    if (
+      version === null ||
+      linearModelResult?.model_manifest === undefined ||
+      linearModelPredictionTargetVersionId === null
+    ) {
       setLinearModelPredictionPreflightError("regression_model_manifest_required");
       return;
     }
 
+    linearModelPredictionRequest.cancel();
+    linearModelPredictionRowsRequest.cancel();
+    setIsRunningLinearModelPrediction(false);
+    setLinearModelPrediction(null);
+    setLinearModelPredictionError(null);
+    setLinearModelPredictionRowsPage(null);
+    setLinearModelPredictionRowsError(null);
+    setIsLoadingLinearModelPredictionRows(false);
+    const request = linearModelPredictionPreflightRequest.begin();
     setIsRunningLinearModelPredictionPreflight(true);
     setLinearModelPredictionPreflightError(null);
     try {
       const response = await fetchRegressionPredictionPreflight(
         linearModelResult.model_manifest.model_id,
         {
-          dataset_version_id: version.version_id,
+          dataset_version_id: linearModelPredictionTargetVersionId,
         },
       );
-      setLinearModelPredictionPreflight(response);
-      setLinearModelPrediction(null);
-      setLinearModelPredictionError(null);
+      if (linearModelPredictionPreflightRequest.isCurrent(request)) {
+        setLinearModelPredictionPreflight(response);
+      }
     } catch (error) {
-      setLinearModelPredictionPreflight(null);
-      setLinearModelPredictionPreflightError(
-        error instanceof Error ? error.message : "regression_prediction_preflight_failed",
-      );
-      setLinearModelPrediction(null);
-      setLinearModelPredictionError(null);
+      if (linearModelPredictionPreflightRequest.isCurrent(request)) {
+        setLinearModelPredictionPreflight(null);
+        setLinearModelPredictionPreflightError(
+          error instanceof Error ? error.message : "regression_prediction_preflight_failed",
+        );
+      }
     } finally {
-      setIsRunningLinearModelPredictionPreflight(false);
+      if (linearModelPredictionPreflightRequest.isCurrent(request)) {
+        setIsRunningLinearModelPredictionPreflight(false);
+      }
     }
   }
 
   async function handleRunLinearModelPrediction() {
-    if (version === null || linearModelResult?.model_manifest === undefined) {
+    if (
+      version === null ||
+      linearModelResult?.model_manifest === undefined ||
+      linearModelPredictionTargetVersionId === null
+    ) {
       setLinearModelPredictionError("regression_model_manifest_required");
       return;
     }
@@ -3148,32 +3206,75 @@ export default function App() {
       linearModelPredictionPreflight === null ||
       !linearModelPredictionPreflight.prediction_ready ||
       linearModelPredictionPreflight.model_id !== linearModelResult.model_manifest.model_id ||
-      linearModelPredictionPreflight.target_dataset_version_id !== version.version_id
+      linearModelPredictionPreflight.target_dataset_version_id !==
+        linearModelPredictionTargetVersionId
     ) {
       setLinearModelPredictionError("regression_prediction_preflight_required");
       return;
     }
 
+    linearModelPredictionRowsRequest.cancel();
+    setLinearModelPredictionRowsPage(null);
+    setLinearModelPredictionRowsError(null);
+    setIsLoadingLinearModelPredictionRows(false);
+    const request = linearModelPredictionRequest.begin();
     setIsRunningLinearModelPrediction(true);
     setLinearModelPredictionError(null);
     try {
       const response = await fetchRegressionPredictions(
         linearModelResult.model_manifest.model_id,
         {
-          dataset_version_id: version.version_id,
+          dataset_version_id: linearModelPredictionTargetVersionId,
           confidence_level: linearModelConfidenceLevel,
           missing_policy: "complete_case",
           include_intervals: true,
         },
       );
-      setLinearModelPrediction(response);
+      if (linearModelPredictionRequest.isCurrent(request)) {
+        setLinearModelPrediction(response);
+        await loadLinearModelPredictionRows(response.prediction_id, 0);
+      }
     } catch (error) {
-      setLinearModelPrediction(null);
-      setLinearModelPredictionError(
-        error instanceof Error ? error.message : "regression_prediction_failed",
-      );
+      if (linearModelPredictionRequest.isCurrent(request)) {
+        linearModelPredictionRowsRequest.cancel();
+        setLinearModelPrediction(null);
+        setLinearModelPredictionError(
+          error instanceof Error ? error.message : "regression_prediction_failed",
+        );
+        setLinearModelPredictionRowsPage(null);
+        setLinearModelPredictionRowsError(null);
+        setIsLoadingLinearModelPredictionRows(false);
+      }
     } finally {
-      setIsRunningLinearModelPrediction(false);
+      if (linearModelPredictionRequest.isCurrent(request)) {
+        setIsRunningLinearModelPrediction(false);
+      }
+    }
+  }
+
+  async function loadLinearModelPredictionRows(predictionId: string, offset: number) {
+    const request = linearModelPredictionRowsRequest.begin();
+    setIsLoadingLinearModelPredictionRows(true);
+    setLinearModelPredictionRowsError(null);
+    try {
+      const response = await fetchRegressionPredictionRows(
+        predictionId,
+        linearModelPredictionPageSize,
+        Math.max(0, offset),
+      );
+      if (linearModelPredictionRowsRequest.isCurrent(request)) {
+        setLinearModelPredictionRowsPage(response);
+      }
+    } catch (error) {
+      if (linearModelPredictionRowsRequest.isCurrent(request)) {
+        setLinearModelPredictionRowsError(
+          error instanceof Error ? error.message : "regression_prediction_rows_failed",
+        );
+      }
+    } finally {
+      if (linearModelPredictionRowsRequest.isCurrent(request)) {
+        setIsLoadingLinearModelPredictionRows(false);
+      }
     }
   }
 
@@ -3386,6 +3487,18 @@ export default function App() {
     linearModelPredictorColumns,
     linearModelPrediction,
     linearModelPredictionError,
+    linearModelPredictionRowsState: {
+      error: linearModelPredictionRowsError,
+      isLoading: isLoadingLinearModelPredictionRows,
+      page: linearModelPredictionRowsPage,
+      onPageChange: (offset: number) => {
+        if (linearModelPrediction !== null) {
+          void loadLinearModelPredictionRows(linearModelPrediction.prediction_id, offset);
+        }
+      },
+    },
+    linearModelPredictionExportState,
+    linearModelPredictionTargetState,
     linearModelPredictionPreflight,
     linearModelPredictionPreflightError,
     linearModelQuadraticColumnIds: selectedLinearModelQuadraticColumnIds,

@@ -5,6 +5,8 @@ from typing import Any
 
 import pytest
 
+from app.analyses.registry import METHODS
+from app.api.v1.schemas.analyses import MethodAvailability
 from app.main import create_app
 from app.services.analysis_method_handlers import METHOD_EXECUTION_HANDLER_SPECS
 
@@ -91,6 +93,14 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema="DatasetRowsPreviewResponse",
         parameters=frozenset({("version_id", "path"), ("offset", "query"), ("limit", "query")}),
+    ),
+    OperationContract(
+        route_name="datasetVersions",
+        method="get",
+        path="/api/v1/dataset-versions",
+        success_status="200",
+        response_schema="DatasetVersionCatalogResponse",
+        parameters=frozenset({("limit", "query"), ("offset", "query")}),
     ),
     OperationContract(
         route_name="datasetVersionProfile",
@@ -239,6 +249,22 @@ FRONTEND_ROUTE_CONTRACTS = [
         response_schema="RegressionPredictionResponse",
         parameters=frozenset({("model_id", "path")}),
         request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="regressionPredictionRows",
+        method="get",
+        path="/api/v1/regression-models/predictions/{prediction_id}/rows",
+        success_status="200",
+        response_schema="RegressionPredictionRowsPageResponse",
+        parameters=frozenset({("prediction_id", "path"), ("limit", "query"), ("offset", "query")}),
+    ),
+    OperationContract(
+        route_name="regressionPredictionCsvExport",
+        method="post",
+        path="/api/v1/regression-models/predictions/{prediction_id}/exports/csv",
+        success_status="201",
+        response_schema="RegressionPredictionCsvExportResponse",
+        parameters=frozenset({("prediction_id", "path")}),
     ),
     OperationContract(
         route_name="gageRrPreflight",
@@ -825,10 +851,10 @@ def test_workbench_saved_result_state_is_owned_by_dedicated_hooks() -> None:
         assert spread not in app_text
 
     expected_shell_grouped_props = {
-        "comparisonState={effectiveWorkbenchComparisonState}",
-        "exportState={effectiveWorkbenchExportState}",
-        "historyState={effectiveWorkbenchHistoryState}",
-        "restoredState={effectiveWorkbenchRestoredState}",
+        "comparisonState={workbenchComparisonState}",
+        "exportState={workbenchExportState}",
+        "historyState={workbenchHistoryState}",
+        "restoredState={workbenchRestoredState}",
     }
     for grouped_prop in expected_shell_grouped_props:
         assert grouped_prop in shell_text
@@ -841,6 +867,27 @@ def test_workbench_saved_result_state_is_owned_by_dedicated_hooks() -> None:
     }
     for type_name in expected_workbench_state_types:
         assert type_name in workbench_text
+
+    forbidden_legacy_saved_result_props = {
+        "analysisHistory?:",
+        "analysisComparison?:",
+        "analysisResultExportList?:",
+        "analysisResultJsonExport?:",
+        "restoredAnalysisResult?:",
+        "onRefreshAnalysisHistory?:",
+        "onRestoreAnalysisRun?:",
+    }
+    shell_props = shell_text.split("export interface AnalysisShellProps", 1)[1].split(
+        "export function AnalysisShell",
+        1,
+    )[0]
+    workbench_props = workbench_text.split("interface AnalysisWorkbenchProps", 1)[1].split(
+        "const workbenchSteps",
+        1,
+    )[0]
+    for legacy_prop in forbidden_legacy_saved_result_props:
+        assert legacy_prop not in shell_props
+        assert legacy_prop not in workbench_props
 
     forbidden_app_api_symbols = {
         "fetchAnalysisRuns",
@@ -907,6 +954,24 @@ def test_workbench_saved_result_state_is_owned_by_dedicated_hooks() -> None:
             "resetKey",
         },
     }
+    expected_hook_cleanup_markers = {
+        "frontend/src/useAnalysisHistoryState.ts": {
+            "historyRequest.cancel(request)",
+            "setIsLoadingAnalysisHistory(false)",
+        },
+        "frontend/src/useAnalysisExportState.ts": {
+            "cancelAnalysisExportRequests",
+            "return cancelAnalysisExportRequests",
+        },
+        "frontend/src/useAnalysisComparisonState.ts": {
+            "comparisonRequest.cancel()",
+            "setIsComparingAnalysisRuns(false)",
+        },
+        "frontend/src/useRestoredAnalysisResultState.ts": {
+            "restoreRequest.cancel()",
+            "setIsRestoringAnalysisResult(false)",
+        },
+    }
     all_saved_result_api_symbols = set().union(*expected_hook_api_symbols.values())
     for relative_path, symbols in expected_hook_api_symbols.items():
         hook_text = (_repo_root() / relative_path).read_text(encoding="utf-8")
@@ -915,6 +980,11 @@ def test_workbench_saved_result_state_is_owned_by_dedicated_hooks() -> None:
         for symbol in all_saved_result_api_symbols - symbols:
             assert symbol not in hook_text
         for marker in expected_hook_state_markers[relative_path]:
+            assert marker in hook_text
+        assert 'from "./latestRequest"' in hook_text
+        assert ".isCurrent(" in hook_text
+        assert ".cancel(" in hook_text
+        for marker in expected_hook_cleanup_markers[relative_path]:
             assert marker in hook_text
 
 
@@ -992,8 +1062,8 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ):
         assert phrase in workflow_section
 
-    assert "latest recorded backend pytest count is 445" in local_validation_section
-    assert "latest recorded frontend Vitest count is 59" in local_validation_section
+    assert "latest recorded backend pytest count is 461" in local_validation_section
+    assert "latest recorded frontend Vitest count is 63" in local_validation_section
     assert "The latest run passed backend ruff check" not in local_validation_section
     assert "That 2026-07-09 run passed backend ruff check" in local_validation_section
     assert "That 2026-07-07 run passed backend ruff check" in local_validation_section
@@ -1042,6 +1112,40 @@ def test_e2e_coverage_doc_tracks_current_smoke_step_markers() -> None:
     assert section_match is not None
     documented_step_markers = re.findall(r"- `([^`]+)`", section_match.group("body"))
     assert documented_step_markers == code_step_markers
+
+
+def test_e2e_critical_path_keeps_linear_model_prediction_browser_flow() -> None:
+    critical_path_text = (_repo_root() / "tests/e2e/critical_path.py").read_text(
+        encoding="utf-8",
+    )
+    helper = critical_path_text.split(
+        "def verify_linear_model_fit_and_prediction(page: Page) -> None:",
+        maxsplit=1,
+    )[1].split("\ndef ", maxsplit=1)[0]
+
+    assert "REGRESSION_SAMPLE_DATA" in critical_path_text
+    assert "REGRESSION_TARGET_DATA" in critical_path_text
+    for required_contract in (
+        'row_label="12행", column_label="3컬럼"',
+        'name=re.compile(r"상관관계 및 회귀분석")',
+        'name=re.compile(r"회귀모형 적합")',
+        'select_option(label="y")',
+        'name="회귀모형 적합 실행"',
+        'get_by_label("예측 대상 데이터셋 버전")',
+        'has_text="4행 × 3열"',
+        'get_by_label("예측 사전점검 요약")',
+        'to_contain_text("예측 준비 가능")',
+        'to_contain_text("4 / 4")',
+        'to_contain_text("다름")',
+        'name="예측 실행"',
+        'get_by_label("예측 결과 요약")',
+        "to_have_count(4)",
+        'has_text="Prediction interval"',
+        'name="전체 예측 CSV 생성"',
+        'name="전체 예측 CSV 다운로드"',
+        'suggested_filename.endswith(".csv")',
+    ):
+        assert required_contract in helper
 
 
 def test_beginner_usability_walkthrough_keeps_required_qa_checklist_scope() -> None:
@@ -1144,11 +1248,33 @@ def test_independent_reference_backlog_keeps_actionable_fixture_plan() -> None:
         assert license_check
         assert "TODO" not in " ".join(cells)
         assert "TBD" not in " ".join(cells)
-        assert "Confirm" in license_check or "Verify" in license_check
+        assert any(
+            review_state in license_check
+            for review_state in ("Confirm", "Confirmed", "Verify", "Verified")
+        )
         assert "1e-" in tolerance or "Exact equality" in tolerance
         row_text = " | ".join(cells)
         for phrase in required_phrases:
             assert phrase in row_text
+
+
+def test_registry_progress_docs_match_catalog_and_generic_handler_counts() -> None:
+    available_count = sum(method.availability == MethodAvailability.AVAILABLE for method in METHODS)
+    stable_count = len(METHODS)
+    generic_handler_count = len(METHOD_EXECUTION_HANDLER_SPECS)
+    required_count_phrases = {
+        f"{stable_count} stable catalog IDs",
+        f"{available_count} available IDs",
+        f"{generic_handler_count} generic `MethodExecutionHandler` entries",
+    }
+    progress_text = re.sub(
+        r"\s+",
+        " ",
+        (_repo_root() / "docs/progress_gate_b.md").read_text(encoding="utf-8"),
+    )
+
+    for phrase in required_count_phrases:
+        assert phrase in progress_text
 
 
 def test_openapi_typescript_generation_review_stays_planning_only() -> None:

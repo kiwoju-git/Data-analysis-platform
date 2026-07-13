@@ -1,0 +1,119 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "quality_gage_run_chart_ordering_v1",
+  "source": {
+    "type": "internal_hand_reviewed_diagnostic_fixture",
+    "prepared_on": "2026-07-12",
+    "review_scope": "Deterministic chart-data ordering, label redaction, exclusions, truncation, and balanced-design validation; no inferential statistic or external chart image is asserted.",
+    "license_review": "All rows and labels are synthetic and authored for this repository. No external dataset, chart screenshot, or proprietary output is copied."
+  },
+  "conventions": {
+    "order": "Numeric order ascending with canonical row position as the stable tie-breaker.",
+    "summary": "Summary and design counts use all valid observations before the inline chart point limit is applied.",
+    "label_policy": "Raw part, operator, and replicate labels must not appear in the serialized result; stable one-based indices are used instead.",
+    "interpretation_limit": "The fixture validates diagnostic payload construction only and does not establish measurement-system acceptability or replace Gage R&R variance analysis."
+  },
+  "tolerances": {
+    "numeric_absolute": 1e-12,
+    "ordering_and_metadata": "exact"
+  },
+  "success_case": {
+    "case_id": "balanced_tied_order_with_exclusions_and_truncation",
+    "rows": [
+      ["10", "Part Zeta", "Operator Beta", "R1", "3"],
+      ["11", "Part Zeta", "Operator Beta", "R2", "1"],
+      ["12", "Part Zeta", "Operator Alpha", "R1", "2"],
+      ["13", "Part Zeta", "Operator Alpha", "R2", "2"],
+      ["20", "Part Alpha", "Operator Beta", "R1", "4"],
+      ["21", "Part Alpha", "Operator Beta", "R2", "5"],
+      ["22", "Part Alpha", "Operator Alpha", "R1", "1"],
+      ["23", "Part Alpha", "Operator Alpha", "R2", "6"],
+      ["", "Part Alpha", "Operator Alpha", "R1", "7"],
+      ["not-a-number", "Part Alpha", "Operator Alpha", "R1", "8"],
+      ["24", "Part Alpha", "Operator Alpha", "R1", ""],
+      ["25", "Part Alpha", "Operator Alpha", "R1", "not-an-order"],
+      ["26", "", "Operator Alpha", "R1", "9"]
+    ],
+    "point_limit": 5,
+    "expected": {
+      "order_source": "numeric_order_column_ascending",
+      "order_tie_breaker": "canonical_row_position",
+      "sample": {
+        "n_total": 13,
+        "n_used": 8,
+        "n_excluded_missing_measurement": 1,
+        "n_excluded_non_numeric_measurement": 1,
+        "n_excluded_missing_part": 1,
+        "n_excluded_missing_operator": 0,
+        "n_excluded_missing_replicate": 0,
+        "n_excluded_missing_identifier": 1,
+        "n_excluded_missing_order": 1,
+        "n_excluded_invalid_order": 1
+      },
+      "design": {
+        "ready_for_chart": true,
+        "part_count": 2,
+        "operator_count": 2,
+        "replicate_count": 2,
+        "expected_cell_count": 4,
+        "observed_cell_count": 4,
+        "missing_cell_count": 0,
+        "min_replicates_per_cell": 2,
+        "max_replicates_per_cell": 2,
+        "replicate_set_consistent": true,
+        "duplicate_replicates_per_cell": 0
+      },
+      "summary": {
+        "mean": 16.5,
+        "minimum": 10.0,
+        "maximum": 23.0,
+        "range": 13.0
+      },
+      "chart": {
+        "point_count": 8,
+        "points_truncated": true,
+        "point_limit": 5,
+        "canonical_positions": [2, 7, 3, 4, 1],
+        "values": [11.0, 22.0, 12.0, 13.0, 10.0],
+        "part_indices": [2, 1, 2, 2, 2],
+        "operator_indices": [2, 1, 1, 1, 2],
+        "replicate_indices": [2, 1, 1, 2, 1]
+      },
+      "warnings": [
+        "gage_run_chart_diagnostic_only",
+        "gage_run_chart_requires_gage_design",
+        "gage_run_chart_labels_redacted",
+        "gage_run_chart_uses_order_column",
+        "missing_values_excluded",
+        "non_numeric_values_excluded",
+        "gage_run_chart_identifier_missing_excluded",
+        "gage_run_chart_order_missing_excluded",
+        "gage_run_chart_order_invalid_excluded",
+        "gage_run_chart_points_truncated"
+      ],
+      "redacted_labels": [
+        "Part Alpha",
+        "Part Zeta",
+        "Operator Alpha",
+        "Operator Beta",
+        "R1",
+        "R2"
+      ]
+    }
+  },
+  "failure_case": {
+    "case_id": "duplicate_replicate_rejected",
+    "rows": [
+      ["10", "Part A", "Operator 1", "R1"],
+      ["11", "Part A", "Operator 1", "R2"],
+      ["12", "Part A", "Operator 2", "R1"],
+      ["13", "Part A", "Operator 2", "R2"],
+      ["20", "Part B", "Operator 1", "R1"],
+      ["21", "Part B", "Operator 1", "R2"],
+      ["22", "Part B", "Operator 2", "R1"],
+      ["23", "Part B", "Operator 2", "R2"],
+      ["24", "Part B", "Operator 2", "R2"]
+    ],
+    "expected_error": "gage_run_chart_duplicate_replicates_per_cell"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "quality_gage_rr_minitab_summary_v1",
+  "source": {
+    "organization": "Minitab, LLC",
+    "example_title": "Example of Crossed Gage R&R Study",
+    "example_url": "https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/before-you-start/example/",
+    "formula_title": "Methods and formulas for gage R&R table in Crossed Gage R&R Study",
+    "formula_url": "https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/methods-and-formulas/gage-r-r-table/",
+    "accessed_on": "2026-07-12",
+    "license_review": "Records a small published numerical summary and links to the official copyrighted source for validation. No Minitab worksheet, screenshot, prose passage, or raw measurement data is copied into the repository."
+  },
+  "published_design": {
+    "part_count": 10,
+    "operator_count": 3,
+    "replicate_count": 3,
+    "n_total": 90,
+    "balanced": true,
+    "model": "crossed_two_factor_random_with_part_operator_interaction",
+    "interaction_removal_alpha": 0.05
+  },
+  "published_full_model_anova": {
+    "part": {"df": 9, "ss": 88.3619, "ms": 9.81799, "f": 492.291, "p": 0.0},
+    "operator": {"df": 2, "ss": 3.1673, "ms": 1.58363, "f": 79.406, "p": 0.0},
+    "part_operator": {"df": 18, "ss": 0.3590, "ms": 0.01994, "f": 0.434, "p": 0.974},
+    "repeatability": {"df": 60, "ss": 2.7589, "ms": 0.04598},
+    "total": {"df": 89, "ss": 94.6471}
+  },
+  "published_reduced_model_results": {
+    "policy": "Minitab removes the interaction because p >= 0.05 and reports reduced-model variance components.",
+    "total_gage_rr_variance": 0.09143,
+    "part_to_part_variance": 1.08645,
+    "total_variation": 1.17788,
+    "total_gage_rr_percent_contribution": 7.76,
+    "total_gage_rr_percent_study_variation": 27.86,
+    "ndc": 4
+  },
+  "application_policy": {
+    "interaction": "preserve_part_operator_interaction_no_pooling",
+    "negative_component": "raw_estimate_reported_final_variance_clamped_to_zero",
+    "comparison_limit": "The published reduced-model variance components are not direct parity targets because the application does not remove or pool the interaction."
+  },
+  "application_no_pool_expected_from_published_rounded_ms": {
+    "repeatability_raw_variance": 0.04598,
+    "part_operator_raw_variance": -0.00868,
+    "part_operator_final_variance": 0.0,
+    "operator_raw_variance": 0.052123,
+    "part_to_part_raw_variance": 1.0886722222222223,
+    "reproducibility_final_variance": 0.052123,
+    "total_gage_rr_final_variance": 0.098103,
+    "total_variation_final_variance": 1.1867752222222223,
+    "total_gage_rr_percent_contribution": 8.26635054077918,
+    "total_gage_rr_percent_study_variation": 28.751261782362143,
+    "ndc": 4
+  },
+  "expected_warnings": [
+    "gage_rr_balanced_crossed_anova_assumed",
+    "gage_rr_interaction_not_pooled",
+    "gage_rr_independence_not_proven",
+    "gage_rr_labels_redacted",
+    "gage_rr_negative_variance_component_clamped"
+  ],
+  "tolerances": {
+    "published_rounded_f_absolute": 0.1,
+    "published_rounded_p_absolute": 0.001,
+    "derived_from_rounded_ms_absolute": 1e-12
+  }
+}

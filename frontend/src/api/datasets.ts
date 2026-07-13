@@ -7,6 +7,7 @@ import type {
   DatasetSchemaResponse,
   DatasetSchemaUpdateRequest,
   DatasetUploadResponse,
+  DatasetVersionCatalogResponse,
   DatasetVersionResponse,
   PastedDatasetRequest,
 } from "./types";
@@ -122,4 +123,19 @@ export async function fetchDatasetProfile(versionId: string): Promise<DatasetPro
   }
 
   return (await response.json()) as DatasetProfileResponse;
+}
+
+export async function fetchDatasetVersions(
+  limit: number,
+  offset: number,
+): Promise<DatasetVersionCatalogResponse> {
+  const response = await fetchApi(apiRoutes.datasetVersions(limit, offset), {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "dataset_versions_fetch_failed"));
+  }
+
+  return (await response.json()) as DatasetVersionCatalogResponse;
 }

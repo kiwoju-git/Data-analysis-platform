@@ -1,6 +1,6 @@
 # DOE Factorial Design Method Contract
 
-Last updated: 2026-07-02
+Last updated: 2026-07-12
 
 ## Scope
 
@@ -97,6 +97,29 @@ The generic `POST /api/v1/analysis-runs` endpoint rejects `doe.factorial_design`
 - Response entry does not regenerate or mutate factor levels, standard order, run order, or `design_sha256`.
 - No raw dataset, workspace path, or absolute local path is returned.
 - Run-count limits are explicit. The app must reject over-limit designs rather than silently truncating or sampling.
+
+## Reference Validation
+
+- `backend/tests/reference/fixtures/doe_factorial_design_reference.json` uses
+  the official NIST/SEMATECH `2^3` two-level full-factorial tables for the
+  eight-run Yates standard order and the replicated Speed/Feed/Depth factor
+  settings.
+- The fixture verifies that the first factor changes fastest, low/high levels
+  map to `-1`/`+1`, all eight combinations appear once per replicate, and the
+  second replicate repeats the same standard order.
+- Randomization is disabled for direct NIST parity. The companion internal
+  fixture verifies Python seeded shuffle, center points, and the application's
+  round-robin block assignment; those behaviors are not attributed to NIST.
+- The recorded `design_sha256` is derived from the published factor table using
+  the application's canonical schema-version-1 JSON. NIST does not publish or
+  validate this application-specific checksum.
+- A paired failure case rejects a factor whose low level is not below its high
+  level. No truncated or fallback design is generated.
+- Existing dedicated-API tests cover response-entry completeness, preservation
+  of the immutable run table/checksum, checksum mismatch handling, and rejection
+  of a generic analysis run.
+- The fixture contains no responses and does not validate effects, OLS, ANOVA,
+  diagnostics, alias structure, RSM, or optimization.
 
 ## Stable Error Codes
 

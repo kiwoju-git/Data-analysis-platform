@@ -40,14 +40,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -InstallBrowsers
 Run the smoke without reinstalling the browser:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics
 ```
 
-For CI-style debugging, keep the temporary workspace under a known parent
-directory:
+For CI-style debugging, keep the temporary workspace and diagnostics under
+separate known directories:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -WorkspaceRoot .\tmp\e2e -KeepWorkspace
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -WorkspaceRoot .\.tmp\e2e-workspace -DiagnosticsRoot .\.tmp\e2e-diagnostics -KeepWorkspace
 ```
 
 The script starts backend and frontend servers on loopback-only test ports,
@@ -55,8 +55,9 @@ uses a temporary `DATALAB_WORKSPACE_ROOT`, runs the browser flow, and removes
 the temporary workspace unless `-KeepWorkspace` is passed.
 
 GitHub Actions runs the same browser smoke in a separate `e2e` job after the
-Windows check job succeeds. CI keeps only backend/frontend E2E log files as an
-artifact; it does not upload the temporary data workspace. Local
+Windows check job succeeds. CI uploads only diagnostics-root log files, failure
+screenshots, and failure HTML snapshots as `e2e-logs`; it does not upload the
+temporary data workspace. Local
 `scripts/check.ps1` intentionally remains browser-free so routine checks do not
 require a Playwright browser install.
 
@@ -66,7 +67,9 @@ delimiter selection, named XLSX sheet selection, and CP949 text encoding
 selection, parser error recovery for missing XLSX sheet names and text decoding
 failure, parsing confirmation, dataset version creation, representative analyses,
 saved-result restore/comparison, JSON/CSV/HTML export creation, JSON download,
-and schema stale UI behavior.
+schema stale UI behavior, regression prediction target-version selection, and
+the prediction page API's first-page rendering plus full prediction CSV
+generation/download.
 
 NumPy and SciPy are part of the backend base install for the current `eda.normality` slice. The statistical dependency spike scripts remain available for revalidating or reviewing future SciPy-backed methods:
 

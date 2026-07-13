@@ -1036,6 +1036,20 @@ textarea {
   gap: 8px;
 }
 
+.result-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.result-pagination span {
+  min-width: 140px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .analysis-comparison-box {
   display: flex;
   flex-wrap: wrap;

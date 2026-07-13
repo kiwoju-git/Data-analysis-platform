@@ -25,6 +25,7 @@ import type {
   ChiSquareAssociationResult,
   DatasetColumnResponse,
   DatasetUploadResponse,
+  DatasetVersionCatalogResponse,
   DatasetVersionResponse,
   FactorialDesignResponse,
   GageRrPreflightResponse,
@@ -36,7 +37,9 @@ import type {
   NormalityResult,
   PearsonCorrelationResult,
   RegressionPredictionPreflightResponse,
+  RegressionPredictionCsvExportResponse,
   RegressionPredictionResponse,
+  RegressionPredictionRowsPageResponse,
   RunChartResult,
   SubgroupChartResult,
   XyCorrelationResult,
@@ -418,13 +421,13 @@ describe("App", () => {
       <AnalysisWorkbench
         analysisRunError={null}
         catalog={catalog}
+        exportState={{ onCreateAnalysisResultJsonExport: () => undefined }}
         profile={null}
         selectedAnalysisResult={analysisResult}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        onCreateAnalysisResultJsonExport={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -452,25 +455,31 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisComparison={comparison}
-        analysisComparisonLeftId={comparison.left.analysis_id}
-        analysisComparisonRightId={comparison.right.analysis_id}
-        analysisHistory={history}
-        analysisResultExportList={exportList}
         analysisRunError={null}
         catalog={catalog}
+        comparisonState={{
+          analysisComparison: comparison,
+          analysisComparisonLeftId: comparison.left.analysis_id,
+          analysisComparisonRightId: comparison.right.analysis_id,
+        }}
+        exportState={{ analysisResultExportList: exportList }}
+        historyState={{
+          analysisHistory: history,
+          analysisHistoryMethodId: restored.method_id,
+          analysisHistoryResultAvailabilityFilter: "available",
+          analysisHistoryStaleFilter: "stale",
+          analysisHistoryStatus: "succeeded",
+          onRefreshAnalysisHistory: () => undefined,
+        }}
         profile={null}
-        restoredAnalysisResult={restored}
+        restoredState={{
+          restoredAnalysisResult: restored,
+          onRestoreAnalysisRun: () => undefined,
+        }}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        analysisHistoryMethodId={restored.method_id}
-        analysisHistoryResultAvailabilityFilter="available"
-        analysisHistoryStaleFilter="stale"
-        analysisHistoryStatus="succeeded"
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -527,17 +536,19 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisHistory={unavailableHistory}
         analysisRunError={null}
         catalog={catalog}
+        historyState={{
+          analysisHistory: unavailableHistory,
+          analysisHistoryResultAvailabilityFilter: "unavailable",
+          onRefreshAnalysisHistory: () => undefined,
+        }}
         profile={null}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        analysisHistoryResultAvailabilityFilter="unavailable"
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
+        restoredState={{ onRestoreAnalysisRun: () => undefined }}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -575,19 +586,23 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisComparison={comparison}
-        analysisComparisonLeftId={comparison.left.analysis_id}
-        analysisComparisonRightId={comparison.right.analysis_id}
-        analysisHistory={analysisRunListTestResponse(restored)}
         analysisRunError={null}
         catalog={catalog}
+        comparisonState={{
+          analysisComparison: comparison,
+          analysisComparisonLeftId: comparison.left.analysis_id,
+          analysisComparisonRightId: comparison.right.analysis_id,
+        }}
+        historyState={{
+          analysisHistory: analysisRunListTestResponse(restored),
+          onRefreshAnalysisHistory: () => undefined,
+        }}
         profile={null}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
+        restoredState={{ onRestoreAnalysisRun: () => undefined }}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -611,19 +626,19 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisComparison={comparison}
-        analysisComparisonLeftId={comparison.left.analysis_id}
-        analysisComparisonRightId={comparison.right.analysis_id}
-        analysisHistory={history}
         analysisRunError={null}
         catalog={catalog}
+        comparisonState={{
+          analysisComparison: comparison,
+          analysisComparisonLeftId: comparison.left.analysis_id,
+          analysisComparisonRightId: comparison.right.analysis_id,
+        }}
+        historyState={{ analysisHistory: history }}
         profile={null}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="hypothesis"
         version={datasetVersionTestResponse()}
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -648,19 +663,19 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisComparison={comparison}
-        analysisComparisonLeftId={comparison.left.analysis_id}
-        analysisComparisonRightId={comparison.right.analysis_id}
-        analysisHistory={history}
         analysisRunError={null}
         catalog={catalog}
+        comparisonState={{
+          analysisComparison: comparison,
+          analysisComparisonLeftId: comparison.left.analysis_id,
+          analysisComparisonRightId: comparison.right.analysis_id,
+        }}
+        historyState={{ analysisHistory: history }}
         profile={null}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="hypothesis"
         version={datasetVersionTestResponse()}
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -686,19 +701,19 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisComparison={comparison}
-        analysisComparisonLeftId={comparison.left.analysis_id}
-        analysisComparisonRightId={comparison.right.analysis_id}
-        analysisHistory={history}
         analysisRunError={null}
         catalog={catalog}
+        comparisonState={{
+          analysisComparison: comparison,
+          analysisComparisonLeftId: comparison.left.analysis_id,
+          analysisComparisonRightId: comparison.right.analysis_id,
+        }}
+        historyState={{ analysisHistory: history }}
         profile={null}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="hypothesis"
         version={datasetVersionTestResponse()}
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -724,19 +739,19 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisComparison={comparison}
-        analysisComparisonLeftId={comparison.left.analysis_id}
-        analysisComparisonRightId={comparison.right.analysis_id}
-        analysisHistory={history}
         analysisRunError={null}
         catalog={catalog}
+        comparisonState={{
+          analysisComparison: comparison,
+          analysisComparisonLeftId: comparison.left.analysis_id,
+          analysisComparisonRightId: comparison.right.analysis_id,
+        }}
+        historyState={{ analysisHistory: history }}
         profile={null}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="hypothesis"
         version={datasetVersionTestResponse()}
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -762,19 +777,19 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisComparison={comparison}
-        analysisComparisonLeftId={comparison.left.analysis_id}
-        analysisComparisonRightId={comparison.right.analysis_id}
-        analysisHistory={history}
         analysisRunError={null}
         catalog={catalog}
+        comparisonState={{
+          analysisComparison: comparison,
+          analysisComparisonLeftId: comparison.left.analysis_id,
+          analysisComparisonRightId: comparison.right.analysis_id,
+        }}
+        historyState={{ analysisHistory: history }}
         profile={null}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="hypothesis"
         version={datasetVersionTestResponse()}
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -803,19 +818,19 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisComparison={comparison}
-        analysisComparisonLeftId={comparison.left.analysis_id}
-        analysisComparisonRightId={comparison.right.analysis_id}
-        analysisHistory={history}
         analysisRunError={null}
         catalog={catalog}
+        comparisonState={{
+          analysisComparison: comparison,
+          analysisComparisonLeftId: comparison.left.analysis_id,
+          analysisComparisonRightId: comparison.right.analysis_id,
+        }}
+        historyState={{ analysisHistory: history }}
         profile={null}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="hypothesis"
         version={datasetVersionTestResponse()}
-        onRefreshAnalysisHistory={() => undefined}
-        onRestoreAnalysisRun={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -903,6 +918,15 @@ describe("App", () => {
     expect(apiRoutes.datasetVersionRows("version/1", 5, 10)).toBe(
       "http://127.0.0.1:8000/api/v1/dataset-versions/version%2F1/rows?limit=10&offset=5",
     );
+    expect(apiRoutes.datasetVersions(20, 40)).toBe(
+      "http://127.0.0.1:8000/api/v1/dataset-versions?limit=20&offset=40",
+    );
+    expect(apiRoutes.regressionPredictionRows("prediction/1", 25, 50)).toBe(
+      "http://127.0.0.1:8000/api/v1/regression-models/predictions/prediction%2F1/rows?limit=25&offset=50",
+    );
+    expect(apiRoutes.regressionPredictionCsvExport("prediction/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/regression-models/predictions/prediction%2F1/exports/csv",
+    );
     expect(apiRoutes.analysisRunsBase()).toBe(
       "http://127.0.0.1:8000/api/v1/analysis-runs",
     );
@@ -932,16 +956,18 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisResultJsonExport={exportResult}
         analysisRunError={null}
         catalog={catalog}
+        exportState={{
+          analysisResultJsonExport: exportResult,
+          onCreateAnalysisResultJsonExport: () => undefined,
+        }}
         profile={null}
         selectedAnalysisResult={analysisResult}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        onCreateAnalysisResultJsonExport={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -968,16 +994,18 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisResultJsonExport={exportResult}
         analysisRunError={null}
         catalog={catalog}
+        exportState={{
+          analysisResultJsonExport: exportResult,
+          onCreateAnalysisResultJsonExport: () => undefined,
+        }}
         profile={null}
         selectedAnalysisResult={analysisResult}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        onCreateAnalysisResultJsonExport={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -997,18 +1025,20 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisResultExportDownloadError="analysis_export_checksum_mismatch"
-        analysisResultJsonExport={exportResult}
         analysisRunError={null}
         catalog={catalog}
+        exportState={{
+          analysisResultExportDownloadError: "analysis_export_checksum_mismatch",
+          analysisResultJsonExport: exportResult,
+          onCreateAnalysisResultJsonExport: () => undefined,
+          onDownloadAnalysisResultExport: () => undefined,
+        }}
         profile={null}
         selectedAnalysisResult={analysisResult}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        onCreateAnalysisResultJsonExport={() => undefined}
-        onDownloadAnalysisResultExport={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -1029,16 +1059,18 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisResultCsvExport={exportResult}
         analysisRunError={null}
         catalog={catalog}
+        exportState={{
+          analysisResultCsvExport: exportResult,
+          onCreateAnalysisResultCsvExport: () => undefined,
+        }}
         profile={null}
         selectedAnalysisResult={analysisResult}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        onCreateAnalysisResultCsvExport={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -1064,16 +1096,18 @@ describe("App", () => {
 
     const html = renderToString(
       <AnalysisWorkbench
-        analysisResultHtmlReport={reportResult}
         analysisRunError={null}
         catalog={catalog}
+        exportState={{
+          analysisResultHtmlReport: reportResult,
+          onCreateAnalysisResultHtmlReport: () => undefined,
+        }}
         profile={null}
         selectedAnalysisResult={analysisResult}
         selectedMethod={selectedMethod}
         selectedMethods={[selectedMethod]}
         selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        onCreateAnalysisResultHtmlReport={() => undefined}
         onSelectMethod={() => undefined}
         renderAnalysisFilters={() => <div>분석 필터</div>}
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
@@ -1417,11 +1451,12 @@ describe("App", () => {
         manifest_sha256: "a".repeat(64),
       },
     };
+    const targetVersionId = "cccccccc-dddd-eeee-ffff-000000000000";
     const predictionPreflight: RegressionPredictionPreflightResponse = {
       model_id: "12345678-90ab-cdef-1234-567890abcdef",
       analysis_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
       source_dataset_version_id: version.version_id,
-      target_dataset_version_id: version.version_id,
+      target_dataset_version_id: targetVersionId,
       model_manifest_sha256: "a".repeat(64),
       source_schema_hash: "source-schema",
       target_schema_hash: "target-schema",
@@ -1469,7 +1504,7 @@ describe("App", () => {
       model_id: "12345678-90ab-cdef-1234-567890abcdef",
       analysis_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
       source_dataset_version_id: version.version_id,
-      target_dataset_version_id: version.version_id,
+      target_dataset_version_id: targetVersionId,
       model_manifest_sha256: "a".repeat(64),
       target_schema_hash: "target-schema",
       row_count_total: 8,
@@ -1512,6 +1547,61 @@ describe("App", () => {
         },
       ],
     };
+    const predictionRowsPage: RegressionPredictionRowsPageResponse = {
+      prediction_id: prediction.prediction_id,
+      model_id: prediction.model_id,
+      offset: 0,
+      limit: 25,
+      total: 7,
+      returned: 1,
+      has_previous: false,
+      has_next: true,
+      rows: prediction.rows,
+    };
+    const predictionCsvExport: RegressionPredictionCsvExportResponse = {
+      schema_version: 1,
+      export_id: "eeeeeeee-ffff-0000-1111-222222222222",
+      prediction_id: prediction.prediction_id,
+      format: "regression_prediction_csv",
+      artifact_kind: "regression_prediction_csv_export",
+      media_type: "text/csv",
+      sha256: "b".repeat(64),
+      size_bytes: 2048,
+      source_result_sha256: "c".repeat(64),
+      stale: false,
+      created_at: "2026-07-13T02:00:00Z",
+      columns: ["prediction_id", "row_index", "predicted_mean"],
+      row_count: 7,
+      preview_rows: [],
+    };
+    const predictionTargetCatalog: DatasetVersionCatalogResponse = {
+      offset: 0,
+      limit: 20,
+      total: 2,
+      returned: 2,
+      has_previous: false,
+      has_next: false,
+      versions: [
+        {
+          version_id: version.version_id,
+          dataset_id: version.dataset_id,
+          original_filename: "training.csv",
+          version_number: 1,
+          row_count: version.row_count,
+          column_count: version.column_count,
+          created_at: version.created_at,
+        },
+        {
+          version_id: targetVersionId,
+          dataset_id: "dddddddd-eeee-ffff-0000-111111111111",
+          original_filename: "prediction-target.csv",
+          version_number: 1,
+          row_count: 8,
+          column_count: 3,
+          created_at: "2026-07-13T01:00:00Z",
+        },
+      ],
+    };
 
     const html = renderToString(
       <AnalysisPage
@@ -1521,7 +1611,30 @@ describe("App", () => {
         linearModelPredictorColumnIds={["column-a", "column-x2"]}
         linearModelPredictorColumns={[baseColumns[0], xColumn, yColumn]}
         linearModelPrediction={prediction}
+        linearModelPredictionExportState={{
+          csvExport: predictionCsvExport,
+          error: null,
+          isCreating: false,
+          isDownloading: false,
+          onCreate: vi.fn(),
+          onDownload: vi.fn(),
+        }}
         linearModelPredictionPreflight={predictionPreflight}
+        linearModelPredictionRowsState={{
+          error: null,
+          isLoading: false,
+          page: predictionRowsPage,
+          onPageChange: vi.fn(),
+        }}
+        linearModelPredictionTargetState={{
+          catalog: predictionTargetCatalog,
+          error: null,
+          isLoading: false,
+          selectedTarget: predictionTargetCatalog.versions[1],
+          selectedTargetVersionId: targetVersionId,
+          onPageChange: vi.fn(),
+          onSelect: vi.fn(),
+        }}
         linearModelQuadraticColumnIds={["column-a"]}
         linearModelResult={linearModelResult}
         linearModelResponseColumnId="column-y"
@@ -1547,6 +1660,8 @@ describe("App", () => {
     expect(html).toContain("Model ID");
     expect(html).toContain("12345678-90");
     expect(html).toContain("예측 사전점검");
+    expect(html).toContain("예측 대상 데이터셋 버전");
+    expect(html).toContain("prediction-target.csv");
     expect(html).toContain("사전점검 실행");
     expect(html).toContain("예측 실행");
     expect(html).toContain("예측 준비 가능");
@@ -1555,6 +1670,11 @@ describe("App", () => {
     expect(html).toContain("Prediction ID");
     expect(html).toContain("예측 평균");
     expect(html).toContain("9.975");
+    expect(html).toContain("예측 행 페이지 이동");
+    expect(html).toContain("전체 예측 CSV 생성");
+    expect(html).toContain("전체 예측 CSV 다운로드");
+    expect(html).toContain("1-1 / 7");
+    expect(html).toContain("다음");
     expect(html).toContain("Schema hash");
     expect(html).toContain("컬럼 ID");
     expect(html).toContain("학습범위 위");

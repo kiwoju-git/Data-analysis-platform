@@ -25,6 +25,8 @@ from app.api.v1.schemas.datasets import (
     DatasetRowsPreviewResponse,
     DatasetSchemaResponse,
     DatasetSchemaUpdateRequest,
+    DatasetVersionCatalogItem,
+    DatasetVersionCatalogResponse,
     DatasetVersionListResponse,
     DatasetVersionResponse,
     DatasetVersionSummary,
@@ -47,11 +49,13 @@ from app.storage.metadata import (
     DatasetColumnRecord,
     DatasetRecord,
     DatasetVersionRecord,
+    count_dataset_version_catalog_records,
     get_dataset_artifact_record,
     get_dataset_record,
     get_dataset_version_record,
     insert_dataset_version_record,
     list_dataset_column_records,
+    list_dataset_version_catalog_records,
     list_dataset_version_records,
     update_dataset_schema_records,
 )
@@ -169,6 +173,41 @@ def list_dataset_versions(
     return DatasetVersionListResponse(
         dataset_id=dataset_id,
         versions=[dataset_version_summary_from_record(record) for record in records],
+    )
+
+
+def list_dataset_version_catalog(
+    settings: Settings,
+    *,
+    limit: int,
+    offset: int,
+) -> DatasetVersionCatalogResponse:
+    total = count_dataset_version_catalog_records(settings.workspace_root)
+    records = list_dataset_version_catalog_records(
+        settings.workspace_root,
+        limit=limit,
+        offset=offset,
+    )
+    versions = [
+        DatasetVersionCatalogItem(
+            version_id=UUID(record.version_id),
+            dataset_id=UUID(record.dataset_id),
+            original_filename=record.original_filename,
+            version_number=record.version_number,
+            row_count=record.row_count,
+            column_count=record.column_count,
+            created_at=record.created_at,
+        )
+        for record in records
+    ]
+    return DatasetVersionCatalogResponse(
+        offset=offset,
+        limit=limit,
+        total=total,
+        returned=len(versions),
+        has_previous=offset > 0,
+        has_next=offset + len(versions) < total,
+        versions=versions,
     )
 
 

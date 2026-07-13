@@ -1,6 +1,6 @@
 # CI Status
 
-Last updated: 2026-07-11
+Last updated: 2026-07-13
 
 ## Workflow Configuration
 
@@ -18,6 +18,39 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Local Validation
 
+- Full regression prediction CSV export passed locally on 2026-07-13. The
+  1,005-row streaming export/tamper contract passed, the OpenAPI/frontend
+  contract suite passed with 61 tests, full `scripts\check.ps1` passed with
+  backend pytest 461 tests and frontend Vitest 63 tests, and browser E2E created
+  and downloaded the cross-dataset prediction CSV. The production build retains
+  the existing Vite chunk-size warning for the 548.61 kB main JavaScript asset.
+- Cross-dataset regression prediction target selection passed locally on
+  2026-07-13. The dataset-version catalog privacy/pagination test and
+  cross-dataset prediction contract passed, the OpenAPI/frontend contract suite
+  passed with 60 tests, full `scripts\check.ps1` passed with backend pytest 460
+  tests and frontend Vitest 63 tests, and browser E2E selected a separate
+  four-row target version for a real 12-row trained model. The production build
+  retains the existing Vite chunk-size warning for the 546.32 kB main
+  JavaScript asset.
+- Regression prediction paging stabilization passed locally on 2026-07-13.
+  Targeted regression prediction API tests passed with 9 selected tests, the
+  OpenAPI/frontend contract suite passed with 59 tests, full
+  `scripts\check.ps1` passed with backend pytest 458 tests and frontend Vitest
+  63 tests, and browser E2E passed with
+  `-DiagnosticsRoot .\.tmp\e2e-diagnostics`. The production build retains the
+  existing Vite chunk-size warning for the 542.90 kB main JavaScript asset.
+- Post-reboot baseline validation on 2026-07-12 passed from clean main commit
+  `02d5d4e4fb2e1d8a0ec802177e2ecdf62116a3fa`: bootstrap completed, full
+  `scripts\check.ps1` passed with backend pytest 445 tests and frontend Vitest
+  59 tests, and browser E2E passed with
+  `-DiagnosticsRoot .\.tmp\e2e-diagnostics`. After the Workbench async and prop
+  contract changes plus the capability, Gage R&R, Gage Run Chart, DOE
+  factorial, and linear-model statsmodels reference slices, targeted frontend
+  lint/typecheck passed without warnings,
+  frontend Vitest passed with 63 tests, and the frontend/backend contract pytest
+  passed with 57 tests. The post-change full `scripts\check.ps1` rerun passed
+  with backend pytest 455 tests and frontend Vitest 63 tests, and the
+  post-change browser E2E rerun passed with the same diagnostics-root option.
 - Full local Windows validation for the current E2E stabilization, Workbench
   state-ownership hook split, CI diagnostics hardening, frontend API facade/type
   split, OpenAPI frontend route/schema field contract guards, and analysis-run
@@ -68,13 +101,14 @@ This satisfies the current repository-side requirement that main pushes should s
   production build.
 - Full local Windows validation for the current Workbench component split, UX refinement, Playwright E2E smoke, XLSX browser upload coverage, CSV upload/error-recovery coverage, parser option editing coverage, named XLSX sheet selection coverage, CP949 text encoding selection coverage, parser error-recovery coverage, and GitHub Actions E2E job wiring working tree passed on 2026-07-07 with `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
 - The run passed backend ruff check, backend ruff format check, backend mypy over 75 source files, backend pytest with 387 tests, frontend lint, frontend typecheck, frontend Vitest with 58 tests, and frontend production build.
-- The previous documentation mismatch between 267/277/301/311/320/329/338/348/357/361/363/375/377/380/381/382/383/384/385/386/387/388/412/429/435/437/438/439/440/442/443/444 backend tests is resolved; the latest recorded backend pytest count is 445 and the latest recorded frontend Vitest count is 59.
+- The previous documentation mismatch between historical test counts is resolved.
+  The latest recorded backend pytest count is 461. The latest recorded frontend Vitest count is 63.
 - Opt-in browser E2E validation also passed on 2026-07-10 with
   `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`.
   The run printed stage markers and passed without producing failure
   screenshots or HTML snapshots.
 - Opt-in browser E2E validation also passed on 2026-07-07 with `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\e2e.ps1"` after installing Chromium with `.\scripts\e2e.ps1 -InstallBrowsers`.
-- The current E2E smoke covers pasted TSV intake, parsing confirmation, dataset version creation, `eda.descriptive`, `hypothesis.two_sample_t`, JSON/CSV/HTML export creation, JSON download, saved-result restore/comparison, schema no-op save without stale marking, actual schema display-name change with stale marking, browser XLSX file upload with parsing confirmation, browser CSV file upload, empty-file upload error recovery, parser option editing for header row, missing tokens, and delimiter selection, named XLSX sheet selection, CP949 text encoding selection, missing XLSX sheet recovery, and text decoding failure recovery.
+- The current E2E smoke covers pasted TSV intake, parsing confirmation, dataset version creation, `eda.descriptive`, `hypothesis.two_sample_t`, JSON/CSV/HTML export creation, JSON download, saved-result restore/comparison, schema no-op save without stale marking, actual schema display-name change with stale marking, synthetic `regression.linear_model` fit plus explicit cross-dataset target selection, stored-model prediction preflight/execution and interval rendering, browser XLSX file upload with parsing confirmation, browser CSV file upload, empty-file upload error recovery, parser option editing for header row, missing tokens, and delimiter selection, named XLSX sheet selection, CP949 text encoding selection, missing XLSX sheet recovery, and text decoding failure recovery.
 - `scripts/check.ps1` still does not run the browser E2E smoke locally. GitHub Actions now runs the smoke in a separate `e2e` job after the Windows check job.
 - Historical note: an earlier WSL-side syntax-only validation could not run
   native Windows commands because Windows interop failed before command

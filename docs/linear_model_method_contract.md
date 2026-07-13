@@ -1,6 +1,6 @@
 # Linear Model Method Contract
 
-Last updated: 2026-07-01
+Last updated: 2026-07-12
 
 ## Scope
 
@@ -89,12 +89,43 @@ The prediction calculation contract and remaining frontend/paged-result requirem
 Current result payload `schema_version`: `4`.
 Current model manifest `manifest_schema_version`: `2`.
 
+## Independent Reference Validation
+
+- `backend/tests/reference/fixtures/regression_linear_model_reference.csv` is
+  a compact synthetic training dataset with one numeric predictor and one
+  three-level categorical predictor.
+- `backend/tests/reference/fixtures/regression_linear_model_reference.json`
+  records full-precision statsmodels 0.14.6 OLS results generated in a temporary
+  Python 3.10 environment. statsmodels is not added to production or test
+  dependencies.
+- The reference formula uses an intercept, numeric `x`, and explicit treatment
+  coding with level `A` as the categorical reference. Application and
+  statsmodels term arrays have different order, so coefficients are compared by
+  the recorded term-name mapping.
+- The fixture cross-checks N/df, coefficients, standard errors, t statistics,
+  p-values, coefficient intervals, residual sigma, R-squared, adjusted
+  R-squared, F statistic/p-value, VIF, and condition number with `1e-8` absolute
+  tolerance.
+- Three synthetic prediction rows cross-check predicted means, mean-response
+  confidence intervals, and individual prediction intervals against
+  `OLSResults.get_prediction(...).summary_frame(alpha=0.05)`.
+- A paired failure case rejects a categorical predictor with only one observed
+  level. No fallback model or fabricated statistic is returned.
+- The fixture does not pin a model-manifest SHA-256 because the safe JSON
+  manifest contains generated analysis/model IDs and provenance. API tests
+  independently verify manifest checksum equality, validated retrieval,
+  checksum-mismatch recovery, row-snapshot provenance, and no pickle/joblib
+  loading.
+- The data is synthetic and validates arithmetic/coding only; it does not prove
+  causation, assumption satisfaction, or adequacy for real data.
+
 ## Testing
 
 Required coverage for this method:
 
 - hand-checkable small sample for model shape, R², and coefficient estimates
-- generated reference fixture cross-checked with independent NumPy calculations
+- generated reference fixture cross-checked with independent statsmodels 0.14.6
+  calculations from a synthetic CSV
 - categorical factor treatment-coding fixture with explicit reference level and coefficient checks
 - numeric quadratic and numeric-by-numeric interaction fixture with explicit term metadata and coefficient checks
 - residual, leverage, Cook's distance, and capped diagnostic-point reference checks
@@ -105,3 +136,7 @@ Required coverage for this method:
 - regression model manifest metadata persistence, checksum-validated API retrieval, checksum mismatch recovery error, and cleanup after metadata-insert failure
 - prediction preflight for same-version clean data and target-version schema drift, display-name mapping, extrapolation, missing/non-numeric values, and unseen categorical levels
 - backend prediction API for same-version OLS predicted means, mean-response confidence intervals, individual prediction intervals, stored result retrieval, and preflight-error rejection
+- Playwright browser flow for synthetic TSV registration, explicit
+  response/predictor selection, real fit/manifest creation, same-version
+  prediction preflight, prediction execution, summary/table checks, and
+  interval-line rendering

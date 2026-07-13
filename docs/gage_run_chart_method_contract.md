@@ -57,6 +57,30 @@ The result payload contains:
 
 Raw part, operator, and replicate labels are redacted from the result. The chart payload uses stable integer indices only.
 
+## Reference Validation
+
+- `backend/tests/reference/fixtures/quality_gage_run_chart_ordering_reference.json`
+  is an internally hand-reviewed, fully synthetic diagnostic fixture. An
+  external statistical package is not required because this result is
+  deterministic chart-data preparation rather than an inferential estimate.
+- The reference case fixes numeric order-column sorting and canonical row
+  position as the stable tie-breaker. It asserts every displayed point's value,
+  canonical position, and part/operator/replicate index.
+- Missing measurements, nonnumeric measurements, missing identifiers, missing
+  order values, and invalid order values are excluded visibly with exact sample
+  counts and persistent warning codes.
+- The chart point limit truncates only the inline point array. Design counts,
+  sample counts, and measurement summaries continue to describe all valid
+  observations.
+- Synthetic raw part, operator, and replicate labels are checked against the
+  complete serialized result so the fixture cannot pass while leaking a label
+  outside `chart.points`.
+- A paired failure case rejects a duplicate replicate within a part/operator
+  cell. No empty or fabricated chart result is returned.
+- The fixture does not validate visual rendering, exported chart artifacts, or
+  measurement-system acceptability. Gage R&R remains the variance-component
+  analysis.
+
 ## Stable Error Codes
 
 - `gage_run_chart_distinct_columns_required`

@@ -23,6 +23,17 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - Saves schema metadata with no actual change and verifies saved runs are not
   marked stale.
 - Changes a display name and verifies saved runs become stale.
+- Registers a second synthetic `y`/`x`/`group` TSV dataset, selects
+  `regression.linear_model`, explicitly assigns response/predictor roles, and
+  fits a real treatment-coded OLS model.
+- Registers a separate compatible four-row target dataset version, selects it
+  from the prediction target catalog, and verifies `prediction_ready` with all
+  four target rows usable despite a different schema hash.
+- Executes real cross-dataset backend prediction, retrieves the first stored-result
+  page, and verifies the four-row summary, predicted mean/mean-CI/prediction-interval
+  table, and four rendered interval lines.
+- Generates a full stored prediction CSV and verifies the browser starts a
+  `.csv` download through the checksum-validated analysis export route.
 - Uploads a synthetic XLSX file in the browser and confirms parsing.
 - Uploads an empty CSV to verify upload error recovery, then uploads a valid
   synthetic CSV.
@@ -44,6 +55,7 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - `create and download exports`
 - `restore and compare saved results`
 - `verify schema stale behavior`
+- `verify linear model fit and prediction`
 - `verify XLSX browser upload`
 - `verify CSV upload and upload error recovery`
 - `verify parser option editing`

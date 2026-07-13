@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createAnalysisResultCsvExport,
@@ -11,6 +11,7 @@ import {
   type AnalysisResultHtmlReportResponse,
   type AnalysisResultJsonExportResponse,
 } from "./api";
+import { createLatestRequestGuard } from "./latestRequest";
 
 interface UseAnalysisExportStateOptions {
   currentAnalysisId: string | null;
@@ -56,8 +57,28 @@ export function useAnalysisExportState({
   );
   const [isLoadingAnalysisResultExportList, setIsLoadingAnalysisResultExportList] =
     useState(false);
+  const exportListRequest = useRef(createLatestRequestGuard()).current;
+  const jsonExportRequest = useRef(createLatestRequestGuard()).current;
+  const csvExportRequest = useRef(createLatestRequestGuard()).current;
+  const htmlReportRequest = useRef(createLatestRequestGuard()).current;
+  const exportDownloadRequest = useRef(createLatestRequestGuard()).current;
 
-  function resetAnalysisExportState() {
+  const cancelAnalysisExportRequests = useCallback(() => {
+    exportListRequest.cancel();
+    jsonExportRequest.cancel();
+    csvExportRequest.cancel();
+    htmlReportRequest.cancel();
+    exportDownloadRequest.cancel();
+  }, [
+    csvExportRequest,
+    exportDownloadRequest,
+    exportListRequest,
+    htmlReportRequest,
+    jsonExportRequest,
+  ]);
+
+  const resetAnalysisExportState = useCallback(() => {
+    cancelAnalysisExportRequests();
     setAnalysisResultJsonExport(null);
     setAnalysisResultJsonExportError(null);
     setAnalysisResultCsvExport(null);
@@ -67,7 +88,12 @@ export function useAnalysisExportState({
     setAnalysisResultExportDownloadError(null);
     setAnalysisResultExportList(null);
     setAnalysisResultExportListError(null);
-  }
+    setIsCreatingAnalysisResultJsonExport(false);
+    setIsCreatingAnalysisResultCsvExport(false);
+    setIsCreatingAnalysisResultHtmlReport(false);
+    setIsDownloadingAnalysisResultExport(false);
+    setIsLoadingAnalysisResultExportList(false);
+  }, [cancelAnalysisExportRequests]);
 
   function clearAnalysisExportErrors() {
     setAnalysisResultJsonExportError(null);
@@ -76,87 +102,120 @@ export function useAnalysisExportState({
     setAnalysisResultExportDownloadError(null);
   }
 
-  async function refreshAnalysisResultExports(analysisId: string) {
+  const refreshAnalysisResultExports = useCallback(async (analysisId: string) => {
+    const request = exportListRequest.begin();
     setIsLoadingAnalysisResultExportList(true);
     setAnalysisResultExportListError(null);
     try {
       const response = await fetchAnalysisResultExports(analysisId);
-      setAnalysisResultExportList(response);
+      if (exportListRequest.isCurrent(request)) {
+        setAnalysisResultExportList(response);
+      }
     } catch (error) {
-      setAnalysisResultExportList(null);
-      setAnalysisResultExportListError(
-        error instanceof Error ? error.message : "analysis_result_exports_fetch_failed",
-      );
+      if (exportListRequest.isCurrent(request)) {
+        setAnalysisResultExportList(null);
+        setAnalysisResultExportListError(
+          error instanceof Error ? error.message : "analysis_result_exports_fetch_failed",
+        );
+      }
     } finally {
-      setIsLoadingAnalysisResultExportList(false);
+      if (exportListRequest.isCurrent(request)) {
+        setIsLoadingAnalysisResultExportList(false);
+      }
     }
-  }
+  }, [exportListRequest]);
 
   async function createJsonExport(analysisId: string) {
+    const request = jsonExportRequest.begin();
     setIsCreatingAnalysisResultJsonExport(true);
     setAnalysisResultJsonExportError(null);
     setAnalysisResultExportDownloadError(null);
     try {
       const response = await createAnalysisResultJsonExport(analysisId);
-      setAnalysisResultJsonExport(response);
-      await refreshAnalysisResultExports(analysisId);
+      if (jsonExportRequest.isCurrent(request)) {
+        setAnalysisResultJsonExport(response);
+        await refreshAnalysisResultExports(analysisId);
+      }
     } catch (error) {
-      setAnalysisResultJsonExport(null);
-      setAnalysisResultJsonExportError(
-        error instanceof Error ? error.message : "analysis_result_json_export_failed",
-      );
+      if (jsonExportRequest.isCurrent(request)) {
+        setAnalysisResultJsonExport(null);
+        setAnalysisResultJsonExportError(
+          error instanceof Error ? error.message : "analysis_result_json_export_failed",
+        );
+      }
     } finally {
-      setIsCreatingAnalysisResultJsonExport(false);
+      if (jsonExportRequest.isCurrent(request)) {
+        setIsCreatingAnalysisResultJsonExport(false);
+      }
     }
   }
 
   async function createCsvExport(analysisId: string) {
+    const request = csvExportRequest.begin();
     setIsCreatingAnalysisResultCsvExport(true);
     setAnalysisResultCsvExportError(null);
     setAnalysisResultExportDownloadError(null);
     try {
       const response = await createAnalysisResultCsvExport(analysisId);
-      setAnalysisResultCsvExport(response);
-      await refreshAnalysisResultExports(analysisId);
+      if (csvExportRequest.isCurrent(request)) {
+        setAnalysisResultCsvExport(response);
+        await refreshAnalysisResultExports(analysisId);
+      }
     } catch (error) {
-      setAnalysisResultCsvExport(null);
-      setAnalysisResultCsvExportError(
-        error instanceof Error ? error.message : "analysis_result_csv_export_failed",
-      );
+      if (csvExportRequest.isCurrent(request)) {
+        setAnalysisResultCsvExport(null);
+        setAnalysisResultCsvExportError(
+          error instanceof Error ? error.message : "analysis_result_csv_export_failed",
+        );
+      }
     } finally {
-      setIsCreatingAnalysisResultCsvExport(false);
+      if (csvExportRequest.isCurrent(request)) {
+        setIsCreatingAnalysisResultCsvExport(false);
+      }
     }
   }
 
   async function createHtmlReport(analysisId: string) {
+    const request = htmlReportRequest.begin();
     setIsCreatingAnalysisResultHtmlReport(true);
     setAnalysisResultHtmlReportError(null);
     setAnalysisResultExportDownloadError(null);
     try {
       const response = await createAnalysisResultHtmlReport(analysisId);
-      setAnalysisResultHtmlReport(response);
-      await refreshAnalysisResultExports(analysisId);
+      if (htmlReportRequest.isCurrent(request)) {
+        setAnalysisResultHtmlReport(response);
+        await refreshAnalysisResultExports(analysisId);
+      }
     } catch (error) {
-      setAnalysisResultHtmlReport(null);
-      setAnalysisResultHtmlReportError(
-        error instanceof Error ? error.message : "analysis_result_html_report_failed",
-      );
+      if (htmlReportRequest.isCurrent(request)) {
+        setAnalysisResultHtmlReport(null);
+        setAnalysisResultHtmlReportError(
+          error instanceof Error ? error.message : "analysis_result_html_report_failed",
+        );
+      }
     } finally {
-      setIsCreatingAnalysisResultHtmlReport(false);
+      if (htmlReportRequest.isCurrent(request)) {
+        setIsCreatingAnalysisResultHtmlReport(false);
+      }
     }
   }
 
   async function downloadExport(analysisId: string, exportId: string) {
+    const request = exportDownloadRequest.begin();
     setIsDownloadingAnalysisResultExport(true);
     setAnalysisResultExportDownloadError(null);
     try {
       await downloadAnalysisResultExport(analysisId, exportId);
     } catch (error) {
-      setAnalysisResultExportDownloadError(
-        error instanceof Error ? error.message : "analysis_result_export_download_failed",
-      );
+      if (exportDownloadRequest.isCurrent(request)) {
+        setAnalysisResultExportDownloadError(
+          error instanceof Error ? error.message : "analysis_result_export_download_failed",
+        );
+      }
     } finally {
-      setIsDownloadingAnalysisResultExport(false);
+      if (exportDownloadRequest.isCurrent(request)) {
+        setIsDownloadingAnalysisResultExport(false);
+      }
     }
   }
 
@@ -165,7 +224,15 @@ export function useAnalysisExportState({
     if (currentAnalysisId !== null) {
       void refreshAnalysisResultExports(currentAnalysisId);
     }
-  }, [currentAnalysisId, currentDatasetVersionId, resetKey]);
+    return cancelAnalysisExportRequests;
+  }, [
+    cancelAnalysisExportRequests,
+    currentAnalysisId,
+    currentDatasetVersionId,
+    refreshAnalysisResultExports,
+    resetAnalysisExportState,
+    resetKey,
+  ]);
 
   return {
     analysisResultCsvExport,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   fetchAnalysisRunResult,
@@ -6,6 +6,7 @@ import {
   type AnalysisModuleId,
   type AnalysisResultEnvelope,
 } from "./api";
+import { createLatestRequestGuard } from "./latestRequest";
 
 interface UseRestoredAnalysisResultStateOptions {
   analysisCatalog: AnalysisMethodListResponse | null;
@@ -30,17 +31,24 @@ export function useRestoredAnalysisResultState({
     null,
   );
   const [isRestoringAnalysisResult, setIsRestoringAnalysisResult] = useState(false);
+  const restoreRequest = useRef(createLatestRequestGuard()).current;
 
-  function resetRestoredAnalysisResultState() {
+  const resetRestoredAnalysisResultState = useCallback(() => {
+    restoreRequest.cancel();
     setRestoredAnalysisResult(null);
     setRestoredAnalysisResultError(null);
-  }
+    setIsRestoringAnalysisResult(false);
+  }, [restoreRequest]);
 
   async function restoreAnalysisRun(analysisId: string) {
+    const request = restoreRequest.begin();
     setIsRestoringAnalysisResult(true);
     setRestoredAnalysisResultError(null);
     try {
       const response = await fetchAnalysisRunResult(analysisId);
+      if (!restoreRequest.isCurrent(request)) {
+        return;
+      }
       setRestoredAnalysisResult(response);
       const method = analysisCatalog?.methods.find(
         (candidate) => candidate.method_id === response.method_id,
@@ -50,12 +58,16 @@ export function useRestoredAnalysisResultState({
       }
       await onRefreshAnalysisResultExports(analysisId);
     } catch (error) {
-      setRestoredAnalysisResult(null);
-      setRestoredAnalysisResultError(
-        error instanceof Error ? error.message : "analysis_result_fetch_failed",
-      );
+      if (restoreRequest.isCurrent(request)) {
+        setRestoredAnalysisResult(null);
+        setRestoredAnalysisResultError(
+          error instanceof Error ? error.message : "analysis_result_fetch_failed",
+        );
+      }
     } finally {
-      setIsRestoringAnalysisResult(false);
+      if (restoreRequest.isCurrent(request)) {
+        setIsRestoringAnalysisResult(false);
+      }
     }
   }
 
@@ -63,7 +75,18 @@ export function useRestoredAnalysisResultState({
     if (currentAnalysisId !== null || currentDatasetVersionId === null) {
       resetRestoredAnalysisResultState();
     }
-  }, [currentAnalysisId, currentDatasetVersionId, resetKey]);
+  }, [currentAnalysisId, currentDatasetVersionId, resetRestoredAnalysisResultState]);
+
+  useEffect(() => {
+    resetRestoredAnalysisResultState();
+  }, [resetKey, resetRestoredAnalysisResultState]);
+
+  useEffect(
+    () => () => {
+      restoreRequest.cancel();
+    },
+    [restoreRequest],
+  );
 
   return {
     isRestoringAnalysisResult,

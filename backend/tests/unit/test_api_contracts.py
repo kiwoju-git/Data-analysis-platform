@@ -15,6 +15,7 @@ import app.services.analysis_runners_eda as analysis_runners_eda
 import app.services.analysis_runners_hypothesis as analysis_runners_hypothesis
 import app.services.analysis_runners_quality as analysis_runners_quality
 import app.services.analysis_runners_regression as analysis_runners_regression
+import app.services.regression_models as regression_models
 from app.analyses.registry import METHOD_VERSIONS, METHODS, MODULES, analysis_method_catalog
 from app.api.v1.schemas.analyses import (
     AnalysisProvenance,
@@ -29,8 +30,10 @@ from app.api.v1.schemas.analyses import (
     AnalysisWarning,
     GageRrPreflightResponse,
     MethodAvailability,
+    RegressionPredictionCsvExportResponse,
     RegressionPredictionPreflightResponse,
     RegressionPredictionResponse,
+    RegressionPredictionRowsPageResponse,
 )
 from app.api.v1.schemas.common import JobReference, JobState, JobStatusResponse
 from app.api.v1.schemas.doe import DoeDesignResponsesResponse, FactorialDesignResponse
@@ -88,6 +91,7 @@ from app.storage.metadata import (
     initialize_metadata_store,
     insert_analysis_run_record,
     insert_job_record,
+    list_analysis_artifact_records,
 )
 
 
@@ -6923,6 +6927,224 @@ def test_regression_prediction_endpoint_returns_ols_predictions_from_manifest(tm
     assert prediction_record.result_path not in tampered_result_response.text
 
 
+def test_regression_prediction_rows_endpoint_pages_all_rows_and_rejects_tampering(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = "y,x\n" + "".join(f"{(2 * value) + 1},{value}\n" for value in range(1005))
+
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=content.encode("utf-8"),
+            filename="linear-model-paged-prediction.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        predictor_column_id = version["columns"][1]["column_id"]
+        analysis_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.linear_model",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "response": response_column_id,
+                    "predictors": predictor_column_id,
+                },
+                "options": {
+                    "response_column_id": response_column_id,
+                    "predictor_column_ids": [predictor_column_id],
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "missing_policy": "complete_case",
+                    "include_intercept": True,
+                    "covariance_type": "standard",
+                },
+            },
+        )
+        model_id = analysis_response.json()["result"]["model_manifest"]["model_id"]
+        prediction_response = client.post(
+            f"/api/v1/regression-models/{model_id}/predictions",
+            json={
+                "dataset_version_id": version["version_id"],
+                "confidence_level": 0.95,
+                "missing_policy": "complete_case",
+                "include_intervals": True,
+            },
+        )
+        prediction_payload = prediction_response.json()
+        prediction_id = prediction_payload["prediction_id"]
+        page_response = client.get(
+            f"/api/v1/regression-models/predictions/{prediction_id}/rows",
+            params={"offset": 1000, "limit": 10},
+        )
+        export_response = client.post(
+            f"/api/v1/regression-models/predictions/{prediction_id}/exports/csv",
+        )
+        export_payload = export_response.json()
+        export_download_response = client.get(
+            f"/api/v1/analysis-runs/{prediction_id}/exports/"
+            f"{export_payload['export_id']}/download",
+        )
+
+        artifacts = list_analysis_artifact_records(settings.workspace_root, prediction_id)
+        rows_artifact = next(
+            artifact for artifact in artifacts if artifact.kind == "regression_prediction_rows"
+        )
+        rows_path = settings.workspace_root / rows_artifact.path
+        rows_path.write_bytes(rows_path.read_bytes() + b'{"tampered":true}\n')
+        tampered_response = client.get(
+            f"/api/v1/regression-models/predictions/{prediction_id}/rows",
+        )
+        tampered_export_response = client.post(
+            f"/api/v1/regression-models/predictions/{prediction_id}/exports/csv",
+        )
+
+    assert analysis_response.status_code == 201
+    assert prediction_response.status_code == 200
+    assert prediction_payload["row_count_predicted"] == 1005
+    assert prediction_payload["row_count_omitted"] == 5
+    assert prediction_payload["truncated"] is True
+    assert len(prediction_payload["rows"]) == 1000
+
+    assert page_response.status_code == 200
+    page_payload = page_response.json()
+    RegressionPredictionRowsPageResponse.model_validate(page_payload)
+    assert page_payload == {
+        "prediction_id": prediction_id,
+        "model_id": model_id,
+        "offset": 1000,
+        "limit": 10,
+        "total": 1005,
+        "returned": 5,
+        "has_previous": True,
+        "has_next": False,
+        "rows": page_payload["rows"],
+    }
+    assert [row["row_index"] for row in page_payload["rows"]] == list(range(1000, 1005))
+    assert all(
+        set(row)
+        == {
+            "row_index",
+            "predicted_mean",
+            "mean_confidence_interval",
+            "prediction_interval",
+            "warnings",
+        }
+        for row in page_payload["rows"]
+    )
+    assert page_payload["rows"][0]["predicted_mean"] == pytest.approx(2001.0, abs=1e-9)
+
+    assert export_response.status_code == 201
+    RegressionPredictionCsvExportResponse.model_validate(export_payload)
+    assert export_payload["prediction_id"] == prediction_id
+    assert export_payload["format"] == "regression_prediction_csv"
+    assert export_payload["artifact_kind"] == "regression_prediction_csv_export"
+    assert export_payload["row_count"] == 1005
+    assert len(export_payload["preview_rows"]) == 50
+    assert export_payload["columns"] == [
+        "prediction_id",
+        "model_id",
+        "source_dataset_version_id",
+        "target_dataset_version_id",
+        "model_manifest_sha256",
+        "target_schema_hash",
+        "confidence_level",
+        "row_index",
+        "predicted_mean",
+        "mean_ci_level",
+        "mean_ci_lower",
+        "mean_ci_upper",
+        "prediction_interval_level",
+        "prediction_interval_lower",
+        "prediction_interval_upper",
+        "warnings",
+    ]
+    assert not {"x", "y", "group", "predictor_value"}.intersection(export_payload["columns"])
+    assert export_download_response.status_code == 200
+    assert hashlib.sha256(export_download_response.content).hexdigest() == export_payload["sha256"]
+    downloaded_rows = list(
+        csv.reader(io.StringIO(export_download_response.content.decode("utf-8-sig"))),
+    )
+    assert len(downloaded_rows) == 1006
+    assert downloaded_rows[0] == export_payload["columns"]
+    assert downloaded_rows[-1][7] == "1004"
+    assert downloaded_rows[-1][0] == prediction_id
+    assert downloaded_rows[-1][1] == model_id
+
+    assert tampered_response.status_code == 409
+    assert tampered_response.json()["error"]["code"] in {
+        "regression_prediction_rows_artifact_checksum_mismatch",
+        "regression_prediction_rows_artifact_invalid",
+    }
+    assert rows_artifact.path not in _public_error_text(tampered_response)
+    assert tampered_export_response.status_code == 409
+    assert tampered_export_response.json()["error"]["code"] in {
+        "regression_prediction_rows_artifact_checksum_mismatch",
+        "regression_prediction_rows_artifact_invalid",
+    }
+    assert rows_artifact.path not in _public_error_text(tampered_export_response)
+
+
+def test_regression_prediction_metadata_failure_removes_result_artifacts(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    content = b"y,x\n3,1\n5,2\n7,3\n9,4\n11,5\n"
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=content,
+            filename="linear-model-prediction-cleanup.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        predictor_column_id = version["columns"][1]["column_id"]
+        analysis_response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.linear_model",
+                "method_version": "0.1.0",
+                "dataset_version_id": version["version_id"],
+                "roles": {"response": response_column_id, "predictors": predictor_column_id},
+                "options": {
+                    "response_column_id": response_column_id,
+                    "predictor_column_ids": [predictor_column_id],
+                    "alpha": 0.05,
+                    "confidence_level": 0.95,
+                    "missing_policy": "complete_case",
+                    "include_intercept": True,
+                    "covariance_type": "standard",
+                },
+            },
+        )
+        model_id = analysis_response.json()["result"]["model_manifest"]["model_id"]
+        existing_results = set(tmp_path.rglob("result.json"))
+        existing_prediction_rows = set(tmp_path.rglob("prediction_rows.jsonl"))
+
+        def fail_metadata_insert(*args, **kwargs) -> None:
+            raise RuntimeError("synthetic metadata failure")
+
+        monkeypatch.setattr(
+            regression_models,
+            "insert_analysis_run_record_with_artifacts",
+            fail_metadata_insert,
+        )
+        prediction_response = client.post(
+            f"/api/v1/regression-models/{model_id}/predictions",
+            json={
+                "dataset_version_id": version["version_id"],
+                "confidence_level": 0.95,
+                "missing_policy": "complete_case",
+                "include_intervals": True,
+            },
+        )
+
+    assert analysis_response.status_code == 201
+    assert prediction_response.status_code == 500
+    assert set(tmp_path.rglob("result.json")) == existing_results
+    assert set(tmp_path.rglob("prediction_rows.jsonl")) == existing_prediction_rows
+
+
 def test_regression_prediction_endpoint_handles_categorical_factor_terms(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"y,group\n" b"10,A\n" b"11,A\n" b"13,B\n" b"14,B\n" b"16,C\n" b"17,C\n"
@@ -7279,6 +7501,10 @@ def test_regression_prediction_preflight_reports_target_dataset_risks(tmp_path) 
             f"/api/v1/regression-models/{model_id}/prediction-preflight",
             json={"dataset_version_id": target_version["version_id"]},
         )
+        prediction_response = client.post(
+            f"/api/v1/regression-models/{model_id}/predictions",
+            json={"dataset_version_id": target_version["version_id"]},
+        )
 
     assert analysis_response.status_code == 201
     assert preflight_response.status_code == 200
@@ -7316,6 +7542,15 @@ def test_regression_prediction_preflight_reports_target_dataset_risks(tmp_path) 
     assert categorical_check["training_level_count"] == 3
     assert categorical_check["n_valid"] == 5
     assert categorical_check["n_unseen_level"] == 1
+    assert prediction_response.status_code == 200
+    prediction = prediction_response.json()
+    RegressionPredictionResponse.model_validate(prediction)
+    assert prediction["source_dataset_version_id"] == training_version["version_id"]
+    assert prediction["target_dataset_version_id"] == target_version["version_id"]
+    assert prediction["row_count_total"] == 5
+    assert prediction["row_count_predicted"] == 2
+    assert prediction["row_count_excluded"] == 3
+    assert [row["row_index"] for row in prediction["rows"]] == [0, 4]
 
 
 def test_analysis_run_executes_linear_model_with_categorical_factor(tmp_path) -> None:

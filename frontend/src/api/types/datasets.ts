@@ -123,6 +123,26 @@ export interface DatasetVersionResponse {
   canonical_artifact: DatasetArtifactResponse | null;
 }
 
+export interface DatasetVersionCatalogItem {
+  version_id: string;
+  dataset_id: string;
+  original_filename: string;
+  version_number: number;
+  row_count: number;
+  column_count: number;
+  created_at: string;
+}
+
+export interface DatasetVersionCatalogResponse {
+  offset: number;
+  limit: number;
+  total: number;
+  returned: number;
+  has_previous: boolean;
+  has_next: boolean;
+  versions: DatasetVersionCatalogItem[];
+}
+
 export interface DatasetColumnSchemaUpdate {
   column_id: string;
   display_name: string;

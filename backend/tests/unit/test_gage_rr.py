@@ -3,11 +3,20 @@ from pathlib import Path
 
 import pytest
 
-from app.statistics.gage_rr import GageRrError, calculate_gage_rr_anova
+from app.statistics.gage_rr import (
+    GageRrError,
+    _anova_row,
+    _variance_components,
+    _warnings,
+    calculate_gage_rr_anova,
+)
 from app.statistics.gage_rr_preflight import GageRrColumn
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/gage_rr_input.json")
 REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/gage_rr_reference.json")
+MINITAB_REFERENCE_FIXTURE = Path(
+    "backend/tests/reference/fixtures/quality_gage_rr_crossed_reference.json",
+)
 
 
 def test_gage_rr_balanced_crossed_anova_matches_hand_checkable_fixture() -> None:
@@ -135,6 +144,106 @@ def test_gage_rr_matches_reference_fixture() -> None:
                 else:
                     assert actual_component[key] == pytest.approx(expected_value, abs=1e-12)
         assert result["warnings"] == expected["warnings"]
+
+
+def test_gage_rr_matches_minitab_full_model_summary_under_no_pooling_policy() -> None:
+    fixture = json.loads(MINITAB_REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    design = fixture["published_design"]
+    published_anova = fixture["published_full_model_anova"]
+    expected = fixture["application_no_pool_expected_from_published_rounded_ms"]
+    tolerance = fixture["tolerances"]["derived_from_rounded_ms_absolute"]
+
+    assert fixture["source"]["organization"] == "Minitab, LLC"
+    assert fixture["source"]["example_url"].startswith("https://support.minitab.com/")
+    assert "does not remove or pool" in fixture["application_policy"]["comparison_limit"]
+    assert design == {
+        "part_count": 10,
+        "operator_count": 3,
+        "replicate_count": 3,
+        "n_total": 90,
+        "balanced": True,
+        "model": "crossed_two_factor_random_with_part_operator_interaction",
+        "interaction_removal_alpha": 0.05,
+    }
+
+    interaction_row = _anova_row(
+        source="part_operator",
+        degrees_of_freedom=published_anova["part_operator"]["df"],
+        sum_of_squares=published_anova["part_operator"]["ss"],
+        mean_square=published_anova["part_operator"]["ms"],
+        denominator="repeatability",
+        denominator_mean_square=published_anova["repeatability"]["ms"],
+        denominator_degrees_of_freedom=published_anova["repeatability"]["df"],
+    )
+    assert interaction_row["f_statistic"] == pytest.approx(
+        published_anova["part_operator"]["f"],
+        abs=fixture["tolerances"]["published_rounded_f_absolute"],
+    )
+    assert interaction_row["p_value"] == pytest.approx(
+        published_anova["part_operator"]["p"],
+        abs=fixture["tolerances"]["published_rounded_p_absolute"],
+    )
+
+    components = _variance_components(
+        {
+            "mean_squares": {
+                source: published_anova[source]["ms"]
+                for source in ("part", "operator", "part_operator", "repeatability")
+            },
+        },
+        design,
+    )
+    assert components["repeatability"]["raw_variance"] == pytest.approx(
+        expected["repeatability_raw_variance"],
+        abs=tolerance,
+    )
+    assert components["part_operator"]["raw_variance"] == pytest.approx(
+        expected["part_operator_raw_variance"],
+        abs=tolerance,
+    )
+    assert components["part_operator"]["final_variance"] == expected["part_operator_final_variance"]
+    assert components["operator"]["raw_variance"] == pytest.approx(
+        expected["operator_raw_variance"],
+        abs=tolerance,
+    )
+    assert components["part_to_part"]["raw_variance"] == pytest.approx(
+        expected["part_to_part_raw_variance"],
+        abs=tolerance,
+    )
+    for component_name, expected_key in (
+        ("reproducibility", "reproducibility_final_variance"),
+        ("total_gage_rr", "total_gage_rr_final_variance"),
+        ("total_variation", "total_variation_final_variance"),
+    ):
+        assert components[component_name]["final_variance"] == pytest.approx(
+            expected[expected_key],
+            abs=tolerance,
+        )
+    assert components["total_gage_rr"]["percent_contribution"] == pytest.approx(
+        expected["total_gage_rr_percent_contribution"],
+        abs=tolerance,
+    )
+    assert components["total_gage_rr"]["percent_study_variation"] == pytest.approx(
+        expected["total_gage_rr_percent_study_variation"],
+        abs=tolerance,
+    )
+    assert components["ndc"] == expected["ndc"]
+    assert components["interaction_policy"] == fixture["application_policy"]["interaction"]
+    assert (
+        components["negative_component_policy"]
+        == fixture["application_policy"]["negative_component"]
+    )
+    assert (
+        _warnings(
+            {
+                "n_excluded_missing_measurement": 0,
+                "n_excluded_non_numeric_measurement": 0,
+                "n_excluded_missing_identifier": 0,
+            },
+            components,
+        )
+        == fixture["expected_warnings"]
+    )
 
 
 def test_gage_rr_rejects_invalid_designs_without_fake_components() -> None:

@@ -2,6 +2,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import status
+from pydantic import ValidationError
 
 from app.api.v1.schemas.analyses import (
     AnalysisResultCsvExportResponse,
@@ -17,13 +19,20 @@ from app.api.v1.schemas.analyses import (
     AnalysisResultExportListResponse,
     AnalysisResultHtmlReportResponse,
     AnalysisResultJsonExportResponse,
+    RegressionPredictionCsvExportResponse,
+    RegressionPredictionResponse,
+    RegressionPredictionRow,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import canonical_json_bytes
 from app.services.analysis_run_execution import utc_now as _utc_now
 from app.services.analysis_run_results import get_analysis_run_result
-from app.storage.atomic import atomic_write_bytes
+from app.services.regression_models import (
+    REGRESSION_PREDICTION_METHOD_ID,
+    iter_regression_prediction_rows,
+)
+from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
     get_analysis_artifact_record,
@@ -55,6 +64,32 @@ ANALYSIS_RESULT_HTML_REPORT_FORMAT: Literal["analysis_result_html_report"] = (
 )
 ANALYSIS_RESULT_HTML_REPORT_MEDIA_TYPE: Literal["text/html"] = "text/html"
 ANALYSIS_RESULT_HTML_REPORT_TITLE = "DataLab Studio Analysis Report"
+REGRESSION_PREDICTION_CSV_EXPORT_SCHEMA_VERSION = 1
+REGRESSION_PREDICTION_CSV_EXPORT_KIND: Literal["regression_prediction_csv_export"] = (
+    "regression_prediction_csv_export"
+)
+REGRESSION_PREDICTION_CSV_EXPORT_FORMAT: Literal["regression_prediction_csv"] = (
+    "regression_prediction_csv"
+)
+REGRESSION_PREDICTION_CSV_EXPORT_MEDIA_TYPE: Literal["text/csv"] = "text/csv"
+REGRESSION_PREDICTION_CSV_COLUMNS = (
+    "prediction_id",
+    "model_id",
+    "source_dataset_version_id",
+    "target_dataset_version_id",
+    "model_manifest_sha256",
+    "target_schema_hash",
+    "confidence_level",
+    "row_index",
+    "predicted_mean",
+    "mean_ci_level",
+    "mean_ci_lower",
+    "mean_ci_upper",
+    "prediction_interval_level",
+    "prediction_interval_lower",
+    "prediction_interval_upper",
+    "warnings",
+)
 
 HYPOTHESIS_REPORT_SUMMARY_TYPES = {
     "one_sample_t_test",
@@ -88,6 +123,7 @@ ANALYSIS_RESULT_EXPORT_DOWNLOAD_KINDS = {
     ANALYSIS_RESULT_JSON_EXPORT_KIND,
     ANALYSIS_RESULT_CSV_EXPORT_KIND,
     ANALYSIS_RESULT_HTML_REPORT_KIND,
+    REGRESSION_PREDICTION_CSV_EXPORT_KIND,
 }
 
 
@@ -271,6 +307,94 @@ def create_analysis_result_csv_export(
     )
 
 
+def create_regression_prediction_csv_export(
+    settings: Settings,
+    prediction_id: UUID,
+) -> RegressionPredictionCsvExportResponse:
+    record = get_analysis_run_record(settings.workspace_root, str(prediction_id))
+    if record is None or record.method_id != REGRESSION_PREDICTION_METHOD_ID:
+        raise ApiError(
+            code="regression_prediction_not_found",
+            message="요청한 회귀 예측 결과를 찾을 수 없습니다.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    result = get_analysis_run_result(settings, prediction_id)
+    if record.result_sha256 is None:
+        raise ApiError(
+            code="analysis_result_not_available",
+            message="저장된 분석 결과가 아직 없습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    try:
+        prediction = RegressionPredictionResponse.model_validate(result.result)
+    except ValidationError as exc:
+        raise ApiError(
+            code="regression_prediction_result_invalid",
+            message="저장된 회귀 예측 결과 형식이 올바르지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+
+    export_id = uuid4()
+    created_at = _utc_now()
+    relative_path = _prediction_csv_export_relative_path(str(prediction_id), str(export_id))
+    export_path = settings.workspace_root / relative_path
+    preview_rows: list[list[str]] = []
+    row_count = 0
+
+    def write_export(temp_path: Path) -> None:
+        nonlocal row_count
+        with temp_path.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.writer(handle, lineterminator="\n")
+            writer.writerow(
+                [_sanitize_csv_cell(column) for column in REGRESSION_PREDICTION_CSV_COLUMNS],
+            )
+            for row in iter_regression_prediction_rows(settings, prediction_id):
+                export_row = _regression_prediction_csv_row(prediction, row)
+                writer.writerow(export_row)
+                if len(preview_rows) < ANALYSIS_RESULT_CSV_PREVIEW_ROW_LIMIT:
+                    preview_rows.append(export_row)
+                row_count += 1
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    atomic_replace(export_path, write_export)
+    export_sha256 = _file_sha256(export_path)
+    size_bytes = export_path.stat().st_size
+    try:
+        insert_analysis_artifact_record(
+            settings.workspace_root,
+            AnalysisArtifactRecord(
+                artifact_id=str(export_id),
+                analysis_id=str(prediction_id),
+                kind=REGRESSION_PREDICTION_CSV_EXPORT_KIND,
+                path=relative_path.as_posix(),
+                sha256=export_sha256,
+                media_type=REGRESSION_PREDICTION_CSV_EXPORT_MEDIA_TYPE,
+                created_at=created_at,
+            ),
+        )
+    except Exception:
+        export_path.unlink(missing_ok=True)
+        raise
+
+    return RegressionPredictionCsvExportResponse(
+        schema_version=REGRESSION_PREDICTION_CSV_EXPORT_SCHEMA_VERSION,
+        export_id=export_id,
+        prediction_id=prediction_id,
+        format=REGRESSION_PREDICTION_CSV_EXPORT_FORMAT,
+        artifact_kind=REGRESSION_PREDICTION_CSV_EXPORT_KIND,
+        media_type=REGRESSION_PREDICTION_CSV_EXPORT_MEDIA_TYPE,
+        sha256=export_sha256,
+        size_bytes=size_bytes,
+        source_result_sha256=record.result_sha256,
+        stale=record.stale,
+        created_at=created_at,
+        columns=list(REGRESSION_PREDICTION_CSV_COLUMNS),
+        row_count=row_count,
+        preview_rows=preview_rows,
+    )
+
+
 def create_analysis_result_html_report_export(
     settings: Settings,
     analysis_id: UUID,
@@ -400,7 +524,10 @@ def _analysis_export_download_filename(
 ) -> str:
     if artifact_kind == ANALYSIS_RESULT_JSON_EXPORT_KIND:
         suffix = "json"
-    elif artifact_kind == ANALYSIS_RESULT_CSV_EXPORT_KIND:
+    elif artifact_kind in {
+        ANALYSIS_RESULT_CSV_EXPORT_KIND,
+        REGRESSION_PREDICTION_CSV_EXPORT_KIND,
+    }:
         suffix = "csv"
     else:
         suffix = "html"
@@ -435,6 +562,51 @@ def _result_html_report_relative_path(analysis_id: str, export_id: str) -> Path:
         / "exports"
         / f"{export_id}.analysis-result.html"
     )
+
+
+def _prediction_csv_export_relative_path(prediction_id: str, export_id: str) -> Path:
+    return (
+        Path("workspaces")
+        / "analyses"
+        / prediction_id
+        / "exports"
+        / f"{export_id}.regression-prediction.csv"
+    )
+
+
+def _regression_prediction_csv_row(
+    prediction: RegressionPredictionResponse,
+    row: RegressionPredictionRow,
+) -> list[str]:
+    mean_interval = row.mean_confidence_interval
+    prediction_interval = row.prediction_interval
+    values = [
+        str(prediction.prediction_id),
+        str(prediction.model_id),
+        str(prediction.source_dataset_version_id),
+        str(prediction.target_dataset_version_id),
+        prediction.model_manifest_sha256,
+        prediction.target_schema_hash,
+        str(prediction.confidence_level),
+        str(row.row_index),
+        str(row.predicted_mean),
+        "" if mean_interval is None else str(mean_interval.level),
+        "" if mean_interval is None else str(mean_interval.lower),
+        "" if mean_interval is None else str(mean_interval.upper),
+        "" if prediction_interval is None else str(prediction_interval.level),
+        "" if prediction_interval is None else str(prediction_interval.lower),
+        "" if prediction_interval is None else str(prediction_interval.upper),
+        ";".join(row.warnings),
+    ]
+    return [_sanitize_csv_cell(value) for value in values]
+
+
+def _file_sha256(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 
 def _analysis_result_csv_rows(result: AnalysisResultEnvelope) -> list[list[str]]:

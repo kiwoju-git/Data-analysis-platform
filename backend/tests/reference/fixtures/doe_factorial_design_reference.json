@@ -1,0 +1,87 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "doe_factorial_design_nist_standard_order_v1",
+  "source": {
+    "organization": "NIST/SEMATECH",
+    "standard_order_title": "Two-level full factorial designs",
+    "standard_order_url": "https://www.itl.nist.gov/div898/handbook/pri/section3/pri3331.htm",
+    "replication_title": "Full factorial example",
+    "replication_url": "https://www.itl.nist.gov/div898/handbook/pri/section3/pri3332.htm",
+    "accessed_on": "2026-07-12",
+    "published_scope": "The 2^3 Yates standard-order coded matrix and the replicated Speed/Feed/Depth factor settings in NIST Tables 3.6 and 3.7.",
+    "license_review": "Uses a small numerical design table from an official United States government technical reference. No response measurements, screenshot, or prose passage is copied."
+  },
+  "conventions": {
+    "published_standard_order": "The first factor changes fastest, the second every two runs, and the third every four runs. Low is coded -1 and high is coded +1.",
+    "published_replication": "The complete eight-run standard-order design is repeated for replicate 2.",
+    "application_run_order": "Randomization is disabled for direct NIST parity, so application run_order is 1 through 16. Seeded shuffle behavior is an application-specific contract covered by the companion factorial_design_reference.json fixture.",
+    "application_blocking": "NIST standard-order parity is unblocked. The application's round-robin block assignment is covered separately and is not attributed to NIST.",
+    "application_checksum": "The expected SHA-256 is derived from the NIST factor table using the application's canonical schema-version-1 JSON payload; NIST does not publish this checksum.",
+    "analysis_limit": "This fixture validates an immutable design asset only. It does not provide responses, effects, OLS, ANOVA, diagnostics, or optimization results."
+  },
+  "tolerances": {
+    "factor_levels_absolute": 1e-12,
+    "coded_levels_order_and_checksum": "exact"
+  },
+  "reference_case": {
+    "case_id": "nist_two_cubed_replicated_standard_order",
+    "factors": [
+      {"name": "Speed", "low": 16.0, "high": 24.0, "unit": null},
+      {"name": "Feed", "low": 0.001, "high": 0.005, "unit": null},
+      {"name": "Depth", "low": 0.01, "high": 0.02, "unit": null}
+    ],
+    "options": {
+      "replicates": 2,
+      "center_points": 0,
+      "randomize": false,
+      "randomization_seed": 0,
+      "block_count": 1
+    },
+    "published_coded_standard_order": [
+      [-1, -1, -1],
+      [1, -1, -1],
+      [-1, 1, -1],
+      [1, 1, -1],
+      [-1, -1, 1],
+      [1, -1, 1],
+      [-1, 1, 1],
+      [1, 1, 1]
+    ],
+    "published_factor_level_standard_order": [
+      [16.0, 0.001, 0.01],
+      [24.0, 0.001, 0.01],
+      [16.0, 0.005, 0.01],
+      [24.0, 0.005, 0.01],
+      [16.0, 0.001, 0.02],
+      [24.0, 0.001, 0.02],
+      [16.0, 0.005, 0.02],
+      [24.0, 0.005, 0.02]
+    ],
+    "expected_application_metadata": {
+      "schema_version": 1,
+      "family": "two_level_full_factorial",
+      "run_count": 16,
+      "standard_orders": [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8],
+      "run_orders": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+      "replicate_indices": [1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2],
+      "center_points": [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+      "block_indices": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+      "design_sha256": "6a2fe196b7400d02877ad28c74b020ae09c46be837b39ad409706c1c0ebc1935"
+    }
+  },
+  "failure_case": {
+    "case_id": "reversed_factor_range_rejected",
+    "factors": [
+      {"name": "Speed", "low": 24.0, "high": 16.0, "unit": null},
+      {"name": "Feed", "low": 0.001, "high": 0.005, "unit": null}
+    ],
+    "options": {
+      "replicates": 1,
+      "center_points": 0,
+      "randomize": false,
+      "randomization_seed": 0,
+      "block_count": 1
+    },
+    "expected_error": "doe_factorial_factor_range_invalid"
+  }
+}

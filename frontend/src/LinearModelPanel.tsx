@@ -3,11 +3,22 @@ import type { ReactNode } from "react";
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
+  DatasetVersionCatalogItem,
   DatasetVersionResponse,
   LinearModelResult,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
+  RegressionPredictionRowsPageResponse,
 } from "./api";
+import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
+import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
+
+export interface LinearModelPredictionRowsState {
+  error: string | null;
+  isLoading: boolean;
+  page: RegressionPredictionRowsPageResponse | null;
+  onPageChange: (offset: number) => void;
+}
 
 interface LinearModelPanelProps {
   alpha: number;
@@ -21,8 +32,11 @@ interface LinearModelPanelProps {
   predictorColumns: DatasetColumnResponse[];
   prediction: RegressionPredictionResponse | null;
   predictionError: string | null;
+  predictionExportState: RegressionPredictionExportState;
   predictionPreflight: RegressionPredictionPreflightResponse | null;
   predictionPreflightError: string | null;
+  predictionRowsState: LinearModelPredictionRowsState;
+  predictionTargetState: RegressionPredictionTargetState;
   quadraticColumnIds: string[];
   responseColumnId: string | null;
   responseColumns: DatasetColumnResponse[];
@@ -64,8 +78,11 @@ export function LinearModelPanel({
   predictorColumns,
   prediction,
   predictionError,
+  predictionExportState,
   predictionPreflight,
   predictionPreflightError,
+  predictionRowsState,
+  predictionTargetState,
   quadraticColumnIds,
   responseColumnId,
   responseColumns,
@@ -107,21 +124,30 @@ export function LinearModelPanel({
   );
   const interactionOptions = linearModelInteractionOptions(selectedNumericPredictors);
   const canRunPredictionPreflight =
-    version !== null && result?.model_manifest !== undefined && !isRunningPredictionPreflight;
+    version !== null &&
+    result?.model_manifest !== undefined &&
+    predictionTargetState.selectedTargetVersionId !== null &&
+    !isRunningPredictionPreflight;
   const canRunPrediction =
     version !== null &&
     result?.model_manifest !== undefined &&
     predictionPreflight !== null &&
     predictionPreflight.prediction_ready &&
     predictionPreflight.model_id === result.model_manifest.model_id &&
-    predictionPreflight.target_dataset_version_id === version.version_id &&
+    predictionPreflight.target_dataset_version_id ===
+      predictionTargetState.selectedTargetVersionId &&
     !isRunningPrediction &&
     !isRunningPredictionPreflight;
   const preflightErrorCount =
     predictionPreflight?.issues.filter((issue) => issue.severity === "error").length ?? 0;
   const preflightWarningCount =
     predictionPreflight?.issues.filter((issue) => issue.severity === "warning").length ?? 0;
-  const predictionRowsPreview = prediction?.rows.slice(0, 25) ?? [];
+  const activePredictionRowsPage =
+    prediction !== null && predictionRowsState.page?.prediction_id === prediction.prediction_id
+      ? predictionRowsState.page
+      : null;
+  const predictionRowsPreview =
+    activePredictionRowsPage?.rows ?? prediction?.rows.slice(0, 25) ?? [];
 
   return (
     <section className="analysis-run-panel" aria-labelledby="linear-model-title">
@@ -315,7 +341,7 @@ export function LinearModelPanel({
                     <h4 id="linear-model-prediction-preflight-title">
                       예측 사전점검
                     </h4>
-                    <p>현재 데이터셋 버전을 저장된 모델 manifest와 대조합니다.</p>
+                    <p>선택한 데이터셋 버전을 저장된 모델 manifest와 대조합니다.</p>
                   </div>
                   <div className="button-row">
                     <button
@@ -343,8 +369,99 @@ export function LinearModelPanel({
                 {result.model_manifest === undefined ? (
                   <div className="notice-box">저장된 model manifest가 없는 결과입니다.</div>
                 ) : null}
+                <div className="option-grid option-grid-wide">
+                  <label>
+                    <span>예측 대상 데이터셋 버전</span>
+                    <select
+                      aria-label="예측 대상 데이터셋 버전"
+                      disabled={
+                        predictionTargetState.selectedTargetVersionId === null ||
+                        isRunningPredictionPreflight ||
+                        isRunningPrediction ||
+                        predictionExportState.isCreating ||
+                        predictionExportState.isDownloading
+                      }
+                      value={predictionTargetState.selectedTargetVersionId ?? ""}
+                      onChange={(event) => {
+                        predictionTargetState.onSelect(event.target.value);
+                      }}
+                    >
+                      {version !== null ? (
+                        <option value={version.version_id}>
+                          현재 데이터셋 · v{version.version_number} · {version.row_count.toLocaleString()}
+                          행 × {version.column_count.toLocaleString()}열
+                        </option>
+                      ) : null}
+                      {predictionTargetState.selectedTarget !== null &&
+                      predictionTargetState.selectedTarget.version_id !== version?.version_id &&
+                      !predictionTargetState.catalog?.versions.some(
+                        (candidate) =>
+                          candidate.version_id ===
+                          predictionTargetState.selectedTarget?.version_id,
+                      ) ? (
+                        <option value={predictionTargetState.selectedTarget.version_id}>
+                          {predictionTargetLabel(predictionTargetState.selectedTarget)}
+                        </option>
+                      ) : null}
+                      {predictionTargetState.catalog?.versions
+                        .filter((candidate) => candidate.version_id !== version?.version_id)
+                        .map((candidate) => (
+                          <option key={candidate.version_id} value={candidate.version_id}>
+                            {predictionTargetLabel(candidate)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </div>
+                {predictionTargetState.error !== null ? (
+                  <div className="error-box" role="alert">
+                    데이터셋 버전 목록 조회 실패: {predictionTargetState.error}
+                  </div>
+                ) : null}
+                {predictionTargetState.catalog !== null &&
+                predictionTargetState.catalog.total > predictionTargetState.catalog.limit ? (
+                  <div className="result-pagination" aria-label="예측 대상 데이터셋 목록 페이지 이동">
+                    <button
+                      type="button"
+                      disabled={
+                        predictionTargetState.isLoading ||
+                        !predictionTargetState.catalog.has_previous
+                      }
+                      onClick={() => {
+                        predictionTargetState.onPageChange(
+                          Math.max(
+                            0,
+                            predictionTargetState.catalog!.offset -
+                              predictionTargetState.catalog!.limit,
+                          ),
+                        );
+                      }}
+                    >
+                      이전
+                    </button>
+                    <span>
+                      {predictionTargetState.catalog.offset + 1}-
+                      {predictionTargetState.catalog.offset +
+                        predictionTargetState.catalog.returned} / {predictionTargetState.catalog.total}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={
+                        predictionTargetState.isLoading || !predictionTargetState.catalog.has_next
+                      }
+                      onClick={() => {
+                        predictionTargetState.onPageChange(
+                          predictionTargetState.catalog!.offset +
+                            predictionTargetState.catalog!.limit,
+                        );
+                      }}
+                    >
+                      다음
+                    </button>
+                  </div>
+                ) : null}
                 <div className="notice-box">
-                  예측은 저장된 OLS 모델이 현재 데이터셋 버전에 적용한 추정값입니다.
+                  예측은 저장된 OLS 모델이 선택한 데이터셋 버전에 적용한 추정값입니다.
                   원인·효과나 확정값으로 해석하지 말고, 학습 범위 밖 값과 OLS 가정을 함께
                   확인해야 합니다.
                 </div>
@@ -499,6 +616,44 @@ export function LinearModelPanel({
                         {prediction.row_limit.toLocaleString()}
                       </strong>
                     </div>
+                    <div className="button-row" aria-label="전체 예측 CSV export">
+                      <button
+                        className="secondary-button"
+                        disabled={
+                          predictionExportState.isCreating ||
+                          predictionExportState.isDownloading
+                        }
+                        onClick={predictionExportState.onCreate}
+                        type="button"
+                      >
+                        {predictionExportState.isCreating
+                          ? "전체 예측 CSV 생성 중"
+                          : "전체 예측 CSV 생성"}
+                      </button>
+                      {predictionExportState.csvExport !== null ? (
+                        <>
+                          <span className="cell-subtle">
+                            {predictionExportState.csvExport.row_count.toLocaleString()}행 · sha256:
+                            {shortIdentifier(predictionExportState.csvExport.sha256)}
+                          </span>
+                          <button
+                            className="secondary-button"
+                            disabled={predictionExportState.isDownloading}
+                            onClick={predictionExportState.onDownload}
+                            type="button"
+                          >
+                            {predictionExportState.isDownloading
+                              ? "CSV 다운로드 중"
+                              : "전체 예측 CSV 다운로드"}
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                    {predictionExportState.error !== null ? (
+                      <div className="error-box" role="alert">
+                        예측 CSV export 실패: {predictionExportState.error}
+                      </div>
+                    ) : null}
                     {prediction.warnings.length > 0 ? (
                       <ul className="warning-list" aria-label="예측 경고">
                         {prediction.warnings.map((warning, index) => (
@@ -550,7 +705,55 @@ export function LinearModelPanel({
                         </tbody>
                       </table>
                     </div>
-                    {prediction.rows.length > predictionRowsPreview.length ? (
+                    {predictionRowsState.error !== null ? (
+                      <div className="error-box" role="alert">
+                        예측 행 조회 실패: {predictionRowsState.error}
+                      </div>
+                    ) : null}
+                    {activePredictionRowsPage !== null ? (
+                      <div className="result-pagination" aria-label="예측 행 페이지 이동">
+                        <button
+                          type="button"
+                          disabled={
+                            predictionRowsState.isLoading ||
+                            !activePredictionRowsPage.has_previous
+                          }
+                          onClick={() => {
+                            predictionRowsState.onPageChange(
+                              Math.max(
+                                0,
+                                activePredictionRowsPage.offset - activePredictionRowsPage.limit,
+                              ),
+                            );
+                          }}
+                        >
+                          이전
+                        </button>
+                        <span>
+                          {activePredictionRowsPage.total === 0
+                            ? "0 / 0"
+                            : `${(
+                                activePredictionRowsPage.offset + 1
+                              ).toLocaleString()}-${(
+                                activePredictionRowsPage.offset +
+                                activePredictionRowsPage.returned
+                              ).toLocaleString()} / ${activePredictionRowsPage.total.toLocaleString()}`}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={
+                            predictionRowsState.isLoading || !activePredictionRowsPage.has_next
+                          }
+                          onClick={() => {
+                            predictionRowsState.onPageChange(
+                              activePredictionRowsPage.offset + activePredictionRowsPage.limit,
+                            );
+                          }}
+                        >
+                          다음
+                        </button>
+                      </div>
+                    ) : prediction.rows.length > predictionRowsPreview.length ? (
                       <p className="cell-subtle">
                         화면에는 처음 {predictionRowsPreview.length.toLocaleString()}개 예측 행만
                         표시합니다.
@@ -984,6 +1187,10 @@ function formatPredictionInterval(
   return `${formatPercent(interval.level)} ${formatModelNumber(interval.lower)} - ${formatModelNumber(
     interval.upper,
   )}`;
+}
+
+function predictionTargetLabel(target: DatasetVersionCatalogItem): string {
+  return `${target.original_filename} · v${target.version_number} · ${target.row_count.toLocaleString()}행 × ${target.column_count.toLocaleString()}열 · ${shortIdentifier(target.version_id)}`;
 }
 
 function shortIdentifier(value: string): string {

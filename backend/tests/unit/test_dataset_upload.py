@@ -328,6 +328,85 @@ def test_confirm_parsing_creates_immutable_dataset_version_and_columns(tmp_path)
     assert version_response.json() == payload
 
 
+def test_dataset_version_catalog_pages_confirmed_versions_without_storage_metadata(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        empty_response = client.get("/api/v1/dataset-versions")
+        version_ids: list[str] = []
+        for filename, content in (
+            ("학습 데이터.csv", b"y,x\n3,1\n5,2\n"),
+            ("prediction-target.csv", b"y,x\n7,3\n9,4\n11,5\n"),
+        ):
+            upload_response = client.post(
+                "/api/v1/datasets",
+                files={"file": (filename, content, "text/csv")},
+            )
+            dataset_id = upload_response.json()["dataset_id"]
+            confirm_response = client.post(
+                f"/api/v1/datasets/{dataset_id}/confirm-parsing",
+                json=_confirmation_body(),
+            )
+            version_ids.append(confirm_response.json()["version_id"])
+
+        first_page_response = client.get(
+            "/api/v1/dataset-versions",
+            params={"limit": 1, "offset": 0},
+        )
+        second_page_response = client.get(
+            "/api/v1/dataset-versions",
+            params={"limit": 1, "offset": 1},
+        )
+        invalid_limit_response = client.get(
+            "/api/v1/dataset-versions",
+            params={"limit": 101},
+        )
+
+    assert empty_response.status_code == 200
+    assert empty_response.json() == {
+        "offset": 0,
+        "limit": 20,
+        "total": 0,
+        "returned": 0,
+        "has_previous": False,
+        "has_next": False,
+        "versions": [],
+    }
+
+    assert first_page_response.status_code == 200
+    first_page = first_page_response.json()
+    assert first_page["total"] == 2
+    assert first_page["returned"] == 1
+    assert first_page["has_previous"] is False
+    assert first_page["has_next"] is True
+    assert first_page["versions"][0] == {
+        "version_id": version_ids[1],
+        "dataset_id": first_page["versions"][0]["dataset_id"],
+        "original_filename": "prediction-target.csv",
+        "version_number": 1,
+        "row_count": 3,
+        "column_count": 2,
+        "created_at": first_page["versions"][0]["created_at"],
+    }
+    assert not {
+        "stored_path",
+        "source_sha256",
+        "schema_hash",
+        "canonical_artifact",
+        "columns",
+    }.intersection(first_page["versions"][0])
+
+    assert second_page_response.status_code == 200
+    second_page = second_page_response.json()
+    assert second_page["versions"][0]["version_id"] == version_ids[0]
+    assert second_page["versions"][0]["original_filename"] == "학습 데이터.csv"
+    assert second_page["has_previous"] is True
+    assert second_page["has_next"] is False
+    assert invalid_limit_response.status_code == 422
+
+
 def test_confirm_parsing_rejects_raw_upload_integrity_mismatch(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"alpha,beta\n1,2\n"

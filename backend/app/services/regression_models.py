@@ -1,6 +1,7 @@
 import hashlib
 import json
-from collections.abc import Sequence
+import os
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -10,6 +11,7 @@ from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import status
+from pydantic import ValidationError
 from scipy import stats  # type: ignore[import-untyped]
 
 from app.api.v1.schemas.analyses import (
@@ -27,6 +29,7 @@ from app.api.v1.schemas.analyses import (
     RegressionPredictionRequest,
     RegressionPredictionResponse,
     RegressionPredictionRow,
+    RegressionPredictionRowsPageResponse,
     RegressionPredictionWarning,
 )
 from app.core.config import Settings
@@ -36,13 +39,15 @@ from app.services.dataset_rows import (
     get_dataset_rows_context,
     iter_dataset_rows,
 )
-from app.storage.atomic import atomic_write_bytes
+from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
+    AnalysisArtifactRecord,
     AnalysisRunRecord,
     DatasetColumnRecord,
     get_analysis_run_record,
     get_regression_model_record,
-    insert_analysis_run_record,
+    insert_analysis_run_record_with_artifacts,
+    list_analysis_artifact_records,
 )
 
 APP_VERSION = "0.1.0"
@@ -50,6 +55,8 @@ REGRESSION_PREDICTION_METHOD_ID = "regression.predict"
 REGRESSION_PREDICTION_METHOD_VERSION = "0.1.0"
 REGRESSION_PREDICTION_SCHEMA_VERSION = 1
 MAX_REGRESSION_PREDICTION_INLINE_ROWS = 1000
+REGRESSION_PREDICTION_ROWS_ARTIFACT_KIND = "regression_prediction_rows"
+REGRESSION_PREDICTION_ROWS_MEDIA_TYPE = "application/x-ndjson"
 
 
 @dataclass
@@ -79,6 +86,14 @@ class _PredictionPreflightState:
     checks: list[_PredictionColumnCheck]
     issues: list[RegressionPredictionPreflightIssue]
     row_count_usable: int
+
+
+@dataclass(frozen=True)
+class _PredictionRowsContext:
+    model_id: UUID
+    expected_total: int
+    path: Path
+    sha256: str
 
 
 def get_regression_model_manifest(
@@ -174,16 +189,148 @@ def create_regression_predictions(
         basis=basis,
         coefficient_count=len(coefficient_estimates),
     )
-    response = _calculate_prediction_response(
-        prediction_id=uuid4(),
-        request=body,
-        preflight=preflight,
-        state=state,
-        basis=basis,
-        coefficient_estimates=coefficient_estimates,
+    prediction_id = uuid4()
+    rows_relative_path = _prediction_rows_relative_path(str(prediction_id))
+    rows_path = settings.workspace_root / rows_relative_path
+    response_holder: list[RegressionPredictionResponse] = []
+    rows_sha256_holder: list[str] = []
+
+    def write_rows(temp_path: Path) -> None:
+        hasher = hashlib.sha256()
+        with temp_path.open("wb") as handle:
+
+            def store_row(row: RegressionPredictionRow) -> None:
+                line = _canonical_json_bytes(row.model_dump(mode="json")) + b"\n"
+                handle.write(line)
+                hasher.update(line)
+
+            response_holder.append(
+                _calculate_prediction_response(
+                    prediction_id=prediction_id,
+                    request=body,
+                    preflight=preflight,
+                    state=state,
+                    basis=basis,
+                    coefficient_estimates=coefficient_estimates,
+                    row_sink=store_row,
+                ),
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        rows_sha256_holder.append(hasher.hexdigest())
+
+    atomic_replace(rows_path, write_rows)
+    response = response_holder[0]
+    _persist_prediction_response(
+        settings,
+        response,
+        rows_relative_path=rows_relative_path,
+        rows_sha256=rows_sha256_holder[0],
     )
-    _persist_prediction_response(settings, response)
     return response
+
+
+def get_regression_prediction_rows(
+    settings: Settings,
+    prediction_id: UUID,
+    *,
+    limit: int,
+    offset: int,
+) -> RegressionPredictionRowsPageResponse:
+    context = _prediction_rows_context(settings, prediction_id)
+    rows = [
+        row
+        for row_number, row in enumerate(
+            _iter_regression_prediction_rows(context),
+        )
+        if offset <= row_number < offset + limit
+    ]
+    return RegressionPredictionRowsPageResponse(
+        prediction_id=prediction_id,
+        model_id=context.model_id,
+        offset=offset,
+        limit=limit,
+        total=context.expected_total,
+        returned=len(rows),
+        has_previous=offset > 0,
+        has_next=offset + len(rows) < context.expected_total,
+        rows=rows,
+    )
+
+
+def iter_regression_prediction_rows(
+    settings: Settings,
+    prediction_id: UUID,
+) -> Iterator[RegressionPredictionRow]:
+    context = _prediction_rows_context(settings, prediction_id)
+    return _iter_regression_prediction_rows(context)
+
+
+def _iter_regression_prediction_rows(
+    context: _PredictionRowsContext,
+) -> Iterator[RegressionPredictionRow]:
+    hasher = hashlib.sha256()
+    actual_total = 0
+    try:
+        with context.path.open("rb") as handle:
+            for raw_line in handle:
+                hasher.update(raw_line)
+                try:
+                    payload = json.loads(raw_line.decode("utf-8"))
+                    row = RegressionPredictionRow.model_validate(payload)
+                except (UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
+                    raise _prediction_rows_artifact_error(
+                        "regression_prediction_rows_artifact_invalid",
+                    ) from exc
+                actual_total += 1
+                yield row
+    except OSError as exc:
+        raise _prediction_rows_artifact_error(
+            "regression_prediction_rows_artifact_unreadable",
+        ) from exc
+
+    if hasher.hexdigest() != context.sha256:
+        raise _prediction_rows_artifact_error(
+            "regression_prediction_rows_artifact_checksum_mismatch",
+        )
+    if actual_total != context.expected_total:
+        raise _prediction_rows_artifact_error("regression_prediction_rows_artifact_invalid")
+
+
+def _prediction_rows_context(
+    settings: Settings,
+    prediction_id: UUID,
+) -> _PredictionRowsContext:
+    record = get_analysis_run_record(settings.workspace_root, str(prediction_id))
+    if record is None or record.method_id != REGRESSION_PREDICTION_METHOD_ID:
+        raise ApiError(
+            code="regression_prediction_not_found",
+            message="요청한 회귀 예측 결과를 찾을 수 없습니다.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    model_id, expected_total = _prediction_page_config(record.config_json)
+    artifacts = [
+        artifact
+        for artifact in list_analysis_artifact_records(
+            settings.workspace_root,
+            str(prediction_id),
+        )
+        if artifact.kind == REGRESSION_PREDICTION_ROWS_ARTIFACT_KIND
+    ]
+    if len(artifacts) != 1:
+        raise _prediction_rows_artifact_error("regression_prediction_rows_artifact_missing")
+
+    artifact = artifacts[0]
+    rows_path = _safe_prediction_rows_path(settings.workspace_root, artifact.path)
+    if not rows_path.exists():
+        raise _prediction_rows_artifact_error("regression_prediction_rows_artifact_missing")
+    return _PredictionRowsContext(
+        model_id=model_id,
+        expected_total=expected_total,
+        path=rows_path,
+        sha256=artifact.sha256,
+    )
 
 
 def _build_prediction_preflight_state(
@@ -438,6 +585,7 @@ def _calculate_prediction_response(
     state: _PredictionPreflightState,
     basis: _PredictionBasis,
     coefficient_estimates: list[float],
+    row_sink: Callable[[RegressionPredictionRow], None],
 ) -> RegressionPredictionResponse:
     t_critical = float(
         stats.t.ppf(1.0 - ((1.0 - request.confidence_level) / 2.0), df=basis.df_residual),
@@ -508,16 +656,16 @@ def _calculate_prediction_response(
         row_count_predicted += 1
         for code in set(row_warning_codes):
             warning_counts[code] = warning_counts.get(code, 0) + 1
+        prediction_row = RegressionPredictionRow(
+            row_index=row_index,
+            predicted_mean=predicted_mean,
+            mean_confidence_interval=mean_interval,
+            prediction_interval=prediction_interval,
+            warnings=sorted(set(row_warning_codes)),
+        )
+        row_sink(prediction_row)
         if len(rows) < MAX_REGRESSION_PREDICTION_INLINE_ROWS:
-            rows.append(
-                RegressionPredictionRow(
-                    row_index=row_index,
-                    predicted_mean=predicted_mean,
-                    mean_confidence_interval=mean_interval,
-                    prediction_interval=prediction_interval,
-                    warnings=sorted(set(row_warning_codes)),
-                ),
-            )
+            rows.append(prediction_row)
         else:
             row_count_omitted += 1
 
@@ -832,6 +980,9 @@ def _prediction_warnings(
 def _persist_prediction_response(
     settings: Settings,
     response: RegressionPredictionResponse,
+    *,
+    rows_relative_path: Path,
+    rows_sha256: str,
 ) -> None:
     completed_at = str(response.provenance["created_at"])
     result_relative_path = _prediction_result_relative_path(str(response.prediction_id))
@@ -862,11 +1013,11 @@ def _persist_prediction_response(
         result=response.model_dump(mode="json"),
     )
     result_bytes = _canonical_json_bytes(envelope.model_dump(mode="json"))
-    atomic_write_bytes(result_path, result_bytes)
     result_sha256 = hashlib.sha256(result_bytes).hexdigest()
 
     try:
-        insert_analysis_run_record(
+        atomic_write_bytes(result_path, result_bytes)
+        insert_analysis_run_record_with_artifacts(
             settings.workspace_root,
             AnalysisRunRecord(
                 analysis_id=str(response.prediction_id),
@@ -883,16 +1034,28 @@ def _persist_prediction_response(
                 completed_at=completed_at,
                 app_version=APP_VERSION,
             ),
+            [
+                AnalysisArtifactRecord(
+                    artifact_id=str(uuid4()),
+                    analysis_id=str(response.prediction_id),
+                    kind=REGRESSION_PREDICTION_ROWS_ARTIFACT_KIND,
+                    path=rows_relative_path.as_posix(),
+                    sha256=rows_sha256,
+                    media_type=REGRESSION_PREDICTION_ROWS_MEDIA_TYPE,
+                    created_at=completed_at,
+                ),
+            ],
         )
     except Exception:
         _remove_file_if_exists(result_path)
+        _remove_file_if_exists(settings.workspace_root / rows_relative_path)
         raise
 
 
 def _prediction_config_json(response: RegressionPredictionResponse) -> str:
     return json.dumps(
         {
-            "config_schema_version": 1,
+            "config_schema_version": 2,
             "model_id": str(response.model_id),
             "source_analysis_id": str(response.analysis_id),
             "source_dataset_version_id": str(response.source_dataset_version_id),
@@ -903,6 +1066,7 @@ def _prediction_config_json(response: RegressionPredictionResponse) -> str:
             "missing_policy": response.provenance.get("missing_policy"),
             "include_intervals": response.provenance.get("include_intervals"),
             "row_limit": response.row_limit,
+            "row_count_predicted": response.row_count_predicted,
         },
         ensure_ascii=False,
         sort_keys=True,
@@ -921,6 +1085,41 @@ def _canonical_json_bytes(payload: dict[str, Any]) -> bytes:
 
 def _prediction_result_relative_path(prediction_id: str) -> Path:
     return Path("workspaces") / "analyses" / prediction_id / "result.json"
+
+
+def _prediction_rows_relative_path(prediction_id: str) -> Path:
+    return Path("workspaces") / "analyses" / prediction_id / "prediction_rows.jsonl"
+
+
+def _prediction_page_config(config_json: str) -> tuple[UUID, int]:
+    try:
+        config = json.loads(config_json)
+        model_id = UUID(config["model_id"])
+        row_count_predicted = config["row_count_predicted"]
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise _prediction_rows_artifact_error(
+            "regression_prediction_rows_metadata_invalid",
+        ) from exc
+    if isinstance(row_count_predicted, bool) or not isinstance(row_count_predicted, int):
+        raise _prediction_rows_artifact_error("regression_prediction_rows_metadata_invalid")
+    if row_count_predicted < 0:
+        raise _prediction_rows_artifact_error("regression_prediction_rows_metadata_invalid")
+    return model_id, row_count_predicted
+
+
+def _safe_prediction_rows_path(workspace_root: Path, stored_path: str) -> Path:
+    relative_path = Path(stored_path)
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise _prediction_rows_artifact_error("regression_prediction_rows_artifact_path_invalid")
+    return workspace_root / relative_path
+
+
+def _prediction_rows_artifact_error(code: str) -> ApiError:
+    return ApiError(
+        code=code,
+        message="저장된 회귀 예측 행 아티팩트를 안전하게 읽을 수 없습니다.",
+        status_code=status.HTTP_409_CONFLICT,
+    )
 
 
 def _utc_now() -> str:

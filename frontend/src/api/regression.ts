@@ -5,6 +5,8 @@ import type {
   RegressionPredictionPreflightResponse,
   RegressionPredictionRequest,
   RegressionPredictionResponse,
+  RegressionPredictionRowsPageResponse,
+  RegressionPredictionCsvExportResponse,
 } from "./types";
 
 export async function fetchRegressionPredictionPreflight(
@@ -51,4 +53,38 @@ export async function fetchRegressionPredictions(
   }
 
   return (await response.json()) as RegressionPredictionResponse;
+}
+
+export async function fetchRegressionPredictionRows(
+  predictionId: string,
+  limit: number,
+  offset: number,
+): Promise<RegressionPredictionRowsPageResponse> {
+  const response = await fetchApi(
+    apiRoutes.regressionPredictionRows(predictionId, limit, offset),
+    {
+      headers: { Accept: "application/json" },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_prediction_rows_failed"));
+  }
+
+  return (await response.json()) as RegressionPredictionRowsPageResponse;
+}
+
+export async function createRegressionPredictionCsvExport(
+  predictionId: string,
+): Promise<RegressionPredictionCsvExportResponse> {
+  const response = await fetchApi(apiRoutes.regressionPredictionCsvExport(predictionId), {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_prediction_csv_export_failed"));
+  }
+
+  return (await response.json()) as RegressionPredictionCsvExportResponse;
 }

@@ -17,7 +17,10 @@ import { GageRunChartPanel } from "./GageRunChartPanel";
 import { GraphicalSummaryPanel } from "./GraphicalSummaryPanel";
 import { IndividualsChartPanel } from "./IndividualsChartPanel";
 import { KruskalWallisPanel } from "./KruskalWallisPanel";
-import { LinearModelPanel } from "./LinearModelPanel";
+import {
+  LinearModelPanel,
+  type LinearModelPredictionRowsState,
+} from "./LinearModelPanel";
 import { MannWhitneyPanel } from "./MannWhitneyPanel";
 import { NormalityAnalysisPanel } from "./NormalityAnalysisPanel";
 import { OneProportionPanel } from "./OneProportionPanel";
@@ -35,14 +38,7 @@ import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
   AnalysisModuleId,
-  AnalysisRunComparisonResponse,
-  AnalysisResultExportListResponse,
-  AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
-  AnalysisResultHtmlReportResponse,
-  AnalysisResultJsonExportResponse,
-  AnalysisRunListResponse,
-  AnalysisRunState,
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
@@ -79,6 +75,8 @@ import type {
   XyCorrelationResult,
 } from "./api";
 import type { AnalysisFilterDraft } from "./analysisFilters";
+import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
+import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
 
 type SubgroupChartType = "xbar_r" | "xbar_s";
 
@@ -121,26 +119,6 @@ export interface AnalysisShellProps {
   workbenchExportState?: AnalysisWorkbenchExportState;
   workbenchHistoryState?: AnalysisWorkbenchHistoryState;
   workbenchRestoredState?: AnalysisWorkbenchRestoredState;
-  analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
-  analysisResultCsvExportError?: string | null;
-  analysisResultExportDownloadError?: string | null;
-  analysisResultExportList?: AnalysisResultExportListResponse | null;
-  analysisResultExportListError?: string | null;
-  analysisResultHtmlReport?: AnalysisResultHtmlReportResponse | null;
-  analysisResultHtmlReportError?: string | null;
-  analysisResultJsonExport?: AnalysisResultJsonExportResponse | null;
-  analysisResultJsonExportError?: string | null;
-  analysisHistory?: AnalysisRunListResponse | null;
-  analysisHistoryError?: string | null;
-  analysisHistoryMethodId?: string;
-  analysisHistoryOffset?: number;
-  analysisHistoryResultAvailabilityFilter?: "all" | "available" | "unavailable";
-  analysisHistoryStaleFilter?: "all" | "stale" | "fresh";
-  analysisHistoryStatus?: AnalysisRunState | "";
-  analysisComparison?: AnalysisRunComparisonResponse | null;
-  analysisComparisonError?: string | null;
-  analysisComparisonLeftId?: string | null;
-  analysisComparisonRightId?: string | null;
   capabilityAnalysisResult?: AnalysisResultEnvelope | null;
   capabilityLsl?: string;
   capabilityResult?: CapabilityResult | null;
@@ -201,15 +179,7 @@ export interface AnalysisShellProps {
   individualsChartResult?: IndividualsChartResult | null;
   individualsChartValueColumnId?: string | null;
   individualsChartValueColumns?: DatasetColumnResponse[];
-  isCreatingAnalysisResultCsvExport?: boolean;
   isCreatingFactorialDesign?: boolean;
-  isCreatingAnalysisResultHtmlReport?: boolean;
-  isCreatingAnalysisResultJsonExport?: boolean;
-  isDownloadingAnalysisResultExport?: boolean;
-  isLoadingAnalysisHistory?: boolean;
-  isLoadingAnalysisResultExportList?: boolean;
-  isComparingAnalysisRuns?: boolean;
-  isRestoringAnalysisResult?: boolean;
   isSavingFactorialDesignResponses?: boolean;
   isRunningAnalysis: boolean;
   kruskalWallisAlpha: number;
@@ -227,6 +197,9 @@ export interface AnalysisShellProps {
   linearModelPredictorColumns?: DatasetColumnResponse[];
   linearModelPrediction?: RegressionPredictionResponse | null;
   linearModelPredictionError?: string | null;
+  linearModelPredictionExportState?: RegressionPredictionExportState;
+  linearModelPredictionRowsState?: LinearModelPredictionRowsState;
+  linearModelPredictionTargetState?: RegressionPredictionTargetState;
   linearModelPredictionPreflight?: RegressionPredictionPreflightResponse | null;
   linearModelPredictionPreflightError?: string | null;
   linearModelQuadraticColumnIds?: string[];
@@ -323,8 +296,6 @@ export interface AnalysisShellProps {
   xyCorrelationYColumnIds?: string[];
   xyCorrelationYColumns?: DatasetColumnResponse[];
   profile: DatasetProfileResponse | null;
-  restoredAnalysisResult?: AnalysisResultEnvelope | null;
-  restoredAnalysisResultError?: string | null;
   selectedDescriptiveColumnIds: string[];
   selectedGraphicalSummaryColumnIds: string[];
   selectedNormalityColumnIds: string[];
@@ -362,22 +333,7 @@ export interface AnalysisShellProps {
   onGageRrPartColumnChange?: (columnId: string) => void;
   onGageRrReplicateColumnChange?: (columnId: string) => void;
   onGageRunChartOrderColumnChange?: (columnId: string) => void;
-  onCreateAnalysisResultCsvExport?: (analysisId: string) => void;
   onCreateFactorialDesign?: (request: FactorialDesignCreateRequest) => void;
-  onCreateAnalysisResultHtmlReport?: (analysisId: string) => void;
-  onCreateAnalysisResultJsonExport?: (analysisId: string) => void;
-  onChangeAnalysisHistoryFilters?: (filters: {
-    methodId: string;
-    resultAvailability: "all" | "available" | "unavailable";
-    stale: "all" | "stale" | "fresh";
-    status: AnalysisRunState | "";
-  }) => void;
-  onChangeAnalysisHistoryPage?: (offset: number) => void;
-  onCompareAnalysisRuns?: () => void;
-  onDownloadAnalysisResultExport?: (analysisId: string, exportId: string) => void;
-  onRefreshAnalysisHistory?: () => void;
-  onRestoreAnalysisRun?: (analysisId: string) => void;
-  onSelectAnalysisComparisonRun?: (side: "left" | "right", analysisId: string) => void;
   onSaveFactorialDesignResponses?: (
     designId: string,
     request: DoeDesignResponsesUpsertRequest,
@@ -508,26 +464,6 @@ export function AnalysisShell({
   workbenchExportState,
   workbenchHistoryState,
   workbenchRestoredState,
-  analysisResultCsvExport = null,
-  analysisResultCsvExportError = null,
-  analysisResultExportDownloadError = null,
-  analysisResultExportList = null,
-  analysisResultExportListError = null,
-  analysisResultHtmlReport = null,
-  analysisResultHtmlReportError = null,
-  analysisResultJsonExport = null,
-  analysisResultJsonExportError = null,
-  analysisHistory = null,
-  analysisHistoryError = null,
-  analysisHistoryMethodId = "",
-  analysisHistoryOffset = 0,
-  analysisHistoryResultAvailabilityFilter = "all",
-  analysisHistoryStaleFilter = "all",
-  analysisHistoryStatus = "",
-  analysisComparison = null,
-  analysisComparisonError = null,
-  analysisComparisonLeftId = null,
-  analysisComparisonRightId = null,
   capabilityAnalysisResult = null,
   capabilityLsl = "",
   capabilityResult = null,
@@ -582,15 +518,7 @@ export function AnalysisShell({
   gageRunChartOrderColumnId = null,
   gageRunChartOrderColumns = [],
   gageRunChartResult = null,
-  isCreatingAnalysisResultCsvExport = false,
-  isCreatingAnalysisResultHtmlReport = false,
-  isCreatingAnalysisResultJsonExport = false,
   isCreatingFactorialDesign = false,
-  isDownloadingAnalysisResultExport = false,
-  isLoadingAnalysisHistory = false,
-  isLoadingAnalysisResultExportList = false,
-  isComparingAnalysisRuns = false,
-  isRestoringAnalysisResult = false,
   isSavingFactorialDesignResponses = false,
   isRunningAnalysis,
   kruskalWallisAlpha,
@@ -608,6 +536,29 @@ export function AnalysisShell({
   linearModelPredictorColumns = [],
   linearModelPrediction = null,
   linearModelPredictionError = null,
+  linearModelPredictionExportState = {
+    csvExport: null,
+    error: null,
+    isCreating: false,
+    isDownloading: false,
+    onCreate: () => undefined,
+    onDownload: () => undefined,
+  },
+  linearModelPredictionRowsState = {
+    error: null,
+    isLoading: false,
+    page: null,
+    onPageChange: () => undefined,
+  },
+  linearModelPredictionTargetState = {
+    catalog: null,
+    error: null,
+    isLoading: false,
+    selectedTarget: null,
+    selectedTargetVersionId: null,
+    onPageChange: () => undefined,
+    onSelect: () => undefined,
+  },
   linearModelPredictionPreflight = null,
   linearModelPredictionPreflightError = null,
   linearModelQuadraticColumnIds = [],
@@ -710,8 +661,6 @@ export function AnalysisShell({
   xyCorrelationYColumnIds = [],
   xyCorrelationYColumns = [],
   profile,
-  restoredAnalysisResult = null,
-  restoredAnalysisResultError = null,
   selectedDescriptiveColumnIds,
   selectedGraphicalSummaryColumnIds,
   selectedNormalityColumnIds,
@@ -749,16 +698,6 @@ export function AnalysisShell({
   onGageRrPartColumnChange = () => undefined,
   onGageRrReplicateColumnChange = () => undefined,
   onGageRunChartOrderColumnChange = () => undefined,
-  onCreateAnalysisResultCsvExport = () => undefined,
-  onCreateAnalysisResultHtmlReport = () => undefined,
-  onCreateAnalysisResultJsonExport = () => undefined,
-  onChangeAnalysisHistoryFilters = () => undefined,
-  onChangeAnalysisHistoryPage = () => undefined,
-  onCompareAnalysisRuns = () => undefined,
-  onDownloadAnalysisResultExport = () => undefined,
-  onRefreshAnalysisHistory = () => undefined,
-  onRestoreAnalysisRun = () => undefined,
-  onSelectAnalysisComparisonRun = () => undefined,
   onCreateFactorialDesign = () => undefined,
   onSaveFactorialDesignResponses = () => undefined,
   onRunChiSquareAssociationAnalysis,
@@ -905,55 +844,6 @@ export function AnalysisShell({
           gageRrAnalysisResult,
           gageRunChartAnalysisResult,
         });
-  const effectiveWorkbenchExportState = workbenchExportState ?? {
-    analysisResultCsvExport,
-    analysisResultCsvExportError,
-    analysisResultExportDownloadError,
-    analysisResultExportList,
-    analysisResultExportListError,
-    analysisResultHtmlReport,
-    analysisResultHtmlReportError,
-    analysisResultJsonExport,
-    analysisResultJsonExportError,
-    isCreatingAnalysisResultCsvExport,
-    isCreatingAnalysisResultHtmlReport,
-    isCreatingAnalysisResultJsonExport,
-    isDownloadingAnalysisResultExport,
-    isLoadingAnalysisResultExportList,
-    onCreateAnalysisResultCsvExport,
-    onCreateAnalysisResultHtmlReport,
-    onCreateAnalysisResultJsonExport,
-    onDownloadAnalysisResultExport,
-  };
-  const effectiveWorkbenchHistoryState = workbenchHistoryState ?? {
-    analysisHistory,
-    analysisHistoryError,
-    analysisHistoryMethodId,
-    analysisHistoryOffset,
-    analysisHistoryResultAvailabilityFilter,
-    analysisHistoryStaleFilter,
-    analysisHistoryStatus,
-    isLoadingAnalysisHistory,
-    onChangeAnalysisHistoryFilters,
-    onChangeAnalysisHistoryPage,
-    onRefreshAnalysisHistory,
-  };
-  const effectiveWorkbenchComparisonState = workbenchComparisonState ?? {
-    analysisComparison,
-    analysisComparisonError,
-    analysisComparisonLeftId,
-    analysisComparisonRightId,
-    isComparingAnalysisRuns,
-    onCompareAnalysisRuns,
-    onSelectAnalysisComparisonRun,
-  };
-  const effectiveWorkbenchRestoredState = workbenchRestoredState ?? {
-    isRestoringAnalysisResult,
-    restoredAnalysisResult,
-    restoredAnalysisResultError,
-    onRestoreAnalysisRun,
-  };
-
   return (
     <section className="analysis-shell" aria-labelledby="analysis-modules-title">
       <div className="analysis-heading">
@@ -977,11 +867,11 @@ export function AnalysisShell({
         <AnalysisWorkbench
           analysisRunError={analysisRunError}
           catalog={analysisCatalog}
-          comparisonState={effectiveWorkbenchComparisonState}
-          exportState={effectiveWorkbenchExportState}
-          historyState={effectiveWorkbenchHistoryState}
+          comparisonState={workbenchComparisonState}
+          exportState={workbenchExportState}
+          historyState={workbenchHistoryState}
           profile={profile}
-          restoredState={effectiveWorkbenchRestoredState}
+          restoredState={workbenchRestoredState}
           selectedAnalysisResult={selectedAnalysisResult}
           selectedMethod={selectedMethod}
           selectedMethods={selectedMethods}
@@ -1449,6 +1339,9 @@ export function AnalysisShell({
                   predictorColumns={linearModelPredictorColumns}
                   prediction={linearModelPrediction}
                   predictionError={linearModelPredictionError}
+                  predictionExportState={linearModelPredictionExportState}
+                  predictionRowsState={linearModelPredictionRowsState}
+                  predictionTargetState={linearModelPredictionTargetState}
                   predictionPreflight={linearModelPredictionPreflight}
                   predictionPreflightError={linearModelPredictionPreflightError}
                   quadraticColumnIds={linearModelQuadraticColumnIds}

@@ -1,21 +1,58 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request, status
 
 from app.api.v1.schemas.analyses import (
     RegressionModelManifestResponse,
+    RegressionPredictionCsvExportResponse,
     RegressionPredictionPreflightRequest,
     RegressionPredictionPreflightResponse,
     RegressionPredictionRequest,
     RegressionPredictionResponse,
+    RegressionPredictionRowsPageResponse,
 )
+from app.services.analysis_run_exports import create_regression_prediction_csv_export
 from app.services.regression_models import (
     create_regression_predictions,
     get_regression_model_manifest,
     get_regression_prediction_preflight,
+    get_regression_prediction_rows,
 )
 
 router = APIRouter(prefix="/regression-models", tags=["regression-models"])
+
+
+@router.post(
+    "/predictions/{prediction_id}/exports/csv",
+    response_model=RegressionPredictionCsvExportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_regression_prediction_csv_export_route(
+    request: Request,
+    prediction_id: UUID,
+) -> RegressionPredictionCsvExportResponse:
+    return create_regression_prediction_csv_export(
+        settings=request.app.state.settings,
+        prediction_id=prediction_id,
+    )
+
+
+@router.get(
+    "/predictions/{prediction_id}/rows",
+    response_model=RegressionPredictionRowsPageResponse,
+)
+def get_regression_prediction_rows_route(
+    request: Request,
+    prediction_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> RegressionPredictionRowsPageResponse:
+    return get_regression_prediction_rows(
+        settings=request.app.state.settings,
+        prediction_id=prediction_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/{model_id}", response_model=RegressionModelManifestResponse)

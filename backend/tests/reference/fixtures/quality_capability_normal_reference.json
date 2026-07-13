@@ -1,0 +1,61 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "quality_capability_nist_summary_v1",
+  "source": {
+    "organization": "NIST/SEMATECH",
+    "title": "e-Handbook of Statistical Methods, 6.1.6 What is Process Capability?",
+    "url": "https://www.itl.nist.gov/div898/handbook/pmc/section1/pmc16.htm",
+    "accessed_on": "2026-07-12",
+    "published_example_scope": "Summary statistics and Cp/Cpk/Cpl/Cpu values",
+    "license_review": "Uses a small numerical example and formulas from an official United States government technical reference; no proprietary table, screenshot, or raw dataset is copied."
+  },
+  "conventions": {
+    "reference_sigma": "sample_standard_deviation_s",
+    "application_overall_mapping": "NIST Cp/Cpk/Cpl/Cpu values map numerically to the application overall two_sided/min_side/lower/upper fields because both use sample standard deviation.",
+    "application_within_mapping": "The application within fields use adjacent moving-range MRbar/d2 and are hand-checked separately; NIST does not publish that estimator for this example.",
+    "interpretation_limit": "The three synthetic rows reproduce the published mean and sample standard deviation for formula verification only. They are not evidence that a process is stable, normal, or adequately sampled for a capability decision."
+  },
+  "tolerances": {
+    "published_rounded_absolute": 0.0001,
+    "application_hand_check_absolute": 1e-12
+  },
+  "case": {
+    "case_id": "nist_summary_mean_16_sd_2",
+    "synthetic_rows": [["14"], ["16"], ["18"]],
+    "lsl": 8.0,
+    "usl": 20.0,
+    "target": null,
+    "published_summary": {
+      "mean": 16.0,
+      "sample_standard_deviation": 2.0,
+      "cp": 1.0,
+      "cpk": 0.6667,
+      "cpl": 1.3333,
+      "cpu": 0.6667
+    },
+    "application_within_hand_check": {
+      "mrbar": 2.0,
+      "std_within": 1.7730496453900708,
+      "indices": {
+        "two_sided": 1.128,
+        "lower": 1.5039999999999998,
+        "upper": 0.7519999999999999,
+        "min_side": 0.7519999999999999
+      }
+    },
+    "expected_metadata": {
+      "n_total": 3,
+      "n_used": 3,
+      "n_excluded_missing_value": 0,
+      "n_excluded_non_numeric_value": 0,
+      "warnings": [
+        "capability_normal_model_assumed",
+        "capability_control_limits_not_spec_limits",
+        "capability_process_stability_not_proven",
+        "capability_measurement_system_not_verified",
+        "capability_within_sigma_uses_canonical_moving_range",
+        "capability_point_estimates_without_ci"
+      ]
+    }
+  }
+}

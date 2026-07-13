@@ -59,6 +59,14 @@ export const apiRoutes = {
     return apiUrl(`/dataset-versions/${pathId(versionId)}/profile`);
   },
 
+  datasetVersions(limit: number, offset: number): string {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    return urlWithQuery("/dataset-versions", params);
+  },
+
   analysisMethods(): string {
     return apiUrl("/analysis-methods");
   },
@@ -150,6 +158,18 @@ export const apiRoutes = {
 
   regressionPredictions(modelId: string): string {
     return apiUrl(`/regression-models/${pathId(modelId)}/predictions`);
+  },
+
+  regressionPredictionRows(predictionId: string, limit: number, offset: number): string {
+    const query = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    return apiUrl(`/regression-models/predictions/${pathId(predictionId)}/rows?${query}`);
+  },
+
+  regressionPredictionCsvExport(predictionId: string): string {
+    return apiUrl(`/regression-models/predictions/${pathId(predictionId)}/exports/csv`);
   },
 
   gageRrPreflight(): string {

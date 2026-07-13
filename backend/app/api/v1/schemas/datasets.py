@@ -188,6 +188,30 @@ class DatasetVersionListResponse(BaseModel):
     versions: list[DatasetVersionSummary]
 
 
+class DatasetVersionCatalogItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version_id: UUID
+    dataset_id: UUID
+    original_filename: str
+    version_number: int = Field(ge=1)
+    row_count: int = Field(ge=0)
+    column_count: int = Field(ge=1)
+    created_at: str
+
+
+class DatasetVersionCatalogResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    total: int = Field(ge=0)
+    returned: int = Field(ge=0)
+    has_previous: bool
+    has_next: bool
+    versions: list[DatasetVersionCatalogItem]
+
+
 class DatasetColumnSchemaUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

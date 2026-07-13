@@ -140,6 +140,11 @@ Already implemented:
   - `GET /api/v1/regression-models/{model_id}` validates manifest path and SHA-256 before returning the manifest without exposing absolute paths
   - `POST /api/v1/regression-models/{model_id}/prediction-preflight` validates the stored manifest and target canonical rows for schema drift, required predictor mapping, numeric extrapolation, missing/non-numeric values, and unseen categorical levels
   - `POST /api/v1/regression-models/{model_id}/predictions` runs the same preflight path, rejects error-severity preflight failures, reconstructs the OLS design matrix from the stored manifest, returns capped predicted means plus mean-response confidence intervals and individual prediction intervals, and stores a checksum-validated `regression.predict` result envelope without raw cell values
+  - all valid prediction rows are atomically stored in a checksum-recorded `regression_prediction_rows` NDJSON artifact; `GET /api/v1/regression-models/predictions/{prediction_id}/rows` validates the artifact and returns pages of up to 200 rows
+  - the Linear Model UI retrieves 25-row pages through one grouped prediction-row state contract and invalidates stale page requests when the model or dataset version changes
+  - `GET /api/v1/dataset-versions` returns a paged catalog of confirmed local versions without raw rows, storage paths, or hashes; the prediction UI defaults to the active version and can explicitly select another catalog version
+  - target selection state is isolated in `useRegressionPredictionTargetState`; changing target invalidates preflight, prediction, and prediction-row requests/results before a new run
+  - full stored prediction rows can be streamed into a checksum-recorded, raw-predictor-free wide CSV through `POST /api/v1/regression-models/predictions/{prediction_id}/exports/csv` and downloaded through the existing analysis export route
   - result, row snapshot, model manifest, and prediction result files are removed if metadata insert fails after file writes
 - Filter snapshot row freezing:
   - `eda.descriptive` filter snapshots are frozen into `analysis_row_snapshot` artifacts
@@ -198,7 +203,7 @@ Not implemented yet:
 - Cell-level data editing or transformations that create a new immutable dataset version
 - Executable analysis method dispatch beyond the current twenty-four analysis-run methods and the dedicated DOE design endpoint
 - Any production statistical calculation beyond `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
-- Any Bayesian, optimizer, DOE response/effects/ANOVA analysis beyond the first factorial design-asset slice, broader quality-control method, regression prediction target-dataset selection UI, paged prediction result retrieval, or additional hypothesis/categorical test calculation
+- Any Bayesian, optimizer, DOE response/effects/ANOVA analysis beyond the first factorial design-asset slice, broader quality-control method, or additional hypothesis/categorical test calculation
 - Any mock/fake statistical result
 
 Strict rule:
@@ -606,7 +611,7 @@ Current status:
 - Started. `regression.pearson` is available as the first narrow C1 slice with real SciPy-backed Pearson product-moment correlation, complete-case exclusion counts, covariance, r, r-squared, p-value, Fisher z CI, non-causation/linearity/outlier warnings, row snapshot provenance, persisted result retrieval, backend reference tests, API tests, and a minimal frontend panel.
 - `regression.xy_correlation` is available as the second narrow C1 slice with real SciPy-backed pairwise Pearson X-Y correlation matrices, pair-level N/exclusions, covariance, r, r-squared, p-value, Fisher z CI, failed-cell error codes, row snapshot provenance, persisted result retrieval, backend reference tests, API tests, and a minimal frontend panel.
 - `regression.linear_model` is available as the third narrow Gate C1 slice with real NumPy/SciPy-backed OLS for one numeric response and numeric/categorical main-effect predictors, selected numeric quadratic terms, selected numeric-by-numeric interactions, deterministic treatment coding for categorical factors, complete-case exclusions, coefficient SE/t/p/CI, R²/adjusted R², F test, VIF/condition diagnostics, residual/leverage/Cook's distance diagnostics, capped diagnostic points, row snapshot provenance, persisted result retrieval, safe JSON model manifest storage, checksum-validated manifest retrieval, prediction preflight for stored app-created manifests, backend prediction means/intervals from the stored manifest, backend reference tests, API tests, and a minimal frontend panel.
-- Spearman/Kendall, adjusted p-values, scatterplot artifacts, categorical interactions, factor-by-numeric interactions, robust covariance, prediction target-dataset selection UI, paged prediction result retrieval, response optimizer, and diagnostic chart artifacts remain planned/disabled until each has real calculation code, reference fixtures, warning metadata, and UI/API coverage.
+- Spearman/Kendall, adjusted p-values, scatterplot artifacts, categorical interactions, factor-by-numeric interactions, robust covariance, prediction target-dataset selection UI, response optimizer, and diagnostic chart artifacts remain planned/disabled until each has real calculation code, reference fixtures, warning metadata, and UI/API coverage.
 
 ### Gate C2: Basic Quality Control
 
@@ -7334,3 +7339,354 @@ Remaining:
 - Remote GitHub Actions still needs authenticated confirmation after push for
   the `windows` job, `e2e` job, dependency order, `e2e-logs` artifact, and
   `workflow_dispatch` UI control.
+
+## Progress Update 150 - Post-Reboot Workbench Async Stabilization
+
+Status: completed in the current working tree.
+
+Completed:
+
+- Started from clean main commit
+  `02d5d4e4fb2e1d8a0ec802177e2ecdf62116a3fa` and reran bootstrap, the full
+  repository check, and browser E2E before editing.
+- Added latest-request guards to all four Workbench saved-result hooks so stale
+  history/export/comparison/restore responses and stale `finally` blocks cannot
+  overwrite newer state or clear newer loading indicators.
+- Reset and comparison-selection paths invalidate pending requests and clear
+  their loading state immediately; unmount cleanup invalidates requests without
+  writing React state.
+- Removed duplicate individual saved-result props from `AnalysisShell` and
+  `AnalysisWorkbench`; the four grouped state objects are the sole prop
+  contract.
+- Reconciled documentation with the registry implementation: 29 stable IDs,
+  25 available catalog methods, 24 generic handlers, dedicated DOE design
+  routes, and dedicated stored-model prediction while generic
+  `regression.predict` remains disabled.
+- Corrected setup documentation for separate E2E workspace/diagnostics roots
+  and the diagnostics-only CI artifact scope.
+- Kept statistical methods, formulas, result schemas, method versions,
+  dependencies, migrations, and availability unchanged.
+
+Targeted validation:
+
+- Frontend lint and typecheck passed.
+- Frontend Vitest passed with 63 tests.
+- Frontend/backend contract pytest passed with 57 tests.
+- Full `scripts\check.ps1` passed with backend pytest 446 tests, frontend
+  Vitest 63 tests, lint, typecheck, and production build.
+- Browser E2E passed with
+  `-DiagnosticsRoot .\.tmp\e2e-diagnostics` after the implementation changes.
+
+Remaining:
+
+- Remote GitHub Actions verification still requires authenticated access after
+  push.
+- Deliberately reordered browser HTTP responses are not part of the E2E smoke;
+  focused request-token tests and static hook integration guards cover this
+  stabilization contract.
+
+## Progress Update 151 - Capability Independent NIST Reference Slice
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Added an official NIST/SEMATECH summary-reference fixture for
+  `quality.capability` with source, access date, convention mapping, tolerances,
+  and interpretation limits.
+- Used synthetic rows that reproduce the NIST example's mean 16 and sample SD 2
+  to verify the published Cp/Cpk/Cpl/Cpu values against the application's
+  overall sample-SD fields.
+- Kept `MRbar/d2` within-sigma values as an application-specific hand-check and
+  did not silently equate them with the NIST estimator.
+- Added N/exclusion, warning, source-metadata, and numeric tolerance assertions.
+- Updated the capability contract and audit matrix without changing runtime
+  calculations, result schemas, method versions, dependencies, or migrations.
+
+Targeted validation:
+
+- Capability unit/reference tests passed with 5 tests.
+- Full `scripts\check.ps1` passed with backend pytest 447 tests, frontend
+  Vitest 63 tests, lint, typecheck, and production build.
+- Browser E2E passed with the separate diagnostics-root option.
+
+Remaining:
+
+- Add a compatible public raw-data industrial-software fixture for
+  nonconformance/ppm and within-sigma comparison before changing capability
+  formulas or versions.
+- The synthetic three-row formula fixture is not an adequate capability-study
+  sample and does not establish stability or normality.
+
+## Progress Update 152 - Gage R&R Independent Minitab Summary Slice
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Added an official Minitab Crossed Gage R&R summary fixture with source URLs,
+  access date, design counts, full-model ANOVA values, reduced-model comparison
+  values, tolerances, license review, and policy limits.
+- Verified the published interaction `F=0.434` / `p=0.974` within its displayed
+  precision and derived the application's no-pooling variance components from
+  the published rounded mean squares.
+- Asserted negative interaction variance preservation, final clamp, contribution,
+  study variation, ndc, and persistent warnings.
+- Kept Minitab's automatically pooled reduced-model values out of direct parity
+  because the current application explicitly preserves the interaction.
+- Updated the Gage R&R contract and audit matrix without changing runtime
+  calculations, schemas, method versions, dependencies, or migrations.
+
+Targeted validation:
+
+- Gage R&R unit/reference tests passed with 5 tests.
+- Full `scripts\check.ps1` passed with backend pytest 448 tests, frontend
+  Vitest 63 tests, lint, typecheck, and production build.
+- Browser E2E passed with the separate diagnostics-root option.
+
+Remaining:
+
+- Add a redistributable raw-row crossed fixture with a matching no-pooling
+  policy for full independent ANOVA parity.
+
+## Progress Update 153 - Gage Run Chart Ordering Reference Slice
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Added a fully synthetic, internally hand-reviewed ordering fixture for
+  `quality.gage_run_chart` with explicit source/license review, conventions,
+  tolerances, and diagnostic interpretation limits.
+- Verified tied numeric order values use canonical row position as the stable
+  tie breaker and asserted all displayed values, canonical positions, and
+  redacted part/operator/replicate indexes.
+- Verified inline point truncation preserves full valid-observation sample,
+  design, and summary metadata.
+- Added exact exclusion and warning assertions for missing/nonnumeric
+  measurements, missing identifiers, and missing/invalid order values.
+- Checked that no synthetic raw identifiers appear anywhere in the serialized
+  result and added a duplicate-replicate failure fixture.
+- Updated the method contract and audit matrix without changing runtime
+  calculations, schemas, method versions, dependencies, or migrations.
+
+Targeted validation:
+
+- Gage Run Chart unit/reference tests passed with 6 tests.
+- Full `scripts\check.ps1` passed with backend pytest 450 tests, frontend
+  Vitest 63 tests, lint, typecheck, and production build.
+- Browser E2E passed with the separate diagnostics-root option.
+
+Remaining:
+
+- Browser chart rendering and exported chart artifacts are outside this
+  fixture's deterministic payload scope.
+- Gage Run Chart remains diagnostic only and does not replace variance-component
+  Gage R&R or establish measurement-system acceptability.
+
+## Progress Update 154 - DOE Factorial NIST Standard-Order Reference Slice
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Added an official NIST/SEMATECH reference fixture for the three-factor `2^3`
+  Yates standard order and the replicated Speed/Feed/Depth factor settings.
+- Verified all coded and actual low/high combinations, replicate ordering,
+  immutable run metadata, and the application-derived design SHA-256.
+- Kept NIST standard-order parity separate from the application's seeded
+  shuffle, center-point, round-robin block, and checksum conventions.
+- Added a reversed factor-range failure case without a fallback design.
+- Reconciled the DOE method contract and statistical audit matrix with existing
+  dedicated create/read, response completeness, checksum, report, and generic
+  analysis-run rejection tests.
+- Kept runtime generation, APIs, schemas, migrations, versions, dependencies,
+  and frontend behavior unchanged.
+
+Targeted validation:
+
+- DOE factorial unit/reference tests passed with 6 tests.
+- Full `scripts\check.ps1` passed with backend pytest 452 tests, frontend
+  Vitest 63 tests, lint, typecheck, and production build.
+- Browser E2E passed with the separate diagnostics-root option.
+
+Remaining:
+
+- The current DOE slice remains a design asset with numeric response storage;
+  effects, OLS/ANOVA, alias analysis, diagnostics, RSM, and optimization are not
+  implemented.
+
+## Progress Update 155 - Linear Model Independent Statsmodels Reference Slice
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Added a fully synthetic compact regression CSV and a statsmodels 0.14.6
+  full-precision OLS reference with CSV SHA-256, package versions, formula,
+  covariance/interval options, term mapping, license review, and limitations.
+- Generated the independent values in a temporary Python 3.10 environment
+  outside the repository without adding statsmodels to product/test dependencies.
+- Verified categorical treatment reference `A`, coefficients, SE/t/p/CI, fit
+  statistics, VIF/condition number, warnings, and a single-level failure case.
+- Verified three mean predictions, mean-response confidence intervals, and
+  individual prediction intervals from the stored OLS prediction basis.
+- Linked the fixture to existing API coverage for method/version, safe JSON
+  manifest checksum equality/tamper recovery, result persistence, and
+  row-snapshot provenance rather than pinning generated IDs to a fake checksum.
+- Updated the linear model and prediction contracts plus statistical audit
+  matrix without changing runtime code, schemas, versions, dependencies, or
+  frontend behavior.
+
+Targeted validation:
+
+- Linear model unit/reference tests passed with 8 tests.
+- Full `scripts\check.ps1` passed with backend pytest 454 tests, frontend
+  Vitest 63 tests, lint, typecheck, and production build after removing the
+  temporary statsmodels environment.
+- Browser E2E passed with the separate diagnostics-root option.
+
+Remaining:
+
+- Robust covariance, categorical interactions, arbitrary formulas, paged
+  prediction retrieval, and interactive upload-fit-predict E2E remain backlog.
+
+## Progress Update 156 - Linear Model Browser Fit And Prediction Slice
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Extended the Playwright critical path with a fully synthetic 12-row
+  `y`/`x`/`group` paste-and-confirm workflow.
+- Navigated through the regression module/method grid, explicitly selected
+  response `y` and numeric/categorical predictors, and executed a real OLS fit.
+- Verified generated Model ID/manifest UI, same-version prediction preflight,
+  12/12 usable rows, matching schema, and prediction-ready status.
+- Executed real stored-model prediction and verified the 12-row result summary,
+  predicted mean/CI/PI table, one reference prediction, and all 12 interval
+  lines.
+- Added a regression browser-flow contract guard and synchronized
+  `docs/e2e_coverage.md`, linear model/prediction contracts, and step markers.
+- No mock response/statistic, runtime behavior change, schema/version bump,
+  dependency, or migration was introduced.
+
+Targeted validation:
+
+- E2E Python syntax check passed.
+- Browser E2E passed with the new regression fit/preflight/predict step.
+- Full `scripts\check.ps1` passed with backend pytest 455 tests, frontend
+  Vitest 63 tests, lint, typecheck, and production build.
+- Browser E2E passed again after the full check and contract documentation
+  synchronization.
+
+Remaining:
+
+- A UI for choosing a different target dataset version remains backlog.
+
+## Progress Update 157 - Regression Prediction Paging Stabilization
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Preserved the existing 1,000-row inline POST response while atomically
+  storing every valid prediction row in a raw-predictor-free NDJSON artifact.
+- Added checksum/schema/count-validated prediction row retrieval with
+  `limit=1..200`, non-negative offsets, and stable pagination metadata.
+- Inserted the prediction analysis run and artifact metadata in one SQLite
+  transaction and removed both result files when persistence fails.
+- Added a typed frontend client and 25-row previous/next controls, passed
+  prediction paging as one grouped prop contract, and guarded page requests so
+  stale responses cannot replace newer prediction state.
+- Updated OpenAPI/frontend route drift coverage and the prediction, setup,
+  versioning, E2E, implementation-guide, progress, and CI documents. No new
+  dependency, migration, statistical calculation, or method-version bump was
+  introduced.
+
+Validation:
+
+- Targeted regression prediction API tests passed with 9 tests.
+- OpenAPI/frontend contract tests passed with 59 tests.
+- Full `scripts\check.ps1` passed with backend pytest 458 tests, frontend
+  Vitest 63 tests, Ruff, format, mypy, lint, typecheck, and production build.
+- Browser E2E passed with the separate diagnostics-root option and exercised
+  the real fit/preflight/predict plus first-page retrieval flow.
+
+Remaining:
+
+- Selecting a different target dataset version in the prediction UI remains
+  backlog.
+- The production build retains the existing Vite main-chunk size warning.
+
+## Progress Update 159 - Full Regression Prediction CSV Export
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Refactored prediction row retrieval around one checksum/schema/count-verified
+  iterator shared by paging and export.
+- Added a dedicated streaming UTF-8-SIG wide CSV export with prediction/model,
+  source-target version, manifest/schema, interval, row-index, and warning
+  provenance but no raw predictor columns or target cells.
+- Registered `regression_prediction_csv_export` in the existing analysis export
+  artifact list/checksum download path without changing generic long-form CSV.
+- Added a latest-request-guarded prediction export hook and Linear Model
+  generate/download controls that reset on prediction changes.
+- Verified all 1,005 stored prediction rows export despite the 1,000-row inline
+  limit and blocked export after row artifact tampering.
+- Extended browser E2E through real cross-dataset prediction CSV generation and
+  `.csv` download. No dependency, migration, calculation, or method-version
+  bump was introduced.
+
+Validation:
+
+- Targeted backend/OpenAPI tests passed with 62 tests.
+- Full `scripts\check.ps1` passed with backend pytest 461 tests and frontend
+  Vitest 63 tests, including Ruff, format, mypy, lint, typecheck, and build.
+- Browser E2E passed with prediction CSV generation and download.
+
+Remaining:
+
+- Manual single-row prediction input remains a later contract slice.
+- The production build retains the existing Vite main-chunk size warning.
+
+## Progress Update 158 - Cross-Dataset Regression Prediction Target Selection
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Added paged `GET /api/v1/dataset-versions` discovery for confirmed local
+  versions, returning only sanitized display name, IDs, version number,
+  row/column counts, and creation time.
+- Added a typed client and `useRegressionPredictionTargetState` so target
+  catalog loading, paging, selection, and stale-response ownership remain
+  outside the main App state surface.
+- Defaulted prediction to the active version while allowing explicit selection
+  of another confirmed version; target changes cancel and clear older
+  preflight, prediction, and prediction-row request state.
+- Kept the selector disabled while preflight or prediction is running and
+  retained backend schema/range/category validation as the execution gate.
+- Extended browser coverage to train on 12 rows, select a separate four-row
+  dataset version, pass cross-dataset preflight, and render four real prediction
+  intervals.
+- Updated OpenAPI route guards and prediction, implementation, setup, E2E,
+  progress, and CI documents. No new dependency, migration, calculation, or
+  method-version bump was introduced.
+
+Validation:
+
+- Dataset-version catalog privacy/pagination and cross-dataset prediction tests
+  passed.
+- OpenAPI/frontend contract tests passed with 60 tests.
+- Full `scripts\check.ps1` passed with backend pytest 460 tests and frontend
+  Vitest 63 tests, including Ruff, format, mypy, lint, typecheck, and build.
+- Browser E2E passed with explicit cross-dataset target selection.
+
+Remaining:
+
+- Manual single-row prediction input and stored prediction export remain later
+  contract slices.
+- The production build retains the existing Vite main-chunk size warning.

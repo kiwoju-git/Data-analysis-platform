@@ -124,3 +124,27 @@ The current slice includes:
 - API execution from a confirmed dataset version;
 - API rejection for unbalanced data without a result payload;
 - stored result retrieval through the common checksum-validated result API.
+
+## Reference Validation
+
+`backend/tests/reference/fixtures/quality_gage_rr_crossed_reference.json`
+records a small numerical summary from Minitab's official Crossed Gage R&R
+example and formula documentation:
+
+- `https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/before-you-start/example/`
+- `https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/methods-and-formulas/gage-r-r-table/`
+
+The published design has 10 parts, 3 operators, and 3 replicates. The fixture
+uses the published full-model interaction ANOVA mean squares to validate the
+application's variance-component formulas, negative interaction component
+clamp, percent contribution, percent study variation, and ndc. The interaction
+F/p calculation is checked against the published rounded `F=0.434` and
+`p=0.974`.
+
+Minitab removes the interaction at its default alpha because `p >= 0.05` and
+publishes reduced-model final variance components. This application explicitly
+preserves the interaction without pooling, so those reduced-model values are
+recorded for convention review but are not asserted as direct parity. No raw
+Minitab worksheet, screenshot, or measurement rows are stored in this
+repository. This reference-only slice does not change the method version,
+runtime formulas, or the no-pooling policy.

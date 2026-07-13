@@ -11,6 +11,9 @@ from app.statistics.gage_run_chart import (
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/gage_run_chart_input.json")
 REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/gage_run_chart_reference.json")
+ORDERING_REFERENCE_FIXTURE = Path(
+    "backend/tests/reference/fixtures/quality_gage_run_chart_ordering_reference.json",
+)
 
 
 def test_gage_run_chart_balanced_design_redacts_labels_and_summarizes_patterns() -> None:
@@ -109,6 +112,75 @@ def test_gage_run_chart_matches_reference_fixture() -> None:
         serialized = json.dumps(result, ensure_ascii=False)
         assert "Part A" not in serialized
         assert "Operator 1" not in serialized
+
+
+def test_gage_run_chart_matches_hand_reviewed_ordering_reference() -> None:
+    fixture = json.loads(ORDERING_REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    case = fixture["success_case"]
+    expected = case["expected"]
+    tolerance = fixture["tolerances"]["numeric_absolute"]
+
+    assert fixture["source"]["type"] == "internal_hand_reviewed_diagnostic_fixture"
+    assert "synthetic" in fixture["source"]["license_review"]
+    assert (
+        "does not establish measurement-system acceptability"
+        in (fixture["conventions"]["interpretation_limit"])
+    )
+
+    result = calculate_gage_run_chart(
+        case["rows"],
+        measurement_column=_column("measurement", 0, data_type="decimal"),
+        part_column=_column("part", 1, role="part_id"),
+        operator_column=_column("operator", 2, role="operator_id"),
+        replicate_column=_column("replicate", 3, role="replicate_id"),
+        order_column=_column("run", 4, data_type="integer", role="order"),
+        point_limit=case["point_limit"],
+    )
+
+    assert result["order_source"] == expected["order_source"]
+    assert result["order_tie_breaker"] == expected["order_tie_breaker"]
+    assert result["sample"] == expected["sample"]
+    assert result["design"] == expected["design"]
+    _assert_numeric_mapping(result["summary"], expected["summary"])
+
+    chart = result["chart"]
+    assert chart["point_count"] == expected["chart"]["point_count"]
+    assert chart["points_truncated"] is expected["chart"]["points_truncated"]
+    assert chart["point_limit"] == expected["chart"]["point_limit"]
+    assert [point["position"] for point in chart["points"]] == [1, 2, 3, 4, 5]
+    assert [point["canonical_position"] for point in chart["points"]] == (
+        expected["chart"]["canonical_positions"]
+    )
+    assert [point["value"] for point in chart["points"]] == pytest.approx(
+        expected["chart"]["values"],
+        abs=tolerance,
+    )
+    assert [point["part_index"] for point in chart["points"]] == (expected["chart"]["part_indices"])
+    assert [point["operator_index"] for point in chart["points"]] == (
+        expected["chart"]["operator_indices"]
+    )
+    assert [point["replicate_index"] for point in chart["points"]] == (
+        expected["chart"]["replicate_indices"]
+    )
+    assert result["warnings"] == expected["warnings"]
+
+    serialized = json.dumps(result, ensure_ascii=False)
+    for raw_label in expected["redacted_labels"]:
+        assert raw_label not in serialized
+
+
+def test_gage_run_chart_ordering_reference_rejects_duplicate_replicate() -> None:
+    fixture = json.loads(ORDERING_REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    case = fixture["failure_case"]
+
+    with pytest.raises(GageRunChartError, match=case["expected_error"]):
+        calculate_gage_run_chart(
+            case["rows"],
+            measurement_column=_column("measurement", 0, data_type="decimal"),
+            part_column=_column("part", 1, role="part_id"),
+            operator_column=_column("operator", 2, role="operator_id"),
+            replicate_column=_column("replicate", 3, role="replicate_id"),
+        )
 
 
 def test_gage_run_chart_rejects_invalid_designs_without_fake_points() -> None:

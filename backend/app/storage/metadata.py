@@ -47,6 +47,17 @@ class DatasetVersionRecord:
 
 
 @dataclass(frozen=True)
+class DatasetVersionCatalogRecord:
+    version_id: str
+    dataset_id: str
+    original_filename: str
+    version_number: int
+    row_count: int
+    column_count: int
+    created_at: str
+
+
+@dataclass(frozen=True)
 class DatasetColumnRecord:
     column_id: str
     version_id: str
@@ -681,6 +692,52 @@ def list_dataset_version_records(
         ).fetchall()
 
     return [_dataset_version_from_row(row) for row in rows]
+
+
+def count_dataset_version_catalog_records(workspace_root: Path) -> int:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute("SELECT COUNT(*) FROM dataset_versions;").fetchone()
+    return 0 if row is None else _row_int(row[0])
+
+
+def list_dataset_version_catalog_records(
+    workspace_root: Path,
+    *,
+    limit: int,
+    offset: int,
+) -> list[DatasetVersionCatalogRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                version.version_id,
+                version.dataset_id,
+                dataset.original_filename,
+                version.version_number,
+                version.row_count,
+                version.column_count,
+                version.created_at
+            FROM dataset_versions AS version
+            INNER JOIN datasets AS dataset
+                ON dataset.dataset_id = version.dataset_id
+            ORDER BY version.created_at DESC, version.rowid DESC
+            LIMIT ? OFFSET ?;
+            """,
+            (limit, offset),
+        ).fetchall()
+
+    return [
+        DatasetVersionCatalogRecord(
+            version_id=str(row[0]),
+            dataset_id=str(row[1]),
+            original_filename=str(row[2]),
+            version_number=_row_int(row[3]),
+            row_count=_row_int(row[4]),
+            column_count=_row_int(row[5]),
+            created_at=str(row[6]),
+        )
+        for row in rows
+    ]
 
 
 def get_dataset_version_record(

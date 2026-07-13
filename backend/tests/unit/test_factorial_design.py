@@ -13,6 +13,9 @@ from app.statistics.factorial_design import (
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/factorial_design_input.json")
 REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/factorial_design_reference.json")
+NIST_REFERENCE_FIXTURE = Path(
+    "backend/tests/reference/fixtures/doe_factorial_design_reference.json",
+)
 
 
 def test_two_level_full_factorial_standard_order_and_center_point() -> None:
@@ -101,6 +104,71 @@ def test_two_level_full_factorial_matches_reference_fixture() -> None:
                 }
                 for run in design.runs
             ] == expected["run_order_summary"]
+
+
+def test_two_level_full_factorial_matches_nist_replicated_standard_order() -> None:
+    fixture = json.loads(NIST_REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    case = fixture["reference_case"]
+    factor_names = [factor["name"] for factor in case["factors"]]
+    tolerance = fixture["tolerances"]["factor_levels_absolute"]
+
+    assert fixture["source"]["organization"] == "NIST/SEMATECH"
+    assert fixture["source"]["standard_order_url"].startswith(
+        "https://www.itl.nist.gov/",
+    )
+    assert "NIST does not publish this checksum" in (fixture["conventions"]["application_checksum"])
+    assert "does not provide responses" in fixture["conventions"]["analysis_limit"]
+
+    design = generate_two_level_full_factorial_design(
+        factors=[FactorialFactor(**factor) for factor in case["factors"]],
+        options=FactorialDesignOptions(**case["options"]),
+    )
+    expected = case["expected_application_metadata"]
+
+    assert design.schema_version == expected["schema_version"]
+    assert design.family == expected["family"]
+    assert len(design.runs) == expected["run_count"]
+    assert [run.standard_order for run in design.runs] == expected["standard_orders"]
+    assert [run.run_order for run in design.runs] == expected["run_orders"]
+    assert [run.replicate_index for run in design.runs] == expected["replicate_indices"]
+    assert [run.center_point for run in design.runs] == expected["center_points"]
+    assert [run.block_index for run in design.runs] == expected["block_indices"]
+    assert design.design_sha256 == expected["design_sha256"]
+
+    first_replicate = design.runs[:8]
+    second_replicate = design.runs[8:]
+    actual_coded_order = [
+        [run.coded_levels[name] for name in factor_names] for run in first_replicate
+    ]
+    actual_factor_order = [
+        [run.factor_levels[name] for name in factor_names] for run in first_replicate
+    ]
+    assert actual_coded_order == case["published_coded_standard_order"]
+    for actual, published in zip(
+        actual_factor_order,
+        case["published_factor_level_standard_order"],
+        strict=True,
+    ):
+        assert actual == pytest.approx(published, abs=tolerance)
+    assert [run.coded_levels for run in second_replicate] == [
+        run.coded_levels for run in first_replicate
+    ]
+    assert [run.factor_levels for run in second_replicate] == [
+        run.factor_levels for run in first_replicate
+    ]
+
+
+def test_two_level_full_factorial_nist_fixture_rejects_reversed_range() -> None:
+    fixture = json.loads(NIST_REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    case = fixture["failure_case"]
+
+    with pytest.raises(FactorialDesignError) as error:
+        generate_two_level_full_factorial_design(
+            factors=[FactorialFactor(**factor) for factor in case["factors"]],
+            options=FactorialDesignOptions(**case["options"]),
+        )
+
+    assert error.value.code == case["expected_error"]
 
 
 def test_two_level_full_factorial_rejects_invalid_designs() -> None:

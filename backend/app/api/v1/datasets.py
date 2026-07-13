@@ -10,6 +10,7 @@ from app.api.v1.schemas.datasets import (
     DatasetSchemaResponse,
     DatasetSchemaUpdateRequest,
     DatasetUploadResponse,
+    DatasetVersionCatalogResponse,
     DatasetVersionListResponse,
     DatasetVersionResponse,
     PastedDatasetRequest,
@@ -21,12 +22,26 @@ from app.services.dataset_versions import (
     get_dataset_rows_preview,
     get_dataset_schema,
     get_dataset_version,
+    list_dataset_version_catalog,
     list_dataset_versions,
     update_dataset_schema,
 )
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 version_router = APIRouter(prefix="/dataset-versions", tags=["dataset-versions"])
+
+
+@version_router.get("", response_model=DatasetVersionCatalogResponse)
+def list_dataset_version_catalog_route(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> DatasetVersionCatalogResponse:
+    return list_dataset_version_catalog(
+        settings=request.app.state.settings,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(

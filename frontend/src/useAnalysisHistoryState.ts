@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   fetchAnalysisRuns,
@@ -9,6 +9,7 @@ import type {
   AnalysisHistoryResultAvailabilityFilter,
   AnalysisHistoryStaleFilter,
 } from "./analysisWorkbenchTypes";
+import { createLatestRequestGuard } from "./latestRequest";
 
 const ANALYSIS_HISTORY_PAGE_SIZE = 20;
 
@@ -66,24 +67,30 @@ export function useAnalysisHistoryState({
   const [analysisHistoryResultAvailabilityFilter, setAnalysisHistoryResultAvailabilityFilter] =
     useState<AnalysisHistoryResultAvailabilityFilter>("all");
   const [analysisHistoryOffset, setAnalysisHistoryOffset] = useState(0);
+  const historyRequest = useRef(createLatestRequestGuard()).current;
 
-  function resetAnalysisHistoryState() {
+  const resetAnalysisHistoryState = useCallback(() => {
+    historyRequest.cancel();
     setAnalysisHistory(null);
     setAnalysisHistoryError(null);
+    setIsLoadingAnalysisHistory(false);
     setAnalysisHistoryMethodId("");
     setAnalysisHistoryStatus("");
     setAnalysisHistoryStaleFilter("all");
     setAnalysisHistoryResultAvailabilityFilter("all");
     setAnalysisHistoryOffset(0);
-  }
+  }, [historyRequest]);
 
   async function refreshAnalysisHistory() {
     if (currentDatasetVersionId === null) {
+      historyRequest.cancel();
       setAnalysisHistory(null);
       setAnalysisHistoryError(null);
+      setIsLoadingAnalysisHistory(false);
       return;
     }
 
+    const request = historyRequest.begin();
     setIsLoadingAnalysisHistory(true);
     setAnalysisHistoryError(null);
     try {
@@ -98,14 +105,20 @@ export function useAnalysisHistoryState({
         limit: ANALYSIS_HISTORY_PAGE_SIZE,
         offset: analysisHistoryOffset,
       });
-      setAnalysisHistory(response);
+      if (historyRequest.isCurrent(request)) {
+        setAnalysisHistory(response);
+      }
     } catch (error) {
-      setAnalysisHistory(null);
-      setAnalysisHistoryError(
-        error instanceof Error ? error.message : "analysis_history_fetch_failed",
-      );
+      if (historyRequest.isCurrent(request)) {
+        setAnalysisHistory(null);
+        setAnalysisHistoryError(
+          error instanceof Error ? error.message : "analysis_history_fetch_failed",
+        );
+      }
     } finally {
-      setIsLoadingAnalysisHistory(false);
+      if (historyRequest.isCurrent(request)) {
+        setIsLoadingAnalysisHistory(false);
+      }
     }
   }
 
@@ -132,7 +145,7 @@ export function useAnalysisHistoryState({
       return;
     }
 
-    let cancelled = false;
+    const request = historyRequest.begin();
     setIsLoadingAnalysisHistory(true);
     fetchAnalysisRuns({
       datasetVersionId: currentDatasetVersionId,
@@ -146,13 +159,13 @@ export function useAnalysisHistoryState({
       offset: analysisHistoryOffset,
     })
       .then((response) => {
-        if (!cancelled) {
+        if (historyRequest.isCurrent(request)) {
           setAnalysisHistory(response);
           setAnalysisHistoryError(null);
         }
       })
       .catch((error) => {
-        if (!cancelled) {
+        if (historyRequest.isCurrent(request)) {
           setAnalysisHistory(null);
           setAnalysisHistoryError(
             error instanceof Error ? error.message : "analysis_history_fetch_failed",
@@ -160,13 +173,13 @@ export function useAnalysisHistoryState({
         }
       })
       .finally(() => {
-        if (!cancelled) {
+        if (historyRequest.isCurrent(request)) {
           setIsLoadingAnalysisHistory(false);
         }
       });
 
     return () => {
-      cancelled = true;
+      historyRequest.cancel(request);
     };
   }, [
     analysisHistoryMethodId,
@@ -175,7 +188,9 @@ export function useAnalysisHistoryState({
     analysisHistoryStaleFilter,
     analysisHistoryStatus,
     currentDatasetVersionId,
+    historyRequest,
     refreshKey,
+    resetAnalysisHistoryState,
     resetKey,
   ]);
 

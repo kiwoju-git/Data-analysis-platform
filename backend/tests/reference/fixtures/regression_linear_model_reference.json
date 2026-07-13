@@ -1,0 +1,159 @@
+{
+  "fixture_schema_version": 1,
+  "fixture_id": "regression_linear_model_statsmodels_treatment_v1",
+  "source": {
+    "tool": "statsmodels",
+    "version": "0.14.6",
+    "ols_prediction_url": "https://www.statsmodels.org/stable/generated/statsmodels.regression.linear_model.OLSResults.get_prediction.html",
+    "treatment_coding_url": "https://www.statsmodels.org/stable/contrasts.html",
+    "license_url": "https://www.statsmodels.org/stable/",
+    "generated_on": "2026-07-12",
+    "license_review": "statsmodels is published under the Modified BSD (3-clause) license. It was installed only in a temporary reference-generation environment and is not a production or test dependency.",
+    "data_review": "The compact CSV is fully synthetic and contains no user, personal, or externally sourced records. No data was sent to statsmodels or any remote service."
+  },
+  "generator_environment": {
+    "python": "3.10.x",
+    "statsmodels": "0.14.6",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3",
+    "pandas": "2.3.3",
+    "formula": "y ~ x + C(group, Treatment(reference='A'))",
+    "covariance_type": "nonrobust_standard_ols",
+    "confidence_level": 0.95,
+    "prediction_api": "OLSResults.get_prediction(...).summary_frame(alpha=0.05)"
+  },
+  "input": {
+    "csv_file": "regression_linear_model_reference.csv",
+    "csv_sha256": "fda46921320436f468682fdc04440dbd68b0a0b0c69d8663c95857b682e99842",
+    "response_column": "y",
+    "predictor_columns": ["x", "group"],
+    "categorical_levels": ["A", "B", "C"],
+    "reference_level": "A",
+    "row_count": 12
+  },
+  "conventions": {
+    "term_mapping": {
+      "Intercept": "Intercept",
+      "x": "x",
+      "group[B]": "C(group, Treatment(reference='A'))[T.B]",
+      "group[C]": "C(group, Treatment(reference='A'))[T.C]"
+    },
+    "term_order_limit": "statsmodels emits categorical terms before x for this formula, while the application follows selected predictor order. Terms are compared by the explicit mapping, not by array position.",
+    "interval_mapping": "statsmodels mean_ci_lower/upper maps to the application's mean-response confidence interval; obs_ci_lower/upper maps to the individual prediction interval.",
+    "manifest_checksum_contract": "The model manifest checksum is intentionally not pinned to a fixture value because the manifest includes generated analysis/model identifiers and provenance. Existing API tests verify SHA-256 metadata equality, retrieval validation, and checksum-mismatch rejection.",
+    "interpretation_limit": "The synthetic fit validates OLS arithmetic and treatment coding only. It does not establish causation, model adequacy, or applicability to real data."
+  },
+  "tolerances": {
+    "statsmodels_absolute": 1e-8,
+    "metadata_and_warning_codes": "exact"
+  },
+  "expected": {
+    "sample": {
+      "n_total": 12,
+      "n_used": 12,
+      "n_excluded_missing": 0,
+      "n_excluded_non_numeric": 0,
+      "df_model": 3,
+      "df_residual": 8
+    },
+    "application_coefficient_order": ["Intercept", "x", "group[B]", "group[C]"],
+    "fit": {
+      "r_squared": 0.9973946390448327,
+      "adjusted_r_squared": 0.996417628686645,
+      "residual_standard_error": 0.2343430533783039,
+      "sigma_squared": 0.05491666666666659,
+      "sse": 0.43933333333333274,
+      "ssr": 168.18733333333333,
+      "tss": 168.62666666666667,
+      "f_statistic": 1020.863935255439,
+      "f_p_value": 1.1327109682383795e-10
+    },
+    "coefficients": {
+      "Intercept": {
+        "statsmodels_term": "Intercept",
+        "estimate": 5.060000000000008,
+        "standard_error": 0.1482115605027712,
+        "statistic": 34.140386774386585,
+        "p_value": 5.920734451031444e-10,
+        "ci_lower": 4.718223528595555,
+        "ci_upper": 5.40177647140446,
+        "vif": null
+      },
+      "x": {
+        "statsmodels_term": "x",
+        "estimate": 1.496666666666667,
+        "standard_error": 0.0302535581011189,
+        "statistic": 49.47076511345335,
+        "p_value": 3.085506822254349e-11,
+        "ci_lower": 1.4269018365808475,
+        "ci_upper": 1.5664314967524866,
+        "vif": 1.0333333333333332
+      },
+      "group[B]": {
+        "statsmodels_term": "C(group, Treatment(reference='A'))[T.B]",
+        "estimate": 1.9033333333333344,
+        "standard_error": 0.16844468264421741,
+        "statistic": 11.299456316786706,
+        "p_value": 3.3860461980661066e-6,
+        "ci_lower": 1.5148991986026157,
+        "ci_upper": 2.2917674680640534,
+        "vif": 1.3777777777777782
+      },
+      "group[C]": {
+        "statsmodels_term": "C(group, Treatment(reference='A'))[T.C]",
+        "estimate": -1.0483333333333313,
+        "standard_error": 0.16639456955615406,
+        "statistic": -6.300285737267073,
+        "p_value": 0.00023271541088602658,
+        "ci_lower": -1.4320398988053398,
+        "ci_upper": -0.6646267678613229,
+        "vif": 1.3444444444444448
+      }
+    },
+    "condition_number": 14.351927765434091,
+    "warnings": [
+      "linear_model_not_causation",
+      "linear_model_linearity_assumption",
+      "linear_model_independence_assumption",
+      "linear_model_homoscedasticity_assumption",
+      "linear_model_residual_normality_assumption",
+      "linear_model_outlier_influence_sensitive",
+      "linear_model_categorical_treatment_coding",
+      "linear_model_high_cooks_distance"
+    ],
+    "predictions": [
+      {
+        "x": 1.5,
+        "group": "A",
+        "predicted_mean": 7.305000000000009,
+        "mean_ci_lower": 7.015244898808362,
+        "mean_ci_upper": 7.594755101191655,
+        "prediction_interval_lower": 6.691823100825896,
+        "prediction_interval_upper": 7.918176899174121
+      },
+      {
+        "x": 3.5,
+        "group": "B",
+        "predicted_mean": 12.201666666666677,
+        "mean_ci_lower": 11.929226295882948,
+        "mean_ci_upper": 12.474107037450405,
+        "prediction_interval_lower": 11.596479384375506,
+        "prediction_interval_upper": 12.806853948957848
+      },
+      {
+        "x": 5.5,
+        "group": "C",
+        "predicted_mean": 12.243333333333347,
+        "mean_ci_lower": 11.939235489175973,
+        "mean_ci_upper": 12.54743117749072,
+        "prediction_interval_lower": 11.623249960039594,
+        "prediction_interval_upper": 12.863416706627099
+      }
+    ]
+  },
+  "failure_case": {
+    "case_id": "categorical_predictor_single_level_rejected",
+    "rows": [["1", "0", "A"], ["2", "1", "A"], ["4", "2", "A"], ["7", "3", "A"]],
+    "expected_error": "linear_model_factor_single_level"
+  }
+}

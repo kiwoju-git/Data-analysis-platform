@@ -1387,3 +1387,36 @@ class RegressionPredictionResponse(BaseModel):
     provenance: dict[str, Any]
     columns: list[RegressionPredictionColumnMapping]
     rows: list[RegressionPredictionRow]
+
+
+class RegressionPredictionRowsPageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prediction_id: UUID
+    model_id: UUID
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    total: int = Field(ge=0)
+    returned: int = Field(ge=0)
+    has_previous: bool
+    has_next: bool
+    rows: list[RegressionPredictionRow]
+
+
+class RegressionPredictionCsvExportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = Field(ge=1)
+    export_id: UUID
+    prediction_id: UUID
+    format: Literal["regression_prediction_csv"]
+    artifact_kind: Literal["regression_prediction_csv_export"]
+    media_type: Literal["text/csv"]
+    sha256: str = Field(min_length=64, max_length=64)
+    size_bytes: int = Field(ge=0)
+    source_result_sha256: str = Field(min_length=64, max_length=64)
+    stale: bool
+    created_at: str
+    columns: list[str]
+    row_count: int = Field(ge=0)
+    preview_rows: list[list[str]]

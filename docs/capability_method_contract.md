@@ -88,3 +88,23 @@ Two-sided Cp/Pp values are `null` when only one spec limit is provided. Cpk/Ppk-
 Spec limits are not control limits. The first slice always warns that process stability, normal-model suitability, and measurement-system adequacy are not proven by this calculation.
 
 This slice returns point estimates only. It records `capability_point_estimates_without_ci` until confidence intervals are implemented and validated.
+
+## Reference Validation
+
+`backend/tests/reference/fixtures/quality_capability_normal_reference.json`
+cross-checks the overall sample-standard-deviation indices against the official
+NIST/SEMATECH e-Handbook section 6.1.6 capability example:
+`https://www.itl.nist.gov/div898/handbook/pmc/section1/pmc16.htm`.
+
+The published example provides LSL 8, USL 20, mean 16, sample standard
+deviation 2, Cp 1.0, Cpk/Cpu 0.6667, and Cpl 1.3333. The fixture uses synthetic
+rows `[14, 16, 18]` to reproduce that mean and sample standard deviation. The
+application's overall fields match those formulas numerically, although this
+product labels sample-SD indices as overall Pp/Ppk-style fields. The within
+fields use the separate `MRbar/d2` contract and are hand-checked rather than
+attributed to NIST.
+
+This three-row fixture validates formulas only. It must not be interpreted as
+evidence of process stability, normality, measurement-system adequacy, or an
+adequate capability-study sample size. No method version or runtime calculation
+changes as a result of this reference-only slice.

@@ -11,6 +11,9 @@ from app.statistics.capability import (
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/capability_input.json")
 REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/capability_reference.json")
+NIST_REFERENCE_FIXTURE = Path(
+    "backend/tests/reference/fixtures/quality_capability_normal_reference.json",
+)
 
 
 def test_normal_capability_is_hand_checkable_for_two_sided_specs() -> None:
@@ -143,6 +146,71 @@ def test_normal_capability_matches_reference_fixture() -> None:
             expected["observed_nonconformance"],
         )
         assert result["warnings"] == expected["warnings"]
+
+
+def test_normal_capability_matches_nist_published_summary_example() -> None:
+    fixture = json.loads(NIST_REFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    case = fixture["case"]
+    published = case["published_summary"]
+    expected_within = case["application_within_hand_check"]
+    expected_metadata = case["expected_metadata"]
+    published_tolerance = fixture["tolerances"]["published_rounded_absolute"]
+    hand_tolerance = fixture["tolerances"]["application_hand_check_absolute"]
+
+    assert fixture["source"]["organization"] == "NIST/SEMATECH"
+    assert fixture["source"]["url"].startswith("https://www.itl.nist.gov/")
+    assert "formula verification only" in fixture["conventions"]["interpretation_limit"]
+    assert "sample standard deviation" in fixture["conventions"]["application_overall_mapping"]
+    assert "MRbar/d2" in fixture["conventions"]["application_within_mapping"]
+
+    result = calculate_normal_capability(
+        case["synthetic_rows"],
+        _value_column(),
+        lsl=case["lsl"],
+        usl=case["usl"],
+        target=case["target"],
+    )
+
+    assert result["sample"]["mean"] == pytest.approx(published["mean"], abs=hand_tolerance)
+    assert result["sample"]["std_overall"] == pytest.approx(
+        published["sample_standard_deviation"],
+        abs=hand_tolerance,
+    )
+    assert result["capability"]["overall"]["two_sided"] == pytest.approx(
+        published["cp"],
+        abs=published_tolerance,
+    )
+    assert result["capability"]["overall"]["min_side"] == pytest.approx(
+        published["cpk"],
+        abs=published_tolerance,
+    )
+    assert result["capability"]["overall"]["lower"] == pytest.approx(
+        published["cpl"],
+        abs=published_tolerance,
+    )
+    assert result["capability"]["overall"]["upper"] == pytest.approx(
+        published["cpu"],
+        abs=published_tolerance,
+    )
+    assert result["sigma_estimators"]["mrbar"] == pytest.approx(
+        expected_within["mrbar"],
+        abs=hand_tolerance,
+    )
+    assert result["sample"]["std_within"] == pytest.approx(
+        expected_within["std_within"],
+        abs=hand_tolerance,
+    )
+    _assert_optional_numeric_mapping(
+        result["capability"]["within"],
+        expected_within["indices"],
+    )
+    assert result["n_total"] == expected_metadata["n_total"]
+    assert result["n_used"] == expected_metadata["n_used"]
+    assert result["n_excluded_missing_value"] == expected_metadata["n_excluded_missing_value"]
+    assert (
+        result["n_excluded_non_numeric_value"] == expected_metadata["n_excluded_non_numeric_value"]
+    )
+    assert result["warnings"] == expected_metadata["warnings"]
 
 
 def test_normal_capability_rejects_invalid_inputs_without_fake_indices() -> None:

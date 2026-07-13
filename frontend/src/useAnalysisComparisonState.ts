@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   fetchAnalysisRunComparison,
   type AnalysisRunComparisonResponse,
 } from "./api";
+import { createLatestRequestGuard } from "./latestRequest";
 
 interface UseAnalysisComparisonStateOptions {
   resetKey: number;
@@ -16,17 +17,22 @@ export function useAnalysisComparisonState({ resetKey }: UseAnalysisComparisonSt
     useState<AnalysisRunComparisonResponse | null>(null);
   const [analysisComparisonError, setAnalysisComparisonError] = useState<string | null>(null);
   const [isComparingAnalysisRuns, setIsComparingAnalysisRuns] = useState(false);
+  const comparisonRequest = useRef(createLatestRequestGuard()).current;
 
-  function resetAnalysisComparisonState() {
+  const resetAnalysisComparisonState = useCallback(() => {
+    comparisonRequest.cancel();
     setAnalysisComparisonLeftId(null);
     setAnalysisComparisonRightId(null);
     setAnalysisComparison(null);
     setAnalysisComparisonError(null);
-  }
+    setIsComparingAnalysisRuns(false);
+  }, [comparisonRequest]);
 
   function handleSelectAnalysisComparisonRun(side: "left" | "right", analysisId: string) {
+    comparisonRequest.cancel();
     setAnalysisComparison(null);
     setAnalysisComparisonError(null);
+    setIsComparingAnalysisRuns(false);
     if (side === "left") {
       setAnalysisComparisonLeftId(analysisId);
       return;
@@ -40,6 +46,7 @@ export function useAnalysisComparisonState({ resetKey }: UseAnalysisComparisonSt
       return;
     }
 
+    const request = comparisonRequest.begin();
     setIsComparingAnalysisRuns(true);
     setAnalysisComparisonError(null);
     try {
@@ -47,20 +54,29 @@ export function useAnalysisComparisonState({ resetKey }: UseAnalysisComparisonSt
         analysisComparisonLeftId,
         analysisComparisonRightId,
       );
-      setAnalysisComparison(response);
+      if (comparisonRequest.isCurrent(request)) {
+        setAnalysisComparison(response);
+      }
     } catch (error) {
-      setAnalysisComparison(null);
-      setAnalysisComparisonError(
-        error instanceof Error ? error.message : "analysis_comparison_failed",
-      );
+      if (comparisonRequest.isCurrent(request)) {
+        setAnalysisComparison(null);
+        setAnalysisComparisonError(
+          error instanceof Error ? error.message : "analysis_comparison_failed",
+        );
+      }
     } finally {
-      setIsComparingAnalysisRuns(false);
+      if (comparisonRequest.isCurrent(request)) {
+        setIsComparingAnalysisRuns(false);
+      }
     }
   }
 
   useEffect(() => {
     resetAnalysisComparisonState();
-  }, [resetKey]);
+    return () => {
+      comparisonRequest.cancel();
+    };
+  }, [comparisonRequest, resetAnalysisComparisonState, resetKey]);
 
   return {
     analysisComparison,
