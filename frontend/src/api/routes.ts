@@ -144,12 +144,54 @@ export const apiRoutes = {
     return apiUrl("/doe-designs/factorial");
   },
 
+  doeResponseSurfaceDesign(): string {
+    return apiUrl("/doe-designs/response-surface");
+  },
+
+  doeResponseSurfaceDesignById(designId: string): string {
+    return apiUrl(`/doe-designs/response-surface/${pathId(designId)}`);
+  },
+
+  doeResponseSurfaceResponses(designId: string): string {
+    return apiUrl(`/doe-designs/response-surface/${pathId(designId)}/responses`);
+  },
+
+  doeResponseSurfaceAnalyses(designId: string): string {
+    return apiUrl(`/doe-designs/response-surface/${pathId(designId)}/analyses`);
+  },
+
+  doeResponseSurfaceAnalysis(designId: string, analysisId: string): string {
+    return apiUrl(
+      `/doe-designs/response-surface/${pathId(designId)}/analyses/${pathId(analysisId)}`,
+    );
+  },
+
+  doeResponseSurfaceOptimizations(designId: string): string {
+    return apiUrl(`/doe-designs/response-surface/${pathId(designId)}/optimizations`);
+  },
+
+  doeResponseSurfaceOptimization(designId: string, optimizationId: string): string {
+    return apiUrl(
+      `/doe-designs/response-surface/${pathId(designId)}/optimizations/${pathId(optimizationId)}`,
+    );
+  },
+
   doeDesign(designId: string): string {
     return apiUrl(`/doe-designs/${pathId(designId)}`);
   },
 
   doeDesignResponses(designId: string): string {
     return apiUrl(`/doe-designs/${pathId(designId)}/responses`);
+  },
+
+  doeDesignAnalyses(designId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses`);
+  },
+
+  doeDesignAnalysis(designId: string, analysisId: string): string {
+    return apiUrl(
+      `/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}`,
+    );
   },
 
   regressionPredictionPreflight(modelId: string): string {

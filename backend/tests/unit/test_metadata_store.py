@@ -10,6 +10,7 @@ from app.storage.metadata import (
     DatasetColumnRecord,
     DatasetRecord,
     DatasetVersionRecord,
+    ExperimentDesignAnalysisRecord,
     ExperimentDesignRecord,
     ExperimentDesignVersionRecord,
     ExperimentRunRecord,
@@ -19,9 +20,11 @@ from app.storage.metadata import (
     count_analysis_artifact_records,
     get_analysis_run_record,
     get_dataset_artifact_record,
+    get_experiment_design_analysis_record,
     get_experiment_design_record,
     get_experiment_design_version_record,
     get_job_record,
+    get_latest_experiment_design_analysis_record,
     get_regression_model_record,
     initialize_metadata_store,
     insert_analysis_artifact_record,
@@ -29,6 +32,7 @@ from app.storage.metadata import (
     insert_analysis_run_record_with_artifacts_and_regression_model,
     insert_dataset_record,
     insert_dataset_version_record,
+    insert_experiment_design_analysis_record,
     insert_experiment_design_records,
     insert_job_record,
     list_dataset_artifact_records,
@@ -66,6 +70,7 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (6, "create_regression_models"),
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
+        (9, "create_experiment_design_analyses"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -81,7 +86,7 @@ def test_initialize_metadata_store_is_idempotent(tmp_path) -> None:
     with sqlite3.connect(second.path) as connection:
         count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
 
-    assert count == 8
+    assert count == 9
 
 
 def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) -> None:
@@ -129,6 +134,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (6, "create_regression_models"),
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
+        (9, "create_experiment_design_analyses"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -204,6 +210,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (6, "create_regression_models"),
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
+        (9, "create_experiment_design_analyses"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -311,6 +318,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (6, "create_regression_models"),
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
+        (9, "create_experiment_design_analyses"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -472,6 +480,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (6, "create_regression_models"),
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
+        (9, "create_experiment_design_analyses"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -520,6 +529,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (6, "create_regression_models"),
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
+        (9, "create_experiment_design_analyses"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -576,6 +586,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (6, "create_regression_models"),
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
+        (9, "create_experiment_design_analyses"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -628,8 +639,44 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (6, "create_regression_models"),
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
+        (9, "create_experiment_design_analyses"),
     ]
     assert response_table == ("experiment_run_responses",)
+    assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_from_schema_version_eight(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 8:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO schema_migrations (version, name)
+                VALUES (?, ?);
+                """,
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 8;")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        analysis_table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'experiment_design_analyses';
+            """,
+        ).fetchone()
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert analysis_table == ("experiment_design_analyses",)
     assert user_version == SCHEMA_VERSION
 
 
@@ -1018,6 +1065,67 @@ def test_experiment_design_records_round_trip(tmp_path) -> None:
     assert stored_design_after_response.status == "completed"
     assert stored_design_after_response.updated_at == response_updated_at
     assert stored_runs_after_response == runs
+
+    analysis_id = str(uuid4())
+    analysis_created_at = "2026-07-02T00:06:00.000Z"
+    analysis = ExperimentDesignAnalysisRecord(
+        analysis_id=analysis_id,
+        design_version_id=design_version_id,
+        response_name="Yield",
+        method_id="doe.factorial_design",
+        method_version="0.2.0",
+        config_json='{"schema_version":1}',
+        result_json='{"analysis_schema_version":1}',
+        result_sha256="b" * 64,
+        response_sha256="c" * 64,
+        created_at=analysis_created_at,
+        app_version="0.1.0",
+    )
+    insert_experiment_design_analysis_record(
+        workspace_root,
+        design_id=design_id,
+        record=analysis,
+        updated_at=analysis_created_at,
+    )
+
+    optimizer = ExperimentDesignAnalysisRecord(
+        analysis_id=str(uuid4()),
+        design_version_id=design_version_id,
+        response_name="response_optimizer",
+        method_id="regression.response_optimizer",
+        method_version="0.1.0",
+        config_json='{"schema_version":1}',
+        result_json='{"result_schema_version":1}',
+        result_sha256="d" * 64,
+        response_sha256="e" * 64,
+        created_at="2026-07-02T00:07:00.000Z",
+        app_version="0.1.0",
+    )
+    insert_experiment_design_analysis_record(
+        workspace_root,
+        design_id=design_id,
+        record=optimizer,
+        updated_at=optimizer.created_at,
+    )
+
+    stored_analysis = get_experiment_design_analysis_record(workspace_root, analysis_id)
+    latest_analysis = get_latest_experiment_design_analysis_record(
+        workspace_root,
+        design_version_id,
+    )
+    latest_factorial_analysis = get_latest_experiment_design_analysis_record(
+        workspace_root,
+        design_version_id,
+        method_id="doe.factorial_design",
+    )
+    stored_design_after_analysis = get_experiment_design_record(workspace_root, design_id)
+
+    assert stored_analysis == analysis
+    assert latest_analysis == optimizer
+    assert latest_factorial_analysis == analysis
+    assert stored_design_after_analysis is not None
+    assert stored_design_after_analysis.status == "analyzed"
+    assert stored_design_after_analysis.updated_at == optimizer.created_at
 
 
 def test_analysis_run_artifact_and_job_records_round_trip(tmp_path) -> None:

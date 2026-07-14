@@ -1,0 +1,106 @@
+{
+  "fixture_schema_version": 1,
+  "method_id": "doe.bayesian_optimization",
+  "method_version": "0.1.0",
+  "status": "planning_only",
+  "runtime_result_expected": false,
+  "policy": {
+    "objective_count": 1,
+    "objective_directions": ["minimize", "maximize"],
+    "factor_type": "continuous",
+    "factor_count_min": 1,
+    "factor_count_max": 6,
+    "factor_scaling": "declared_bounds_to_unit_interval",
+    "observation_policy": "deterministic_user_entered_completed_trials",
+    "surrogate": "gaussian_process_matern_5_2_ard",
+    "acquisition": "expected_improvement",
+    "known_constraints": "actual_unit_linear_inequalities",
+    "global_optimum_guaranteed": false,
+    "app_executes_objective": false
+  },
+  "expected_improvement_reference": {
+    "direction_normalization": "all_objectives_are_transformed_to_maximize",
+    "formula": "I*Phi(I/sigma)+sigma*phi(I/sigma), I=mu-best-xi; zero when sigma<=0",
+    "absolute_tolerance": 1e-12,
+    "cases": [
+      {
+        "posterior_mean": 0.0,
+        "posterior_std": 1.0,
+        "incumbent": 0.0,
+        "xi": 0.0,
+        "expected_improvement": 0.3989422804014327
+      },
+      {
+        "posterior_mean": 1.0,
+        "posterior_std": 1.0,
+        "incumbent": 0.0,
+        "xi": 0.0,
+        "expected_improvement": 1.0833154705876864
+      },
+      {
+        "posterior_mean": 2.0,
+        "posterior_std": 0.0,
+        "incumbent": 0.0,
+        "xi": 0.0,
+        "expected_improvement": 0.0
+      }
+    ]
+  },
+  "benchmarks": [
+    {
+      "benchmark_id": "hand_quadratic_1d_maximize",
+      "formula": "1-(x-0.25)^2",
+      "bounds": [[-1.0, 1.0]],
+      "known_optimizers": [[0.25]],
+      "known_optimum": 1.0,
+      "absolute_tolerance": 1e-12,
+      "purpose": "hand_checkable_direction_bounds_and_duplicate_policy"
+    },
+    {
+      "benchmark_id": "botorch_branin_minimize",
+      "formula": "(x2-b*x1^2+c*x1-r)^2+10*(1-t)*cos(x1)+10",
+      "constants": {
+        "b": 0.12918450914398066,
+        "c": 1.5915494309189535,
+        "r": 6.0,
+        "t": 0.039788735772973836
+      },
+      "bounds": [[-5.0, 10.0], [0.0, 15.0]],
+      "known_optimizers": [
+        [-3.141592653589793, 12.275],
+        [3.141592653589793, 2.275],
+        [9.42477796076938, 2.475]
+      ],
+      "known_optimum": 0.39788735772973816,
+      "absolute_tolerance": 1e-12,
+      "purpose": "future_seeded_end_to_end_convergence_and_multiple_global_minima"
+    }
+  ],
+  "sources": [
+    {
+      "title": "Efficient Global Optimization of Expensive Black-Box Functions",
+      "authors": "Jones, Schonlau, Welch",
+      "year": 1998,
+      "doi": "10.1023/A:1008306431147",
+      "url": "https://openturns.github.io/openturns/papers/jones1998.pdf",
+      "use": "expected_improvement_and_sequential_EGO_reference"
+    },
+    {
+      "title": "Gaussian Processes for Machine Learning",
+      "authors": "Rasmussen, Williams",
+      "year": 2006,
+      "url": "https://gaussianprocess.org/gpml/chapters/RW.pdf",
+      "use": "gaussian_process_posterior_and_numerical_policy_reference"
+    },
+    {
+      "title": "scikit-learn Gaussian Process user guide",
+      "url": "https://scikit-learn.org/stable/modules/gaussian_process.html",
+      "use": "future_product_surrogate_API_and_Matern_semantics"
+    },
+    {
+      "title": "BoTorch synthetic test functions: Branin",
+      "url": "https://botorch.readthedocs.io/en/latest/test_functions.html",
+      "use": "independent_Branin_formula_bounds_minimizers_and_optimum"
+    }
+  ]
+}

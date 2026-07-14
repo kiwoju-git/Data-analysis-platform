@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-SCHEMA_VERSION: Final = 8
+SCHEMA_VERSION: Final = 9
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -173,6 +173,21 @@ class ExperimentRunResponseRecord:
     unit: str | None
     created_at: str
     updated_at: str
+
+
+@dataclass(frozen=True)
+class ExperimentDesignAnalysisRecord:
+    analysis_id: str
+    design_version_id: str
+    response_name: str
+    method_id: str
+    method_version: str
+    config_json: str
+    result_json: str
+    result_sha256: str
+    response_sha256: str
+    created_at: str
+    app_version: str
 
 
 @dataclass(frozen=True)
@@ -467,6 +482,29 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
 
         CREATE INDEX IF NOT EXISTS idx_experiment_run_responses_version_name
         ON experiment_run_responses(design_version_id, response_name, run_id);
+        """,
+    ),
+    Migration(
+        version=9,
+        name="create_experiment_design_analyses",
+        sql="""
+        CREATE TABLE IF NOT EXISTS experiment_design_analyses (
+            analysis_id TEXT PRIMARY KEY,
+            design_version_id TEXT NOT NULL
+                REFERENCES experiment_design_versions(design_version_id) ON DELETE CASCADE,
+            response_name TEXT NOT NULL,
+            method_id TEXT NOT NULL,
+            method_version TEXT NOT NULL,
+            config_json TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            result_sha256 TEXT NOT NULL,
+            response_sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            app_version TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_experiment_design_analyses_version_response
+        ON experiment_design_analyses(design_version_id, response_name, created_at);
         """,
     ),
 )
@@ -1259,6 +1297,119 @@ def list_experiment_run_response_records(
     return [_experiment_run_response_from_row(row) for row in rows]
 
 
+def insert_experiment_design_analysis_record(
+    workspace_root: Path,
+    *,
+    design_id: str,
+    record: ExperimentDesignAnalysisRecord,
+    updated_at: str,
+) -> None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        with connection:
+            connection.execute(
+                """
+                INSERT INTO experiment_design_analyses (
+                    analysis_id,
+                    design_version_id,
+                    response_name,
+                    method_id,
+                    method_version,
+                    config_json,
+                    result_json,
+                    result_sha256,
+                    response_sha256,
+                    created_at,
+                    app_version
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    record.analysis_id,
+                    record.design_version_id,
+                    record.response_name,
+                    record.method_id,
+                    record.method_version,
+                    record.config_json,
+                    record.result_json,
+                    record.result_sha256,
+                    record.response_sha256,
+                    record.created_at,
+                    record.app_version,
+                ),
+            )
+            connection.execute(
+                """
+                UPDATE experiment_designs
+                SET status = 'analyzed', updated_at = ?
+                WHERE design_id = ?;
+                """,
+                (updated_at, design_id),
+            )
+
+
+def get_experiment_design_analysis_record(
+    workspace_root: Path,
+    analysis_id: str,
+) -> ExperimentDesignAnalysisRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                analysis_id,
+                design_version_id,
+                response_name,
+                method_id,
+                method_version,
+                config_json,
+                result_json,
+                result_sha256,
+                response_sha256,
+                created_at,
+                app_version
+            FROM experiment_design_analyses
+            WHERE analysis_id = ?;
+            """,
+            (analysis_id,),
+        ).fetchone()
+    return None if row is None else _experiment_design_analysis_from_row(row)
+
+
+def get_latest_experiment_design_analysis_record(
+    workspace_root: Path,
+    design_version_id: str,
+    *,
+    method_id: str | None = None,
+) -> ExperimentDesignAnalysisRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        query = """
+            SELECT
+                analysis_id,
+                design_version_id,
+                response_name,
+                method_id,
+                method_version,
+                config_json,
+                result_json,
+                result_sha256,
+                response_sha256,
+                created_at,
+                app_version
+            FROM experiment_design_analyses
+            WHERE design_version_id = ?
+        """
+        parameters: tuple[str, ...] = (design_version_id,)
+        if method_id is not None:
+            query += " AND method_id = ?"
+            parameters = (design_version_id, method_id)
+        query += """
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT 1;
+        """
+        row = connection.execute(query, parameters).fetchone()
+    return None if row is None else _experiment_design_analysis_from_row(row)
+
+
 def get_analysis_run_record(
     workspace_root: Path,
     analysis_id: str,
@@ -1861,6 +2012,24 @@ def _experiment_run_response_from_row(row: tuple[object, ...]) -> ExperimentRunR
         unit=None if row[5] is None else str(row[5]),
         created_at=str(row[6]),
         updated_at=str(row[7]),
+    )
+
+
+def _experiment_design_analysis_from_row(
+    row: tuple[object, ...],
+) -> ExperimentDesignAnalysisRecord:
+    return ExperimentDesignAnalysisRecord(
+        analysis_id=str(row[0]),
+        design_version_id=str(row[1]),
+        response_name=str(row[2]),
+        method_id=str(row[3]),
+        method_version=str(row[4]),
+        config_json=str(row[5]),
+        result_json=str(row[6]),
+        result_sha256=str(row[7]),
+        response_sha256=str(row[8]),
+        created_at=str(row[9]),
+        app_version=str(row[10]),
     )
 
 

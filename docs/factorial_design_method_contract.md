@@ -1,157 +1,173 @@
-# DOE Factorial Design Method Contract
+# DOE Factorial Design and Analysis Contract
 
-Last updated: 2026-07-12
+Last updated: 2026-07-14
 
-## Scope
+## Scope and Versions
 
-`doe.factorial_design` is currently available only for the first Gate D1 design-asset slice.
+`doe.factorial_design` is available through dedicated DOE APIs rather than the
+generic analysis-run endpoint.
+
+- Method version: `0.2.0`.
+- Design manifest schema: `1`.
+- Analysis config schema: `1`.
+- Analysis result schema: `1`.
+- SQLite metadata schema: `9`.
+
+Version `0.2.0` adds a persisted factorial-analysis result, effects, inference,
+diagnostics, and report sections to the earlier design/response contract. The
+method version is read from `METHOD_VERSIONS`; the design service, analysis
+service, catalog, stored record, API envelope, UI, and this document must agree.
 
 Implemented:
 
-- 2-level full factorial design generation.
-- Continuous factors with `name`, `unit`, `low`, and `high`.
-- Replicates, center points, optional block count, randomization on/off, and randomization seed.
-- Preserved `standard_order` and generated `run_order`.
-- Immutable design/version/run metadata in SQLite schema version `7`.
-- Numeric response entry/readback stored by immutable design version and run ID in SQLite schema version `8`.
-- `POST /api/v1/doe-designs/factorial`.
-- `GET /api/v1/doe-designs/{design_id}`.
-- `PUT /api/v1/doe-designs/{design_id}/responses`.
-- `GET /api/v1/doe-designs/{design_id}/responses`.
-- Minimal Workbench UI for design inputs, run-table preview, and one numeric response series entry.
+- 2-level full factorial design generation for 2 to 6 continuous factors.
+- Replicates, center points, fixed blocks, deterministic randomization seed,
+  standard order, and run order.
+- Immutable design/version/run metadata and canonical `design_sha256`.
+- Complete numeric response series stored against immutable run IDs.
+- `-1/+1` factorial coding and center-point coding at `0`.
+- Main effects and interactions through the selected maximum order, with all
+  lower-order terms retained to enforce hierarchy.
+- OLS coefficients, factorial effects (`effect = 2 * coefficient`), confidence
+  intervals, partial drop-one sums of squares, model ANOVA, and ranked effects.
+- Center-point curvature and block fixed effects when present.
+- Pure-error and lack-of-fit decomposition when replication permits it.
+- Residual, leverage, Cook's distance, Durbin-Watson, Shapiro-Wilk, Q-Q,
+  main-effect, and interaction plot payloads.
+- Persisted checksum-validated analysis restore and an HTML report containing
+  the verified design, response, effects, ANOVA, diagnostics, warnings, and
+  runtime/build provenance.
+- Workbench response entry, analysis controls, effect/main-effect charts,
+  term/ANOVA tables, and diagnostic summary.
 
-Out of scope for this slice:
+Out of scope:
 
-- Effect estimates, OLS, ANOVA, residual diagnostics, alias structure, Pareto/main-effect/interaction plots.
-- Fractional factorial, Plackett-Burman, general factorial, CCD, Box-Behnken, RSM, optimizer.
-- Any fake statistical result or placeholder analysis output.
+- Automatic term selection or a quiet switch to another model.
+- Fractional factorial alias analysis, Plackett-Burman, and general factorial.
+- CCD, Box-Behnken, RSM, contour/surface plots, and response optimization.
+- Chart image export and any claim of causal effects or a guaranteed optimum.
 
-## API Contract
+## Dedicated API
 
-Create:
+Design and response routes:
 
 ```http
 POST /api/v1/doe-designs/factorial
+GET  /api/v1/doe-designs/{design_id}
+PUT  /api/v1/doe-designs/{design_id}/responses
+GET  /api/v1/doe-designs/{design_id}/responses
+GET  /api/v1/doe-designs/{design_id}/report.html
 ```
 
-Request fields:
+The design request accepts `name`, 2 to 6 `factors`, `replicates`,
+`center_points`, `randomize`, `randomization_seed`, and `block_count`. A response
+upsert must provide exactly one finite numeric value for every persisted
+`run_order`. Once a successful analysis marks the design `analyzed`, response
+mutation is rejected; create a new design/version for changed observations.
 
-- `name`: design name.
-- `factors`: 2 to 6 factors.
-- `factors[].name`: unique, non-empty factor name.
-- `factors[].low`: finite numeric low level.
-- `factors[].high`: finite numeric high level, strictly greater than low.
-- `factors[].unit`: optional display unit.
-- `replicates`: integer 1 to 16.
-- `center_points`: integer 0 to 32.
-- `randomize`: boolean.
-- `randomization_seed`: integer >= 0.
-- `block_count`: integer 1 to 64 and not greater than total run count.
-
-Read:
+Analysis routes:
 
 ```http
-GET /api/v1/doe-designs/{design_id}
+POST /api/v1/doe-designs/{design_id}/analyses
+GET  /api/v1/doe-designs/{design_id}/analyses/{analysis_id}
 ```
 
-Response includes:
+Create request:
 
-- `design_id`, `design_version_id`, `version_number`.
-- `method_id = "doe.factorial_design"`, `method_version`.
-- `family = "two_level_full_factorial"`.
-- `status`, currently `designed` before response entry and `completed` after a full response series is stored.
-- factor and option payloads.
-- `run_count`.
-- `design_sha256`.
-- ordered `runs` with `standard_order`, `run_order`, `replicate_index`, `center_point`, `block_index`, uncoded `factor_levels`, and `coded_levels`.
+- `response_name`: an existing complete response series.
+- `max_interaction_order`: `1` to `min(3, factor_count)`.
+- `confidence_level`: finite value strictly between 0 and 1, default `0.95`.
+- `point_limit`: diagnostic point cap from 1 to 256.
 
-Save responses:
+The generic `POST /api/v1/analysis-runs` endpoint continues to reject this
+method with `analysis_method_uses_dedicated_api`.
 
-```http
-PUT /api/v1/doe-designs/{design_id}/responses
-```
+## Calculation Policy
 
-Request fields:
+- The intercept and every factorial term through `max_interaction_order` are
+  fitted together. Hierarchy is mandatory and automatic term selection is off.
+- Blocks use treatment-coded fixed effects. A center indicator estimates
+  curvature when center points exist.
+- Rank-deficient or constant-response models fail explicitly. There is no
+  automatic factor removal, pooling, method substitution, or fabricated result.
+- A saturated model returns estimable coefficients/effects but reports null
+  standard errors, confidence intervals, F statistics, and p-values with a
+  stable warning.
+- Pure error groups observations at identical coded factor points and blocks.
+  Lack-of-fit inference is returned only when both pure-error and lack-of-fit
+  degrees of freedom exist.
+- Plot payload limits affect displayed diagnostic points only; fit and summary
+  statistics always use the full stored response series.
 
-- `response_name`: non-empty response label, trimmed before persistence.
-- `unit`: optional display unit.
-- `values`: one numeric finite value for every current design `run_order`.
-- `values[].run_order`: must match the persisted design run table exactly; duplicates, missing runs, or extra runs are rejected.
-- `values[].value`: finite numeric response value.
+## Persistence and Integrity
 
-Read responses:
+SQLite schema v9 adds `experiment_design_analyses`. Each record stores:
 
-```http
-GET /api/v1/doe-designs/{design_id}/responses
-```
+- analysis ID and immutable design-version dependency;
+- response name and canonical response SHA-256;
+- method ID/version, config JSON, result JSON, and result SHA-256;
+- created time and app version.
 
-Response includes `design_id`, `design_version_id`, `version_number`, `status`, and response series ordered by response name and run order. The response API does not return DOE effects, p-values, ANOVA tables, or placeholder analysis output.
+Restore and report paths verify the design checksum, stored result checksum,
+method/version, design/version IDs, response name/SHA, config dependencies, and
+the currently stored response series. A mismatch returns an explicit 409 error.
+No absolute path, original filename, raw workspace location, or external data
+transfer is part of this contract.
 
-The generic `POST /api/v1/analysis-runs` endpoint rejects `doe.factorial_design` with `analysis_method_uses_dedicated_api`.
-
-## Reproducibility Rules
-
-- With the same factors, options, and seed, generated run order and `design_sha256` must be deterministic.
-- The checksum is computed from canonical JSON with schema version, family, factors, options, and runs.
-- Stored design metadata is checksum-verified before response.
-- Response entry does not regenerate or mutate factor levels, standard order, run order, or `design_sha256`.
-- No raw dataset, workspace path, or absolute local path is returned.
-- Run-count limits are explicit. The app must reject over-limit designs rather than silently truncating or sampling.
+The result envelope also records Python version, platform, optional build commit,
+and NumPy/SciPy versions through the common runtime/build provenance helper.
 
 ## Reference Validation
 
-- `backend/tests/reference/fixtures/doe_factorial_design_reference.json` uses
-  the official NIST/SEMATECH `2^3` two-level full-factorial tables for the
-  eight-run Yates standard order and the replicated Speed/Feed/Depth factor
-  settings.
-- The fixture verifies that the first factor changes fastest, low/high levels
-  map to `-1`/`+1`, all eight combinations appear once per replicate, and the
-  second replicate repeats the same standard order.
-- Randomization is disabled for direct NIST parity. The companion internal
-  fixture verifies Python seeded shuffle, center points, and the application's
-  round-robin block assignment; those behaviors are not attributed to NIST.
-- The recorded `design_sha256` is derived from the published factor table using
-  the application's canonical schema-version-1 JSON. NIST does not publish or
-  validate this application-specific checksum.
-- A paired failure case rejects a factor whose low level is not below its high
-  level. No truncated or fallback design is generated.
-- Existing dedicated-API tests cover response-entry completeness, preservation
-  of the immutable run table/checksum, checksum mismatch handling, and rejection
-  of a generic analysis run.
-- The fixture contains no responses and does not validate effects, OLS, ANOVA,
-  diagnostics, alias structure, RSM, or optimization.
+- `doe_factorial_design_reference.json` directly checks the official
+  NIST/SEMATECH `2^3` Yates standard order and coded/actual levels. Seeded
+  randomization, blocks, and the app checksum remain documented app conventions.
+- `doe_factorial_analysis_nist_reference.json` checks the NIST published eight
+  responses and all saturated `2^3` coefficients. Factorial effects are twice
+  the corresponding coefficients. The saturated reference deliberately has no
+  residual inference.
+- Hand-check tests cover hierarchy, effect scaling, reduced-model lack of fit,
+  plot/diagnostic limits, constant response, and invalid center coding.
+- API tests cover persistence/restore, method-version alignment, runtime/package
+  provenance, response dependency hashing, result/config relationship tamper,
+  report rendering, and internal-path non-exposure.
 
-## Stable Error Codes
+Primary references:
 
-- `analysis_method_uses_dedicated_api`
-- `doe_design_not_found`
-- `doe_design_family_unsupported`
-- `doe_design_version_missing`
-- `doe_design_run_metadata_incomplete`
-- `doe_design_metadata_invalid`
-- `doe_design_checksum_mismatch`
-- `doe_design_already_analyzed`
-- `doe_response_metadata_invalid`
-- `doe_response_name_required`
-- `doe_response_run_order_duplicate`
-- `doe_response_run_set_mismatch`
-- `doe_factorial_method_registry_mismatch`
-- `doe_factorial_factor_count_out_of_range`
-- `doe_factorial_factor_name_required`
-- `doe_factorial_factor_names_not_unique`
-- `doe_factorial_factor_range_invalid`
-- `doe_factorial_replicates_invalid`
-- `doe_factorial_center_points_invalid`
-- `doe_factorial_block_count_invalid`
-- `doe_factorial_seed_invalid`
-- `doe_factorial_run_count_exceeds_limit`
-- `doe_factorial_block_count_exceeds_run_count`
+- NIST/SEMATECH Yates order:
+  <https://www.itl.nist.gov/div898/handbook/eda/section3/eda35i.htm>
+- NIST factorial effects example:
+  <https://www.itl.nist.gov/div898/handbook/pri/section6/pri615.htm>
+- NIST lack-of-fit decomposition:
+  <https://www.itl.nist.gov/div898/handbook/pmd/section4/pmd446.htm>
 
-## Tests
+## Stable Errors and Warnings
 
-Required coverage for this slice:
+Design/response errors retain the existing `doe_design_*`, `doe_response_*`,
+and `doe_factorial_*` codes. Analysis adds:
 
-- Pure generator tests for standard order, center points, same-seed randomization, blocks, and invalid designs.
-- SQLite migration v6 to v7, v7 to v8, experiment-design record round trip, and response record round trip.
-- API contract tests for create/read, duplicate factor rejection, response save/read, incomplete response run-set rejection, and generic analysis-run rejection.
-- Frontend SSR test for the Workbench DOE design panel, run preview, and response entry shell.
+- `doe_factorial_analysis_not_found`
+- `doe_factorial_analysis_response_not_found`
+- `doe_factorial_analysis_response_incomplete`
+- `doe_factorial_analysis_response_metadata_invalid`
+- `doe_factorial_analysis_method_mismatch`
+- `doe_factorial_analysis_checksum_mismatch`
+- `doe_factorial_analysis_metadata_invalid`
+- `doe_factorial_analysis_dependency_mismatch`
+- `doe_factorial_analysis_response_mismatch`
+- `doe_factorial_analysis_factors_invalid`
+- `doe_factorial_interaction_order_invalid`
+- `doe_factorial_response_variance_zero`
+- `doe_factorial_model_rank_deficient`
+
+Warnings include saturated inference unavailable, small residual degrees of
+freedom, excluded higher-order interactions, unavailable pure error/lack of fit,
+included block fixed effects, and influential points.
+
+## Validation Requirements
+
+- Migration tests must cover v8 to v9 and record round trips.
+- Domain and independent-reference tests must use explicit tolerances.
+- API/OpenAPI/frontend contract tests must keep method and schema versions aligned.
+- Browser E2E must retain design creation, response entry, analysis execution,
+  effect/ANOVA rendering, and report download without fake values.

@@ -29,6 +29,7 @@ class SchemaComponentContract:
     required_fields: frozenset[str] = field(default_factory=frozenset)
     enum_values: frozenset[str] | None = None
     property_refs: tuple[tuple[str, str], ...] = ()
+    property_any_of_refs: tuple[tuple[str, frozenset[str]], ...] = ()
     array_item_refs: tuple[tuple[str, str], ...] = ()
     property_consts: tuple[tuple[str, object], ...] = ()
     additional_properties: bool | None = False
@@ -208,6 +209,67 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="doeResponseSurfaceDesign",
+        method="post",
+        path="/api/v1/doe-designs/response-surface",
+        success_status="201",
+        response_schema="ResponseSurfaceDesignResponse",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="doeResponseSurfaceDesignById",
+        method="get",
+        path="/api/v1/doe-designs/response-surface/{design_id}",
+        success_status="200",
+        response_schema="ResponseSurfaceDesignResponse",
+        parameters=frozenset({("design_id", "path")}),
+    ),
+    OperationContract(
+        route_name="doeResponseSurfaceResponses",
+        method="put",
+        path="/api/v1/doe-designs/response-surface/{design_id}/responses",
+        success_status="200",
+        response_schema="DoeDesignResponsesResponse",
+        parameters=frozenset({("design_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="doeResponseSurfaceAnalyses",
+        method="post",
+        path="/api/v1/doe-designs/response-surface/{design_id}/analyses",
+        success_status="201",
+        response_schema="DoeResponseSurfaceAnalysisResponse",
+        parameters=frozenset({("design_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="doeResponseSurfaceAnalysis",
+        method="get",
+        path=("/api/v1/doe-designs/response-surface/{design_id}/analyses/{analysis_id}"),
+        success_status="200",
+        response_schema="DoeResponseSurfaceAnalysisResponse",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="doeResponseSurfaceOptimizations",
+        method="post",
+        path="/api/v1/doe-designs/response-surface/{design_id}/optimizations",
+        success_status="201",
+        response_schema="ResponseOptimizerResponse",
+        parameters=frozenset({("design_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="doeResponseSurfaceOptimization",
+        method="get",
+        path=(
+            "/api/v1/doe-designs/response-surface/{design_id}/optimizations/" "{optimization_id}"
+        ),
+        success_status="200",
+        response_schema="ResponseOptimizerResponse",
+        parameters=frozenset({("design_id", "path"), ("optimization_id", "path")}),
+    ),
+    OperationContract(
         route_name="doeDesign",
         method="get",
         path="/api/v1/doe-designs/{design_id}",
@@ -231,6 +293,23 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema="DoeDesignResponsesResponse",
         parameters=frozenset({("design_id", "path")}),
+    ),
+    OperationContract(
+        route_name="doeDesignAnalyses",
+        method="post",
+        path="/api/v1/doe-designs/{design_id}/analyses",
+        success_status="201",
+        response_schema="DoeFactorialAnalysisResponse",
+        parameters=frozenset({("design_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="doeDesignAnalysis",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}",
+        success_status="200",
+        response_schema="DoeFactorialAnalysisResponse",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
     ),
     OperationContract(
         route_name="regressionPredictionPreflight",
@@ -588,8 +667,471 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "provenance",
             }
         ),
-        property_refs=(("provenance", "AnalysisProvenance"),),
+        property_any_of_refs=(
+            (
+                "provenance",
+                frozenset({"AnalysisProvenance", "RegressionPredictionProvenance"}),
+            ),
+        ),
         array_item_refs=(("warnings", "AnalysisWarning"),),
+    ),
+    SchemaComponentContract(
+        name="DoeFactorialAnalysisCreateRequest",
+        properties=frozenset(
+            {"response_name", "max_interaction_order", "confidence_level", "point_limit"}
+        ),
+        required_fields=frozenset({"response_name"}),
+    ),
+    SchemaComponentContract(
+        name="DoeFactorialAnalysisResponse",
+        properties=frozenset(
+            {
+                "analysis_id",
+                "design_id",
+                "design_version_id",
+                "design_version_number",
+                "method_id",
+                "method_version",
+                "analysis_schema_version",
+                "design_sha256",
+                "response_sha256",
+                "response_name",
+                "created_at",
+                "app_version",
+                "python_version",
+                "platform",
+                "build_commit",
+                "package_versions",
+                "result",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "analysis_id",
+                "design_id",
+                "design_version_id",
+                "design_version_number",
+                "method_id",
+                "method_version",
+                "analysis_schema_version",
+                "design_sha256",
+                "response_sha256",
+                "response_name",
+                "created_at",
+                "app_version",
+                "python_version",
+                "platform",
+                "build_commit",
+                "package_versions",
+                "result",
+            }
+        ),
+        property_refs=(("result", "DoeFactorialAnalysisResult"),),
+    ),
+    SchemaComponentContract(
+        name="DoeFactorialAnalysisResult",
+        properties=frozenset(
+            {
+                "schema_version",
+                "summary_type",
+                "method",
+                "response",
+                "factor_names",
+                "coding",
+                "model_policy",
+                "sample",
+                "fit",
+                "terms",
+                "ranked_effects",
+                "anova",
+                "diagnostics",
+                "plots",
+                "warnings",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "schema_version",
+                "summary_type",
+                "method",
+                "response",
+                "factor_names",
+                "coding",
+                "model_policy",
+                "sample",
+                "fit",
+                "terms",
+                "ranked_effects",
+                "anova",
+                "diagnostics",
+                "plots",
+                "warnings",
+            }
+        ),
+        property_consts=(("schema_version", 1), ("summary_type", "factorial_analysis")),
+    ),
+    SchemaComponentContract(
+        name="ResponseSurfaceDesignCreateRequest",
+        properties=frozenset(
+            {
+                "name",
+                "factors",
+                "alpha_mode",
+                "factorial_replicates",
+                "axial_replicates",
+                "center_points",
+                "randomize",
+                "randomization_seed",
+            }
+        ),
+        required_fields=frozenset({"factors", "randomization_seed"}),
+        array_item_refs=(("factors", "DoeFactorRequest"),),
+    ),
+    SchemaComponentContract(
+        name="ResponseSurfaceDesignResponse",
+        properties=frozenset(
+            {
+                "design_id",
+                "design_version_id",
+                "version_number",
+                "method_id",
+                "method_version",
+                "family",
+                "name",
+                "status",
+                "created_at",
+                "updated_at",
+                "app_version",
+                "factors",
+                "options",
+                "run_count",
+                "design_sha256",
+                "runs",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "design_id",
+                "design_version_id",
+                "version_number",
+                "method_id",
+                "method_version",
+                "family",
+                "name",
+                "status",
+                "created_at",
+                "updated_at",
+                "app_version",
+                "factors",
+                "options",
+                "run_count",
+                "design_sha256",
+                "runs",
+            }
+        ),
+        property_refs=(("options", "ResponseSurfaceDesignOptionsResponse"),),
+        array_item_refs=(
+            ("factors", "DoeFactorResponse"),
+            ("runs", "ResponseSurfaceDesignRunResponse"),
+        ),
+        property_consts=(
+            ("method_id", "doe.response_surface"),
+            ("family", "central_composite_inscribed"),
+        ),
+    ),
+    SchemaComponentContract(
+        name="DoeResponseSurfaceAnalysisCreateRequest",
+        properties=frozenset(
+            {"response_name", "confidence_level", "point_limit", "contour_grid_size"}
+        ),
+        required_fields=frozenset({"response_name"}),
+    ),
+    SchemaComponentContract(
+        name="DoeResponseSurfaceAnalysisResponse",
+        properties=frozenset(
+            {
+                "analysis_id",
+                "design_id",
+                "design_version_id",
+                "design_version_number",
+                "method_id",
+                "method_version",
+                "analysis_schema_version",
+                "design_sha256",
+                "response_sha256",
+                "response_name",
+                "created_at",
+                "app_version",
+                "python_version",
+                "platform",
+                "build_commit",
+                "package_versions",
+                "result",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "analysis_id",
+                "design_id",
+                "design_version_id",
+                "design_version_number",
+                "method_id",
+                "method_version",
+                "analysis_schema_version",
+                "design_sha256",
+                "response_sha256",
+                "response_name",
+                "created_at",
+                "app_version",
+                "python_version",
+                "platform",
+                "build_commit",
+                "package_versions",
+                "result",
+            }
+        ),
+        property_refs=(("result", "DoeResponseSurfaceAnalysisResult"),),
+        property_consts=(("method_id", "doe.response_surface"),),
+    ),
+    SchemaComponentContract(
+        name="DoeResponseSurfaceAnalysisResult",
+        properties=frozenset(
+            {
+                "schema_version",
+                "summary_type",
+                "method",
+                "response",
+                "factor_names",
+                "coding",
+                "model_policy",
+                "sample",
+                "fit",
+                "terms",
+                "anova",
+                "stationary_point",
+                "contour",
+                "diagnostics",
+                "warnings",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "schema_version",
+                "summary_type",
+                "method",
+                "response",
+                "factor_names",
+                "coding",
+                "model_policy",
+                "sample",
+                "fit",
+                "terms",
+                "anova",
+                "stationary_point",
+                "contour",
+                "diagnostics",
+                "warnings",
+            }
+        ),
+        property_refs=(
+            ("stationary_point", "DoeResponseSurfaceStationaryPointResponse"),
+            ("contour", "DoeResponseSurfaceContourResponse"),
+        ),
+        array_item_refs=(("terms", "DoeResponseSurfaceTermResponse"),),
+        property_consts=(
+            ("schema_version", 1),
+            ("summary_type", "response_surface_analysis"),
+            ("method", "full_quadratic_ordinary_least_squares"),
+        ),
+    ),
+    SchemaComponentContract(
+        name="ResponseOptimizerCreateRequest",
+        properties=frozenset({"objectives", "factor_bounds", "linear_constraints", "search"}),
+        required_fields=frozenset({"objectives"}),
+        property_refs=(("search", "ResponseOptimizerSearchOptionsRequest"),),
+        array_item_refs=(
+            ("objectives", "ResponseOptimizerObjectiveRequest"),
+            ("factor_bounds", "ResponseOptimizerFactorBoundRequest"),
+            ("linear_constraints", "ResponseOptimizerLinearConstraintRequest"),
+        ),
+    ),
+    SchemaComponentContract(
+        name="ResponseOptimizerObjectiveRequest",
+        properties=frozenset(
+            {
+                "source_analysis_id",
+                "goal",
+                "lower",
+                "target",
+                "upper",
+                "lower_weight",
+                "upper_weight",
+                "importance",
+            }
+        ),
+        required_fields=frozenset({"source_analysis_id", "goal"}),
+    ),
+    SchemaComponentContract(
+        name="ResponseOptimizerSearchOptionsRequest",
+        properties=frozenset(
+            {
+                "random_seed",
+                "random_candidate_count",
+                "multi_start_count",
+                "max_iterations",
+                "max_evaluations",
+                "time_budget_ms",
+            }
+        ),
+    ),
+    SchemaComponentContract(
+        name="ResponseOptimizerResponse",
+        properties=frozenset(
+            {
+                "optimization_id",
+                "design_id",
+                "design_version_id",
+                "design_version_number",
+                "method_id",
+                "method_version",
+                "config_schema_version",
+                "result_schema_version",
+                "config_sha256",
+                "design_sha256",
+                "source_analysis_ids",
+                "source_bundle_sha256",
+                "created_at",
+                "app_version",
+                "python_version",
+                "platform",
+                "build_commit",
+                "package_versions",
+                "result",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "optimization_id",
+                "design_id",
+                "design_version_id",
+                "design_version_number",
+                "method_id",
+                "method_version",
+                "config_schema_version",
+                "result_schema_version",
+                "config_sha256",
+                "design_sha256",
+                "source_analysis_ids",
+                "source_bundle_sha256",
+                "created_at",
+                "app_version",
+                "python_version",
+                "platform",
+                "build_commit",
+                "package_versions",
+                "result",
+            }
+        ),
+        property_refs=(("result", "ResponseOptimizerResult"),),
+        property_consts=(("method_id", "regression.response_optimizer"),),
+    ),
+    SchemaComponentContract(
+        name="ResponseOptimizerResult",
+        properties=frozenset(
+            {
+                "schema_version",
+                "summary_type",
+                "method",
+                "model_policy",
+                "factor_region",
+                "objectives",
+                "recommendation",
+                "search",
+                "warnings",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "schema_version",
+                "summary_type",
+                "method",
+                "model_policy",
+                "factor_region",
+                "objectives",
+                "recommendation",
+                "search",
+                "warnings",
+            }
+        ),
+        property_refs=(
+            ("model_policy", "ResponseOptimizerModelPolicyResponse"),
+            ("factor_region", "ResponseOptimizerFactorRegionResponse"),
+            ("recommendation", "ResponseOptimizerRecommendationResponse"),
+            ("search", "ResponseOptimizerSearchResponse"),
+        ),
+        array_item_refs=(("objectives", "ResponseOptimizerObjectiveResponse"),),
+        property_consts=(
+            ("schema_version", 1),
+            ("summary_type", "response_optimizer"),
+            ("method", "derringer_suich_bounded_multistart_slsqp"),
+        ),
+    ),
+    SchemaComponentContract(
+        name="RegressionPredictionProvenance",
+        properties=frozenset(
+            {
+                "method_id",
+                "method_version",
+                "dataset_version_id",
+                "app_version",
+                "python_version",
+                "platform",
+                "build_commit",
+                "package_versions",
+                "source_analysis_id",
+                "source_analysis_stale_at_prediction",
+                "source_dataset_version_id",
+                "source_schema_hash_at_fit",
+                "source_schema_hash_current",
+                "target_dataset_version_id",
+                "target_schema_hash",
+                "model_id",
+                "model_manifest_sha256",
+                "prediction_schema_version",
+                "model_manifest_schema_version",
+                "missing_policy",
+                "confidence_level",
+                "include_intervals",
+                "source_canonical_artifact_sha256",
+                "target_canonical_artifact_sha256",
+                "created_at",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "method_id",
+                "method_version",
+                "dataset_version_id",
+                "app_version",
+                "source_analysis_id",
+                "source_analysis_stale_at_prediction",
+                "source_dataset_version_id",
+                "source_schema_hash_at_fit",
+                "source_schema_hash_current",
+                "target_dataset_version_id",
+                "target_schema_hash",
+                "model_id",
+                "model_manifest_sha256",
+                "prediction_schema_version",
+                "model_manifest_schema_version",
+                "missing_policy",
+                "confidence_level",
+                "include_intervals",
+                "source_canonical_artifact_sha256",
+                "target_canonical_artifact_sha256",
+                "created_at",
+            }
+        ),
     ),
     SchemaComponentContract(
         name="AnalysisResultExportListItemResponse",
@@ -666,6 +1208,7 @@ FRONTEND_RESULT_TYPE_FILE_CONTRACTS = [
         path="frontend/src/api/types/analysisResultsQuality.ts",
         summary_types=frozenset(
             {
+                "attribute_control_chart",
                 "individuals_chart",
                 "subgroup_chart",
                 "run_chart",
@@ -676,9 +1219,22 @@ FRONTEND_RESULT_TYPE_FILE_CONTRACTS = [
             }
         ),
     ),
+    FrontendResultTypeFileContract(
+        path="frontend/src/api/types/doe.ts",
+        summary_types=frozenset(
+            {"factorial_analysis", "response_surface_analysis", "response_optimizer"}
+        ),
+    ),
 ]
 
-NON_ANALYSIS_RUN_RESULT_SUMMARY_TYPES = frozenset({"gage_rr_preflight"})
+NON_ANALYSIS_RUN_RESULT_SUMMARY_TYPES = frozenset(
+    {
+        "factorial_analysis",
+        "response_surface_analysis",
+        "response_optimizer",
+        "gage_rr_preflight",
+    }
+)
 
 
 def _repo_root() -> Path:
@@ -755,6 +1311,18 @@ def _schema_ref_name(schema: dict[str, Any]) -> str | None:
     if not isinstance(ref, str):
         return None
     return ref.removeprefix("#/components/schemas/")
+
+
+def _schema_any_of_ref_names(schema: dict[str, Any]) -> frozenset[str]:
+    any_of = schema.get("anyOf")
+    if not isinstance(any_of, list):
+        return frozenset()
+    return frozenset(
+        ref_name
+        for candidate in any_of
+        if isinstance(candidate, dict)
+        if (ref_name := _schema_ref_name(candidate)) is not None
+    )
 
 
 def _array_item_ref_name(schema: dict[str, Any]) -> str | None:
@@ -1041,6 +1609,10 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ci_status_text = (_repo_root() / "docs/ci_status.md").read_text(encoding="utf-8")
     workflow_section = _markdown_h2_section(ci_status_text, "Workflow Configuration")
     local_validation_section = _markdown_h2_section(ci_status_text, "Local Validation")
+    historical_validation_section = _markdown_h2_section(
+        ci_status_text,
+        "Historical Local Validation",
+    )
     remote_section = _markdown_h2_section(
         ci_status_text,
         "Remote GitHub Actions Verification",
@@ -1062,11 +1634,11 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ):
         assert phrase in workflow_section
 
-    assert "latest recorded backend pytest count is 461" in local_validation_section
-    assert "latest recorded frontend Vitest count is 63" in local_validation_section
+    assert "latest recorded backend pytest count is 564" in local_validation_section
+    assert "latest recorded frontend Vitest count is 86" in local_validation_section
     assert "The latest run passed backend ruff check" not in local_validation_section
-    assert "That 2026-07-09 run passed backend ruff check" in local_validation_section
-    assert "That 2026-07-07 run passed backend ruff check" in local_validation_section
+    assert "That 2026-07-09 run passed backend ruff check" in historical_validation_section
+    assert "That 2026-07-07 run passed backend ruff check" in historical_validation_section
 
     for phrase in (
         "has not been directly verified",
@@ -1128,7 +1700,7 @@ def test_e2e_critical_path_keeps_linear_model_prediction_browser_flow() -> None:
     for required_contract in (
         'row_label="12행", column_label="3컬럼"',
         'name=re.compile(r"상관관계 및 회귀분석")',
-        'name=re.compile(r"회귀모형 적합")',
+        'name=re.compile(r"^회귀모형 적합")',
         'select_option(label="y")',
         'name="회귀모형 적합 실행"',
         'get_by_label("예측 대상 데이터셋 버전")',
@@ -1221,11 +1793,12 @@ def test_independent_reference_backlog_keeps_actionable_fixture_plan() -> None:
         },
         "doe.factorial_design": {
             "doe_factorial_design_reference.json",
+            "doe_factorial_analysis_nist_reference.json",
             "standard order",
-            "run order",
-            "design SHA-256",
-            "dedicated-route boundary",
-            "no generic analysis-run result",
+            "published responses",
+            "saturated coefficients",
+            "effect=2*coefficient",
+            "provenance",
         },
         "regression.linear_model": {
             "regression_linear_model_reference.json",
@@ -1344,6 +1917,10 @@ def test_frontend_schema_component_contract_is_present_in_openapi(
     for field_name, ref_name in contract.property_refs:
         assert _schema_ref_name(properties[field_name]) == ref_name
         assert ref_name in schemas
+
+    for field_name, ref_names in contract.property_any_of_refs:
+        assert _schema_any_of_ref_names(properties[field_name]) == ref_names
+        assert ref_names <= frozenset(schemas)
 
     for field_name, ref_name in contract.array_item_refs:
         assert _array_item_ref_name(properties[field_name]) == ref_name

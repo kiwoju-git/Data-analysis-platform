@@ -6,6 +6,8 @@ import App from "./App";
 import { AnalysisPage } from "./AnalysisPage";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { DatasetPreparationPage } from "./DatasetPreparationPage";
+import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
+import { ResponseSurfacePanel } from "./ResponseSurfacePanel";
 import {
   fetchAnalysisResultExports,
   fetchAnalysisRunComparison,
@@ -21,12 +23,16 @@ import type {
   AnalysisResultHtmlReportResponse,
   AnalysisResultJsonExportResponse,
   AnalysisRunListResponse,
+  AttributeControlChartResult,
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
   DatasetUploadResponse,
   DatasetVersionCatalogResponse,
   DatasetVersionResponse,
+  DoeDesignResponsesResponse,
+  DoeFactorialAnalysisResponse,
+  DoeResponseSurfaceAnalysisResponse,
   FactorialDesignResponse,
   GageRrPreflightResponse,
   GageRrResult,
@@ -40,6 +46,7 @@ import type {
   RegressionPredictionCsvExportResponse,
   RegressionPredictionResponse,
   RegressionPredictionRowsPageResponse,
+  ResponseSurfaceDesignResponse,
   RunChartResult,
   SubgroupChartResult,
   XyCorrelationResult,
@@ -189,8 +196,8 @@ describe("App", () => {
     });
   });
 
-  it("defines guidance for all 29 documented six-module methods", () => {
-    expect(analysisMethodGuidanceIds).toHaveLength(29);
+  it("defines guidance for all 30 documented six-module methods", () => {
+    expect(analysisMethodGuidanceIds).toHaveLength(30);
     expect(getAnalysisMethodGuidance("eda.descriptive").roleRequirements[0]).toMatchObject({
       label: "분석 변수",
       required: true,
@@ -204,6 +211,21 @@ describe("App", () => {
     );
     expect(getAnalysisMethodGuidance("doe.factorial_design").plainLanguage).toContain(
       "효과 추정",
+    );
+    expect(getAnalysisMethodGuidance("doe.response_surface").plainLanguage).toContain(
+      "full quadratic OLS",
+    );
+    expect(getAnalysisMethodGuidance("regression.predict").plainLanguage).toContain(
+      "회귀모형 적합 화면에서 지원됩니다",
+    );
+    expect(getAnalysisMethodGuidance("regression.predict").plainLanguage).toContain(
+      "독립 Predict method 화면은 아직 제공하지 않습니다",
+    );
+    expect(getAnalysisMethodGuidance("doe.bayesian_optimization").plainLanguage).toContain(
+      "계약과 reference 정책만 확정된 planned method",
+    );
+    expect(getAnalysisMethodGuidance("doe.bayesian_optimization").plainLanguage).toContain(
+      "가짜 최적값도 아직 제공하지 않습니다",
     );
   });
 
@@ -237,7 +259,9 @@ describe("App", () => {
       <AnalysisPage
         {...analysisPageTestProps()}
         analysisCatalog={catalog}
+        factorialAnalysis={factorialAnalysisTestResponse()}
         factorialDesign={factorialDesignTestResponse()}
+        factorialDesignResponses={factorialDesignResponsesTestResponse()}
         selectedMethod={catalog.methods[0]}
         selectedMethods={catalog.methods}
         selectedModuleId="doe"
@@ -249,7 +273,11 @@ describe("App", () => {
     expect(html).toContain("DOE 설계 생성");
     expect(html).toContain("screening design");
     expect(html).toContain("two_level_full_factorial");
-    expect(html).toContain("효과/ANOVA 미포함");
+    expect(html).toContain("효과·OLS/ANOVA 지원");
+    expect(html).toContain("Factorial 분석 결과");
+    expect(html).toContain("절대 효과 순위");
+    expect(html).toContain("ANOVA source");
+    expect(html).toContain("factorial-analysis-id");
     expect(html).toContain("Temperature");
     expect(html).toContain("Pressure");
     expect(html).toContain("design-hash-");
@@ -384,6 +412,59 @@ describe("App", () => {
     const doeHtml = renderSelectedMethod("doe.factorial_design", "doe", "요인배치 설계");
     expect(doeHtml).toContain("DOE 설계 핵심 역할");
     expect(doeHtml).toContain("Factor 이름, low/high level, run order, random seed");
+
+    const rsmHtml = renderSelectedMethod("doe.response_surface", "doe", "반응표면법");
+    expect(rsmHtml).toContain("반응표면 설계 핵심 역할");
+    expect(rsmHtml).toContain("axial point");
+
+    const bayesianHtml = renderSelectedMethod(
+      "doe.bayesian_optimization",
+      "doe",
+      "베이지안 최적화",
+    );
+    expect(bayesianHtml).toContain("순차 Bayesian Optimization 핵심 역할");
+    expect(bayesianHtml).toContain("계약만 확정된 planned method");
+  });
+
+  it("renders the response surface dedicated design and analysis controls", () => {
+    const html = renderToString(<ResponseSurfacePanel />);
+
+    expect(html).toContain("반응표면법");
+    expect(html).toContain("Rotatable CCI");
+    expect(html).toContain("Face-centered CCD");
+    expect(html).toContain("CCD 생성");
+    expect(html).toContain("Full quadratic, no automatic selection");
+  });
+
+  it("renders bounded response optimizer objectives, constraints, and budgets", () => {
+    const design = {
+      design_id: "00000000-0000-4000-8000-000000000201",
+      factors: [
+        { name: "Temperature", low: 60, high: 80, unit: "C" },
+        { name: "Pressure", low: 5, high: 15, unit: "bar" },
+      ],
+    } as unknown as ResponseSurfaceDesignResponse;
+    const analysis = {
+      analysis_id: "00000000-0000-4000-8000-000000000202",
+      response_name: "Yield",
+      result: {
+        contour: {
+          points: [{ predicted: 80 }, { predicted: 95 }],
+        },
+      },
+    } as unknown as DoeResponseSurfaceAnalysisResponse;
+
+    const html = renderToString(
+      <ResponseOptimizerPanel design={design} analysis={analysis} />,
+    );
+
+    expect(html).toContain("Response Optimizer");
+    expect(html).toContain("목표 유형");
+    expect(html).toContain("최대화");
+    expect(html).toContain("Temperature optimizer lower bound");
+    expect(html).toContain("선형 제약 사용");
+    expect(html).toContain("최대 평가 수");
+    expect(html).toContain("Response Optimizer 실행");
   });
 
   it("shows analysis run errors under the selected execution panel with a readable action", () => {
@@ -1459,6 +1540,8 @@ describe("App", () => {
       target_dataset_version_id: targetVersionId,
       model_manifest_sha256: "a".repeat(64),
       source_schema_hash: "source-schema",
+      source_schema_hash_current: "source-schema",
+      source_analysis_stale: false,
       target_schema_hash: "target-schema",
       schema_hash_match: false,
       row_count_total: 8,
@@ -1503,6 +1586,7 @@ describe("App", () => {
       prediction_id: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
       model_id: "12345678-90ab-cdef-1234-567890abcdef",
       analysis_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      source_analysis_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
       source_dataset_version_id: version.version_id,
       target_dataset_version_id: targetVersionId,
       model_manifest_sha256: "a".repeat(64),
@@ -1523,8 +1607,28 @@ describe("App", () => {
         },
       ],
       provenance: {
-        prediction_schema_version: 1,
         method_id: "regression.predict",
+        method_version: "0.2.0",
+        dataset_version_id: targetVersionId,
+        source_schema_hash: "target-schema",
+        app_version: "0.1.0",
+        source_analysis_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        source_analysis_stale_at_prediction: false,
+        source_dataset_version_id: version.version_id,
+        source_schema_hash_at_fit: "source-schema",
+        source_schema_hash_current: "source-schema",
+        target_dataset_version_id: targetVersionId,
+        target_schema_hash: "target-schema",
+        model_id: "12345678-90ab-cdef-1234-567890abcdef",
+        model_manifest_sha256: "a".repeat(64),
+        prediction_schema_version: 2,
+        model_manifest_schema_version: 2,
+        missing_policy: "complete_case",
+        confidence_level: 0.95,
+        include_intervals: true,
+        source_canonical_artifact_sha256: "b".repeat(64),
+        target_canonical_artifact_sha256: "c".repeat(64),
+        created_at: "2026-07-13T00:00:00Z",
       },
       columns: predictionPreflight.required_columns,
       rows: [
@@ -1676,8 +1780,134 @@ describe("App", () => {
     expect(html).toContain("1-1 / 7");
     expect(html).toContain("다음");
     expect(html).toContain("Schema hash");
+    expect(html).toContain("Source model");
+    expect(html).toContain("fresh");
+    expect(html).toContain("Source schema");
+    expect(html).toContain("적합 시점과 일치");
     expect(html).toContain("컬럼 ID");
     expect(html).toContain("학습범위 위");
+  });
+
+  it("renders the P/NP/C/U attribute control chart contract and result", () => {
+    const columns = filterTestColumns();
+    const version: DatasetVersionResponse = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.attribute_control_chart",
+          method_version: "0.2.0",
+          module_id: "quality",
+          label_ko: "계수형 관리도",
+          label_en: "Control Chart",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 1,
+          disabled_reason: null,
+        },
+      ],
+    };
+
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        attributeControlChartAnalysisResult={{
+          ...analysisResultEnvelopeTestResponse("quality.attribute_control_chart"),
+          warnings: [
+            {
+              code: "attribute_control_chart_phase_1_limits_estimated_from_data",
+              severity: "info",
+              message: "Phase I 중심선과 3-sigma 관리한계는 유효 관측에서 추정했습니다.",
+            },
+          ],
+          result: attributeControlChartTestResult(),
+        }}
+        attributeControlChartConstantOpportunityConfirmed={false}
+        attributeControlChartCountColumnId="column-a"
+        attributeControlChartCountColumns={[columns[0]]}
+        attributeControlChartDenominatorColumnId="column-b"
+        attributeControlChartDenominatorColumns={[columns[1]]}
+        attributeControlChartResult={attributeControlChartTestResult()}
+        attributeControlChartType="p"
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("계수형 관리도 실행");
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain("P 관리도 실행");
+    expect(html).toContain("불량품 수");
+    expect(html).toContain("표본 크기");
+    expect(html).toContain("가변 표본 크기 불량률");
+    expect(html).toContain("Dispersion ratio");
+    expect(html).toContain("관측별 한계");
+    expect(html).toContain("관리한계 밖");
+    expect(html).toContain("Phase I 중심선과 3-sigma 관리한계");
+    expect(html).toContain("P 관리도. 중심선");
+  });
+
+  it("requires visible constant-opportunity confirmation for the C chart", () => {
+    const columns = filterTestColumns();
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.attribute_control_chart",
+          method_version: "0.1.0",
+          module_id: "quality",
+          label_ko: "계수형 관리도",
+          label_en: "Control Chart",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 1,
+          disabled_reason: null,
+        },
+      ],
+    };
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        attributeControlChartConstantOpportunityConfirmed={false}
+        attributeControlChartCountColumnId="column-a"
+        attributeControlChartCountColumns={[columns[0]]}
+        attributeControlChartResult={null}
+        attributeControlChartType="c"
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={{ ...datasetVersionTestResponse(), columns, column_count: columns.length }}
+      />,
+    );
+
+    expect(html).toContain("모든 관측의 검사 기회가 동일함을 확인");
+    expect(html).toContain("동일 검사 기회의 결점 수");
+    expect(html).toContain("C 관리도 실행");
+    expect(html).toContain("disabled");
   });
 
   it("renders the individuals chart execution panel for the first quality method", () => {
@@ -4560,7 +4790,7 @@ function factorialDesignTestResponse(): FactorialDesignResponse {
     design_version_id: "22222222-2222-4222-8222-222222222222",
     version_number: 1,
     method_id: "doe.factorial_design",
-    method_version: "0.1.0",
+    method_version: "0.2.0",
     family: "two_level_full_factorial",
     name: "screening design",
     status: "designed",
@@ -4627,6 +4857,203 @@ function factorialDesignTestResponse(): FactorialDesignResponse {
         coded_levels: { Temperature: 0, Pressure: 0 },
       },
     ],
+  };
+}
+
+function factorialDesignResponsesTestResponse(): DoeDesignResponsesResponse {
+  return {
+    design_id: "11111111-1111-4111-8111-111111111111",
+    design_version_id: "22222222-2222-4222-8222-222222222222",
+    version_number: 1,
+    status: "analyzed",
+    responses: [
+      {
+        response_name: "Yield",
+        unit: "kg",
+        response_count: 5,
+        values: [1, 2, 3, 4, 5].map((runOrder) => ({
+          run_order: runOrder,
+          value: 10 + runOrder,
+        })),
+      },
+    ],
+  };
+}
+
+function factorialAnalysisTestResponse(): DoeFactorialAnalysisResponse {
+  const anovaRow = {
+    df: 1,
+    sum_squares: 8,
+    mean_square: 8,
+    f_statistic: 12,
+    p_value: 0.04,
+  };
+  return {
+    analysis_id: "factorial-analysis-id",
+    design_id: "11111111-1111-4111-8111-111111111111",
+    design_version_id: "22222222-2222-4222-8222-222222222222",
+    design_version_number: 1,
+    method_id: "doe.factorial_design",
+    method_version: "0.2.0",
+    analysis_schema_version: 1,
+    design_sha256: "design-hash-012345678901234567890123456789012345678901234567890",
+    response_sha256: "response-hash-012345678901234567890123456789012345678901234567",
+    response_name: "Yield",
+    created_at: "2026-07-14T00:00:00.000Z",
+    app_version: "0.1.0",
+    python_version: "3.10.11",
+    platform: "Windows-11",
+    build_commit: "test-build",
+    package_versions: { numpy: "2.2.6", scipy: "1.15.3" },
+    result: {
+      schema_version: 1,
+      summary_type: "factorial_analysis",
+      method: "ordinary_least_squares_factorial_effects",
+      response: { name: "Yield", unit: "kg" },
+      factor_names: ["Temperature", "Pressure"],
+      coding: {
+        low: -1,
+        high: 1,
+        center: 0,
+        effect_definition: "effect=2*coefficient",
+      },
+      model_policy: {
+        hierarchy_enforced: true,
+        max_interaction_order: 2,
+        automatic_term_selection: false,
+        center_curvature_included: true,
+        block_fixed_effects_included: false,
+        sum_of_squares: "partial_drop_one",
+      },
+      sample: {
+        n_observations: 5,
+        factorial_point_count: 4,
+        center_point_count: 1,
+        block_count: 1,
+        parameter_count: 5,
+        rank: 5,
+        df_model: 4,
+        df_residual: 0,
+      },
+      fit: {
+        response_mean: 13,
+        sse: 0,
+        model_ss: 10,
+        total_ss: 10,
+        residual_mean_square: null,
+        residual_standard_error: null,
+        r_squared: 1,
+        adjusted_r_squared: null,
+        f_statistic: null,
+        f_p_value: null,
+      },
+      terms: [
+        {
+          term_id: "intercept",
+          label: "Intercept",
+          kind: "intercept",
+          factor_names: [],
+          coefficient: 13,
+          effect: null,
+          standard_error: null,
+          statistic: null,
+          p_value: null,
+          confidence_interval: null,
+          effect_confidence_interval: null,
+          partial_sum_squares: null,
+          f_statistic: null,
+          f_p_value: null,
+        },
+        {
+          term_id: "factor_1",
+          label: "Temperature",
+          kind: "factorial",
+          factor_names: ["Temperature"],
+          coefficient: 2,
+          effect: 4,
+          standard_error: null,
+          statistic: null,
+          p_value: null,
+          confidence_interval: null,
+          effect_confidence_interval: null,
+          partial_sum_squares: 8,
+          f_statistic: null,
+          f_p_value: null,
+        },
+        {
+          term_id: "factor_2",
+          label: "Pressure",
+          kind: "factorial",
+          factor_names: ["Pressure"],
+          coefficient: -1,
+          effect: -2,
+          standard_error: null,
+          statistic: null,
+          p_value: null,
+          confidence_interval: null,
+          effect_confidence_interval: null,
+          partial_sum_squares: 2,
+          f_statistic: null,
+          f_p_value: null,
+        },
+      ],
+      ranked_effects: [
+        { term_id: "factor_1", label: "Temperature", effect: 4, absolute_effect: 4 },
+        { term_id: "factor_2", label: "Pressure", effect: -2, absolute_effect: 2 },
+      ],
+      anova: {
+        sum_of_squares_policy: "partial_drop_one",
+        model: { ...anovaRow, df: 4, sum_squares: 10, mean_square: 2.5 },
+        residual: {
+          df: 0,
+          sum_squares: 0,
+          mean_square: null,
+          f_statistic: null,
+          p_value: null,
+        },
+        total: {
+          df: 4,
+          sum_squares: 10,
+          mean_square: null,
+          f_statistic: null,
+          p_value: null,
+        },
+        lack_of_fit: {
+          available: false,
+          unique_design_point_count: 5,
+          pure_error: { ...anovaRow, df: 0, sum_squares: 0, mean_square: null },
+          lack_of_fit: { ...anovaRow, df: 0, sum_squares: 0, mean_square: null },
+          residual_df: 0,
+        },
+      },
+      diagnostics: {
+        residual_mean: 0,
+        residual_min: 0,
+        residual_max: 0,
+        max_abs_standardized_residual: null,
+        high_standardized_residual_count: 0,
+        max_leverage: 1,
+        high_leverage_threshold: 2,
+        high_leverage_count: 0,
+        max_cooks_distance: null,
+        cooks_distance_threshold: 0.8,
+        high_cooks_distance_count: 0,
+        durbin_watson: null,
+        shapiro_wilk: { statistic: null, p_value: null },
+        point_limit: 256,
+        points_truncated: false,
+        points: [],
+        qq_points: [],
+      },
+      plots: {
+        main_effects: [
+          { factor: "Temperature", low_mean: 11, high_mean: 15 },
+          { factor: "Pressure", low_mean: 14, high_mean: 12 },
+        ],
+        interactions: [],
+      },
+      warnings: ["doe_factorial_model_saturated_no_inference"],
+    },
   };
 }
 
@@ -5152,6 +5579,115 @@ function datasetPageTestProps(): ComponentProps<typeof DatasetPreparationPage> {
     onSaveSchema: () => undefined,
     onSchemaDraftChange: () => undefined,
     onUpload: () => undefined,
+  };
+}
+
+function attributeControlChartTestResult(): AttributeControlChartResult {
+  return {
+    schema_version: 1,
+    summary_type: "attribute_control_chart",
+    method: "p_chart",
+    chart_type: "p",
+    count_definition: "defectives",
+    distribution_assumption: "binomial",
+    control_limit_method: "phase_1_estimated_three_sigma",
+    baseline: "all_filtered_valid_points",
+    order_source: "canonical_row_order",
+    missing_policy: "complete_case",
+    constant_opportunity_confirmed: false,
+    control_rules: [
+      {
+        code: "attribute_control_chart_point_beyond_control_limits",
+        definition: "one_point_strictly_outside_three_sigma_control_limits",
+        enabled: true,
+      },
+    ],
+    warnings: ["attribute_control_chart_limit_signal_detected"],
+    count: {
+      column_id: "column-a",
+      column_index: 0,
+      display_name: "Defectives",
+      data_type: "integer",
+      measurement_level: "count",
+      role: "target",
+      unit: null,
+    },
+    denominator: {
+      column_id: "column-b",
+      column_index: 1,
+      display_name: "Sample size",
+      data_type: "integer",
+      measurement_level: "count",
+      role: "unspecified",
+      unit: null,
+    },
+    denominator_role: "sample_size",
+    n_total: 2,
+    n_used: 2,
+    n_excluded_missing_count: 0,
+    n_excluded_non_numeric_count: 0,
+    n_excluded_missing_denominator: 0,
+    n_excluded_non_numeric_denominator: 0,
+    total_count: 11,
+    total_denominator: 100,
+    center_line: 0.11,
+    limits_vary: false,
+    lcl_truncated_count: 2,
+    ucl_truncated_count: 0,
+    dispersion: {
+      method: "pearson_chi_square_over_degrees_of_freedom",
+      degrees_of_freedom: 1,
+      ratio: 2.3,
+      warning_threshold: 2,
+      used_to_adjust_limits: false,
+    },
+    chart: {
+      x_axis: "canonical_row_position",
+      y_axis: "proportion_defective",
+      center_line: 0.11,
+      limits_vary: false,
+      point_count: 2,
+      points_truncated: false,
+      point_limit: 1000,
+      points: [
+        {
+          position: 1,
+          canonical_position: 1,
+          count: 1,
+          denominator: 50,
+          value: 0.02,
+          lcl: 0,
+          ucl: 0.2427,
+          lcl_truncated: true,
+          ucl_truncated: false,
+          signal_codes: [],
+        },
+        {
+          position: 2,
+          canonical_position: 2,
+          count: 10,
+          denominator: 50,
+          value: 0.2,
+          lcl: 0,
+          ucl: 0.18,
+          lcl_truncated: true,
+          ucl_truncated: false,
+          signal_codes: ["attribute_control_chart_point_beyond_control_limits"],
+        },
+      ],
+    },
+    signals: [
+      {
+        signal_id: "attribute-p-2-limit",
+        code: "attribute_control_chart_point_beyond_control_limits",
+        severity: "warning",
+        position: 2,
+        canonical_position: 2,
+        value: 0.2,
+        limit: "upper",
+        definition: "one_point_strictly_outside_three_sigma_control_limits",
+      },
+    ],
   };
 }
 

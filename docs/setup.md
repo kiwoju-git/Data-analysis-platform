@@ -69,7 +69,9 @@ failure, parsing confirmation, dataset version creation, representative analyses
 saved-result restore/comparison, JSON/CSV/HTML export creation, JSON download,
 schema stale UI behavior, regression prediction target-version selection, and
 the prediction page API's first-page rendering plus full prediction CSV
-generation/download.
+generation/download. It also covers the P attribute control chart, two-level
+factorial DOE analysis, response-surface CCD/full-quadratic fit and contour,
+and the bounded Response Optimizer recommendation/desirability workflow.
 
 NumPy and SciPy are part of the backend base install for the current `eda.normality` slice. The statistical dependency spike scripts remain available for revalidating or reviewing future SciPy-backed methods:
 
@@ -105,6 +107,10 @@ Frontend:
 ```powershell
 npm --prefix .\frontend run dev -- --host 127.0.0.1
 ```
+
+The backend remains bound to loopback only. The default CORS allowlist accepts
+the Vite UI at both `http://127.0.0.1:5173` and `http://localhost:5173`; no LAN
+origin or wildcard is enabled.
 
 ## Local Data
 

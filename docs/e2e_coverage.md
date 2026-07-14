@@ -34,6 +34,20 @@ The current smoke test is `tests/e2e/critical_path.py`.
   table, and four rendered interval lines.
 - Generates a full stored prediction CSV and verifies the browser starts a
   `.csv` download through the checksum-validated analysis export route.
+- Registers the published NIST 30-point defectives/sample-size fixture, opens
+  `quality.attribute_control_chart`, executes a P chart, and verifies the
+  30-row summary, two strict 3-sigma signals, accessible SVG chart, and first
+  25 displayed point rows.
+- Creates a deterministic replicated 2-factor DOE with one center point, saves
+  all nine response values, runs the dedicated factorial analysis, and verifies
+  method v0.2.0, effect and main-effect SVGs, ANOVA table, and diagnostics.
+- Creates a deterministic 13-run rotatable CCI, saves every response, fits the
+  dedicated full quadratic response-surface model, and verifies the contour
+  SVG, coefficient table, fit summary, and diagnostics.
+- Runs the bounded Response Optimizer from that verified RSM result and checks
+  the recommended factor settings, point prediction, individual/composite
+  desirability, constraint status, search termination, confirmation-run
+  warning, and explicit absence of a global-optimum guarantee.
 - Uploads a synthetic XLSX file in the browser and confirms parsing.
 - Uploads an empty CSV to verify upload error recovery, then uploads a valid
   synthetic CSV.
@@ -56,6 +70,9 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - `restore and compare saved results`
 - `verify schema stale behavior`
 - `verify linear model fit and prediction`
+- `verify attribute control chart`
+- `verify DOE factorial analysis`
+- `verify DOE response surface analysis and optimization`
 - `verify XLSX browser upload`
 - `verify CSV upload and upload error recovery`
 - `verify parser option editing`
@@ -68,9 +85,8 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - Remote GitHub Actions status or branch protection settings.
 - Full OpenAPI-to-TypeScript generation.
 - Every available statistical method panel.
-- Response Optimizer, RSM, Bayesian optimization, attribute control charts,
-  non-normal capability, advanced Gage R&R, DOE effects, DOE ANOVA, or DOE
-  diagnostics.
+- Bayesian optimization, non-normal capability, advanced Gage R&R, or
+  fractional-factorial alias analysis.
 - Chart export artifacts.
 - Browser matrix coverage beyond Chromium.
 - Large dataset performance or memory budget E2E.

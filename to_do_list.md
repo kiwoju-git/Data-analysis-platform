@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-02
+Last updated: 2026-07-14
 
 ## 1. Required Reading And Priority
 
@@ -19,6 +19,13 @@ Current source-of-truth note:
 - `data_prd_addendum.md` remains authoritative for security, privacy, statistical correctness, reproducibility, Windows/Python 3.10, CPU-only, and local-only constraints.
 - `to_do_list.md` tracks the current implementation state and the next allowed PR slice.
 
+Next allowed PR after the Bayesian Optimization planning-contract slice:
+
+- Bayesian Optimization study/history foundation: immutable bounded factor
+  space and objective metadata, deterministic initial design, explicit
+  completed/pending/abandoned trial states, observation-history checksum,
+  typed storage/API relationship tests, and no surrogate recommendation yet.
+
 ## 2. Current Code State
 
 Already implemented:
@@ -28,7 +35,7 @@ Already implemented:
 - Local-only default host `127.0.0.1` and narrow CORS
 - React 18 + Vite + TypeScript shell with API health display
 - PowerShell workflow scripts: `bootstrap.ps1`, `dev.ps1`, `test.ps1`, `check.ps1`
-- SQLite migration skeleton through schema version `8`
+- SQLite migration skeleton through schema version `9`
 - `datasets` metadata table for raw upload provenance
 - `dataset_versions` metadata table for immutable parsing-confirmed versions
 - `dataset_columns` metadata table preserving original names and unique display names
@@ -77,7 +84,7 @@ Already implemented:
 - Common analysis request, filter snapshot, warning, provenance, and result envelope schemas
 - Common analysis run status and job status schemas
 - `analysis_runs`, `analysis_artifacts`, and `jobs` metadata tables
-- `experiment_designs`, `experiment_design_versions`, `experiment_runs`, and `experiment_run_responses` metadata tables for DOE design/response assets
+- `experiment_designs`, `experiment_design_versions`, `experiment_runs`, `experiment_run_responses`, and `experiment_design_analyses` metadata tables for DOE design/response/analysis assets
 - Analysis run and job status/cancel API skeletons
 - Six-module planned/disabled navigation shell in the React UI
 - Six-module selected-method Workbench shell in the React UI:
@@ -88,13 +95,14 @@ Already implemented:
   - workspace route boundary is split into `frontend/src/WorkspaceRouter.tsx`
   - analysis page boundary is split into `frontend/src/AnalysisPage.tsx`
   - common shell rendering is split into `frontend/src/AnalysisWorkbench.tsx`
-  - analysis area rendering is further split into `frontend/src/AnalysisShell.tsx`, `frontend/src/DescriptiveAnalysisPanel.tsx`, `frontend/src/GraphicalSummaryPanel.tsx`, `frontend/src/NormalityAnalysisPanel.tsx`, `frontend/src/EqualVariancesPanel.tsx`, `frontend/src/OneSampleTPanel.tsx`, `frontend/src/PairedTPanel.tsx`, `frontend/src/EquivalenceTostPanel.tsx`, `frontend/src/OneSampleWilcoxonPanel.tsx`, `frontend/src/TwoSampleTPanel.tsx`, `frontend/src/MannWhitneyPanel.tsx`, `frontend/src/KruskalWallisPanel.tsx`, `frontend/src/OneWayAnovaPanel.tsx`, `frontend/src/OneProportionPanel.tsx`, `frontend/src/TwoProportionPanel.tsx`, `frontend/src/ChiSquareAssociationPanel.tsx`, `frontend/src/PearsonCorrelationPanel.tsx`, `frontend/src/XyCorrelationPanel.tsx`, `frontend/src/LinearModelPanel.tsx`, `frontend/src/IndividualsChartPanel.tsx`, `frontend/src/SubgroupChartPanel.tsx`, `frontend/src/RunChartPanel.tsx`, `frontend/src/CapabilityPanel.tsx`, `frontend/src/GageRrPreflightPanel.tsx`, `frontend/src/GageRunChartPanel.tsx`, and `frontend/src/FactorialDesignPanel.tsx`
+  - analysis area rendering is further split into `frontend/src/AnalysisShell.tsx`, `frontend/src/DescriptiveAnalysisPanel.tsx`, `frontend/src/GraphicalSummaryPanel.tsx`, `frontend/src/NormalityAnalysisPanel.tsx`, `frontend/src/EqualVariancesPanel.tsx`, `frontend/src/OneSampleTPanel.tsx`, `frontend/src/PairedTPanel.tsx`, `frontend/src/EquivalenceTostPanel.tsx`, `frontend/src/OneSampleWilcoxonPanel.tsx`, `frontend/src/TwoSampleTPanel.tsx`, `frontend/src/MannWhitneyPanel.tsx`, `frontend/src/KruskalWallisPanel.tsx`, `frontend/src/OneWayAnovaPanel.tsx`, `frontend/src/OneProportionPanel.tsx`, `frontend/src/TwoProportionPanel.tsx`, `frontend/src/ChiSquareAssociationPanel.tsx`, `frontend/src/PearsonCorrelationPanel.tsx`, `frontend/src/XyCorrelationPanel.tsx`, `frontend/src/LinearModelPanel.tsx`, `frontend/src/IndividualsChartPanel.tsx`, `frontend/src/SubgroupChartPanel.tsx`, `frontend/src/RunChartPanel.tsx`, `frontend/src/CapabilityPanel.tsx`, `frontend/src/GageRrPreflightPanel.tsx`, `frontend/src/GageRunChartPanel.tsx`, `frontend/src/FactorialDesignPanel.tsx`, `frontend/src/ResponseSurfacePanel.tsx`, and `frontend/src/ResponseOptimizerPanel.tsx`
   - root/dataset routes render the dataset preparation page and `/analysis/{module_id}/{method_id}` routes render the analysis page
   - supported filter controls render through a common Workbench slot for dataset-backed methods
   - Workbench steps show data, roles, options, preflight, execution, and results
   - all 29 documented methods show UI guidance for required roles, options, preflight checks, and result focus
-  - `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` expose analysis execution controls
-  - `doe.factorial_design` exposes dedicated DOE design-asset creation and response-entry controls, not a generic analysis-run result
+  - `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.attribute_control_chart`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` expose analysis execution controls
+  - `doe.factorial_design` exposes dedicated design, response-entry, effects/ANOVA, diagnostic, and report controls; it remains outside the generic analysis-run API
+  - `doe.response_surface` exposes dedicated CCD design, response-entry, full-quadratic model, contour, stationary-point, diagnostic, and bounded Response Optimizer controls; both RSM and optimizer remain outside the generic analysis-run API
 - Analysis run API guard that rejects planned/disabled methods without returning fake results
 - `eda.descriptive` is the first executable method and computes real descriptive statistics from confirmed dataset versions
 - `eda.graphical_summary` is the second executable method and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads from confirmed dataset versions, with frontend inline SVG rendering for histogram, box plot, Q-Q plot, and ECDF
@@ -113,15 +121,17 @@ Already implemented:
 - `categorical.chi_square_association` is the third categorical Gate B2 executable method and computes real SciPy-backed Pearson chi-square association results from two categorical columns on confirmed dataset versions
 - `regression.pearson` is the first Gate C1 executable method and computes real SciPy-backed Pearson product-moment correlation results from two numeric columns on confirmed dataset versions
 - `regression.xy_correlation` is the second Gate C1 executable method and computes real SciPy-backed pairwise Pearson X-Y correlation matrix results from numeric X/Y column sets on confirmed dataset versions
-- `regression.linear_model` is the third Gate C1 executable method and computes real NumPy/SciPy-backed OLS linear model results from one numeric response and one or more numeric/categorical predictors on confirmed dataset versions, with safe JSON model manifest persistence, checksum-validated manifest retrieval, stored-model prediction preflight, backend prediction values/intervals from app-created manifests, and frontend preflight result display
+- `regression.linear_model` is the third Gate C1 executable method and computes real NumPy/SciPy-backed OLS linear model results from one numeric response and one or more numeric/categorical predictors on confirmed dataset versions, with safe JSON model manifest persistence, checksum-validated manifest retrieval, source-freshness-gated same/cross-dataset prediction, paged rows, full prediction CSV export, and frontend execution/result display
 - `quality.gage_run_chart` is the second Gate C3 executable method and computes real stdlib measurement-system diagnostic chart payloads from balanced crossed Gage rows with raw part/operator/replicate label redaction
-- `doe.factorial_design` is the first Gate D1 design-asset method and creates real 2-level full factorial design/run tables through the dedicated DOE design API with deterministic seed handling, design SHA-256, SQLite schema v7 metadata persistence, SQLite schema v8 response persistence, and frontend run-table preview/response entry; effects, OLS/ANOVA, alias structure, and DOE analysis charts remain out of scope
+- `doe.factorial_design` is the Gate D1 2-level full factorial method at version `0.2.0`; dedicated APIs persist schema v7 design/run metadata, schema v8 responses, and schema v9 checksum-validated analysis results with -1/+1 effects, hierarchy-fixed OLS/ANOVA, pure error/lack-of-fit, diagnostics, chart payloads, Workbench rendering, and HTML report integration. Fractional alias analysis and optimization remain out of scope
+- `doe.response_surface` is the Gate D2 CCD/full-quadratic method at version `0.1.0`; dedicated APIs persist bounded rotatable CCI or face-centered designs, complete run responses, schema-1 full-quadratic results, stationary-point/design-region checks, contour payloads, diagnostics, runtime provenance, and checksum/dependency restore
+- `regression.response_optimizer` is a disabled generic catalog method with a dedicated RSM-panel API at version `0.1.0`; config/result schema 1 stores verified source bundles, maximize/minimize/target/range desirability, bounded factor regions, linear inequality constraints, deterministic search budgets, recommendations, limitations, and common runtime/build provenance
 - NumPy 2.2.6/SciPy 1.15.3 are production-pinned after the native Windows Python 3.10.11 dependency spike, and a SciPy-backed normality reference fixture was generated and validated
 - Descriptive statistics result persistence stores app-owned JSON under the workspace and records result SHA-256 in `analysis_runs`
 - Available inline analysis runs persist an `analysis_row_snapshot` artifact with filter snapshot hash, source canonical artifact hash, included row counts, and row ranges for supported filters
 - XLSX container checks, sheet-selection warning, and basic stdlib parsing confirmation for the first or named worksheet
 - XLSX formula recalculation, merged-cell expansion, hidden row/column handling, and display-format/date serial restoration remain out of scope
-- Synthetic upload tests, parsing confirmation tests, canonical artifact tests, and migration upgrade tests from schema version `1`/`2`/`3`/`4`/`5`/`6`/`7` to `8`
+- Synthetic upload tests, parsing confirmation tests, canonical artifact tests, and migration upgrade tests through schema version `9`, including v8-to-v9 DOE analysis storage
 - Schema update validation tests and rows preview pagination/bounds tests
 - Synthetic tests for preamble-plus-headerless delimited text upload, parsing confirmation, generated columns, and row preview
 - Canonical row reader adoption tests proving profile and `eda.descriptive` read canonical rows after raw upload mutation
@@ -138,13 +148,16 @@ Already implemented:
   - `regression.linear_model` writes a safe JSON `regression_model_manifest` artifact tied to dataset version, schema hash, canonical artifact hash, row snapshot hash, coefficients, fit summary, diagnostic summary, and package versions
   - `regression_models` SQLite metadata stores model ID, analysis ID, dataset version ID, schema hash, manifest path, and manifest SHA-256 for app-created regression models only
   - `GET /api/v1/regression-models/{model_id}` validates manifest path and SHA-256 before returning the manifest without exposing absolute paths
-  - `POST /api/v1/regression-models/{model_id}/prediction-preflight` validates the stored manifest and target canonical rows for schema drift, required predictor mapping, numeric extrapolation, missing/non-numeric values, and unseen categorical levels
+  - `POST /api/v1/regression-models/{model_id}/prediction-preflight` validates source analysis existence/method/version/freshness, fit/current source schema, model/manifest metadata and checksum, then validates target mapping, extrapolation, missing/non-numeric values, and unseen categorical levels
   - `POST /api/v1/regression-models/{model_id}/predictions` runs the same preflight path, rejects error-severity preflight failures, reconstructs the OLS design matrix from the stored manifest, returns capped predicted means plus mean-response confidence intervals and individual prediction intervals, and stores a checksum-validated `regression.predict` result envelope without raw cell values
   - all valid prediction rows are atomically stored in a checksum-recorded `regression_prediction_rows` NDJSON artifact; `GET /api/v1/regression-models/predictions/{prediction_id}/rows` validates the artifact and returns pages of up to 200 rows
   - the Linear Model UI retrieves 25-row pages through one grouped prediction-row state contract and invalidates stale page requests when the model or dataset version changes
   - `GET /api/v1/dataset-versions` returns a paged catalog of confirmed local versions without raw rows, storage paths, or hashes; the prediction UI defaults to the active version and can explicitly select another catalog version
   - target selection state is isolated in `useRegressionPredictionTargetState`; changing target invalidates preflight, prediction, and prediction-row requests/results before a new run
   - full stored prediction rows can be streamed into a checksum-recorded, raw-predictor-free wide CSV through `POST /api/v1/regression-models/predictions/{prediction_id}/exports/csv` and downloaded through the existing analysis export route
+  - prediction provenance records source analysis/source dataset/target dataset/model dependencies plus shared runtime/build/package metadata without paths, filenames, or raw predictor values
+  - restore, page, CSV, export-list, and download paths share result/config/rows/model relationship validation for IDs, method version, hashes, target/source linkage, and expected counts
+  - `METHOD_VERSIONS` is the only prediction version source; `regression.predict` is `0.2.0`, prediction result/config/rows schemas are `2`/`3`/`2`, and CSV schema remains `1`
   - result, row snapshot, model manifest, and prediction result files are removed if metadata insert fails after file writes
 - Filter snapshot row freezing:
   - `eda.descriptive` filter snapshots are frozen into `analysis_row_snapshot` artifacts
@@ -154,7 +167,8 @@ Already implemented:
   - users can add/remove AND filter conditions in the selected-method Workbench before running supported analyses
   - numeric columns expose `gt`/`gte`/`lt`/`lte`; all columns expose missing and equality conditions
   - filter drafts are validated in the shared UI slot
-  - current executable payload serialization into `filter_snapshot.conditions` covers `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
+  - current executable payload serialization into `filter_snapshot.conditions` covers `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.attribute_control_chart`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
+  - `quality.attribute_control_chart` implements Phase I P/NP/C/U formulas with explicit defective/defect semantics, sample-size/opportunity validation, natural-bound truncation, one-point 3-sigma signals, dispersion/approximation warnings, stored provenance, common exports, and inline SVG UI
   - `quality.individuals_chart` uses canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks, complete-case exclusions, arithmetic mean center line, `MRbar / d2` sigma estimate, I chart 3-sigma limits, MR chart `D3/D4` limits, I/MR single-point limit signals, I chart same-side centerline signals, I chart strict trend signals, I chart alternating signals, and explicit I chart zone/pattern signals
   - `quality.subgroup_chart` uses canonical first-seen subgroup order, fixed subgroup size 2-10, complete-case exclusions, Xbar-R/Xbar-S standard constants, Xbar/R/S control limits, and Xbar/R/S single-point limit signals
   - `quality.run_chart` uses canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks, median center line, complete-case exclusions, above/below median run counts, tie-to-median exclusion policy, strict 6-point trend signal, strict 14-point oscillation signal, and exact conditional run-count clustering/mixture signals without control limits
@@ -198,12 +212,12 @@ Not implemented yet:
 
 - Full profile API beyond the current aggregate/duplicate/memory/date-time preflight slice
 - Router-mounted Analysis Workbench page decomposition and additional shared feature components
-- Binding the common filter UI state into future dataset-backed executable methods beyond the current twenty-four analysis-run methods
+- Binding the common filter UI state into future dataset-backed executable methods beyond the current twenty-five analysis-run methods
 - Full XLSX workbook semantics beyond cached worksheet values
 - Cell-level data editing or transformations that create a new immutable dataset version
-- Executable analysis method dispatch beyond the current twenty-four analysis-run methods and the dedicated DOE design endpoint
-- Any production statistical calculation beyond `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
-- Any Bayesian, optimizer, DOE response/effects/ANOVA analysis beyond the first factorial design-asset slice, broader quality-control method, or additional hypothesis/categorical test calculation
+- Executable generic analysis method dispatch beyond the current twenty-five analysis-run methods and the dedicated DOE/RSM/optimizer endpoints
+- Any production statistical calculation beyond `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.attribute_control_chart`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
+- Bayesian Optimization, fractional alias analysis, Box-Behnken, uncertainty-aware desirability, nonlinear/integer optimizer constraints, broader quality-control methods, or additional hypothesis/categorical calculations
 - Any mock/fake statistical result
 
 Strict rule:
@@ -603,7 +617,8 @@ Tests:
 
 Completion criteria:
 
-- Stored regression model predictions are reproducible with the same dataset version and schema.
+- Stored regression model predictions are reproducible only while the source
+  analysis is fresh and its current schema still matches the fit-time schema.
 - Model explanation text avoids causal claims.
 
 Current status:
@@ -611,7 +626,7 @@ Current status:
 - Started. `regression.pearson` is available as the first narrow C1 slice with real SciPy-backed Pearson product-moment correlation, complete-case exclusion counts, covariance, r, r-squared, p-value, Fisher z CI, non-causation/linearity/outlier warnings, row snapshot provenance, persisted result retrieval, backend reference tests, API tests, and a minimal frontend panel.
 - `regression.xy_correlation` is available as the second narrow C1 slice with real SciPy-backed pairwise Pearson X-Y correlation matrices, pair-level N/exclusions, covariance, r, r-squared, p-value, Fisher z CI, failed-cell error codes, row snapshot provenance, persisted result retrieval, backend reference tests, API tests, and a minimal frontend panel.
 - `regression.linear_model` is available as the third narrow Gate C1 slice with real NumPy/SciPy-backed OLS for one numeric response and numeric/categorical main-effect predictors, selected numeric quadratic terms, selected numeric-by-numeric interactions, deterministic treatment coding for categorical factors, complete-case exclusions, coefficient SE/t/p/CI, R²/adjusted R², F test, VIF/condition diagnostics, residual/leverage/Cook's distance diagnostics, capped diagnostic points, row snapshot provenance, persisted result retrieval, safe JSON model manifest storage, checksum-validated manifest retrieval, prediction preflight for stored app-created manifests, backend prediction means/intervals from the stored manifest, backend reference tests, API tests, and a minimal frontend panel.
-- Spearman/Kendall, adjusted p-values, scatterplot artifacts, categorical interactions, factor-by-numeric interactions, robust covariance, prediction target-dataset selection UI, response optimizer, and diagnostic chart artifacts remain planned/disabled until each has real calculation code, reference fixtures, warning metadata, and UI/API coverage.
+- Spearman/Kendall, adjusted p-values, scatterplot artifacts, categorical interactions, factor-by-numeric interactions, robust covariance, manual single-row prediction, response optimizer, and diagnostic chart artifacts remain planned/disabled until each has real calculation code, reference fixtures, warning metadata, and UI/API coverage.
 
 ### Gate C2: Basic Quality Control
 
@@ -758,7 +773,9 @@ Completion criteria:
 
 Current status:
 
-- Not started.
+- Complete for the current 2-level full-factorial design, response, effects,
+  OLS/ANOVA, diagnostics, persistence, report, and UI slice. Fractional alias
+  analysis remains a later extension.
 
 ### Gate D2: RSM And Optimization
 
@@ -804,7 +821,9 @@ Completion criteria:
 
 Current status:
 
-- Not started.
+- Partially complete: CCD generation, full quadratic modeling, contour payload,
+  stationary-point/design-region checks, persistence, reference tests, and UI
+  are implemented. Bounded response optimization and Box-Behnken remain.
 
 ### Gate E: Deferred ML And Advanced Statistics
 
@@ -7685,8 +7704,246 @@ Validation:
   Vitest 63 tests, including Ruff, format, mypy, lint, typecheck, and build.
 - Browser E2E passed with explicit cross-dataset target selection.
 
-Remaining:
+Historical remaining at completion of Update 158 (prediction export was later
+completed by Update 159):
 
-- Manual single-row prediction input and stored prediction export remain later
-  contract slices.
+- Manual single-row prediction input remains a later contract slice.
 - The production build retains the existing Vite main-chunk size warning.
+
+## Progress Update 160 - Regression Prediction Dependency Stabilization
+
+Status: implemented in the current working tree.
+
+Completed:
+
+- Block stale, missing, wrong-method, method-version-mismatched, and
+  source-schema-drifted source models before target prediction.
+- Persist source analysis/source dataset/target dataset/model dependencies and
+  shared runtime/build/package provenance without raw paths or values.
+- Use registry `METHOD_VERSIONS` as the sole source and bump
+  `regression.predict` to `0.2.0`; result/config/rows schemas are `2`/`3`/`2`.
+- Validate result/config/rows/model IDs, versions, hashes, target/source links,
+  and counts for restore, paging, CSV, list, and download paths.
+- Add nine actual hook-level stale-response/reset tests and update registry/UI
+  guidance to point to the implemented Linear Model prediction flow.
+- Record 1,000/10,000/100,000-row full-verification page and CSV performance;
+  keep verified cache/index/hash/session-cache work as a separate safety review.
+
+Validation:
+
+- Backend pytest: 475 passed.
+- Frontend Vitest: 72 passed.
+- OpenAPI/frontend contract pytest: 62 passed.
+- Full `scripts\check.ps1` passed with backend Ruff/format/mypy, backend pytest
+  475, frontend lint/typecheck, frontend Vitest 72, and production build. The
+  existing Vite main-chunk warning remains at 550.39 kB.
+- Browser E2E passed with the cross-dataset prediction page and full CSV flow
+  after making the Fit Regression Model locator unambiguous.
+
+Next allowed PR:
+
+- `quality.attribute_control_chart`, starting with the common method contract
+  and P/NP/C/U validation/reference/UI/provenance/export slice.
+
+## Progress Update 161 - Attribute Control Chart P/NP/C/U Slice
+
+Status: implemented and locally validated in the current working tree.
+
+Completed:
+
+- Added the available `quality.attribute_control_chart` generic analysis-run
+  method at version `0.1.0` with result schema `1`.
+- Implemented P/NP/C/U Phase I formulas, natural bounds, one-point 3-sigma
+  signals, explicit defective/defect semantics, NP fixed-size and C equal-
+  opportunity gates, exclusion accounting, approximation and dispersion
+  warnings, and no silent fallback or automatic limit adjustment.
+- Reused stored result, row snapshot, provenance, stale handling, and common
+  JSON/CSV/HTML exports without adding a dependency or migration.
+- Added NIST/formula reference coverage, stable failure/security contracts,
+  P/NP/C/U frontend controls, varying-limit SVG and result table, and updated
+  method/audit/progress documentation.
+
+Validation:
+
+- Attribute chart unit/reference tests: 17 passed.
+- Targeted API/registry/handler tests: 12 passed.
+- OpenAPI/frontend contract tests: 62 passed.
+- Full `scripts\check.ps1`: passed with Ruff/format/mypy, backend pytest 500,
+  frontend lint/typecheck, frontend Vitest 82, and production build. The
+  existing Vite chunk warning remains at 563.92 kB.
+- Browser E2E: passed with the new P-chart execution, accessible chart, two
+  strict 3-sigma signals, and first-25-point table checks while preserving the
+  existing regression prediction/export and upload/parser flows.
+
+Next allowed PR:
+
+- DOE factorial analysis: effect estimates, OLS/ANOVA, hierarchy, main and
+  interaction effects, residual diagnostics, pure error/lack-of-fit, reference
+  fixtures, and report integration.
+
+## Progress Update 162 - DOE Factorial Effects, OLS/ANOVA, And Diagnostics
+
+Status: implemented and locally validated in the current working tree.
+
+Completed:
+
+- Bumped `doe.factorial_design` to `0.2.0` from the shared registry source
+  because a persisted analysis contract was added; analysis config/result
+  schemas are `1` and SQLite metadata schema is `9`.
+- Added -1/+1 coded main/interaction effects through order 3 with enforced
+  hierarchy, center curvature, block fixed effects, OLS inference, partial
+  drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, and
+  capped main/interaction plot payloads without automatic term selection or
+  fallback.
+- Added a NIST saturated 2^3 coefficient reference and hand/failure tests for
+  effect scaling, hierarchy, reduced-model lack of fit, point limits, constant
+  response, and invalid center coding.
+- Added dedicated create/restore APIs and schema-v9 checksum/dependency storage,
+  response SHA verification, relationship-tamper rejection, runtime/build/
+  NumPy/SciPy provenance, and internal-path-free errors.
+- Extended the verified DOE HTML report with stored fit/effect/ANOVA/diagnostic
+  sections and added typed frontend API routes/types plus Workbench analysis
+  controls, effect/main-effect SVGs, term/ANOVA tables, diagnostics, and warnings.
+- Added OpenAPI/frontend route/schema/summary-type guards and API, migration,
+  report, tamper, and frontend SSR coverage.
+
+Targeted validation completed:
+
+- Factorial statistics plus metadata tests: 22 passed.
+- Dedicated DOE API tests: 9 passed.
+- OpenAPI/frontend contract suite: 68 passed.
+- Frontend lint and strict typecheck passed; targeted Vitest: 63 passed.
+
+Full validation:
+
+- Full `scripts/check.ps1` passed with Ruff/format, mypy over 83 source files,
+  backend pytest 517, frontend lint/typecheck, frontend Vitest 84, and build.
+- Browser E2E passed through DOE design, nine response values, analysis v0.2.0,
+  effect/main-effect SVGs, ANOVA, and diagnostics after adding the required
+  local-origin CORS `PUT` allowance and its startup contract test.
+- Fractional factorial alias analysis, RSM, optimization, and chart image export
+  remain out of scope.
+
+Next allowed PR after this slice:
+
+- DOE/RSM: Central Composite Design, axial/center points, quadratic model,
+  contour/surface plot payloads, residual diagnostics, and design-region
+  validation.
+
+## Progress Update 163 - DOE/RSM CCD And Full Quadratic Model
+
+Status: implemented in the current working tree; final full validation recorded
+in `docs/ci_status.md`.
+
+Completed:
+
+- Made `doe.response_surface` available at `0.1.0` through dedicated DOE APIs.
+- Added bounded rotatable central composite inscribed and face-centered CCD
+  generation for two to five factors with deterministic standard order,
+  optional seeded randomization, factorial/axial/center labels, and design SHA.
+- Added complete response storage and hierarchy-fixed full quadratic OLS with
+  coefficient inference, partial drop-one ANOVA, pure error/lack-of-fit,
+  residual/influence diagnostics, stationary-point/Hessian classification,
+  design-region checks, and a 21x21 contour payload.
+- Reused schema-v9 DOE storage plus common runtime/build provenance and added
+  design/result/response/config relationship validation on restore.
+- Added the NIST/SEMATECH 11-run CCI Uniformity reference, known quadratic
+  stationary-point hand test, rank/constant/invalid-grid failures, API tamper
+  coverage, typed OpenAPI/frontend contracts, and Workbench CCD/RSM controls.
+- Added browser coverage for CCD creation, thirteen response values, response
+  persistence, quadratic fit, contour rendering, term table, and diagnostics.
+- Allowed only the two local Vite loopback origins, `127.0.0.1:5173` and
+  `localhost:5173`, so either address reaches the loopback backend without a
+  wildcard or LAN exposure.
+
+Intentionally deferred:
+
+- Response optimizer/desirability, objective constraints, Box-Behnken,
+  orthogonal blocking, ridge analysis, surface perspective plot, report/image
+  export, and recommended operating settings.
+
+Next allowed PR:
+
+- Response Optimizer: maximize/minimize/target/range objectives, bounded design
+  region and constraints, individual/composite desirability, deterministic
+  CPU/time budget, stored manifests, and auditable recommendation provenance.
+
+## Progress Update 164 - Bounded Response Optimizer
+
+Status: implemented and locally validated in the current working tree; the
+exact full-check record is in `docs/ci_status.md`.
+
+Completed:
+
+- Added `regression.response_optimizer` v0.1.0 through dedicated response-
+  surface optimization create/restore APIs. The generic catalog method remains
+  disabled and points users to the fitted RSM screen.
+- Added config/result schema 1 with checksum-validated source RSM analyses,
+  source bundle SHA, design/response/config/result relationships, common
+  runtime/build/package provenance, and schema-v9 DOE metadata reuse.
+- Implemented maximize/minimize/target/range Derringer-Suich objectives,
+  importance-weighted geometric composite desirability, narrower actual factor
+  bounds, actual-unit linear `<=`/`>=` constraints, deterministic seeded
+  candidates, bounded SLSQP multi-start search, and explicit CPU/time/
+  iteration/evaluation budgets.
+- Added a one-current-response `ResponseOptimizerPanel` under the verified RSM
+  result. It renders recommendation coordinates, point prediction,
+  individual/composite desirability, constraint slack/status, diagnostics, and
+  persistent confirmation/global-optimum/uncertainty warnings.
+- Added NIST/SEMATECH multiresponse reference coverage, hand-checkable known-
+  optimum and constraint cases, source/config/result tamper coverage, stable
+  public errors without internal paths, typed OpenAPI/frontend contracts, and
+  browser critical-path coverage.
+- Full local validation passed with backend pytest 558, frontend Vitest 86,
+  OpenAPI/frontend contracts 85, mypy over 88 source files, lint/typecheck/
+  production build, and the complete browser E2E optimizer flow.
+
+Intentionally deferred:
+
+- Multiresponse objective construction in the UI, prediction intervals and
+  uncertainty-aware desirability, nonlinear/equality/integer/categorical
+  constraints, global-optimum claims, confirmation experiments, ridge analysis,
+  and an independent Response Optimizer page.
+
+Next allowed PR:
+
+- Plan and specify `doe.bayesian_optimization`: bounded factor space,
+  objective/constraints, surrogate/acquisition policies, sequential experiment
+  history, deterministic seed and CPU/time/trial budgets, recommendation
+  provenance, audit trail, and no guaranteed-global-optimum claim. Keep it
+  non-executable until its contract and independent reference policy exist.
+
+## Progress Update 165 - Bayesian Optimization Planning Contract
+
+Status: implemented in the current working tree; final validation is recorded
+in `docs/ci_status.md` after the full pass.
+
+Completed:
+
+- Added stable method ID `doe.bayesian_optimization` at planning version
+  `0.1.0`; it is catalog `planned`, requires no dataset, has no execution
+  handler, and returns no result or recommendation.
+- Defined a one-to-six continuous-factor, single deterministic objective,
+  sequential completed-trial contract with Matérn-5/2 GP, Expected Improvement,
+  actual-unit linear constraints, one pending recommendation, explicit seeds,
+  and CPU/time/trial/candidate/local-search budgets.
+- Prohibited arbitrary objective/Python/shell/equipment execution, fabricated
+  observations, silent model/acquisition fallback, recommendation-to-observation
+  promotion, path/raw-value logging, and global-optimum guarantees.
+- Added `doe_bayesian_optimization_reference_policy.json` with hand EI cases,
+  a hand quadratic, documented Branin minima, method sources, and explicit
+  `planning_only`/`runtime_result_expected=false` metadata.
+- Added registry/API no-fake tests and frontend catalog/guidance/role tests.
+  No dependency, migration, persisted schema, executable API, or calculation
+  was introduced.
+- Full local validation passed with backend pytest 564, frontend Vitest 86,
+  OpenAPI/frontend contracts 85, mypy over 88 source files, lint/typecheck/
+  production build, and the existing browser critical path.
+
+Next allowed PR:
+
+- Build only the immutable Bayesian Optimization study/history foundation:
+  study version, bounded factor/objective definition, initial design policy,
+  trial state transitions, observation history SHA, storage/API relationship
+  validation, and typed tests. Keep surrogate fitting and recommendation out
+  until this foundation passes its own gate.

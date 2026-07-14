@@ -6,6 +6,7 @@ import {
   type AnalysisWorkbenchHistoryState,
   type AnalysisWorkbenchRestoredState,
 } from "./AnalysisWorkbench";
+import { AttributeControlChartPanel } from "./AttributeControlChartPanel";
 import { CapabilityPanel } from "./CapabilityPanel";
 import { ChiSquareAssociationPanel } from "./ChiSquareAssociationPanel";
 import { DescriptiveAnalysisPanel } from "./DescriptiveAnalysisPanel";
@@ -29,6 +30,7 @@ import { OneSampleTPanel } from "./OneSampleTPanel";
 import { OneSampleWilcoxonPanel } from "./OneSampleWilcoxonPanel";
 import { PairedTPanel } from "./PairedTPanel";
 import { PearsonCorrelationPanel } from "./PearsonCorrelationPanel";
+import { ResponseSurfacePanel } from "./ResponseSurfacePanel";
 import { RunChartPanel } from "./RunChartPanel";
 import { SubgroupChartPanel } from "./SubgroupChartPanel";
 import { TwoSampleTPanel } from "./TwoSampleTPanel";
@@ -39,6 +41,8 @@ import type {
   AnalysisMethodListResponse,
   AnalysisModuleId,
   AnalysisResultEnvelope,
+  AttributeControlChartResult,
+  AttributeControlChartType,
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
@@ -51,6 +55,8 @@ import type {
   FactorialDesignResponse,
   DoeDesignResponsesResponse,
   DoeDesignResponsesUpsertRequest,
+  DoeFactorialAnalysisCreateRequest,
+  DoeFactorialAnalysisResponse,
   GageRrPreflightResponse,
   GageRrResult,
   GageRunChartResult,
@@ -99,6 +105,7 @@ interface AnalysisResultByMethod {
   pearsonAnalysisResult: AnalysisResultEnvelope | null;
   xyCorrelationAnalysisResult: AnalysisResultEnvelope | null;
   linearModelAnalysisResult: AnalysisResultEnvelope | null;
+  attributeControlChartAnalysisResult: AnalysisResultEnvelope | null;
   individualsChartAnalysisResult: AnalysisResultEnvelope | null;
   subgroupChartAnalysisResult: AnalysisResultEnvelope | null;
   runChartAnalysisResult: AnalysisResultEnvelope | null;
@@ -119,6 +126,14 @@ export interface AnalysisShellProps {
   workbenchExportState?: AnalysisWorkbenchExportState;
   workbenchHistoryState?: AnalysisWorkbenchHistoryState;
   workbenchRestoredState?: AnalysisWorkbenchRestoredState;
+  attributeControlChartAnalysisResult?: AnalysisResultEnvelope | null;
+  attributeControlChartConstantOpportunityConfirmed?: boolean;
+  attributeControlChartCountColumnId?: string | null;
+  attributeControlChartCountColumns?: DatasetColumnResponse[];
+  attributeControlChartDenominatorColumnId?: string | null;
+  attributeControlChartDenominatorColumns?: DatasetColumnResponse[];
+  attributeControlChartResult?: AttributeControlChartResult | null;
+  attributeControlChartType?: AttributeControlChartType;
   capabilityAnalysisResult?: AnalysisResultEnvelope | null;
   capabilityLsl?: string;
   capabilityResult?: CapabilityResult | null;
@@ -154,6 +169,8 @@ export interface AnalysisShellProps {
   graphicalSummaryColumns: DatasetColumnResponse[];
   graphicalSummaryResult: GraphicalSummaryResult | null;
   factorialDesign?: FactorialDesignResponse | null;
+  factorialAnalysis?: DoeFactorialAnalysisResponse | null;
+  factorialAnalysisError?: string | null;
   factorialDesignError?: string | null;
   factorialDesignResponseError?: string | null;
   factorialDesignResponses?: DoeDesignResponsesResponse | null;
@@ -180,6 +197,7 @@ export interface AnalysisShellProps {
   individualsChartValueColumnId?: string | null;
   individualsChartValueColumns?: DatasetColumnResponse[];
   isCreatingFactorialDesign?: boolean;
+  isRunningFactorialAnalysis?: boolean;
   isSavingFactorialDesignResponses?: boolean;
   isRunningAnalysis: boolean;
   kruskalWallisAlpha: number;
@@ -324,6 +342,10 @@ export interface AnalysisShellProps {
   twoProportionResult: TwoProportionResult | null;
   version: DatasetVersionResponse | null;
   onAnalysisFilterDraftsChange: (drafts: AnalysisFilterDraft[]) => void;
+  onAttributeControlChartConstantOpportunityConfirmedChange?: (confirmed: boolean) => void;
+  onAttributeControlChartCountColumnChange?: (columnId: string) => void;
+  onAttributeControlChartDenominatorColumnChange?: (columnId: string) => void;
+  onAttributeControlChartTypeChange?: (chartType: AttributeControlChartType) => void;
   onCapabilityLslChange?: (value: string) => void;
   onCapabilityTargetChange?: (value: string) => void;
   onCapabilityUslChange?: (value: string) => void;
@@ -334,11 +356,16 @@ export interface AnalysisShellProps {
   onGageRrReplicateColumnChange?: (columnId: string) => void;
   onGageRunChartOrderColumnChange?: (columnId: string) => void;
   onCreateFactorialDesign?: (request: FactorialDesignCreateRequest) => void;
+  onRunFactorialAnalysis?: (
+    designId: string,
+    request: DoeFactorialAnalysisCreateRequest,
+  ) => void;
   onSaveFactorialDesignResponses?: (
     designId: string,
     request: DoeDesignResponsesUpsertRequest,
   ) => void;
   onRunChiSquareAssociationAnalysis: () => void;
+  onRunAttributeControlChartAnalysis?: () => void;
   onRunDescriptiveAnalysis: () => void;
   onRunEqualVariancesAnalysis: () => void;
   onRunEquivalenceTostAnalysis: () => void;
@@ -464,6 +491,14 @@ export function AnalysisShell({
   workbenchExportState,
   workbenchHistoryState,
   workbenchRestoredState,
+  attributeControlChartAnalysisResult = null,
+  attributeControlChartConstantOpportunityConfirmed = false,
+  attributeControlChartCountColumnId = null,
+  attributeControlChartCountColumns = [],
+  attributeControlChartDenominatorColumnId = null,
+  attributeControlChartDenominatorColumns = [],
+  attributeControlChartResult = null,
+  attributeControlChartType = "p",
   capabilityAnalysisResult = null,
   capabilityLsl = "",
   capabilityResult = null,
@@ -499,6 +534,8 @@ export function AnalysisShell({
   graphicalSummaryColumns,
   graphicalSummaryResult,
   factorialDesign = null,
+  factorialAnalysis = null,
+  factorialAnalysisError = null,
   factorialDesignError = null,
   factorialDesignResponseError = null,
   factorialDesignResponses = null,
@@ -519,6 +556,7 @@ export function AnalysisShell({
   gageRunChartOrderColumns = [],
   gageRunChartResult = null,
   isCreatingFactorialDesign = false,
+  isRunningFactorialAnalysis = false,
   isSavingFactorialDesignResponses = false,
   isRunningAnalysis,
   kruskalWallisAlpha,
@@ -689,6 +727,10 @@ export function AnalysisShell({
   twoProportionResult,
   version,
   onAnalysisFilterDraftsChange,
+  onAttributeControlChartConstantOpportunityConfirmedChange = () => undefined,
+  onAttributeControlChartCountColumnChange = () => undefined,
+  onAttributeControlChartDenominatorColumnChange = () => undefined,
+  onAttributeControlChartTypeChange = () => undefined,
   onCapabilityLslChange = () => undefined,
   onCapabilityTargetChange = () => undefined,
   onCapabilityUslChange = () => undefined,
@@ -699,7 +741,9 @@ export function AnalysisShell({
   onGageRrReplicateColumnChange = () => undefined,
   onGageRunChartOrderColumnChange = () => undefined,
   onCreateFactorialDesign = () => undefined,
+  onRunFactorialAnalysis = () => undefined,
   onSaveFactorialDesignResponses = () => undefined,
+  onRunAttributeControlChartAnalysis = () => undefined,
   onRunChiSquareAssociationAnalysis,
   onRunDescriptiveAnalysis,
   onRunEqualVariancesAnalysis,
@@ -837,6 +881,7 @@ export function AnalysisShell({
           pearsonAnalysisResult,
           xyCorrelationAnalysisResult,
           linearModelAnalysisResult,
+          attributeControlChartAnalysisResult,
           individualsChartAnalysisResult,
           subgroupChartAnalysisResult,
           runChartAnalysisResult,
@@ -1363,6 +1408,36 @@ export function AnalysisShell({
                 />
               );
             }
+            if (
+              method.method_id === "quality.attribute_control_chart" &&
+              method.availability === "available"
+            ) {
+              return (
+                <AttributeControlChartPanel
+                  analysisResult={attributeControlChartAnalysisResult}
+                  chartType={attributeControlChartType}
+                  constantOpportunityConfirmed={
+                    attributeControlChartConstantOpportunityConfirmed
+                  }
+                  countColumnId={attributeControlChartCountColumnId}
+                  countColumns={attributeControlChartCountColumns}
+                  denominatorColumnId={attributeControlChartDenominatorColumnId}
+                  denominatorColumns={attributeControlChartDenominatorColumns}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  methodId={method.method_id}
+                  result={attributeControlChartResult}
+                  version={version}
+                  onChartTypeChange={onAttributeControlChartTypeChange}
+                  onConstantOpportunityConfirmedChange={
+                    onAttributeControlChartConstantOpportunityConfirmedChange
+                  }
+                  onCountColumnChange={onAttributeControlChartCountColumnChange}
+                  onDenominatorColumnChange={onAttributeControlChartDenominatorColumnChange}
+                  onRun={onRunAttributeControlChartAnalysis}
+                />
+              );
+            }
             if (method.method_id === "quality.run_chart" && method.availability === "available") {
               return (
                 <RunChartPanel
@@ -1518,17 +1593,27 @@ export function AnalysisShell({
             ) {
               return (
                 <FactorialDesignPanel
+                  analysis={factorialAnalysis}
+                  analysisError={factorialAnalysisError}
                   design={factorialDesign}
                   error={factorialDesignError}
                   isCreating={isCreatingFactorialDesign}
+                  isRunningAnalysis={isRunningFactorialAnalysis}
                   isSavingResponses={isSavingFactorialDesignResponses}
                   methodId={method.method_id}
                   onCreateDesign={onCreateFactorialDesign}
+                  onRunAnalysis={onRunFactorialAnalysis}
                   onSaveResponses={onSaveFactorialDesignResponses}
                   responseError={factorialDesignResponseError}
                   responses={factorialDesignResponses}
                 />
               );
+            }
+            if (
+              method.method_id === "doe.response_surface" &&
+              method.availability === "available"
+            ) {
+              return <ResponseSurfacePanel />;
             }
             return null;
           }}
@@ -1579,6 +1664,8 @@ function selectedAnalysisResultForMethod(
       return results.xyCorrelationAnalysisResult;
     case "regression.linear_model":
       return results.linearModelAnalysisResult;
+    case "quality.attribute_control_chart":
+      return results.attributeControlChartAnalysisResult;
     case "quality.individuals_chart":
       return results.individualsChartAnalysisResult;
     case "quality.subgroup_chart":

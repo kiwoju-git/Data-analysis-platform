@@ -1,6 +1,6 @@
 # CI Status
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 ## Workflow Configuration
 
@@ -17,6 +17,100 @@ Last updated: 2026-07-13
 This satisfies the current repository-side requirement that main pushes should start the Windows CI workflow and the browser E2E smoke workflow job.
 
 ## Local Validation
+
+- The Bayesian Optimization planning-contract slice was validated locally on
+  2026-07-15 from a working tree based on main SHA
+  `3e05a7c32f0fa48830ca22600cbf20f450280244`. Full
+  `scripts\check.ps1` passed with backend Ruff/format, mypy over 88 source
+  files, backend pytest 564, frontend lint/typecheck, frontend Vitest 86, and
+  the production build. The OpenAPI/frontend contract suite contains 85
+  passing tests. The Vite chunk warning remains for the 608.26 kB main
+  JavaScript asset. This is local validation before commit/push, not remote
+  GitHub Actions verification.
+- Browser E2E passed on 2026-07-15 with
+  `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-bayesian-contract`. The
+  planning-only catalog entry did not add an execution step or alter existing
+  results; the full upload, stored analysis, prediction/export, attribute
+  chart, factorial DOE, RSM, bounded optimizer, and parser-recovery path
+  completed successfully.
+- The bounded Response Optimizer slice was validated locally on 2026-07-14
+  from a working tree based on main SHA
+  `3e05a7c32f0fa48830ca22600cbf20f450280244`. Full
+  `scripts\check.ps1` passed with backend Ruff/format, mypy over 88 source
+  files, backend pytest 558, frontend lint/typecheck, frontend Vitest 86, and
+  the production build. The OpenAPI/frontend contract suite contains 85
+  passing tests. The existing Vite chunk warning remains for the 606.10 kB
+  main JavaScript asset. This is local validation of uncommitted changes, not
+  remote GitHub Actions verification.
+- Browser E2E passed on 2026-07-14 with
+  `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-response-optimizer`. The smoke
+  completed the verified RSM fit and bounded optimizer recommendation,
+  individual/composite desirability, constraint/search status, explicit
+  no-global-optimum statement, and confirmation-run warning before completing
+  every remaining upload and parser-recovery stage. An initial attempt stopped
+  before browser startup on an E2E marker indentation syntax error; correcting
+  that test-only line and passing `py_compile` preceded the successful rerun.
+- The DOE response-surface CCD/quadratic-model slice and the narrow
+  `localhost:5173` CORS compatibility fix were validated locally on
+  2026-07-14 from a working tree based on main SHA
+  `3e05a7c32f0fa48830ca22600cbf20f450280244`. Full
+  `scripts\check.ps1` passed with backend Ruff/format, mypy over 86 source
+  files, backend pytest 538, frontend lint/typecheck, frontend Vitest 85, and
+  the production build. The OpenAPI/frontend contract suite contains 78
+  passing tests. The existing Vite chunk warning remains for the 592.01 kB
+  main JavaScript asset. This is local validation of uncommitted changes, not
+  remote GitHub Actions verification.
+- Browser E2E passed on 2026-07-14 with
+  `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-rsm-rerun`. The first run reached
+  the response-surface screen but stopped on a test-only ambiguous heading
+  locator. After scoping that assertion to the RSM panel title, the complete
+  rerun passed through 13-run CCD creation, response persistence, quadratic
+  fit, coefficient/diagnostic rendering, and the two-factor contour, followed
+  by every remaining upload and parser-recovery stage.
+- The DOE factorial effects/OLS/ANOVA slice was validated locally on
+  2026-07-14 from a working tree based on main SHA
+  `3e05a7c32f0fa48830ca22600cbf20f450280244`. Full
+  `scripts\check.ps1` passed with backend Ruff/format, mypy over 83 source
+  files, backend pytest 517, frontend lint/typecheck, frontend Vitest 84, and
+  the production build. The OpenAPI/frontend contract suite contains 68
+  passing tests. The existing Vite warning remains for the 575.69 kB main
+  JavaScript asset. This is local validation of uncommitted changes, not remote
+  GitHub Actions verification.
+- Browser E2E passed on 2026-07-14 with
+  `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-doe-cors`. The first DOE run exposed
+  a purpose-helper locator mismatch; the second exposed the existing missing
+  CORS `PUT` allowlist entry. After using the catalog label and adding a narrow
+  `PUT` allowance plus startup test, the complete rerun passed through DOE
+  design creation, nine response values, analysis v0.2.0, two SVGs, ANOVA, and
+  diagnostics while preserving every earlier critical-path stage.
+- The attribute-control-chart P/NP/C/U slice and the preceding regression
+  prediction stabilization were validated locally on 2026-07-14 from a
+  working tree based on main SHA
+  `3e05a7c32f0fa48830ca22600cbf20f450280244`. Full
+  `scripts\check.ps1` passed with backend Ruff/format/mypy over 81 source
+  files, backend pytest 500, frontend lint/typecheck, frontend Vitest 82, and
+  the production build. The OpenAPI/frontend contract suite contains 62
+  passing tests. The existing Vite chunk warning remains for the 563.92 kB
+  main JavaScript asset. This is local validation of uncommitted changes, not
+  remote GitHub Actions verification.
+- Browser E2E passed on 2026-07-14 with
+  `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-attribute-chart`. The first run
+  stopped at a test-only P/NP partial-name locator ambiguity. Exact P selection
+  and the correct two-signal NIST expectation were applied, and the complete
+  rerun passed through regression fit/cross-dataset prediction/CSV plus the new
+  30-row P-chart execution and rendered-signal checks.
+- The prediction performance baseline exercised 1,000, 10,000, and 100,000
+  cross-dataset rows through the real API with full page checksum/count/schema
+  verification and full CSV creation. It is a benchmark record, not a CI
+  pass/fail gate.
+- The latest recorded backend pytest count is 564. The latest recorded frontend Vitest count is 86.
+
+## Historical Local Validation
 
 - Full regression prediction CSV export passed locally on 2026-07-13. The
   1,005-row streaming export/tamper contract passed, the OpenAPI/frontend
@@ -101,8 +195,9 @@ This satisfies the current repository-side requirement that main pushes should s
   production build.
 - Full local Windows validation for the current Workbench component split, UX refinement, Playwright E2E smoke, XLSX browser upload coverage, CSV upload/error-recovery coverage, parser option editing coverage, named XLSX sheet selection coverage, CP949 text encoding selection coverage, parser error-recovery coverage, and GitHub Actions E2E job wiring working tree passed on 2026-07-07 with `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"`.
 - The run passed backend ruff check, backend ruff format check, backend mypy over 75 source files, backend pytest with 387 tests, frontend lint, frontend typecheck, frontend Vitest with 58 tests, and frontend production build.
-- The previous documentation mismatch between historical test counts is resolved.
-  The latest recorded backend pytest count is 461. The latest recorded frontend Vitest count is 63.
+- The previous documentation mismatch between historical test counts was
+  resolved by the dated records below; current counts are maintained only in
+  the Local Validation section.
 - Opt-in browser E2E validation also passed on 2026-07-10 with
   `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics`.
   The run printed stage markers and passed without producing failure
@@ -117,9 +212,16 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Remote GitHub Actions Verification
 
+- On 2026-07-15, `gh --version` failed before any network request because
+  GitHub CLI is not installed. The earlier requested `gh auth status` and
+  `gh run list` checks therefore remain unavailable.
+- Therefore no current run ID/head SHA, Windows/e2e job result/order, or
+  `e2e-logs` artifact contents were verified. No artifact download was
+  attempted after the CLI prerequisite failed.
 - Remote GitHub Actions execution has not been directly verified from this
-  environment for the latest pushed `main` commit
-  `49266a365bbfffcecdf32a008bdb4c02739f2742`.
+  environment for the working tree validated from local base `main` commit
+  `3e05a7c32f0fa48830ca22600cbf20f450280244`. A successful Git push confirms
+  only remote ref transfer; it does not verify the resulting Actions jobs.
 - GitHub app checks against that commit returned no PR-filtered workflow runs
   and no legacy commit statuses on 2026-07-10. The available connector endpoint
   is PR-run oriented, so that result is not sufficient to confirm push-triggered

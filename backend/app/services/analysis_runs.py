@@ -35,6 +35,9 @@ from app.services.analysis_run_history import (
     request_analysis_run_cancellation,
 )
 from app.services.analysis_run_results import get_analysis_run_result
+from app.services.analysis_runner_attribute_control_chart import (
+    run_attribute_control_chart_analysis,
+)
 from app.services.analysis_runners_categorical import (
     run_chi_square_association_analysis,
     run_one_proportion_analysis,
@@ -118,12 +121,16 @@ def create_analysis_run(
     if handler is not None:
         return handler.run(settings, request)
 
-    if request.method_id == "doe.factorial_design":
+    if request.method_id in {"doe.factorial_design", "doe.response_surface"}:
         raise ApiError(
             code="analysis_method_uses_dedicated_api",
             message="이 메서드는 DOE 설계 자산 API를 통해 실행해야 합니다.",
             status_code=status.HTTP_409_CONFLICT,
-            developer_detail="/api/v1/doe-designs/factorial",
+            developer_detail=(
+                "/api/v1/doe-designs/factorial"
+                if request.method_id == "doe.factorial_design"
+                else "/api/v1/doe-designs/response-surface"
+            ),
         )
 
     raise ApiError(
@@ -154,6 +161,7 @@ _METHOD_EXECUTION_HANDLERS: dict[str, MethodExecutionHandler] = build_method_exe
         "regression.pearson": run_pearson_analysis,
         "regression.xy_correlation": run_xy_correlation_analysis,
         "regression.linear_model": run_linear_model_analysis,
+        "quality.attribute_control_chart": run_attribute_control_chart_analysis,
         "quality.individuals_chart": run_individuals_chart_analysis,
         "quality.subgroup_chart": run_subgroup_chart_analysis,
         "quality.run_chart": run_run_chart_analysis,

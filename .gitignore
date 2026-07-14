@@ -35,5 +35,6 @@ Thumbs.db
 /db/
 /logs/
 /tmp/
+/.tmp/
 /exports/
 *.sqlite3

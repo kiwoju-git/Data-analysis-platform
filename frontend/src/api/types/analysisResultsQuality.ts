@@ -1,5 +1,98 @@
 import type { DatasetColumnResponse, DatasetColumnRole, DatasetMeasurementLevel } from "./datasets";
 
+export type AttributeControlChartType = "p" | "np" | "c" | "u";
+
+export interface AttributeControlChartColumnRef {
+  column_id: string;
+  column_index: number;
+  display_name: string;
+  data_type: DatasetColumnResponse["data_type"];
+  measurement_level: DatasetMeasurementLevel;
+  role: DatasetColumnRole;
+  unit: string | null;
+}
+
+export interface AttributeControlChartPoint {
+  position: number;
+  canonical_position: number;
+  count: number;
+  denominator: number | null;
+  value: number;
+  lcl: number;
+  ucl: number;
+  lcl_truncated: boolean;
+  ucl_truncated: boolean;
+  signal_codes: string[];
+}
+
+export interface AttributeControlChartSignal {
+  signal_id: string;
+  code: "attribute_control_chart_point_beyond_control_limits";
+  severity: "warning";
+  position: number;
+  canonical_position: number;
+  value: number;
+  limit: "lower" | "upper";
+  definition: string;
+}
+
+export interface AttributeControlChartResult {
+  schema_version: number;
+  summary_type: "attribute_control_chart";
+  method: "p_chart" | "np_chart" | "c_chart" | "u_chart";
+  chart_type: AttributeControlChartType;
+  count_definition: "defectives" | "defects";
+  distribution_assumption: "binomial" | "poisson";
+  control_limit_method: "phase_1_estimated_three_sigma";
+  baseline: "all_filtered_valid_points";
+  order_source: "canonical_row_order";
+  missing_policy: "complete_case";
+  constant_opportunity_confirmed: boolean;
+  control_rules: Array<{
+    code: string;
+    definition: string;
+    enabled: boolean;
+  }>;
+  warnings: string[];
+  count: AttributeControlChartColumnRef;
+  denominator: AttributeControlChartColumnRef | null;
+  denominator_role: "sample_size" | "inspection_opportunity" | null;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing_count: number;
+  n_excluded_non_numeric_count: number;
+  n_excluded_missing_denominator: number;
+  n_excluded_non_numeric_denominator: number;
+  total_count: number;
+  total_denominator: number | null;
+  center_line: number;
+  limits_vary: boolean;
+  lcl_truncated_count: number;
+  ucl_truncated_count: number;
+  dispersion: {
+    method: string;
+    degrees_of_freedom: number;
+    ratio: number;
+    warning_threshold: number;
+    used_to_adjust_limits: false;
+  };
+  chart: {
+    x_axis: "canonical_row_position";
+    y_axis:
+      | "proportion_defective"
+      | "defective_count"
+      | "defect_count"
+      | "defects_per_opportunity";
+    center_line: number;
+    limits_vary: boolean;
+    point_count: number;
+    points_truncated: boolean;
+    point_limit: number;
+    points: AttributeControlChartPoint[];
+  };
+  signals: AttributeControlChartSignal[];
+}
+
 export interface IndividualsChartColumnRef {
   column_id: string;
   column_index: number;

@@ -1,0 +1,254 @@
+import hashlib
+import json
+import sqlite3
+from uuid import uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.analyses.registry import METHOD_VERSIONS
+from app.core.config import Settings
+from app.main import create_app
+from app.storage.metadata import metadata_db_path
+
+
+def _create_source_analysis(client: TestClient) -> tuple[dict, dict]:
+    design_response = client.post(
+        "/api/v1/doe-designs/response-surface",
+        json={
+            "name": "optimizer source",
+            "factors": [
+                {"name": "x", "low": -1, "high": 1, "unit": None},
+                {"name": "y", "low": -1, "high": 1, "unit": None},
+            ],
+            "alpha_mode": "face_centered",
+            "factorial_replicates": 1,
+            "axial_replicates": 1,
+            "center_points": 5,
+            "randomize": False,
+            "randomization_seed": 20260714,
+        },
+    )
+    assert design_response.status_code == 201
+    design = design_response.json()
+    values = []
+    for run in design["runs"]:
+        x = run["coded_levels"]["x"]
+        y = run["coded_levels"]["y"]
+        response = 10.0 - (x - 0.25) ** 2 - 2.0 * (y + 0.5) ** 2
+        values.append({"run_order": run["run_order"], "value": response})
+    stored = client.put(
+        f"/api/v1/doe-designs/response-surface/{design['design_id']}/responses",
+        json={"response_name": "Yield", "unit": "%", "values": values},
+    )
+    assert stored.status_code == 200
+    analysis_response = client.post(
+        f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses",
+        json={
+            "response_name": "Yield",
+            "confidence_level": 0.95,
+            "point_limit": 256,
+            "contour_grid_size": 21,
+        },
+    )
+    assert analysis_response.status_code == 201
+    return design, analysis_response.json()
+
+
+def _optimizer_request(source_analysis_id: str) -> dict:
+    return {
+        "objectives": [
+            {
+                "source_analysis_id": source_analysis_id,
+                "goal": "maximize",
+                "lower": 8.0,
+                "target": 10.0,
+                "upper": None,
+                "lower_weight": 1.0,
+                "upper_weight": 1.0,
+                "importance": 1.0,
+            }
+        ],
+        "factor_bounds": [],
+        "linear_constraints": [
+            {
+                "name": "combined setting",
+                "coefficients": {"x": 1.0, "y": 1.0},
+                "relation": "less_than_or_equal",
+                "bound": 0.0,
+            }
+        ],
+        "search": {
+            "random_seed": 20260714,
+            "random_candidate_count": 128,
+            "multi_start_count": 8,
+            "max_iterations": 120,
+            "max_evaluations": 5000,
+            "time_budget_ms": 5000,
+        },
+    }
+
+
+def test_response_optimizer_api_creates_and_restores_bounded_auditable_result(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        design, analysis = _create_source_analysis(client)
+        created_response = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
+            json=_optimizer_request(analysis["analysis_id"]),
+        )
+        assert created_response.status_code == 201
+        created = created_response.json()
+        restored_response = client.get(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}"
+            f"/optimizations/{created['optimization_id']}"
+        )
+
+    assert restored_response.status_code == 200
+    restored = restored_response.json()
+    assert restored == created
+    assert created["method_id"] == "regression.response_optimizer"
+    assert created["method_version"] == METHOD_VERSIONS["regression.response_optimizer"]
+    assert created["config_schema_version"] == 1
+    assert created["result_schema_version"] == 1
+    assert created["source_analysis_ids"] == [analysis["analysis_id"]]
+    assert len(created["source_bundle_sha256"]) == 64
+    assert len(created["config_sha256"]) == 64
+    assert created["python_version"]
+    assert created["platform"]
+    assert created["package_versions"]["numpy"]
+    assert created["package_versions"]["scipy"]
+    result = created["result"]
+    assert result["summary_type"] == "response_optimizer"
+    recommendation = result["recommendation"]
+    assert recommendation["actual_coordinates"]["x"] == pytest.approx(0.25, abs=1e-5)
+    assert recommendation["actual_coordinates"]["y"] == pytest.approx(-0.5, abs=1e-5)
+    assert recommendation["composite_desirability"] == pytest.approx(1.0)
+    assert recommendation["all_constraints_satisfied"] is True
+    assert result["search"]["global_optimum_guaranteed"] is False
+    assert "response_optimizer_confirmation_run_required" in result["warnings"]
+    assert str(tmp_path) not in created_response.text
+
+
+def test_response_optimizer_api_honors_narrow_factor_bounds(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        design, analysis = _create_source_analysis(client)
+        request = _optimizer_request(analysis["analysis_id"])
+        request["factor_bounds"] = [{"factor_name": "x", "lower": -1.0, "upper": 0.0}]
+        request["linear_constraints"] = []
+        response = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
+            json=request,
+        )
+
+    assert response.status_code == 201
+    result = response.json()["result"]
+    assert result["recommendation"]["actual_coordinates"]["x"] == pytest.approx(0.0, abs=1e-6)
+    assert "response_optimizer_recommendation_on_factor_bound" in result["warnings"]
+
+
+def test_response_optimizer_api_rejects_missing_source_and_invalid_goal_thresholds(
+    tmp_path,
+) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        design, analysis = _create_source_analysis(client)
+        missing = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
+            json=_optimizer_request(str(uuid4())),
+        )
+        request = _optimizer_request(analysis["analysis_id"])
+        request["objectives"][0]["lower"] = 11
+        invalid = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
+            json=request,
+        )
+
+    assert missing.status_code == 409
+    assert missing.json()["error"]["code"] == "response_optimizer_source_analysis_missing"
+    assert invalid.status_code == 409
+    assert invalid.json()["error"]["code"] == "response_optimizer_objective_thresholds_invalid"
+    assert str(tmp_path) not in missing.text
+    assert str(tmp_path) not in invalid.text
+
+
+def test_response_optimizer_restore_rejects_config_result_relationship_tamper(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        design, analysis = _create_source_analysis(client)
+        created = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
+            json=_optimizer_request(analysis["analysis_id"]),
+        ).json()
+
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            config_json, result_json = connection.execute(
+                "SELECT config_json, result_json FROM experiment_design_analyses "
+                "WHERE analysis_id = ?",
+                (created["optimization_id"],),
+            ).fetchone()
+            config = json.loads(config_json)
+            config["request"]["objectives"][0]["target"] = 9.5
+            updated_config_json = json.dumps(
+                config,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            result = json.loads(result_json)
+            result["config_sha256"] = hashlib.sha256(
+                updated_config_json.encode("utf-8")
+            ).hexdigest()
+            updated_result_json = json.dumps(
+                result,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            connection.execute(
+                "UPDATE experiment_design_analyses "
+                "SET config_json = ?, result_json = ?, result_sha256 = ? "
+                "WHERE analysis_id = ?",
+                (
+                    updated_config_json,
+                    updated_result_json,
+                    hashlib.sha256(updated_result_json.encode("utf-8")).hexdigest(),
+                    created["optimization_id"],
+                ),
+            )
+            connection.commit()
+
+        restored = client.get(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}"
+            f"/optimizations/{created['optimization_id']}"
+        )
+
+    assert restored.status_code == 409
+    assert restored.json()["error"]["code"] == "response_optimizer_result_config_mismatch"
+    assert str(tmp_path) not in restored.text
+
+
+def test_response_optimizer_restore_rejects_result_checksum_tamper(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        design, analysis = _create_source_analysis(client)
+        created = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
+            json=_optimizer_request(analysis["analysis_id"]),
+        ).json()
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            connection.execute(
+                "UPDATE experiment_design_analyses SET result_json = result_json || ' ' "
+                "WHERE analysis_id = ?",
+                (created["optimization_id"],),
+            )
+            connection.commit()
+        restored = client.get(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}"
+            f"/optimizations/{created['optimization_id']}"
+        )
+
+    assert restored.status_code == 409
+    assert restored.json()["error"]["code"] == "response_optimizer_checksum_mismatch"
+    assert str(tmp_path) not in restored.text

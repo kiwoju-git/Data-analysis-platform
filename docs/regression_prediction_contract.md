@@ -1,55 +1,43 @@
 # Regression Prediction Contract
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 ## Scope
 
-This contract covers the next Gate C1 slice for `regression.predict`, limited to predictions from app-created OLS `regression.linear_model` manifests.
+`regression.predict` predicts confirmed local dataset versions from safe JSON
+OLS manifests created by `regression.linear_model`. It is available through
+dedicated regression-model APIs and the Linear Model panel. The generic method
+catalog entry remains disabled because an independent Predict method page is
+not implemented.
 
-Current implemented state:
+Implemented scope:
 
-- `POST /api/v1/regression-models/{model_id}/prediction-preflight` validates a target dataset version before prediction.
-- The preflight returns schema, column mapping, numeric range, missing/non-numeric, categorical unseen-level, and usable-row counts.
-- `regression.linear_model` manifest schema version `2` stores the coefficient order, inverse cross-product matrix, residual variance, and residual degrees of freedom needed for OLS prediction intervals.
-- `POST /api/v1/regression-models/{model_id}/predictions` produces real backend prediction values from app-created OLS manifests after the same preflight path passes.
-- Prediction results are stored as `regression.predict` analysis result envelopes with relative workspace paths and SHA-256 validation.
-- Every valid prediction row is written atomically to a checksum-recorded, raw-predictor-free NDJSON analysis artifact.
-- `GET /api/v1/regression-models/predictions/{prediction_id}/rows` returns checksum-validated pages of stored prediction rows.
-- `GET /api/v1/dataset-versions` returns paged, raw-row-free target candidates across confirmed local datasets.
-- `POST /api/v1/regression-models/predictions/{prediction_id}/exports/csv` streams every checksum-validated stored prediction row into a wide CSV export.
-- The Linear Model UI can select a confirmed target version, run prediction after successful preflight, and render 25-row pages without exposing raw predictor values.
+- same-dataset and explicitly selected cross-dataset batch prediction
+- app-created OLS manifests only; external pickle/joblib upload is forbidden
+- canonical target rows and explicit complete-case handling
+- exact reconstruction of numeric, categorical treatment-coded, quadratic,
+  and numeric interaction terms stored by the source model
+- predicted mean, mean-response confidence interval, individual prediction
+  interval, warnings, exclusions, and dependency provenance
+- at most 1,000 raw-predictor-free rows in the initial response
+- all valid rows in checksum-recorded NDJSON with 25-row UI paging
+- checksum-recorded full CSV creation/download without raw predictors
 
-Current backend implementation scope:
-
-- batch prediction for a confirmed target `dataset_version_id`
-- app-created OLS manifests only
-- canonical target rows only
-- complete-case prediction rows only
-- deterministic reconstruction of the original model design matrix from the stored JSON manifest
-- predicted mean, mean-response confidence interval, individual prediction interval, row index, exclusion reason counts, warning metadata, and provenance
-- inline POST response capped at 1,000 predicted rows for compatibility; all valid rows remain available through paged retrieval
-
-Out of scope until later contracts:
-
-- manual single-row prediction UI
-- external model upload
-- pickle/joblib model loading
-- non-OLS regression, logistic regression, general ML prediction, response optimizer, DOE/RSM prediction
-- automatic transformation or imputation of target data
-- generated chart artifact export
+Manual single-row entry, non-OLS prediction, external models, automatic
+imputation/transformation, response optimization, and chart-image export remain
+out of scope.
 
 ## API
 
-Implemented endpoint:
-
 ```text
+POST /api/v1/regression-models/{model_id}/prediction-preflight
 POST /api/v1/regression-models/{model_id}/predictions
 GET  /api/v1/regression-models/predictions/{prediction_id}/rows?limit=25&offset=0
 GET  /api/v1/dataset-versions?limit=20&offset=0
 POST /api/v1/regression-models/predictions/{prediction_id}/exports/csv
 ```
 
-Request:
+Prediction request:
 
 ```json
 {
@@ -60,171 +48,207 @@ Request:
 }
 ```
 
-Response envelope:
+Response identity fields:
 
 ```json
 {
-  "prediction_id": "prediction-run-uuid",
+  "prediction_id": "prediction-analysis-run-uuid",
   "model_id": "model-uuid",
   "analysis_id": "source-analysis-uuid",
-  "source_dataset_version_id": "training-dataset-version-uuid",
-  "target_dataset_version_id": "target-dataset-version-uuid",
+  "source_analysis_id": "source-analysis-uuid",
+  "source_dataset_version_id": "training-version-uuid",
+  "target_dataset_version_id": "target-version-uuid",
   "model_manifest_sha256": "sha256",
-  "target_schema_hash": "sha256",
-  "row_count_total": 100,
-  "row_count_predicted": 97,
-  "row_count_excluded": 3,
-  "row_count_omitted": 0,
-  "row_limit": 1000,
-  "truncated": false,
-  "confidence_level": 0.95,
-  "warnings": [],
-  "provenance": {},
-  "columns": [],
-  "rows": []
+  "target_schema_hash": "sha256"
 }
 ```
 
-Rows are capped only in the inline POST response. The page endpoint accepts
-`limit=1..200` and a non-negative `offset`, and returns `total`, `returned`,
-`has_previous`, `has_next`, and raw-predictor-free prediction rows.
+`analysis_id` is retained as a compatibility alias for
+`source_analysis_id`. The stored prediction analysis-run ID is
+`prediction_id`. Page requests accept `limit=1..200` and a non-negative
+`offset`.
 
-## Validation Policy
+## Source Model Freshness
 
-Prediction must call the existing preflight logic first or share the same validation path. It must refuse to produce predictions when preflight reports an error severity issue.
+Preflight validates source dependencies before scanning the target:
 
-Required checks:
+- the source analysis exists and is `regression.linear_model`
+- the source analysis points to the model's source dataset
+- analysis, model record, manifest metadata, and registry method versions agree
+- the source analysis is not stale
+- the source dataset version and canonical artifact still exist and validate
+- the current source schema hash equals the schema hash stored at fit
+- model manifest IDs, schema metadata, path metadata, and SHA-256 agree
 
-- model manifest path and SHA-256 match metadata
-- source row snapshot path and SHA-256 match manifest metadata
-- target dataset version exists and has a valid canonical artifact
-- required predictors map by exact column ID or explicit one-to-one display-name fallback
-- target predictor types are compatible with the stored predictor kind
-- numeric target values parse with the target dataset's recorded decimal/thousands options
-- categorical target values must be present in the stored training levels
-- missing, non-numeric, unseen, and structurally invalid rows are counted and excluded, not silently coerced
-- numeric extrapolation is warned and recorded, not hidden
+Source issues are intentionally distinct:
+
+- `regression_prediction_source_analysis_missing`
+- `regression_prediction_source_analysis_invalid`
+- `regression_prediction_source_model_stale`
+- `regression_prediction_source_schema_mismatch`
+- `regression_prediction_source_method_version_mismatch`
+
+Any source error makes `prediction_ready=false`. Prediction execution shares
+the same validation and returns HTTP 409
+`regression_prediction_preflight_failed` with structured issue codes and a
+refit instruction. Source-model staleness is not merged with target
+schema/column incompatibility. A source schema no-op PATCH does not mark the
+analysis stale and does not block prediction.
+
+## Target Validation
+
+After source validation, preflight requires:
+
+- an existing target version with a checksum-valid canonical artifact
+- exact column-ID mapping or unambiguous display-name fallback
+- compatible predictor kinds and recorded numeric parsing conventions
+- categorical values limited to training levels
+- explicit missing, non-numeric, unseen-level, and unusable-row counts
+- visible numeric training-range/extrapolation warnings
+
+Rows are excluded under the recorded complete-case policy, never silently
+coerced or imputed. No raw target cell sample or internal path is returned.
 
 ## Statistical Contract
 
-OLS prediction must reconstruct the design matrix exactly from the stored manifest:
+The design matrix is reconstructed from the stored manifest:
 
-- intercept handling from the manifest
-- numeric main effects by original predictor value
-- categorical treatment coding with the stored reference level and level order
-- numeric quadratic terms from the stored source column ID
-- numeric-by-numeric interaction terms from the stored source column IDs
+- manifest-controlled intercept
+- original numeric predictor values
+- stored categorical reference level and deterministic level order
+- stored numeric quadratic source column
+- stored numeric-by-numeric interaction columns
 
-Prediction intervals require the stored model information needed to compute uncertainty:
+Intervals require the coefficient vector, inverse cross-product covariance
+basis, residual variance, residual degrees of freedom, confidence level, and
+package metadata. Missing or invalid uncertainty metadata returns
+`regression_prediction_manifest_uncertainty_missing` or
+`regression_prediction_manifest_invalid`; no alternate calculation or fake
+interval is substituted.
 
-- coefficient vector
-- residual variance
-- residual degrees of freedom
-- inverse cross-product or equivalent covariance basis
-- confidence level
-- package versions
+Every result preserves warnings that predictions are model-based rather than
+causal, OLS interval assumptions still apply, and extrapolation may be
+unreliable.
 
-If the current manifest does not contain enough information for valid intervals, the prediction endpoint returns `regression_prediction_manifest_uncertainty_missing` or `regression_prediction_manifest_invalid` instead of fabricating intervals.
+## Provenance
 
-## Result Payload Requirements
+The stored result and `RegressionPredictionProvenance` record:
 
-Each predicted row must include:
+- source analysis ID and stale state at prediction time
+- source dataset version, fit/current schema hashes, and canonical SHA-256
+- target dataset version, schema hash, and canonical SHA-256
+- model ID, manifest SHA-256, and model-manifest schema version
+- method ID/version and prediction schema version
+- app version, Python version, platform, build commit, NumPy and SciPy versions
+- missing policy, confidence level, interval flag, and creation time
 
-- target row index
-- predicted mean
-- mean-response confidence interval when available
-- individual prediction interval when available
-- extrapolation warning flag
-- display-safe exclusion or warning codes
+Runtime/build/package fields reuse the common analysis provenance helper.
+Provenance never records an internal path, original filename, or raw predictor
+value.
 
-Rows must not include raw input cell values unless a separate privacy-reviewed result-view contract explicitly allows them.
+## Storage And Consistency
 
-Required warnings:
+Prediction persistence uses relative workspace paths and atomic result/row
+writes. The prediction analysis run and rows artifact metadata are inserted in
+one SQLite transaction; failed metadata persistence removes both files.
 
-- regression predictions are model-based estimates, not causal effects
-- extrapolation beyond training ranges may be unreliable
-- unseen categorical levels are excluded unless a future explicit policy supports them
-- prediction intervals rely on OLS assumptions and the training residual variance
+The NDJSON file begins with a raw-value-free relationship header and then stores
+all valid prediction rows. Page and export reads verify the full file SHA-256,
+header/schema, row schema, and expected row count.
 
-## Storage
+A shared consistency validator requires these records to agree:
 
-Prediction results are stored as app-owned `regression.predict` analysis result envelopes with:
+- `analysis_runs` DB record and `config_json`
+- stored `result.json` envelope/provenance
+- `regression_prediction_rows` artifact metadata and NDJSON header/body
+- regression model record and model manifest metadata
 
-- relative workspace path only
-- SHA-256
-- prediction schema version
-- model ID and manifest SHA-256
-- source and target dataset version IDs
-- target canonical artifact SHA-256
-- request options
-- package versions
+It compares prediction/analysis ID, method ID/version, model ID, source analysis
+ID, source/target dataset versions, manifest SHA-256, target schema hash,
+predicted/expected row totals, result checksum, and rows checksum/count. It is
+used by result restore, page retrieval, full CSV creation, prediction export
+listing, and prediction export download.
 
-All valid rows are additionally stored as `application/x-ndjson` under a
-relative workspace path and registered as a `regression_prediction_rows`
-analysis artifact with SHA-256. Retrieval verifies the full artifact checksum,
-row schema, and expected row count before returning a page. Analysis-run and
-artifact metadata are inserted in one SQLite transaction. If metadata insertion
-fails, both `result.json` and `prediction_rows.jsonl` are removed.
+Stable relationship errors are:
 
-Prediction CSV exports are registered as
-`regression_prediction_csv_export` analysis artifacts and use the existing
-checksum-validated analysis export download route. The UTF-8-SIG wide CSV
-contains prediction/model/source-target version provenance, manifest/schema
-hashes, confidence level, row index, predicted mean, mean CI, prediction
-interval, and warning codes. It never contains predictor input columns or raw
-target cell values. Export generation exhausts the verified NDJSON iterator, so
-the CSV is not published when row schema, count, or checksum validation fails.
+- `regression_prediction_metadata_invalid`
+- `regression_prediction_result_config_mismatch`
+- `regression_prediction_model_mismatch`
+- `regression_prediction_artifact_mismatch`
 
-If a result file is written before metadata insert and metadata insert fails, the file must be deleted.
+The full UTF-8-SIG CSV includes prediction/model/source-target IDs, hashes,
+confidence/interval metadata, row index, predicted values, intervals, and
+warning codes. It never includes predictor columns or raw target cell values.
+
+## Versions
+
+- `METHOD_VERSIONS["regression.predict"]`: `0.2.0`
+- persisted prediction result schema: `2`
+- internal prediction config schema: `3`
+- prediction rows artifact/header schema: `2`
+- linear-model manifest schema: `2` (unchanged)
+- prediction CSV export schema: `1` (unchanged)
+
+The method receives a minor bump because required dependency provenance and
+cross-artifact identity fields change the persisted result contract and restore
+interpretation. Prediction formulas, predictor coding, intervals, and CSV
+columns do not change. Registry `METHOD_VERSIONS` is the sole method-version
+source; tests require catalog, service, DB run, result envelope, and provenance
+versions to agree.
+
+Existing `0.1.0` and older-schema artifacts are not silently rewritten.
+Incompatible prediction artifacts return explicit recovery/consistency errors.
 
 ## Tests
 
-Implemented backend coverage:
+Backend coverage includes:
 
-- same-dataset OLS prediction API returns predicted mean, mean-response CI, and individual prediction interval
-- a 1,005-row prediction preserves 1,000 inline rows and retrieves the remaining five through the page endpoint
-- page rows contain only row index, prediction values, intervals, and warning codes
-- NDJSON checksum/schema tampering returns a stable recovery error without exposing internal paths
-- metadata insertion failure removes both result artifacts
-- a 1,005-row prediction CSV contains all 1,005 stored rows, including rows omitted from the inline response
-- prediction CSV download SHA matches metadata and its columns exclude raw predictors
-- tampered prediction row artifacts block both page retrieval and CSV export
-- stored prediction result is retrievable through the existing checksum-validated analysis result API
-- stored prediction result checksum mismatch returns the existing recovery error without exposing internal paths
-- missing required predictor rejects prediction execution through `regression_prediction_preflight_failed`
-- categorical treatment-coded manifest terms are reconstructed for prediction
-- numeric quadratic and numeric-by-numeric interaction terms are reconstructed for prediction
-- insufficient manifest uncertainty metadata returns `regression_prediction_manifest_uncertainty_missing`
-- `regression_linear_model_reference.json` cross-checks three treatment-coded
-  predicted means, mean-response confidence intervals, and individual
-  prediction intervals against statsmodels 0.14.6 full-precision output
+- same- and cross-dataset predicted means and both interval types
+- statsmodels 0.14.6 independent full-precision reference values
+- numeric/categorical/quadratic/interaction design reconstruction
+- source stale/schema drift, source missing/wrong method, method-version drift,
+  manifest metadata drift, and source schema no-op behavior
+- target mapping, range, missing/non-numeric, and unseen-level behavior
+- complete retrieval and export of 1,005 rows beyond the inline cap
+- checksum, schema, count, config, result, rows cross-link, model, method,
+  target-version, prediction-ID, and manifest-SHA tampering
+- restore/page/export/list/download rejection without paths or raw values
 
-Implemented frontend coverage:
+Frontend coverage executes actual history, export, comparison, restore,
+prediction-target, prediction-export, preflight/prediction, and row-page hooks
+with delayed Promises completed out of order. Reset/model/target/prediction
+changes preserve the newest state and leave loading flags false.
 
-- Linear Model panel renders preflight, enables prediction only after `prediction_ready=true`, and displays paged row index, predicted mean, mean-response CI, individual prediction interval, and warning codes without raw target cell values
-- prediction page state is passed as one grouped prop contract and stale page responses cannot overwrite a newer prediction request
-- prediction target catalog/selection state is owned by a dedicated hook; changing target cancels and clears older preflight, prediction, and row-page state
-- prediction CSV generation/download state is owned by a dedicated latest-request-guarded hook and resets when prediction ID changes
-- Playwright critical path registers a synthetic `y`/`x`/`group` dataset,
-  separately registers a compatible four-row target, performs a real
-  linear-model fit on 12 training rows, selects the other dataset version,
-  verifies the stored-manifest preflight is ready for all four target rows,
-  executes prediction, and checks the four-row summary, interval table, and
-  rendered prediction-interval lines before creating and downloading the full
-  prediction CSV
+Playwright covers real 12-row OLS fitting, separate four-row target selection,
+preflight, prediction, interval rendering, row paging, full CSV creation and
+download, and absence of raw predictor values.
 
 ## Current UI Policy
 
-The current UI defaults to the active dataset version and can explicitly select
-another confirmed local dataset version from a paged catalog. Target changes
-invalidate prior asynchronous prediction state. The UI displays 25-row result
-pages and must not imply causation or expose raw target cell values.
-After prediction, the UI can generate and download a checksum-recorded CSV of
-all stored prediction rows; target selection is locked while export work is in
-progress.
+Prediction is presented inside the `regression.linear_model` panel. The
+registry and guidance text state that saved-model prediction is supported there
+and that only an independent Predict method page is absent. Target selection
+defaults to the active version and can choose another confirmed local version.
+Model or target changes invalidate preflight, prediction, page, and export
+state.
 
-This storage and retrieval addition does not change prediction calculations or
-the persisted statistical result fields, so `regression.predict` remains at
-method version `0.1.0`. The internal prediction config schema is version `2`.
-The CSV export schema is independently versioned at `1` and does not change the
-`regression.predict` calculation or stored result interpretation.
+## Page Performance Baseline
+
+Measured 2026-07-14 through the real FastAPI/TestClient cross-dataset path on
+Windows 10 build 19045, CPython 3.10.11, four logical CPUs, NumPy 2.2.6, SciPy
+1.15.3, CPU only. Page size was 25. Values are one-run wall-clock time and
+incremental `tracemalloc` Python peak allocation; native NumPy/SciPy memory is
+not included.
+
+| Predicted rows | First page | Middle page | Last page | Full CSV create |
+| ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 0.181 s / 3.817 MiB | 0.244 s / 3.775 MiB | 0.188 s / 3.783 MiB | 0.366 s / 5.159 MiB |
+| 10,000 | 0.997 s / 3.799 MiB | 0.925 s / 3.789 MiB | 0.854 s / 3.506 MiB | 2.224 s / 5.783 MiB |
+| 100,000 | 7.910 s / 3.798 MiB | 7.966 s / 3.789 MiB | 7.829 s / 3.784 MiB | 19.916 s / 5.502 MiB |
+
+Every page intentionally rereads the complete immutable NDJSON artifact before
+returning data. Similar first/middle/last times confirm the current O(N) safety
+cost. Verification is not bypassed in this PR. Future candidates are a verified
+immutable-artifact cache, row-offset index, chunk-hash manifest, and verified
+session cache; each requires a separate invalidation, memory, and tamper-safety
+review.

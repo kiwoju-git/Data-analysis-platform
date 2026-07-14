@@ -76,6 +76,7 @@ def analysis_provenance(
     context: DatasetRowsContext,
     row_snapshot: RowSnapshotArtifact,
 ) -> AnalysisProvenance:
+    runtime = runtime_build_provenance(settings)
     return AnalysisProvenance(
         method_id=request.method_id,
         method_version=request.method_version,
@@ -86,11 +87,17 @@ def analysis_provenance(
         row_count_total=context.version.row_count,
         row_count_included=int(row_snapshot.payload["selection"]["row_count_included"]),
         app_version=APP_VERSION,
-        python_version=_runtime_python_version(),
-        platform=_runtime_platform(),
-        build_commit=_build_commit(settings),
-        package_versions=_dependency_versions(),
+        **runtime,
     )
+
+
+def runtime_build_provenance(settings: Settings) -> dict[str, Any]:
+    return {
+        "python_version": _runtime_python_version(),
+        "platform": _runtime_platform(),
+        "build_commit": _build_commit(settings),
+        "package_versions": _dependency_versions(),
+    }
 
 
 def create_row_snapshot_artifact(

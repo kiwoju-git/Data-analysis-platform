@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "fixture_id": "doe_factorial_analysis_nist_yates_v1",
+  "source": {
+    "publisher": "NIST/SEMATECH",
+    "title": "Yates Algorithm and Estimate Main and Interaction Effects",
+    "yates_url": "https://www.itl.nist.gov/div898/handbook/eda/section3/eda35i.htm",
+    "effects_url": "https://www.itl.nist.gov/div898/handbook/pri/section6/pri615.htm",
+    "accessed_at": "2026-07-14",
+    "license_note": "US federal government technical reference; only the eight published response values and numerical coefficient expectations are recorded."
+  },
+  "factor_names": ["X1", "X2", "X3"],
+  "responses_yates_order": [1.7, 4.57, 0.55, 3.39, 1.51, 4.59, 0.67, 4.29],
+  "expected_coefficients": {
+    "intercept": 2.65875,
+    "factor_1": 1.55125,
+    "factor_2": -0.43375,
+    "factor_1:factor_2": 0.06375,
+    "factor_3": 0.10625,
+    "factor_1:factor_3": 0.12375,
+    "factor_2:factor_3": 0.14875,
+    "factor_1:factor_2:factor_3": 0.07125
+  },
+  "expected_residual_df": 0,
+  "inference_policy": "Saturated full model reports no standard errors or p-values."
+}

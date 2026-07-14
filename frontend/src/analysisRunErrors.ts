@@ -323,6 +323,46 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     message: "Gage R&R 실행 옵션의 필수 컬럼 ID나 허용되지 않은 항목이 맞지 않습니다.",
     action: "측정값, 부품, 측정자, 반복 컬럼을 다시 선택하고 preflight를 통과한 뒤 실행하세요.",
   },
+  invalid_attribute_control_chart_options: {
+    title: "계수형 관리도 옵션 형식 오류",
+    message: "P/NP/C/U 유형, 계수 정의, 컬럼 또는 point limit 계약이 올바르지 않습니다.",
+    action: "차트 유형과 불량품/결점 정의, 표본 크기/검사 기회 선택을 다시 확인하세요.",
+  },
+  attribute_control_chart_count_definition_mismatch: {
+    title: "계수 정의 불일치",
+    message: "P/NP는 불량품 수, C/U는 결점 수를 사용해야 합니다.",
+    action: "집계한 값이 불량품인지 개별 결점인지 확인하고 알맞은 차트를 선택하세요.",
+  },
+  attribute_control_chart_count_not_finite: {
+    title: "유한한 계수 필요",
+    message: "결점 또는 불량품 수에 NaN이나 무한대 값을 사용할 수 없습니다.",
+    action: "계수 컬럼의 비유한 값을 수정하거나 명시적 필터로 제외하세요.",
+  },
+  attribute_control_chart_denominator_not_finite: {
+    title: "유한한 분모 필요",
+    message: "표본 크기 또는 검사 기회에 NaN이나 무한대 값을 사용할 수 없습니다.",
+    action: "분모 컬럼의 비유한 값을 수정하거나 명시적 필터로 제외하세요.",
+  },
+  attribute_control_chart_defectives_exceed_sample_size: {
+    title: "불량품 수가 표본 크기 초과",
+    message: "P/NP 관측의 불량품 수는 같은 행의 표본 크기보다 클 수 없습니다.",
+    action: "계수와 표본 크기 컬럼 선택 및 원자료 집계를 확인하세요.",
+  },
+  attribute_control_chart_np_varying_sample_size: {
+    title: "NP 표본 크기 불일치",
+    message: "NP 관리도는 모든 유효 관측의 표본 크기가 같아야 합니다.",
+    action: "표본 크기가 변한다면 P 관리도를 선택하세요.",
+  },
+  attribute_control_chart_c_constant_opportunity_required: {
+    title: "동일 검사 기회 확인 필요",
+    message: "C 관리도는 각 관측의 검사 기회나 면적이 동일해야 합니다.",
+    action: "동일 기회를 확인하거나 검사 기회가 변한다면 U 관리도를 선택하세요.",
+  },
+  attribute_control_chart_zero_variation: {
+    title: "관리한계 추정 불가",
+    message: "기준선의 추정 분산이 0이라 유효한 3-sigma 관리한계를 만들 수 없습니다.",
+    action: "필터와 계수 집계를 확인하고 변동이 있는 적절한 Phase I 기간을 선택하세요.",
+  },
   invalid_individuals_chart_options: {
     title: "개별값 관리도 옵션 형식 오류",
     message: "개별값 관리도 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",

@@ -1,0 +1,42 @@
+{
+  "source": {
+    "title": "NIST/SEMATECH e-Handbook of Statistical Methods, Response surface model example",
+    "url": "https://www.itl.nist.gov/div898/handbook/pri/section4/pri473.htm",
+    "retrieved_at": "2026-07-14",
+    "notes": "The fixture preserves the published 11-run coded CCI table and full quadratic Uniformity fit."
+  },
+  "factor_names": ["Pressure", "H2_WF6"],
+  "runs": [
+    {"run_order": 1, "x1": 1.0, "x2": 0.0, "response": 4.6, "point_type": "axial"},
+    {"run_order": 2, "x1": 0.0, "x2": 0.0, "response": 6.2, "point_type": "center"},
+    {"run_order": 3, "x1": 0.71, "x2": -0.71, "response": 3.4, "point_type": "factorial"},
+    {"run_order": 4, "x1": -0.71, "x2": 0.71, "response": 6.9, "point_type": "factorial"},
+    {"run_order": 5, "x1": -1.0, "x2": 0.0, "response": 7.3, "point_type": "axial"},
+    {"run_order": 6, "x1": 0.0, "x2": 0.0, "response": 6.4, "point_type": "center"},
+    {"run_order": 7, "x1": -0.71, "x2": -0.71, "response": 8.6, "point_type": "factorial"},
+    {"run_order": 8, "x1": 0.0, "x2": -1.0, "response": 6.3, "point_type": "axial"},
+    {"run_order": 9, "x1": 0.71, "x2": 0.71, "response": 5.1, "point_type": "factorial"},
+    {"run_order": 10, "x1": 0.0, "x2": 1.0, "response": 5.4, "point_type": "axial"},
+    {"run_order": 11, "x1": 0.0, "x2": 0.0, "response": 5.0, "point_type": "center"}
+  ],
+  "expected": {
+    "coefficients": {
+      "intercept": 5.86613,
+      "factor_1": -1.90967,
+      "factor_2": -0.22408,
+      "factor_1:factor_2": 1.68617,
+      "factor_1^2": 0.13373,
+      "factor_2^2": 0.03373
+    },
+    "residual_standard_error": 0.7235,
+    "df_residual": 5,
+    "r_squared": 0.8716,
+    "adjusted_r_squared": 0.7431,
+    "f_statistic": 6.787,
+    "f_p_value": 0.0278
+  },
+  "tolerances": {
+    "coefficient_absolute": 0.00001,
+    "fit_absolute": 0.0005
+  }
+}

@@ -89,6 +89,12 @@ const roleGuideItems: readonly RoleGuideItem[] = [
 ] as const;
 
 const methodRoleFocusById: Readonly<Record<string, MethodRoleFocus>> = {
+  "regression.linear_model": {
+    roleKeys: ["response", "predictor"],
+    title: "회귀모형 적합과 저장 모델 예측",
+    detail:
+      "저장 모델 예측은 이 화면에서 실행합니다. source dataset schema가 바뀌어 모델이 stale이면 예측 전에 현재 schema로 회귀모형을 다시 적합해야 합니다.",
+  },
   "hypothesis.two_sample_t": {
     roleKeys: ["response", "group"],
     title: "2-표본 t-검정 핵심 역할",
@@ -117,7 +123,19 @@ const methodRoleFocusById: Readonly<Record<string, MethodRoleFocus>> = {
     roleKeys: ["predictor", "order"],
     title: "DOE 설계 핵심 역할",
     detail:
-      "Factor 이름, low/high level, run order, random seed가 설계 재현성을 결정합니다. 이 단계는 설계표 생성이며 effects/ANOVA는 계산하지 않습니다.",
+      "Factor 이름, low/high level, run order, random seed와 각 run의 Response가 재현성을 결정합니다. 효과와 ANOVA는 -1/+1 coding 및 선택한 hierarchy 모형을 기준으로 해석합니다.",
+  },
+  "doe.response_surface": {
+    roleKeys: ["predictor", "response", "order"],
+    title: "반응표면 설계 핵심 역할",
+    detail:
+      "각 Factor의 low/high는 실제 안전 설계경계이며 axial point가 이 경계에 놓입니다. 저장한 run별 Response로 full quadratic 모형을 적합하고, 정상점과 optimizer 권장점은 설계영역 포함 여부 및 확인 실험 필요성과 함께 해석합니다.",
+  },
+  "doe.bayesian_optimization": {
+    roleKeys: ["predictor", "response", "order"],
+    title: "순차 Bayesian Optimization 핵심 역할",
+    detail:
+      "연속 Factor 경계, 최대/최소 Objective, 실제로 수행한 Trial 순서와 관측 Response를 구분해야 합니다. 현재는 계약만 확정된 planned method이며 추천 실행이나 전역 최적 보장은 제공하지 않습니다.",
   },
 };
 

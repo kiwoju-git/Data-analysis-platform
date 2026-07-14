@@ -29,6 +29,23 @@ def load_analysis_run_result(
     settings: Settings,
     analysis_id: UUID,
 ) -> StoredAnalysisRunResult:
+    stored = load_analysis_run_result_base(settings, analysis_id)
+    if stored.record.method_id == "regression.predict":
+        from app.services.regression_models import validate_regression_prediction_consistency
+
+        validate_regression_prediction_consistency(
+            settings,
+            analysis_id,
+            stored_result=stored,
+            verify_rows=True,
+        )
+    return stored
+
+
+def load_analysis_run_result_base(
+    settings: Settings,
+    analysis_id: UUID,
+) -> StoredAnalysisRunResult:
     record = get_analysis_run_record(settings.workspace_root, str(analysis_id))
     if record is None:
         raise ApiError(

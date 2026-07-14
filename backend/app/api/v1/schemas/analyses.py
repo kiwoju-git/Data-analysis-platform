@@ -470,6 +470,48 @@ class IndividualsChartOptions(BaseModel):
         return value
 
 
+class AttributeControlChartOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    chart_type: Literal["p", "np", "c", "u"]
+    count_definition: Literal["defectives", "defects"]
+    count_column_id: str = Field(min_length=1)
+    denominator_column_id: str | None = None
+    constant_opportunity_confirmed: bool = False
+    missing_policy: Literal["complete_case"] = "complete_case"
+    point_limit: int = 1000
+
+    @field_validator("count_column_id", mode="before")
+    @classmethod
+    def require_count_column_id(cls, value: object) -> object:
+        if not isinstance(value, str) or not value:
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @field_validator("denominator_column_id", mode="before")
+    @classmethod
+    def require_optional_denominator_column_id(cls, value: object) -> object:
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value:
+            raise ValueError("must be a non-empty string")
+        return value
+
+    @field_validator("constant_opportunity_confirmed", mode="before")
+    @classmethod
+    def require_constant_opportunity_boolean(cls, value: object) -> object:
+        if not isinstance(value, bool):
+            raise ValueError("must be a boolean")
+        return value
+
+    @field_validator("point_limit", mode="before")
+    @classmethod
+    def require_point_limit_integer(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+
 class SubgroupChartOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1059,6 +1101,28 @@ class AnalysisProvenance(BaseModel):
     package_versions: dict[str, str] | None = None
 
 
+class RegressionPredictionProvenance(AnalysisProvenance):
+    model_config = ConfigDict(extra="forbid")
+
+    source_analysis_id: UUID
+    source_analysis_stale_at_prediction: bool
+    source_dataset_version_id: UUID
+    source_schema_hash_at_fit: str
+    source_schema_hash_current: str
+    target_dataset_version_id: UUID
+    target_schema_hash: str
+    model_id: UUID
+    model_manifest_sha256: str
+    prediction_schema_version: int = Field(ge=1)
+    model_manifest_schema_version: int = Field(ge=1)
+    missing_policy: Literal["complete_case"]
+    confidence_level: float = Field(gt=0.0, lt=1.0)
+    include_intervals: bool
+    source_canonical_artifact_sha256: str
+    target_canonical_artifact_sha256: str
+    created_at: str
+
+
 class AnalysisResultEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1068,7 +1132,7 @@ class AnalysisResultEnvelope(BaseModel):
     dataset_version_id: UUID | None
     status: Literal["succeeded", "failed", "cancelled"]
     warnings: list[AnalysisWarning]
-    provenance: AnalysisProvenance
+    provenance: AnalysisProvenance | RegressionPredictionProvenance
     result: dict[str, Any] | None = None
 
 
@@ -1318,6 +1382,8 @@ class RegressionPredictionPreflightResponse(BaseModel):
     target_dataset_version_id: UUID
     model_manifest_sha256: str
     source_schema_hash: str
+    source_schema_hash_current: str | None
+    source_analysis_stale: bool | None
     target_schema_hash: str
     schema_hash_match: bool
     row_count_total: int = Field(ge=0)
@@ -1372,6 +1438,7 @@ class RegressionPredictionResponse(BaseModel):
     prediction_id: UUID
     model_id: UUID
     analysis_id: UUID
+    source_analysis_id: UUID
     source_dataset_version_id: UUID
     target_dataset_version_id: UUID
     model_manifest_sha256: str
@@ -1384,7 +1451,7 @@ class RegressionPredictionResponse(BaseModel):
     truncated: bool
     confidence_level: float = Field(gt=0.0, lt=1.0)
     warnings: list[RegressionPredictionWarning]
-    provenance: dict[str, Any]
+    provenance: RegressionPredictionProvenance
     columns: list[RegressionPredictionColumnMapping]
     rows: list[RegressionPredictionRow]
 

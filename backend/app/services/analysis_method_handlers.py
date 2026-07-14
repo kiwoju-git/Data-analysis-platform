@@ -115,6 +115,11 @@ METHOD_EXECUTION_HANDLER_SPECS: tuple[MethodExecutionHandlerSpec, ...] = (
         result_summary_type="linear_model",
     ),
     MethodExecutionHandlerSpec(
+        method_id="quality.attribute_control_chart",
+        method_version=METHOD_VERSIONS["quality.attribute_control_chart"],
+        result_summary_type="attribute_control_chart",
+    ),
+    MethodExecutionHandlerSpec(
         method_id="quality.individuals_chart",
         method_version=METHOD_VERSIONS["quality.individuals_chart"],
         result_summary_type="individuals_chart",

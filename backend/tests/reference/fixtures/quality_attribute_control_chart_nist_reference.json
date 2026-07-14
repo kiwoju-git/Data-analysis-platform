@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "fixture_id": "quality_attribute_control_chart_nist_v1",
+  "source": {
+    "publisher": "NIST/SEMATECH",
+    "title": "e-Handbook of Statistical Methods, Attributes Control Charts",
+    "counts_url": "https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc331.htm",
+    "proportions_url": "https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc332.htm",
+    "dataplot_control_chart_url": "https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/contchar.htm",
+    "accessed_at": "2026-07-14",
+    "license_note": "US federal government technical reference; fixture values are limited to the published numerical examples and independently evaluated formulas."
+  },
+  "conventions": {
+    "phase": "phase_1_limits_estimated_from_all_fixture_points",
+    "sigma_multiple": 3,
+    "signal_boundary": "strictly_outside",
+    "lower_natural_bound": 0,
+    "p_upper_natural_bound": 1,
+    "np_upper_natural_bound": "sample_size"
+  },
+  "c_chart": {
+    "counts": [16, 14, 28, 16, 12, 20, 10, 12, 10, 17, 19, 17, 14, 16, 15, 13, 14, 16, 11, 20, 11, 19, 16, 31, 13],
+    "expected": {
+      "center_line": 16,
+      "lcl": 4,
+      "ucl": 28,
+      "strict_signal_positions": [24]
+    }
+  },
+  "p_chart": {
+    "sample_size": 50,
+    "counts": [12, 15, 8, 10, 4, 7, 16, 9, 14, 10, 5, 6, 17, 12, 22, 8, 10, 5, 13, 11, 20, 18, 24, 15, 9, 12, 7, 13, 9, 6],
+    "expected": {
+      "center_line": 0.23133333333333334,
+      "lcl": 0.05242754807192823,
+      "ucl": 0.41023911859473844
+    }
+  },
+  "np_chart": {
+    "sample_size": 50,
+    "counts": [12, 15, 8, 10, 4, 7, 16, 9, 14, 10, 5, 6, 17, 12, 22, 8, 10, 5, 13, 11, 20, 18, 24, 15, 9, 12, 7, 13, 9, 6],
+    "expected": {
+      "center_line": 11.566666666666666,
+      "lcl": 2.6213774035964115,
+      "ucl": 20.51195592973692
+    }
+  },
+  "u_chart": {
+    "counts": [4, 8, 5, 12],
+    "opportunities": [10, 20, 10, 20],
+    "expected": {
+      "center_line": 0.48333333333333334,
+      "lcl": [0, 0.016964380678892554, 0, 0.016964380678892554],
+      "ucl": [1.1428786312469792, 0.9497022859877742, 1.1428786312469792, 0.9497022859877742]
+    }
+  }
+}

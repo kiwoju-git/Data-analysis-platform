@@ -281,10 +281,9 @@ def test_linear_model_matches_statsmodels_treatment_and_prediction_reference() -
     assert "temporary reference-generation environment" in (fixture["source"]["license_review"])
     assert "fully synthetic" in fixture["source"]["data_review"]
     assert "not pinned" in fixture["conventions"]["manifest_checksum_contract"]
-    assert (
-        hashlib.sha256(STATSMODELS_REFERENCE_CSV.read_bytes()).hexdigest()
-        == (fixture["input"]["csv_sha256"])
-    )
+    csv_bytes = STATSMODELS_REFERENCE_CSV.read_bytes().replace(b"\r\n", b"\n")
+    assert fixture["input"]["csv_sha256_contract"] == "canonical_utf8_lf"
+    assert hashlib.sha256(csv_bytes).hexdigest() == fixture["input"]["csv_sha256"]
 
     with STATSMODELS_REFERENCE_CSV.open(encoding="utf-8", newline="") as handle:
         rows = [[row["y"], row["x"], row["group"]] for row in csv.DictReader(handle)]

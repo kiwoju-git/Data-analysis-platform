@@ -1,6 +1,6 @@
 # Linear Model Method Contract
 
-Last updated: 2026-07-12
+Last updated: 2026-07-14
 
 ## Scope
 
@@ -21,14 +21,15 @@ Current supported input:
 - safe app-created JSON model manifest storage with checksum-validated retrieval
 - stored-model prediction preflight for a target dataset version
 - backend stored-model prediction from app-created OLS manifests through `regression.predict`
-- frontend prediction execution and capped raw-value-free prediction result display for the active dataset version
+- frontend same/cross-dataset prediction execution, paged raw-value-free result
+  display, and full prediction CSV export
 
 Current out of scope:
 
 - categorical interactions, factor-by-numeric interactions, higher-order interactions, arbitrary formulas, and no-intercept models
 - HC3 or other robust covariance estimators
 - diagnostic chart artifacts
-- selecting a different target dataset version in the prediction UI, paged prediction result retrieval, and response optimization
+- manual single-row prediction input and response optimization
 - automatic causal interpretation
 
 ## Statistical Policy
@@ -82,7 +83,14 @@ The persisted result includes a model-manifest pointer:
 
 `POST /api/v1/regression-models/{model_id}/prediction-preflight` accepts a target `dataset_version_id` and validates the stored manifest checksum before scanning the target dataset's canonical rows. The response reports schema-hash match, required-column mapping by exact column ID or one-to-one display name fallback, numeric target missing/non-numeric counts, numeric values outside the training range, categorical unseen-level counts, usable row count, and structured warning/error issues. It does not expose raw cell samples or absolute paths.
 
-`POST /api/v1/regression-models/{model_id}/predictions` accepts a target `dataset_version_id`, confidence level, complete-case missing policy, and interval flag. It reuses the same preflight path, rejects error-severity preflight failures, reconstructs the OLS design matrix from the stored manifest, returns predicted means plus mean-response confidence intervals and individual prediction intervals, stores the result as a `regression.predict` analysis result envelope, and does not expose raw cell values.
+Before target checks, prediction preflight validates that the source analysis
+still exists, is a fresh `regression.linear_model` run, has a method version
+matching the model metadata, and still points to a source schema hash equal to
+the fit-time manifest hash. A stale source model or source schema mismatch
+makes preflight not ready and requires refitting; target incompatibility remains
+a separate issue class. Source schema no-op updates do not block prediction.
+
+`POST /api/v1/regression-models/{model_id}/predictions` accepts a target `dataset_version_id`, confidence level, complete-case missing policy, and interval flag. It reuses the same freshness/preflight path, rejects error-severity failures, reconstructs the OLS design matrix from the stored manifest, returns predicted means plus mean-response confidence intervals and individual prediction intervals, stores the result as a `regression.predict` analysis result envelope with source/target/model provenance, and does not expose raw cell values. Restore, paging, and full CSV export validate the result/config/rows/model relationships as well as each artifact checksum.
 
 The prediction calculation contract and remaining frontend/paged-result requirements are tracked separately in `docs/regression_prediction_contract.md`.
 

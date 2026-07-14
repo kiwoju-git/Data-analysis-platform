@@ -1,0 +1,97 @@
+{
+  "source": {
+    "title": "NIST/SEMATECH e-Handbook 5.5.3.2.2 Multiple responses: The desirability approach",
+    "url": "https://www.itl.nist.gov/div898/handbook/pri/section5/pri5322.htm",
+    "reference": "Derringer and Suich (1980) tire-tread response optimizer example",
+    "license_review": "Public United States government technical reference; only published coefficients and rounded expected optimizer values are reproduced.",
+    "verified_on": "2026-07-14"
+  },
+  "factor_bounds": {
+    "x1": [-1.0, 1.0],
+    "x2": [-1.0, 1.0],
+    "x3": [-1.0, 1.0]
+  },
+  "models": [
+    {
+      "analysis_id": "nist-y1",
+      "response_name": "PICO abrasion index",
+      "goal": "maximize",
+      "lower": 120.0,
+      "target": 170.0,
+      "upper": null,
+      "terms": [
+        ["intercept", [], 139.12],
+        ["main_effect", ["x1"], 16.49],
+        ["main_effect", ["x2"], 17.88],
+        ["main_effect", ["x3"], 2.21],
+        ["quadratic", ["x1"], -4.01],
+        ["quadratic", ["x2"], -3.45],
+        ["quadratic", ["x3"], -1.57],
+        ["interaction", ["x1", "x2"], 5.12],
+        ["interaction", ["x1", "x3"], -7.88],
+        ["interaction", ["x2", "x3"], -7.13]
+      ]
+    },
+    {
+      "analysis_id": "nist-y2",
+      "response_name": "200 percent modulus",
+      "goal": "maximize",
+      "lower": 1000.0,
+      "target": 1300.0,
+      "upper": null,
+      "terms": [
+        ["intercept", [], 1261.13],
+        ["main_effect", ["x1"], 268.15],
+        ["main_effect", ["x2"], 246.5],
+        ["main_effect", ["x3"], -102.6],
+        ["quadratic", ["x1"], -83.57],
+        ["quadratic", ["x2"], -124.92],
+        ["quadratic", ["x3"], 199.2],
+        ["interaction", ["x1", "x2"], 69.37],
+        ["interaction", ["x1", "x3"], -104.38],
+        ["interaction", ["x2", "x3"], -94.13]
+      ]
+    },
+    {
+      "analysis_id": "nist-y3",
+      "response_name": "Elongation at break",
+      "goal": "target",
+      "lower": 400.0,
+      "target": 500.0,
+      "upper": 600.0,
+      "terms": [
+        ["intercept", [], 417.5],
+        ["main_effect", ["x1"], -99.67],
+        ["main_effect", ["x2"], -31.4],
+        ["main_effect", ["x3"], -27.42]
+      ]
+    },
+    {
+      "analysis_id": "nist-y4",
+      "response_name": "Hardness",
+      "goal": "target",
+      "lower": 60.0,
+      "target": 67.5,
+      "upper": 75.0,
+      "terms": [
+        ["intercept", [], 68.91],
+        ["main_effect", ["x1"], -1.41],
+        ["main_effect", ["x2"], 4.32],
+        ["main_effect", ["x3"], 0.21],
+        ["quadratic", ["x1"], 1.56],
+        ["quadratic", ["x2"], 0.058],
+        ["quadratic", ["x3"], -0.32],
+        ["interaction", ["x1", "x2"], -1.62],
+        ["interaction", ["x1", "x3"], 0.25],
+        ["interaction", ["x2", "x3"], -0.12]
+      ]
+    }
+  ],
+  "published_best": {
+    "coded_coordinates": {"x1": -0.10, "x2": 0.15, "x3": -1.0},
+    "predicted": [136.4, 1571.05, 450.56, 69.26],
+    "individual_desirability": [0.34, 1.0, 0.49, 0.76],
+    "composite_desirability": 0.596
+  },
+  "tolerance_note": "The handbook publishes rounded model coefficients and rounded optimizer output. Coordinate tolerance is 0.12 and composite desirability tolerance is 0.02; this is reference parity, not an exact bitwise target."
+}

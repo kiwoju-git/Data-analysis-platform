@@ -269,21 +269,40 @@ export const analysisMethodGuidance = {
     preflightChecks: ["모델 manifest", "스키마 drift", "범주 수준", "외삽 위험"],
     resultFocus: ["예측값", "예측/신뢰 구간", "스키마 경고"],
     plainLanguage:
-      "일반 분석 실행 registry에서는 비활성 상태이며, 회귀 모델 패널의 저장 모델 예측 API로만 실행됩니다. 앱이 생성하고 checksum 검증한 모델 manifest와 현재 데이터셋 스키마 preflight를 통과한 경우에만 예측 결과를 저장합니다.",
+      "저장된 회귀 모델을 이용한 예측은 회귀모형 적합 화면에서 지원됩니다. 독립 Predict method 화면은 아직 제공하지 않습니다. source model freshness와 checksum, source/target schema preflight를 통과한 경우에만 예측 결과를 저장합니다.",
+    commonErrors: [
+      "source dataset schema 변경 뒤 stale 회귀모형을 다시 적합하지 않은 경우",
+      "대상 데이터셋의 필수 predictor가 없거나 범주 수준이 모델과 다른 경우",
+    ],
   },
   "regression.response_optimizer": {
     methodId: "regression.response_optimizer",
-    roleRequirements: [required("검증된 모델", "회귀 또는 DOE 반응표면 모델"), required("목표", "최대/최소/목표값")],
-    optionChecklist: ["요인 범위", "목표 가중치", "제약조건"],
-    preflightChecks: ["모델 유효성", "설계영역", "외삽", "다중반응 목표 충돌"],
-    resultFocus: ["최적 조건", "예측 반응", "desirability", "제약 경고"],
+    roleRequirements: [required("검증된 모델", "저장된 DOE 반응표면 모델"), required("목표", "최대/최소/목표값/허용 범위")],
+    optionChecklist: ["요인 탐색 범위", "desirability shape/importance", "선형 제약", "seed/평가/시간 budget"],
+    preflightChecks: ["source checksum", "동일 factor 공간", "설계영역", "제약 feasible 여부"],
+    resultFocus: ["권장 조건", "예측 반응", "개별/종합 desirability", "제약과 종료 이유"],
+    plainLanguage:
+      "저장된 반응표면 모델의 최적화는 반응표면법 화면에서 지원됩니다. 독립 Response Optimizer 화면은 아직 제공하지 않습니다. 추천은 선언한 설계영역과 제약 안의 bounded multi-start 결과이며 전역 최적을 보장하지 않으므로 확인 실험이 필요합니다.",
   },
   "quality.attribute_control_chart": {
     methodId: "quality.attribute_control_chart",
-    roleRequirements: [required("결함/불량 수", "계수형 결과"), required("표본 크기/기회수", "p/np/c/u 차트 기준")],
-    optionChecklist: ["차트 유형", "관리한계", "규칙 세트"],
-    preflightChecks: ["음수/비정수", "표본 크기 변화", "과산포", "시계열 순서"],
-    resultFocus: ["중심선", "관리한계", "규칙 위반점", "공정 안정성"],
+    roleRequirements: [
+      required("불량품/결점 수", "P/NP는 불량품, C/U는 결점의 0 이상 정수"),
+      required("표본 크기/검사 기회", "P/NP/U에 필요, C는 동일 기회 확인"),
+    ],
+    optionChecklist: ["P/NP/C/U", "불량품과 결점 구분", "complete-case", "Phase I 기준선"],
+    preflightChecks: [
+      "음수/비정수 계수",
+      "0 이하 분모",
+      "NP 표본 크기 고정",
+      "C 검사 기회 동일",
+      "정규근사와 과산포",
+    ],
+    resultFocus: ["중심선", "관측별 3-sigma 한계", "LCL 절단", "관리한계 밖 점", "dispersion"],
+    commonErrors: [
+      "불량품 수와 결점 수를 같은 의미로 사용한 경우",
+      "표본 크기가 변하는데 NP 또는 검사 기회가 변하는데 C를 선택한 경우",
+    ],
   },
   "quality.individuals_chart": {
     methodId: "quality.individuals_chart",
@@ -431,17 +450,57 @@ export const analysisMethodGuidance = {
     methodId: "doe.factorial_design",
     roleRequirements: [required("요인", "이름, 수준, low/high"), optional("블록", "블록 또는 반복 구조")],
     optionChecklist: ["2-level full factorial", "반복/센터점", "랜덤 seed", "run order"],
-    preflightChecks: ["요인 수준", "실행 수 제한", "블록 수", "랜덤화 재현성"],
-    resultFocus: ["설계표", "표준/실행 순서", "design SHA-256", "재현 seed"],
+    preflightChecks: [
+      "요인 수준",
+      "실행 수 제한",
+      "반응값 run 완전성",
+      "모형 rank와 잔차 자유도",
+    ],
+    resultFocus: ["효과 순위", "OLS/ANOVA", "pure error/lack-of-fit", "잔차 진단"],
     plainLanguage:
-      "현재 slice는 일반 분석 실행이 아니라 전용 DOE 설계 API로 2-level full factorial 설계표를 생성하고 반응값을 저장합니다. 효과 추정, OLS/ANOVA 분석, DOE 진단 차트는 다음 DOE slice에서 추가합니다.",
+      "전용 DOE API에서 2-level full factorial 설계표와 반응값을 저장하고 -1/+1 coding 효과 추정, hierarchy 고정 OLS/ANOVA, pure error/lack-of-fit, 잔차 진단을 실행합니다. 반응표면 분석은 별도 RSM 화면에서 제공합니다.",
   },
   "doe.response_surface": {
     methodId: "doe.response_surface",
-    roleRequirements: [required("요인", "연속 요인과 설계영역"), required("반응", "최적화할 response")],
-    optionChecklist: ["CCD/Box-Behnken", "센터점", "블록", "모형 차수"],
-    preflightChecks: ["설계영역", "pure error", "alias/curvature", "외삽 위험"],
-    resultFocus: ["반응표면 모델", "contour/surface", "최적 후보", "lack-of-fit"],
+    roleRequirements: [required("요인", "2~5개 연속 요인과 실제 안전 경계"), required("반응", "각 CCD run의 숫자 반응")],
+    optionChecklist: ["rotatable CCI/face-centered CCD", "센터점", "랜덤 seed", "95% 신뢰수준", "optimizer 목표와 budget"],
+    preflightChecks: ["low < high 설계경계", "quadratic model rank", "pure error", "정상점/optimizer 조건의 설계영역 포함 여부"],
+    resultFocus: ["full quadratic 계수", "contour grid", "정상점 분류", "optimizer 권장 조건", "lack-of-fit/잔차 진단"],
+    plainLanguage:
+      "전용 DOE API에서 Central Composite Design과 full quadratic OLS를 만들고 contour, 정상점, 잔차 진단을 계산합니다. 적합 뒤에는 같은 화면에서 설계영역 제한 Response Optimizer를 실행할 수 있으며 자동 항 선택이나 전역 최적 보장은 제공하지 않습니다.",
+  },
+  "doe.bayesian_optimization": {
+    methodId: "doe.bayesian_optimization",
+    roleRequirements: [
+      required("요인", "1~6개 연속 요인과 실제 안전 low/high"),
+      required("목적", "최대화 또는 최소화할 단일 숫자 반응"),
+      required("순차 이력", "실제로 수행한 조건과 관측 반응"),
+    ],
+    optionChecklist: [
+      "결정론적 관측 정책",
+      "Matérn-5/2 GP surrogate",
+      "Expected Improvement xi",
+      "seed/trial/candidate/time budget",
+    ],
+    preflightChecks: [
+      "요인 경계와 중복점",
+      "관측 이력 checksum",
+      "선형 제약 feasible 여부",
+      "GP 수치 안정성과 남은 trial budget",
+    ],
+    resultFocus: [
+      "다음 실험 후보",
+      "예측 평균/표준편차",
+      "Expected Improvement",
+      "incumbent와 audit trail",
+    ],
+    plainLanguage:
+      "현재는 bounded sequential Bayesian Optimization의 계약과 reference 정책만 확정된 planned method입니다. 앱은 사용자 목적함수를 실행하지 않으며 추천 API나 가짜 최적값도 아직 제공하지 않습니다. 향후 후보도 전역 최적을 보장하지 않고 실제 확인 실험이 필요합니다.",
+    commonErrors: [
+      "아직 수행하지 않은 추천 조건을 관측값처럼 history에 기록하는 경우",
+      "설계경계 밖 후보나 이미 평가한 점을 새 추천으로 해석하는 경우",
+      "surrogate 불확실성을 실제 공정 보증구간으로 해석하는 경우",
+    ],
   },
 } as const satisfies Record<string, AnalysisMethodGuidance>;
 

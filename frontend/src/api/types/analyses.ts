@@ -15,6 +15,7 @@ import type {
   XyCorrelationResult,
 } from "./analysisResultsRegression";
 import type {
+  AttributeControlChartResult,
   CapabilityResult,
   GageRrResult,
   GageRunChartResult,
@@ -148,6 +149,7 @@ export interface AnalysisResultEnvelope {
     | ChiSquareAssociationResult
     | PearsonCorrelationResult
     | XyCorrelationResult
+    | AttributeControlChartResult
     | IndividualsChartResult
     | SubgroupChartResult
     | RunChartResult

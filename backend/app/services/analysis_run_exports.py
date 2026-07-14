@@ -10,7 +10,6 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import status
-from pydantic import ValidationError
 
 from app.api.v1.schemas.analyses import (
     AnalysisResultCsvExportResponse,
@@ -31,6 +30,7 @@ from app.services.analysis_run_results import get_analysis_run_result
 from app.services.regression_models import (
     REGRESSION_PREDICTION_METHOD_ID,
     iter_regression_prediction_rows,
+    validate_regression_prediction_consistency,
 )
 from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
@@ -112,6 +112,7 @@ REGRESSION_REPORT_SUMMARY_TYPES = {
     "linear_model",
 }
 QUALITY_REPORT_SUMMARY_TYPES = {
+    "attribute_control_chart",
     "individuals_chart",
     "subgroup_chart",
     "run_chart",
@@ -145,6 +146,12 @@ def list_analysis_result_exports(
             code="analysis_run_not_found",
             message="요청한 분석 실행을 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
+        )
+    if record.method_id == REGRESSION_PREDICTION_METHOD_ID:
+        validate_regression_prediction_consistency(
+            settings,
+            analysis_id,
+            verify_rows=True,
         )
 
     artifacts = [
@@ -318,21 +325,18 @@ def create_regression_prediction_csv_export(
             message="요청한 회귀 예측 결과를 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    result = get_analysis_run_result(settings, prediction_id)
+    consistency = validate_regression_prediction_consistency(
+        settings,
+        prediction_id,
+        verify_rows=False,
+    )
     if record.result_sha256 is None:
         raise ApiError(
             code="analysis_result_not_available",
             message="저장된 분석 결과가 아직 없습니다.",
             status_code=status.HTTP_409_CONFLICT,
         )
-    try:
-        prediction = RegressionPredictionResponse.model_validate(result.result)
-    except ValidationError as exc:
-        raise ApiError(
-            code="regression_prediction_result_invalid",
-            message="저장된 회귀 예측 결과 형식이 올바르지 않습니다.",
-            status_code=status.HTTP_409_CONFLICT,
-        ) from exc
+    prediction = consistency.prediction
 
     export_id = uuid4()
     created_at = _utc_now()
@@ -348,7 +352,11 @@ def create_regression_prediction_csv_export(
             writer.writerow(
                 [_sanitize_csv_cell(column) for column in REGRESSION_PREDICTION_CSV_COLUMNS],
             )
-            for row in iter_regression_prediction_rows(settings, prediction_id):
+            for row in iter_regression_prediction_rows(
+                settings,
+                prediction_id,
+                consistency=consistency,
+            ):
                 export_row = _regression_prediction_csv_row(prediction, row)
                 writer.writerow(export_row)
                 if len(preview_rows) < ANALYSIS_RESULT_CSV_PREVIEW_ROW_LIMIT:
@@ -470,6 +478,13 @@ def get_analysis_result_export_download(
     analysis_id: UUID,
     export_id: UUID,
 ) -> AnalysisResultExportDownload:
+    record = get_analysis_run_record(settings.workspace_root, str(analysis_id))
+    if record is not None and record.method_id == REGRESSION_PREDICTION_METHOD_ID:
+        validate_regression_prediction_consistency(
+            settings,
+            analysis_id,
+            verify_rows=True,
+        )
     artifact = get_analysis_artifact_record(
         settings.workspace_root,
         str(analysis_id),

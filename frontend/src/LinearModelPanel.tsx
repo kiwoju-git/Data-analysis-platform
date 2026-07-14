@@ -463,7 +463,8 @@ export function LinearModelPanel({
                 <div className="notice-box">
                   예측은 저장된 OLS 모델이 선택한 데이터셋 버전에 적용한 추정값입니다.
                   원인·효과나 확정값으로 해석하지 말고, 학습 범위 밖 값과 OLS 가정을 함께
-                  확인해야 합니다.
+                  확인해야 합니다. source dataset schema가 바뀌어 모델이 stale이면 현재
+                  schema로 회귀모형을 다시 적합해야 합니다.
                 </div>
                 {predictionPreflightError !== null ? (
                   <div className="error-box" role="alert">
@@ -490,6 +491,23 @@ export function LinearModelPanel({
                       <span>Schema hash</span>
                       <strong>
                         {predictionPreflight.schema_hash_match ? "일치" : "다름"}
+                      </strong>
+                      <span>Source model</span>
+                      <strong>
+                        {predictionPreflight.source_analysis_stale === true
+                          ? "stale · 재적합 필요"
+                          : predictionPreflight.source_analysis_stale === false
+                            ? "fresh"
+                            : "검증 불가"}
+                      </strong>
+                      <span>Source schema</span>
+                      <strong>
+                        {predictionPreflight.source_schema_hash_current === null
+                          ? "검증 불가"
+                          : predictionPreflight.source_schema_hash_current ===
+                              predictionPreflight.source_schema_hash
+                            ? "적합 시점과 일치"
+                            : "변경됨 · 재적합 필요"}
                       </strong>
                       <span>문제</span>
                       <strong>

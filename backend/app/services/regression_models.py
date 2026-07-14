@@ -11,11 +11,11 @@ from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import status
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from scipy import stats  # type: ignore[import-untyped]
 
+from app.analyses.registry import get_method_version
 from app.api.v1.schemas.analyses import (
-    AnalysisProvenance,
     AnalysisResultEnvelope,
     AnalysisRunState,
     AnalysisWarning,
@@ -26,6 +26,7 @@ from app.api.v1.schemas.analyses import (
     RegressionPredictionNumericCheck,
     RegressionPredictionPreflightIssue,
     RegressionPredictionPreflightResponse,
+    RegressionPredictionProvenance,
     RegressionPredictionRequest,
     RegressionPredictionResponse,
     RegressionPredictionRow,
@@ -34,6 +35,11 @@ from app.api.v1.schemas.analyses import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
+from app.services.analysis_run_execution import runtime_build_provenance
+from app.services.analysis_run_results import (
+    StoredAnalysisRunResult,
+    load_analysis_run_result_base,
+)
 from app.services.dataset_rows import (
     DatasetRowsContext,
     get_dataset_rows_context,
@@ -52,8 +58,10 @@ from app.storage.metadata import (
 
 APP_VERSION = "0.1.0"
 REGRESSION_PREDICTION_METHOD_ID = "regression.predict"
-REGRESSION_PREDICTION_METHOD_VERSION = "0.1.0"
-REGRESSION_PREDICTION_SCHEMA_VERSION = 1
+REGRESSION_PREDICTION_METHOD_VERSION = get_method_version(REGRESSION_PREDICTION_METHOD_ID)
+REGRESSION_PREDICTION_SCHEMA_VERSION = 2
+REGRESSION_PREDICTION_CONFIG_SCHEMA_VERSION = 3
+REGRESSION_PREDICTION_ROWS_SCHEMA_VERSION = 2
 MAX_REGRESSION_PREDICTION_INLINE_ROWS = 1000
 REGRESSION_PREDICTION_ROWS_ARTIFACT_KIND = "regression_prediction_rows"
 REGRESSION_PREDICTION_ROWS_MEDIA_TYPE = "application/x-ndjson"
@@ -83,6 +91,8 @@ class _PredictionPreflightState:
     model_response: RegressionModelManifestResponse
     source_dataset_version_id: UUID
     target_context: DatasetRowsContext
+    source_context: DatasetRowsContext | None
+    source_analysis_stale: bool | None
     checks: list[_PredictionColumnCheck]
     issues: list[RegressionPredictionPreflightIssue]
     row_count_usable: int
@@ -94,6 +104,62 @@ class _PredictionRowsContext:
     expected_total: int
     path: Path
     sha256: str
+    header: "_PredictionRowsHeader"
+
+
+@dataclass(frozen=True)
+class RegressionPredictionConsistencyContext:
+    stored_result: StoredAnalysisRunResult
+    config: "_PredictionStoredConfig"
+    prediction: RegressionPredictionResponse
+    model_response: RegressionModelManifestResponse
+    rows: _PredictionRowsContext
+
+
+class _PredictionStoredConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    config_schema_version: Literal[3]
+    prediction_id: UUID
+    analysis_id: UUID
+    method_id: Literal["regression.predict"]
+    method_version: str
+    model_id: UUID
+    source_analysis_id: UUID
+    source_dataset_version_id: UUID
+    source_schema_hash_at_fit: str
+    source_schema_hash_current: str
+    target_dataset_version_id: UUID
+    target_schema_hash: str
+    model_manifest_sha256: str
+    prediction_schema_version: int = Field(ge=1)
+    rows_artifact_schema_version: int = Field(ge=1)
+    confidence_level: float = Field(gt=0.0, lt=1.0)
+    missing_policy: Literal["complete_case"]
+    include_intervals: bool
+    row_limit: int = Field(ge=1)
+    row_count_total: int = Field(ge=0)
+    row_count_predicted: int = Field(ge=0)
+    row_count_excluded: int = Field(ge=0)
+
+
+class _PredictionRowsHeader(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    record_type: Literal["regression_prediction_rows_header"]
+    artifact_schema_version: Literal[2]
+    artifact_kind: Literal["regression_prediction_rows"]
+    prediction_id: UUID
+    analysis_id: UUID
+    method_id: Literal["regression.predict"]
+    method_version: str
+    model_id: UUID
+    source_analysis_id: UUID
+    source_dataset_version_id: UUID
+    target_dataset_version_id: UUID
+    model_manifest_sha256: str
+    target_schema_hash: str
+    row_count_predicted: int = Field(ge=0)
 
 
 def get_regression_model_manifest(
@@ -190,6 +256,7 @@ def create_regression_predictions(
         coefficient_count=len(coefficient_estimates),
     )
     prediction_id = uuid4()
+    created_at = _utc_now()
     rows_relative_path = _prediction_rows_relative_path(str(prediction_id))
     rows_path = settings.workspace_root / rows_relative_path
     response_holder: list[RegressionPredictionResponse] = []
@@ -198,6 +265,25 @@ def create_regression_predictions(
     def write_rows(temp_path: Path) -> None:
         hasher = hashlib.sha256()
         with temp_path.open("wb") as handle:
+            header = _PredictionRowsHeader(
+                record_type="regression_prediction_rows_header",
+                artifact_schema_version=2,
+                artifact_kind="regression_prediction_rows",
+                prediction_id=prediction_id,
+                analysis_id=prediction_id,
+                method_id="regression.predict",
+                method_version=REGRESSION_PREDICTION_METHOD_VERSION,
+                model_id=preflight.model_id,
+                source_analysis_id=preflight.analysis_id,
+                source_dataset_version_id=preflight.source_dataset_version_id,
+                target_dataset_version_id=preflight.target_dataset_version_id,
+                model_manifest_sha256=preflight.model_manifest_sha256,
+                target_schema_hash=preflight.target_schema_hash,
+                row_count_predicted=preflight.row_count_usable,
+            )
+            header_line = _canonical_json_bytes(header.model_dump(mode="json")) + b"\n"
+            handle.write(header_line)
+            hasher.update(header_line)
 
             def store_row(row: RegressionPredictionRow) -> None:
                 line = _canonical_json_bytes(row.model_dump(mode="json")) + b"\n"
@@ -206,7 +292,9 @@ def create_regression_predictions(
 
             response_holder.append(
                 _calculate_prediction_response(
+                    settings=settings,
                     prediction_id=prediction_id,
+                    created_at=created_at,
                     request=body,
                     preflight=preflight,
                     state=state,
@@ -237,7 +325,12 @@ def get_regression_prediction_rows(
     limit: int,
     offset: int,
 ) -> RegressionPredictionRowsPageResponse:
-    context = _prediction_rows_context(settings, prediction_id)
+    consistency = validate_regression_prediction_consistency(
+        settings,
+        prediction_id,
+        verify_rows=False,
+    )
+    context = consistency.rows
     rows = [
         row
         for row_number, row in enumerate(
@@ -261,9 +354,15 @@ def get_regression_prediction_rows(
 def iter_regression_prediction_rows(
     settings: Settings,
     prediction_id: UUID,
+    *,
+    consistency: RegressionPredictionConsistencyContext | None = None,
 ) -> Iterator[RegressionPredictionRow]:
-    context = _prediction_rows_context(settings, prediction_id)
-    return _iter_regression_prediction_rows(context)
+    validated = consistency or validate_regression_prediction_consistency(
+        settings,
+        prediction_id,
+        verify_rows=False,
+    )
+    return _iter_regression_prediction_rows(validated.rows)
 
 
 def _iter_regression_prediction_rows(
@@ -273,6 +372,18 @@ def _iter_regression_prediction_rows(
     actual_total = 0
     try:
         with context.path.open("rb") as handle:
+            header_line = handle.readline()
+            hasher.update(header_line)
+            try:
+                header = _PredictionRowsHeader.model_validate_json(header_line)
+            except ValidationError as exc:
+                raise _prediction_rows_artifact_error(
+                    "regression_prediction_artifact_mismatch",
+                ) from exc
+            if header != context.header:
+                raise _prediction_rows_artifact_error(
+                    "regression_prediction_artifact_mismatch",
+                )
             for raw_line in handle:
                 hasher.update(raw_line)
                 try:
@@ -297,10 +408,13 @@ def _iter_regression_prediction_rows(
         raise _prediction_rows_artifact_error("regression_prediction_rows_artifact_invalid")
 
 
-def _prediction_rows_context(
+def validate_regression_prediction_consistency(
     settings: Settings,
     prediction_id: UUID,
-) -> _PredictionRowsContext:
+    *,
+    stored_result: StoredAnalysisRunResult | None = None,
+    verify_rows: bool,
+) -> RegressionPredictionConsistencyContext:
     record = get_analysis_run_record(settings.workspace_root, str(prediction_id))
     if record is None or record.method_id != REGRESSION_PREDICTION_METHOD_ID:
         raise ApiError(
@@ -308,8 +422,192 @@ def _prediction_rows_context(
             message="요청한 회귀 예측 결과를 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
+    stored = stored_result or load_analysis_run_result_base(settings, prediction_id)
+    try:
+        config = _PredictionStoredConfig.model_validate_json(record.config_json)
+        prediction = RegressionPredictionResponse.model_validate(stored.envelope.result)
+        provenance = RegressionPredictionProvenance.model_validate(
+            stored.envelope.provenance.model_dump(mode="json"),
+        )
+    except ValidationError as exc:
+        raise _prediction_consistency_error(
+            "regression_prediction_metadata_invalid",
+            "저장된 회귀 예측 metadata 형식이 올바르지 않습니다.",
+        ) from exc
 
-    model_id, expected_total = _prediction_page_config(record.config_json)
+    try:
+        model_response = get_regression_model_manifest(settings, config.model_id)
+    except ApiError as exc:
+        raise _prediction_consistency_error(
+            "regression_prediction_model_mismatch",
+            "회귀 예측 model dependency를 검증할 수 없습니다.",
+        ) from exc
+    try:
+        source_context = get_dataset_rows_context(settings, config.source_dataset_version_id)
+        target_context = get_dataset_rows_context(settings, config.target_dataset_version_id)
+    except ApiError as exc:
+        raise _prediction_consistency_error(
+            "regression_prediction_model_mismatch",
+            "회귀 예측 source/target dataset dependency를 검증할 수 없습니다.",
+        ) from exc
+    rows = _load_prediction_rows_context(settings, prediction_id, config)
+    source_analysis = get_analysis_run_record(
+        settings.workspace_root,
+        str(config.source_analysis_id),
+    )
+    if source_analysis is None:
+        raise _prediction_consistency_error(
+            "regression_prediction_model_mismatch",
+            "회귀 예측 source model metadata를 찾을 수 없습니다.",
+        )
+
+    current_method_version = get_method_version(REGRESSION_PREDICTION_METHOD_ID)
+    if not (
+        record.analysis_id == str(prediction_id)
+        and config.prediction_id == prediction_id
+        and config.analysis_id == prediction_id
+        and stored.envelope.analysis_id == prediction_id
+        and prediction.prediction_id == prediction_id
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 result와 config의 prediction ID가 일치하지 않습니다.",
+        )
+    if not (
+        record.method_version == current_method_version
+        and config.method_version == current_method_version
+        and stored.envelope.method_id == REGRESSION_PREDICTION_METHOD_ID
+        and stored.envelope.method_version == current_method_version
+        and provenance.method_id == REGRESSION_PREDICTION_METHOD_ID
+        and provenance.method_version == current_method_version
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 method version metadata가 일치하지 않습니다.",
+        )
+    if not (
+        prediction.analysis_id == config.source_analysis_id
+        and prediction.source_analysis_id == config.source_analysis_id
+        and provenance.source_analysis_id == config.source_analysis_id
+        and model_response.analysis_id == config.source_analysis_id
+        and source_analysis.analysis_id == str(config.source_analysis_id)
+        and source_analysis.method_id == "regression.linear_model"
+        and source_analysis.method_version == model_response.method_version
+        and model_response.method_id == "regression.linear_model"
+        and model_response.manifest.get("method_id") == "regression.linear_model"
+        and model_response.manifest.get("method_version") == model_response.method_version
+        and model_response.manifest.get("model_id") == str(config.model_id)
+        and model_response.manifest.get("analysis_id") == str(config.source_analysis_id)
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_model_mismatch",
+            "회귀 예측 source analysis와 model metadata가 일치하지 않습니다.",
+        )
+    if not (
+        record.dataset_version_id == str(config.target_dataset_version_id)
+        and stored.envelope.dataset_version_id == config.target_dataset_version_id
+        and provenance.dataset_version_id == config.target_dataset_version_id
+        and prediction.target_dataset_version_id == config.target_dataset_version_id
+        and provenance.target_dataset_version_id == config.target_dataset_version_id
+        and prediction.source_dataset_version_id == config.source_dataset_version_id
+        and provenance.source_dataset_version_id == config.source_dataset_version_id
+        and model_response.dataset_version_id == config.source_dataset_version_id
+        and model_response.manifest.get("dataset_version_id")
+        == str(config.source_dataset_version_id)
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 source/target dataset metadata가 일치하지 않습니다.",
+        )
+    if not (
+        prediction.model_id == config.model_id
+        and provenance.model_id == config.model_id
+        and model_response.model_id == config.model_id
+        and prediction.model_manifest_sha256 == config.model_manifest_sha256
+        and provenance.model_manifest_sha256 == config.model_manifest_sha256
+        and model_response.manifest_sha256 == config.model_manifest_sha256
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_model_mismatch",
+            "회귀 예측 model manifest metadata가 일치하지 않습니다.",
+        )
+    if not (
+        prediction.target_schema_hash == config.target_schema_hash
+        and provenance.target_schema_hash == config.target_schema_hash
+        and provenance.source_schema_hash_at_fit == config.source_schema_hash_at_fit
+        and provenance.source_schema_hash_current == config.source_schema_hash_current
+        and model_response.schema_hash == config.source_schema_hash_at_fit
+        and model_response.manifest.get("source_schema_hash") == config.source_schema_hash_at_fit
+        and config.source_schema_hash_at_fit == config.source_schema_hash_current
+        and provenance.source_analysis_stale_at_prediction is False
+        and provenance.source_canonical_artifact_sha256
+        == model_response.manifest.get("source_canonical_artifact_sha256")
+        == source_context.canonical_rows_artifact.sha256
+        and provenance.target_canonical_artifact_sha256
+        == target_context.canonical_rows_artifact.sha256
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 schema/freshness metadata가 일치하지 않습니다.",
+        )
+    if not (
+        prediction.row_count_total == config.row_count_total
+        and prediction.row_limit == config.row_limit
+        and prediction.row_count_predicted == config.row_count_predicted
+        and prediction.row_count_excluded == config.row_count_excluded
+        and prediction.row_count_predicted + prediction.row_count_excluded
+        == prediction.row_count_total
+        and len(prediction.rows) == min(prediction.row_count_predicted, prediction.row_limit)
+        and prediction.row_count_omitted == prediction.row_count_predicted - len(prediction.rows)
+        and prediction.truncated == (prediction.row_count_omitted > 0)
+        and provenance.row_count_total == prediction.row_count_total
+        and provenance.row_count_included == prediction.row_count_predicted
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 row count metadata가 일치하지 않습니다.",
+        )
+    if not (
+        provenance.prediction_schema_version
+        == config.prediction_schema_version
+        == REGRESSION_PREDICTION_SCHEMA_VERSION
+        and config.config_schema_version == REGRESSION_PREDICTION_CONFIG_SCHEMA_VERSION
+        and provenance.model_manifest_schema_version
+        == model_response.manifest.get("manifest_schema_version")
+        and config.rows_artifact_schema_version == REGRESSION_PREDICTION_ROWS_SCHEMA_VERSION
+        and prediction.confidence_level == config.confidence_level
+        and provenance.confidence_level == config.confidence_level
+        and provenance.missing_policy == config.missing_policy
+        and provenance.include_intervals == config.include_intervals
+        and provenance.created_at == record.created_at
+        and provenance.app_version == record.app_version
+        and stored.envelope.provenance.model_dump(mode="json")
+        == prediction.provenance.model_dump(mode="json")
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 result provenance와 config가 일치하지 않습니다.",
+        )
+    _validate_prediction_rows_relationship(rows.header, config)
+
+    context = RegressionPredictionConsistencyContext(
+        stored_result=stored,
+        config=config,
+        prediction=prediction,
+        model_response=model_response,
+        rows=rows,
+    )
+    if verify_rows:
+        for _row in _iter_regression_prediction_rows(rows):
+            pass
+    return context
+
+
+def _load_prediction_rows_context(
+    settings: Settings,
+    prediction_id: UUID,
+    config: _PredictionStoredConfig,
+) -> _PredictionRowsContext:
     artifacts = [
         artifact
         for artifact in list_analysis_artifact_records(
@@ -320,17 +618,53 @@ def _prediction_rows_context(
     ]
     if len(artifacts) != 1:
         raise _prediction_rows_artifact_error("regression_prediction_rows_artifact_missing")
-
     artifact = artifacts[0]
+    expected_path = _prediction_rows_relative_path(str(prediction_id)).as_posix()
+    if (
+        artifact.analysis_id != str(prediction_id)
+        or artifact.path != expected_path
+        or artifact.media_type != REGRESSION_PREDICTION_ROWS_MEDIA_TYPE
+    ):
+        raise _prediction_rows_artifact_error("regression_prediction_artifact_mismatch")
     rows_path = _safe_prediction_rows_path(settings.workspace_root, artifact.path)
     if not rows_path.exists():
         raise _prediction_rows_artifact_error("regression_prediction_rows_artifact_missing")
+    try:
+        with rows_path.open("rb") as handle:
+            header = _PredictionRowsHeader.model_validate_json(handle.readline())
+    except (OSError, ValidationError) as exc:
+        raise _prediction_rows_artifact_error("regression_prediction_artifact_mismatch") from exc
     return _PredictionRowsContext(
-        model_id=model_id,
-        expected_total=expected_total,
+        model_id=config.model_id,
+        expected_total=config.row_count_predicted,
         path=rows_path,
         sha256=artifact.sha256,
+        header=header,
     )
+
+
+def _validate_prediction_rows_relationship(
+    header: _PredictionRowsHeader,
+    config: _PredictionStoredConfig,
+) -> None:
+    if not (
+        header.prediction_id == config.prediction_id
+        and header.analysis_id == config.analysis_id
+        and header.method_id == config.method_id
+        and header.method_version == config.method_version
+        and header.model_id == config.model_id
+        and header.source_analysis_id == config.source_analysis_id
+        and header.source_dataset_version_id == config.source_dataset_version_id
+        and header.target_dataset_version_id == config.target_dataset_version_id
+        and header.model_manifest_sha256 == config.model_manifest_sha256
+        and header.target_schema_hash == config.target_schema_hash
+        and header.row_count_predicted == config.row_count_predicted
+    ):
+        raise _prediction_rows_artifact_error("regression_prediction_artifact_mismatch")
+
+
+def _prediction_consistency_error(code: str, message: str) -> ApiError:
+    return ApiError(code=code, message=message, status_code=status.HTTP_409_CONFLICT)
 
 
 def _build_prediction_preflight_state(
@@ -355,9 +689,14 @@ def _build_prediction_preflight_state(
             message="저장된 회귀모델 manifest 형식이 올바르지 않습니다.",
             status_code=status.HTTP_409_CONFLICT,
         ) from exc
-    source_context = get_dataset_rows_context(settings, source_version_id)
     target_context = get_dataset_rows_context(settings, dataset_version_id)
     issues: list[RegressionPredictionPreflightIssue] = []
+    source_context, source_analysis = _validated_source_model_dependencies(
+        settings=settings,
+        model_response=model_response,
+        source_version_id=source_version_id,
+        issues=issues,
+    )
     if target_context.version.schema_hash != model_response.schema_hash:
         issues.append(
             RegressionPredictionPreflightIssue(
@@ -367,22 +706,34 @@ def _build_prediction_preflight_state(
             ),
         )
 
-    source_row_indices = _model_source_row_indices(
-        settings=settings,
-        analysis_id=str(model_response.analysis_id),
-        expected_sha256=str(manifest.get("row_snapshot_sha256")),
-    )
+    source_row_indices: set[int] | None = None
+    if source_context is not None and source_analysis is not None:
+        try:
+            source_row_indices = _model_source_row_indices(
+                settings=settings,
+                analysis_id=str(model_response.analysis_id),
+                expected_sha256=str(manifest.get("row_snapshot_sha256")),
+            )
+        except ApiError:
+            issues.append(
+                RegressionPredictionPreflightIssue(
+                    code="regression_prediction_source_analysis_invalid",
+                    severity="error",
+                    message="회귀모형 source analysis의 row snapshot을 검증할 수 없습니다.",
+                ),
+            )
     checks = _prediction_column_checks(
         manifest=manifest,
-        source_columns=source_context.columns,
+        source_columns=[] if source_context is None else source_context.columns,
         target_columns=target_context.columns,
         issues=issues,
     )
-    _fill_training_ranges(
-        checks=checks,
-        source_context=source_context,
-        source_row_indices=source_row_indices,
-    )
+    if source_context is not None:
+        _fill_training_ranges(
+            checks=checks,
+            source_context=source_context,
+            source_row_indices=source_row_indices,
+        )
     row_count_usable = _scan_target_rows(
         checks=checks,
         target_context=target_context,
@@ -402,6 +753,8 @@ def _build_prediction_preflight_state(
         model_response=model_response,
         source_dataset_version_id=source_version_id,
         target_context=target_context,
+        source_context=source_context,
+        source_analysis_stale=None if source_analysis is None else source_analysis.stale,
         checks=checks,
         issues=issues,
         row_count_usable=row_count_usable,
@@ -423,6 +776,10 @@ def _prediction_preflight_response(
         target_dataset_version_id=UUID(target_context.version.version_id),
         model_manifest_sha256=model_response.manifest_sha256,
         source_schema_hash=model_response.schema_hash,
+        source_schema_hash_current=(
+            None if state.source_context is None else state.source_context.version.schema_hash
+        ),
+        source_analysis_stale=state.source_analysis_stale,
         target_schema_hash=target_context.version.schema_hash,
         schema_hash_match=target_context.version.schema_hash == model_response.schema_hash,
         row_count_total=target_context.version.row_count,
@@ -439,6 +796,123 @@ def _prediction_preflight_response(
         ],
         issues=state.issues,
     )
+
+
+def _validated_source_model_dependencies(
+    *,
+    settings: Settings,
+    model_response: RegressionModelManifestResponse,
+    source_version_id: UUID,
+    issues: list[RegressionPredictionPreflightIssue],
+) -> tuple[DatasetRowsContext | None, AnalysisRunRecord | None]:
+    manifest = model_response.manifest
+    source_analysis = get_analysis_run_record(
+        settings.workspace_root,
+        str(model_response.analysis_id),
+    )
+    if source_analysis is None:
+        issues.append(
+            RegressionPredictionPreflightIssue(
+                code="regression_prediction_source_analysis_missing",
+                severity="error",
+                message="회귀모형을 생성한 source analysis를 찾을 수 없습니다.",
+            ),
+        )
+    else:
+        if (
+            source_analysis.method_id != "regression.linear_model"
+            or source_analysis.dataset_version_id != str(source_version_id)
+        ):
+            issues.append(
+                RegressionPredictionPreflightIssue(
+                    code="regression_prediction_source_analysis_invalid",
+                    severity="error",
+                    message="회귀모형 source analysis metadata가 model과 일치하지 않습니다.",
+                ),
+            )
+        if (
+            source_analysis.method_version != model_response.method_version
+            or manifest.get("method_version") != model_response.method_version
+        ):
+            issues.append(
+                RegressionPredictionPreflightIssue(
+                    code="regression_prediction_source_method_version_mismatch",
+                    severity="error",
+                    message=(
+                        "회귀모형 source analysis와 model의 method version이 " "일치하지 않습니다."
+                    ),
+                ),
+            )
+        if source_analysis.stale:
+            issues.append(
+                RegressionPredictionPreflightIssue(
+                    code="regression_prediction_source_model_stale",
+                    severity="error",
+                    message=(
+                        "source 회귀모형이 stale 상태입니다. 현재 schema로 "
+                        "회귀모형을 다시 적합하세요."
+                    ),
+                ),
+            )
+
+    manifest_metadata_matches = (
+        model_response.method_id == "regression.linear_model"
+        and manifest.get("method_id") == "regression.linear_model"
+        and manifest.get("model_id") == str(model_response.model_id)
+        and manifest.get("analysis_id") == str(model_response.analysis_id)
+        and manifest.get("dataset_version_id") == str(source_version_id)
+        and manifest.get("source_schema_hash") == model_response.schema_hash
+    )
+    manifest_schema_version = manifest.get("manifest_schema_version")
+    if (
+        not manifest_metadata_matches
+        or isinstance(manifest_schema_version, bool)
+        or not isinstance(manifest_schema_version, int)
+        or manifest_schema_version < 1
+    ):
+        issues.append(
+            RegressionPredictionPreflightIssue(
+                code="regression_prediction_source_analysis_invalid",
+                severity="error",
+                message="회귀모형 manifest metadata가 source analysis와 일치하지 않습니다.",
+            ),
+        )
+
+    try:
+        source_context = get_dataset_rows_context(settings, source_version_id)
+    except ApiError:
+        issues.append(
+            RegressionPredictionPreflightIssue(
+                code="regression_prediction_source_analysis_invalid",
+                severity="error",
+                message="회귀모형 source dataset version을 검증할 수 없습니다.",
+            ),
+        )
+        return None, source_analysis
+
+    if source_context.version.schema_hash != model_response.schema_hash:
+        issues.append(
+            RegressionPredictionPreflightIssue(
+                code="regression_prediction_source_schema_mismatch",
+                severity="error",
+                message=(
+                    "source dataset schema가 모델 적합 시점과 다릅니다. "
+                    "회귀모형을 다시 적합하세요."
+                ),
+            ),
+        )
+    if (
+        manifest.get("source_canonical_artifact_sha256")
+        != source_context.canonical_rows_artifact.sha256
+    ):
+        issues.append(
+            RegressionPredictionPreflightIssue(
+                code="regression_prediction_source_analysis_invalid",
+                severity="error",
+                message="회귀모형 source canonical artifact가 manifest와 일치하지 않습니다.",
+            ),
+        )
+    return source_context, source_analysis
 
 
 @dataclass(frozen=True)
@@ -579,7 +1053,9 @@ def _validate_prediction_dimensions(
 
 def _calculate_prediction_response(
     *,
+    settings: Settings,
     prediction_id: UUID,
+    created_at: str,
     request: RegressionPredictionRequest,
     preflight: RegressionPredictionPreflightResponse,
     state: _PredictionPreflightState,
@@ -669,7 +1145,18 @@ def _calculate_prediction_response(
         else:
             row_count_omitted += 1
 
-    created_at = _utc_now()
+    if row_count_predicted != preflight.row_count_usable:
+        raise ApiError(
+            code="regression_prediction_metadata_invalid",
+            message="회귀 예측 행 수가 사전점검 결과와 일치하지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if state.source_context is None or preflight.source_schema_hash_current is None:
+        raise ApiError(
+            code="regression_prediction_source_analysis_invalid",
+            message="회귀모델 source dependency를 검증할 수 없습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
     warnings = _prediction_warnings(
         preflight=preflight,
         row_count_excluded=row_count_excluded,
@@ -680,6 +1167,7 @@ def _calculate_prediction_response(
         prediction_id=prediction_id,
         model_id=preflight.model_id,
         analysis_id=preflight.analysis_id,
+        source_analysis_id=preflight.analysis_id,
         source_dataset_version_id=preflight.source_dataset_version_id,
         target_dataset_version_id=preflight.target_dataset_version_id,
         model_manifest_sha256=preflight.model_manifest_sha256,
@@ -692,22 +1180,35 @@ def _calculate_prediction_response(
         truncated=row_count_omitted > 0,
         confidence_level=request.confidence_level,
         warnings=warnings,
-        provenance={
-            "prediction_schema_version": REGRESSION_PREDICTION_SCHEMA_VERSION,
-            "method_id": REGRESSION_PREDICTION_METHOD_ID,
-            "method_version": REGRESSION_PREDICTION_METHOD_VERSION,
-            "app_version": APP_VERSION,
-            "created_at": created_at,
-            "model_manifest_schema_version": state.model_response.manifest.get(
-                "manifest_schema_version",
+        provenance=RegressionPredictionProvenance(
+            method_id=REGRESSION_PREDICTION_METHOD_ID,
+            method_version=REGRESSION_PREDICTION_METHOD_VERSION,
+            dataset_version_id=preflight.target_dataset_version_id,
+            source_schema_hash=preflight.target_schema_hash,
+            row_count_total=preflight.row_count_total,
+            row_count_included=row_count_predicted,
+            app_version=APP_VERSION,
+            source_analysis_id=preflight.analysis_id,
+            source_analysis_stale_at_prediction=False,
+            source_dataset_version_id=preflight.source_dataset_version_id,
+            source_schema_hash_at_fit=preflight.source_schema_hash,
+            source_schema_hash_current=preflight.source_schema_hash_current,
+            target_dataset_version_id=preflight.target_dataset_version_id,
+            target_schema_hash=preflight.target_schema_hash,
+            model_id=preflight.model_id,
+            model_manifest_sha256=preflight.model_manifest_sha256,
+            prediction_schema_version=REGRESSION_PREDICTION_SCHEMA_VERSION,
+            model_manifest_schema_version=int(
+                state.model_response.manifest["manifest_schema_version"],
             ),
-            "source_canonical_artifact_sha256": state.model_response.manifest.get(
-                "source_canonical_artifact_sha256",
-            ),
-            "target_canonical_artifact_sha256": state.target_context.canonical_rows_artifact.sha256,
-            "missing_policy": request.missing_policy,
-            "include_intervals": request.include_intervals,
-        },
+            missing_policy=request.missing_policy,
+            confidence_level=request.confidence_level,
+            include_intervals=request.include_intervals,
+            source_canonical_artifact_sha256=state.source_context.canonical_rows_artifact.sha256,
+            target_canonical_artifact_sha256=(state.target_context.canonical_rows_artifact.sha256),
+            created_at=created_at,
+            **runtime_build_provenance(settings),
+        ),
         columns=preflight.required_columns,
         rows=rows,
     )
@@ -984,7 +1485,7 @@ def _persist_prediction_response(
     rows_relative_path: Path,
     rows_sha256: str,
 ) -> None:
-    completed_at = str(response.provenance["created_at"])
+    completed_at = response.provenance.created_at
     result_relative_path = _prediction_result_relative_path(str(response.prediction_id))
     result_path = settings.workspace_root / result_relative_path
     envelope = AnalysisResultEnvelope(
@@ -1001,15 +1502,7 @@ def _persist_prediction_response(
             )
             for warning in response.warnings
         ],
-        provenance=AnalysisProvenance(
-            method_id=REGRESSION_PREDICTION_METHOD_ID,
-            method_version=REGRESSION_PREDICTION_METHOD_VERSION,
-            dataset_version_id=response.target_dataset_version_id,
-            source_schema_hash=response.target_schema_hash,
-            row_count_total=response.row_count_total,
-            row_count_included=response.row_count_predicted,
-            app_version=APP_VERSION,
-        ),
+        provenance=response.provenance,
         result=response.model_dump(mode="json"),
     )
     result_bytes = _canonical_json_bytes(envelope.model_dump(mode="json"))
@@ -1053,21 +1546,32 @@ def _persist_prediction_response(
 
 
 def _prediction_config_json(response: RegressionPredictionResponse) -> str:
+    payload = _PredictionStoredConfig(
+        config_schema_version=3,
+        prediction_id=response.prediction_id,
+        analysis_id=response.prediction_id,
+        method_id="regression.predict",
+        method_version=REGRESSION_PREDICTION_METHOD_VERSION,
+        model_id=response.model_id,
+        source_analysis_id=response.source_analysis_id,
+        source_dataset_version_id=response.source_dataset_version_id,
+        source_schema_hash_at_fit=response.provenance.source_schema_hash_at_fit,
+        source_schema_hash_current=response.provenance.source_schema_hash_current,
+        target_dataset_version_id=response.target_dataset_version_id,
+        target_schema_hash=response.target_schema_hash,
+        model_manifest_sha256=response.model_manifest_sha256,
+        prediction_schema_version=REGRESSION_PREDICTION_SCHEMA_VERSION,
+        rows_artifact_schema_version=REGRESSION_PREDICTION_ROWS_SCHEMA_VERSION,
+        confidence_level=response.confidence_level,
+        missing_policy=response.provenance.missing_policy,
+        include_intervals=response.provenance.include_intervals,
+        row_limit=response.row_limit,
+        row_count_total=response.row_count_total,
+        row_count_predicted=response.row_count_predicted,
+        row_count_excluded=response.row_count_excluded,
+    )
     return json.dumps(
-        {
-            "config_schema_version": 2,
-            "model_id": str(response.model_id),
-            "source_analysis_id": str(response.analysis_id),
-            "source_dataset_version_id": str(response.source_dataset_version_id),
-            "target_dataset_version_id": str(response.target_dataset_version_id),
-            "model_manifest_sha256": response.model_manifest_sha256,
-            "target_schema_hash": response.target_schema_hash,
-            "confidence_level": response.confidence_level,
-            "missing_policy": response.provenance.get("missing_policy"),
-            "include_intervals": response.provenance.get("include_intervals"),
-            "row_limit": response.row_limit,
-            "row_count_predicted": response.row_count_predicted,
-        },
+        payload.model_dump(mode="json"),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -1089,22 +1593,6 @@ def _prediction_result_relative_path(prediction_id: str) -> Path:
 
 def _prediction_rows_relative_path(prediction_id: str) -> Path:
     return Path("workspaces") / "analyses" / prediction_id / "prediction_rows.jsonl"
-
-
-def _prediction_page_config(config_json: str) -> tuple[UUID, int]:
-    try:
-        config = json.loads(config_json)
-        model_id = UUID(config["model_id"])
-        row_count_predicted = config["row_count_predicted"]
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise _prediction_rows_artifact_error(
-            "regression_prediction_rows_metadata_invalid",
-        ) from exc
-    if isinstance(row_count_predicted, bool) or not isinstance(row_count_predicted, int):
-        raise _prediction_rows_artifact_error("regression_prediction_rows_metadata_invalid")
-    if row_count_predicted < 0:
-        raise _prediction_rows_artifact_error("regression_prediction_rows_metadata_invalid")
-    return model_id, row_count_predicted
 
 
 def _safe_prediction_rows_path(workspace_root: Path, stored_path: str) -> Path:

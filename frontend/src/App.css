@@ -792,6 +792,39 @@ textarea {
   justify-self: start;
 }
 
+.chart-mode-control {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(54px, 1fr));
+  width: min(100%, 420px);
+  border: 1px solid #aeb8c5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chart-mode-control button {
+  min-height: 38px;
+  border: 0;
+  border-right: 1px solid #aeb8c5;
+  background: #f7f9fc;
+  color: #263244;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.chart-mode-control button:last-child {
+  border-right: 0;
+}
+
+.chart-mode-control button.is-active {
+  background: #1f4e79;
+  color: #ffffff;
+}
+
+.chart-mode-control button:focus-visible {
+  outline: 3px solid #7cb7e8;
+  outline-offset: -3px;
+}
+
 .primary-button {
   min-height: 38px;
   border: 1px solid #17684f;
@@ -1576,6 +1609,22 @@ td {
 .histogram-bar {
   fill: #2f6f9f;
   opacity: 0.82;
+}
+
+.doe-effect-bar {
+  fill: #2f6f9f;
+  opacity: 0.86;
+}
+
+.doe-main-effect-line {
+  stroke: #b24d3e;
+  stroke-width: 2.5;
+}
+
+.doe-main-effect-point {
+  fill: #ffffff;
+  stroke: #b24d3e;
+  stroke-width: 2.5;
 }
 
 .boxplot-line,

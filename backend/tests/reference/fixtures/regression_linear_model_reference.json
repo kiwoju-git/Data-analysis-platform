@@ -25,6 +25,7 @@
   "input": {
     "csv_file": "regression_linear_model_reference.csv",
     "csv_sha256": "fda46921320436f468682fdc04440dbd68b0a0b0c69d8663c95857b682e99842",
+    "csv_sha256_contract": "canonical_utf8_lf",
     "response_column": "y",
     "predictor_columns": ["x", "group"],
     "categorical_levels": ["A", "B", "C"],

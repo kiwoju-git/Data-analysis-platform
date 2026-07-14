@@ -36,7 +36,13 @@ from app.api.v1.schemas.analyses import (
     RegressionPredictionRowsPageResponse,
 )
 from app.api.v1.schemas.common import JobReference, JobState, JobStatusResponse
-from app.api.v1.schemas.doe import DoeDesignResponsesResponse, FactorialDesignResponse
+from app.api.v1.schemas.doe import (
+    DoeDesignResponsesResponse,
+    DoeFactorialAnalysisResponse,
+    DoeResponseSurfaceAnalysisResponse,
+    FactorialDesignResponse,
+    ResponseSurfaceDesignResponse,
+)
 from app.core.config import Settings
 from app.main import create_app
 from app.services.analysis_method_handlers import (
@@ -44,6 +50,9 @@ from app.services.analysis_method_handlers import (
     build_method_execution_handlers,
 )
 from app.services.analysis_run_execution import store_succeeded_analysis_result
+from app.services.analysis_runner_attribute_control_chart import (
+    run_attribute_control_chart_analysis,
+)
 from app.services.analysis_runners_categorical import (
     run_chi_square_association_analysis,
     run_one_proportion_analysis,
@@ -142,7 +151,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
     ]
 
     method_ids = [method.method_id for method in METHODS]
-    assert len(method_ids) == 29
+    assert len(method_ids) == 30
     assert len(set(method_ids)) == len(method_ids)
     assert method_ids[:4] == [
         "eda.descriptive",
@@ -152,6 +161,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
     ]
     assert "regression.response_optimizer" in method_ids
     assert "doe.response_surface" in method_ids
+    assert "doe.bayesian_optimization" in method_ids
     available_methods = [
         method.method_id
         for method in METHODS
@@ -176,6 +186,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "regression.pearson",
         "regression.xy_correlation",
         "regression.linear_model",
+        "quality.attribute_control_chart",
         "quality.individuals_chart",
         "quality.subgroup_chart",
         "quality.run_chart",
@@ -183,6 +194,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "quality.gage_rr",
         "quality.gage_run_chart",
         "doe.factorial_design",
+        "doe.response_surface",
     ]
     assert set(METHOD_VERSIONS) == set(method_ids)
     assert all(METHOD_VERSIONS[method.method_id] == method.method_version for method in METHODS)
@@ -215,6 +227,7 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         "regression.pearson": "pearson_correlation",
         "regression.xy_correlation": "xy_correlation_matrix",
         "regression.linear_model": "linear_model",
+        "quality.attribute_control_chart": "attribute_control_chart",
         "quality.individuals_chart": "individuals_chart",
         "quality.subgroup_chart": "subgroup_chart",
         "quality.run_chart": "run_chart",
@@ -222,7 +235,7 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         "quality.gage_rr": "gage_rr",
         "quality.gage_run_chart": "gage_run_chart",
     }
-    generic_analysis_run_exceptions = {"doe.factorial_design"}
+    generic_analysis_run_exceptions = {"doe.factorial_design", "doe.response_surface"}
     assert set(_METHOD_EXECUTION_HANDLERS) == {
         method.method_id
         for method in METHODS
@@ -274,6 +287,10 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         _METHOD_EXECUTION_HANDLERS["regression.xy_correlation"].run is run_xy_correlation_analysis
     )
     assert _METHOD_EXECUTION_HANDLERS["regression.linear_model"].run is run_linear_model_analysis
+    assert (
+        _METHOD_EXECUTION_HANDLERS["quality.attribute_control_chart"].run
+        is run_attribute_control_chart_analysis
+    )
     assert (
         _METHOD_EXECUTION_HANDLERS["quality.individuals_chart"].run
         is run_individuals_chart_analysis
@@ -382,11 +399,11 @@ def test_analysis_runner_persistence_boundaries_are_explicit() -> None:
     assert hasattr(analysis_runners_regression, "_store_succeeded_linear_model_result")
 
 
-def test_analysis_method_catalog_response_groups_planned_and_disabled_methods() -> None:
+def test_analysis_method_catalog_response_groups_available_and_disabled_methods() -> None:
     catalog = analysis_method_catalog()
 
     assert len(catalog.modules) == 6
-    assert len(catalog.methods) == 29
+    assert len(catalog.methods) == 30
     assert {method.availability.value for method in catalog.methods} == {
         "available",
         "planned",
@@ -478,11 +495,34 @@ def test_analysis_method_catalog_response_groups_planned_and_disabled_methods() 
     )
     assert linear_model.availability == MethodAvailability.AVAILABLE
     assert linear_model.disabled_reason is None
+    prediction = next(
+        method for method in catalog.methods if method.method_id == "regression.predict"
+    )
+    assert prediction.availability == MethodAvailability.DISABLED
+    assert prediction.disabled_reason is not None
+    assert "회귀모형 적합 화면에서 지원됩니다" in prediction.disabled_reason
+    assert "독립 Predict method 화면은 아직 제공하지 않습니다" in prediction.disabled_reason
+    response_optimizer = next(
+        method for method in catalog.methods if method.method_id == "regression.response_optimizer"
+    )
+    assert response_optimizer.availability == MethodAvailability.DISABLED
+    assert response_optimizer.disabled_reason is not None
+    assert "반응표면법 화면에서 지원됩니다" in response_optimizer.disabled_reason
+    assert "독립 Response Optimizer 화면은 아직 제공하지 않습니다" in (
+        response_optimizer.disabled_reason
+    )
     individuals_chart = next(
         method for method in catalog.methods if method.method_id == "quality.individuals_chart"
     )
     assert individuals_chart.availability == MethodAvailability.AVAILABLE
     assert individuals_chart.disabled_reason is None
+    attribute_control_chart = next(
+        method
+        for method in catalog.methods
+        if method.method_id == "quality.attribute_control_chart"
+    )
+    assert attribute_control_chart.availability == MethodAvailability.AVAILABLE
+    assert attribute_control_chart.disabled_reason is None
     subgroup_chart = next(
         method for method in catalog.methods if method.method_id == "quality.subgroup_chart"
     )
@@ -512,7 +552,23 @@ def test_analysis_method_catalog_response_groups_planned_and_disabled_methods() 
     assert factorial_design.availability == MethodAvailability.AVAILABLE
     assert factorial_design.disabled_reason is None
     assert factorial_design.requires_dataset is False
-    assert [method.module_id.value for method in catalog.methods[-2:]] == ["doe", "doe"]
+    response_surface = next(
+        method for method in catalog.methods if method.method_id == "doe.response_surface"
+    )
+    assert response_surface.availability == MethodAvailability.AVAILABLE
+    assert response_surface.disabled_reason is None
+    assert response_surface.requires_dataset is False
+    bayesian_optimization = next(
+        method for method in catalog.methods if method.method_id == "doe.bayesian_optimization"
+    )
+    assert bayesian_optimization.availability == MethodAvailability.PLANNED
+    assert bayesian_optimization.requires_dataset is False
+    assert bayesian_optimization.disabled_reason is not None
+    assert "계약 및 reference 정책만 확정" in bayesian_optimization.disabled_reason
+    assert "실행 API와 추천 결과는 아직 제공하지 않습니다" in (
+        bayesian_optimization.disabled_reason
+    )
+    assert [method.module_id.value for method in catalog.methods[-3:]] == ["doe", "doe", "doe"]
 
 
 def test_analysis_methods_api_exposes_only_real_methods_as_available_without_mock_results(
@@ -524,7 +580,7 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
     assert response.status_code == 200
     payload = response.json()
     assert len(payload["modules"]) == 6
-    assert len(payload["methods"]) == 29
+    assert len(payload["methods"]) == 30
     assert {method["availability"] for method in payload["methods"]} == {
         "available",
         "planned",
@@ -554,6 +610,7 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
         "regression.pearson",
         "regression.xy_correlation",
         "regression.linear_model",
+        "quality.attribute_control_chart",
         "quality.individuals_chart",
         "quality.subgroup_chart",
         "quality.run_chart",
@@ -561,6 +618,7 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
         "quality.gage_rr",
         "quality.gage_run_chart",
         "doe.factorial_design",
+        "doe.response_surface",
     ]
     normality = next(
         method for method in payload["methods"] if method["method_id"] == "eda.normality"
@@ -579,7 +637,7 @@ def test_analysis_run_rejects_remaining_planned_or_disabled_method_without_fake_
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.predict",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": str(uuid4()),
                 "roles": {},
                 "options": {},
@@ -593,13 +651,59 @@ def test_analysis_run_rejects_remaining_planned_or_disabled_method_without_fake_
     assert "result" not in response.text
 
 
+def test_analysis_run_rejects_response_optimizer_generic_page_without_fake_result(
+    tmp_path,
+) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "regression.response_optimizer",
+                "method_version": METHOD_VERSIONS["regression.response_optimizer"],
+                "dataset_version_id": None,
+                "filter_snapshot": {"expression_version": 1, "conditions": []},
+                "roles": {},
+                "options": {},
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "analysis_method_not_available"
+    assert "p_value" not in response.text
+    assert "statistic" not in response.text
+    assert "result" not in response.text
+
+
+def test_analysis_run_rejects_planned_bayesian_optimization_without_fake_recommendation(
+    tmp_path,
+) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "doe.bayesian_optimization",
+                "method_version": METHOD_VERSIONS["doe.bayesian_optimization"],
+                "dataset_version_id": None,
+                "filter_snapshot": {"expression_version": 1, "conditions": []},
+                "roles": {},
+                "options": {},
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "analysis_method_not_available"
+    assert "recommendation" not in response.text
+    assert "predicted" not in response.text
+    assert "result" not in response.text
+
+
 def test_analysis_run_rejects_factorial_design_on_generic_analysis_api(tmp_path) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         response = client.post(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "doe.factorial_design",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": None,
                 "filter_snapshot": {"expression_version": 1, "conditions": []},
                 "roles": {},
@@ -611,6 +715,25 @@ def test_analysis_run_rejects_factorial_design_on_generic_analysis_api(tmp_path)
     assert response.json()["error"]["code"] == "analysis_method_uses_dedicated_api"
     assert "p_value" not in response.text
     assert "statistic" not in response.text
+    assert "result" not in response.text
+
+
+def test_analysis_run_rejects_response_surface_on_generic_analysis_api(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "doe.response_surface",
+                "method_version": METHOD_VERSIONS["doe.response_surface"],
+                "dataset_version_id": None,
+                "filter_snapshot": {"expression_version": 1, "conditions": []},
+                "roles": {},
+                "options": {},
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "analysis_method_uses_dedicated_api"
     assert "result" not in response.text
 
 
@@ -637,7 +760,7 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
     payload = response.json()
     FactorialDesignResponse.model_validate(payload)
     assert payload["method_id"] == "doe.factorial_design"
-    assert payload["method_version"] == "0.1.0"
+    assert payload["method_version"] == "0.2.0"
     assert payload["family"] == "two_level_full_factorial"
     assert payload["status"] == "designed"
     assert payload["name"] == "screening design"
@@ -744,6 +867,179 @@ def test_factorial_design_response_api_saves_values_without_regenerating_runs(tm
     assert "statistic" not in save_response.text
 
 
+def test_factorial_analysis_api_persists_effects_anova_diagnostics_and_provenance(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path, git_commit="test-doe-build")
+    with TestClient(create_app(settings)) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "factorial analysis design",
+                "factors": [
+                    {"name": "Temperature", "low": 60, "high": 80, "unit": "C"},
+                    {"name": "Pressure", "low": 5, "high": 15, "unit": "bar"},
+                ],
+                "replicates": 2,
+                "center_points": 1,
+                "randomize": False,
+                "randomization_seed": 20260714,
+                "block_count": 1,
+            },
+        )
+        design = create_response.json()
+        values = []
+        for run in design["runs"]:
+            coded = run["coded_levels"]
+            value = (
+                51.0
+                if run["center_point"]
+                else 50.0
+                + 4.0 * coded["Temperature"]
+                - 2.0 * coded["Pressure"]
+                + 3.0 * coded["Temperature"] * coded["Pressure"]
+                + (0.2 if run["replicate_index"] == 2 else -0.2)
+            )
+            values.append({"run_order": run["run_order"], "value": value})
+        save_response = client.put(
+            f"/api/v1/doe-designs/{design['design_id']}/responses",
+            json={"response_name": "Yield", "unit": "kg", "values": values},
+        )
+        analysis_response = client.post(
+            f"/api/v1/doe-designs/{design['design_id']}/analyses",
+            json={
+                "response_name": "Yield",
+                "max_interaction_order": 2,
+                "confidence_level": 0.95,
+                "point_limit": 32,
+            },
+        )
+        analysis = analysis_response.json()
+        restored_response = client.get(
+            f"/api/v1/doe-designs/{design['design_id']}/analyses/{analysis['analysis_id']}",
+        )
+        design_after_analysis = client.get(
+            f"/api/v1/doe-designs/{design['design_id']}",
+        )
+        report_response = client.get(
+            f"/api/v1/doe-designs/{design['design_id']}/report.html",
+        )
+
+    assert create_response.status_code == 201
+    assert save_response.status_code == 200
+    assert analysis_response.status_code == 201
+    DoeFactorialAnalysisResponse.model_validate(analysis)
+    assert analysis["method_id"] == "doe.factorial_design"
+    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.2.0"
+    assert analysis["analysis_schema_version"] == 1
+    assert analysis["design_version_id"] == design["design_version_id"]
+    assert analysis["design_sha256"] == design["design_sha256"]
+    assert len(analysis["response_sha256"]) == 64
+    assert analysis["build_commit"] == "test-doe-build"
+    assert "numpy" in analysis["package_versions"]
+    assert "scipy" in analysis["package_versions"]
+    result = analysis["result"]
+    assert result["model_policy"]["hierarchy_enforced"] is True
+    assert result["model_policy"]["automatic_term_selection"] is False
+    assert result["sample"]["n_observations"] == 9
+    assert result["sample"]["df_residual"] == 4
+    terms = {term["term_id"]: term for term in result["terms"]}
+    assert terms["factor_1"]["effect"] == pytest.approx(8.0)
+    assert terms["factor_2"]["effect"] == pytest.approx(-4.0)
+    assert terms["factor_1:factor_2"]["effect"] == pytest.approx(6.0)
+    assert result["anova"]["residual"]["df"] == 4
+    assert result["anova"]["lack_of_fit"]["pure_error"]["df"] == 4
+    assert len(result["diagnostics"]["points"]) == 9
+    assert restored_response.status_code == 200
+    assert restored_response.json() == analysis
+    assert design_after_analysis.json()["status"] == "analyzed"
+    assert report_response.status_code == 200
+    assert "Factorial Analysis" in report_response.text
+    assert "Terms and Effects" in report_response.text
+    assert analysis["analysis_id"] in report_response.text
+    assert analysis["response_sha256"] in report_response.text
+    assert str(tmp_path) not in analysis_response.text
+    assert str(tmp_path) not in report_response.text
+
+
+def test_factorial_analysis_api_rejects_missing_response_and_tampered_dependency(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "factorial dependency design",
+                "factors": [
+                    {"name": "A", "low": -1, "high": 1},
+                    {"name": "B", "low": -1, "high": 1},
+                ],
+                "replicates": 2,
+                "center_points": 0,
+                "randomize": False,
+                "randomization_seed": 42,
+                "block_count": 1,
+            },
+        )
+        design = create_response.json()
+        missing_response = client.post(
+            f"/api/v1/doe-designs/{design['design_id']}/analyses",
+            json={"response_name": "Yield", "max_interaction_order": 2},
+        )
+        values = [
+            {"run_order": run["run_order"], "value": float(run["run_order"])}
+            for run in design["runs"]
+        ]
+        client.put(
+            f"/api/v1/doe-designs/{design['design_id']}/responses",
+            json={"response_name": "Yield", "values": values},
+        )
+        created_analysis = client.post(
+            f"/api/v1/doe-designs/{design['design_id']}/analyses",
+            json={"response_name": "Yield", "max_interaction_order": 2},
+        ).json()
+        with sqlite3.connect(settings.workspace_root / METADATA_DB_RELATIVE_PATH) as connection:
+            stored = json.loads(
+                connection.execute(
+                    "SELECT result_json FROM experiment_design_analyses WHERE analysis_id = ?",
+                    (created_analysis["analysis_id"],),
+                ).fetchone()[0],
+            )
+            stored["response_name"] = "Other response"
+            tampered_json = json.dumps(
+                stored,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            connection.execute(
+                """
+                UPDATE experiment_design_analyses
+                SET result_json = ?, result_sha256 = ?
+                WHERE analysis_id = ?;
+                """,
+                (
+                    tampered_json,
+                    hashlib.sha256(tampered_json.encode("utf-8")).hexdigest(),
+                    created_analysis["analysis_id"],
+                ),
+            )
+        tampered_response = client.get(
+            f"/api/v1/doe-designs/{design['design_id']}/analyses/"
+            f"{created_analysis['analysis_id']}",
+        )
+
+    assert missing_response.status_code == 409
+    assert missing_response.json()["error"]["code"] == ("doe_factorial_analysis_response_not_found")
+    assert tampered_response.status_code == 409
+    assert tampered_response.json()["error"]["code"] == (
+        "doe_factorial_analysis_dependency_mismatch"
+    )
+    assert str(tmp_path) not in tampered_response.text
+    assert "metadata.sqlite3" not in tampered_response.text
+
+
 def test_factorial_design_html_report_download_renders_verified_design_and_responses(
     tmp_path,
 ) -> None:
@@ -835,6 +1131,182 @@ def test_factorial_design_html_report_download_rejects_checksum_mismatch(tmp_pat
     assert report_response.json()["error"]["code"] == "doe_design_checksum_mismatch"
     assert "p_value" not in report_response.text
     assert "statistic" not in report_response.text
+
+
+def test_response_surface_design_api_creates_bounded_rotatable_cci(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/response-surface",
+            json={
+                "name": "quadratic process window",
+                "factors": [
+                    {"name": "Temperature", "low": 60, "high": 80, "unit": "C"},
+                    {"name": "Pressure", "low": 5, "high": 15, "unit": "bar"},
+                ],
+                "alpha_mode": "rotatable",
+                "factorial_replicates": 1,
+                "axial_replicates": 1,
+                "center_points": 5,
+                "randomize": False,
+                "randomization_seed": 20260714,
+            },
+        )
+        payload = create_response.json()
+        get_response = client.get(f"/api/v1/doe-designs/response-surface/{payload['design_id']}")
+
+    assert create_response.status_code == 201
+    ResponseSurfaceDesignResponse.model_validate(payload)
+    assert payload["method_id"] == "doe.response_surface"
+    assert payload["method_version"] == METHOD_VERSIONS["doe.response_surface"]
+    assert payload["family"] == "central_composite_inscribed"
+    assert payload["options"]["alpha"] == pytest.approx(2**0.5)
+    assert payload["run_count"] == 13
+    assert [run["point_type"] for run in payload["runs"]].count("factorial") == 4
+    assert [run["point_type"] for run in payload["runs"]].count("axial") == 4
+    assert [run["point_type"] for run in payload["runs"]].count("center") == 5
+    assert min(run["factor_levels"]["Temperature"] for run in payload["runs"]) == 60
+    assert max(run["factor_levels"]["Temperature"] for run in payload["runs"]) == 80
+    assert get_response.status_code == 200
+    assert get_response.json() == payload
+    assert str(tmp_path) not in create_response.text
+
+
+def test_response_surface_analysis_api_persists_quadratic_model_and_stationary_point(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path, git_commit="test-rsm-build")
+    with TestClient(create_app(settings)) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/response-surface",
+            json={
+                "name": "stationary maximum",
+                "factors": [
+                    {"name": "Temperature", "low": 60, "high": 80},
+                    {"name": "Pressure", "low": 5, "high": 15},
+                ],
+                "alpha_mode": "rotatable",
+                "factorial_replicates": 1,
+                "axial_replicates": 1,
+                "center_points": 5,
+                "randomize": False,
+                "randomization_seed": 7,
+            },
+        )
+        design = create_response.json()
+        values = []
+        center_errors = iter((-0.2, 0.1, 0.0, 0.15, -0.05))
+        for run in design["runs"]:
+            x = run["coded_levels"]["Temperature"]
+            y = run["coded_levels"]["Pressure"]
+            value = 100.0 - (x - 0.2) ** 2 - 2.0 * (y + 0.3) ** 2
+            if run["point_type"] == "center":
+                value += next(center_errors)
+            values.append({"run_order": run["run_order"], "value": value})
+        save_response = client.put(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/responses",
+            json={"response_name": "Yield", "unit": "kg", "values": values},
+        )
+        analysis_response = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses",
+            json={
+                "response_name": "Yield",
+                "confidence_level": 0.95,
+                "point_limit": 32,
+                "contour_grid_size": 21,
+            },
+        )
+        analysis = analysis_response.json()
+        restored_response = client.get(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses/"
+            f"{analysis['analysis_id']}"
+        )
+
+    assert create_response.status_code == 201
+    assert save_response.status_code == 200
+    assert analysis_response.status_code == 201
+    DoeResponseSurfaceAnalysisResponse.model_validate(analysis)
+    assert analysis["method_id"] == "doe.response_surface"
+    assert analysis["method_version"] == METHOD_VERSIONS["doe.response_surface"]
+    assert analysis["build_commit"] == "test-rsm-build"
+    assert analysis["result"]["model_policy"]["full_quadratic"] is True
+    assert analysis["result"]["model_policy"]["automatic_term_selection"] is False
+    assert analysis["result"]["sample"]["n_observations"] == 13
+    assert analysis["result"]["sample"]["parameter_count"] == 6
+    assert analysis["result"]["stationary_point"]["classification"] == "maximum"
+    assert analysis["result"]["stationary_point"]["within_axial_bounds"] is True
+    assert len(analysis["result"]["contour"]["points"]) == 441
+    assert analysis["result"]["anova"]["lack_of_fit"]["pure_error"]["df"] == 4
+    assert restored_response.status_code == 200
+    assert restored_response.json() == analysis
+    assert str(tmp_path) not in analysis_response.text
+    assert "metadata.sqlite3" not in analysis_response.text
+
+
+def test_response_surface_analysis_rejects_invalid_grid_and_tampered_dependency(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        create_response = client.post(
+            "/api/v1/doe-designs/response-surface",
+            json={
+                "factors": [
+                    {"name": "A", "low": -2, "high": 2},
+                    {"name": "B", "low": -3, "high": 3},
+                ],
+                "center_points": 5,
+                "randomize": False,
+                "randomization_seed": 1,
+            },
+        )
+        design = create_response.json()
+        values = [
+            {
+                "run_order": run["run_order"],
+                "value": 10
+                + run["coded_levels"]["A"]
+                + run["coded_levels"]["B"] ** 2
+                + run["run_order"] * 0.001,
+            }
+            for run in design["runs"]
+        ]
+        client.put(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/responses",
+            json={"response_name": "Y", "values": values},
+        )
+        invalid_grid = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses",
+            json={"response_name": "Y", "contour_grid_size": 20},
+        )
+        created = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses",
+            json={"response_name": "Y", "contour_grid_size": 21},
+        ).json()
+        with sqlite3.connect(settings.workspace_root / METADATA_DB_RELATIVE_PATH) as connection:
+            config = json.loads(
+                connection.execute(
+                    "SELECT config_json FROM experiment_design_analyses WHERE analysis_id = ?",
+                    (created["analysis_id"],),
+                ).fetchone()[0]
+            )
+            config["design_sha256"] = "0" * 64
+            connection.execute(
+                "UPDATE experiment_design_analyses SET config_json = ? WHERE analysis_id = ?",
+                (
+                    json.dumps(config, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                    created["analysis_id"],
+                ),
+            )
+        tampered = client.get(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses/"
+            f"{created['analysis_id']}"
+        )
+
+    assert invalid_grid.status_code == 409
+    assert invalid_grid.json()["error"]["code"] == "doe_rsm_contour_grid_size_invalid"
+    assert tampered.status_code == 409
+    assert tampered.json()["error"]["code"] == "doe_rsm_analysis_dependency_mismatch"
+    assert str(tmp_path) not in tampered.text
 
 
 def test_factorial_design_response_api_rejects_incomplete_run_set(tmp_path) -> None:
@@ -3887,6 +4359,176 @@ def test_xy_correlation_typed_options_reject_invalid_contract(
     assert forbidden_text not in _public_error_text(response)
 
 
+def test_analysis_run_executes_and_exports_attribute_p_chart(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"defectives,sample_size\n1,10\n4,20\n3,10\n2,20\n",
+            filename="attribute-p-chart.csv",
+        )
+        count_column_id = version["columns"][0]["column_id"]
+        denominator_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.attribute_control_chart",
+                "method_version": METHOD_VERSIONS["quality.attribute_control_chart"],
+                "dataset_version_id": version["version_id"],
+                "roles": {
+                    "count": count_column_id,
+                    "sample_size": denominator_column_id,
+                },
+                "options": {
+                    "chart_type": "p",
+                    "count_definition": "defectives",
+                    "count_column_id": count_column_id,
+                    "denominator_column_id": denominator_column_id,
+                    "missing_policy": "complete_case",
+                    "point_limit": 100,
+                },
+            },
+        )
+        payload = response.json()
+        restore_response = client.get(f"/api/v1/analysis-runs/{payload['analysis_id']}/result")
+        csv_response = client.post(f"/api/v1/analysis-runs/{payload['analysis_id']}/exports/csv")
+        html_response = client.post(f"/api/v1/analysis-runs/{payload['analysis_id']}/exports/html")
+
+    assert response.status_code == 201
+    AnalysisResultEnvelope.model_validate(payload)
+    assert payload["method_id"] == "quality.attribute_control_chart"
+    assert payload["method_version"] == METHOD_VERSIONS["quality.attribute_control_chart"]
+    assert payload["provenance"]["source_schema_hash"] == version["schema_hash"]
+    assert payload["provenance"]["row_count_total"] == 4
+    assert payload["provenance"]["row_count_included"] == 4
+    result = payload["result"]
+    assert result["summary_type"] == "attribute_control_chart"
+    assert result["chart_type"] == "p"
+    assert result["count_definition"] == "defectives"
+    assert result["center_line"] == pytest.approx(1 / 6)
+    assert result["limits_vary"] is True
+    assert result["total_count"] == 10
+    assert result["total_denominator"] == 60
+    assert result["dispersion"]["used_to_adjust_limits"] is False
+    assert restore_response.status_code == 200
+    assert restore_response.json() == payload
+    assert csv_response.status_code == 201
+    assert csv_response.json()["artifact_kind"] == "analysis_result_csv_export"
+    assert html_response.status_code == 201
+    assert html_response.json()["artifact_kind"] == "analysis_result_html_report"
+
+
+def test_attribute_chart_rejects_np_varying_sample_size_without_fallback(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"defectives,sample_size\n1,10\n2,20\n",
+            filename="private-np-source.csv",
+        )
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.attribute_control_chart",
+                "method_version": METHOD_VERSIONS["quality.attribute_control_chart"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "chart_type": "np",
+                    "count_definition": "defectives",
+                    "count_column_id": version["columns"][0]["column_id"],
+                    "denominator_column_id": version["columns"][1]["column_id"],
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "attribute_control_chart_np_varying_sample_size"
+    public_error = _public_error_text(response)
+    assert "private-np-source.csv" not in public_error
+    assert str(tmp_path) not in public_error
+
+
+def test_attribute_c_chart_requires_explicit_constant_opportunity_confirmation(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"defects\n4\n6\n5\n9\n",
+            filename="attribute-c-chart.csv",
+        )
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.attribute_control_chart",
+                "method_version": METHOD_VERSIONS["quality.attribute_control_chart"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "chart_type": "c",
+                    "count_definition": "defects",
+                    "count_column_id": version["columns"][0]["column_id"],
+                    "constant_opportunity_confirmed": False,
+                },
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == (
+        "attribute_control_chart_c_constant_opportunity_required"
+    )
+
+
+@pytest.mark.parametrize(
+    ("option_patch", "forbidden_text"),
+    [
+        ({"chart_type": "xbar"}, "xbar"),
+        ({"count_definition": "unknown"}, "unknown"),
+        ({"point_limit": True}, "True"),
+        ({"constant_opportunity_confirmed": "yes"}, "yes"),
+        ({"_remove": "count_column_id"}, "private-count"),
+    ],
+)
+def test_attribute_chart_rejects_invalid_option_contract_without_echo(
+    tmp_path,
+    option_patch,
+    forbidden_text,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"private-count,sample_size\n1,10\n2,10\n",
+            filename="attribute-invalid-options.csv",
+        )
+        options = {
+            "chart_type": "p",
+            "count_definition": "defectives",
+            "count_column_id": version["columns"][0]["column_id"],
+            "denominator_column_id": version["columns"][1]["column_id"],
+            "point_limit": 100,
+            "constant_opportunity_confirmed": False,
+        }
+        if "_remove" in option_patch:
+            options.pop(str(option_patch["_remove"]))
+        else:
+            options.update(option_patch)
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.attribute_control_chart",
+                "method_version": METHOD_VERSIONS["quality.attribute_control_chart"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": options,
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_attribute_control_chart_options"
+    assert forbidden_text not in _public_error_text(response)
+
+
 def test_analysis_run_executes_individuals_chart_from_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = b"value\n10\n11\n9\n10\n12\n11\n"
@@ -6724,6 +7366,73 @@ def test_linear_model_typed_options_reject_invalid_contract(
     assert forbidden_text not in _public_error_text(response)
 
 
+def _create_regression_prediction_fixture(
+    client: TestClient,
+) -> dict[str, object]:
+    version = _upload_confirmed_csv_dataset(
+        client,
+        content=(
+            b"y,x1,x2\n"
+            b"10,1,3\n"
+            b"13,2,2\n"
+            b"15,3,4\n"
+            b"18,4,3\n"
+            b"21,5,5\n"
+            b"23,6,4\n"
+            b"26,7,6\n"
+            b"29,8,5\n"
+        ),
+        filename="regression-prediction-integrity.csv",
+    )
+    response_column_id = version["columns"][0]["column_id"]
+    predictor_column_ids = [
+        version["columns"][1]["column_id"],
+        version["columns"][2]["column_id"],
+    ]
+    analysis_response = client.post(
+        "/api/v1/analysis-runs",
+        json={
+            "method_id": "regression.linear_model",
+            "method_version": METHOD_VERSIONS["regression.linear_model"],
+            "dataset_version_id": version["version_id"],
+            "roles": {
+                "response": response_column_id,
+                "predictors": ",".join(predictor_column_ids),
+            },
+            "options": {
+                "response_column_id": response_column_id,
+                "predictor_column_ids": predictor_column_ids,
+                "alpha": 0.05,
+                "confidence_level": 0.95,
+                "missing_policy": "complete_case",
+                "include_intercept": True,
+                "covariance_type": "standard",
+            },
+        },
+    )
+    assert analysis_response.status_code == 201
+    source_analysis_id = analysis_response.json()["analysis_id"]
+    model_id = analysis_response.json()["result"]["model_manifest"]["model_id"]
+    prediction_response = client.post(
+        f"/api/v1/regression-models/{model_id}/predictions",
+        json={
+            "dataset_version_id": version["version_id"],
+            "confidence_level": 0.95,
+            "missing_policy": "complete_case",
+            "include_intervals": True,
+        },
+    )
+    assert prediction_response.status_code == 200
+    return {
+        "analysis_response": analysis_response,
+        "model_id": model_id,
+        "prediction_id": prediction_response.json()["prediction_id"],
+        "prediction_response": prediction_response,
+        "source_analysis_id": source_analysis_id,
+        "version": version,
+    }
+
+
 def test_regression_prediction_preflight_accepts_same_dataset_version(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     content = (
@@ -7082,6 +7791,325 @@ def test_regression_prediction_rows_endpoint_pages_all_rows_and_rejects_tamperin
         "regression_prediction_rows_artifact_invalid",
     }
     assert rows_artifact.path not in _public_error_text(tampered_export_response)
+
+
+def test_regression_prediction_blocks_stale_source_model_but_allows_schema_noop(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        fixture = _create_regression_prediction_fixture(client)
+        version = fixture["version"]
+        assert isinstance(version, dict)
+        model_id = str(fixture["model_id"])
+        source_analysis_id = str(fixture["source_analysis_id"])
+        first_column = version["columns"][0]
+
+        noop_response = client.patch(
+            f"/api/v1/dataset-versions/{version['version_id']}/schema",
+            json={
+                "columns": [
+                    {
+                        "column_id": first_column["column_id"],
+                        "display_name": first_column["display_name"],
+                        "measurement_level": first_column["measurement_level"],
+                        "role": first_column["role"],
+                        "unit": first_column["unit"],
+                    },
+                ],
+            },
+        )
+        noop_preflight = client.post(
+            f"/api/v1/regression-models/{model_id}/prediction-preflight",
+            json={"dataset_version_id": version["version_id"]},
+        )
+        changed_response = client.patch(
+            f"/api/v1/dataset-versions/{version['version_id']}/schema",
+            json={
+                "columns": [
+                    {
+                        "column_id": first_column["column_id"],
+                        "display_name": "changed-response",
+                        "measurement_level": first_column["measurement_level"],
+                        "role": first_column["role"],
+                        "unit": first_column["unit"],
+                    },
+                ],
+            },
+        )
+        source_status = client.get(f"/api/v1/analysis-runs/{source_analysis_id}")
+        stale_preflight = client.post(
+            f"/api/v1/regression-models/{model_id}/prediction-preflight",
+            json={"dataset_version_id": version["version_id"]},
+        )
+        stale_prediction = client.post(
+            f"/api/v1/regression-models/{model_id}/predictions",
+            json={"dataset_version_id": version["version_id"]},
+        )
+
+        with sqlite3.connect(settings.workspace_root / METADATA_DB_RELATIVE_PATH) as connection:
+            connection.execute(
+                "UPDATE analysis_runs SET stale = 0 WHERE analysis_id = ?",
+                (source_analysis_id,),
+            )
+        schema_only_preflight = client.post(
+            f"/api/v1/regression-models/{model_id}/prediction-preflight",
+            json={"dataset_version_id": version["version_id"]},
+        )
+
+    assert noop_response.status_code == 200
+    assert noop_preflight.status_code == 200
+    assert noop_preflight.json()["prediction_ready"] is True
+    assert changed_response.status_code == 200
+    assert source_status.json()["stale"] is True
+    stale_payload = stale_preflight.json()
+    assert stale_payload["prediction_ready"] is False
+    assert stale_payload["source_analysis_stale"] is True
+    assert stale_payload["source_schema_hash"] != stale_payload["source_schema_hash_current"]
+    stale_codes = {issue["code"] for issue in stale_payload["issues"]}
+    assert "regression_prediction_source_model_stale" in stale_codes
+    assert "regression_prediction_source_schema_mismatch" in stale_codes
+    assert stale_prediction.status_code == 409
+    assert stale_prediction.json()["error"]["code"] == "regression_prediction_preflight_failed"
+    assert (
+        "regression_prediction_source_model_stale"
+        in (stale_prediction.json()["error"]["developer_detail"])
+    )
+    schema_only_payload = schema_only_preflight.json()
+    assert schema_only_payload["prediction_ready"] is False
+    assert schema_only_payload["source_analysis_stale"] is False
+    assert {
+        issue["code"] for issue in schema_only_payload["issues"] if issue["severity"] == "error"
+    } == {"regression_prediction_source_schema_mismatch"}
+    assert str(tmp_path) not in _public_error_text(stale_prediction)
+    assert "regression-prediction-integrity.csv" not in _public_error_text(stale_prediction)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_issue"),
+    [
+        ("missing", "regression_prediction_source_analysis_missing"),
+        ("method", "regression_prediction_source_analysis_invalid"),
+        ("method_version", "regression_prediction_source_method_version_mismatch"),
+        ("manifest", "regression_prediction_source_analysis_invalid"),
+    ],
+)
+def test_regression_prediction_preflight_rejects_invalid_source_dependency(
+    tmp_path,
+    mutation,
+    expected_issue,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        fixture = _create_regression_prediction_fixture(client)
+        version = fixture["version"]
+        assert isinstance(version, dict)
+        model_id = str(fixture["model_id"])
+        source_analysis_id = str(fixture["source_analysis_id"])
+        database_path = settings.workspace_root / METADATA_DB_RELATIVE_PATH
+        if mutation == "manifest":
+            model_record = get_regression_model_record(settings.workspace_root, model_id)
+            assert model_record is not None
+            manifest_path = settings.workspace_root / model_record.manifest_path
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["analysis_id"] = str(uuid4())
+            manifest_bytes = json.dumps(
+                manifest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            manifest_path.write_bytes(manifest_bytes)
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(
+                    "UPDATE regression_models SET manifest_sha256 = ? WHERE model_id = ?",
+                    (hashlib.sha256(manifest_bytes).hexdigest(), model_id),
+                )
+        else:
+            statements = {
+                "missing": "DELETE FROM analysis_runs WHERE analysis_id = ?",
+                "method": (
+                    "UPDATE analysis_runs SET method_id = 'eda.descriptive' "
+                    "WHERE analysis_id = ?"
+                ),
+                "method_version": (
+                    "UPDATE analysis_runs SET method_version = '9.9.9' WHERE analysis_id = ?"
+                ),
+            }
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(statements[mutation], (source_analysis_id,))
+
+        preflight = client.post(
+            f"/api/v1/regression-models/{model_id}/prediction-preflight",
+            json={"dataset_version_id": version["version_id"]},
+        )
+        prediction = client.post(
+            f"/api/v1/regression-models/{model_id}/predictions",
+            json={"dataset_version_id": version["version_id"]},
+        )
+
+    assert preflight.status_code == 200
+    assert preflight.json()["prediction_ready"] is False
+    assert expected_issue in {issue["code"] for issue in preflight.json()["issues"]}
+    assert prediction.status_code == 409
+    assert prediction.json()["error"]["code"] == "regression_prediction_preflight_failed"
+    assert str(tmp_path) not in _public_error_text(prediction)
+
+
+def test_regression_prediction_version_and_dependency_provenance_are_aligned(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path, git_commit="prediction-provenance-test")
+    with TestClient(create_app(settings)) as client:
+        fixture = _create_regression_prediction_fixture(client)
+        prediction = fixture["prediction_response"].json()
+        prediction_id = prediction["prediction_id"]
+        stored_response = client.get(f"/api/v1/analysis-runs/{prediction_id}/result")
+        catalog = client.get("/api/v1/analysis-methods").json()
+
+    record = get_analysis_run_record(settings.workspace_root, prediction_id)
+    assert record is not None
+    catalog_version = next(
+        method["method_version"]
+        for method in catalog["methods"]
+        if method["method_id"] == "regression.predict"
+    )
+    provenance = prediction["provenance"]
+    assert catalog_version == METHOD_VERSIONS["regression.predict"] == "0.2.0"
+    assert regression_models.REGRESSION_PREDICTION_METHOD_VERSION == catalog_version
+    assert record.method_version == catalog_version
+    assert stored_response.status_code == 200
+    stored = stored_response.json()
+    assert stored["method_version"] == catalog_version
+    assert stored["provenance"]["method_version"] == catalog_version
+    assert stored["result"] == prediction
+    assert prediction["source_analysis_id"] == prediction["analysis_id"]
+    assert provenance["source_analysis_id"] == prediction["source_analysis_id"]
+    assert provenance["source_analysis_stale_at_prediction"] is False
+    assert provenance["source_dataset_version_id"] == prediction["source_dataset_version_id"]
+    assert provenance["target_dataset_version_id"] == prediction["target_dataset_version_id"]
+    assert provenance["source_schema_hash_at_fit"] == provenance["source_schema_hash_current"]
+    assert provenance["target_schema_hash"] == prediction["target_schema_hash"]
+    assert provenance["model_id"] == prediction["model_id"]
+    assert provenance["model_manifest_sha256"] == prediction["model_manifest_sha256"]
+    assert provenance["prediction_schema_version"] == 2
+    assert provenance["missing_policy"] == "complete_case"
+    assert provenance["confidence_level"] == 0.95
+    assert provenance["include_intervals"] is True
+    assert provenance["python_version"].startswith("3.10.")
+    assert provenance["platform"]
+    assert provenance["build_commit"] == "prediction-provenance-test"
+    assert provenance["package_versions"] == {"numpy": "2.2.6", "scipy": "1.15.3"}
+    public_payload = json.dumps(stored, ensure_ascii=False, sort_keys=True)
+    assert str(tmp_path) not in public_payload
+    assert "regression-prediction-integrity.csv" not in public_payload
+    assert "10,1,3" not in public_payload
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_code"),
+    [
+        ("config_model_id", "regression_prediction_model_mismatch"),
+        ("config_row_count", "regression_prediction_result_config_mismatch"),
+        ("result_target_version", "regression_prediction_result_config_mismatch"),
+        ("rows_cross_link", "regression_prediction_artifact_mismatch"),
+        ("method_version", "regression_prediction_result_config_mismatch"),
+        ("model_manifest_sha", "regression_prediction_model_mismatch"),
+        ("result_prediction_id", "regression_prediction_result_config_mismatch"),
+    ],
+)
+def test_regression_prediction_cross_artifact_tampering_is_rejected(
+    tmp_path,
+    mutation,
+    expected_code,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        fixture = _create_regression_prediction_fixture(client)
+        prediction_id = str(fixture["prediction_id"])
+        model_id = str(fixture["model_id"])
+        version = fixture["version"]
+        assert isinstance(version, dict)
+        record = get_analysis_run_record(settings.workspace_root, prediction_id)
+        assert record is not None
+        assert record.result_path is not None
+        database_path = settings.workspace_root / METADATA_DB_RELATIVE_PATH
+
+        if mutation.startswith("config_") or mutation in {"method_version", "model_manifest_sha"}:
+            config = json.loads(record.config_json)
+            if mutation == "config_model_id":
+                config["model_id"] = str(uuid4())
+            elif mutation == "config_row_count":
+                config["row_count_predicted"] += 1
+            elif mutation == "method_version":
+                config["method_version"] = "9.9.9"
+            else:
+                config["model_manifest_sha256"] = "f" * 64
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(
+                    "UPDATE analysis_runs SET config_json = ? WHERE analysis_id = ?",
+                    (
+                        json.dumps(
+                            config,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ),
+                        prediction_id,
+                    ),
+                )
+        elif mutation in {"result_target_version", "result_prediction_id"}:
+            result_path = settings.workspace_root / record.result_path
+            envelope = json.loads(result_path.read_text(encoding="utf-8"))
+            if mutation == "result_target_version":
+                replacement = str(uuid4())
+                envelope["result"]["target_dataset_version_id"] = replacement
+                envelope["result"]["provenance"]["target_dataset_version_id"] = replacement
+            else:
+                envelope["result"]["prediction_id"] = str(uuid4())
+            result_bytes = json.dumps(
+                envelope,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            result_path.write_bytes(result_bytes)
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(
+                    "UPDATE analysis_runs SET result_sha256 = ? WHERE analysis_id = ?",
+                    (hashlib.sha256(result_bytes).hexdigest(), prediction_id),
+                )
+        else:
+            other_prediction = client.post(
+                f"/api/v1/regression-models/{model_id}/predictions",
+                json={"dataset_version_id": version["version_id"]},
+            )
+            assert other_prediction.status_code == 200
+            other_prediction_id = other_prediction.json()["prediction_id"]
+            other_artifact = next(
+                artifact
+                for artifact in list_analysis_artifact_records(
+                    settings.workspace_root,
+                    other_prediction_id,
+                )
+                if artifact.kind == "regression_prediction_rows"
+            )
+            with sqlite3.connect(database_path) as connection:
+                connection.execute(
+                    "UPDATE analysis_artifacts SET path = ?, sha256 = ? "
+                    "WHERE analysis_id = ? AND kind = 'regression_prediction_rows'",
+                    (other_artifact.path, other_artifact.sha256, prediction_id),
+                )
+
+        responses = [
+            client.get(f"/api/v1/analysis-runs/{prediction_id}/result"),
+            client.get(f"/api/v1/regression-models/predictions/{prediction_id}/rows"),
+            client.post(f"/api/v1/regression-models/predictions/{prediction_id}/exports/csv"),
+        ]
+
+    assert [response.status_code for response in responses] == [409, 409, 409]
+    assert {response.json()["error"]["code"] for response in responses} == {expected_code}
+    for response in responses:
+        assert str(tmp_path) not in _public_error_text(response)
+        assert "prediction_rows.jsonl" not in _public_error_text(response)
 
 
 def test_regression_prediction_metadata_failure_removes_result_artifacts(

@@ -219,53 +219,102 @@ blocked until the balanced crossed design requirement is satisfied.
 ## Experiment Condition Table
 
 User question: What experiment runs should I perform for a two-level factorial
-screening design?
+screening design, and which factors affect the response?
 
-Purpose helper card: create a two-level factorial design,
+Purpose helper card: create and analyze a two-level factorial design,
 `doe.factorial_design`.
 
 Needed roles: factor names, low/high levels, optional repeats, center points,
-blocks, and randomization seed.
+blocks, randomization seed, and one complete numeric response series.
 
 Easy wrong roles: treating response columns as factors, using unreviewed factor
-units, confusing run order with standard order, or assuming response analysis is
-already implemented.
+units, confusing run order with standard order, or treating an outcome as a
+controllable factor.
 
 Preflight checks: unique factor names, valid low/high levels, run count,
-randomization seed, block/repeat settings, and whether response entry matches
-all generated runs.
+randomization seed, block/repeat settings, response completeness, interaction
+order, model rank, and residual degrees of freedom.
 
-Read first in results: generated run table, standard order, randomized run
-order, factor settings, design checksum, seed, and response-entry status.
+Read first in results: generated run table and checksum, effect ranking, model
+and residual degrees of freedom, ANOVA/pure-error/lack-of-fit availability,
+warnings, and residual diagnostics.
 
-Cannot say: effects, ANOVA, alias structure, diagnostics, RSM, or optimization
-are available from the current design table alone.
+Cannot say: an effect proves causation outside the randomized design, an absent
+p-value means no effect, or fractional alias analysis and optimization are
+available from the factorial panel.
 
 QA pass criteria:
 
-- The purpose helper routes design-table questions to `doe.factorial_design`
-  without implying effects or ANOVA are implemented.
+- The purpose helper routes design-and-effect questions to
+  `doe.factorial_design` and distinguishes it from the dedicated RSM panel.
 - Factor name, low/high level, unit, repeat, center point, block, randomization,
   and seed inputs are visible and recoverable before generation.
 - The generated table clearly distinguishes standard order from randomized run
   order and displays a stable design checksum.
-- Response-entry status is visible without implying analysis calculations.
+- Response-entry status, interaction-order policy, effect ranking, ANOVA,
+  diagnostics, and persistent warnings are visible.
 
 Fail examples:
 
-- The UI suggests DOE effects, ANOVA, RSM, or optimization can be run from the
-  current design table.
+- The UI suggests optimization can be run from the current factorial model, or
+  fabricates p-values for a saturated model.
 - Duplicate factor names or invalid low/high levels produce unclear errors.
 - The user cannot tell whether randomization was enabled or which seed was used.
 
 UX copy that must remain visible: "2-level full factorial", run order versus
 standard order language, design checksum, seed/randomization copy, response
-entry status, and the out-of-scope warning for effects/ANOVA/diagnostics.
+entry status, -1/+1 coding, hierarchy, effect/ANOVA/diagnostic labels, and the
+separate-RSM/optimization boundary.
 
 UI element to inspect: `MethodPurposeHelper`, `StatisticalRoleGuide`,
 `PreflightExplanationPanel`, `FactorialDesignPanel`, run table preview, response
-entry section, and design report/export affordances.
+entry section, effect/main-effect charts, ANOVA table, diagnostics, and design
+report/export affordances.
 
 Recovery from wrong role: the user should be able to rename factors, correct
 low/high values and units, toggle randomization or seed, regenerate the design,
-and keep response analysis expectations separate from design generation.
+save a complete response, choose an interaction order, and rerun analysis only
+on a new immutable design version when observations must change.
+
+## Response Surface Process Window
+
+User question: How does a curved process response change across two or more
+continuous factors, and is the fitted stationary point inside the tested region?
+
+Purpose helper card: model a curved process response, `doe.response_surface`.
+
+Needed roles: two to five continuous factor names and actual safe low/high
+bounds, seeded run order, and a complete numeric response for every CCD run.
+
+Read first in results: CCD type and axial distance, factorial/axial/center run
+labels, residual degrees of freedom, full-quadratic coefficients, lack-of-fit,
+stationary classification and design-region flag, contour slice policy, and
+persistent diagnostics warnings.
+
+Cannot say: the stationary point is an approved optimum, the model is causal,
+or predictions outside the declared design region are supported.
+
+QA pass criteria:
+
+- `localhost:5173` and `127.0.0.1:5173` both show `API ready` while the backend
+  remains loopback-only.
+- Rotatable CCI states that axial points equal the declared low/high bounds.
+- All generated run responses must be present before analysis is enabled.
+- The result exposes full-quadratic/no-automatic-selection policy, contour,
+  stationary point, design-region status, fit, term, and diagnostic sections.
+- Response optimization is available only after a verified RSM fit and remains
+  separate from the stationary-point diagnostic.
+- The optimizer exposes objective limits, factor bounds, constraints, search
+  budgets, individual/composite desirability, and persistent limitations.
+- The recommendation explicitly denies a global-optimum guarantee and requires
+  model review plus a confirmation experiment.
+
+UI element to inspect: `MethodPurposeHelper`, `StatisticalRoleGuide`,
+`ResponseSurfacePanel`, `ResponseOptimizerPanel`, CCD run table, contour SVG,
+term table, stationary-point summary, optimizer bounds/objective controls,
+recommended settings, desirability table, and residual diagnostic summary.
+
+Recovery from wrong role: correct factor names/bounds before generating a new
+immutable CCD, then enter the complete response series and refit the model.
+Invalid optimizer thresholds, bounds, or linear constraints should leave the
+verified RSM result intact so the user can correct only the optimizer request.

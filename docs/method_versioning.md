@@ -1,16 +1,19 @@
 # Method Versioning Policy
 
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
-receive a method-version bump. It does not change any current method version in
-this PR; all current stable IDs remain on `0.1.0`.
+receive a method-version bump. `regression.predict` and `doe.factorial_design`
+are currently `0.2.0`; the other stable IDs remain on `0.1.0`.
 
 ## Source Of Truth
 
 - `backend/app/analyses/registry.py` owns the `METHOD_VERSIONS` map.
 - The analysis method catalog and `MethodExecutionHandler` specs must read from
   that same map.
+- Dedicated services, including regression prediction, must call the registry
+  accessor instead of defining a second version string.
 - Tests must assert that every stable method ID has a version entry and that
-  catalog/handler versions agree.
+  catalog, handler/service, DB run, dedicated analysis record, result envelope, and provenance versions
+  agree where those records exist.
 
 ## Patch Version
 
@@ -66,7 +69,8 @@ types (`categorical.one_proportion`, `categorical.two_proportion`, and
 correlation and regression result types (`regression.pearson`,
 `regression.xy_correlation`, and `regression.linear_model`).
 `analysisResultsQuality.ts` owns quality result and preflight types
-(`quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`,
+(`quality.attribute_control_chart`, `quality.individuals_chart`,
+`quality.subgroup_chart`, `quality.run_chart`,
 `quality.capability`, `quality.gage_rr`, `quality.gage_run_chart`, and the Gage
 R&R balanced-crossed preflight contract). `analysisResultsHypothesis.ts` owns
 hypothesis-test result types (`hypothesis.one_sample_t`,
@@ -137,16 +141,49 @@ diff that compares the full FastAPI response/request field shapes with
 a method-version bump; changing request payload semantics, summary-type
 semantics, or stored result field interpretation does.
 
-`regression.predict` paged row retrieval is an additive storage/access contract:
-it preserves the `0.1.0` calculation and persisted result fields while moving
-all valid raw-predictor-free rows into a checksum-recorded app-owned artifact.
-Its internal config schema is version `2`; this addition does not rewrite old
-results, and older prediction runs without the artifact return an explicit
-recovery error from the page endpoint.
+Earlier paged row retrieval and the dedicated
+`regression_prediction_csv_export` format were additive storage/access changes
+that preserved the `0.1.0` result interpretation. The 2026-07-14 dependency
+stabilization changes required persisted provenance and cross-artifact identity
+fields, so `regression.predict` receives a minor bump to `0.2.0` under the rule
+below. Its prediction result schema is `2`, config schema is `3`, and rows
+artifact/header schema is `2`; the unchanged CSV format remains schema `1`.
+Older prediction artifacts are not silently migrated.
 
-The dedicated `regression_prediction_csv_export` format has its own schema
-version. Adding this raw-predictor-free export does not change stored prediction
-statistics or interpretation, so it does not bump `regression.predict`.
+`doe.factorial_design` receives a minor bump from `0.1.0` to `0.2.0` because
+the same dedicated method now persists and restores effects, OLS/ANOVA,
+pure-error/lack-of-fit, diagnostic, plot, and provenance fields. Its analysis
+config and result schemas both start at `1`; SQLite metadata schema v9 stores
+the relationship. Earlier v0.1 design/response assets are not rewritten into
+analysis results, and no fake migration is performed.
+
+`doe.response_surface` becomes executable for the first time at `0.1.0` through
+dedicated CCD design/response/analysis routes. Its design, analysis config, and
+analysis result schemas each start at `1`; existing schema-v9 DOE metadata
+tables store the relationship. There is no prior executable response-surface
+artifact to migrate or reinterpret.
+
+`regression.response_optimizer` keeps its initial registry version `0.1.0`
+when its first persisted dedicated optimizer contract becomes executable from
+the response-surface panel. Its config and result schemas both start at `1` and
+schema-v9 DOE analysis metadata stores the relationship. The generic
+analysis-run page remains disabled, but it produced no earlier optimizer result
+that would require a version bump or migration.
+
+`doe.bayesian_optimization` enters the catalog as a planning-only method at
+`0.1.0`. It has no executable API, config/result/history schema, migration, or
+stored result. The version identifies the approved planning contract and
+reference policy only. Before the first executable artifact is allowed, the
+implementation must either match that contract or make an explicit method-
+version decision; no stored result may be silently assigned to the planning
+version after semantics change.
+
+`quality.attribute_control_chart` becomes available with its first persisted
+contract at method version `0.1.0` and result schema `1`. This is not a bump of
+an older executable result: the registry ID existed only as planned guidance
+and no result artifact was previously produced. Future changes to P/NP/C/U
+formulas, count/denominator meaning, limit policy, signal rules, or persisted
+field interpretation require a method-version decision under this policy.
 
 ## Minor Version
 

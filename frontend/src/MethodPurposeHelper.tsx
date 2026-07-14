@@ -52,8 +52,20 @@ const purposeGuideItems = [
     caution: "상관은 원인과 결과를 증명하지 않습니다.",
   },
   {
+    question: "저장된 회귀모형으로 새 데이터를 예측하고 싶다",
+    methods: ["regression.linear_model"],
+    reason: "회귀모형 적합 화면에서 저장 모델의 source freshness와 target schema를 확인한 뒤 예측합니다.",
+    roles: "Response, Predictor, 예측 대상 데이터셋",
+    caution: "source schema가 바뀌어 모델이 stale이면 현재 schema로 회귀모형을 다시 적합해야 합니다.",
+  },
+  {
     question: "공정이 안정적인지 보고 싶다",
-    methods: ["quality.individuals_chart", "quality.subgroup_chart", "quality.run_chart"],
+    methods: [
+      "quality.attribute_control_chart",
+      "quality.individuals_chart",
+      "quality.subgroup_chart",
+      "quality.run_chart",
+    ],
     reason: "시간/실행 순서 또는 부분군 구조에서 공정 신호를 확인합니다.",
     roles: "Response, Order 또는 Subgroup",
     caution: "실제 생산 순서나 합리적 부분군 구조가 맞는지 먼저 확인해야 합니다.",
@@ -73,11 +85,25 @@ const purposeGuideItems = [
     caution: "Part-Operator-Replicate 조합이 균형 설계인지 사전점검이 필요합니다.",
   },
   {
-    question: "실험 조건표를 만들고 싶다",
+    question: "요인실험을 설계하고 효과를 분석하고 싶다",
     methods: ["doe.factorial_design"],
-    reason: "2-level full factorial 실행 순서와 재현 가능한 설계표를 만듭니다.",
-    roles: "Factor, level, run order, seed",
-    caution: "현재 DOE는 설계표와 response entry/report까지만 제공하고 effects/ANOVA는 계산하지 않습니다.",
+    reason: "2-level full factorial 실행 순서를 만들고 저장한 반응의 효과와 ANOVA를 계산합니다.",
+    roles: "Factor, low/high level, run order, response",
+    caution: "효과는 -1/+1 coding 기준이며 RSM이나 최적 조건 추천으로 해석할 수 없습니다.",
+  },
+  {
+    question: "곡률이 있는 공정 반응을 모델링하고 싶다",
+    methods: ["doe.response_surface", "regression.response_optimizer"],
+    reason: "Central Composite Design과 full quadratic OLS로 반응표면을 보고, 저장 모형의 bounded desirability 최적화를 실행합니다.",
+    roles: "Continuous factor bounds, run order, response",
+    caution: "정상점과 optimizer 권장점은 모형 기반 후보이며 전역 최적이 아니므로 설계영역 안에서 확인 실험이 필요합니다.",
+  },
+  {
+    question: "비용이 큰 실험을 순차적으로 탐색하고 싶다",
+    methods: ["doe.bayesian_optimization"],
+    reason: "관측 이력의 Gaussian Process surrogate와 Expected Improvement로 다음 실험 후보를 정하는 계획입니다.",
+    roles: "Continuous factor bounds, objective, sequential trial history",
+    caution: "현재는 계약 단계로 실행되지 않으며, 향후 추천도 전역 최적을 보장하거나 실험을 대신 수행하지 않습니다.",
   },
 ] as const;
 

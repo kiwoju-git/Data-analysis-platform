@@ -24,7 +24,10 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 100 * 1024 * 1024
     workspace_root: Path = Field(default_factory=default_workspace_root)
     cors_allowed_origins: list[str] = Field(
-        default_factory=lambda: ["http://127.0.0.1:5173"],
+        default_factory=lambda: [
+            "http://127.0.0.1:5173",
+            "http://localhost:5173",
+        ],
     )
 
     @field_validator("bind_host")

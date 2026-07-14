@@ -27,7 +27,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "regression.pearson": METHOD_VERSION,
     "regression.xy_correlation": METHOD_VERSION,
     "regression.linear_model": METHOD_VERSION,
-    "regression.predict": METHOD_VERSION,
+    "regression.predict": "0.2.0",
     "regression.response_optimizer": METHOD_VERSION,
     "quality.attribute_control_chart": METHOD_VERSION,
     "quality.individuals_chart": METHOD_VERSION,
@@ -36,8 +36,9 @@ METHOD_VERSIONS: dict[str, str] = {
     "quality.capability": METHOD_VERSION,
     "quality.gage_rr": METHOD_VERSION,
     "quality.gage_run_chart": METHOD_VERSION,
-    "doe.factorial_design": METHOD_VERSION,
+    "doe.factorial_design": "0.2.0",
     "doe.response_surface": METHOD_VERSION,
+    "doe.bayesian_optimization": METHOD_VERSION,
 }
 
 MODULES: tuple[AnalysisModuleDescriptor, ...] = (
@@ -300,7 +301,10 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_ko="예측",
         label_en="Predict",
         order=40,
-        disabled_reason="앱이 생성한 회귀 모델 manifest가 구현된 뒤 활성화됩니다.",
+        disabled_reason=(
+            "저장된 회귀 모델을 이용한 예측은 회귀모형 적합 화면에서 지원됩니다. "
+            "독립 Predict method 화면은 아직 제공하지 않습니다."
+        ),
     ),
     _disabled(
         method_id="regression.response_optimizer",
@@ -308,9 +312,12 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_ko="반응 최적화",
         label_en="Response Optimizer",
         order=50,
-        disabled_reason="검증된 회귀 또는 DOE 반응표면 모델이 필요합니다.",
+        disabled_reason=(
+            "저장된 반응표면 모델을 이용한 최적화는 반응표면법 화면에서 지원됩니다. "
+            "독립 Response Optimizer 화면은 아직 제공하지 않습니다."
+        ),
     ),
-    _planned(
+    _available(
         method_id="quality.attribute_control_chart",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="계수형 관리도",
@@ -367,13 +374,26 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         order=10,
         requires_dataset=False,
     ),
-    _planned(
+    _available(
         method_id="doe.response_surface",
         module_id=AnalysisModuleId.DOE,
         label_ko="반응표면법",
         label_en="Response Surface Method",
         order=20,
         requires_dataset=False,
+    ),
+    _planned(
+        method_id="doe.bayesian_optimization",
+        module_id=AnalysisModuleId.DOE,
+        label_ko="베이지안 최적화",
+        label_en="Bayesian Optimization",
+        order=30,
+        requires_dataset=False,
+        disabled_reason=(
+            "순차 실험 history, Gaussian Process surrogate, Expected Improvement, "
+            "제약과 실행 budget의 계약 및 reference 정책만 확정되어 있습니다. "
+            "실행 API와 추천 결과는 아직 제공하지 않습니다."
+        ),
     ),
 )
 

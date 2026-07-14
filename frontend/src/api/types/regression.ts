@@ -49,6 +49,8 @@ export interface RegressionPredictionPreflightResponse {
   target_dataset_version_id: string;
   model_manifest_sha256: string;
   source_schema_hash: string;
+  source_schema_hash_current: string | null;
+  source_analysis_stale: boolean | null;
   target_schema_hash: string;
   schema_hash_match: boolean;
   row_count_total: number;
@@ -89,10 +91,31 @@ export interface RegressionPredictionRow {
   warnings: string[];
 }
 
+export interface RegressionPredictionProvenance extends AnalysisProvenance {
+  source_analysis_id: string;
+  source_analysis_stale_at_prediction: boolean;
+  source_dataset_version_id: string;
+  source_schema_hash_at_fit: string;
+  source_schema_hash_current: string;
+  target_dataset_version_id: string;
+  target_schema_hash: string;
+  model_id: string;
+  model_manifest_sha256: string;
+  prediction_schema_version: number;
+  model_manifest_schema_version: number;
+  missing_policy: "complete_case";
+  confidence_level: number;
+  include_intervals: boolean;
+  source_canonical_artifact_sha256: string;
+  target_canonical_artifact_sha256: string;
+  created_at: string;
+}
+
 export interface RegressionPredictionResponse {
   prediction_id: string;
   model_id: string;
   analysis_id: string;
+  source_analysis_id: string;
   source_dataset_version_id: string;
   target_dataset_version_id: string;
   model_manifest_sha256: string;
@@ -105,7 +128,7 @@ export interface RegressionPredictionResponse {
   truncated: boolean;
   confidence_level: number;
   warnings: RegressionPredictionWarning[];
-  provenance: Record<string, unknown>;
+  provenance: RegressionPredictionProvenance;
   columns: RegressionPredictionColumnMapping[];
   rows: RegressionPredictionRow[];
 }
@@ -138,3 +161,4 @@ export interface RegressionPredictionCsvExportResponse {
   row_count: number;
   preview_rows: string[][];
 }
+import type { AnalysisProvenance } from "./analyses";

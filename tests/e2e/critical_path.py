@@ -53,6 +53,39 @@ REGRESSION_TARGET_DATA = """y\tx\tgroup
 0\t6\tA
 """
 
+ATTRIBUTE_CONTROL_CHART_DATA = """defectives\tsample_size
+12\t50
+15\t50
+8\t50
+10\t50
+4\t50
+7\t50
+16\t50
+9\t50
+14\t50
+10\t50
+5\t50
+6\t50
+17\t50
+12\t50
+22\t50
+8\t50
+10\t50
+5\t50
+13\t50
+11\t50
+20\t50
+18\t50
+24\t50
+15\t50
+9\t50
+12\t50
+7\t50
+13\t50
+9\t50
+6\t50
+"""
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -71,7 +104,9 @@ def main() -> int:
     else:
         args.workspace_root.mkdir(parents=True, exist_ok=True)
         workspace_root = Path(tempfile.mkdtemp(prefix="run-", dir=args.workspace_root))
-    diagnostics_root = args.diagnostics_root if args.diagnostics_root is not None else workspace_root
+    diagnostics_root = (
+        args.diagnostics_root if args.diagnostics_root is not None else workspace_root
+    )
     diagnostics = E2EDiagnostics(diagnostics_root)
     diagnostics.record("E2E diagnostics initialized")
     log_root = diagnostics.log_root
@@ -122,7 +157,9 @@ def main() -> int:
             stdout=backend_log,
             stderr=subprocess.STDOUT,
         )
-        managed_processes.append(ManagedProcess("backend", backend_process, backend_log_path))
+        managed_processes.append(
+            ManagedProcess("backend", backend_process, backend_log_path)
+        )
         frontend_process = subprocess.Popen(
             [
                 npm_command(),
@@ -142,7 +179,9 @@ def main() -> int:
             stdout=frontend_log,
             stderr=subprocess.STDOUT,
         )
-        managed_processes.append(ManagedProcess("frontend", frontend_process, frontend_log_path))
+        managed_processes.append(
+            ManagedProcess("frontend", frontend_process, frontend_log_path)
+        )
 
         diagnostics.step("wait for backend health")
         wait_for_url(
@@ -152,7 +191,9 @@ def main() -> int:
             diagnostics,
         )
         diagnostics.step("wait for frontend dev server")
-        wait_for_url(frontend_base_url, "frontend dev server", managed_processes, diagnostics)
+        wait_for_url(
+            frontend_base_url, "frontend dev server", managed_processes, diagnostics
+        )
         run_browser_flow(frontend_base_url, diagnostics)
         print("E2E critical path passed")
         return 0
@@ -214,7 +255,9 @@ def wait_for_url(
         except (urllib.error.URLError, TimeoutError) as exc:
             last_error = exc
         time.sleep(0.5)
-    message = f"[e2e] {label} readiness timed out at {url}; printing recent process logs"
+    message = (
+        f"[e2e] {label} readiness timed out at {url}; printing recent process logs"
+    )
     print(message, file=sys.stderr)
     diagnostics.record(message)
     for managed_process in managed_processes:
@@ -294,7 +337,9 @@ class E2EDiagnostics:
             self.record(message)
         try:
             page.screenshot(path=str(screenshot_path), full_page=True)
-            message = f"[e2e] failure screenshot: {self.artifact_label(screenshot_path)}"
+            message = (
+                f"[e2e] failure screenshot: {self.artifact_label(screenshot_path)}"
+            )
             print(message, file=sys.stderr)
             self.record(message)
         except Exception as exc:
@@ -328,7 +373,9 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
 
             page.get_by_label("복사한 표 붙여넣기").fill(SAMPLE_DATA)
             page.get_by_role("button", name="붙여넣기 데이터 등록").click()
-            expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+            expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
+                timeout=15_000
+            )
 
             page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
             expect(
@@ -340,15 +387,23 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             expect(page.get_by_role("heading", name="기술통계 실행")).to_be_visible()
             page.get_by_role("button", name="기술통계 실행").click()
             diagnostics.step("run descriptive statistics")
-            expect(page.locator(".result-table").filter(has_text="Value")).to_be_visible(
+            expect(
+                page.locator(".result-table").filter(has_text="Value")
+            ).to_be_visible(
                 timeout=20_000,
             )
 
-            page.get_by_role("button", name=re.compile(r"2-표본 t-검정 메서드 보기")).click()
-            expect(page.get_by_role("heading", name="2-표본 t-검정 실행")).to_be_visible()
+            page.get_by_role(
+                "button", name=re.compile(r"2-표본 t-검정 메서드 보기")
+            ).click()
+            expect(
+                page.get_by_role("heading", name="2-표본 t-검정 실행")
+            ).to_be_visible()
             page.get_by_role("button", name="2-표본 t-검정 실행").click()
             diagnostics.step("run two-sample t test")
-            expect(page.locator(".result-table").filter(has_text="Hedges g")).to_be_visible(
+            expect(
+                page.locator(".result-table").filter(has_text="Hedges g")
+            ).to_be_visible(
                 timeout=20_000,
             )
 
@@ -360,8 +415,16 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_schema_stale_behavior(page)
             diagnostics.step("verify linear model fit and prediction")
             verify_linear_model_fit_and_prediction(page)
+            diagnostics.step("verify attribute control chart")
+            verify_attribute_control_chart(page)
+            diagnostics.step("verify DOE factorial analysis")
+            verify_doe_factorial_analysis(page)
+            diagnostics.step("verify DOE response surface analysis and optimization")
+            verify_doe_response_surface_analysis(page)
             diagnostics.step("verify XLSX browser upload")
-            verify_xlsx_file_upload(page, Path(tempfile.mkdtemp(prefix="datalab-e2e-upload-")))
+            verify_xlsx_file_upload(
+                page, Path(tempfile.mkdtemp(prefix="datalab-e2e-upload-"))
+            )
             diagnostics.step("verify CSV upload and upload error recovery")
             verify_csv_file_upload_and_error_recovery(
                 page,
@@ -415,13 +478,19 @@ def describe_page(page: Page | None) -> str:
 
 def create_exports(page: Page) -> None:
     page.get_by_role("button", name="JSON 생성").click()
-    expect(page.get_by_role("button", name="JSON 다운로드")).to_be_visible(timeout=15_000)
+    expect(page.get_by_role("button", name="JSON 다운로드")).to_be_visible(
+        timeout=15_000
+    )
 
     page.get_by_role("button", name="CSV 생성").click()
-    expect(page.get_by_role("button", name="CSV 다운로드")).to_be_visible(timeout=15_000)
+    expect(page.get_by_role("button", name="CSV 다운로드")).to_be_visible(
+        timeout=15_000
+    )
 
     page.get_by_role("button", name="HTML 생성").click()
-    expect(page.get_by_role("button", name="HTML 다운로드")).to_be_visible(timeout=15_000)
+    expect(page.get_by_role("button", name="HTML 다운로드")).to_be_visible(
+        timeout=15_000
+    )
     expect(page.get_by_text("최근 export")).to_be_visible()
 
     try:
@@ -429,7 +498,9 @@ def create_exports(page: Page) -> None:
             page.get_by_role("button", name="JSON 다운로드").click()
         download = download_info.value
         if not download.suggested_filename.endswith(".json"):
-            raise AssertionError(f"unexpected JSON download name: {download.suggested_filename}")
+            raise AssertionError(
+                f"unexpected JSON download name: {download.suggested_filename}"
+            )
     except PlaywrightTimeoutError as exc:
         raise AssertionError("JSON export download did not start") from exc
 
@@ -446,7 +517,9 @@ def restore_and_compare_saved_results(page: Page) -> None:
     history_items.nth(1).get_by_role("button", name="오른쪽").click()
     page.get_by_role("button", name="비교").click()
     expect(page.get_by_text("비교 결과")).to_be_visible(timeout=15_000)
-    expect(page.get_by_text("같은 method/version일 때만 자세한 비교가 가능합니다.")).to_be_visible()
+    expect(
+        page.get_by_text("같은 method/version일 때만 자세한 비교가 가능합니다.")
+    ).to_be_visible()
     expect(page.get_by_text(re.compile(r"method (same|different)"))).to_be_visible()
 
 
@@ -460,7 +533,9 @@ def verify_schema_stale_behavior(page: Page) -> None:
     expect(page.get_by_role("button", name="스키마 저장")).to_be_enabled(timeout=15_000)
 
     page.get_by_role("button", name="분석", exact=True).click()
-    expect(page.get_by_text("현재 데이터셋의 저장된 분석")).to_be_visible(timeout=15_000)
+    expect(page.get_by_text("현재 데이터셋의 저장된 분석")).to_be_visible(
+        timeout=15_000
+    )
     page.get_by_role("button", name="새로고침").click()
     expect(page.locator(".analysis-history-item")).to_have_count(2, timeout=15_000)
     expect(page.locator(".analysis-history-panel .stale-badge")).to_have_count(0)
@@ -499,7 +574,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     ).click()
     page.get_by_label("분석 메서드").get_by_role(
         "button",
-        name=re.compile(r"회귀모형 적합"),
+        name=re.compile(r"^회귀모형 적합"),
     ).click()
     expect(page.get_by_role("heading", name="회귀모형 적합 실행")).to_be_visible()
 
@@ -527,7 +602,9 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(target_option).to_have_count(1, timeout=15_000)
     target_version_id = target_option.get_attribute("value")
     if target_version_id is None:
-        raise AssertionError("Prediction target option did not expose a dataset version ID")
+        raise AssertionError(
+            "Prediction target option did not expose a dataset version ID"
+        )
     target_selector.select_option(target_version_id)
     expect(target_selector).to_have_value(target_version_id)
 
@@ -545,7 +622,9 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(prediction_summary).to_contain_text("Prediction ID")
     expect(page.get_by_role("heading", name="예측 구간 차트")).to_be_visible()
     expect(page.locator(".prediction-interval-line")).to_have_count(4)
-    prediction_table = page.locator(".result-table").filter(has_text="Prediction interval")
+    prediction_table = page.locator(".result-table").filter(
+        has_text="Prediction interval"
+    )
     expect(prediction_table).to_be_visible()
     expect(prediction_table.get_by_role("columnheader", name="Mean CI")).to_be_visible()
     expect(prediction_table.locator("tbody tr")).to_have_count(4)
@@ -566,6 +645,117 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
         raise AssertionError("Prediction CSV export download did not start") from exc
 
 
+def verify_attribute_control_chart(page: Page) -> None:
+    page.get_by_role("button", name="데이터셋", exact=True).click()
+    page.get_by_label("복사한 표 붙여넣기").fill(ATTRIBUTE_CONTROL_CHART_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect_dataset_context_counts(page, row_label="30행", column_label="2컬럼")
+
+    page.get_by_role("button", name="분석", exact=True).click()
+    page.get_by_role("button", name="계수형 관리도 메서드 보기").click()
+    expect(page.get_by_role("heading", name="계수형 관리도 실행")).to_be_visible()
+    expect(page.get_by_role("radio", name="P", exact=True)).to_have_attribute(
+        "aria-checked", "true"
+    )
+    expect(page.get_by_label("불량품 수")).to_have_value(re.compile(r".+"))
+    expect(page.get_by_label("표본 크기")).to_have_value(re.compile(r".+"))
+
+    page.get_by_role("button", name="P 관리도 실행").click()
+    summary = page.get_by_label("계수형 관리도 요약")
+    expect(summary).to_be_visible(timeout=20_000)
+    expect(summary).to_contain_text("30 / 30")
+    expect(summary).to_contain_text("2개")
+    expect(
+        page.get_by_role("img", name=re.compile(r"P 관리도.*신호 2개"))
+    ).to_be_visible()
+    result_table = page.locator(".result-table").filter(has_text="표본 크기")
+    expect(result_table).to_be_visible()
+    expect(result_table.locator("tbody tr")).to_have_count(25)
+    expect(result_table.get_by_text("관리한계 밖")).to_have_count(2)
+
+
+def verify_doe_factorial_analysis(page: Page) -> None:
+    page.get_by_role("button", name="분석", exact=True).click()
+    page.get_by_role("button", name="실험 계획 생성 메서드 보기").click()
+    expect(
+        page.get_by_role("heading", name="2-level full factorial 설계 생성")
+    ).to_be_visible()
+
+    page.get_by_label("반복", exact=True).fill("2")
+    page.get_by_label("센터점", exact=True).fill("1")
+    page.get_by_label("랜덤화", exact=True).uncheck()
+    page.get_by_role("button", name="DOE 설계 생성").click()
+    expect(page.get_by_text("2-level screening design", exact=True)).to_be_visible(
+        timeout=20_000
+    )
+
+    for run_order in range(1, 10):
+        page.get_by_label(f"run {run_order} response").fill(
+            str(40 + run_order + (0.25 if run_order % 2 == 0 else -0.25))
+        )
+    page.get_by_role("button", name="반응값 저장").click()
+    response_summary = page.get_by_label("저장된 DOE 반응 요약")
+    expect(response_summary).to_be_visible(timeout=20_000)
+    expect(response_summary).to_contain_text("Yield")
+    expect(response_summary).to_contain_text("9")
+
+    page.get_by_label("최대 상호작용 차수").select_option("2")
+    page.get_by_role("button", name="효과 및 ANOVA 분석").click()
+    expect(page.get_by_role("heading", name="Factorial 분석 결과")).to_be_visible(
+        timeout=20_000
+    )
+    expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
+    expect(page.get_by_role("img", name="주효과 평균 차트")).to_be_visible()
+    expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.2.0")
+    expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
+
+
+def verify_doe_response_surface_analysis(page: Page) -> None:
+    page.get_by_role("button", name="반응표면법 메서드 보기").click()
+    expect(page.locator("#response-surface-title")).to_be_visible()
+
+    page.get_by_label("실행 순서 무작위화").uncheck()
+    page.get_by_role("button", name="CCD 생성").click()
+    expect(page.get_by_role("heading", name="CCD 실행표와 반응 입력")).to_be_visible(
+        timeout=20_000
+    )
+    responses = [90, 94, 96, 100, 92, 98, 91, 99, 95.0, 95.2, 94.9, 95.1, 94.8]
+    for run_order, response in enumerate(responses, start=1):
+        page.get_by_label(f"Run {run_order} 반응").fill(str(response))
+
+    page.get_by_role("button", name="반응 저장").click()
+    analysis_button = page.get_by_role("button", name="Quadratic model 적합")
+    expect(analysis_button).to_be_enabled(timeout=20_000)
+    analysis_button.click()
+
+    expect(
+        page.get_by_role("heading", name="Quadratic response surface")
+    ).to_be_visible(timeout=20_000)
+    expect(
+        page.get_by_role("img", name="Temperature와 Pressure의 예측 반응 contour")
+    ).to_be_visible()
+    expect(page.get_by_role("columnheader", name="계수")).to_be_visible()
+    expect(page.get_by_label("반응표면 적합 요약")).to_contain_text("R²")
+    expect(page.get_by_label("반응표면 진단 요약")).to_be_visible()
+
+    optimizer_button = page.get_by_role("button", name="Response Optimizer 실행")
+    expect(optimizer_button).to_be_enabled()
+    optimizer_button.click()
+    expect(page.get_by_role("heading", name="권장 운전 조건")).to_be_visible(
+        timeout=20_000
+    )
+    optimizer_summary = page.get_by_label("Response Optimizer 결과 요약")
+    expect(optimizer_summary).to_contain_text("Composite desirability")
+    expect(optimizer_summary).to_contain_text("search_completed")
+    expect(optimizer_summary).to_contain_text("전역 최적 보장")
+    expect(page.get_by_role("columnheader", name="권장 실제값")).to_be_visible()
+    expect(page.get_by_role("columnheader", name="개별 desirability")).to_be_visible()
+    expect(page.get_by_text("response_optimizer_confirmation_run_required")).to_be_visible()
+
+
 def verify_xlsx_file_upload(page: Page, temp_dir: Path) -> None:
     try:
         xlsx_path = temp_dir / "browser-upload-sample.xlsx"
@@ -574,7 +764,9 @@ def verify_xlsx_file_upload(page: Page, temp_dir: Path) -> None:
         page.get_by_role("button", name="데이터셋", exact=True).click()
         page.get_by_label("원본 데이터 파일").set_input_files(str(xlsx_path))
         page.get_by_role("button", name="업로드").click()
-        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
+            timeout=15_000
+        )
         expect(page.get_by_text("browser-upload-sample.xlsx")).to_be_visible()
 
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
@@ -613,7 +805,9 @@ def verify_csv_file_upload_and_error_recovery(page: Page, temp_dir: Path) -> Non
         page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
         expect(page.get_by_role("alert")).not_to_be_visible()
         page.get_by_role("button", name="업로드").click()
-        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
+            timeout=15_000
+        )
         expect(page.get_by_text("브라우저-csv-upload.csv")).to_be_visible()
 
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
@@ -645,7 +839,9 @@ def verify_parser_option_editing(page: Page, temp_dir: Path) -> None:
         page.get_by_role("button", name="데이터셋", exact=True).click()
         page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
         page.get_by_role("button", name="업로드").click()
-        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
+            timeout=15_000
+        )
         expect(page.get_by_text("parser-options-edit.csv")).to_be_visible()
 
         page.get_by_label("첫 데이터 행을 헤더로 사용").check()
@@ -681,7 +877,9 @@ def verify_delimiter_option_editing(page: Page, temp_dir: Path) -> None:
         page.get_by_role("button", name="데이터셋", exact=True).click()
         page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
         page.get_by_role("button", name="업로드").click()
-        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
+            timeout=15_000
+        )
         expect(page.get_by_text("semicolon-delimiter.csv")).to_be_visible()
 
         page.get_by_label("구분자").select_option(";")
@@ -707,12 +905,16 @@ def verify_xlsx_sheet_selection(page: Page, temp_dir: Path) -> None:
         page.get_by_role("button", name="데이터셋", exact=True).click()
         page.get_by_label("원본 데이터 파일").set_input_files(str(xlsx_path))
         page.get_by_role("button", name="업로드").click()
-        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
+            timeout=15_000
+        )
         expect(page.get_by_text("multi-sheet-upload.xlsx")).to_be_visible()
 
         page.get_by_label("시트명").fill("Missing")
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-        expect(page.get_by_role("alert")).to_contain_text("xlsx_sheet_not_found", timeout=15_000)
+        expect(page.get_by_role("alert")).to_contain_text(
+            "xlsx_sheet_not_found", timeout=15_000
+        )
         expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible()
 
         page.get_by_label("시트명").fill("Measurements")
@@ -734,19 +936,17 @@ def verify_text_encoding_selection(page: Page, temp_dir: Path) -> None:
     try:
         csv_path = temp_dir / "cp949-upload.csv"
         csv_path.write_bytes(
-            (
-                ("A" * 8300)
-                + "\n"
-                + "이름,값\n"
-                + "홍길동,1\n"
-                + "김철수,2\n"
-            ).encode("cp949"),
+            (("A" * 8300) + "\n" + "이름,값\n" + "홍길동,1\n" + "김철수,2\n").encode(
+                "cp949"
+            ),
         )
 
         page.get_by_role("button", name="데이터셋", exact=True).click()
         page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
         page.get_by_role("button", name="업로드").click()
-        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+        expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
+            timeout=15_000
+        )
         expect(page.get_by_text("cp949-upload.csv")).to_be_visible()
 
         page.get_by_label("구분자").select_option(",")
@@ -754,7 +954,9 @@ def verify_text_encoding_selection(page: Page, temp_dir: Path) -> None:
         page.get_by_label("헤더 행").fill("2")
         page.get_by_label("인코딩").select_option("utf-8")
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-        expect(page.get_by_role("alert")).to_contain_text("text_decoding_failed", timeout=15_000)
+        expect(page.get_by_role("alert")).to_contain_text(
+            "text_decoding_failed", timeout=15_000
+        )
         expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible()
 
         page.get_by_label("인코딩").select_option("cp949")
@@ -764,7 +966,9 @@ def verify_text_encoding_selection(page: Page, temp_dir: Path) -> None:
             page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
         ).to_be_visible(timeout=20_000)
         expect_dataset_context_counts(page, row_label="2행", column_label="2컬럼")
-        expect(page.get_by_role("columnheader", name="이름", exact=True)).to_be_visible()
+        expect(
+            page.get_by_role("columnheader", name="이름", exact=True)
+        ).to_be_visible()
         expect(page.get_by_role("columnheader", name="값", exact=True)).to_be_visible()
         expect(page.get_by_role("cell", name="홍길동", exact=True)).to_be_visible()
         expect(page.get_by_role("cell", name="김철수", exact=True)).to_be_visible()
@@ -772,7 +976,9 @@ def verify_text_encoding_selection(page: Page, temp_dir: Path) -> None:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def expect_dataset_context_counts(page: Page, *, row_label: str, column_label: str) -> None:
+def expect_dataset_context_counts(
+    page: Page, *, row_label: str, column_label: str
+) -> None:
     context_bar = page.locator('[aria-label="데이터셋 컨텍스트"]')
     expect(context_bar.get_by_text(row_label, exact=True)).to_be_visible()
     expect(context_bar.get_by_text(column_label, exact=True)).to_be_visible()

@@ -8,12 +8,13 @@ from uuid import UUID, uuid4
 
 from fastapi import status
 
-from app.analyses.registry import METHOD_VERSION, get_analysis_method
+from app.analyses.registry import METHOD_VERSIONS, get_analysis_method
 from app.api.v1.schemas.doe import (
     DoeDesignResponseSeries,
     DoeDesignResponsesResponse,
     DoeDesignResponsesUpsertRequest,
     DoeDesignResponseValue,
+    DoeFactorialAnalysisResponse,
     DoeFactorResponse,
     FactorialDesignCreateRequest,
     FactorialDesignOptionsResponse,
@@ -64,7 +65,8 @@ def create_factorial_design(
     body: FactorialDesignCreateRequest,
 ) -> FactorialDesignResponse:
     method = get_analysis_method(DOE_FACTORIAL_METHOD_ID)
-    if method is None or method.method_version != METHOD_VERSION:
+    method_version = METHOD_VERSIONS[DOE_FACTORIAL_METHOD_ID]
+    if method is None or method.method_version != method_version:
         raise ApiError(
             code="doe_factorial_method_registry_mismatch",
             message="DOE factorial method registry 상태가 올바르지 않습니다.",
@@ -98,7 +100,7 @@ def create_factorial_design(
     design_record = ExperimentDesignRecord(
         design_id=str(design_id),
         method_id=DOE_FACTORIAL_METHOD_ID,
-        method_version=METHOD_VERSION,
+        method_version=method_version,
         family=FACTORIAL_DESIGN_FAMILY,
         name=body.name.strip(),
         status="designed",
@@ -236,7 +238,14 @@ def get_factorial_design_html_report(
         version.design_version_id,
     )
     response_payload = _factorial_design_responses_response(design, version, runs, records)
-    content = _factorial_design_html_report_bytes(design_payload, response_payload)
+    from app.services.doe_factorial_analysis import get_latest_factorial_analysis
+
+    analysis_payload = get_latest_factorial_analysis(settings, design_id)
+    content = _factorial_design_html_report_bytes(
+        design_payload,
+        response_payload,
+        analysis_payload,
+    )
     return DoeDesignHtmlReport(
         content=content,
         media_type=DOE_FACTORIAL_HTML_REPORT_MEDIA_TYPE,
@@ -372,6 +381,7 @@ def _factorial_design_responses_response(
 def _factorial_design_html_report_bytes(
     design: FactorialDesignResponse,
     responses: DoeDesignResponsesResponse,
+    analysis: DoeFactorialAnalysisResponse | None,
 ) -> bytes:
     factor_markup = "\n".join(
         "<tr>"
@@ -395,6 +405,7 @@ def _factorial_design_html_report_bytes(
         for run in design.runs
     )
     response_markup = _factorial_design_response_html_markup(responses)
+    analysis_markup = _factorial_analysis_html_markup(analysis)
 
     html = f"""<!doctype html>
 <html lang="ko">
@@ -431,8 +442,7 @@ def _factorial_design_html_report_bytes(
 <body>
   <h1>DOE Factorial Design Report</h1>
   <p>
-    저장된 DOE 설계와 반응값을 재계산 없이 표시합니다.
-    효과, 모델 적합, 진단은 이 보고서에서 계산하지 않습니다.
+    검증된 DOE 설계, 반응값, 저장된 factorial 분석 결과를 재계산 없이 표시합니다.
   </p>
   <dl class="meta">
     <dt>Design ID</dt><dd>{_html_text(str(design.design_id))}</dd>
@@ -498,6 +508,9 @@ def _factorial_design_html_report_bytes(
 
   <h2>Responses</h2>
 {response_markup}
+
+  <h2>Factorial Analysis</h2>
+{analysis_markup}
 </body>
 </html>
 """
@@ -535,6 +548,105 @@ def _factorial_design_response_html_markup(responses: DoeDesignResponsesResponse
 {row_markup}
     </tbody>
   </table>"""
+
+
+def _factorial_analysis_html_markup(
+    analysis: DoeFactorialAnalysisResponse | None,
+) -> str:
+    if analysis is None:
+        return "  <p>저장된 factorial 분석 결과가 없습니다.</p>"
+
+    result = analysis.result
+    fit = result.fit
+    effect_rows = "\n".join(
+        "<tr>"
+        f"<td>{_html_text(term.label)}</td>"
+        f"<td>{_html_text(_report_cell(term.coefficient))}</td>"
+        f"<td>{_html_text(_report_cell(term.effect))}</td>"
+        f"<td>{_html_text(_report_cell(term.standard_error))}</td>"
+        f"<td>{_html_text(_report_cell(term.p_value))}</td>"
+        "</tr>"
+        for term in result.terms
+    )
+    anova_rows = "\n".join(
+        "<tr>"
+        f"<td>{_html_text(label)}</td>"
+        f"<td>{_html_text(row.df)}</td>"
+        f"<td>{_html_text(row.sum_squares)}</td>"
+        f"<td>{_html_text(_report_cell(row.mean_square))}</td>"
+        f"<td>{_html_text(_report_cell(row.f_statistic))}</td>"
+        f"<td>{_html_text(_report_cell(row.p_value))}</td>"
+        "</tr>"
+        for label, row in (
+            ("Model", result.anova.model),
+            ("Residual", result.anova.residual),
+            ("Pure error", result.anova.lack_of_fit.pure_error),
+            ("Lack of fit", result.anova.lack_of_fit.lack_of_fit),
+            ("Total", result.anova.total),
+        )
+    )
+    warning_markup = (
+        "<p>None</p>"
+        if not result.warnings
+        else "<ul>"
+        + "".join(f"<li>{_html_text(warning)}</li>" for warning in result.warnings)
+        + "</ul>"
+    )
+    return f"""  <dl class="meta">
+    <dt>Analysis ID</dt><dd>{_html_text(str(analysis.analysis_id))}</dd>
+    <dt>Response</dt><dd>{_html_text(analysis.response_name)}</dd>
+    <dt>Method</dt><dd>{_html_text(analysis.method_id)} v{_html_text(analysis.method_version)}</dd>
+    <dt>Analysis Schema</dt><dd>{_html_text(analysis.analysis_schema_version)}</dd>
+    <dt>Response SHA-256</dt><dd><code>{_html_text(analysis.response_sha256)}</code></dd>
+    <dt>Created At</dt><dd>{_html_text(analysis.created_at)}</dd>
+    <dt>Python</dt><dd>{_html_text(analysis.python_version)}</dd>
+    <dt>Platform</dt><dd>{_html_text(analysis.platform)}</dd>
+    <dt>Build Commit</dt><dd>{_html_text(_report_cell(analysis.build_commit))}</dd>
+  </dl>
+  <h3>Model Fit</h3>
+  <table>
+    <thead><tr>
+      <th>N</th><th>Parameters</th><th>Residual DF</th><th>R²</th>
+      <th>Adjusted R²</th><th>Residual SE</th><th>F</th><th>p-value</th>
+    </tr></thead>
+    <tbody><tr>
+      <td>{_html_text(result.sample.n_observations)}</td>
+      <td>{_html_text(result.sample.parameter_count)}</td>
+      <td>{_html_text(result.sample.df_residual)}</td>
+      <td>{_html_text(fit.r_squared)}</td>
+      <td>{_html_text(_report_cell(fit.adjusted_r_squared))}</td>
+      <td>{_html_text(_report_cell(fit.residual_standard_error))}</td>
+      <td>{_html_text(_report_cell(fit.f_statistic))}</td>
+      <td>{_html_text(_report_cell(fit.f_p_value))}</td>
+    </tr></tbody>
+  </table>
+  <h3>Terms and Effects</h3>
+  <table>
+    <thead><tr><th>Term</th><th>Coefficient</th><th>Effect</th><th>SE</th><th>p-value</th></tr></thead>
+    <tbody>
+{effect_rows}
+    </tbody>
+  </table>
+  <h3>ANOVA and Lack of Fit</h3>
+  <table>
+    <thead><tr><th>Source</th><th>DF</th><th>SS</th><th>MS</th><th>F</th><th>p-value</th></tr></thead>
+    <tbody>
+{anova_rows}
+    </tbody>
+  </table>
+  <h3>Diagnostics</h3>
+  <dl class="meta">
+    <dt>Durbin-Watson</dt><dd>{_html_text(_report_cell(result.diagnostics.durbin_watson))}</dd>
+    <dt>Shapiro-Wilk p-value</dt>
+    <dd>{_html_text(_report_cell(result.diagnostics.shapiro_wilk.p_value))}</dd>
+    <dt>High standardized residuals</dt>
+    <dd>{_html_text(result.diagnostics.high_standardized_residual_count)}</dd>
+    <dt>High leverage points</dt><dd>{_html_text(result.diagnostics.high_leverage_count)}</dd>
+    <dt>High Cook's distance points</dt>
+    <dd>{_html_text(result.diagnostics.high_cooks_distance_count)}</dd>
+  </dl>
+  <h3>Warnings</h3>
+  {warning_markup}"""
 
 
 def _report_cell(value: object) -> str:

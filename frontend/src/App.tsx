@@ -3,17 +3,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import {
   createAnalysisRun,
+  createFactorialAnalysis,
   createFactorialDesign,
   fetchAnalysisMethods,
   fetchGageRrPreflight,
   fetchHealth,
-  fetchRegressionPredictions,
-  fetchRegressionPredictionPreflight,
-  fetchRegressionPredictionRows,
   saveFactorialDesignResponses,
   type AnalysisResultEnvelope,
   type AnalysisMethodListResponse,
   type AnalysisModuleId,
+  type AttributeControlChartResult,
+  type AttributeControlChartType,
   type CapabilityResult,
   type ChiSquareAssociationResult,
   type DatasetColumnResponse,
@@ -24,6 +24,8 @@ import {
   type FactorialDesignResponse,
   type DoeDesignResponsesResponse,
   type DoeDesignResponsesUpsertRequest,
+  type DoeFactorialAnalysisCreateRequest,
+  type DoeFactorialAnalysisResponse,
   type GageRrPreflightResponse,
   type GageRrResult,
   type GageRunChartResult,
@@ -40,9 +42,6 @@ import {
   type OneSampleWilcoxonResult,
   type PairedTResult,
   type PearsonCorrelationResult,
-  type RegressionPredictionPreflightResponse,
-  type RegressionPredictionResponse,
-  type RegressionPredictionRowsPageResponse,
   type RunChartResult,
   type SubgroupChartResult,
   type TwoSampleTResult,
@@ -58,7 +57,7 @@ import {
 } from "./analysisFilters";
 import { useAnalysisSelection } from "./analysisSelection";
 import { currentAppRoute } from "./appRoute";
-import { createLatestRequestGuard } from "./latestRequest";
+import { startRetryingRequest } from "./startupRequest";
 import { useAnalysisComparisonState } from "./useAnalysisComparisonState";
 import { useAnalysisExportState } from "./useAnalysisExportState";
 import { useAnalysisHistoryState } from "./useAnalysisHistoryState";
@@ -66,6 +65,8 @@ import { useDatasetWorkflow } from "./useDatasetWorkflow";
 import { useRestoredAnalysisResultState } from "./useRestoredAnalysisResultState";
 import { useRegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
 import { useRegressionPredictionExportState } from "./useRegressionPredictionExportState";
+import { useRegressionPredictionRowsState } from "./useRegressionPredictionRowsState";
+import { useRegressionPredictionState } from "./useRegressionPredictionState";
 import { WorkspaceRouter } from "./WorkspaceRouter";
 
 type HealthState =
@@ -76,7 +77,6 @@ type HealthState =
 type SubgroupChartType = "xbar_r" | "xbar_s";
 
 const numericDataTypes = new Set<DatasetColumnResponse["data_type"]>(["integer", "decimal"]);
-const linearModelPredictionPageSize = 25;
 
 function statusLabel(health: HealthState): string {
   if (health.kind === "ready") {
@@ -215,6 +215,16 @@ export default function App() {
   >([]);
   const [xyCorrelationAlpha, setXyCorrelationAlpha] = useState(0.05);
   const [xyCorrelationConfidenceLevel, setXyCorrelationConfidenceLevel] = useState(0.95);
+  const [selectedAttributeControlChartType, setSelectedAttributeControlChartType] =
+    useState<AttributeControlChartType>("p");
+  const [selectedAttributeControlChartCountColumnId, setSelectedAttributeControlChartCountColumnId] =
+    useState<string | null>(null);
+  const [
+    selectedAttributeControlChartDenominatorColumnId,
+    setSelectedAttributeControlChartDenominatorColumnId,
+  ] = useState<string | null>(null);
+  const [attributeControlChartConstantOpportunityConfirmed, setAttributeControlChartConstantOpportunityConfirmed] =
+    useState(false);
   const [selectedIndividualsChartValueColumnId, setSelectedIndividualsChartValueColumnId] =
     useState<string | null>(null);
   const [selectedIndividualsChartOrderColumnId, setSelectedIndividualsChartOrderColumnId] =
@@ -270,30 +280,6 @@ export default function App() {
   >([]);
   const [linearModelAlpha, setLinearModelAlpha] = useState(0.05);
   const [linearModelConfidenceLevel, setLinearModelConfidenceLevel] = useState(0.95);
-  const [
-    linearModelPredictionPreflight,
-    setLinearModelPredictionPreflight,
-  ] = useState<RegressionPredictionPreflightResponse | null>(null);
-  const [linearModelPredictionPreflightError, setLinearModelPredictionPreflightError] =
-    useState<string | null>(null);
-  const [isRunningLinearModelPredictionPreflight, setIsRunningLinearModelPredictionPreflight] =
-    useState(false);
-  const linearModelPredictionPreflightRequest = useRef(createLatestRequestGuard()).current;
-  const [linearModelPrediction, setLinearModelPrediction] =
-    useState<RegressionPredictionResponse | null>(null);
-  const [linearModelPredictionError, setLinearModelPredictionError] = useState<string | null>(null);
-  const [isRunningLinearModelPrediction, setIsRunningLinearModelPrediction] = useState(false);
-  const linearModelPredictionRequest = useRef(createLatestRequestGuard()).current;
-  const [linearModelPredictionRowsPage, setLinearModelPredictionRowsPage] =
-    useState<RegressionPredictionRowsPageResponse | null>(null);
-  const [linearModelPredictionRowsError, setLinearModelPredictionRowsError] =
-    useState<string | null>(null);
-  const [isLoadingLinearModelPredictionRows, setIsLoadingLinearModelPredictionRows] =
-    useState(false);
-  const linearModelPredictionRowsRequest = useRef(createLatestRequestGuard()).current;
-  const linearModelPredictionExportState = useRegressionPredictionExportState(
-    linearModelPrediction?.prediction_id ?? null,
-  );
   const [analysisFilterDrafts, setAnalysisFilterDrafts] = useState<AnalysisFilterDraft[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
   const [datasetStateRevision, setDatasetStateRevision] = useState(0);
@@ -307,6 +293,11 @@ export default function App() {
     null,
   );
   const [isSavingFactorialDesignResponses, setIsSavingFactorialDesignResponses] = useState(false);
+  const [factorialAnalysis, setFactorialAnalysis] =
+    useState<DoeFactorialAnalysisResponse | null>(null);
+  const [factorialAnalysisError, setFactorialAnalysisError] = useState<string | null>(null);
+  const [isRunningFactorialAnalysis, setIsRunningFactorialAnalysis] = useState(false);
+  const factorialAnalysisRequestIdRef = useRef(0);
   const [appRoute, setAppRoute] = useState(currentAppRoute);
   const {
     datasetPageProps,
@@ -408,6 +399,13 @@ export default function App() {
       setSelectedPearsonYColumnId(defaultPearsonYColumnId(columns, pearsonXColumnId));
       setSelectedXyCorrelationXColumnIds(defaultXyCorrelationXColumnIds(columns));
       setSelectedXyCorrelationYColumnIds(defaultXyCorrelationYColumnIds(columns));
+      const attributeCountColumnId = defaultAttributeControlChartCountColumnId(columns);
+      setSelectedAttributeControlChartType("p");
+      setSelectedAttributeControlChartCountColumnId(attributeCountColumnId);
+      setSelectedAttributeControlChartDenominatorColumnId(
+        defaultAttributeControlChartDenominatorColumnId(columns, attributeCountColumnId),
+      );
+      setAttributeControlChartConstantOpportunityConfirmed(false);
       setSelectedIndividualsChartValueColumnId(defaultIndividualsChartValueColumnId(columns));
       setSelectedIndividualsChartOrderColumnId(null);
       const subgroupChartValueColumnId = defaultSubgroupChartValueColumnId(columns);
@@ -539,32 +537,32 @@ export default function App() {
   });
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    fetchHealth(controller.signal)
-      .then((response) => {
+    const stopHealthRequest = startRetryingRequest({
+      request: fetchHealth,
+      onSuccess: (response) => {
         setHealth({ kind: "ready", response });
-      })
-      .catch(() => {
+      },
+      onError: () => {
         setHealth({
           kind: "error",
           message: "API 연결 필요",
         });
-      });
-
-    fetchAnalysisMethods(controller.signal)
-      .then((response) => {
+      },
+    });
+    const stopCatalogRequest = startRetryingRequest({
+      request: fetchAnalysisMethods,
+      onSuccess: (response) => {
         setAnalysisCatalog(response);
         setAnalysisCatalogError(null);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setAnalysisCatalogError("analysis_methods_failed");
-        }
-      });
+      },
+      onError: () => {
+        setAnalysisCatalogError("analysis_methods_failed");
+      },
+    });
 
     return () => {
-      controller.abort();
+      stopHealthRequest();
+      stopCatalogRequest();
     };
   }, []);
 
@@ -692,6 +690,20 @@ export default function App() {
   const xyCorrelationYColumns = useMemo(
     () => (version === null ? [] : selectableXyCorrelationColumns(version.columns)),
     [version],
+  );
+  const attributeControlChartCountColumns = useMemo(
+    () => (version === null ? [] : selectableAttributeControlChartColumns(version.columns)),
+    [version],
+  );
+  const attributeControlChartDenominatorColumns = useMemo(
+    () =>
+      version === null
+        ? []
+        : selectableAttributeControlChartColumns(
+            version.columns,
+            selectedAttributeControlChartCountColumnId,
+          ),
+    [selectedAttributeControlChartCountColumnId, version],
   );
   const individualsChartValueColumns = useMemo(
     () => (version === null ? [] : selectableIndividualsChartValueColumns(version.columns)),
@@ -824,6 +836,8 @@ export default function App() {
     analysisResult?.method_id === "regression.xy_correlation" ? analysisResult : null;
   const linearModelAnalysisResult =
     analysisResult?.method_id === "regression.linear_model" ? analysisResult : null;
+  const attributeControlChartAnalysisResult =
+    analysisResult?.method_id === "quality.attribute_control_chart" ? analysisResult : null;
   const individualsChartAnalysisResult =
     analysisResult?.method_id === "quality.individuals_chart" ? analysisResult : null;
   const subgroupChartAnalysisResult =
@@ -898,6 +912,11 @@ export default function App() {
   const linearModelResult = isLinearModelResult(linearModelAnalysisResult?.result)
     ? linearModelAnalysisResult.result
     : null;
+  const attributeControlChartResult = isAttributeControlChartResult(
+    attributeControlChartAnalysisResult?.result,
+  )
+    ? attributeControlChartAnalysisResult.result
+    : null;
   const individualsChartResult = isIndividualsChartResult(individualsChartAnalysisResult?.result)
     ? individualsChartAnalysisResult.result
     : null;
@@ -923,28 +942,27 @@ export default function App() {
   });
   const linearModelPredictionTargetVersionId =
     linearModelPredictionTargetState.selectedTargetVersionId;
-
-  useEffect(() => {
-    linearModelPredictionPreflightRequest.cancel();
-    linearModelPredictionRequest.cancel();
-    linearModelPredictionRowsRequest.cancel();
-    setLinearModelPredictionPreflight(null);
-    setLinearModelPredictionPreflightError(null);
-    setLinearModelPrediction(null);
-    setLinearModelPredictionError(null);
-    setLinearModelPredictionRowsPage(null);
-    setLinearModelPredictionRowsError(null);
-    setIsRunningLinearModelPredictionPreflight(false);
-    setIsRunningLinearModelPrediction(false);
-    setIsLoadingLinearModelPredictionRows(false);
-  }, [
-    activeLinearModelModelId,
-    linearModelPredictionPreflightRequest,
-    linearModelPredictionRequest,
-    linearModelPredictionRowsRequest,
-    linearModelPredictionTargetVersionId,
-    version?.version_id,
-  ]);
+  const {
+    isRunningPrediction: isRunningLinearModelPrediction,
+    isRunningPreflight: isRunningLinearModelPredictionPreflight,
+    onRunPrediction: handleRunLinearModelPrediction,
+    onRunPreflight: handleRunLinearModelPredictionPreflight,
+    prediction: linearModelPrediction,
+    predictionError: linearModelPredictionError,
+    preflight: linearModelPredictionPreflight,
+    preflightError: linearModelPredictionPreflightError,
+  } = useRegressionPredictionState({
+    confidenceLevel: linearModelConfidenceLevel,
+    currentDatasetVersionId: version?.version_id ?? null,
+    modelId: activeLinearModelModelId,
+    targetDatasetVersionId: linearModelPredictionTargetVersionId,
+  });
+  const linearModelPredictionRowsState = useRegressionPredictionRowsState(
+    linearModelPrediction?.prediction_id ?? null,
+  );
+  const linearModelPredictionExportState = useRegressionPredictionExportState(
+    linearModelPrediction?.prediction_id ?? null,
+  );
 
   const analysisFilterValidationError = useMemo(
     () =>
@@ -964,6 +982,10 @@ export default function App() {
   }
 
   async function handleCreateFactorialDesign(request: FactorialDesignCreateRequest) {
+    factorialAnalysisRequestIdRef.current += 1;
+    setFactorialAnalysis(null);
+    setFactorialAnalysisError(null);
+    setIsRunningFactorialAnalysis(false);
     setIsCreatingFactorialDesign(true);
     setFactorialDesignError(null);
     try {
@@ -984,6 +1006,10 @@ export default function App() {
     designId: string,
     request: DoeDesignResponsesUpsertRequest,
   ) {
+    factorialAnalysisRequestIdRef.current += 1;
+    setFactorialAnalysis(null);
+    setFactorialAnalysisError(null);
+    setIsRunningFactorialAnalysis(false);
     setIsSavingFactorialDesignResponses(true);
     setFactorialDesignResponseError(null);
     try {
@@ -1000,6 +1026,40 @@ export default function App() {
       );
     } finally {
       setIsSavingFactorialDesignResponses(false);
+    }
+  }
+
+  async function handleRunFactorialAnalysis(
+    designId: string,
+    request: DoeFactorialAnalysisCreateRequest,
+  ) {
+    const requestId = factorialAnalysisRequestIdRef.current + 1;
+    factorialAnalysisRequestIdRef.current = requestId;
+    setIsRunningFactorialAnalysis(true);
+    setFactorialAnalysisError(null);
+    try {
+      const response = await createFactorialAnalysis(designId, request);
+      if (factorialAnalysisRequestIdRef.current !== requestId) {
+        return;
+      }
+      setFactorialAnalysis(response);
+      setFactorialDesign((current) =>
+        current !== null && current.design_id === response.design_id
+          ? { ...current, status: "analyzed" }
+          : current,
+      );
+    } catch (error) {
+      if (factorialAnalysisRequestIdRef.current !== requestId) {
+        return;
+      }
+      setFactorialAnalysis(null);
+      setFactorialAnalysisError(
+        error instanceof Error ? error.message : "doe_factorial_analysis_failed",
+      );
+    } finally {
+      if (factorialAnalysisRequestIdRef.current === requestId) {
+        setIsRunningFactorialAnalysis(false);
+      }
     }
   }
 
@@ -1431,6 +1491,31 @@ export default function App() {
 
   function handleXyCorrelationConfidenceLevelChange(confidenceLevel: number) {
     setXyCorrelationConfidenceLevel(confidenceLevel);
+    setAnalysisResult(null);
+  }
+
+  function handleAttributeControlChartTypeChange(chartType: AttributeControlChartType) {
+    setSelectedAttributeControlChartType(chartType);
+    setAttributeControlChartConstantOpportunityConfirmed(false);
+    setAnalysisResult(null);
+  }
+
+  function handleAttributeControlChartCountColumnChange(columnId: string) {
+    const nextColumnId = columnId.length > 0 ? columnId : null;
+    setSelectedAttributeControlChartCountColumnId(nextColumnId);
+    setSelectedAttributeControlChartDenominatorColumnId((current) =>
+      current === nextColumnId ? null : current,
+    );
+    setAnalysisResult(null);
+  }
+
+  function handleAttributeControlChartDenominatorColumnChange(columnId: string) {
+    setSelectedAttributeControlChartDenominatorColumnId(columnId.length > 0 ? columnId : null);
+    setAnalysisResult(null);
+  }
+
+  function handleAttributeControlChartConstantOpportunityConfirmedChange(confirmed: boolean) {
+    setAttributeControlChartConstantOpportunityConfirmed(confirmed);
     setAnalysisResult(null);
   }
 
@@ -2966,6 +3051,74 @@ export default function App() {
     }
   }
 
+  async function handleAttributeControlChartAnalysis() {
+    const needsDenominator = selectedAttributeControlChartType !== "c";
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "quality.attribute_control_chart" ||
+      selectedAttributeControlChartCountColumnId === null ||
+      (needsDenominator && selectedAttributeControlChartDenominatorColumnId === null) ||
+      (selectedAttributeControlChartType === "c" &&
+        !attributeControlChartConstantOpportunityConfirmed)
+    ) {
+      setFlowError("attribute_control_chart_required_inputs_missing");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const roles: Record<string, string> = {
+        count: selectedAttributeControlChartCountColumnId,
+      };
+      const options: Record<string, unknown> = {
+        chart_type: selectedAttributeControlChartType,
+        count_definition:
+          selectedAttributeControlChartType === "p" ||
+          selectedAttributeControlChartType === "np"
+            ? "defectives"
+            : "defects",
+        count_column_id: selectedAttributeControlChartCountColumnId,
+        constant_opportunity_confirmed:
+          selectedAttributeControlChartType === "c" &&
+          attributeControlChartConstantOpportunityConfirmed,
+        point_limit: 1000,
+        missing_policy: "complete_case",
+      };
+      if (needsDenominator && selectedAttributeControlChartDenominatorColumnId !== null) {
+        roles[
+          selectedAttributeControlChartType === "u" ? "inspection_opportunity" : "sample_size"
+        ] = selectedAttributeControlChartDenominatorColumnId;
+        options.denominator_column_id = selectedAttributeControlChartDenominatorColumnId;
+      }
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: {
+          expression_version: 1,
+          conditions: filterConditions,
+        },
+        roles,
+        options,
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "attribute_control_chart_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
   async function handleIndividualsChartAnalysis() {
     if (
       version === null ||
@@ -3148,136 +3301,6 @@ export default function App() {
     }
   }
 
-  async function handleRunLinearModelPredictionPreflight() {
-    if (
-      version === null ||
-      linearModelResult?.model_manifest === undefined ||
-      linearModelPredictionTargetVersionId === null
-    ) {
-      setLinearModelPredictionPreflightError("regression_model_manifest_required");
-      return;
-    }
-
-    linearModelPredictionRequest.cancel();
-    linearModelPredictionRowsRequest.cancel();
-    setIsRunningLinearModelPrediction(false);
-    setLinearModelPrediction(null);
-    setLinearModelPredictionError(null);
-    setLinearModelPredictionRowsPage(null);
-    setLinearModelPredictionRowsError(null);
-    setIsLoadingLinearModelPredictionRows(false);
-    const request = linearModelPredictionPreflightRequest.begin();
-    setIsRunningLinearModelPredictionPreflight(true);
-    setLinearModelPredictionPreflightError(null);
-    try {
-      const response = await fetchRegressionPredictionPreflight(
-        linearModelResult.model_manifest.model_id,
-        {
-          dataset_version_id: linearModelPredictionTargetVersionId,
-        },
-      );
-      if (linearModelPredictionPreflightRequest.isCurrent(request)) {
-        setLinearModelPredictionPreflight(response);
-      }
-    } catch (error) {
-      if (linearModelPredictionPreflightRequest.isCurrent(request)) {
-        setLinearModelPredictionPreflight(null);
-        setLinearModelPredictionPreflightError(
-          error instanceof Error ? error.message : "regression_prediction_preflight_failed",
-        );
-      }
-    } finally {
-      if (linearModelPredictionPreflightRequest.isCurrent(request)) {
-        setIsRunningLinearModelPredictionPreflight(false);
-      }
-    }
-  }
-
-  async function handleRunLinearModelPrediction() {
-    if (
-      version === null ||
-      linearModelResult?.model_manifest === undefined ||
-      linearModelPredictionTargetVersionId === null
-    ) {
-      setLinearModelPredictionError("regression_model_manifest_required");
-      return;
-    }
-    if (
-      linearModelPredictionPreflight === null ||
-      !linearModelPredictionPreflight.prediction_ready ||
-      linearModelPredictionPreflight.model_id !== linearModelResult.model_manifest.model_id ||
-      linearModelPredictionPreflight.target_dataset_version_id !==
-        linearModelPredictionTargetVersionId
-    ) {
-      setLinearModelPredictionError("regression_prediction_preflight_required");
-      return;
-    }
-
-    linearModelPredictionRowsRequest.cancel();
-    setLinearModelPredictionRowsPage(null);
-    setLinearModelPredictionRowsError(null);
-    setIsLoadingLinearModelPredictionRows(false);
-    const request = linearModelPredictionRequest.begin();
-    setIsRunningLinearModelPrediction(true);
-    setLinearModelPredictionError(null);
-    try {
-      const response = await fetchRegressionPredictions(
-        linearModelResult.model_manifest.model_id,
-        {
-          dataset_version_id: linearModelPredictionTargetVersionId,
-          confidence_level: linearModelConfidenceLevel,
-          missing_policy: "complete_case",
-          include_intervals: true,
-        },
-      );
-      if (linearModelPredictionRequest.isCurrent(request)) {
-        setLinearModelPrediction(response);
-        await loadLinearModelPredictionRows(response.prediction_id, 0);
-      }
-    } catch (error) {
-      if (linearModelPredictionRequest.isCurrent(request)) {
-        linearModelPredictionRowsRequest.cancel();
-        setLinearModelPrediction(null);
-        setLinearModelPredictionError(
-          error instanceof Error ? error.message : "regression_prediction_failed",
-        );
-        setLinearModelPredictionRowsPage(null);
-        setLinearModelPredictionRowsError(null);
-        setIsLoadingLinearModelPredictionRows(false);
-      }
-    } finally {
-      if (linearModelPredictionRequest.isCurrent(request)) {
-        setIsRunningLinearModelPrediction(false);
-      }
-    }
-  }
-
-  async function loadLinearModelPredictionRows(predictionId: string, offset: number) {
-    const request = linearModelPredictionRowsRequest.begin();
-    setIsLoadingLinearModelPredictionRows(true);
-    setLinearModelPredictionRowsError(null);
-    try {
-      const response = await fetchRegressionPredictionRows(
-        predictionId,
-        linearModelPredictionPageSize,
-        Math.max(0, offset),
-      );
-      if (linearModelPredictionRowsRequest.isCurrent(request)) {
-        setLinearModelPredictionRowsPage(response);
-      }
-    } catch (error) {
-      if (linearModelPredictionRowsRequest.isCurrent(request)) {
-        setLinearModelPredictionRowsError(
-          error instanceof Error ? error.message : "regression_prediction_rows_failed",
-        );
-      }
-    } finally {
-      if (linearModelPredictionRowsRequest.isCurrent(request)) {
-        setIsLoadingLinearModelPredictionRows(false);
-      }
-    }
-  }
-
   function handleOpenDatasetPage() {
     if (typeof window !== "undefined") {
       window.history.pushState(null, "", "/");
@@ -3322,6 +3345,14 @@ export default function App() {
     workbenchExportState: analysisExportState,
     workbenchHistoryState: analysisHistoryState,
     workbenchRestoredState: restoredAnalysisResultState,
+    attributeControlChartAnalysisResult,
+    attributeControlChartConstantOpportunityConfirmed,
+    attributeControlChartCountColumnId: selectedAttributeControlChartCountColumnId,
+    attributeControlChartCountColumns,
+    attributeControlChartDenominatorColumnId: selectedAttributeControlChartDenominatorColumnId,
+    attributeControlChartDenominatorColumns,
+    attributeControlChartResult,
+    attributeControlChartType: selectedAttributeControlChartType,
     chiSquareAssociationAlpha,
     chiSquareAssociationAnalysisResult,
     chiSquareAssociationColumnColumnId: selectedChiSquareAssociationColumnColumnId,
@@ -3350,11 +3381,14 @@ export default function App() {
     graphicalSummaryColumns,
     graphicalSummaryResult,
     factorialDesign,
+    factorialAnalysis,
+    factorialAnalysisError,
     factorialDesignError,
     factorialDesignResponseError,
     factorialDesignResponses,
     isRunningAnalysis,
     isCreatingFactorialDesign,
+    isRunningFactorialAnalysis,
     isSavingFactorialDesignResponses,
     kruskalWallisAlpha,
     kruskalWallisAnalysisResult,
@@ -3487,16 +3521,7 @@ export default function App() {
     linearModelPredictorColumns,
     linearModelPrediction,
     linearModelPredictionError,
-    linearModelPredictionRowsState: {
-      error: linearModelPredictionRowsError,
-      isLoading: isLoadingLinearModelPredictionRows,
-      page: linearModelPredictionRowsPage,
-      onPageChange: (offset: number) => {
-        if (linearModelPrediction !== null) {
-          void loadLinearModelPredictionRows(linearModelPrediction.prediction_id, offset);
-        }
-      },
-    },
+    linearModelPredictionRowsState,
     linearModelPredictionExportState,
     linearModelPredictionTargetState,
     linearModelPredictionPreflight,
@@ -3536,6 +3561,12 @@ export default function App() {
     twoProportionResult,
     version,
     onAnalysisFilterDraftsChange: handleAnalysisFilterDraftsChange,
+    onAttributeControlChartConstantOpportunityConfirmedChange:
+      handleAttributeControlChartConstantOpportunityConfirmedChange,
+    onAttributeControlChartCountColumnChange: handleAttributeControlChartCountColumnChange,
+    onAttributeControlChartDenominatorColumnChange:
+      handleAttributeControlChartDenominatorColumnChange,
+    onAttributeControlChartTypeChange: handleAttributeControlChartTypeChange,
     onCapabilityLslChange: handleCapabilityLslChange,
     onCapabilityTargetChange: handleCapabilityTargetChange,
     onCapabilityUslChange: handleCapabilityUslChange,
@@ -3548,6 +3579,12 @@ export default function App() {
     onCreateFactorialDesign: (request: FactorialDesignCreateRequest) => {
       void handleCreateFactorialDesign(request);
     },
+    onRunFactorialAnalysis: (
+      designId: string,
+      request: DoeFactorialAnalysisCreateRequest,
+    ) => {
+      void handleRunFactorialAnalysis(designId, request);
+    },
     onSaveFactorialDesignResponses: (
       designId: string,
       request: DoeDesignResponsesUpsertRequest,
@@ -3556,6 +3593,9 @@ export default function App() {
     },
     onRunChiSquareAssociationAnalysis: () => {
       void handleRunChiSquareAssociationAnalysis();
+    },
+    onRunAttributeControlChartAnalysis: () => {
+      void handleAttributeControlChartAnalysis();
     },
     onRunDescriptiveAnalysis: () => {
       void handleRunDescriptiveAnalysis();
@@ -4124,6 +4164,19 @@ function selectableXyCorrelationColumns(columns: DatasetColumnResponse[]): Datas
   return selectableDescriptiveColumns(columns);
 }
 
+function selectableAttributeControlChartColumns(
+  columns: DatasetColumnResponse[],
+  excludedColumnId: string | null = null,
+): DatasetColumnResponse[] {
+  return columns.filter(
+    (column) =>
+      column.column_id !== excludedColumnId &&
+      column.role !== "id" &&
+      column.measurement_level !== "id" &&
+      numericDataTypes.has(column.data_type),
+  );
+}
+
 function selectableIndividualsChartValueColumns(
   columns: DatasetColumnResponse[],
 ): DatasetColumnResponse[] {
@@ -4296,6 +4349,32 @@ function defaultXyCorrelationYColumnIds(columns: DatasetColumnResponse[]): strin
   return (responseCandidates.length > 0 ? responseCandidates : candidates.slice(1))
     .slice(0, 3)
     .map((column) => column.column_id);
+}
+
+function defaultAttributeControlChartCountColumnId(
+  columns: DatasetColumnResponse[],
+): string | null {
+  const candidates = selectableAttributeControlChartColumns(columns);
+  return (
+    candidates.find((column) => column.measurement_level === "count")?.column_id ??
+    candidates.find((column) => column.role === "target")?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
+}
+
+function defaultAttributeControlChartDenominatorColumnId(
+  columns: DatasetColumnResponse[],
+  countColumnId: string | null,
+): string | null {
+  const candidates = selectableAttributeControlChartColumns(columns, countColumnId);
+  return (
+    candidates.find((column) =>
+      /sample|size|denominator|opportun|area|표본|기회/i.test(column.display_name),
+    )?.column_id ??
+    candidates[0]?.column_id ??
+    null
+  );
 }
 
 function defaultIndividualsChartValueColumnId(
@@ -4717,6 +4796,21 @@ function isXyCorrelationResult(
   }
   const candidate = value as Record<string, unknown>;
   return candidate.summary_type === "xy_correlation_matrix" && Array.isArray(candidate.pairs);
+}
+
+function isAttributeControlChartResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is AttributeControlChartResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.summary_type === "attribute_control_chart" &&
+    typeof candidate.chart === "object" &&
+    candidate.chart !== null &&
+    Array.isArray(candidate.signals)
+  );
 }
 
 function isIndividualsChartResult(
