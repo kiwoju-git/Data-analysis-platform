@@ -28,7 +28,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "regression.xy_correlation": METHOD_VERSION,
     "regression.linear_model": METHOD_VERSION,
     "regression.predict": "0.2.0",
-    "regression.response_optimizer": METHOD_VERSION,
+    "regression.response_optimizer": "0.3.0",
     "quality.attribute_control_chart": METHOD_VERSION,
     "quality.individuals_chart": METHOD_VERSION,
     "quality.subgroup_chart": METHOD_VERSION,
@@ -36,9 +36,9 @@ METHOD_VERSIONS: dict[str, str] = {
     "quality.capability": METHOD_VERSION,
     "quality.gage_rr": METHOD_VERSION,
     "quality.gage_run_chart": METHOD_VERSION,
-    "doe.factorial_design": "0.2.0",
-    "doe.response_surface": METHOD_VERSION,
-    "doe.bayesian_optimization": METHOD_VERSION,
+    "doe.factorial_design": "0.3.0",
+    "doe.response_surface": "0.2.0",
+    "doe.bayesian_optimization": "0.2.0",
 }
 
 MODULES: tuple[AnalysisModuleDescriptor, ...] = (
@@ -382,18 +382,13 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         order=20,
         requires_dataset=False,
     ),
-    _planned(
+    _available(
         method_id="doe.bayesian_optimization",
         module_id=AnalysisModuleId.DOE,
         label_ko="베이지안 최적화",
         label_en="Bayesian Optimization",
         order=30,
         requires_dataset=False,
-        disabled_reason=(
-            "순차 실험 history, Gaussian Process surrogate, Expected Improvement, "
-            "제약과 실행 budget의 계약 및 reference 정책만 확정되어 있습니다. "
-            "실행 API와 추천 결과는 아직 제공하지 않습니다."
-        ),
     ),
 )
 

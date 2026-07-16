@@ -16,6 +16,7 @@ from app.api.v1.schemas.doe import (
     DoeDesignResponseValue,
     DoeFactorialAnalysisResponse,
     DoeFactorResponse,
+    DoeResponseRevisionCreateRequest,
     FactorialDesignCreateRequest,
     FactorialDesignOptionsResponse,
     FactorialDesignResponse,
@@ -23,6 +24,7 @@ from app.api.v1.schemas.doe import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
+from app.services.doe_response_revisions import create_response_revision
 from app.statistics.factorial_design import (
     FACTORIAL_DESIGN_FAMILY,
     FactorialDesignError,
@@ -37,14 +39,15 @@ from app.statistics.factorial_design import (
 from app.storage.metadata import (
     ExperimentDesignRecord,
     ExperimentDesignVersionRecord,
+    ExperimentResponseRevisionRecord,
     ExperimentRunRecord,
     ExperimentRunResponseRecord,
+    get_current_experiment_response_revision_record,
     get_experiment_design_record,
     get_experiment_design_version_record,
     insert_experiment_design_records,
     list_experiment_run_records,
     list_experiment_run_response_records,
-    replace_experiment_run_response_records,
 )
 
 APP_VERSION = "0.1.0"
@@ -155,62 +158,14 @@ def save_factorial_design_responses(
     design_id: UUID,
     body: DoeDesignResponsesUpsertRequest,
 ) -> DoeDesignResponsesResponse:
-    design, version, runs = _load_factorial_design_records(settings, design_id)
-    _factorial_design_response(design, version, runs)
-    if design.status == "analyzed":
-        raise ApiError(
-            code="doe_design_already_analyzed",
-            message="이미 분석된 DOE 설계의 반응값은 이 API에서 수정할 수 없습니다.",
-            status_code=status.HTTP_409_CONFLICT,
-        )
-
-    response_name = body.response_name.strip()
-    if not response_name:
-        raise ApiError(
-            code="doe_response_name_required",
-            message="반응 이름을 입력해야 합니다.",
-            status_code=status.HTTP_409_CONFLICT,
-        )
-    unit = None if body.unit is None else body.unit.strip() or None
-    run_by_order = {run.run_order: run for run in runs}
-    submitted: dict[int, float] = {}
-    for value in body.values:
-        if value.run_order in submitted:
-            raise ApiError(
-                code="doe_response_run_order_duplicate",
-                message="같은 run_order에 반응값이 두 번 제출되었습니다.",
-                status_code=status.HTTP_409_CONFLICT,
-            )
-        submitted[value.run_order] = float(value.value)
-    if set(submitted) != set(run_by_order):
-        raise ApiError(
-            code="doe_response_run_set_mismatch",
-            message="반응값은 현재 DOE 설계의 모든 run_order와 정확히 일치해야 합니다.",
-            status_code=status.HTTP_409_CONFLICT,
-        )
-
-    now = _utc_now()
-    records = [
-        ExperimentRunResponseRecord(
-            response_id=str(uuid4()),
-            design_version_id=version.design_version_id,
-            run_id=run_by_order[run_order].run_id,
-            response_name=response_name,
-            response_value=value,
-            unit=unit,
-            created_at=now,
-            updated_at=now,
-        )
-        for run_order, value in sorted(submitted.items())
-    ]
-    replace_experiment_run_response_records(
-        settings.workspace_root,
-        design_id=design.design_id,
-        design_version_id=version.design_version_id,
-        response_name=response_name,
-        records=records,
-        design_status="completed",
-        updated_at=now,
+    create_response_revision(
+        settings,
+        design_id,
+        DoeResponseRevisionCreateRequest(**body.model_dump()),
+        allow_analyzed=False,
+        require_explicit_supersedes=False,
+        duplicate_run_error_code="doe_response_run_order_duplicate",
+        run_set_error_code="doe_response_run_set_mismatch",
     )
     return list_factorial_design_responses(settings, design_id)
 
@@ -224,7 +179,13 @@ def list_factorial_design_responses(
     records = list_experiment_run_response_records(
         settings.workspace_root, version.design_version_id
     )
-    return _factorial_design_responses_response(design, version, runs, records)
+    revisions = {
+        name: get_current_experiment_response_revision_record(
+            settings.workspace_root, version.design_version_id, name
+        )
+        for name in {record.response_name for record in records}
+    }
+    return _factorial_design_responses_response(design, version, runs, records, revisions)
 
 
 def get_factorial_design_html_report(
@@ -237,7 +198,15 @@ def get_factorial_design_html_report(
         settings.workspace_root,
         version.design_version_id,
     )
-    response_payload = _factorial_design_responses_response(design, version, runs, records)
+    revisions = {
+        name: get_current_experiment_response_revision_record(
+            settings.workspace_root, version.design_version_id, name
+        )
+        for name in {record.response_name for record in records}
+    }
+    response_payload = _factorial_design_responses_response(
+        design, version, runs, records, revisions
+    )
     from app.services.doe_factorial_analysis import get_latest_factorial_analysis
 
     analysis_payload = get_latest_factorial_analysis(settings, design_id)
@@ -343,6 +312,7 @@ def _factorial_design_responses_response(
     version: ExperimentDesignVersionRecord,
     runs: list[ExperimentRunRecord],
     records: list[ExperimentRunResponseRecord],
+    revisions: dict[str, ExperimentResponseRevisionRecord | None],
 ) -> DoeDesignResponsesResponse:
     run_order_by_id = {run.run_id: run.run_order for run in runs}
     grouped: dict[str, list[DoeDesignResponseValue]] = {}
@@ -360,15 +330,34 @@ def _factorial_design_responses_response(
         )
         units.setdefault(record.response_name, record.unit)
 
-    responses = [
-        DoeDesignResponseSeries(
-            response_name=response_name,
-            unit=units[response_name],
-            response_count=len(values),
-            values=sorted(values, key=lambda value: value.run_order),
+    responses = []
+    for response_name, values in sorted(grouped.items()):
+        revision = revisions.get(response_name)
+        if (
+            revision is None
+            or revision.schema_version != 1
+            or revision.state != "completed"
+            or revision.value_count != len(values)
+        ):
+            raise ApiError(
+                code="doe_response_revision_dependency_mismatch",
+                message="현재 DOE response revision metadata를 검증할 수 없습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        responses.append(
+            DoeDesignResponseSeries(
+                response_name=response_name,
+                unit=units[response_name],
+                response_revision_id=UUID(revision.response_revision_id),
+                response_revision_number=revision.revision_number,
+                response_revision_schema_version=1,
+                response_revision_sha256=revision.response_sha256,
+                created_at=revision.created_at,
+                closed_at=revision.closed_at,
+                response_count=len(values),
+                values=sorted(values, key=lambda value: value.run_order),
+            )
         )
-        for response_name, values in sorted(grouped.items())
-    ]
     return DoeDesignResponsesResponse(
         design_id=UUID(design.design_id),
         design_version_id=UUID(version.design_version_id),
@@ -592,11 +581,18 @@ def _factorial_analysis_html_markup(
         + "".join(f"<li>{_html_text(warning)}</li>" for warning in result.warnings)
         + "</ul>"
     )
+    response_revision_label = (
+        f"r{_html_text(analysis.response_revision_number)} "
+        f"({_html_text(str(analysis.response_revision_id))})"
+    )
+    response_revision_sha256 = _html_text(analysis.response_revision_sha256)
     return f"""  <dl class="meta">
     <dt>Analysis ID</dt><dd>{_html_text(str(analysis.analysis_id))}</dd>
     <dt>Response</dt><dd>{_html_text(analysis.response_name)}</dd>
     <dt>Method</dt><dd>{_html_text(analysis.method_id)} v{_html_text(analysis.method_version)}</dd>
     <dt>Analysis Schema</dt><dd>{_html_text(analysis.analysis_schema_version)}</dd>
+    <dt>Response Revision</dt><dd>{response_revision_label}</dd>
+    <dt>Response Revision SHA-256</dt><dd><code>{response_revision_sha256}</code></dd>
     <dt>Response SHA-256</dt><dd><code>{_html_text(analysis.response_sha256)}</code></dd>
     <dt>Created At</dt><dd>{_html_text(analysis.created_at)}</dd>
     <dt>Python</dt><dd>{_html_text(analysis.python_version)}</dd>

@@ -135,7 +135,7 @@ const methodRoleFocusById: Readonly<Record<string, MethodRoleFocus>> = {
     roleKeys: ["predictor", "response", "order"],
     title: "순차 Bayesian Optimization 핵심 역할",
     detail:
-      "연속 Factor 경계, 최대/최소 Objective, 실제로 수행한 Trial 순서와 관측 Response를 구분해야 합니다. 현재는 계약만 확정된 planned method이며 추천 실행이나 전역 최적 보장은 제공하지 않습니다.",
+      "연속 Factor 경계, 최대/최소 Objective, 초기 Trial과 추천 Trial, 실제 관측 Response를 구분해야 합니다. 전용 화면은 Matérn-5/2 GP와 Expected Improvement로 다음 후보를 계산하지만 목적함수를 실행하거나 전역 최적을 보장하지 않습니다.",
   },
 };
 

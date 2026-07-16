@@ -1,0 +1,19 @@
+# Exact bootstrap inputs and reviewed resolver constraints for CPython 3.10 on Windows AMD64.
+# Keep project dependency pins synchronized with backend/pyproject.toml.
+pip==26.1.2
+hatchling==1.26.3
+editables==0.5
+fastapi==0.115.6
+numpy==2.2.6
+pydantic-settings==2.7.0
+python-multipart==0.0.32
+scikit-learn==1.7.2
+joblib==1.5.2
+threadpoolctl==3.6.0
+scipy==1.15.3
+uvicorn[standard]==0.32.1
+httpx==0.28.1
+mypy==1.13.0
+playwright==1.61.0
+pytest==8.3.4
+ruff==0.8.4

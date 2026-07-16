@@ -83,6 +83,12 @@ class DoeDesignResponseSeries(BaseModel):
 
     response_name: str
     unit: str | None
+    response_revision_id: UUID
+    response_revision_number: int = Field(ge=1)
+    response_revision_schema_version: Literal[1]
+    response_revision_sha256: str
+    created_at: str
+    closed_at: str | None
     response_count: int = Field(ge=0)
     values: list[DoeDesignResponseValue]
 
@@ -95,6 +101,47 @@ class DoeDesignResponsesResponse(BaseModel):
     version_number: int = Field(ge=1)
     status: str
     responses: list[DoeDesignResponseSeries]
+
+
+class DoeResponseRevisionCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_name: str = Field(min_length=1, max_length=80)
+    unit: str | None = Field(default=None, max_length=40)
+    values: list[DoeResponseValueRequest] = Field(min_length=1, max_length=256)
+    supersedes_response_revision_id: UUID | None = None
+
+
+class DoeResponseRevisionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_revision_id: UUID
+    design_id: UUID
+    design_version_id: UUID
+    response_revision_schema_version: Literal[1]
+    response_revision_sha256: str
+    response_name: str
+    unit: str | None
+    revision_number: int = Field(ge=1)
+    state: Literal["completed", "abandoned"]
+    is_current: bool
+    response_count: int = Field(ge=1)
+    supersedes_response_revision_id: UUID | None
+    created_at: str
+    closed_at: str | None
+    values: list[DoeDesignResponseValue]
+
+
+class DoeResponseRevisionHistoryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    design_id: UUID
+    design_version_id: UUID
+    response_name: str
+    total: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    items: list[DoeResponseRevisionResponse]
 
 
 class FactorialDesignResponse(BaseModel):
@@ -122,6 +169,7 @@ class DoeFactorialAnalysisCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     response_name: str = Field(min_length=1, max_length=80)
+    response_revision_id: UUID | None = None
     max_interaction_order: int = Field(default=2, ge=1, le=3)
     confidence_level: FiniteFloat = Field(default=0.95, gt=0, lt=1)
     point_limit: int = Field(default=256, ge=1, le=256)
@@ -360,6 +408,9 @@ class DoeFactorialAnalysisResponse(BaseModel):
     method_version: str
     analysis_schema_version: int
     design_sha256: str
+    response_revision_id: UUID
+    response_revision_number: int = Field(ge=1)
+    response_revision_sha256: str
     response_sha256: str
     response_name: str
     created_at: str
@@ -416,7 +467,8 @@ class ResponseSurfaceDesignResponse(BaseModel):
     version_number: int = Field(ge=1)
     method_id: Literal["doe.response_surface"]
     method_version: str
-    family: Literal["central_composite_inscribed"]
+    design_schema_version: Literal[1, 2]
+    family: Literal["central_composite", "central_composite_inscribed"]
     name: str
     status: str
     created_at: str
@@ -433,6 +485,7 @@ class DoeResponseSurfaceAnalysisCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     response_name: str = Field(min_length=1, max_length=80)
+    response_revision_id: UUID | None = None
     confidence_level: FiniteFloat = Field(default=0.95, gt=0, lt=1)
     point_limit: int = Field(default=256, ge=1, le=256)
     contour_grid_size: int = Field(default=21, ge=11, le=51)
@@ -590,6 +643,9 @@ class DoeResponseSurfaceAnalysisResponse(BaseModel):
     method_version: str
     analysis_schema_version: int
     design_sha256: str
+    response_revision_id: UUID
+    response_revision_number: int = Field(ge=1)
+    response_revision_sha256: str
     response_sha256: str
     response_name: str
     created_at: str
@@ -655,6 +711,25 @@ class ResponseOptimizerCreateRequest(BaseModel):
     search: ResponseOptimizerSearchOptionsRequest = Field(
         default_factory=ResponseOptimizerSearchOptionsRequest
     )
+    acknowledged_source_warning_codes: list[str] = Field(default_factory=list, max_length=32)
+
+
+class ResponseOptimizerEligibilityIssueResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_analysis_id: UUID | None
+    code: str
+    severity: Literal["blocking", "acknowledgment_required", "informational"]
+    source_warning_code: str | None
+
+
+class ResponseOptimizerSourceEligibilityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    eligible: bool
+    acknowledgment_required: bool
+    issues: list[ResponseOptimizerEligibilityIssueResponse]
+    acknowledged_source_warning_codes: list[str]
 
 
 class ResponseOptimizerModelPolicyResponse(BaseModel):
@@ -772,7 +847,7 @@ class ResponseOptimizerSearchResponse(BaseModel):
 class ResponseOptimizerResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     summary_type: Literal["response_optimizer"]
     method: Literal["derringer_suich_bounded_multistart_slsqp"]
     model_policy: ResponseOptimizerModelPolicyResponse
@@ -780,6 +855,8 @@ class ResponseOptimizerResult(BaseModel):
     objectives: list[ResponseOptimizerObjectiveResponse]
     recommendation: ResponseOptimizerRecommendationResponse
     search: ResponseOptimizerSearchResponse
+    source_model_eligibility: ResponseOptimizerSourceEligibilityResponse
+    acknowledged_source_warning_codes: list[str]
     warnings: list[str]
 
 
@@ -792,12 +869,13 @@ class ResponseOptimizerResponse(BaseModel):
     design_version_number: int
     method_id: Literal["regression.response_optimizer"]
     method_version: str
-    config_schema_version: int
-    result_schema_version: int
+    config_schema_version: Literal[2]
+    result_schema_version: Literal[2]
     config_sha256: str
     design_sha256: str
     source_analysis_ids: list[UUID]
     source_bundle_sha256: str
+    acknowledged_source_warning_codes: list[str]
     created_at: str
     app_version: str
     python_version: str

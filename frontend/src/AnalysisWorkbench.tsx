@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { startTransition, type ReactNode } from "react";
 
 import { AnalysisHistoryPanel } from "./AnalysisHistoryPanel";
+import { AnalysisPanelBoundary } from "./AnalysisPanelBoundary";
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
 import { MethodPurposeHelper } from "./MethodPurposeHelper";
 import { PreflightExplanationPanel } from "./PreflightExplanationPanel";
@@ -194,10 +195,15 @@ export function AnalysisWorkbench({
   };
   const analysisResultForExport =
     effectiveRestoredState.restoredAnalysisResult ?? selectedAnalysisResult;
+  const selectMethod = (moduleId: AnalysisModuleId, methodId: string | null) => {
+    startTransition(() => {
+      onSelectMethod(moduleId, methodId);
+    });
+  };
 
   return (
     <>
-      <MethodPurposeHelper catalog={catalog} onSelectMethod={onSelectMethod} />
+      <MethodPurposeHelper catalog={catalog} onSelectMethod={selectMethod} />
       <StatisticalRoleGuide selectedMethod={selectedMethod} />
       <nav className="module-nav" aria-label="분석 모듈">
         {catalog.modules.map((module) => (
@@ -212,7 +218,7 @@ export function AnalysisWorkbench({
             onClick={() => {
               const firstMethod =
                 catalog.methods.find((method) => method.module_id === module.module_id) ?? null;
-              onSelectMethod(module.module_id, firstMethod?.method_id ?? null);
+              selectMethod(module.module_id, firstMethod?.method_id ?? null);
             }}
             type="button"
           >
@@ -232,7 +238,7 @@ export function AnalysisWorkbench({
             }
             key={method.method_id}
             onClick={() => {
-              onSelectMethod(method.module_id, method.method_id);
+              selectMethod(method.module_id, method.method_id);
             }}
             type="button"
           >
@@ -368,7 +374,11 @@ export function AnalysisWorkbench({
               </div>
             </>
           ) : null}
-          {executablePanel !== null && executablePanel !== undefined ? executablePanel : null}
+          {executablePanel !== null && executablePanel !== undefined ? (
+            <AnalysisPanelBoundary panelKey={selectedMethod.method_id}>
+              {executablePanel}
+            </AnalysisPanelBoundary>
+          ) : null}
           <AnalysisHistoryPanel
             catalog={catalog}
             history={effectiveHistoryState.analysisHistory}

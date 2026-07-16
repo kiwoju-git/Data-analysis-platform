@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  createDoeResponseRevision,
   createResponseSurfaceAnalysis,
   createResponseSurfaceDesign,
+  fetchDoeResponseRevisions,
   saveResponseSurfaceResponses,
+  type DoeResponseRevisionHistoryResponse,
   type DoeResponseSurfaceAnalysisResponse,
   type ResponseSurfaceDesignCreateRequest,
   type ResponseSurfaceDesignResponse,
@@ -35,6 +38,12 @@ export function ResponseSurfacePanel() {
   const [responseUnit, setResponseUnit] = useState("");
   const [responseValues, setResponseValues] = useState<Record<number, string>>({});
   const [responsesSaved, setResponsesSaved] = useState(false);
+  const [responseRevisionId, setResponseRevisionId] = useState<string | null>(null);
+  const [responseRevisionNumber, setResponseRevisionNumber] = useState<number | null>(null);
+  const [responseRevisionSha256, setResponseRevisionSha256] = useState<string | null>(null);
+  const [revisionHistory, setRevisionHistory] =
+    useState<DoeResponseRevisionHistoryResponse | null>(null);
+  const [correctionMode, setCorrectionMode] = useState(false);
   const [analysis, setAnalysis] = useState<DoeResponseSurfaceAnalysisResponse | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -75,8 +84,15 @@ export function ResponseSurfacePanel() {
       const created = await createResponseSurfaceDesign(request);
       if (requestRevision.current !== revision) return;
       setDesign(created);
+      setIsSaving(false);
+      setIsAnalyzing(false);
       setResponsesSaved(false);
       setAnalysis(null);
+      setResponseRevisionId(null);
+      setResponseRevisionNumber(null);
+      setResponseRevisionSha256(null);
+      setRevisionHistory(null);
+      setCorrectionMode(false);
       setResponseValues(Object.fromEntries(created.runs.map((run) => [run.run_order, ""])));
     } catch (caught) {
       if (requestRevision.current === revision) setError(errorCode(caught));
@@ -104,15 +120,36 @@ export function ResponseSurfacePanel() {
     setIsSaving(true);
     setError(null);
     try {
-      const stored = await saveResponseSurfaceResponses(design.design_id, {
-        response_name: trimmedName,
-        unit: responseUnit.trim() || null,
-        values,
-      });
+      const stored = correctionMode
+        ? await createDoeResponseRevision(design.design_id, {
+            response_name: trimmedName,
+            unit: responseUnit.trim() || null,
+            values,
+            supersedes_response_revision_id: responseRevisionId,
+          })
+        : await saveResponseSurfaceResponses(design.design_id, {
+            response_name: trimmedName,
+            unit: responseUnit.trim() || null,
+            values,
+          });
       if (requestRevision.current !== revision) return;
       setResponsesSaved(true);
       setAnalysis(null);
-      setDesign((current) => (current === null ? null : { ...current, status: stored.status }));
+      setCorrectionMode(false);
+      if ("response_revision_id" in stored) {
+        setResponseRevisionId(stored.response_revision_id);
+        setResponseRevisionNumber(stored.revision_number);
+        setResponseRevisionSha256(stored.response_revision_sha256);
+        setDesign((current) => (current === null ? null : { ...current, status: "completed" }));
+      } else {
+        const current = stored.responses.find((item) => item.response_name === trimmedName) ?? null;
+        setResponseRevisionId(current?.response_revision_id ?? null);
+        setResponseRevisionNumber(current?.response_revision_number ?? null);
+        setResponseRevisionSha256(current?.response_revision_sha256 ?? null);
+        setDesign((value) => (value === null ? null : { ...value, status: stored.status }));
+      }
+      const history = await fetchDoeResponseRevisions(design.design_id, trimmedName);
+      if (requestRevision.current === revision) setRevisionHistory(history);
     } catch (caught) {
       if (requestRevision.current === revision) setError(errorCode(caught));
     } finally {
@@ -128,6 +165,7 @@ export function ResponseSurfacePanel() {
     try {
       const created = await createResponseSurfaceAnalysis(design.design_id, {
         response_name: responseName.trim(),
+        response_revision_id: responseRevisionId,
         confidence_level: 0.95,
         point_limit: 256,
         contour_grid_size: 21,
@@ -297,24 +335,40 @@ export function ResponseSurfacePanel() {
       {error !== null ? <div className="error-box">오류 코드: {error}</div> : null}
 
       {design !== null ? (
-        <ResponseEntry
+        <ResponseSurfaceResponseEntry
           design={design}
           responseName={responseName}
           responseUnit={responseUnit}
           responseValues={responseValues}
           responsesSaved={responsesSaved}
+          responseRevisionNumber={responseRevisionNumber}
+          responseRevisionSha256={responseRevisionSha256}
+          revisionHistory={revisionHistory}
+          correctionMode={correctionMode}
           isSaving={isSaving}
           isAnalyzing={isAnalyzing}
           onResponseNameChange={(value) => {
             setResponseName(value);
             setResponsesSaved(false);
-            setAnalysis(null);
           }}
           onResponseUnitChange={setResponseUnit}
           onResponseValueChange={(runOrder, value) => {
             setResponsesSaved(false);
-            setAnalysis(null);
             setResponseValues((current) => ({ ...current, [runOrder]: value }));
+          }}
+          onStartCorrection={() => {
+            setCorrectionMode(true);
+            setError(null);
+            const revision = ++requestRevision.current;
+            if (responseName.trim().length > 0) {
+              void fetchDoeResponseRevisions(design.design_id, responseName.trim())
+                .then((history) => {
+                  if (requestRevision.current === revision) setRevisionHistory(history);
+                })
+                .catch((caught: unknown) => {
+                  if (requestRevision.current === revision) setError(errorCode(caught));
+                });
+            }
           }}
           onSave={() => void saveResponses()}
           onAnalyze={() => void runAnalysis()}
@@ -336,29 +390,40 @@ interface ResponseEntryProps {
   responseUnit: string;
   responseValues: Record<number, string>;
   responsesSaved: boolean;
+  responseRevisionNumber: number | null;
+  responseRevisionSha256: string | null;
+  revisionHistory: DoeResponseRevisionHistoryResponse | null;
+  correctionMode: boolean;
   isSaving: boolean;
   isAnalyzing: boolean;
   onResponseNameChange: (value: string) => void;
   onResponseUnitChange: (value: string) => void;
   onResponseValueChange: (runOrder: number, value: string) => void;
+  onStartCorrection: () => void;
   onSave: () => void;
   onAnalyze: () => void;
 }
 
-function ResponseEntry({
+export function ResponseSurfaceResponseEntry({
   design,
   responseName,
   responseUnit,
   responseValues,
   responsesSaved,
+  responseRevisionNumber,
+  responseRevisionSha256,
+  revisionHistory,
+  correctionMode,
   isSaving,
   isAnalyzing,
   onResponseNameChange,
   onResponseUnitChange,
   onResponseValueChange,
+  onStartCorrection,
   onSave,
   onAnalyze,
 }: ResponseEntryProps) {
+  const responsesLocked = design.status === "analyzed" && !correctionMode;
   return (
     <section className="analysis-result-section" aria-labelledby="rsm-response-title">
       <div className="panel-heading compact-heading">
@@ -375,15 +440,27 @@ function ResponseEntry({
         <strong>{formatNumber(design.options.alpha)}</strong>
         <span>설계 경계</span>
         <strong>Axial points = declared low/high</strong>
+        <span>Response revision</span>
+        <strong>{responseRevisionNumber === null ? "-" : `r${responseRevisionNumber}`}</strong>
+        <span>Revision SHA</span>
+        <strong>{responseRevisionSha256?.slice(0, 12) ?? "-"}</strong>
       </div>
       <div className="option-grid">
         <label>
           <span>반응 이름</span>
-          <input value={responseName} onChange={(event) => onResponseNameChange(event.currentTarget.value)} />
+          <input
+            disabled={responsesLocked || correctionMode}
+            value={responseName}
+            onChange={(event) => onResponseNameChange(event.currentTarget.value)}
+          />
         </label>
         <label>
           <span>반응 단위</span>
-          <input value={responseUnit} onChange={(event) => onResponseUnitChange(event.currentTarget.value)} />
+          <input
+            disabled={responsesLocked}
+            value={responseUnit}
+            onChange={(event) => onResponseUnitChange(event.currentTarget.value)}
+          />
         </label>
       </div>
       <div className="table-wrap">
@@ -409,6 +486,7 @@ function ResponseEntry({
                 <td>
                   <input
                     aria-label={`Run ${run.run_order} 반응`}
+                    disabled={responsesLocked}
                     inputMode="decimal"
                     value={responseValues[run.run_order] ?? ""}
                     onChange={(event) => onResponseValueChange(run.run_order, event.currentTarget.value)}
@@ -419,19 +497,68 @@ function ResponseEntry({
           </tbody>
         </table>
       </div>
+      {responsesLocked ? (
+        <div className="notice-box notice-warning" role="status">
+          분석이 완료되어 현재 revision은 읽기 전용입니다. 수정은 새 revision으로만 저장되며 과거 분석은 유지됩니다.
+        </div>
+      ) : correctionMode ? (
+        <div className="notice-box notice-warning" role="status">
+          새 revision을 편집 중입니다. 저장 전 기존 revision과 분석 결과는 변경되지 않습니다.
+        </div>
+      ) : (
+        <div className="notice-box notice-warning">
+          분석을 실행하면 현재 설계의 반응값이 잠깁니다. 여러 response를 사용할 계획이면 먼저 모두 저장하세요.
+        </div>
+      )}
       <div className="button-row">
-        <button type="button" className="secondary-button" disabled={isSaving} onClick={onSave}>
-          {isSaving ? "저장 중" : "반응 저장"}
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={isSaving || responsesLocked}
+          onClick={onSave}
+        >
+          {isSaving ? "저장 중" : correctionMode ? "새 revision 저장" : "반응 저장"}
         </button>
+        {design.status === "analyzed" && !correctionMode ? (
+          <button type="button" className="secondary-button" onClick={onStartCorrection}>
+            새 revision으로 수정
+          </button>
+        ) : null}
         <button
           type="button"
           className="primary-button"
-          disabled={!responsesSaved || isAnalyzing}
+          disabled={!responsesSaved || isAnalyzing || responsesLocked}
           onClick={onAnalyze}
         >
           {isAnalyzing ? "분석 중" : "Quadratic model 적합"}
         </button>
       </div>
+      {revisionHistory !== null ? (
+        <div className="table-wrap" aria-label="RSM response revision history">
+          <table className="result-table">
+            <thead>
+              <tr>
+                <th>Revision</th>
+                <th>State</th>
+                <th>Current</th>
+                <th>Closed</th>
+                <th>SHA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {revisionHistory.items.map((revision) => (
+                <tr key={revision.response_revision_id}>
+                  <td>r{revision.revision_number}</td>
+                  <td>{revision.state}</td>
+                  <td>{revision.is_current ? "current" : "history"}</td>
+                  <td>{revision.closed_at ?? "-"}</td>
+                  <td>{revision.response_revision_sha256.slice(0, 12)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -461,6 +588,8 @@ function ResponseSurfaceResult({ analysis }: { analysis: DoeResponseSurfaceAnaly
         <strong>{stationary.within_axial_bounds ? "예" : "아니오"}</strong>
         <span>예측 반응</span>
         <strong>{formatNullable(stationary.predicted_response)}</strong>
+        <span>Response revision</span>
+        <strong>r{analysis.response_revision_number}</strong>
       </div>
       {stationary.available ? (
         <div className="metadata-grid" aria-label="정상점 좌표">

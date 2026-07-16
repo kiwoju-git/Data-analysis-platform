@@ -41,6 +41,8 @@ def _options(alpha_mode: str = "rotatable") -> ResponseSurfaceDesignOptions:
 def test_rotatable_central_composite_design_uses_declared_bounds_for_axial_points() -> None:
     design = generate_central_composite_design(_factors(), _options())
 
+    assert design.schema_version == 2
+    assert design.family == "central_composite"
     assert design.alpha == pytest.approx(2**0.5)
     assert len(design.runs) == 13
     assert [run.point_type for run in design.runs].count("factorial") == 4
@@ -68,6 +70,8 @@ def test_face_centered_design_and_seeded_randomization_are_reproducible() -> Non
     second = generate_central_composite_design(_factors(), options)
 
     assert first.alpha == 1.0
+    assert first.schema_version == 2
+    assert first.family == "central_composite"
     assert first.design_sha256 == second.design_sha256
     assert [run.standard_order for run in first.runs] == [run.standard_order for run in second.runs]
 

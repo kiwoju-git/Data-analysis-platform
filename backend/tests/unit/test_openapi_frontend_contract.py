@@ -295,6 +295,48 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("design_id", "path")}),
     ),
     OperationContract(
+        route_name="doeResponseRevisions",
+        method="post",
+        path="/api/v1/doe-designs/{design_id}/response-revisions",
+        success_status="201",
+        response_schema="DoeResponseRevisionResponse",
+        parameters=frozenset({("design_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="doeResponseRevisions",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/response-revisions",
+        success_status="200",
+        response_schema="DoeResponseRevisionHistoryResponse",
+        parameters=frozenset(
+            {
+                ("design_id", "path"),
+                ("response_name", "query"),
+                ("offset", "query"),
+                ("limit", "query"),
+            }
+        ),
+    ),
+    OperationContract(
+        route_name="doeResponseRevision",
+        method="get",
+        path=("/api/v1/doe-designs/{design_id}/response-revisions/" "{response_revision_id}"),
+        success_status="200",
+        response_schema="DoeResponseRevisionResponse",
+        parameters=frozenset({("design_id", "path"), ("response_revision_id", "path")}),
+    ),
+    OperationContract(
+        route_name="doeResponseRevisionAbandon",
+        method="post",
+        path=(
+            "/api/v1/doe-designs/{design_id}/response-revisions/" "{response_revision_id}/abandon"
+        ),
+        success_status="200",
+        response_schema="DoeResponseRevisionResponse",
+        parameters=frozenset({("design_id", "path"), ("response_revision_id", "path")}),
+    ),
+    OperationContract(
         route_name="doeDesignAnalyses",
         method="post",
         path="/api/v1/doe-designs/{design_id}/analyses",
@@ -310,6 +352,96 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema="DoeFactorialAnalysisResponse",
         parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianStudies",
+        method="post",
+        path="/api/v1/bayesian-studies",
+        success_status="201",
+        response_schema="BayesianStudyResponse",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="bayesianStudies",
+        method="get",
+        path="/api/v1/bayesian-studies",
+        success_status="200",
+        response_schema="BayesianStudyListResponse",
+        parameters=frozenset({("offset", "query"), ("limit", "query")}),
+    ),
+    OperationContract(
+        route_name="bayesianStudy",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}",
+        success_status="200",
+        response_schema="BayesianStudyResponse",
+        parameters=frozenset({("study_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianTrials",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/trials",
+        success_status="200",
+        response_schema="BayesianTrialListResponse",
+        parameters=frozenset({("study_id", "path"), ("offset", "query"), ("limit", "query")}),
+    ),
+    OperationContract(
+        route_name="bayesianTrialObservation",
+        method="put",
+        path="/api/v1/bayesian-studies/{study_id}/trials/{trial_id}/observation",
+        success_status="200",
+        response_schema="BayesianTrialTransitionResponse",
+        parameters=frozenset({("study_id", "path"), ("trial_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="bayesianTrialAbandon",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/trials/{trial_id}/abandon",
+        success_status="200",
+        response_schema="BayesianTrialTransitionResponse",
+        parameters=frozenset({("study_id", "path"), ("trial_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianHistory",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/history",
+        success_status="200",
+        response_schema="BayesianHistoryListResponse",
+        parameters=frozenset({("study_id", "path"), ("offset", "query"), ("limit", "query")}),
+    ),
+    OperationContract(
+        route_name="bayesianHistoryRevision",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/history/{history_revision_id}",
+        success_status="200",
+        response_schema="BayesianHistoryRevisionResponse",
+        parameters=frozenset({("study_id", "path"), ("history_revision_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianRecommendations",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/recommendations",
+        success_status="201",
+        response_schema="BayesianRecommendationResponse",
+        parameters=frozenset({("study_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="bayesianRecommendations",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/recommendations",
+        success_status="200",
+        response_schema="BayesianRecommendationListResponse",
+        parameters=frozenset({("study_id", "path"), ("offset", "query"), ("limit", "query")}),
+    ),
+    OperationContract(
+        route_name="bayesianRecommendation",
+        method="get",
+        path=("/api/v1/bayesian-studies/{study_id}/recommendations/" "{recommendation_id}"),
+        success_status="200",
+        response_schema="BayesianRecommendationResponse",
+        parameters=frozenset({("study_id", "path"), ("recommendation_id", "path")}),
     ),
     OperationContract(
         route_name="regressionPredictionPreflight",
@@ -353,6 +485,37 @@ FRONTEND_ROUTE_CONTRACTS = [
         response_schema="GageRrPreflightResponse",
         request_media_types=frozenset({"application/json"}),
     ),
+    OperationContract(
+        route_name="attributeControlLimitSetsBase",
+        method="post",
+        path="/api/v1/quality/attribute-control-limit-sets",
+        success_status="201",
+        response_schema="AttributeControlLimitSetResponse",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="attributeControlLimitSets",
+        method="get",
+        path="/api/v1/quality/attribute-control-limit-sets",
+        success_status="200",
+        response_schema="AttributeControlLimitSetListResponse",
+        parameters=frozenset(
+            {
+                ("source_dataset_version_id", "query"),
+                ("chart_type", "query"),
+                ("limit", "query"),
+                ("offset", "query"),
+            }
+        ),
+    ),
+    OperationContract(
+        route_name="attributeControlLimitSet",
+        method="get",
+        path="/api/v1/quality/attribute-control-limit-sets/{limit_set_id}",
+        success_status="200",
+        response_schema="AttributeControlLimitSetResponse",
+        parameters=frozenset({("limit_set_id", "path")}),
+    ),
 ]
 
 
@@ -361,6 +524,349 @@ FRONTEND_ROUTE_CONTRACTS = [
 # full Pydantic-to-TypeScript generation and it permits additive backend fields;
 # broader schema generation/diffing remains a separate hardening task.
 FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
+    SchemaComponentContract(
+        name="AttributeControlLimitSetCreateRequest",
+        properties=frozenset({"source_analysis_id"}),
+        required_fields=frozenset({"source_analysis_id"}),
+    ),
+    SchemaComponentContract(
+        name="AttributeControlLimitSetResponse",
+        properties=frozenset(
+            {
+                "asset_schema_version",
+                "asset_sha256",
+                "limit_set_id",
+                "status",
+                "method_id",
+                "source_method_version",
+                "phase2_method_version",
+                "source_result_schema_version",
+                "source_analysis_id",
+                "source_dataset_version_id",
+                "source_schema_hash",
+                "source_canonical_sha256",
+                "source_config_sha256",
+                "source_result_sha256",
+                "filter_snapshot_sha256",
+                "row_snapshot_sha256",
+                "chart_type",
+                "count_definition",
+                "count",
+                "denominator",
+                "denominator_role",
+                "baseline_point_count",
+                "total_count",
+                "total_denominator",
+                "frozen_center_line",
+                "fixed_sample_size",
+                "constant_opportunity_confirmed",
+                "sigma_multiplier",
+                "calculation_policy",
+                "natural_bound_policy",
+                "eligibility",
+                "creator_provenance",
+                "created_at",
+                "closed_at",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "asset_schema_version",
+                "asset_sha256",
+                "limit_set_id",
+                "source_analysis_id",
+                "source_dataset_version_id",
+                "source_schema_hash",
+                "source_canonical_sha256",
+                "source_config_sha256",
+                "source_result_sha256",
+                "filter_snapshot_sha256",
+                "row_snapshot_sha256",
+                "chart_type",
+                "count_definition",
+                "count",
+                "denominator",
+                "baseline_point_count",
+                "frozen_center_line",
+                "eligibility",
+                "creator_provenance",
+            }
+        ),
+        property_refs=(
+            ("count", "AttributeControlLimitSetColumnDependency"),
+            ("eligibility", "AttributeControlLimitSetEligibility"),
+            ("creator_provenance", "AttributeControlLimitSetCreatorProvenance"),
+        ),
+        property_any_of_refs=(
+            (
+                "denominator",
+                frozenset({"AttributeControlLimitSetColumnDependency"}),
+            ),
+        ),
+        property_consts=(
+            ("asset_schema_version", 1),
+            ("method_id", "quality.attribute_control_chart"),
+            ("source_method_version", "0.1.0"),
+            ("phase2_method_version", "0.2.0"),
+            ("source_result_schema_version", 1),
+        ),
+    ),
+    SchemaComponentContract(
+        name="AttributeControlLimitSetListResponse",
+        properties=frozenset({"total", "offset", "limit", "items"}),
+        required_fields=frozenset({"total", "offset", "limit", "items"}),
+        array_item_refs=(("items", "AttributeControlLimitSetResponse"),),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyCreateRequest",
+        properties=frozenset(
+            {
+                "name",
+                "factors",
+                "objective",
+                "constraints",
+                "initial_design_seed",
+                "initial_design_size",
+            }
+        ),
+        required_fields=frozenset(
+            {"factors", "objective", "initial_design_seed", "initial_design_size"}
+        ),
+        property_refs=(("objective", "BayesianObjectiveRequest"),),
+        array_item_refs=(
+            ("factors", "BayesianFactorRequest"),
+            ("constraints", "BayesianLinearConstraintRequest"),
+        ),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyResponse",
+        properties=frozenset(
+            {
+                "study_id",
+                "study_version_id",
+                "version_number",
+                "study_schema_version",
+                "method_id",
+                "method_version",
+                "name",
+                "status",
+                "definition_sha256",
+                "factors",
+                "objective",
+                "constraints",
+                "initial_design",
+                "trial_count",
+                "pending_trial_count",
+                "completed_trial_count",
+                "abandoned_trial_count",
+                "observation_history",
+                "trials",
+                "surrogate_available",
+                "recommendation_available",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "study_id",
+                "study_version_id",
+                "study_schema_version",
+                "method_id",
+                "method_version",
+                "definition_sha256",
+                "observation_history",
+                "trials",
+                "surrogate_available",
+                "recommendation_available",
+            }
+        ),
+        property_refs=(
+            ("objective", "BayesianObjectiveResponse"),
+            ("initial_design", "BayesianInitialDesignResponse"),
+            ("observation_history", "BayesianHistoryRevisionResponse"),
+        ),
+        array_item_refs=(
+            ("factors", "BayesianFactorResponse"),
+            ("constraints", "BayesianLinearConstraintResponse"),
+            ("trials", "BayesianTrialResponse"),
+        ),
+        property_consts=(
+            ("study_schema_version", 1),
+            ("method_id", "doe.bayesian_optimization"),
+        ),
+    ),
+    SchemaComponentContract(
+        name="BayesianTrialResponse",
+        properties=frozenset(
+            {
+                "trial_id",
+                "study_version_id",
+                "trial_number",
+                "origin",
+                "state",
+                "actual_coordinates",
+                "normalized_coordinates",
+                "coordinates_sha256",
+                "objective_value",
+                "created_at",
+                "closed_at",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "trial_id",
+                "study_version_id",
+                "trial_number",
+                "origin",
+                "state",
+                "actual_coordinates",
+                "normalized_coordinates",
+                "coordinates_sha256",
+                "objective_value",
+                "created_at",
+                "closed_at",
+            }
+        ),
+    ),
+    SchemaComponentContract(
+        name="BayesianHistoryRevisionResponse",
+        properties=frozenset(
+            {
+                "history_revision_id",
+                "study_version_id",
+                "revision_number",
+                "schema_version",
+                "completed_trial_ids",
+                "completed_trial_count",
+                "observation_history_sha256",
+                "previous_history_sha256",
+                "created_at",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "history_revision_id",
+                "study_version_id",
+                "revision_number",
+                "schema_version",
+                "completed_trial_ids",
+                "completed_trial_count",
+                "observation_history_sha256",
+                "previous_history_sha256",
+                "created_at",
+            }
+        ),
+        property_consts=(("schema_version", 1),),
+    ),
+    SchemaComponentContract(
+        name="BayesianObservationCreateRequest",
+        properties=frozenset({"objective_value", "expected_history_revision_id"}),
+        required_fields=frozenset({"objective_value", "expected_history_revision_id"}),
+    ),
+    SchemaComponentContract(
+        name="BayesianRecommendationCreateRequest",
+        properties=frozenset({"expected_history_revision_id", "search"}),
+        required_fields=frozenset({"expected_history_revision_id"}),
+        property_refs=(("search", "BayesianRecommendationSearchRequest"),),
+    ),
+    SchemaComponentContract(
+        name="BayesianRecommendationResult",
+        properties=frozenset(
+            {
+                "schema_version",
+                "recommended_actual_coordinates",
+                "recommended_normalized_coordinates",
+                "predicted_objective_mean",
+                "posterior_standard_deviation",
+                "expected_improvement",
+                "incumbent_objective",
+                "objective_direction",
+                "constraint_evaluations",
+                "model",
+                "budget",
+                "warnings",
+                "limitations",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "schema_version",
+                "recommended_actual_coordinates",
+                "recommended_normalized_coordinates",
+                "predicted_objective_mean",
+                "posterior_standard_deviation",
+                "expected_improvement",
+                "incumbent_objective",
+                "objective_direction",
+                "constraint_evaluations",
+                "model",
+                "budget",
+                "warnings",
+                "limitations",
+            }
+        ),
+        property_refs=(
+            ("model", "BayesianSurrogateModelResponse"),
+            ("budget", "BayesianRecommendationBudgetResponse"),
+        ),
+        array_item_refs=(("constraint_evaluations", "BayesianConstraintEvaluationResponse"),),
+        property_consts=(("schema_version", 1),),
+    ),
+    SchemaComponentContract(
+        name="BayesianRecommendationResponse",
+        properties=frozenset(
+            {
+                "recommendation_id",
+                "study_id",
+                "study_version_id",
+                "source_history_revision_id",
+                "source_observation_history_sha256",
+                "definition_sha256",
+                "method_id",
+                "method_version",
+                "config_schema_version",
+                "result_schema_version",
+                "model_schema_version",
+                "config_sha256",
+                "result_payload_sha256",
+                "created_at",
+                "trial",
+                "result",
+                "provenance",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "recommendation_id",
+                "study_id",
+                "study_version_id",
+                "source_history_revision_id",
+                "source_observation_history_sha256",
+                "definition_sha256",
+                "method_id",
+                "method_version",
+                "config_schema_version",
+                "result_schema_version",
+                "model_schema_version",
+                "config_sha256",
+                "result_payload_sha256",
+                "created_at",
+                "trial",
+                "result",
+                "provenance",
+            }
+        ),
+        property_refs=(
+            ("trial", "BayesianTrialResponse"),
+            ("result", "BayesianRecommendationResult"),
+            ("provenance", "BayesianRecommendationProvenance"),
+        ),
+        property_consts=(
+            ("method_id", "doe.bayesian_optimization"),
+            ("config_schema_version", 1),
+            ("result_schema_version", 1),
+            ("model_schema_version", 1),
+        ),
+    ),
     SchemaComponentContract(
         name="HealthResponse",
         properties=frozenset({"status", "service", "version"}),
@@ -678,7 +1184,13 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
     SchemaComponentContract(
         name="DoeFactorialAnalysisCreateRequest",
         properties=frozenset(
-            {"response_name", "max_interaction_order", "confidence_level", "point_limit"}
+            {
+                "response_name",
+                "response_revision_id",
+                "max_interaction_order",
+                "confidence_level",
+                "point_limit",
+            }
         ),
         required_fields=frozenset({"response_name"}),
     ),
@@ -694,6 +1206,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "method_version",
                 "analysis_schema_version",
                 "design_sha256",
+                "response_revision_id",
+                "response_revision_number",
+                "response_revision_sha256",
                 "response_sha256",
                 "response_name",
                 "created_at",
@@ -715,6 +1230,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "method_version",
                 "analysis_schema_version",
                 "design_sha256",
+                "response_revision_id",
+                "response_revision_number",
+                "response_revision_sha256",
                 "response_sha256",
                 "response_name",
                 "created_at",
@@ -796,6 +1314,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "version_number",
                 "method_id",
                 "method_version",
+                "design_schema_version",
                 "family",
                 "name",
                 "status",
@@ -816,6 +1335,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "version_number",
                 "method_id",
                 "method_version",
+                "design_schema_version",
                 "family",
                 "name",
                 "status",
@@ -834,15 +1354,18 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("factors", "DoeFactorResponse"),
             ("runs", "ResponseSurfaceDesignRunResponse"),
         ),
-        property_consts=(
-            ("method_id", "doe.response_surface"),
-            ("family", "central_composite_inscribed"),
-        ),
+        property_consts=(("method_id", "doe.response_surface"),),
     ),
     SchemaComponentContract(
         name="DoeResponseSurfaceAnalysisCreateRequest",
         properties=frozenset(
-            {"response_name", "confidence_level", "point_limit", "contour_grid_size"}
+            {
+                "response_name",
+                "response_revision_id",
+                "confidence_level",
+                "point_limit",
+                "contour_grid_size",
+            }
         ),
         required_fields=frozenset({"response_name"}),
     ),
@@ -858,6 +1381,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "method_version",
                 "analysis_schema_version",
                 "design_sha256",
+                "response_revision_id",
+                "response_revision_number",
+                "response_revision_sha256",
                 "response_sha256",
                 "response_name",
                 "created_at",
@@ -879,6 +1405,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "method_version",
                 "analysis_schema_version",
                 "design_sha256",
+                "response_revision_id",
+                "response_revision_number",
+                "response_revision_sha256",
                 "response_sha256",
                 "response_name",
                 "created_at",
@@ -946,7 +1475,15 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
     ),
     SchemaComponentContract(
         name="ResponseOptimizerCreateRequest",
-        properties=frozenset({"objectives", "factor_bounds", "linear_constraints", "search"}),
+        properties=frozenset(
+            {
+                "objectives",
+                "factor_bounds",
+                "linear_constraints",
+                "search",
+                "acknowledged_source_warning_codes",
+            }
+        ),
         required_fields=frozenset({"objectives"}),
         property_refs=(("search", "ResponseOptimizerSearchOptionsRequest"),),
         array_item_refs=(
@@ -1000,6 +1537,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "design_sha256",
                 "source_analysis_ids",
                 "source_bundle_sha256",
+                "acknowledged_source_warning_codes",
                 "created_at",
                 "app_version",
                 "python_version",
@@ -1023,6 +1561,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "design_sha256",
                 "source_analysis_ids",
                 "source_bundle_sha256",
+                "acknowledged_source_warning_codes",
                 "created_at",
                 "app_version",
                 "python_version",
@@ -1047,6 +1586,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "objectives",
                 "recommendation",
                 "search",
+                "source_model_eligibility",
+                "acknowledged_source_warning_codes",
                 "warnings",
             }
         ),
@@ -1060,6 +1601,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "objectives",
                 "recommendation",
                 "search",
+                "source_model_eligibility",
+                "acknowledged_source_warning_codes",
                 "warnings",
             }
         ),
@@ -1068,12 +1611,52 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("factor_region", "ResponseOptimizerFactorRegionResponse"),
             ("recommendation", "ResponseOptimizerRecommendationResponse"),
             ("search", "ResponseOptimizerSearchResponse"),
+            ("source_model_eligibility", "ResponseOptimizerSourceEligibilityResponse"),
         ),
         array_item_refs=(("objectives", "ResponseOptimizerObjectiveResponse"),),
         property_consts=(
-            ("schema_version", 1),
+            ("schema_version", 2),
             ("summary_type", "response_optimizer"),
             ("method", "derringer_suich_bounded_multistart_slsqp"),
+        ),
+    ),
+    SchemaComponentContract(
+        name="ResponseOptimizerSourceEligibilityResponse",
+        properties=frozenset(
+            {
+                "eligible",
+                "acknowledgment_required",
+                "issues",
+                "acknowledged_source_warning_codes",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "eligible",
+                "acknowledgment_required",
+                "issues",
+                "acknowledged_source_warning_codes",
+            }
+        ),
+        array_item_refs=(("issues", "ResponseOptimizerEligibilityIssueResponse"),),
+    ),
+    SchemaComponentContract(
+        name="ResponseOptimizerEligibilityIssueResponse",
+        properties=frozenset(
+            {
+                "source_analysis_id",
+                "code",
+                "severity",
+                "source_warning_code",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "source_analysis_id",
+                "code",
+                "severity",
+                "source_warning_code",
+            }
         ),
     ),
     SchemaComponentContract(
@@ -1634,8 +2217,9 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ):
         assert phrase in workflow_section
 
-    assert "latest recorded backend pytest count is 564" in local_validation_section
-    assert "latest recorded frontend Vitest count is 86" in local_validation_section
+    assert "latest recorded backend pytest count is 603" in local_validation_section
+    assert "latest recorded frontend Vitest count is 93" in local_validation_section
+    assert "latest OpenAPI/frontend contract count is 104" in local_validation_section
     assert "The latest run passed backend ruff check" not in local_validation_section
     assert "That 2026-07-09 run passed backend ruff check" in historical_validation_section
     assert "That 2026-07-07 run passed backend ruff check" in historical_validation_section

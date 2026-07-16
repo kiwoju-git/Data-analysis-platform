@@ -1,10 +1,10 @@
 # Response Optimizer Contract
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 ## Scope
 
-`regression.response_optimizer` v0.1.0 optimizes one or more checksum-validated
+`regression.response_optimizer` v0.3.0 optimizes one or more checksum-validated
 `doe.response_surface` full-quadratic models over their shared declared factor
 region. It is implemented through dedicated response-surface APIs and the RSM
 panel; it does not execute through generic `POST /api/v1/analysis-runs` and no
@@ -22,6 +22,10 @@ Implemented:
 - seeded candidate generation and bounded SLSQP multi-start refinement;
 - explicit candidate, multi-start, iteration, evaluation, and wall-time budgets;
 - stored config/result/source-bundle checksums and runtime/build provenance;
+- typed source-model eligibility with blocking, acknowledgment-required, and
+  informational issues;
+- exact acknowledgment-code persistence in request, config, result, and result
+  envelope when an advisory model diagnostic is accepted;
 - a single-current-response objective UI in `ResponseSurfacePanel`.
 
 Not implemented:
@@ -38,17 +42,22 @@ Not implemented:
 
 | Contract | Version |
 | --- | ---: |
-| method | `0.1.0` |
-| optimizer config | `1` |
-| optimizer result | `1` |
+| method | `0.3.0` |
+| optimizer config | `2` |
+| optimizer result | `2` |
 | source RSM result | `1` |
-| SQLite metadata | `9` |
+| source bundle | `2` |
+| SQLite metadata | `10` |
 
 `METHOD_VERSIONS["regression.response_optimizer"]` is the only method-version
-source. The registry ID previously produced no result, so its first persisted
-contract starts at `0.1.0`; this is not a reinterpretation of an older result.
-Schema-v9 `experiment_design_analyses` already stores method ID/version,
-config/result JSON, result SHA, and dependency SHA, so no migration is needed.
+source. The first persisted contract was v0.1.0/schema 1. Typed eligibility and
+acknowledgment fields change persisted semantics, so the current contract is
+v0.2.0 with config/result schema 2. Version 0.3.0 keeps those optimizer schemas
+and calculations, but source bundle schema 2 now includes each RSM analysis's
+explicit response revision ID/number/SHA. Older optimizer records are not
+silently assigned the new version or migrated. Schema 10 stores the source RSM
+analysis-to-revision relation; optimizer records remain keyed by source
+analysis IDs and a source bundle SHA.
 
 ## Dedicated API
 
@@ -64,14 +73,36 @@ Every objective references a stored RSM `analysis_id`. Before calculation and
 again on restore, the service validates:
 
 - source analysis existence, method ID, registry version, and result checksum;
-- source design ID/version/SHA and current response-series SHA;
+- source design ID/version/SHA and the exact historical response revision
+  ID/number/SHA used by that analysis;
 - source config/result relationship and full typed result schema;
 - identical ordered factor names, actual low/high bounds, and axial coding;
 - a source bundle SHA containing each analysis/result/response dependency.
 
-Changing current response data or tampering with a source, config, result, or
-checksum blocks restore. Errors do not expose workspace paths or response
-values beyond the aggregate model result already selected by the user.
+Creating a newer current response revision does not mutate or invalidate an
+older source analysis/optimizer. Tampering with the selected historical
+revision, relation, source, config, result, or checksum blocks restore. Errors
+do not expose workspace paths or unrelated response values.
+
+## Source-Model Eligibility
+
+Eligibility is evaluated from the checksum-validated RSM result before search
+and recomputed during restore.
+
+- Blocking: dependency/checksum failure, invalid rank, saturated/no-residual-
+  inference model, zero or unusable residual variance, significant lack of fit
+  when the test is available, or an invalid/incomplete response dependency.
+- Acknowledgment required: residual df below 5, influential runs, high leverage,
+  large standardized residuals, or severe residual-normality diagnostics.
+- Informational: associational model interpretation, contour-slice limitations,
+  confirmation-run requirement, and absence of a global-optimum guarantee.
+
+Blocking issues return `response_optimizer_source_model_ineligible` and no
+recommendation. Advisory issues require the request to contain exactly the
+current acknowledgment-required codes. Missing or unknown acknowledgments are
+rejected; accepted codes and the complete typed issue list are stored in the
+config/result/envelope. The frontend mirrors the classification for early UX,
+but backend validation remains authoritative.
 
 ## Desirability
 
@@ -129,6 +160,9 @@ optimality is not guaranteed.
 - `response_optimizer_source_analysis_missing`
 - `response_optimizer_source_analysis_invalid`
 - `response_optimizer_source_analysis_duplicate`
+- `response_optimizer_source_model_ineligible`
+- `response_optimizer_source_model_acknowledgment_required`
+- `response_optimizer_source_acknowledgment_invalid`
 - `response_optimizer_factor_space_mismatch`
 - `response_optimizer_objective_thresholds_invalid`
 - `response_optimizer_factor_bound_invalid`

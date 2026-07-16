@@ -18,10 +18,10 @@ from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import (
     APP_VERSION,
-    canonical_json_bytes,
     runtime_build_provenance,
     utc_now,
 )
+from app.services.doe_response_revisions import load_response_revision_dependency
 from app.services.response_surface_designs import (
     DOE_RESPONSE_SURFACE_METHOD_ID,
     get_response_surface_design,
@@ -40,12 +40,10 @@ from app.storage.metadata import (
     get_experiment_design_analysis_record,
     get_latest_experiment_design_analysis_record,
     insert_experiment_design_analysis_record,
-    list_experiment_run_records,
-    list_experiment_run_response_records,
 )
 
-DOE_RESPONSE_SURFACE_ANALYSIS_SCHEMA_VERSION = 1
-DOE_RESPONSE_SURFACE_CONFIG_SCHEMA_VERSION = 1
+DOE_RESPONSE_SURFACE_ANALYSIS_SCHEMA_VERSION = 2
+DOE_RESPONSE_SURFACE_CONFIG_SCHEMA_VERSION = 2
 
 
 def create_response_surface_analysis(
@@ -55,15 +53,16 @@ def create_response_surface_analysis(
 ) -> DoeResponseSurfaceAnalysisResponse:
     design = get_response_surface_design(settings, design_id)
     response_name = body.response_name.strip()
-    runs, response_records = _dependency_records(settings, design.design_version_id, response_name)
-    unit = _response_unit(response_records)
-    response_sha256 = _response_sha256(
+    dependency = load_response_revision_dependency(
+        settings,
         design_version_id=design.design_version_id,
         response_name=response_name,
-        unit=unit,
-        runs=runs,
-        response_records=response_records,
+        response_revision_id=body.response_revision_id,
     )
+    runs = dependency.runs
+    response_records = dependency.response_records
+    unit = _response_unit(response_records)
+    response_sha256 = dependency.revision.response_sha256
     response_by_run_id = {record.run_id: record.response_value for record in response_records}
     alpha = design.options.alpha
     calculation_runs = []
@@ -111,6 +110,9 @@ def create_response_surface_analysis(
         method_version=method_version,
         analysis_schema_version=DOE_RESPONSE_SURFACE_ANALYSIS_SCHEMA_VERSION,
         design_sha256=design.design_sha256,
+        response_revision_id=UUID(dependency.revision.response_revision_id),
+        response_revision_number=dependency.revision.revision_number,
+        response_revision_sha256=response_sha256,
         response_sha256=response_sha256,
         response_name=response_name,
         created_at=created_at,
@@ -125,8 +127,11 @@ def create_response_surface_analysis(
             "design_id": str(design.design_id),
             "design_version_id": str(design.design_version_id),
             "design_sha256": design.design_sha256,
-            "response_sha256": response_sha256,
             **body.model_dump(mode="json"),
+            "response_revision_id": dependency.revision.response_revision_id,
+            "response_revision_number": dependency.revision.revision_number,
+            "response_revision_sha256": response_sha256,
+            "response_sha256": response_sha256,
             "response_name": response_name,
         }
     )
@@ -142,6 +147,7 @@ def create_response_surface_analysis(
         response_sha256=response_sha256,
         created_at=created_at,
         app_version=APP_VERSION,
+        response_revision_id=dependency.revision.response_revision_id,
     )
     insert_experiment_design_analysis_record(
         settings.workspace_root,
@@ -207,6 +213,9 @@ def _validated_analysis_response(
         "design_id": str(design.design_id),
         "design_version_id": str(design.design_version_id),
         "design_sha256": design.design_sha256,
+        "response_revision_id": record.response_revision_id,
+        "response_revision_number": response.response_revision_number,
+        "response_revision_sha256": record.response_sha256,
         "response_sha256": record.response_sha256,
         "response_name": record.response_name,
     }
@@ -217,47 +226,30 @@ def _validated_analysis_response(
         or response.design_id != design.design_id
         or response.design_version_id != design.design_version_id
         or response.design_sha256 != design.design_sha256
+        or str(response.response_revision_id) != record.response_revision_id
+        or record.response_revision_sha256 != record.response_sha256
+        or response.response_revision_number < 1
+        or response.response_revision_sha256 != record.response_sha256
         or response.response_name != record.response_name
         or response.response_sha256 != record.response_sha256
         or response.method_id != record.method_id
         or response.method_version != record.method_version
     ):
         raise _metadata_error("doe_rsm_analysis_dependency_mismatch")
-    runs, response_records = _dependency_records(
-        settings, design.design_version_id, record.response_name
-    )
-    current_response_sha = _response_sha256(
+    if record.response_revision_id is None:
+        raise _metadata_error("doe_rsm_analysis_dependency_mismatch")
+    dependency = load_response_revision_dependency(
+        settings,
         design_version_id=design.design_version_id,
         response_name=record.response_name,
-        unit=_response_unit(response_records),
-        runs=runs,
-        response_records=response_records,
+        response_revision_id=UUID(record.response_revision_id),
     )
-    if current_response_sha != record.response_sha256:
+    if (
+        dependency.revision.response_sha256 != record.response_sha256
+        or dependency.revision.revision_number != response.response_revision_number
+    ):
         raise _metadata_error("doe_rsm_analysis_response_mismatch")
     return response
-
-
-def _dependency_records(
-    settings: Settings,
-    design_version_id: UUID,
-    response_name: str,
-) -> tuple[list[ExperimentRunRecord], list[ExperimentRunResponseRecord]]:
-    runs = list_experiment_run_records(settings.workspace_root, str(design_version_id))
-    all_responses = list_experiment_run_response_records(
-        settings.workspace_root, str(design_version_id)
-    )
-    responses = [record for record in all_responses if record.response_name == response_name]
-    if not responses:
-        raise ApiError(
-            code="doe_rsm_analysis_response_not_found",
-            message="분석할 저장 반응 series를 찾을 수 없습니다.",
-            status_code=status.HTTP_409_CONFLICT,
-        )
-    run_ids = {run.run_id for run in runs}
-    if len(responses) != len(runs) or {record.run_id for record in responses} != run_ids:
-        raise _metadata_error("doe_rsm_analysis_response_incomplete")
-    return runs, responses
 
 
 def _response_unit(records: list[ExperimentRunResponseRecord]) -> str | None:
@@ -265,31 +257,6 @@ def _response_unit(records: list[ExperimentRunResponseRecord]) -> str | None:
     if len(units) != 1:
         raise _metadata_error("doe_rsm_analysis_response_metadata_invalid")
     return next(iter(units))
-
-
-def _response_sha256(
-    *,
-    design_version_id: UUID,
-    response_name: str,
-    unit: str | None,
-    runs: list[ExperimentRunRecord],
-    response_records: list[ExperimentRunResponseRecord],
-) -> str:
-    run_order_by_id = {run.run_id: run.run_order for run in runs}
-    payload = {
-        "schema_version": 1,
-        "design_version_id": str(design_version_id),
-        "response_name": response_name,
-        "unit": unit,
-        "values": [
-            {
-                "run_order": run_order_by_id[record.run_id],
-                "value": record.response_value,
-            }
-            for record in sorted(response_records, key=lambda item: run_order_by_id[item.run_id])
-        ],
-    }
-    return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
 
 def _coded_levels(run: ExperimentRunRecord) -> dict[str, float]:

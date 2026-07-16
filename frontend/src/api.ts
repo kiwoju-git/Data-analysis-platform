@@ -9,6 +9,19 @@ export { fetchAnalysisRunComparison } from "./api/analyses";
 export { fetchAnalysisRunResult } from "./api/analyses";
 export { fetchAnalysisRuns } from "./api/analyses";
 export { getApiBaseUrl } from "./api/client";
+export {
+  abandonBayesianTrial,
+  createBayesianRecommendation,
+  createBayesianStudy,
+  fetchBayesianHistory,
+  fetchBayesianHistoryRevision,
+  fetchBayesianRecommendation,
+  fetchBayesianRecommendations,
+  fetchBayesianStudies,
+  fetchBayesianStudy,
+  fetchBayesianTrials,
+  recordBayesianObservation,
+} from "./api/bayesian";
 export { confirmDatasetParsing } from "./api/datasets";
 export { createDatasetFromPastedText } from "./api/datasets";
 export { fetchDatasetProfile } from "./api/datasets";
@@ -22,6 +35,12 @@ export { fetchFactorialAnalysis } from "./api/doe";
 export { fetchFactorialDesign } from "./api/doe";
 export { fetchFactorialDesignResponses } from "./api/doe";
 export { saveFactorialDesignResponses } from "./api/doe";
+export {
+  abandonDoeResponseRevision,
+  createDoeResponseRevision,
+  fetchDoeResponseRevision,
+  fetchDoeResponseRevisions,
+} from "./api/doe";
 export { createResponseSurfaceAnalysis } from "./api/doe";
 export { createResponseSurfaceDesign } from "./api/doe";
 export { fetchResponseSurfaceAnalysis } from "./api/doe";
@@ -31,6 +50,11 @@ export { createResponseOptimizer } from "./api/doe";
 export { fetchResponseOptimizer } from "./api/doe";
 export { fetchHealth } from "./api/health";
 export { fetchGageRrPreflight } from "./api/quality";
+export {
+  createAttributeControlLimitSet,
+  fetchAttributeControlLimitSet,
+  fetchAttributeControlLimitSets,
+} from "./api/quality";
 export { fetchRegressionPredictionPreflight } from "./api/regression";
 export { createRegressionPredictionCsvExport } from "./api/regression";
 export { fetchRegressionPredictionRows } from "./api/regression";

@@ -1,11 +1,13 @@
 import sqlite3
 from uuid import uuid4
 
+from app.services.doe_response_revisions import canonical_response_revision_sha256
 from app.storage.metadata import (
     MIGRATIONS,
     SCHEMA_VERSION,
     AnalysisArtifactRecord,
     AnalysisRunRecord,
+    AttributeControlLimitSetRecord,
     DatasetArtifactRecord,
     DatasetColumnRecord,
     DatasetRecord,
@@ -18,7 +20,11 @@ from app.storage.metadata import (
     JobRecord,
     RegressionModelRecord,
     count_analysis_artifact_records,
+    count_attribute_control_limit_set_records,
     get_analysis_run_record,
+    get_attribute_control_limit_set_record,
+    get_attribute_control_limit_set_record_by_source_analysis,
+    get_current_experiment_response_revision_record,
     get_dataset_artifact_record,
     get_experiment_design_analysis_record,
     get_experiment_design_record,
@@ -30,12 +36,15 @@ from app.storage.metadata import (
     insert_analysis_artifact_record,
     insert_analysis_run_record,
     insert_analysis_run_record_with_artifacts_and_regression_model,
+    insert_attribute_control_limit_set_record,
     insert_dataset_record,
     insert_dataset_version_record,
     insert_experiment_design_analysis_record,
     insert_experiment_design_records,
     insert_job_record,
+    list_attribute_control_limit_set_records,
     list_dataset_artifact_records,
+    list_experiment_response_revision_value_records,
     list_experiment_run_records,
     list_experiment_run_response_records,
     metadata_db_path,
@@ -71,6 +80,10 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
         (9, "create_experiment_design_analyses"),
+        (10, "create_experiment_response_revisions"),
+        (11, "create_bayesian_study_history"),
+        (12, "create_bayesian_recommendations"),
+        (13, "create_attribute_control_limit_sets"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -86,7 +99,7 @@ def test_initialize_metadata_store_is_idempotent(tmp_path) -> None:
     with sqlite3.connect(second.path) as connection:
         count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
 
-    assert count == 9
+    assert count == SCHEMA_VERSION
 
 
 def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) -> None:
@@ -135,6 +148,10 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
         (9, "create_experiment_design_analyses"),
+        (10, "create_experiment_response_revisions"),
+        (11, "create_bayesian_study_history"),
+        (12, "create_bayesian_recommendations"),
+        (13, "create_attribute_control_limit_sets"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -211,6 +228,10 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
         (9, "create_experiment_design_analyses"),
+        (10, "create_experiment_response_revisions"),
+        (11, "create_bayesian_study_history"),
+        (12, "create_bayesian_recommendations"),
+        (13, "create_attribute_control_limit_sets"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -319,6 +340,10 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
         (9, "create_experiment_design_analyses"),
+        (10, "create_experiment_response_revisions"),
+        (11, "create_bayesian_study_history"),
+        (12, "create_bayesian_recommendations"),
+        (13, "create_attribute_control_limit_sets"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -481,6 +506,10 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
         (9, "create_experiment_design_analyses"),
+        (10, "create_experiment_response_revisions"),
+        (11, "create_bayesian_study_history"),
+        (12, "create_bayesian_recommendations"),
+        (13, "create_attribute_control_limit_sets"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -530,6 +559,10 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
         (9, "create_experiment_design_analyses"),
+        (10, "create_experiment_response_revisions"),
+        (11, "create_bayesian_study_history"),
+        (12, "create_bayesian_recommendations"),
+        (13, "create_attribute_control_limit_sets"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -587,6 +620,10 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
         (9, "create_experiment_design_analyses"),
+        (10, "create_experiment_response_revisions"),
+        (11, "create_bayesian_study_history"),
+        (12, "create_bayesian_recommendations"),
+        (13, "create_attribute_control_limit_sets"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -640,6 +677,10 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (7, "create_experiment_designs"),
         (8, "create_experiment_run_responses"),
         (9, "create_experiment_design_analyses"),
+        (10, "create_experiment_response_revisions"),
+        (11, "create_bayesian_study_history"),
+        (12, "create_bayesian_recommendations"),
+        (13, "create_attribute_control_limit_sets"),
     ]
     assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION
@@ -678,6 +719,427 @@ def test_initialize_metadata_store_upgrades_from_schema_version_eight(tmp_path) 
 
     assert analysis_table == ("experiment_design_analyses",)
     assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_v9_responses_to_immutable_revision(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace with spaces" / "한글 경로"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 9:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 9")
+
+    design_id = str(uuid4())
+    design_version_id = str(uuid4())
+    runs = [
+        ExperimentRunRecord(
+            run_id=str(uuid4()),
+            design_version_id=design_version_id,
+            standard_order=run_order,
+            run_order=run_order,
+            replicate_index=1,
+            center_point=False,
+            block_index=None,
+            factor_levels_json='{"A":1}',
+            coded_levels_json='{"A":1}',
+        )
+        for run_order in (1, 2)
+    ]
+    insert_experiment_design_records(
+        workspace_root,
+        ExperimentDesignRecord(
+            design_id=design_id,
+            method_id="doe.factorial_design",
+            method_version="0.2.0",
+            family="two_level_full_factorial",
+            name="legacy",
+            status="designed",
+            current_version=1,
+            created_at="2026-07-14T00:00:00.000Z",
+            updated_at="2026-07-14T00:00:00.000Z",
+            app_version="0.1.0",
+        ),
+        ExperimentDesignVersionRecord(
+            design_version_id=design_version_id,
+            design_id=design_id,
+            version_number=1,
+            factors_json="[]",
+            options_json="{}",
+            run_count=2,
+            design_sha256="a" * 64,
+            created_at="2026-07-14T00:00:00.000Z",
+        ),
+        runs,
+    )
+    replace_experiment_run_response_records(
+        workspace_root,
+        design_id=design_id,
+        design_version_id=design_version_id,
+        response_name="Yield",
+        records=[
+            ExperimentRunResponseRecord(
+                response_id=str(uuid4()),
+                design_version_id=design_version_id,
+                run_id=run.run_id,
+                response_name="Yield",
+                response_value=10.0 + run.run_order,
+                unit="kg",
+                created_at="2026-07-14T00:01:00.000Z",
+                updated_at="2026-07-14T00:01:00.000Z",
+            )
+            for run in runs
+        ],
+        design_status="completed",
+        updated_at="2026-07-14T00:01:00.000Z",
+    )
+
+    initialize_metadata_store(workspace_root)
+
+    revision = get_current_experiment_response_revision_record(
+        workspace_root, design_version_id, "Yield"
+    )
+    assert revision is not None
+    assert revision.revision_number == 1
+    assert revision.state == "completed"
+    assert revision.response_sha256 == canonical_response_revision_sha256(
+        design_version_id=design_version_id,
+        response_name="Yield",
+        unit="kg",
+        values=[
+            {"run_order": 1, "value": 11.0},
+            {"run_order": 2, "value": 12.0},
+        ],
+    )
+    values = list_experiment_response_revision_value_records(
+        workspace_root, revision.response_revision_id
+    )
+    assert [(value.run_order, value.response_value) for value in values] == [
+        (1, 11.0),
+        (2, 12.0),
+    ]
+
+
+def test_initialize_metadata_store_upgrades_v10_with_empty_bayesian_foundation(
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspace with spaces" / "한글 경로"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 10:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 10")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        table_names = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table' AND name LIKE 'bayesian_%';
+                """
+            ).fetchall()
+        }
+        study_count = connection.execute("SELECT COUNT(*) FROM bayesian_studies").fetchone()[0]
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert table_names == {
+        "bayesian_studies",
+        "bayesian_study_versions",
+        "bayesian_trials",
+        "bayesian_observation_history_revisions",
+        "bayesian_observation_history_heads",
+        "bayesian_recommendations",
+    }
+    assert study_count == 0
+    assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_v11_and_preserves_bayesian_trials(
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 11:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
+        connection.execute(
+            """
+            INSERT INTO bayesian_studies (
+                study_id, method_id, method_version, name, status,
+                current_version, created_at, updated_at, app_version
+            ) VALUES ('study', 'doe.bayesian_optimization', '0.1.0', 'legacy',
+                      'active', 1, 'created', 'created', '0.1.0');
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO bayesian_study_versions (
+                study_version_id, study_id, version_number, schema_version,
+                factors_json, objective_json, constraints_json,
+                initial_design_json, definition_sha256, created_at
+            ) VALUES ('version', 'study', 1, 1, '[]', '{}', '[]', '{}', ?, 'created');
+            """,
+            ("a" * 64,),
+        )
+        connection.execute(
+            """
+            INSERT INTO bayesian_trials (
+                trial_id, study_version_id, trial_number, origin, state,
+                actual_coordinates_json, normalized_coordinates_json,
+                coordinates_sha256, objective_value, created_at, closed_at
+            ) VALUES ('trial', 'version', 1, 'initial_design', 'completed',
+                      '{"x":0.5}', '{"x":0.5}', ?, 1.25, 'created', 'closed');
+            """,
+            ("b" * 64,),
+        )
+        connection.execute(
+            """
+            INSERT INTO bayesian_observation_history_revisions (
+                history_revision_id, study_version_id, revision_number,
+                schema_version, completed_trial_ids_json, completed_trial_count,
+                observation_history_sha256, previous_history_sha256, created_at
+            ) VALUES ('history', 'version', 1, 1, '["trial"]', 1, ?, NULL, 'created');
+            """,
+            ("c" * 64,),
+        )
+        connection.execute(
+            """
+            INSERT INTO bayesian_observation_history_heads (
+                study_version_id, history_revision_id, updated_at
+            ) VALUES ('version', 'history', 'created');
+            """
+        )
+        connection.execute("PRAGMA user_version = 11")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        trial = connection.execute(
+            """
+            SELECT trial_id, origin, state, objective_value
+            FROM bayesian_trials WHERE trial_id = 'trial';
+            """
+        ).fetchone()
+        recommendation_count = connection.execute(
+            "SELECT COUNT(*) FROM bayesian_recommendations;"
+        ).fetchone()[0]
+        trial_table_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bayesian_trials';"
+        ).fetchone()[0]
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert trial == ("trial", "initial_design", "completed", 1.25)
+    assert recommendation_count == 0
+    assert "'recommendation'" in trial_table_sql
+    assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_v12_with_empty_attribute_limit_sets(
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspace with spaces" / "한글 경로"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 12:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 12")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        table = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'attribute_control_limit_sets';
+            """
+        ).fetchone()
+        count = connection.execute("SELECT COUNT(*) FROM attribute_control_limit_sets;").fetchone()[
+            0
+        ]
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert table == ("attribute_control_limit_sets",)
+    assert count == 0
+    assert user_version == SCHEMA_VERSION
+
+
+def test_attribute_control_limit_set_metadata_round_trip_and_filters(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace with spaces" / "한글 경로"
+    initialize_metadata_store(workspace_root)
+    dataset_id = str(uuid4())
+    version_id = str(uuid4())
+    count_column_id = str(uuid4())
+    denominator_column_id = str(uuid4())
+    analysis_id = str(uuid4())
+    limit_set_id = str(uuid4())
+    created_at = "2026-07-16T00:00:00.000Z"
+    insert_dataset_record(
+        workspace_root,
+        DatasetRecord(
+            dataset_id=dataset_id,
+            original_filename="source.csv",
+            safe_filename="source.csv",
+            media_type="text/csv",
+            detected_format="csv",
+            stored_path="workspaces/datasets/raw/source.csv",
+            sha256="1" * 64,
+            size_bytes=10,
+            created_at=created_at,
+        ),
+    )
+    insert_dataset_version_record(
+        workspace_root,
+        DatasetVersionRecord(
+            version_id=version_id,
+            dataset_id=dataset_id,
+            version_number=1,
+            source_sha256="1" * 64,
+            parsing_options_json='{"kind":"delimited_text"}',
+            row_count=20,
+            column_count=2,
+            schema_hash="2" * 64,
+            created_at=created_at,
+        ),
+        [
+            DatasetColumnRecord(
+                column_id=count_column_id,
+                version_id=version_id,
+                column_index=0,
+                original_name="count",
+                display_name="count",
+                data_type="integer",
+                measurement_level="count",
+                role="measure",
+                unit=None,
+            ),
+            DatasetColumnRecord(
+                column_id=denominator_column_id,
+                version_id=version_id,
+                column_index=1,
+                original_name="n",
+                display_name="n",
+                data_type="integer",
+                measurement_level="count",
+                role="measure",
+                unit=None,
+            ),
+        ],
+    )
+    insert_analysis_run_record(
+        workspace_root,
+        AnalysisRunRecord(
+            analysis_id=analysis_id,
+            method_id="quality.attribute_control_chart",
+            method_version="0.1.0",
+            dataset_version_id=version_id,
+            config_json="{}",
+            status="succeeded",
+            result_path="analysis/result.json",
+            result_sha256="3" * 64,
+            stale=False,
+            created_at=created_at,
+            updated_at=created_at,
+            completed_at=created_at,
+            app_version="0.1.0",
+        ),
+    )
+    record = AttributeControlLimitSetRecord(
+        limit_set_id=limit_set_id,
+        source_analysis_id=analysis_id,
+        source_dataset_version_id=version_id,
+        asset_schema_version=1,
+        method_id="quality.attribute_control_chart",
+        source_method_version="0.1.0",
+        phase2_method_version="0.2.0",
+        chart_type="p",
+        count_definition="defectives",
+        count_column_id=count_column_id,
+        denominator_column_id=denominator_column_id,
+        source_schema_hash="2" * 64,
+        source_canonical_sha256="4" * 64,
+        source_config_sha256="5" * 64,
+        source_result_sha256="3" * 64,
+        filter_snapshot_sha256="6" * 64,
+        row_snapshot_sha256="7" * 64,
+        baseline_point_count=20,
+        total_count=200,
+        total_denominator=400.0,
+        center_line=0.5,
+        fixed_sample_size=None,
+        constant_opportunity_confirmed=False,
+        sigma_multiplier=3.0,
+        calculation_policy="phase_2_frozen_three_sigma_v1",
+        natural_bound_policy="binomial_zero_one",
+        asset_path=f"quality/attribute-control-limit-sets/{limit_set_id}.json",
+        asset_sha256="8" * 64,
+        created_at=created_at,
+        closed_at=created_at,
+        app_version="0.1.0",
+    )
+
+    insert_attribute_control_limit_set_record(workspace_root, record)
+
+    assert get_attribute_control_limit_set_record(workspace_root, limit_set_id) == record
+    assert (
+        get_attribute_control_limit_set_record_by_source_analysis(workspace_root, analysis_id)
+        == record
+    )
+    assert list_attribute_control_limit_set_records(
+        workspace_root,
+        source_dataset_version_id=version_id,
+        chart_type="p",
+        limit=20,
+        offset=0,
+    ) == [record]
+    assert (
+        list_attribute_control_limit_set_records(
+            workspace_root,
+            source_dataset_version_id=None,
+            chart_type="c",
+            limit=20,
+            offset=0,
+        )
+        == []
+    )
+    assert (
+        count_attribute_control_limit_set_records(
+            workspace_root,
+            source_dataset_version_id=version_id,
+            chart_type=None,
+        )
+        == 1
+    )
 
 
 def test_dataset_artifact_records_round_trip_with_dataset_version(tmp_path) -> None:

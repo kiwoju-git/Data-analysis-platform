@@ -78,6 +78,12 @@ export interface DoeDesignResponseValue {
 export interface DoeDesignResponseSeries {
   response_name: string;
   unit: string | null;
+  response_revision_id: string;
+  response_revision_number: number;
+  response_revision_schema_version: 1;
+  response_revision_sha256: string;
+  created_at: string;
+  closed_at: string | null;
   response_count: number;
   values: DoeDesignResponseValue[];
 }
@@ -90,8 +96,41 @@ export interface DoeDesignResponsesResponse {
   responses: DoeDesignResponseSeries[];
 }
 
+export interface DoeResponseRevisionCreateRequest extends DoeDesignResponsesUpsertRequest {
+  supersedes_response_revision_id: string | null;
+}
+
+export interface DoeResponseRevisionResponse {
+  response_revision_id: string;
+  design_id: string;
+  design_version_id: string;
+  response_revision_schema_version: 1;
+  response_revision_sha256: string;
+  response_name: string;
+  unit: string | null;
+  revision_number: number;
+  state: "completed" | "abandoned";
+  is_current: boolean;
+  response_count: number;
+  supersedes_response_revision_id: string | null;
+  created_at: string;
+  closed_at: string | null;
+  values: DoeDesignResponseValue[];
+}
+
+export interface DoeResponseRevisionHistoryResponse {
+  design_id: string;
+  design_version_id: string;
+  response_name: string;
+  total: number;
+  offset: number;
+  limit: number;
+  items: DoeResponseRevisionResponse[];
+}
+
 export interface DoeFactorialAnalysisCreateRequest {
   response_name: string;
+  response_revision_id?: string | null;
   max_interaction_order: number;
   confidence_level: number;
   point_limit: number;
@@ -240,6 +279,9 @@ export interface DoeFactorialAnalysisResponse {
   method_version: string;
   analysis_schema_version: number;
   design_sha256: string;
+  response_revision_id: string;
+  response_revision_number: number;
+  response_revision_sha256: string;
   response_sha256: string;
   response_name: string;
   created_at: string;
@@ -288,7 +330,8 @@ export interface ResponseSurfaceDesignResponse {
   version_number: number;
   method_id: "doe.response_surface";
   method_version: string;
-  family: "central_composite_inscribed";
+  design_schema_version: 1 | 2;
+  family: "central_composite" | "central_composite_inscribed";
   name: string;
   status: string;
   created_at: string;
@@ -303,6 +346,7 @@ export interface ResponseSurfaceDesignResponse {
 
 export interface DoeResponseSurfaceAnalysisCreateRequest {
   response_name: string;
+  response_revision_id?: string | null;
   confidence_level: number;
   point_limit: number;
   contour_grid_size: number;
@@ -400,6 +444,9 @@ export interface DoeResponseSurfaceAnalysisResponse {
   method_version: string;
   analysis_schema_version: number;
   design_sha256: string;
+  response_revision_id: string;
+  response_revision_number: number;
+  response_revision_sha256: string;
   response_sha256: string;
   response_name: string;
   created_at: string;
@@ -451,10 +498,30 @@ export interface ResponseOptimizerCreateRequest {
   factor_bounds: ResponseOptimizerFactorBoundRequest[];
   linear_constraints: ResponseOptimizerLinearConstraintRequest[];
   search: ResponseOptimizerSearchOptionsRequest;
+  acknowledged_source_warning_codes: string[];
+}
+
+export type ResponseOptimizerEligibilitySeverity =
+  | "blocking"
+  | "acknowledgment_required"
+  | "informational";
+
+export interface ResponseOptimizerEligibilityIssue {
+  source_analysis_id: string | null;
+  code: string;
+  severity: ResponseOptimizerEligibilitySeverity;
+  source_warning_code: string | null;
+}
+
+export interface ResponseOptimizerSourceEligibility {
+  eligible: boolean;
+  acknowledgment_required: boolean;
+  issues: ResponseOptimizerEligibilityIssue[];
+  acknowledged_source_warning_codes: string[];
 }
 
 export interface ResponseOptimizerResult {
-  schema_version: 1;
+  schema_version: 2;
   summary_type: "response_optimizer";
   method: "derringer_suich_bounded_multistart_slsqp";
   model_policy: {
@@ -525,6 +592,8 @@ export interface ResponseOptimizerResult {
     termination_reason: "search_completed" | "evaluation_budget" | "time_budget";
     global_optimum_guaranteed: boolean;
   };
+  source_model_eligibility: ResponseOptimizerSourceEligibility;
+  acknowledged_source_warning_codes: string[];
   warnings: string[];
 }
 
@@ -535,12 +604,13 @@ export interface ResponseOptimizerResponse {
   design_version_number: number;
   method_id: "regression.response_optimizer";
   method_version: string;
-  config_schema_version: number;
-  result_schema_version: number;
+  config_schema_version: 2;
+  result_schema_version: 2;
   config_sha256: string;
   design_sha256: string;
   source_analysis_ids: string[];
   source_bundle_sha256: string;
+  acknowledged_source_warning_codes: string[];
   created_at: string;
   app_version: string;
   python_version: string;

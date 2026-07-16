@@ -82,6 +82,10 @@ export function AttributeControlChartPanel({
         </div>
         <span className="status-pill status-ready">사용 가능</span>
       </div>
+      <div className="notice-box">
+        현재 화면은 Phase I 기준선 추정만 실행합니다. 필터 후 유효 관측 전체에서 중심선과
+        3-sigma 관리한계를 추정하며 저장된 Phase II 관리한계는 아직 적용하지 않습니다.
+      </div>
       {version === null ? (
         <div className="notice-box">데이터셋 버전 생성 후 실행할 수 있습니다.</div>
       ) : (
@@ -178,6 +182,10 @@ export function AttributeControlChartPanel({
               <div className="metadata-grid" aria-label="계수형 관리도 요약">
                 <span>Chart</span>
                 <strong>{result.chart_type.toUpperCase()}</strong>
+                <span>단계</span>
+                <strong>Phase I</strong>
+                <span>한계 출처</span>
+                <strong>필터 후 유효 관측에서 추정</strong>
                 <span>계수 정의</span>
                 <strong>{result.count_definition === "defectives" ? "불량품" : "결점"}</strong>
                 <span>사용 관측</span>

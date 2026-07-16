@@ -1,8 +1,9 @@
 # Method Versioning Policy
 
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
-receive a method-version bump. `regression.predict` and `doe.factorial_design`
-are currently `0.2.0`; the other stable IDs remain on `0.1.0`.
+receive a method-version bump. `regression.predict` is `0.2.0`,
+`doe.factorial_design` and `regression.response_optimizer` are `0.3.0`, and
+`doe.response_surface` is `0.2.0`; the other stable IDs remain on `0.1.0`.
 
 ## Source Of Truth
 
@@ -150,33 +151,69 @@ below. Its prediction result schema is `2`, config schema is `3`, and rows
 artifact/header schema is `2`; the unchanged CSV format remains schema `1`.
 Older prediction artifacts are not silently migrated.
 
-`doe.factorial_design` receives a minor bump from `0.1.0` to `0.2.0` because
+`doe.factorial_design` received a minor bump from `0.1.0` to `0.2.0` because
 the same dedicated method now persists and restores effects, OLS/ANOVA,
 pure-error/lack-of-fit, diagnostic, plot, and provenance fields. Its analysis
 config and result schemas both start at `1`; SQLite metadata schema v9 stores
 the relationship. Earlier v0.1 design/response assets are not rewritten into
 analysis results, and no fake migration is performed.
 
-`doe.response_surface` becomes executable for the first time at `0.1.0` through
-dedicated CCD design/response/analysis routes. Its design, analysis config, and
-analysis result schemas each start at `1`; existing schema-v9 DOE metadata
-tables store the relationship. There is no prior executable response-surface
-artifact to migrate or reinterpret.
+`doe.response_surface` originally remained at `0.1.0` because its design
+generation and analysis formulas/results did not change. New design payloads use schema `2`
+and generic family `central_composite`, with geometry carried by `alpha_mode`.
+Legacy schema `1`/`central_composite_inscribed` payloads retain their original
+SHA and are restored verbatim, including face-centered `alpha_mode`; they are
+not rewritten. Analysis config/result schemas remain `1`.
 
-`regression.response_optimizer` keeps its initial registry version `0.1.0`
-when its first persisted dedicated optimizer contract becomes executable from
-the response-surface panel. Its config and result schemas both start at `1` and
-schema-v9 DOE analysis metadata stores the relationship. The generic
-analysis-run page remains disabled, but it produced no earlier optimizer result
-that would require a version bump or migration.
+`regression.response_optimizer` received a minor bump from `0.1.0` to `0.2.0`.
+Source-model eligibility severity, required acknowledgment codes, and their
+persistence change the request and stored result contract. Config/result schema
+both move from `1` to `2`; v0.1 records are not silently migrated. Schema-v9 DOE
+analysis metadata still stores the relationship, so no SQLite migration is
+required. The generic analysis-run page remains disabled.
 
-`doe.bayesian_optimization` enters the catalog as a planning-only method at
-`0.1.0`. It has no executable API, config/result/history schema, migration, or
-stored result. The version identifies the approved planning contract and
-reference policy only. Before the first executable artifact is allowed, the
-implementation must either match that contract or make an explicit method-
-version decision; no stored result may be silently assigned to the planning
-version after semantics change.
+The immutable DOE response revision foundation then requires new minor method
+versions: `doe.factorial_design` v0.3.0 and `doe.response_surface` v0.2.0.
+Their calculation result schemas remain 1, while analysis envelope/config move
+to schema 2 because each record now persists response revision ID, number, and
+SHA. `regression.response_optimizer` moves to v0.3.0 with unchanged config/
+result schema 2 but source bundle schema 2, because its source dependency now
+includes the RSM analysis's exact historical response revision. SQLite schema
+10 stores immutable revision/value/head tables plus the analysis-revision
+relation. Schema-v9 current response streams are backfilled as deterministic
+revision 1 assets without rewriting existing analysis JSON/checksums. Older
+method-version records are not silently assigned these versions.
+
+`doe.bayesian_optimization` entered the catalog as planning-only `0.1.0` with
+study payload schema 1, observation-history schema 1, and SQLite schema 11.
+Those assets had no numerical method result and remain restorable as `0.1.0`;
+they are not relabeled.
+
+The first dedicated GP/EI execution slice moves the method to `0.2.0` because
+it adds a versioned Matérn-5/2 Gaussian Process calculation, Expected
+Improvement search, immutable pending recommendation, and numerical result.
+Recommendation config, result, and surrogate-model schemas each start at 1.
+SQLite schema 12 adds the recommendation relation and extends trial origin with
+`recommendation`. Study/history schemas remain 1 because their payload and hash
+semantics are unchanged. The generic analysis-run endpoint remains unavailable
+for calculation and directs clients to the dedicated study API.
+
+The following sequential-lifecycle stabilization retains method `0.2.0` and
+recommendation config/result/model schemas 1. Rehashed relationship tamper is
+rejected more strictly, the reference fixture adds declared multi-seed Branin
+regret thresholds, the UI constructs the existing actual-unit linear-constraint
+request, and an external benchmark measures the existing worker. None of these
+changes alters the GP kernel, EI formula, numerical defaults, persisted field
+meaning, canonical hash payload, or compatibility of valid `0.2.0` records.
+
+The earlier scikit-learn spike and dependency-promotion evidence schema is an
+external TEMP validation artifact and does not change these method or asset
+versions. Windows 11 client validation remains a release gate; it is not a
+reason to label the current Windows 10 development evidence as Windows 11.
+
+Evidence schema 2 supersedes schema 1 because OS approval semantics and
+candidate-wheel/download-manifest relationship checks changed. This evidence
+schema bump does not change a method, study, history, config, or result schema.
 
 `quality.attribute_control_chart` becomes available with its first persisted
 contract at method version `0.1.0` and result schema `1`. This is not a bump of
@@ -184,6 +221,24 @@ an older executable result: the registry ID existed only as planned guidance
 and no result artifact was previously produced. Future changes to P/NP/C/U
 formulas, count/denominator meaning, limit policy, signal rules, or persisted
 field interpretation require a method-version decision under this policy.
+
+The Phase II frozen-limit contract foundation does not change executable
+versions. The implementation remains `0.1.0`/result schema `1`, estimates its
+baseline from all filtered valid observations, and rejects unknown Phase II
+options. The first executable Phase II slice is reserved for method version
+`0.2.0`, result schema `2`, and immutable limit-set asset schema `1`. This is a
+minor bump because the stable method family remains P/NP/C/U while request
+options, persisted dependencies, limit source, and result interpretation are
+extended. Existing `0.1.0` results remain Phase I and are never reinterpreted
+or migrated to Phase II.
+
+Limit-set asset schema `1` becomes executable storage metadata in SQLite schema
+`13` before Phase II monitoring exists. This does not bump the statistical
+method or result schema: it copies and independently verifies an eligible
+stored `0.1.0` Phase I dependency without changing that result. Any change to
+the asset's canonical fields, eligibility meaning, or checksum interpretation
+requires an asset-schema decision; enabling frozen-limit monitoring still
+requires the reserved method/result bump above.
 
 ## Minor Version
 

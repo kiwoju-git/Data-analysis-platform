@@ -1,14 +1,14 @@
 # Gate B Progress
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 ## Summary
 
 Gate B has completed the upload/version, paste-as-dataset intake, canonical JSONL artifact materialization, canonical row reader adoption for preview/profile/current executable methods, schema/preview, profile/preflight with duplicate-row and memory estimates, persisted profile summary artifacts, conservative date/time preflight, analysis catalog, storage/run foundation, selected-method six-module Workbench shell, shared Workbench component split, route-level selected-analysis restore, route-selected dataset/analysis page rendering, filter snapshot row freezing, a narrow filter expression engine and Workbench-level frontend filter controls, basic XLSX parsing confirmation, the first four real exploration-method slices, the first eight real Gate B2 hypothesis slices, the first three categorical slices, the first three Gate C1 correlation/regression slices, the current Gate D quality-control slices, and the first two Gate C3 measurement-system slices in the working tree. The app can accept a local multipart dataset upload or pasted spreadsheet text, validate the file/text envelope, preserve raw bytes unchanged, store SHA-256 provenance in SQLite metadata, return parsing-option candidates, revalidate raw upload integrity before parsing confirmation, confirm delimited-text and basic XLSX parsing, create immutable dataset version `v1`, materialize canonical rows plus a manifest under the workspace, store dataset columns and artifact metadata, retrieve version metadata, update confirmed column metadata while marking dependent analysis runs stale, return paginated row preview from canonical rows, return aggregate profile/preflight counts and warnings from validated canonical rows, summarize date/time format candidates and timezone-awareness risks without raw samples, persist and reuse raw-value-free `profile_summary` artifacts tied to schema/canonical hashes, expose the 6-module analysis method catalog, show planned/disabled methods in a route-restorable Workbench shell with legacy hash fallback, initialize analysis run/artifact/job/regression-model metadata tables with status/cancel API skeletons, execute `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.attribute_control_chart`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` with real calculations from validated canonical rows, persist an `analysis_row_snapshot` artifact for each executed row selection, persist a safe JSON model manifest for `regression.linear_model`, run backend OLS predictions from app-created manifests through `regression.predict`, store all valid prediction rows in checksum-recorded NDJSON, retrieve them through a paged API, list confirmed target versions without raw rows or storage metadata, and re-read stored analysis results and regression model manifests after checksum validation. The frontend app chrome is split into `AppChrome` for sidebar/topbar/context layout, dataset workflow state and API handlers are split into `useDatasetWorkflow`, and the frontend dataset preparation area is split into `DatasetPreparationPage`, `DatasetParsingPanel`, `DatasetVersionPanel`, `DatasetProfileSection`, `DatasetSchemaSection`, `DatasetPreviewSection`, and shared `datasetDisplay` helpers. The frontend analysis area is split into `AnalysisPage`, `AnalysisShell`, `AnalysisWorkbench`, `DescriptiveAnalysisPanel`, `GraphicalSummaryPanel`, `NormalityAnalysisPanel`, `EqualVariancesPanel`, `OneSampleTPanel`, `PairedTPanel`, `EquivalenceTostPanel`, `OneSampleWilcoxonPanel`, `TwoSampleTPanel`, `MannWhitneyPanel`, `KruskalWallisPanel`, `OneWayAnovaPanel`, `OneProportionPanel`, `TwoProportionPanel`, `ChiSquareAssociationPanel`, `PearsonCorrelationPanel`, `XyCorrelationPanel`, `LinearModelPanel`, `AttributeControlChartPanel`, `IndividualsChartPanel`, `SubgroupChartPanel`, `RunChartPanel`, `CapabilityPanel`, `GageRrPreflightPanel`, and `GageRunChartPanel`, with route selection state handled by `useAnalysisSelection` and app page routing handled by `appRoute` plus `WorkspaceRouter`, so the app chrome, dataset workflow, dataset page, analysis page, method shell, common filter surface, and executable panels have separate component boundaries. LinearModelPanel now supports stored-model preflight followed by explicit target-version prediction execution and a paged raw-value-free prediction result table. GageRrPreflightPanel now supports balanced crossed design preflight followed by Gage R&R ANOVA execution and result rendering. GageRunChartPanel now supports balanced crossed diagnostic chart execution and indexed redacted result rendering. Delimited-text parsing also handles leading preamble plus headerless tabular data through explicit `has_header=false` and `data_start_row` confirmation. The schema UI includes a guarded 34-column Bayesian sample role preset for headerless generated columns. It does not yet provide cell-level data edits, generated chart artifacts, formula recalculation/display-format restoration for XLSX, paired/two-sample TOST, event/trial summary-count categorical input, Fisher exact association p-values, chi-square aggregate-count input, categorical/interaction regression modeling, Gage R&R component/interaction plots, or Gage Run Chart export artifacts.
 
-Gate D1 now includes the dedicated DOE design, response-entry, and 2-level full factorial analysis slices. `doe.factorial_design` v0.2.0 uses design/response routes plus `POST /api/v1/doe-designs/{design_id}/analyses`, `GET /api/v1/doe-designs/{design_id}/analyses/{analysis_id}`, and the HTML report route. Schema v9 stores checksum-validated analysis records tied to immutable design version and response SHA. The calculation uses -1/+1 coding, enforced hierarchy through selected interaction order, center curvature, block fixed effects, OLS effects/inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, and capped plot payloads. `FactorialDesignPanel` renders effect/main-effect charts, term/ANOVA tables, warnings, and diagnostics; the report restores the same verified stored result without recalculation. Fractional alias analysis, optimization, and chart image export remain out of scope.
+Gate D1 now includes the dedicated DOE design, immutable response revision/history, and 2-level full factorial analysis slices. `doe.factorial_design` v0.3.0 uses response revision schema 1 and analysis envelope/config schema 2 through current/history/correction routes plus `POST /api/v1/doe-designs/{design_id}/analyses`, `GET /api/v1/doe-designs/{design_id}/analyses/{analysis_id}`, and the HTML report route. SQLite schema 10 stores immutable ordered response values, current heads, and the exact analysis-revision relationship; legacy current responses are deterministically backfilled without rewriting stored analysis artifacts. The calculation uses -1/+1 coding, enforced hierarchy through selected interaction order, center curvature, block fixed effects, OLS effects/inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, and capped plot payloads. `FactorialDesignPanel` distinguishes current/history revisions, requires explicit correction, and restores analyzed revisions read-only. Fractional alias analysis, optimization, and chart image export remain out of scope.
 
-Gate D2 now includes the dedicated response-surface and bounded response-optimizer slices. `doe.response_surface` v0.1.0 creates rotatable central composite inscribed or face-centered CCD assets for two to five continuous factors, persists complete run responses, and fits a hierarchy-fixed full quadratic OLS model. The result includes coefficient inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, a Hessian-classified stationary point with design-region checks, and a 21x21 contour grid. `regression.response_optimizer` v0.1.0 then optimizes checksum-validated RSM point predictions with maximize/minimize/target/range desirability, bounded factor regions, optional linear inequality constraints, and deterministic CPU/time/evaluation budgets. `ResponseSurfacePanel` provides design, response-entry, model, contour, diagnostics, and single-current-response optimizer views; the backend contract accepts up to eight compatible objectives. Automatic term selection, uncertainty-aware desirability, Box-Behnken, orthogonal blocking, nonlinear/integer constraints, report/image export, and a global-optimum claim remain out of scope.
+Gate D2 now includes the dedicated response-surface and bounded response-optimizer slices. `doe.response_surface` v0.2.0 uses response revision schema 1 and analysis envelope/config schema 2; new design schema-2 assets use family `central_composite`, `alpha_mode` distinguishes rotatable and face-centered CCD, and legacy schema-1 family/mode/SHA restore remains verbatim. It fits a hierarchy-fixed full quadratic OLS model with inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, a Hessian-classified stationary point, design-region checks, and a 21x21 contour grid. `regression.response_optimizer` v0.3.0 keeps config/result schema 2 and uses source-bundle schema 2 to pin the exact source RSM analysis and response revision; a newer current correction does not change old optimizer restore. Invalid rank, saturated/unusable residual inference, significant lack of fit, and dependency failures block, while advisory diagnostics require exact persisted acknowledgment codes. `ResponseSurfacePanel` distinguishes current/history revisions and explicit correction; the backend contract accepts up to eight compatible objectives. Automatic term selection, uncertainty-aware desirability, Box-Behnken, orthogonal blocking, nonlinear/integer constraints, report/image export, and a global-optimum claim remain out of scope.
 
 Current stabilization update:
 
@@ -85,8 +85,8 @@ Current stabilization update:
 | Profile summary artifact | Done for delimited text | profile scans persist raw-value-free `profile_summary` JSON artifacts, include schema/canonical hashes, and reuse matching artifacts without churn |
 | Date/time preflight | Done for delimited text | column-level parse counts, min/max, format candidates, timezone-aware/naive counts, mixed-format and mixed-timezone warnings without coercion |
 | Minimal UI | Done for B0/profile slices | upload, paste intake, parsing option confirmation with header/no-header controls, Context Bar, schema controls, Bayesian sample role preset, paginated preview, profile/preflight table, canonical/preflight summary, rendered through `AppChrome`, `useDatasetWorkflow`, split dataset-preparation components, and `datasetDisplay` helpers |
-| Analysis method registry | Done for B0/B1/B2/C1/D1/C3 current methods | `GET /api/v1/analysis-methods`, 6 modules, 30 stable method IDs, 27 available, two disabled, and planning-only `doe.bayesian_optimization`; no planned method returns a result |
-| Analysis run request guard | Done for B0/B1/B2/C1/D1/C3 current methods | `POST /api/v1/analysis-runs` executes `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`; `doe.factorial_design` returns `analysis_method_uses_dedicated_api`; planned/disabled methods still reject without a result body |
+| Analysis method registry | Done for current methods | `GET /api/v1/analysis-methods`, 6 modules, 30 stable method IDs, 28 available and two disabled. Factorial, RSM, and Bayesian Optimization use dedicated APIs; no fake result is returned from the generic route. |
+| Analysis run request guard | Done for current methods | `POST /api/v1/analysis-runs` executes the 25 generic methods. `doe.factorial_design`, `doe.response_surface`, and `doe.bayesian_optimization` return `analysis_method_uses_dedicated_api` with their dedicated route. Disabled generic pages still reject without a result body. |
 | Analysis run status/cancel API | Done for B0 storage/run slice | `GET/DELETE /api/v1/analysis-runs/{analysis_id}` skeleton |
 | Analysis result retrieval API | Done for available inline methods | `GET /api/v1/analysis-runs/{analysis_id}/result` validates stored result path and SHA-256 before returning the envelope |
 | Filter snapshot row freezing | Done for available inline methods | creates `analysis_row_snapshot` artifacts with filter hash, canonical artifact hash, included row counts, and row ranges for supported filters |
@@ -94,7 +94,7 @@ Current stabilization update:
 | Basic XLSX parser | Done for current slice | stdlib ZIP/XML reader confirms first or named sheet, writes canonical JSONL rows, and keeps formula recalculation/display formatting out of scope |
 | Job status/cancel API | Done for B0 storage/run slice | `GET/DELETE /api/v1/jobs/{job_id}` skeleton |
 | Six-module navigation shell | Done for B0 third slice | frontend catalog fetch, module selector, planned/disabled method cards |
-| Six-module Workbench shell | Done for current slice | selected method details, `/analysis/{module_id}/{method_id}` restore with legacy hash fallback, route-selected analysis page rendering through `appRoute` and `WorkspaceRouter`, split `AnalysisPage`/`AnalysisShell`/`AnalysisWorkbench`/`DescriptiveAnalysisPanel` components, `useAnalysisSelection` route state, common data/role/option/preflight/run/result step rail, method-specific role/option/preflight/result guidance for all 29 methods, no analysis-run execution controls for planned/disabled methods; `quality.gage_rr` has balanced crossed preflight plus executable ANOVA result UI and `quality.gage_run_chart` has executable diagnostic chart UI |
+| Six-module Workbench shell | Done for current slice | selected method details, `/analysis/{module_id}/{method_id}` restore with legacy hash fallback, route-selected analysis page rendering through `appRoute` and `WorkspaceRouter`, split `AnalysisPage`/`AnalysisShell`/`AnalysisWorkbench`/`DescriptiveAnalysisPanel` components, `useAnalysisSelection` route state, common data/role/option/preflight/run/result step rail, method-specific role/option/preflight/result guidance for all 30 methods, no analysis-run execution controls for planned/disabled methods; `quality.gage_rr` has balanced crossed preflight plus executable ANOVA result UI and `quality.gage_run_chart` has executable diagnostic chart UI |
 | Common analysis schemas | Started | request, filter snapshot, warning, provenance, result envelope, run status, and job status schemas exist |
 | `eda.descriptive` | Done for first B1 slice | pure calculation module, dataset-version streaming reader, inline API execution, result JSON persistence, minimal UI result table |
 | `eda.graphical_summary` | Done for current B1 slice plus frontend chart renderer | pure stdlib calculation module for histogram, boxplot, Q-Q, and ECDF chart-data payloads; dataset-version streaming reader; inline API execution; result JSON persistence; inline SVG histogram, box plot, Q-Q plot, ECDF, and summary table UI |
@@ -2948,3 +2948,430 @@ Next allowed PR after this slice:
   completed/pending/abandoned trial state machine, observation-history SHA,
   relationship validation, typed API/storage tests, and no surrogate or next-
   point recommendation until that foundation is verified.
+
+## Progress Update 166 - DOE/RSM/Optimizer Lifecycle Stabilization
+
+Implemented in the current working tree:
+
+- New RSM designs use design schema 2 and family `central_composite`, with
+  rotatable/face-centered meaning carried by `alpha_mode`. Method v0.1.0 and
+  analysis schemas remain unchanged. Legacy schema-1
+  `central_composite_inscribed` assets retain their original payload and SHA.
+- Factorial and RSM panels show the response-lock warning before analysis and
+  disable response name/unit/run values/save after analysis. Direct backend
+  writes to analyzed designs still return 409.
+- `regression.response_optimizer` is v0.2.0 with config/result schema 2.
+  Source eligibility blocks invalid rank, saturated/no inference, unusable
+  residual variance, significant lack of fit, and invalid dependencies.
+  Residual-df/influence/leverage/normality advisories require exact warning-code
+  acknowledgment stored in config, result, envelope, and restore validation.
+- Added `docs/doe_response_revision_contract.md` for immutable response
+  revision IDs/SHA, current/history UI/API, correction flow, migration,
+  analysis/optimizer dependency, multi-response, and tamper acceptance tests.
+- Bayesian remains planning-only and has no scikit-learn dependency. Its future
+  study/history foundation uses stdlib/Pydantic/SQLite; GP work requires a
+  separate Windows/Python 3.10/CPU/offline/license/size dependency spike.
+- The pre-slice approximately 608 kB and latest 612.20 kB main bundle warning is
+  a separate backlog for DOE,
+  Quality, and Regression dynamic imports, loading/error boundaries, route E2E,
+  and before/after measurement.
+
+Next allowed PR after this slice:
+
+- Frontend module lazy loading for DOE/Quality/Regression panels, with explicit
+  loading/error boundaries, route-level E2E coverage, and before/after bundle
+  measurement. Do not mix it with DOE storage or method changes.
+
+## Progress Update 167 - DOE Immutable Response Revision/History Foundation
+
+Implemented in the current working tree:
+
+- Added SQLite schema 10 immutable response revision, ordered-value, current-
+  head, and analysis-revision relationship tables. Consistent schema-v9 current
+  responses are deterministically backfilled as revision 1 without rewriting
+  existing result artifacts or manufacturing unavailable overwrite history.
+- Added response revision schema 1 create/current/paged-history/get/abandon
+  contracts. Corrections require the exact current `supersedes_revision_id`,
+  create a new revision, and never overwrite prior ordered values.
+- Bumped `doe.factorial_design` to v0.3.0 and `doe.response_surface` to v0.2.0.
+  Their analysis envelope/config schemas are 2 and pin revision ID/number/SHA;
+  calculation result schemas remain 1. Stored analyses restore against their
+  original revision after a newer correction becomes current.
+- Bumped `regression.response_optimizer` to v0.3.0 with source-bundle schema 2;
+  config/result schemas remain 2. Optimizer restore validates the exact source
+  RSM analysis and response revision rather than the mutable current head.
+- Added Factorial/RSM current/history displays and explicit correction mode.
+  Analyzed revisions remain read-only, multi-response names retain independent
+  revision streams, and stale history requests cannot overwrite newer panel
+  state.
+- Added migration, old-analysis restore, multi-response, paging, abandon,
+  relation/checksum tamper, path-redaction, typed OpenAPI/frontend contract,
+  optimizer dependency, component, and browser correction-flow coverage.
+- Full local validation passed with backend pytest 582, frontend Vitest 90,
+  OpenAPI/frontend contracts 91, mypy over 89 source files, Ruff/format,
+  frontend lint/typecheck/build, and the complete browser E2E. The final main
+  bundle is 618.10 kB and retains the expected code-splitting warning.
+
+Next allowed PR after this slice:
+
+- Frontend module lazy loading for DOE, Quality, and Regression panels. Add
+  loading/error boundaries and route E2E coverage, measure the main bundle
+  before/after, and leave Bayesian/storage/method behavior unchanged.
+
+## Progress Update 168 - Frontend Module Lazy Loading
+
+Implemented in the current working tree:
+
+- Split Regression, Quality, and DOE execution panels into three module-level
+  dynamic imports without changing method IDs, APIs, statistics, persistence,
+  or dependencies. Response Optimizer remains nested in the DOE chunk.
+- Added a stable execution-panel Suspense boundary, accessible loading state,
+  sanitized import-failure state, reload command, and method-key error reset.
+- Routed module, method-list, and purpose-helper selections through React 18
+  `startTransition` so lazy suspension cannot replace the Workbench during a
+  synchronous selection.
+- Preserved the existing panel-content tests with a test-only direct loader and
+  added focused loading/error/module-group tests.
+- Extended browser E2E to observe all three module requests, open all three
+  routes directly, and abort one isolated Regression import to verify the error
+  boundary without exposing exception text.
+- Reduced main JavaScript from 618.10 kB to 463.89 kB (24.95%). Regression is
+  41.53 kB, Quality 58.83 kB, and DOE 57.26 kB. Total JS is 621.51 kB, so the
+  result is an initial-payload improvement rather than total-code reduction.
+- Full local validation passed with backend pytest 582, frontend Vitest 93,
+  OpenAPI/frontend contracts 91, mypy over 89 source files, Ruff/format,
+  frontend lint/typecheck/build, and the complete browser E2E including direct
+  routes and isolated import-failure recovery.
+
+Next allowed PR after this slice:
+
+- Bayesian Optimization study/history foundation only: immutable study
+  version, bounded factor/objective metadata, trial state machine, observation
+  history SHA, storage/API relationship checks, and typed tests. Do not add a
+  surrogate, recommendation, scikit-learn, or executable objective.
+
+## Progress Update 169 - Bayesian Study/History Foundation
+
+Implemented in the current working tree:
+
+- Added SQLite schema 11 tables for study identity, immutable versioned
+  definition, initial-design trials, immutable observation-history revisions,
+  and the current history head. Migration from schema 10 creates no fabricated
+  study or observation and leaves existing DOE assets unchanged.
+- Added study payload schema 1 for one to six bounded continuous factors, one
+  explicit manual objective, up to 16 actual-unit linear inequalities, method
+  version, generator policy/budget, and canonical definition SHA-256.
+- Added deterministic `sha256_counter_uniform_feasible_v1` initial trials.
+  Generation is seed-stable across Python patch runtimes, bounded by 1,000
+  attempts per requested point, constraint checked, and fails explicitly when
+  it cannot fill the requested feasible set.
+- Added only `origin=initial_design` pending trials. Users can explicitly enter
+  one finite observation or abandon a trial; both transitions are terminal,
+  and neither endpoint executes an objective or creates a recommendation.
+- Added observation-history schema 1. Each completion requires the expected
+  current revision ID and appends a SHA chain over definition SHA and completed
+  trial ID/number/coordinate SHA/value ordered by trial number. Abandonment does
+  not alter the observation history.
+- Added create/list/restore, paged trial/history, immutable history-revision,
+  observation, and abandon routes plus a synchronized typed frontend client.
+  Restore rejects definition, coordinate, state, count, head, chain, or SHA
+  relationship mismatches with stable redacted errors.
+- `doe.bayesian_optimization` remains catalog version 0.1.0 and planned. Study
+  schema 1/history schema 1 are asset schemas; no method config/result schema,
+  generic execution, surrogate, EI, recommendation, fake value, scikit-learn,
+  or objective execution was added.
+- Full local validation passed with backend pytest 603, frontend Vitest 93,
+  OpenAPI/frontend contracts 104, mypy over 93 source files, Ruff/format,
+  frontend lint/typecheck/build, and browser E2E. The main bundle is 464.68 kB
+  and all assets remain below the 500 kB warning threshold.
+
+Next allowed PR after this slice:
+
+- Perform the separate scikit-learn dependency spike only: Windows 11/Python
+  3.10/CPU wheel, pinned NumPy/SciPy compatibility, license, offline behavior,
+  import/startup/memory cost, and deterministic GP smoke. Do not add a
+  production pin or executable GP/EI/recommendation API until review.
+
+## Progress Update 170 - Conditional Scikit-learn Dependency Spike
+
+Implemented in the current working tree:
+
+- Selected scikit-learn 1.7.2 as the newest stable CPython 3.10 candidate.
+  PyPI's current 1.9.0 release requires Python 3.11 and is outside the fixed
+  product runtime.
+- Added `scripts/run-scikit-learn-spike.ps1`, a synthetic fixed-kernel GP
+  probe, an initial evidence validator, and focused backend contract tests.
+  Output is restricted to a new external TEMP path and no product environment,
+  dependency, or lockfile is modified.
+- Downloaded exact Windows AMD64 wheels for NumPy 2.2.6, SciPy 1.15.3,
+  scikit-learn 1.7.2, joblib 1.5.2, and threadpoolctl 3.6.0. The 60.442 MiB
+  wheel set installed with `--no-index`; `pip check`, imports, invalid-proxy
+  offline runtime, and single-threaded CPU execution passed.
+- Two isolated fixed-kernel GP processes produced the same SHA-256 fingerprint
+  `a0a6c5ab5d4aebb74a4a42bd988b427e3d991ad58db97977d1bc3c818909cfed`.
+  Five-run timing and CPython process-tree peak working-set measurements are
+  recorded in `docs/scikit_learn_dependency_spike.md`.
+- The actual host identifies as Windows 10 Home build 19045. The evidence is
+  therefore conditionally compatible but explicitly not approved for a
+  production pin; the Windows 11 acceptance item remains open.
+- `doe.bayesian_optimization` stays planning-only at 0.1.0, study/history
+  schemas stay 1, and no config/result schema, surrogate, EI, recommendation,
+  objective execution, or fake value was added.
+- Full local validation passed with backend pytest 609, frontend Vitest 93,
+  OpenAPI/frontend contracts 104, mypy over 93 source files, Ruff/format,
+  frontend lint/typecheck/build, and the complete browser E2E. The main bundle
+  remains 464.68 kB and all assets remain below the 500 kB warning threshold.
+
+Next allowed PR after this slice:
+
+- Re-run the evidence-schema-2 dependency spike on Windows 11, CPython 3.10, CPU-only.
+  Do not add a production pin or executable GP/EI until that result reports an
+  approved Windows 11 gate.
+
+## Progress Update 171 - Windows 11 Approval Gate Hardening
+
+Implemented in the current working tree:
+
+- Four independent local OS probes identify Windows 10 Home build 19045. The
+  required Windows 11 client run remains an external-environment gate and was
+  not inferred from package compatibility.
+- Replaced the build-number-only evidence rule with evidence schema 2. It
+  records `Win32_OperatingSystem` caption, build, and ProductType and approves
+  only ProductType 1 workstations at build 22000 or newer.
+- Added an explicit Windows Server 2025 build-26100 negative case. The current
+  GitHub-hosted `windows-latest` server image cannot satisfy the Windows 11
+  product requirement despite its newer build number.
+- Pinned the evidence validator to the reviewed five exact package versions
+  and cross-checks the candidate scikit-learn wheel name, byte size, and
+  SHA-256 against the downloaded wheel manifest. Schema-1 evidence is not
+  silently reinterpreted.
+- Expanded the focused validator suite from six to nine tests for Windows 11
+  workstation approval, Windows Server exclusion, false approval, wheel
+  metadata tamper, manifest composition, nondeterminism, source archive,
+  TEMP-only output, and the no-product-dependency contract.
+- Re-ran the schema-2 wheel/offline/GP spike on the current host. It passed all
+  technical checks and retained the deterministic fingerprint while correctly
+  returning `candidate_approved_for_future_pin=false` for Windows 10 build
+  19045/ProductType 1.
+- No product dependency, lockfile, method/config/result schema, surrogate, EI,
+  recommendation, objective execution, or UI behavior changed.
+- Full local validation passed with backend pytest 612, frontend Vitest 93,
+  OpenAPI/frontend contracts 104, mypy over 93 source files, Ruff/format,
+  frontend lint/typecheck/build, and the complete browser E2E. The main bundle
+  remains 464.68 kB and all assets remain below the 500 kB warning threshold.
+
+Next allowed PR after this slice:
+
+- Run the evidence-schema-2 spike on an actual Windows 11 x64 workstation,
+  CPython 3.10, CPU-only. Do not advance to a production pin or executable
+  GP/EI until the validator returns an approved Windows 11 gate.
+
+## Progress Update 172 - Scikit-learn Pin And Windows Hash Lock
+
+Implemented in the current working tree:
+
+- By explicit product-owner decision, actual Windows 11 client validation is
+  now a mandatory release gate rather than a dependency-development gate. The
+  current Windows 10 result is not relabeled as Windows 11 evidence.
+- Added the exact `scikit-learn==1.7.2` production dependency. Bayesian remains
+  planning-only at method version 0.1.0 with study/history schemas 1; no
+  method/config/result version changed because no executable calculation or
+  persisted recommendation was added.
+- Added a 45-wheel CPython 3.10 Windows AMD64 SHA-256 lock covering backend
+  runtime, dev, and build requirements. The reviewed joblib 1.5.2 and
+  threadpoolctl 3.6.0 versions are resolver constraints, not direct project
+  dependencies. Source archives, URLs, editable lock entries, missing hashes,
+  duplicate packages, and reviewed-version drift are rejected.
+- Updated bootstrap to install the wheel-only hash lock, install the backend
+  editable with no dependency resolution/build isolation, and run `pip check`.
+  Lock generation uses an external TEMP wheelhouse and rejects a repository
+  output path.
+- A clean external TEMP venv passed `--no-index --require-hashes` install,
+  editable backend build, `pip check`, exact package imports, and API startup
+  import with `sklearn_loaded=False`. This caught and then explicitly locked
+  the `editables==0.5` build requirement.
+- Added six lock/generator/bootstrap/startup contract tests and updated the
+  nine spike-policy tests for the approved exact pin. Full local validation
+  passed with backend pytest 618, frontend Vitest 93, OpenAPI/frontend
+  contracts 104, mypy over 93 source files, Ruff/format, frontend
+  lint/typecheck/build, and the complete browser E2E. The main bundle remains
+  464.68 kB.
+- `gh` is unavailable, so remote GitHub Actions and artifacts remain
+  unverified. The repository settings and branch protection were unchanged.
+
+Next allowed PR after this slice:
+
+- Implement the first bounded Bayesian GP/EI executable vertical slice with
+  explicit method/config/result versioning, independent posterior and EI
+  parity, typed numerical failures, deterministic budgets, immutable
+  recommendation persistence, relationship tamper coverage, and browser E2E.
+  Do not execute arbitrary objectives or silently change kernels/acquisition
+  policies. Actual Windows 11 x64 workstation validation is required before
+  release.
+
+## Progress Update 173 - Bounded Bayesian GP/EI Executable Slice
+
+Status: implemented in the current working tree; final local validation is
+recorded in `docs/ci_status.md`.
+
+Completed:
+
+- Moved `doe.bayesian_optimization` from planning `0.1.0` to dedicated API/UI
+  method `0.2.0`. The catalog now contains 30 stable catalog IDs, 28 available
+  IDs, two disabled generic pages, and 25 generic `MethodExecutionHandler`
+  entries. Factorial, RSM, and Bayesian use dedicated APIs.
+- Preserved study/history schemas 1 and legacy `0.1.0` restore. SQLite schema
+  12 adds immutable recommendation records and `origin=recommendation` trials;
+  recommendation config/result/model schemas each start at 1.
+- Added spawn-worker Matérn-5/2 ARD GP fitting, analytic Expected Improvement,
+  actual-unit linear constraint filtering, deterministic candidate/local search,
+  bounded fit/search/time budgets, and explicit no-fallback errors.
+- Persisted source history, config/result/model checksums, full runtime/package
+  provenance, pending trial snapshots, confirmation-run warnings, and explicit
+  no-global-optimum limitations. A shared validator checks recommendation,
+  history, trial, config, result, model, and provenance relationships on study,
+  list, and restore paths.
+- Added the dedicated `BayesianOptimizationPanel`, typed client/OpenAPI guards,
+  hand EI and direct Matérn posterior parity, migration/legacy/tamper/API tests,
+  and a browser flow that records observations before requesting a candidate.
+- The app still does not execute objectives or load pickle/joblib. Actual
+  Windows 11 x64 validation remains a release gate and is not claimed from the
+  measured Windows 10 host.
+
+Next allowed PR:
+
+- Stabilize the sequential Bayesian lifecycle by broadening relationship-tamper
+  coverage, characterizing multi-seed Branin regret under declared budgets,
+  exposing existing linear constraints in the UI, and measuring worker startup,
+  fit, and search cost. Do not add a new acquisition algorithm or objective
+  execution in that PR.
+
+## Progress Update 174 - Bayesian Sequential Lifecycle Stabilization
+
+Status: implemented in the current working tree; final local validation is
+recorded in `docs/ci_status.md`.
+
+Completed:
+
+- Extended recommendation restore validation to cross-check result/trial
+  coordinates, factor scaling, source-history observations and incumbent,
+  request/result budgets, model counts, constraint evaluations, required
+  warnings, finite values, and package provenance after checksum validation.
+- Added checksum-recomputed relationship tamper for nine independent fields and
+  verified rejection through study, recommendation-list, and single-restore
+  endpoints without internal path disclosure.
+- Added a five-seed, 20-trial Branin sequential reference with maximum simple
+  regret `0.20` and median simple regret `0.15` gates under declared GP/EI
+  budgets. This is a reference harness, not product objective execution.
+- Exposed the existing actual-unit linear-inequality contract in the dedicated
+  UI, including pre-submit validation, stored equations, and recommendation
+  feasibility output. Browser coverage uses a constrained one-factor study.
+- Added a repeatable Windows/CPython 3.10 CPU-only benchmark for empty spawn,
+  worker round trip, child calculation, GP fit, non-fit calculation, and
+  bootstrap/IPC overhead. The measured Windows 10 values are descriptive and
+  are not relabeled as Windows 11 release evidence.
+- Kept method `0.2.0`, all recommendation schemas at 1, SQLite schema 12, the
+  Matern-5/2/analytic-EI calculation, and no-objective-execution policy
+  unchanged.
+- Full `scripts/check.ps1` passed with backend pytest 635, frontend Vitest 95,
+  OpenAPI/frontend contracts 110, mypy over 96 source files, Ruff/format,
+  frontend lint/typecheck, and production build. Browser E2E passed with
+  diagnostics root
+  `.tmp\e2e-diagnostics-bayesian-lifecycle-stabilization`.
+
+Next allowed PR:
+
+- Define the Phase II attribute-control-chart limits contract/reference
+  foundation with immutable baseline provenance and explicit Phase I/Phase II
+  semantics before changing executable chart behavior.
+
+## Progress Update 175 - Phase II Attribute Chart Contract Foundation
+
+Status: implemented in the current working tree; final local validation is
+recorded in `docs/ci_status.md`.
+
+Completed:
+
+- Kept current `quality.attribute_control_chart` execution at method `0.1.0`,
+  result schema `1`, and Phase I-only behavior. Production options/calculation,
+  registry availability, formulas, and persisted output were not changed.
+- Added `docs/attribute_control_chart_phase_2_contract.md` with an immutable
+  app-created limit-set schema `1`, baseline/target provenance, canonical SHA,
+  restore/tamper gates, P/NP/C/U frozen-limit semantics, reserved typed errors,
+  and implementation acceptance criteria.
+- Reserved method `0.2.0` and result schema `2` for the first executable Phase
+  II slice because request dependencies, limit source, and result meaning will
+  change. Existing `0.1.0` results must remain Phase I without migration or
+  silent reinterpretation.
+- Added a synthetic policy-adjusted reference fixture that independently
+  evaluates frozen P/NP/C/U centers, varying/fixed limits, natural bounds, and
+  strict signal behavior. Contract tests also prove that current options reject
+  `phase` and `limit_set_id` and the production result remains Phase I.
+- Updated the panel and critical-path expectations to state that current
+  execution estimates Phase I limits from all filtered valid observations and
+  does not apply stored Phase II limits. Results identify the phase and limit
+  source explicitly.
+- Kept WECO/Nelson rules, Laney correction, exact probability limits,
+  user-entered naked limits, Phase II execution, new chart families, and all
+  production statistical calculations out of this foundation.
+- Full `scripts/check.ps1` passed with backend pytest 640, frontend Vitest 95,
+  OpenAPI/frontend contracts 110, mypy over 96 source files, Ruff/format,
+  frontend lint/typecheck, and production build. Browser E2E passed with
+  diagnostics root `.tmp\e2e-diagnostics-attribute-phase2-contract`.
+- The measured host remains Windows 10 Home build 19045. Windows 11 validation
+  remains a mandatory release gate, and remote Actions remain unverified
+  because `gh` is unavailable.
+
+Next allowed PR:
+
+- Implement immutable control-limit-set storage and dedicated create/get/list
+  APIs with a SQLite migration, Phase I baseline promotion eligibility,
+  canonical asset checksum, dependency/current-history/tamper/upgrade tests,
+  and typed frontend/OpenAPI contracts. Do not execute monitoring data against
+  frozen limits in that storage/API foundation.
+
+## Progress Update 176 - Immutable Attribute Limit-Set Storage/API
+
+Status: implemented and validated in the current working tree.
+
+Completed:
+
+- Raised SQLite metadata to schema 13 with immutable
+  `attribute_control_limit_sets`. Schema 12 upgrades add an empty table without
+  rewriting Bayesian, DOE, analysis, dataset, or existing result records.
+- Persisted app-created limit-set schema 1 JSON atomically and pinned source
+  analysis/dataset/config/result/schema/canonical/filter/row-snapshot hashes,
+  P/NP/C/U meaning, frozen center, eligibility, asset SHA, and close time.
+- Added idempotent POST plus checksum/relation/source-validated GET and filtered
+  paged list routes under `/api/v1/quality/attribute-control-limit-sets`. No
+  PUT/PATCH/DELETE or monitoring endpoint exists.
+- Required 20 or more complete untruncated points, no existing Phase I signal,
+  usable expected counts, and Pearson dispersion no greater than 2. The service
+  independently recomputes center, point limits, strict signals, dispersion,
+  totals, and NP fixed sample size before promotion.
+- Added controlled frontend routes/client/types and OpenAPI guards, but no
+  Phase II mode, selector, or execution UI.
+- Added migration/metadata tests and P/NP/C/U API coverage for idempotence,
+  ineligibility/stale source, checksum/path/DB relationship tamper, rehashed
+  asset/source result, row-snapshot/canonical/schema tamper, redaction, and
+  immutability.
+- Full `scripts/check.ps1` passed with backend pytest 663, frontend Vitest 95,
+  OpenAPI/frontend contracts 116, mypy over 98 source files, Ruff/format over
+  150 Python files, frontend lint/typecheck, and production build. The
+  successful run used an explicit D-drive pytest basetemp because the host C
+  drive lacked temp space.
+- Browser E2E passed on ports `8025`/`5225` with diagnostics root
+  `.tmp\e2e-diagnostics-attribute-limit-set-storage`. It retains the Phase I
+  P-chart and all prior critical flows without claiming an unimplemented Phase
+  II browser path.
+- The measured host remains Windows 10 Home build 19045. Windows 11 validation
+  remains a mandatory release gate, and remote Actions remain unverified
+  because `gh` is unavailable.
+
+Next allowed PR:
+
+- Implement the first Phase II frozen-limit monitoring vertical slice at
+  method `0.2.0`/result schema `2`, using only verified app-created limit sets
+  with target compatibility preflight, stored provenance, restore/export
+  consistency, typed UI selection, and browser E2E. Keep WECO/Nelson, Laney,
+  exact limits, naked user limits, and automatic baseline refit out of scope.

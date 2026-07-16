@@ -1,20 +1,23 @@
 # Response Surface Method Contract
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 ## Scope
 
-`doe.response_surface` v0.1.0 is an available dedicated-API method for a
+`doe.response_surface` v0.2.0 is an available dedicated-API method for a
 Central Composite Design and a full quadratic ordinary least-squares response
 surface. It does not execute through the generic analysis-run endpoint.
 
 Implemented:
 
 - two to five continuous factors with declared finite `low < high` bounds;
-- rotatable central composite inscribed (CCI) and face-centered CCD geometry;
+- rotatable central composite inscribed geometry and face-centered CCD geometry,
+  represented by the common `central_composite` family plus `alpha_mode`;
 - deterministic standard order and optional seeded run-order randomization;
 - factorial, axial, and replicated center points;
-- immutable design/run persistence and complete run-response entry;
+- immutable design/run persistence and complete immutable response revisions;
+- read-only analyzed/history controls, explicit correction to a new revision,
+  and a pre-analysis warning that every planned response should be saved;
 - full quadratic OLS with all main, two-factor interaction, and squared terms;
 - coefficient inference, partial drop-one sums of squares, model ANOVA,
   pure error, lack of fit, and residual/influence diagnostics;
@@ -37,15 +40,29 @@ Not implemented in this slice:
 
 | Contract | Version |
 | --- | ---: |
-| method | `0.1.0` |
-| design payload | `1` |
-| analysis config | `1` |
+| method | `0.2.0` |
+| current design payload | `2` |
+| legacy design payload | `1` |
+| analysis envelope | `2` |
+| analysis config | `2` |
 | analysis result | `1` |
-| SQLite metadata | `9` |
+| response revision | `1` |
+| SQLite metadata | `10` |
 
 The registry `METHOD_VERSIONS["doe.response_surface"]` is the method-version
-source of truth. The initial executable method starts at `0.1.0`; no earlier
-executable result schema exists to migrate.
+source of truth. The calculation and analysis result remain schema 1. Method
+v0.2.0 identifies the new persisted response revision ID/number/SHA dependency;
+it does not change the quadratic formulas.
+Design payload schema 2 corrects only family metadata: new designs store family
+`central_composite`, while `alpha_mode=rotatable` or `face_centered` records the
+geometry. Because the canonical design payload and SHA include the schema and
+family, the design schema was bumped without changing the statistical method.
+
+Legacy schema-1 designs keep family `central_composite_inscribed` and their
+original design SHA. Restore accepts that exact legacy pair and preserves its
+stored `alpha_mode`, including legacy face-centered records; it does not rewrite
+or silently reinterpret them as schema 2. Unknown schema/family combinations
+fail with `doe_rsm_design_family_mismatch`.
 
 ## Dedicated API
 
@@ -57,6 +74,10 @@ executable result schema exists to migrate.
 - `GET /api/v1/doe-designs/response-surface/{design_id}/analyses/{analysis_id}`
 - `POST /api/v1/doe-designs/response-surface/{design_id}/optimizations`
 - `GET /api/v1/doe-designs/response-surface/{design_id}/optimizations/{optimization_id}`
+- `POST /api/v1/doe-designs/{design_id}/response-revisions`
+- `GET /api/v1/doe-designs/{design_id}/response-revisions`
+- `GET /api/v1/doe-designs/{design_id}/response-revisions/{response_revision_id}`
+- `POST /api/v1/doe-designs/{design_id}/response-revisions/{response_revision_id}/abandon`
 
 `POST /api/v1/analysis-runs` returns
 `analysis_method_uses_dedicated_api` for this method.
@@ -81,6 +102,16 @@ Therefore axial coded levels `-alpha` and `+alpha` equal the declared actual
 bounds. Rotatable factorial points at coded `-1/+1` remain inside those bounds.
 This is a central composite inscribed policy and avoids silently generating
 runs beyond the declared process region.
+
+## Response Lifecycle
+
+Responses may be entered while the design is `completed`; each successful
+legacy `PUT` creates a completed immutable revision. Running an analysis sets
+the design to `analyzed`, and `PUT` continues to reject with 409. The UI keeps
+the analyzed revision read-only and exposes `새 revision으로 수정`, which
+copies the current values into an editable correction and creates a new
+completed revision. The old revision and analysis remain unchanged. Current
+and newest-first history show number/state/current/timestamp/SHA metadata.
 
 ## Quadratic Model
 
@@ -131,23 +162,24 @@ After a verified RSM fit, the same panel can run
 `regression.response_optimizer` with maximize/minimize/target/range
 desirability, narrower factor bounds, optional linear constraints, and explicit
 search budgets. The optimizer is a separate method/result contract documented
-in `docs/response_optimizer_contract.md`; it does not change RSM v0.1.0
+in `docs/response_optimizer_contract.md`; it does not change RSM v0.2.0
 coefficients or reinterpret its stored result.
 
 ## Persistence And Provenance
 
-The existing schema-v9 DOE tables store the design, runs, responses, and analysis
-record. Coded levels are JSON numbers, so axial floating-point levels do not
-require a database migration. Restore verifies:
+Schema-v10 DOE tables store design/runs, normalized immutable response
+revisions/values/current heads, analysis records, and analysis-revision
+relations. Restore verifies:
 
 - method ID and registry method version;
 - design family, current version, run count, and design checksum;
-- config/result design IDs, design version ID, design SHA, response name, and
-  response SHA;
-- result checksum and current response dependency checksum.
+- config/result design IDs, design version ID, design SHA, response revision
+  ID/number/name/SHA, and relation SHA;
+- result checksum and the selected historical revision's ordered-value SHA.
 
 The result envelope records app, Python, platform, build commit, NumPy, SciPy,
-design ID/version/SHA, response SHA/name, method ID/version, and creation time.
+design ID/version/SHA, response revision ID/number/SHA/name, method ID/version,
+and creation time.
 No workspace path, original filename, or unrelated row value is exposed.
 
 ## Stable Errors
@@ -158,6 +190,7 @@ No workspace path, original filename, or unrelated row value is exposed.
 - `doe_rsm_center_points_invalid`
 - `doe_rsm_run_count_exceeds_limit`
 - `doe_rsm_design_checksum_mismatch`
+- `doe_rsm_design_family_mismatch`
 - `doe_rsm_response_run_set_mismatch`
 - `doe_rsm_analysis_response_not_found`
 - `doe_rsm_contour_grid_size_invalid`

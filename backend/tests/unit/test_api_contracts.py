@@ -195,6 +195,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "quality.gage_run_chart",
         "doe.factorial_design",
         "doe.response_surface",
+        "doe.bayesian_optimization",
     ]
     assert set(METHOD_VERSIONS) == set(method_ids)
     assert all(METHOD_VERSIONS[method.method_id] == method.method_version for method in METHODS)
@@ -235,7 +236,11 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         "quality.gage_rr": "gage_rr",
         "quality.gage_run_chart": "gage_run_chart",
     }
-    generic_analysis_run_exceptions = {"doe.factorial_design", "doe.response_surface"}
+    generic_analysis_run_exceptions = {
+        "doe.factorial_design",
+        "doe.response_surface",
+        "doe.bayesian_optimization",
+    }
     assert set(_METHOD_EXECUTION_HANDLERS) == {
         method.method_id
         for method in METHODS
@@ -406,7 +411,6 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     assert len(catalog.methods) == 30
     assert {method.availability.value for method in catalog.methods} == {
         "available",
-        "planned",
         "disabled",
     }
     assert catalog.methods[0].method_id == "eda.descriptive"
@@ -561,13 +565,9 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     bayesian_optimization = next(
         method for method in catalog.methods if method.method_id == "doe.bayesian_optimization"
     )
-    assert bayesian_optimization.availability == MethodAvailability.PLANNED
+    assert bayesian_optimization.availability == MethodAvailability.AVAILABLE
     assert bayesian_optimization.requires_dataset is False
-    assert bayesian_optimization.disabled_reason is not None
-    assert "계약 및 reference 정책만 확정" in bayesian_optimization.disabled_reason
-    assert "실행 API와 추천 결과는 아직 제공하지 않습니다" in (
-        bayesian_optimization.disabled_reason
-    )
+    assert bayesian_optimization.disabled_reason is None
     assert [method.module_id.value for method in catalog.methods[-3:]] == ["doe", "doe", "doe"]
 
 
@@ -583,7 +583,6 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
     assert len(payload["methods"]) == 30
     assert {method["availability"] for method in payload["methods"]} == {
         "available",
-        "planned",
         "disabled",
     }
     available = [
@@ -619,6 +618,7 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
         "quality.gage_run_chart",
         "doe.factorial_design",
         "doe.response_surface",
+        "doe.bayesian_optimization",
     ]
     normality = next(
         method for method in payload["methods"] if method["method_id"] == "eda.normality"
@@ -674,7 +674,7 @@ def test_analysis_run_rejects_response_optimizer_generic_page_without_fake_resul
     assert "result" not in response.text
 
 
-def test_analysis_run_rejects_planned_bayesian_optimization_without_fake_recommendation(
+def test_analysis_run_routes_bayesian_optimization_to_dedicated_api_without_fake_result(
     tmp_path,
 ) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
@@ -691,8 +691,8 @@ def test_analysis_run_rejects_planned_bayesian_optimization_without_fake_recomme
         )
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "analysis_method_not_available"
-    assert "recommendation" not in response.text
+    assert response.json()["error"]["code"] == "analysis_method_uses_dedicated_api"
+    assert response.json()["error"]["developer_detail"] == "/api/v1/bayesian-studies"
     assert "predicted" not in response.text
     assert "result" not in response.text
 
@@ -703,7 +703,7 @@ def test_analysis_run_rejects_factorial_design_on_generic_analysis_api(tmp_path)
             "/api/v1/analysis-runs",
             json={
                 "method_id": "doe.factorial_design",
-                "method_version": "0.2.0",
+                "method_version": "0.3.0",
                 "dataset_version_id": None,
                 "filter_snapshot": {"expression_version": 1, "conditions": []},
                 "roles": {},
@@ -760,7 +760,7 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
     payload = response.json()
     FactorialDesignResponse.model_validate(payload)
     assert payload["method_id"] == "doe.factorial_design"
-    assert payload["method_version"] == "0.2.0"
+    assert payload["method_version"] == "0.3.0"
     assert payload["family"] == "two_level_full_factorial"
     assert payload["status"] == "designed"
     assert payload["name"] == "screening design"
@@ -845,18 +845,18 @@ def test_factorial_design_response_api_saves_values_without_regenerating_runs(tm
     DoeDesignResponsesResponse.model_validate(response_payload)
     assert response_payload["status"] == "completed"
     assert response_payload["design_version_id"] == design_payload["design_version_id"]
-    assert response_payload["responses"] == [
-        {
-            "response_name": "Yield",
-            "unit": "kg",
-            "response_count": 4,
-            "values": [
-                {"run_order": 1, "value": 21.0},
-                {"run_order": 2, "value": 22.0},
-                {"run_order": 3, "value": 23.0},
-                {"run_order": 4, "value": 24.0},
-            ],
-        },
+    stored_series = response_payload["responses"][0]
+    assert stored_series["response_name"] == "Yield"
+    assert stored_series["unit"] == "kg"
+    assert stored_series["response_revision_number"] == 1
+    assert stored_series["response_revision_schema_version"] == 1
+    assert len(stored_series["response_revision_sha256"]) == 64
+    assert stored_series["response_count"] == 4
+    assert stored_series["values"] == [
+        {"run_order": 1, "value": 21.0},
+        {"run_order": 2, "value": 22.0},
+        {"run_order": 3, "value": 23.0},
+        {"run_order": 4, "value": 24.0},
     ]
     assert read_response.status_code == 200
     assert read_response.json() == response_payload
@@ -924,17 +924,23 @@ def test_factorial_analysis_api_persists_effects_anova_diagnostics_and_provenanc
         report_response = client.get(
             f"/api/v1/doe-designs/{design['design_id']}/report.html",
         )
+        locked_response = client.put(
+            f"/api/v1/doe-designs/{design['design_id']}/responses",
+            json={"response_name": "Yield", "unit": "kg", "values": values},
+        )
 
     assert create_response.status_code == 201
     assert save_response.status_code == 200
     assert analysis_response.status_code == 201
     DoeFactorialAnalysisResponse.model_validate(analysis)
     assert analysis["method_id"] == "doe.factorial_design"
-    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.2.0"
-    assert analysis["analysis_schema_version"] == 1
+    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.3.0"
+    assert analysis["analysis_schema_version"] == 2
     assert analysis["design_version_id"] == design["design_version_id"]
     assert analysis["design_sha256"] == design["design_sha256"]
     assert len(analysis["response_sha256"]) == 64
+    assert analysis["response_revision_number"] == 1
+    assert analysis["response_revision_sha256"] == analysis["response_sha256"]
     assert analysis["build_commit"] == "test-doe-build"
     assert "numpy" in analysis["package_versions"]
     assert "scipy" in analysis["package_versions"]
@@ -954,6 +960,8 @@ def test_factorial_analysis_api_persists_effects_anova_diagnostics_and_provenanc
     assert restored_response.json() == analysis
     assert design_after_analysis.json()["status"] == "analyzed"
     assert report_response.status_code == 200
+    assert locked_response.status_code == 409
+    assert locked_response.json()["error"]["code"] == "doe_design_already_analyzed"
     assert "Factorial Analysis" in report_response.text
     assert "Terms and Effects" in report_response.text
     assert analysis["analysis_id"] in report_response.text
@@ -1031,7 +1039,7 @@ def test_factorial_analysis_api_rejects_missing_response_and_tampered_dependency
         )
 
     assert missing_response.status_code == 409
-    assert missing_response.json()["error"]["code"] == ("doe_factorial_analysis_response_not_found")
+    assert missing_response.json()["error"]["code"] == "doe_response_revision_not_found"
     assert tampered_response.status_code == 409
     assert tampered_response.json()["error"]["code"] == (
         "doe_factorial_analysis_dependency_mismatch"
@@ -1158,7 +1166,8 @@ def test_response_surface_design_api_creates_bounded_rotatable_cci(tmp_path) -> 
     ResponseSurfaceDesignResponse.model_validate(payload)
     assert payload["method_id"] == "doe.response_surface"
     assert payload["method_version"] == METHOD_VERSIONS["doe.response_surface"]
-    assert payload["family"] == "central_composite_inscribed"
+    assert payload["design_schema_version"] == 2
+    assert payload["family"] == "central_composite"
     assert payload["options"]["alpha"] == pytest.approx(2**0.5)
     assert payload["run_count"] == 13
     assert [run["point_type"] for run in payload["runs"]].count("factorial") == 4
@@ -1169,6 +1178,78 @@ def test_response_surface_design_api_creates_bounded_rotatable_cci(tmp_path) -> 
     assert get_response.status_code == 200
     assert get_response.json() == payload
     assert str(tmp_path) not in create_response.text
+
+
+def test_response_surface_design_api_restores_legacy_v1_family_without_reinterpretation(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        created = client.post(
+            "/api/v1/doe-designs/response-surface",
+            json={
+                "name": "legacy face centered",
+                "factors": [
+                    {"name": "A", "low": -1, "high": 1},
+                    {"name": "B", "low": -2, "high": 2},
+                ],
+                "alpha_mode": "face_centered",
+                "factorial_replicates": 1,
+                "axial_replicates": 1,
+                "center_points": 3,
+                "randomize": False,
+                "randomization_seed": 17,
+            },
+        ).json()
+        legacy_options = dict(created["options"])
+        alpha = legacy_options.pop("alpha")
+        canonical = {
+            "schema_version": 1,
+            "family": "central_composite_inscribed",
+            "alpha": alpha,
+            "factors": created["factors"],
+            "options": legacy_options,
+            "runs": created["runs"],
+        }
+        legacy_sha = hashlib.sha256(
+            json.dumps(
+                canonical,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        stored_options = {**legacy_options, "alpha": alpha}
+        with sqlite3.connect(settings.workspace_root / METADATA_DB_RELATIVE_PATH) as connection:
+            connection.execute(
+                "UPDATE experiment_designs SET family = ? WHERE design_id = ?",
+                ("central_composite_inscribed", created["design_id"]),
+            )
+            connection.execute(
+                "UPDATE experiment_design_versions SET options_json = ?, design_sha256 = ? "
+                "WHERE design_version_id = ?",
+                (
+                    json.dumps(
+                        stored_options,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                    legacy_sha,
+                    created["design_version_id"],
+                ),
+            )
+        restored_response = client.get(
+            f"/api/v1/doe-designs/response-surface/{created['design_id']}"
+        )
+
+    assert restored_response.status_code == 200
+    restored = restored_response.json()
+    assert restored["design_schema_version"] == 1
+    assert restored["family"] == "central_composite_inscribed"
+    assert restored["options"]["alpha_mode"] == "face_centered"
+    assert restored["options"]["alpha"] == 1
+    assert restored["design_sha256"] == legacy_sha
 
 
 def test_response_surface_analysis_api_persists_quadratic_model_and_stationary_point(
@@ -1220,6 +1301,10 @@ def test_response_surface_analysis_api_persists_quadratic_model_and_stationary_p
             f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses/"
             f"{analysis['analysis_id']}"
         )
+        locked_response = client.put(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/responses",
+            json={"response_name": "Yield", "unit": "kg", "values": values},
+        )
 
     assert create_response.status_code == 201
     assert save_response.status_code == 200
@@ -1227,6 +1312,9 @@ def test_response_surface_analysis_api_persists_quadratic_model_and_stationary_p
     DoeResponseSurfaceAnalysisResponse.model_validate(analysis)
     assert analysis["method_id"] == "doe.response_surface"
     assert analysis["method_version"] == METHOD_VERSIONS["doe.response_surface"]
+    assert analysis["analysis_schema_version"] == 2
+    assert analysis["response_revision_number"] == 1
+    assert analysis["response_revision_sha256"] == analysis["response_sha256"]
     assert analysis["build_commit"] == "test-rsm-build"
     assert analysis["result"]["model_policy"]["full_quadratic"] is True
     assert analysis["result"]["model_policy"]["automatic_term_selection"] is False
@@ -1238,6 +1326,8 @@ def test_response_surface_analysis_api_persists_quadratic_model_and_stationary_p
     assert analysis["result"]["anova"]["lack_of_fit"]["pure_error"]["df"] == 4
     assert restored_response.status_code == 200
     assert restored_response.json() == analysis
+    assert locked_response.status_code == 409
+    assert locked_response.json()["error"]["code"] == "doe_rsm_design_already_analyzed"
     assert str(tmp_path) not in analysis_response.text
     assert "metadata.sqlite3" not in analysis_response.text
 

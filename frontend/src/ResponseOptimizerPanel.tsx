@@ -4,6 +4,7 @@ import {
   createResponseOptimizer,
   type DoeResponseSurfaceAnalysisResponse,
   type ResponseOptimizerCreateRequest,
+  type ResponseOptimizerEligibilityIssue,
   type ResponseOptimizerGoal,
   type ResponseOptimizerResponse,
   type ResponseSurfaceDesignResponse,
@@ -30,6 +31,14 @@ export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPa
     const values = analysis.result.contour.points.map((point) => point.predicted);
     return { minimum: Math.min(...values), maximum: Math.max(...values) };
   }, [analysis]);
+  const sourceEligibility = useMemo(
+    () => responseOptimizerSourceEligibility(analysis),
+    [analysis],
+  );
+  const blockingIssues = sourceEligibility.filter((issue) => issue.severity === "blocking");
+  const acknowledgmentIssues = sourceEligibility.filter(
+    (issue) => issue.severity === "acknowledgment_required",
+  );
   const [goal, setGoal] = useState<ResponseOptimizerGoal>("maximize");
   const [thresholds, setThresholds] = useState<ThresholdDraft>(() =>
     defaultThresholds("maximize", responseRange.minimum, responseRange.maximum),
@@ -57,6 +66,7 @@ export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPa
   const [optimization, setOptimization] = useState<ResponseOptimizerResponse | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sourceWarningsAcknowledged, setSourceWarningsAcknowledged] = useState(false);
   const requestRevision = useRef(0);
 
   useEffect(() => {
@@ -71,6 +81,7 @@ export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPa
     setOptimization(null);
     setIsOptimizing(false);
     setError(null);
+    setSourceWarningsAcknowledged(false);
     return () => {
       requestRevision.current += 1;
     };
@@ -102,6 +113,9 @@ export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPa
       maxIterations,
       maxEvaluations,
       timeBudgetMs,
+      acknowledgedSourceWarningCodes: sourceWarningsAcknowledged
+        ? acknowledgmentIssues.map((issue) => issue.code)
+        : [],
     });
     if (typeof request === "string") {
       setError(request);
@@ -131,6 +145,23 @@ export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPa
         </div>
         <span className="status-pill status-ready">설계영역 제한</span>
       </div>
+      {blockingIssues.map((issue) => (
+        <div className="notice-box notice-warning" key={issue.code} role="alert">
+          차단: {issue.code}
+        </div>
+      ))}
+      {acknowledgmentIssues.length > 0 ? (
+        <label className="inline-option">
+          <input
+            type="checkbox"
+            checked={sourceWarningsAcknowledged}
+            onChange={(event) => setSourceWarningsAcknowledged(event.currentTarget.checked)}
+          />
+          <span>
+            source 모형 진단 경고를 검토했습니다: {acknowledgmentIssues.map((issue) => issue.code).join(", ")}
+          </span>
+        </label>
+      ) : null}
       <div className="option-grid">
         <label>
           <span>목표 유형</span>
@@ -292,7 +323,16 @@ export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPa
         </label>
       </div>
       <div className="button-row">
-        <button type="button" className="primary-button" disabled={isOptimizing} onClick={() => void optimize()}>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={
+            isOptimizing ||
+            blockingIssues.length > 0 ||
+            (acknowledgmentIssues.length > 0 && !sourceWarningsAcknowledged)
+          }
+          onClick={() => void optimize()}
+        >
           {isOptimizing ? "최적화 중" : "Response Optimizer 실행"}
         </button>
       </div>
@@ -376,6 +416,11 @@ function ResponseOptimizerResultView({ optimization }: { optimization: ResponseO
       {result.warnings.map((warning) => (
         <div className="notice-box notice-warning" key={warning}>{warning}</div>
       ))}
+      {result.source_model_eligibility.issues.map((issue) => (
+        <div className="notice-box" key={`${issue.source_analysis_id ?? "optimizer"}-${issue.code}`}>
+          {issue.severity}: {issue.code}
+        </div>
+      ))}
     </section>
   );
 }
@@ -399,6 +444,7 @@ function optimizerRequest(input: {
   maxIterations: string;
   maxEvaluations: string;
   timeBudgetMs: string;
+  acknowledgedSourceWarningCodes: string[];
 }): ResponseOptimizerCreateRequest | string {
   const lower = input.goal === "minimize" ? null : Number(input.thresholds.lower);
   const target = input.goal === "range" ? null : Number(input.thresholds.target);
@@ -475,7 +521,123 @@ function optimizerRequest(input: {
       max_evaluations: searchValues[4],
       time_budget_ms: searchValues[5],
     },
+    acknowledged_source_warning_codes: input.acknowledgedSourceWarningCodes,
   };
+}
+
+function responseOptimizerSourceEligibility(
+  analysis: DoeResponseSurfaceAnalysisResponse,
+): ResponseOptimizerEligibilityIssue[] {
+  const { result } = analysis;
+  const issues: ResponseOptimizerEligibilityIssue[] = [];
+  const add = (
+    code: string,
+    severity: ResponseOptimizerEligibilityIssue["severity"],
+    sourceWarningCode: string | null = null,
+  ) => {
+    issues.push({
+      source_analysis_id: analysis.analysis_id,
+      code,
+      severity,
+      source_warning_code: sourceWarningCode,
+    });
+  };
+  const confidenceLevel =
+    result.terms.find((term) => term.confidence_interval !== null)?.confidence_interval?.level ??
+    0.95;
+
+  if (result.sample.rank !== result.sample.parameter_count) {
+    add("response_optimizer_source_model_rank_invalid", "blocking");
+  }
+  if (result.sample.df_residual <= 0) {
+    add(
+      "response_optimizer_source_model_saturated",
+      "blocking",
+      "doe_rsm_model_saturated_no_inference",
+    );
+  } else {
+    const residualVariance = result.fit.residual_mean_square;
+    const residualStandardError = result.fit.residual_standard_error;
+    if (
+      residualVariance === null ||
+      !Number.isFinite(residualVariance) ||
+      residualVariance <= 0 ||
+      residualStandardError === null ||
+      !Number.isFinite(residualStandardError) ||
+      residualStandardError <= 0
+    ) {
+      add(
+        "response_optimizer_source_residual_variance_unusable",
+        "blocking",
+        "doe_rsm_residual_variance_zero",
+      );
+    }
+    if (result.sample.df_residual < 5) {
+      add(
+        "response_optimizer_source_residual_df_small",
+        "acknowledgment_required",
+        "doe_rsm_residual_df_small",
+      );
+    }
+  }
+  const lackOfFit = result.anova.lack_of_fit;
+  const lackOfFitP = lackOfFit.lack_of_fit.p_value;
+  if (
+    lackOfFit.available &&
+    lackOfFitP !== null &&
+    Number.isFinite(lackOfFitP) &&
+    lackOfFitP < 1 - confidenceLevel
+  ) {
+    add("response_optimizer_source_lack_of_fit_significant", "blocking");
+  }
+  if (result.diagnostics.high_cooks_distance_count > 0) {
+    add(
+      "response_optimizer_source_influential_run",
+      "acknowledgment_required",
+      "doe_rsm_influential_run_detected",
+    );
+  }
+  if (result.diagnostics.high_leverage_count > 0) {
+    add("response_optimizer_source_high_leverage", "acknowledgment_required");
+  }
+  if (result.diagnostics.high_standardized_residual_count > 0) {
+    add(
+      "response_optimizer_source_large_standardized_residual",
+      "acknowledgment_required",
+      "doe_rsm_large_standardized_residual",
+    );
+  }
+  const normalityP = result.diagnostics.shapiro_wilk.p_value;
+  if (normalityP !== null && Number.isFinite(normalityP) && normalityP < 0.01) {
+    add("response_optimizer_source_residual_normality_severe", "acknowledgment_required");
+  }
+  add(
+    "response_optimizer_source_model_associational",
+    "informational",
+    "doe_rsm_model_is_associational_not_causal",
+  );
+  if (result.factor_names.length > 2) {
+    add(
+      "response_optimizer_source_contour_slice_limited",
+      "informational",
+      "doe_rsm_contour_holds_other_factors_at_center",
+    );
+  }
+  issues.push(
+    {
+      source_analysis_id: null,
+      code: "response_optimizer_global_optimum_not_guaranteed",
+      severity: "informational",
+      source_warning_code: null,
+    },
+    {
+      source_analysis_id: null,
+      code: "response_optimizer_confirmation_run_required",
+      severity: "informational",
+      source_warning_code: null,
+    },
+  );
+  return issues;
 }
 
 function defaultThresholds(goal: ResponseOptimizerGoal, minimum: number, maximum: number): ThresholdDraft {

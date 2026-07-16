@@ -8,14 +8,18 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import combinations, product
 from math import isfinite, sqrt
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
-RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION = 1
+RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION: Final[Literal[1]] = 1
+RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION: Final[Literal[2]] = 2
 RESPONSE_SURFACE_RESULT_SCHEMA_VERSION = 1
-RESPONSE_SURFACE_FAMILY = "central_composite_inscribed"
+RESPONSE_SURFACE_FAMILY: Final[Literal["central_composite"]] = "central_composite"
+RESPONSE_SURFACE_LEGACY_FAMILY: Final[Literal["central_composite_inscribed"]] = (
+    "central_composite_inscribed"
+)
 MIN_RESPONSE_SURFACE_FACTORS = 2
 MAX_RESPONSE_SURFACE_FACTORS = 5
 MAX_RESPONSE_SURFACE_RUNS = 256
@@ -188,6 +192,7 @@ def generate_central_composite_design(
 
 def canonical_response_surface_design_payload(
     *,
+    schema_version: int = RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION,
     family: str,
     alpha: float,
     factors: Sequence[ResponseSurfaceFactor],
@@ -195,7 +200,7 @@ def canonical_response_surface_design_payload(
     runs: Sequence[ResponseSurfaceDesignRun],
 ) -> dict[str, Any]:
     return {
-        "schema_version": RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION,
+        "schema_version": schema_version,
         "family": family,
         "alpha": alpha,
         "factors": [response_surface_factor_payload(factor) for factor in factors],

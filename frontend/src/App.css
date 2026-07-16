@@ -1432,6 +1432,19 @@ textarea {
   color: #384457;
 }
 
+.analysis-panel-load-state {
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #c7ced8;
+  border-radius: 6px;
+  background: #f6f7f9;
+  color: #384457;
+  padding: 16px;
+}
+
 .table-wrap {
   max-width: 100%;
   overflow-x: auto;

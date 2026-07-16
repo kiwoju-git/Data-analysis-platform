@@ -1,6 +1,6 @@
 # Dependency Review
 
-Last reviewed: 2026-07-06
+Last reviewed: 2026-07-15
 
 This file records direct dependencies introduced for the Gate A scaffold. Transitive dependency and vulnerability review must be refreshed when lockfiles are generated or dependency versions change.
 
@@ -12,6 +12,7 @@ This file records direct dependencies introduced for the Gate A scaffold. Transi
 | `numpy` | `2.2.6` | SciPy numeric runtime dependency pinned after the Windows statistical dependency spike. | `cp310-win_amd64` wheel validated; CPU-only. | BSD |
 | `pydantic-settings` | `2.7.0` | Typed environment-based settings without custom parsing. | Supports Python 3.10 and does not require GPU. | MIT |
 | `python-multipart` | `0.0.32` | Multipart form parsing for browser file uploads through FastAPI `UploadFile`. | Supports Python 3.10 and does not require GPU. | Apache-2.0 |
+| `scikit-learn` | `1.7.2` | Approved future Bayesian Gaussian Process runtime; pinned before the executable GP/EI slice so installation is independently reproducible. | `cp310-win_amd64` wheel passed CPU-only/offline/deterministic smoke on Windows 10; Windows 11 client remains a release gate. | BSD-3-Clause |
 | `scipy` | `1.15.3` | Shapiro-Wilk, Anderson-Darling, Levene/Brown-Forsythe, t-test, rank-test, and exact binomial statistical calculations. | `cp310-win_amd64` wheel validated; CPU-only. | BSD |
 | `uvicorn[standard]` | `0.32.1` | Local ASGI development server bound to `127.0.0.1`. | Supports Python 3.10 and does not require GPU. | BSD-3-Clause |
 
@@ -43,7 +44,14 @@ This file records direct dependencies introduced for the Gate A scaffold. Transi
 - No dependency is added for telemetry, external data upload, GPU, PyTorch, PyCaret, Optuna, SHAP, LIME, Docker, Redis, or a CDN.
 - Playwright is a development-only dependency. It starts local backend/frontend servers on loopback ports, uses a temporary workspace, and does not send data to an external service. Browser binaries are intentionally not installed by `scripts/check.ps1`.
 - No GPL, AGPL, SSPL, commercial, or evaluation-only direct dependency is introduced.
-- Direct dependency versions are pinned. `frontend/package-lock.json` must be generated with `npm --prefix .\frontend install --package-lock-only --ignore-scripts` before using `npm ci`.
+- Direct dependency versions are pinned. The backend CPython 3.10 Windows AMD64
+  environment is wheel-only hash-locked in
+  `backend/requirements-py310-win.lock`; `joblib==1.5.2` and
+  `threadpoolctl==3.6.0` are reviewed resolver constraints rather than direct
+  project dependencies. The backend application does not import scikit-learn
+  during API startup. `frontend/package-lock.json` must be generated with
+  `npm --prefix .\frontend install --package-lock-only --ignore-scripts` before
+  using `npm ci`.
 
 ## Statistical Dependencies
 

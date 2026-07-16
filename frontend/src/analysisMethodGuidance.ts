@@ -290,7 +290,12 @@ export const analysisMethodGuidance = {
       required("불량품/결점 수", "P/NP는 불량품, C/U는 결점의 0 이상 정수"),
       required("표본 크기/검사 기회", "P/NP/U에 필요, C는 동일 기회 확인"),
     ],
-    optionChecklist: ["P/NP/C/U", "불량품과 결점 구분", "complete-case", "Phase I 기준선"],
+    optionChecklist: [
+      "P/NP/C/U",
+      "불량품과 결점 구분",
+      "complete-case",
+      "Phase I 기준선 추정 전용 (Phase II frozen limits 미지원)",
+    ],
     preflightChecks: [
       "음수/비정수 계수",
       "0 이하 분모",
@@ -495,7 +500,7 @@ export const analysisMethodGuidance = {
       "incumbent와 audit trail",
     ],
     plainLanguage:
-      "현재는 bounded sequential Bayesian Optimization의 계약과 reference 정책만 확정된 planned method입니다. 앱은 사용자 목적함수를 실행하지 않으며 추천 API나 가짜 최적값도 아직 제공하지 않습니다. 향후 후보도 전역 최적을 보장하지 않고 실제 확인 실험이 필요합니다.",
+      "전용 API와 화면에서 bounded 요인·목적·선형 제약, seed 기반 초기 실험점, pending/completed/abandoned trial과 immutable 관측 history를 관리하고 Matérn-5/2 Gaussian Process와 Expected Improvement로 다음 확인 실험 후보를 계산합니다. 앱은 목적함수를 실행하지 않으며 추천은 관측값이나 전역 최적 보장이 아닙니다.",
     commonErrors: [
       "아직 수행하지 않은 추천 조건을 관측값처럼 history에 기록하는 경우",
       "설계경계 밖 후보나 이미 평가한 점을 새 추천으로 해석하는 경우",

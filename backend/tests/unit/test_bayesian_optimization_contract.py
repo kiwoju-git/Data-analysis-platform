@@ -8,6 +8,7 @@ import pytest
 from app.analyses.registry import METHOD_VERSIONS, get_analysis_method
 from app.api.v1.schemas.analyses import MethodAvailability
 from app.services.analysis_runs import _METHOD_EXECUTION_HANDLERS
+from app.statistics.bayesian_optimization import expected_improvement
 
 FIXTURE_PATH = (
     Path(__file__).parents[1]
@@ -32,16 +33,15 @@ def _expected_improvement(mean: float, std: float, incumbent: float, xi: float) 
     return improvement * standard_normal.cdf(z_value) + std * density
 
 
-def test_bayesian_optimization_stays_planned_without_runtime_handler() -> None:
+def test_bayesian_optimization_uses_dedicated_api_without_generic_handler() -> None:
     method = get_analysis_method("doe.bayesian_optimization")
 
     assert method is not None
-    assert method.method_version == METHOD_VERSIONS[method.method_id] == "0.1.0"
-    assert method.availability == MethodAvailability.PLANNED
+    assert method.method_version == METHOD_VERSIONS[method.method_id] == "0.2.0"
+    assert method.availability == MethodAvailability.AVAILABLE
     assert method.requires_dataset is False
     assert method.method_id not in _METHOD_EXECUTION_HANDLERS
-    assert method.disabled_reason is not None
-    assert "실행 API와 추천 결과는 아직 제공하지 않습니다" in method.disabled_reason
+    assert method.disabled_reason is None
 
 
 def test_expected_improvement_hand_cases_match_policy_fixture() -> None:
@@ -61,6 +61,15 @@ def test_expected_improvement_hand_cases_match_policy_fixture() -> None:
             float(case["xi"]),
         )
         assert actual == pytest.approx(float(case["expected_improvement"]), abs=tolerance)
+        implementation = expected_improvement(
+            [float(case["posterior_mean"])],
+            [float(case["posterior_std"])],
+            float(case["incumbent"]),
+            float(case["xi"]),
+        )
+        assert float(implementation[0]) == pytest.approx(
+            float(case["expected_improvement"]), abs=tolerance
+        )
 
 
 def test_reference_benchmarks_reproduce_declared_analytic_optima() -> None:
@@ -108,8 +117,8 @@ def test_reference_policy_forbids_objective_execution_and_global_claims() -> Non
     policy = fixture["policy"]
     assert isinstance(policy, dict)
 
-    assert fixture["status"] == "planning_only"
-    assert fixture["runtime_result_expected"] is False
+    assert fixture["status"] == "executable_dedicated_api"
+    assert fixture["runtime_result_expected"] is True
     assert policy["app_executes_objective"] is False
     assert policy["global_optimum_guaranteed"] is False
     assert policy["objective_count"] == 1
@@ -120,7 +129,7 @@ def test_contract_records_required_safety_and_reproducibility_decisions() -> Non
     contract = CONTRACT_PATH.read_text(encoding="utf-8")
 
     for phrase in (
-        "planning-only",
+        "dedicated API",
         "GaussianProcessRegressor",
         "Matérn 5/2",
         "Expected Improvement",
@@ -128,6 +137,8 @@ def test_contract_records_required_safety_and_reproducibility_decisions() -> Non
         "global optimum",
         "arbitrary Python",
         "observation_history_sha256",
-        "No executable API",
+        "No generic analysis-run execution API",
+        "sha256_counter_uniform_feasible_v1",
+        "SQLite schema 12",
     ):
         assert phrase in contract

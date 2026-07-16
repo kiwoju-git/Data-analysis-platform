@@ -1,6 +1,6 @@
 # Attribute Control Chart Method Contract
 
-Last updated: 2026-07-14
+Last updated: 2026-07-16
 
 ## Scope And Version
 
@@ -17,6 +17,14 @@ This Phase I slice estimates the center line and three-sigma limits from all
 valid rows remaining after the explicit analysis filter. It does not silently
 change chart type, adjust limits for dispersion, remove signaled points, or
 reuse the estimated limits for Phase II monitoring.
+
+The panel explicitly labels this as Phase I-only execution and identifies the
+limit source as all filtered valid observations. The future immutable
+frozen-limit policy, version decision, reference fixture, and implementation
+acceptance criteria are defined separately in
+`docs/attribute_control_chart_phase_2_contract.md`. Its schema-13 immutable
+limit-set create/get/list API is implemented, but it does not make Phase II
+monitoring executable and does not change this method version or result schema.
 
 ## Input Contract
 
@@ -117,21 +125,33 @@ conventions, and full-precision expectations. Tests verify:
 - hand-checkable weighted P limits, exclusions, truncation, dispersion policy,
   and every contract failure class.
 
+The separate contract-only
+`quality_attribute_control_chart_phase_2_reference_policy.json` independently
+checks frozen P/NP/C/U formula and strict-boundary semantics. It is classified
+as policy-adjusted formula parity, not direct published-output parity, and is
+not passed to the production Phase I calculator as a Phase II result.
+
 Primary references:
 
 - NIST counts charts: <https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc331.htm>
 - NIST proportions charts: <https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc332.htm>
 - NIST Dataplot P/NP/C/U definitions: <https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/contchar.htm>
 
-Local validation on 2026-07-14 passed the 17-test method/reference suite, 12
-targeted API/registry/handler tests, the 62-test OpenAPI/frontend contract
-suite, full backend pytest with 500 tests, frontend Vitest with 82 tests, the
-production build, and the Chromium critical-path E2E including a real P-chart
-run. These are local working-tree results, not remote GitHub Actions evidence.
+The initial executable slice validation on 2026-07-14 passed the 17-test
+Phase I method/reference suite. The contract foundation validation on
+2026-07-16 passed the combined 22-test Phase I/Phase II-policy reference suite.
+The subsequent immutable limit-set storage/API foundation passed full backend
+pytest with 663 tests, frontend Vitest with 95 tests, the targeted 116-test
+OpenAPI/frontend contract suite, production build, and Chromium critical-path
+E2E including the explicit Phase I notice and a real P-chart run. Current
+details are recorded in `docs/ci_status.md`. These are local Windows 10
+working-tree results, not remote Actions or Windows 11 release evidence.
 
 ## Limitations
 
-- Phase II frozen limits and user-supplied historical limits are not included.
+- Phase II monitoring and user-supplied historical limits are not included;
+  app-created immutable limit-set storage exists, while the current closed
+  analysis options still reject Phase II fields.
 - Only the one-point-outside-three-sigma rule is enabled; WECO/Nelson pattern
   rules are not claimed.
 - Exact binomial/Poisson probability limits, Laney P'/U', rare-event charts,

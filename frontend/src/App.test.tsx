@@ -6,8 +6,13 @@ import App from "./App";
 import { AnalysisPage } from "./AnalysisPage";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { DatasetPreparationPage } from "./DatasetPreparationPage";
+import { BayesianOptimizationPanel } from "./BayesianOptimizationPanel";
+import { FactorialDesignPreview } from "./FactorialDesignPanel";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
-import { ResponseSurfacePanel } from "./ResponseSurfacePanel";
+import {
+  ResponseSurfacePanel,
+  ResponseSurfaceResponseEntry,
+} from "./ResponseSurfacePanel";
 import {
   fetchAnalysisResultExports,
   fetchAnalysisRunComparison,
@@ -53,6 +58,7 @@ import type {
 } from "./api";
 import { apiRoutes } from "./api/routes";
 import { AppChrome } from "./AppChrome";
+import { buildBayesianStudyRequest } from "./bayesianStudyDraft";
 import {
   analysisMethodGuidanceIds,
   getAnalysisMethodGuidance,
@@ -78,6 +84,15 @@ import {
 } from "./useDatasetWorkflow";
 import { WorkspaceRouter } from "./WorkspaceRouter";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
+
+vi.mock("./lazyAnalysisPanels", async () => {
+  const [regression, quality, doe] = await Promise.all([
+    import("./RegressionAnalysisPanels"),
+    import("./QualityAnalysisPanels"),
+    import("./DoeAnalysisPanels"),
+  ]);
+  return { ...regression, ...quality, ...doe };
+});
 
 describe("App", () => {
   afterEach(() => {
@@ -222,10 +237,10 @@ describe("App", () => {
       "독립 Predict method 화면은 아직 제공하지 않습니다",
     );
     expect(getAnalysisMethodGuidance("doe.bayesian_optimization").plainLanguage).toContain(
-      "계약과 reference 정책만 확정된 planned method",
+      "pending/completed/abandoned trial",
     );
     expect(getAnalysisMethodGuidance("doe.bayesian_optimization").plainLanguage).toContain(
-      "가짜 최적값도 아직 제공하지 않습니다",
+      "추천은 관측값이나 전역 최적 보장이 아닙니다",
     );
   });
 
@@ -423,7 +438,78 @@ describe("App", () => {
       "베이지안 최적화",
     );
     expect(bayesianHtml).toContain("순차 Bayesian Optimization 핵심 역할");
-    expect(bayesianHtml).toContain("계약만 확정된 planned method");
+    expect(bayesianHtml).toContain("Matérn-5/2 GP와 Expected Improvement");
+  });
+
+  it("renders the dedicated Bayesian study, observation, and recommendation controls", () => {
+    const html = renderToString(<BayesianOptimizationPanel />);
+
+    expect(html).toContain("Bayesian 최적화");
+    expect(html).toContain("Study 생성");
+    expect(html).toContain("앱은 목적함수를 실행하지 않습니다");
+    expect(html).toContain("저장된 study");
+    expect(html).toContain("초기 trial 수");
+    expect(html).toContain("실제 단위 선형 제약");
+    expect(html).toContain("제약 추가");
+  });
+
+  it("builds actual-unit Bayesian linear constraints and rejects invalid drafts", () => {
+    const base = {
+      studyName: "Constrained study",
+      factors: [
+        { key: 1, factorId: "temperature", name: "Temperature", low: "60", high: "80", unit: "C" },
+        { key: 2, factorId: "pressure", name: "Pressure", low: "5", high: "15", unit: "bar" },
+      ],
+      objectiveName: "Yield",
+      objectiveUnit: "%",
+      direction: "maximize" as const,
+      initialDesignSize: "3",
+      initialDesignSeed: "20260715",
+    };
+    const request = buildBayesianStudyRequest({
+      ...base,
+      constraints: [
+        {
+          key: 1,
+          constraintId: "energy_limit",
+          name: "Energy limit",
+          coefficients: { 1: "2", 2: "-0.5" },
+          relation: "less_than_or_equal" as const,
+          bound: "150",
+        },
+      ],
+    });
+
+    expect(request).not.toBe("bayesian_study_input_invalid");
+    if (typeof request !== "string") {
+      expect(request.constraints).toEqual([
+        {
+          constraint_id: "energy_limit",
+          name: "Energy limit",
+          terms: [
+            { factor_id: "temperature", coefficient: 2 },
+            { factor_id: "pressure", coefficient: -0.5 },
+          ],
+          relation: "less_than_or_equal",
+          bound: 150,
+        },
+      ]);
+    }
+    expect(
+      buildBayesianStudyRequest({
+        ...base,
+        constraints: [
+          {
+            key: 2,
+            constraintId: "zero_constraint",
+            name: "Invalid zero constraint",
+            coefficients: { 1: "", 2: "0" },
+            relation: "greater_than_or_equal",
+            bound: "0",
+          },
+        ],
+      }),
+    ).toBe("bayesian_study_input_invalid");
   });
 
   it("renders the response surface dedicated design and analysis controls", () => {
@@ -444,15 +530,7 @@ describe("App", () => {
         { name: "Pressure", low: 5, high: 15, unit: "bar" },
       ],
     } as unknown as ResponseSurfaceDesignResponse;
-    const analysis = {
-      analysis_id: "00000000-0000-4000-8000-000000000202",
-      response_name: "Yield",
-      result: {
-        contour: {
-          points: [{ predicted: 80 }, { predicted: 95 }],
-        },
-      },
-    } as unknown as DoeResponseSurfaceAnalysisResponse;
+    const analysis = responseOptimizerAnalysisTestResponse();
 
     const html = renderToString(
       <ResponseOptimizerPanel design={design} analysis={analysis} />,
@@ -465,6 +543,156 @@ describe("App", () => {
     expect(html).toContain("선형 제약 사용");
     expect(html).toContain("최대 평가 수");
     expect(html).toContain("Response Optimizer 실행");
+  });
+
+  it("classifies saturated RSM sources as blocking before optimizer execution", () => {
+    const analysis = responseOptimizerAnalysisTestResponse();
+    analysis.result.sample.df_residual = 0;
+    analysis.result.fit.residual_mean_square = null;
+    analysis.result.fit.residual_standard_error = null;
+
+    const html = renderToString(
+      <ResponseOptimizerPanel
+        analysis={analysis}
+        design={responseSurfaceDesignTestResponse("analyzed")}
+      />,
+    );
+
+    expect(html).toContain("차단:");
+    expect(html).toContain("response_optimizer_source_model_saturated");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Response Optimizer 실행<\/button>/);
+  });
+
+  it("requires an explicit checkbox for advisory RSM source warnings", () => {
+    const analysis = responseOptimizerAnalysisTestResponse();
+    analysis.result.sample.df_residual = 4;
+
+    const html = renderToString(
+      <ResponseOptimizerPanel
+        analysis={analysis}
+        design={responseSurfaceDesignTestResponse("analyzed")}
+      />,
+    );
+
+    expect(html).toContain("response_optimizer_source_residual_df_small");
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("source 모형 진단 경고를 검토했습니다");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Response Optimizer 실행<\/button>/);
+  });
+
+  it("locks analyzed RSM response controls and warns before a completed analysis", () => {
+    const analyzed = responseSurfaceDesignTestResponse("analyzed");
+    const completed = responseSurfaceDesignTestResponse("completed");
+    const common = {
+      responseName: "Yield",
+      responseUnit: "%",
+      responseValues: { 1: "10" },
+      responsesSaved: true,
+      responseRevisionNumber: 1,
+      responseRevisionSha256: "a".repeat(64),
+      revisionHistory: null,
+      correctionMode: false,
+      isSaving: false,
+      isAnalyzing: false,
+      onResponseNameChange: () => undefined,
+      onResponseUnitChange: () => undefined,
+      onResponseValueChange: () => undefined,
+      onStartCorrection: () => undefined,
+      onSave: () => undefined,
+      onAnalyze: () => undefined,
+    };
+
+    const analyzedHtml = renderToString(
+      <ResponseSurfaceResponseEntry {...common} design={analyzed} />,
+    );
+    const completedHtml = renderToString(
+      <ResponseSurfaceResponseEntry {...common} design={completed} />,
+    );
+    const correctionHtml = renderToString(
+      <ResponseSurfaceResponseEntry
+        {...common}
+        correctionMode
+        design={analyzed}
+        revisionHistory={{
+          design_id: analyzed.design_id,
+          design_version_id: analyzed.design_version_id,
+          response_name: "Yield",
+          total: 1,
+          offset: 0,
+          limit: 20,
+          items: [
+            {
+              response_revision_id: "77777777-7777-4777-8777-777777777777",
+              design_id: analyzed.design_id,
+              design_version_id: analyzed.design_version_id,
+              response_revision_schema_version: 1,
+              response_revision_sha256: "a".repeat(64),
+              response_name: "Yield",
+              unit: "%",
+              revision_number: 1,
+              state: "completed",
+              is_current: true,
+              response_count: 1,
+              supersedes_response_revision_id: null,
+              created_at: "2026-07-15T00:00:00.000Z",
+              closed_at: "2026-07-15T00:00:00.000Z",
+              values: [{ run_order: 1, value: 10 }],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect((analyzedHtml.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(analyzedHtml).toContain("현재 revision은 읽기 전용입니다");
+    expect(analyzedHtml).toContain("새 revision으로 수정");
+    expect(completedHtml).toContain("분석을 실행하면 현재 설계의 반응값이 잠깁니다");
+    expect(completedHtml).not.toContain('role="status"');
+    expect(correctionHtml).toContain("새 revision을 편집 중입니다");
+    expect(correctionHtml).toContain("새 revision 저장");
+    expect(correctionHtml).toMatch(/<input disabled="" value="Yield"/);
+    expect(correctionHtml).toContain("RSM response revision history");
+    expect(correctionHtml).not.toContain("새 revision으로 수정");
+  });
+
+  it("locks factorial response controls from restored analyzed status", () => {
+    const analyzedHtml = renderToString(
+      <FactorialDesignPreview
+        analysis={factorialAnalysisTestResponse()}
+        analysisError={null}
+        design={factorialDesignTestResponse()}
+        isRunningAnalysis={false}
+        isSavingResponses={false}
+        onSaveResponses={() => undefined}
+        onRunAnalysis={() => undefined}
+        responseError={null}
+        responses={factorialDesignResponsesTestResponse()}
+      />,
+    );
+    const completedResponses = {
+      ...factorialDesignResponsesTestResponse(),
+      status: "completed",
+    };
+    const completedHtml = renderToString(
+      <FactorialDesignPreview
+        analysis={null}
+        analysisError={null}
+        design={factorialDesignTestResponse()}
+        isRunningAnalysis={false}
+        isSavingResponses={false}
+        onSaveResponses={() => undefined}
+        onRunAnalysis={() => undefined}
+        responseError={null}
+        responses={completedResponses}
+      />,
+    );
+
+    expect(analyzedHtml).toContain("읽기 전용입니다");
+    expect(analyzedHtml).toContain("새 revision으로 수정");
+    expect(analyzedHtml).toContain("Response revision");
+    expect((analyzedHtml.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(7);
+    expect(completedHtml).toContain("분석을 실행하면 현재 설계의 반응값이 잠깁니다");
+    expect(completedHtml).not.toContain('role="status"');
   });
 
   it("shows analysis run errors under the selected execution panel with a readable action", () => {
@@ -1026,6 +1254,22 @@ describe("App", () => {
     );
     expect(apiRoutes.analysisRunExportDownload("analysis/1", "export/1")).toBe(
       "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/exports/export%2F1/download",
+    );
+    expect(apiRoutes.attributeControlLimitSetsBase()).toBe(
+      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets",
+    );
+    expect(
+      apiRoutes.attributeControlLimitSets({
+        sourceDatasetVersionId: "version/1",
+        chartType: "np",
+        limit: 10,
+        offset: 20,
+      }),
+    ).toBe(
+      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets?limit=10&offset=20&source_dataset_version_id=version%2F1&chart_type=np",
+    );
+    expect(apiRoutes.attributeControlLimitSet("limit/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets/limit%2F1",
     );
   });
 
@@ -1807,7 +2051,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "quality.attribute_control_chart",
-          method_version: "0.2.0",
+          method_version: "0.1.0",
           module_id: "quality",
           label_ko: "계수형 관리도",
           label_en: "Control Chart",
@@ -1850,6 +2094,8 @@ describe("App", () => {
     );
 
     expect(html).toContain("계수형 관리도 실행");
+    expect(html).toContain("현재 화면은 Phase I 기준선 추정만 실행합니다");
+    expect(html).toContain("저장된 Phase II 관리한계는 아직 적용하지 않습니다");
     expect(html).toContain('role="radiogroup"');
     expect(html).toContain("P 관리도 실행");
     expect(html).toContain("불량품 수");
@@ -1857,6 +2103,8 @@ describe("App", () => {
     expect(html).toContain("가변 표본 크기 불량률");
     expect(html).toContain("Dispersion ratio");
     expect(html).toContain("관측별 한계");
+    expect(html).toContain("한계 출처");
+    expect(html).toContain("필터 후 유효 관측에서 추정");
     expect(html).toContain("관리한계 밖");
     expect(html).toContain("Phase I 중심선과 3-sigma 관리한계");
     expect(html).toContain("P 관리도. 중심선");
@@ -4784,13 +5032,84 @@ function datasetVersionTestResponse(): DatasetVersionResponse {
   };
 }
 
+function responseSurfaceDesignTestResponse(status: string): ResponseSurfaceDesignResponse {
+  return {
+    design_id: "00000000-0000-4000-8000-000000000201",
+    design_version_id: "00000000-0000-4000-8000-000000000211",
+    version_number: 1,
+    method_id: "doe.response_surface",
+    method_version: "0.1.0",
+    design_schema_version: 2,
+    family: "central_composite",
+    name: "RSM test design",
+    status,
+    created_at: "2026-07-15T00:00:00.000Z",
+    updated_at: "2026-07-15T00:00:00.000Z",
+    app_version: "0.1.0",
+    factors: [
+      { name: "Temperature", low: 60, high: 80, unit: "C" },
+      { name: "Pressure", low: 5, high: 15, unit: "bar" },
+    ],
+    options: {
+      alpha_mode: "face_centered",
+      alpha: 1,
+      factorial_replicates: 1,
+      axial_replicates: 1,
+      center_points: 1,
+      randomize: false,
+      randomization_seed: 1,
+    },
+    run_count: 1,
+    design_sha256: "a".repeat(64),
+    runs: [
+      {
+        standard_order: 1,
+        run_order: 1,
+        replicate_index: 1,
+        point_type: "center",
+        center_point: true,
+        factor_levels: { Temperature: 70, Pressure: 10 },
+        coded_levels: { Temperature: 0, Pressure: 0 },
+      },
+    ],
+  };
+}
+
+function responseOptimizerAnalysisTestResponse(): DoeResponseSurfaceAnalysisResponse {
+  return {
+    analysis_id: "00000000-0000-4000-8000-000000000202",
+    response_name: "Yield",
+    result: {
+      factor_names: ["Temperature", "Pressure"],
+      sample: { parameter_count: 6, rank: 6, df_residual: 7 },
+      fit: { residual_mean_square: 0.04, residual_standard_error: 0.2 },
+      terms: [{ confidence_interval: { level: 0.95 } }],
+      anova: {
+        lack_of_fit: {
+          available: true,
+          lack_of_fit: { p_value: 0.4 },
+        },
+      },
+      diagnostics: {
+        high_cooks_distance_count: 0,
+        high_leverage_count: 0,
+        high_standardized_residual_count: 0,
+        shapiro_wilk: { p_value: 0.5 },
+      },
+      contour: {
+        points: [{ predicted: 80 }, { predicted: 95 }],
+      },
+    },
+  } as unknown as DoeResponseSurfaceAnalysisResponse;
+}
+
 function factorialDesignTestResponse(): FactorialDesignResponse {
   return {
     design_id: "11111111-1111-4111-8111-111111111111",
     design_version_id: "22222222-2222-4222-8222-222222222222",
     version_number: 1,
     method_id: "doe.factorial_design",
-    method_version: "0.2.0",
+    method_version: "0.3.0",
     family: "two_level_full_factorial",
     name: "screening design",
     status: "designed",
@@ -4870,6 +5189,12 @@ function factorialDesignResponsesTestResponse(): DoeDesignResponsesResponse {
       {
         response_name: "Yield",
         unit: "kg",
+        response_revision_id: "77777777-7777-4777-8777-777777777777",
+        response_revision_number: 1,
+        response_revision_schema_version: 1,
+        response_revision_sha256: "a".repeat(64),
+        created_at: "2026-07-15T00:00:00.000Z",
+        closed_at: "2026-07-15T00:00:00.000Z",
         response_count: 5,
         values: [1, 2, 3, 4, 5].map((runOrder) => ({
           run_order: runOrder,
@@ -4894,9 +5219,13 @@ function factorialAnalysisTestResponse(): DoeFactorialAnalysisResponse {
     design_version_id: "22222222-2222-4222-8222-222222222222",
     design_version_number: 1,
     method_id: "doe.factorial_design",
-    method_version: "0.2.0",
-    analysis_schema_version: 1,
+    method_version: "0.3.0",
+    analysis_schema_version: 2,
     design_sha256: "design-hash-012345678901234567890123456789012345678901234567890",
+    response_revision_id: "77777777-7777-4777-8777-777777777777",
+    response_revision_number: 1,
+    response_revision_sha256:
+      "response-hash-012345678901234567890123456789012345678901234567",
     response_sha256: "response-hash-012345678901234567890123456789012345678901234567",
     response_name: "Yield",
     created_at: "2026-07-14T00:00:00.000Z",

@@ -121,16 +121,20 @@ def create_analysis_run(
     if handler is not None:
         return handler.run(settings, request)
 
-    if request.method_id in {"doe.factorial_design", "doe.response_surface"}:
+    if request.method_id in {
+        "doe.factorial_design",
+        "doe.response_surface",
+        "doe.bayesian_optimization",
+    }:
         raise ApiError(
             code="analysis_method_uses_dedicated_api",
             message="이 메서드는 DOE 설계 자산 API를 통해 실행해야 합니다.",
             status_code=status.HTTP_409_CONFLICT,
-            developer_detail=(
-                "/api/v1/doe-designs/factorial"
-                if request.method_id == "doe.factorial_design"
-                else "/api/v1/doe-designs/response-surface"
-            ),
+            developer_detail={
+                "doe.factorial_design": "/api/v1/doe-designs/factorial",
+                "doe.response_surface": "/api/v1/doe-designs/response-surface",
+                "doe.bayesian_optimization": "/api/v1/bayesian-studies",
+            }[request.method_id],
         )
 
     raise ApiError(

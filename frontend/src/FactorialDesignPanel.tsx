@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
+import { createDoeResponseRevision, fetchDoeResponseRevisions } from "./api";
 import type {
   DoeDesignResponsesResponse,
   DoeDesignResponsesUpsertRequest,
   DoeFactorialAnalysisCreateRequest,
   DoeFactorialAnalysisResponse,
+  DoeResponseRevisionHistoryResponse,
+  DoeResponseRevisionResponse,
   FactorialDesignCreateRequest,
   FactorialDesignResponse,
 } from "./api";
@@ -289,7 +292,7 @@ export function FactorialDesignPanel({
   );
 }
 
-function FactorialDesignPreview({
+export function FactorialDesignPreview({
   analysis,
   analysisError,
   design,
@@ -316,10 +319,19 @@ function FactorialDesignPreview({
   const [responseName, setResponseName] = useState("Yield");
   const [responseUnit, setResponseUnit] = useState("");
   const [responseValues, setResponseValues] = useState<Record<number, string>>({});
+  const [correctionMode, setCorrectionMode] = useState(false);
+  const [correctionRevision, setCorrectionRevision] =
+    useState<DoeResponseRevisionResponse | null>(null);
+  const [revisionHistory, setRevisionHistory] =
+    useState<DoeResponseRevisionHistoryResponse | null>(null);
+  const [revisionError, setRevisionError] = useState<string | null>(null);
+  const [isSavingRevision, setIsSavingRevision] = useState(false);
+  const revisionRequest = useRef(0);
   const [maxInteractionOrder, setMaxInteractionOrder] = useState(
     Math.min(2, design.factors.length),
   );
   useEffect(() => {
+    revisionRequest.current += 1;
     const nextValues: Record<number, string> = {};
     if (firstResponse !== null) {
       for (const value of firstResponse.values) {
@@ -335,12 +347,24 @@ function FactorialDesignPreview({
       setResponseUnit("");
     }
     setResponseValues(nextValues);
+    setCorrectionMode(false);
+    setCorrectionRevision(null);
+    setRevisionHistory(null);
+    setRevisionError(null);
+    setIsSavingRevision(false);
   }, [design.design_id, design.runs, firstResponse]);
   const responseValidation = useMemo(
     () => validateResponseDraft(design.runs, responseName, responseUnit, responseValues),
     [design.runs, responseName, responseUnit, responseValues],
   );
   const matchingAnalysis = analysis?.design_id === design.design_id ? analysis : null;
+  const effectiveStatus =
+    matchingAnalysis !== null ? "analyzed" : (matchingResponses?.status ?? design.status);
+  const responsesLocked = effectiveStatus === "analyzed" && !correctionMode;
+  const activeRevisionId =
+    correctionRevision?.response_revision_id ?? firstResponse?.response_revision_id ?? null;
+  const activeRevisionNumber =
+    correctionRevision?.revision_number ?? firstResponse?.response_revision_number ?? null;
 
   return (
     <>
@@ -350,7 +374,7 @@ function FactorialDesignPreview({
         <span>Version</span>
         <strong>v{design.version_number}</strong>
         <span>Status</span>
-        <strong>{matchingResponses?.status ?? design.status}</strong>
+        <strong>{effectiveStatus}</strong>
         <span>Run count</span>
         <strong>{design.run_count.toLocaleString()}</strong>
         <span>SHA-256</span>
@@ -406,6 +430,7 @@ function FactorialDesignPreview({
         <label>
           <span>반응 이름</span>
           <input
+            disabled={responsesLocked || correctionMode}
             value={responseName}
             onChange={(event) => {
               setResponseName(event.currentTarget.value);
@@ -415,6 +440,7 @@ function FactorialDesignPreview({
         <label>
           <span>단위</span>
           <input
+            disabled={responsesLocked}
             value={responseUnit}
             onChange={(event) => {
               setResponseUnit(event.currentTarget.value);
@@ -445,6 +471,7 @@ function FactorialDesignPreview({
                 <td>
                   <input
                     aria-label={`run ${run.run_order} response`}
+                    disabled={responsesLocked}
                     inputMode="decimal"
                     value={responseValues[run.run_order] ?? ""}
                     onChange={(event) => {
@@ -465,27 +492,101 @@ function FactorialDesignPreview({
         <div className="notice-box notice-warning">{responseValidation.message}</div>
       ) : null}
       {responseError !== null ? <div className="error-box">오류 코드: {responseError}</div> : null}
+      {revisionError !== null ? <div className="error-box">오류 코드: {revisionError}</div> : null}
+      {responsesLocked ? (
+        <div className="notice-box notice-warning" role="status">
+          분석이 완료되어 revision {activeRevisionNumber ?? "-"}은 읽기 전용입니다. 과거 분석은
+          사용한 revision에 고정됩니다.
+        </div>
+      ) : correctionMode ? (
+        <div className="notice-box notice-warning" role="status">
+          현재 값을 복사해 새 revision을 편집 중입니다. 저장 전 기존 revision은 변경되지 않습니다.
+        </div>
+      ) : (
+        <div className="notice-box notice-warning">
+          분석을 실행하면 현재 설계의 반응값이 잠깁니다. 여러 response를 사용할 계획이면 먼저 모두 저장하세요.
+        </div>
+      )}
       <div className="button-row">
         <button
           className="primary-button"
           disabled={
             isSavingResponses ||
+            isSavingRevision ||
             responseValidation.kind === "error" ||
-            design.status === "analyzed"
+            responsesLocked
           }
           onClick={() => {
-            if (responseValidation.request !== null) {
-              onSaveResponses(design.design_id, responseValidation.request);
-            }
+            void (async () => {
+              if (responseValidation.request !== null) {
+                if (correctionMode && activeRevisionId !== null) {
+                  setIsSavingRevision(true);
+                  setRevisionError(null);
+                  const requestId = ++revisionRequest.current;
+                  try {
+                    const revision = await createDoeResponseRevision(design.design_id, {
+                      ...responseValidation.request,
+                      supersedes_response_revision_id: activeRevisionId,
+                    });
+                    if (revisionRequest.current !== requestId) return;
+                    setCorrectionRevision(revision);
+                    setCorrectionMode(false);
+                    const history = await fetchDoeResponseRevisions(
+                      design.design_id,
+                      revision.response_name,
+                    );
+                    if (revisionRequest.current === requestId) setRevisionHistory(history);
+                  } catch (error) {
+                    if (revisionRequest.current === requestId) {
+                      setRevisionError(errorCode(error));
+                    }
+                  } finally {
+                    if (revisionRequest.current === requestId) setIsSavingRevision(false);
+                  }
+                } else {
+                  onSaveResponses(design.design_id, responseValidation.request);
+                }
+              }
+            })();
           }}
           type="button"
         >
-          {design.status === "analyzed"
+          {responsesLocked
             ? "분석 후 반응 잠금"
-            : isSavingResponses
+            : isSavingResponses || isSavingRevision
               ? "저장 중"
-              : "반응값 저장"}
+              : correctionMode
+                ? "새 revision 저장"
+                : "반응값 저장"}
         </button>
+        {effectiveStatus === "analyzed" && !correctionMode ? (
+          <button
+            className="secondary-button"
+            onClick={() => {
+              void (async () => {
+                setCorrectionMode(true);
+                setRevisionError(null);
+                const requestId = ++revisionRequest.current;
+                if (firstResponse !== null) {
+                  try {
+                    const history = await fetchDoeResponseRevisions(
+                      design.design_id,
+                      firstResponse.response_name,
+                    );
+                    if (revisionRequest.current === requestId) setRevisionHistory(history);
+                  } catch (error) {
+                    if (revisionRequest.current === requestId) {
+                      setRevisionError(errorCode(error));
+                    }
+                  }
+                }
+              })();
+            }}
+            type="button"
+          >
+            새 revision으로 수정
+          </button>
+        ) : null}
       </div>
       {matchingResponses?.responses.map((response) => (
         <div className="metadata-grid" key={response.response_name} aria-label="저장된 DOE 반응 요약">
@@ -495,10 +596,45 @@ function FactorialDesignPreview({
           <strong>{response.response_count.toLocaleString()}</strong>
           <span>Unit</span>
           <strong>{response.unit ?? "-"}</strong>
+          <span>Revision</span>
+          <strong>r{activeRevisionNumber ?? response.response_revision_number}</strong>
+          <span>Revision SHA</span>
+          <strong>
+            {(correctionRevision?.response_revision_sha256 ?? response.response_revision_sha256).slice(
+              0,
+              12,
+            )}
+          </strong>
           <span>Analysis</span>
           <strong>{matchingAnalysis === null ? "실행 대기" : `v${matchingAnalysis.method_version}`}</strong>
         </div>
       ))}
+      {revisionHistory !== null ? (
+        <div className="table-wrap" aria-label="DOE response revision history">
+          <table className="result-table">
+            <thead>
+              <tr>
+                <th>Revision</th>
+                <th>State</th>
+                <th>Current</th>
+                <th>Closed</th>
+                <th>SHA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {revisionHistory.items.map((revision) => (
+                <tr key={revision.response_revision_id}>
+                  <td>r{revision.revision_number}</td>
+                  <td>{revision.state}</td>
+                  <td>{revision.is_current ? "current" : "history"}</td>
+                  <td>{revision.closed_at ?? "-"}</td>
+                  <td>{revision.response_revision_sha256.slice(0, 12)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
       {firstResponse !== null ? (
         <>
           <div className="panel-heading compact-heading">
@@ -546,6 +682,7 @@ function FactorialDesignPreview({
               onClick={() => {
                 onRunAnalysis(design.design_id, {
                   response_name: firstResponse.response_name,
+                  response_revision_id: activeRevisionId,
                   max_interaction_order: maxInteractionOrder,
                   confidence_level: 0.95,
                   point_limit: 256,
@@ -603,6 +740,8 @@ function FactorialAnalysisResultView({
         <strong>-1 / +1, center 0</strong>
         <span>Response SHA</span>
         <strong>{analysis.response_sha256.slice(0, 12)}</strong>
+        <span>Response revision</span>
+        <strong>r{analysis.response_revision_number}</strong>
         <span>Analysis ID</span>
         <strong>{analysis.analysis_id}</strong>
       </div>
@@ -988,6 +1127,10 @@ function responseValidationError(message: string): ResponseValidationResult {
     message,
     request: null,
   };
+}
+
+function errorCode(error: unknown): string {
+  return error instanceof Error ? error.message : "doe_response_revision_failed";
 }
 
 function integerField(value: string): number | null {

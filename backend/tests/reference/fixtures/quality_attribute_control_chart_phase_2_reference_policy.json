@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "fixture_id": "quality_attribute_control_chart_phase_2_policy_v1",
+  "execution_status": "contract_only_not_executable",
+  "parity_classification": "policy_adjusted_formula_parity",
+  "current_executable": {
+    "method_version": "0.1.0",
+    "result_schema_version": 1,
+    "phase": "phase_1_only"
+  },
+  "proposed_executable": {
+    "method_version": "0.2.0",
+    "result_schema_version": 2,
+    "limit_set_schema_version": 1
+  },
+  "sources": [
+    "https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc331.htm",
+    "https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc332.htm",
+    "https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/contchar.htm"
+  ],
+  "signal_policy": "strictly_outside_limits_boundary_is_not_signal",
+  "cases": [
+    {
+      "chart_type": "p",
+      "count_definition": "defectives",
+      "baseline": {
+        "counts": [2, 3, 1, 4],
+        "denominators": [20, 20, 20, 20]
+      },
+      "monitoring": {
+        "counts": [6, 1, 5],
+        "denominators": [20, 40, 10]
+      },
+      "expected": {
+        "center_line": 0.125,
+        "values": [0.3, 0.025, 0.5],
+        "lcl": [0.0, 0.0, 0.0],
+        "ucl": [0.3468529918662356, 0.28187375497513917, 0.43874750995027834],
+        "strict_signal_positions": [3]
+      }
+    },
+    {
+      "chart_type": "np",
+      "count_definition": "defectives",
+      "baseline": {
+        "counts": [5, 7, 6, 4],
+        "denominators": [50, 50, 50, 50]
+      },
+      "monitoring": {
+        "counts": [12, 13, 0],
+        "denominators": [50, 50, 50]
+      },
+      "expected": {
+        "frozen_pbar": 0.11,
+        "center_line": 5.5,
+        "values": [12.0, 13.0, 0.0],
+        "lcl": [0.0, 0.0, 0.0],
+        "ucl": [12.137394066951277, 12.137394066951277, 12.137394066951277],
+        "strict_signal_positions": [2]
+      }
+    },
+    {
+      "chart_type": "c",
+      "count_definition": "defects",
+      "baseline": {
+        "counts": [4, 5, 6, 5],
+        "constant_opportunity_confirmed": true
+      },
+      "monitoring": {
+        "counts": [11, 12, 0],
+        "constant_opportunity_confirmed": true
+      },
+      "expected": {
+        "center_line": 5.0,
+        "values": [11.0, 12.0, 0.0],
+        "lcl": [0.0, 0.0, 0.0],
+        "ucl": [11.70820393249937, 11.70820393249937, 11.70820393249937],
+        "strict_signal_positions": [2]
+      }
+    },
+    {
+      "chart_type": "u",
+      "count_definition": "defects",
+      "baseline": {
+        "counts": [4, 6, 5, 5],
+        "denominators": [10, 20, 10, 20]
+      },
+      "monitoring": {
+        "counts": [10, 0, 6],
+        "denominators": [10, 20, 5]
+      },
+      "expected": {
+        "center_line": 0.3333333333333333,
+        "values": [1.0, 0.0, 1.2],
+        "lcl": [0.0, 0.0, 0.0],
+        "ucl": [0.8810558908384993, 0.720631667954075, 1.1079300025748167],
+        "strict_signal_positions": [1, 3]
+      }
+    }
+  ]
+}

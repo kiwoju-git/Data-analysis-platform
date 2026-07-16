@@ -4,6 +4,24 @@ This document describes what the current Playwright smoke covers, how to run it,
 and how to inspect failures. It is an operations and coverage note, not a
 statistical-method expansion plan.
 
+## Latest Local Run
+
+The 2026-07-16 immutable attribute-limit-set storage/API regression run passed
+with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
+  -BackendPort 8025 `
+  -FrontendPort 5225 `
+  -WorkspaceRoot .\.tmp\e2e-workspace-attribute-limit-set-storage `
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-attribute-limit-set-storage
+```
+
+The new limit-set create/get/list contract is backend-only and adds no Phase II
+browser control. This run therefore verifies that the existing Phase I chart,
+prediction/export, Factorial, RSM/Optimizer, Bayesian, parser-recovery, and lazy
+panel paths remain intact; it does not claim Phase II monitoring execution.
+
 ## Covered Flows
 
 The current smoke test is `tests/e2e/critical_path.py`.
@@ -36,18 +54,38 @@ The current smoke test is `tests/e2e/critical_path.py`.
   `.csv` download through the checksum-validated analysis export route.
 - Registers the published NIST 30-point defectives/sample-size fixture, opens
   `quality.attribute_control_chart`, executes a P chart, and verifies the
-  30-row summary, two strict 3-sigma signals, accessible SVG chart, and first
-  25 displayed point rows.
+  explicit Phase I-only/stored-Phase-II-unavailable notice, 30-row summary,
+  Phase I limit source, two strict 3-sigma signals, accessible SVG chart, and
+  first 25 displayed point rows.
 - Creates a deterministic replicated 2-factor DOE with one center point, saves
-  all nine response values, runs the dedicated factorial analysis, and verifies
-  method v0.2.0, effect and main-effect SVGs, ANOVA table, and diagnostics.
+  all nine response values as response revision 1, runs the dedicated factorial
+  analysis, and verifies method v0.3.0, effect and main-effect SVGs, ANOVA table,
+  diagnostics, analyzed-response input/save lock, and explicit correction mode.
 - Creates a deterministic 13-run rotatable CCI, saves every response, fits the
   dedicated full quadratic response-surface model, and verifies the contour
-  SVG, coefficient table, fit summary, and diagnostics.
+  SVG, coefficient table, fit summary, diagnostics, and the analyzed-response
+  name/unit/value/save lock. Both DOE flows also assert the pre-analysis lock
+  warning.
 - Runs the bounded Response Optimizer from that verified RSM result and checks
   the recommended factor settings, point prediction, individual/composite
   desirability, constraint status, search termination, confirmation-run
   warning, and explicit absence of a global-optimum guarantee.
+- Creates RSM response revision 2 through the explicit correction flow after
+  analysis and verifies that newest-first revision history retains revision 1.
+- Creates a one-factor Bayesian study with an actual-unit upper-bound linear
+  constraint, records two explicit synthetic initial observations, runs the
+  bounded Matérn-5/2 GP/Expected Improvement worker,
+  and verifies that the new candidate is a pending recommendation rather than
+  an observation. The stored equation and recommendation feasibility are
+  visible, and the page retains confirmation-run and no-global-optimum warnings.
+- Observes the actual Regression, Quality, and DOE dynamic module resources
+  during their existing workflows and verifies no loading state remains after
+  each panel is ready.
+- Opens Linear Model, Attribute Control Chart, and Factorial DOE routes directly
+  and verifies their lazy panels render.
+- Aborts the Regression module request in a separate browser page and verifies
+  the sanitized panel error boundary and reload command without exposing the
+  dynamic-import exception in the page.
 - Uploads a synthetic XLSX file in the browser and confirms parsing.
 - Uploads an empty CSV to verify upload error recovery, then uploads a valid
   synthetic CSV.
@@ -73,20 +111,26 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - `verify attribute control chart`
 - `verify DOE factorial analysis`
 - `verify DOE response surface analysis and optimization`
+- `verify Bayesian study observations and recommendation`
 - `verify XLSX browser upload`
 - `verify CSV upload and upload error recovery`
 - `verify parser option editing`
 - `verify delimiter option editing`
 - `verify XLSX sheet selection recovery`
 - `verify CP949 encoding selection recovery`
+- `verify lazy panel direct routes`
+- `verify lazy panel error boundary`
 
 ## Not Covered
 
 - Remote GitHub Actions status or branch protection settings.
 - Full OpenAPI-to-TypeScript generation.
 - Every available statistical method panel.
-- Bayesian optimization, non-normal capability, advanced Gage R&R, or
-  fractional-factorial alias analysis.
+- Immutable attribute limit-set creation/listing and Phase II monitoring UI;
+  the former is covered by backend/OpenAPI tests and the latter is not yet
+  implemented.
+- Additional Bayesian benchmark families/budgets, non-normal capability,
+  advanced Gage R&R, or fractional-factorial alias analysis.
 - Chart export artifacts.
 - Browser matrix coverage beyond Chromium.
 - Large dataset performance or memory budget E2E.
@@ -111,6 +155,16 @@ The current smoke test is `tests/e2e/critical_path.py`.
   timeouts, so the runner prints the exited process name and recent log tail
   when a process exits early, and prints recent backend/frontend log tails when
   a readiness URL times out while processes are still running.
+
+## Bayesian Foundation Regression
+
+The schema-11 Bayesian study/history foundation has no browser study editor,
+surrogate, recommendation, or executable method in this slice. Its dedicated
+asset API is covered by backend create/restore/paging/state/history/tamper tests
+rather than a fake browser result. The full browser smoke was rerun with
+`-DiagnosticsRoot .\.tmp\e2e-diagnostics-bayesian-foundation` and retained all
+existing critical paths, including lazy direct routes and isolated import
+failure recovery.
 
 ## Run Locally
 

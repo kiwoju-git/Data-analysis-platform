@@ -7,6 +7,9 @@ import type {
   DoeFactorialAnalysisResponse,
   DoeResponseSurfaceAnalysisCreateRequest,
   DoeResponseSurfaceAnalysisResponse,
+  DoeResponseRevisionCreateRequest,
+  DoeResponseRevisionHistoryResponse,
+  DoeResponseRevisionResponse,
   FactorialDesignCreateRequest,
   FactorialDesignResponse,
   ResponseSurfaceDesignCreateRequest,
@@ -82,6 +85,65 @@ export async function fetchFactorialDesignResponses(
   }
 
   return (await response.json()) as DoeDesignResponsesResponse;
+}
+
+export async function createDoeResponseRevision(
+  designId: string,
+  request: DoeResponseRevisionCreateRequest,
+): Promise<DoeResponseRevisionResponse> {
+  const response = await fetchApi(apiRoutes.doeResponseRevisions(designId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_response_revision_failed"));
+  }
+  return (await response.json()) as DoeResponseRevisionResponse;
+}
+
+export async function fetchDoeResponseRevisions(
+  designId: string,
+  responseName: string,
+  offset = 0,
+  limit = 20,
+): Promise<DoeResponseRevisionHistoryResponse> {
+  const response = await fetchApi(
+    apiRoutes.doeResponseRevisions(designId, responseName, offset, limit),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_response_revision_history_failed"));
+  }
+  return (await response.json()) as DoeResponseRevisionHistoryResponse;
+}
+
+export async function fetchDoeResponseRevision(
+  designId: string,
+  responseRevisionId: string,
+): Promise<DoeResponseRevisionResponse> {
+  const response = await fetchApi(
+    apiRoutes.doeResponseRevision(designId, responseRevisionId),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_response_revision_fetch_failed"));
+  }
+  return (await response.json()) as DoeResponseRevisionResponse;
+}
+
+export async function abandonDoeResponseRevision(
+  designId: string,
+  responseRevisionId: string,
+): Promise<DoeResponseRevisionResponse> {
+  const response = await fetchApi(
+    apiRoutes.doeResponseRevisionAbandon(designId, responseRevisionId),
+    { method: "POST", headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_response_revision_abandon_failed"));
+  }
+  return (await response.json()) as DoeResponseRevisionResponse;
 }
 
 export async function createFactorialAnalysis(

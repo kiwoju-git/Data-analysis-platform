@@ -1,12 +1,15 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 
 from app.api.v1.schemas.doe import (
     DoeDesignResponsesResponse,
     DoeDesignResponsesUpsertRequest,
     DoeFactorialAnalysisCreateRequest,
     DoeFactorialAnalysisResponse,
+    DoeResponseRevisionCreateRequest,
+    DoeResponseRevisionHistoryResponse,
+    DoeResponseRevisionResponse,
     DoeResponseSurfaceAnalysisCreateRequest,
     DoeResponseSurfaceAnalysisResponse,
     FactorialDesignCreateRequest,
@@ -24,6 +27,12 @@ from app.services.doe_designs import (
     save_factorial_design_responses,
 )
 from app.services.doe_factorial_analysis import create_factorial_analysis, get_factorial_analysis
+from app.services.doe_response_revisions import (
+    abandon_response_revision,
+    create_response_revision,
+    get_response_revision,
+    list_response_revisions,
+)
 from app.services.doe_response_surface_analysis import (
     create_response_surface_analysis,
     get_response_surface_analysis,
@@ -152,6 +161,69 @@ def get_response_optimizer_route(
         design_id,
         optimization_id,
     )
+
+
+@router.post(
+    "/{design_id}/response-revisions",
+    response_model=DoeResponseRevisionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_response_revision_route(
+    request: Request,
+    design_id: UUID,
+    body: DoeResponseRevisionCreateRequest,
+) -> DoeResponseRevisionResponse:
+    return create_response_revision(
+        request.app.state.settings,
+        design_id,
+        body,
+        allow_analyzed=True,
+        require_explicit_supersedes=True,
+    )
+
+
+@router.get(
+    "/{design_id}/response-revisions",
+    response_model=DoeResponseRevisionHistoryResponse,
+)
+def list_response_revisions_route(
+    request: Request,
+    design_id: UUID,
+    response_name: str = Query(min_length=1, max_length=80),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> DoeResponseRevisionHistoryResponse:
+    return list_response_revisions(
+        request.app.state.settings,
+        design_id,
+        response_name,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/{design_id}/response-revisions/{response_revision_id}",
+    response_model=DoeResponseRevisionResponse,
+)
+def get_response_revision_route(
+    request: Request,
+    design_id: UUID,
+    response_revision_id: UUID,
+) -> DoeResponseRevisionResponse:
+    return get_response_revision(request.app.state.settings, design_id, response_revision_id)
+
+
+@router.post(
+    "/{design_id}/response-revisions/{response_revision_id}/abandon",
+    response_model=DoeResponseRevisionResponse,
+)
+def abandon_response_revision_route(
+    request: Request,
+    design_id: UUID,
+    response_revision_id: UUID,
+) -> DoeResponseRevisionResponse:
+    return abandon_response_revision(request.app.state.settings, design_id, response_revision_id)
 
 
 @router.get("/{design_id}", response_model=FactorialDesignResponse)

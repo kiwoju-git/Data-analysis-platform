@@ -1,9 +1,9 @@
 {
   "fixture_schema_version": 1,
   "method_id": "doe.bayesian_optimization",
-  "method_version": "0.1.0",
-  "status": "planning_only",
-  "runtime_result_expected": false,
+  "method_version": "0.2.0",
+  "status": "executable_dedicated_api",
+  "runtime_result_expected": true,
   "policy": {
     "objective_count": 1,
     "objective_directions": ["minimize", "maximize"],
@@ -76,6 +76,38 @@
       "purpose": "future_seeded_end_to_end_convergence_and_multiple_global_minima"
     }
   ],
+  "sequential_characterization": {
+    "benchmark_id": "botorch_branin_minimize",
+    "initial_normalized_points": [
+      [0.0, 0.0],
+      [0.0, 1.0],
+      [1.0, 0.0],
+      [1.0, 1.0],
+      [0.5, 0.5],
+      [0.25, 0.75]
+    ],
+    "recommendation_steps": 14,
+    "random_seeds": [11, 23, 37, 53, 71],
+    "seed_policy": "base_seed_plus_zero_based_step",
+    "total_trial_budget": 20,
+    "search_budget": {
+      "xi": 0.01,
+      "candidate_count": 512,
+      "local_start_count": 6,
+      "max_iterations": 80,
+      "max_evaluations": 4096,
+      "model_max_iterations": 75,
+      "model_max_evaluations": 500,
+      "hyperparameter_restart_count": 1,
+      "time_budget_ms": 30000,
+      "jitter": 1e-8,
+      "duplicate_tolerance": 1e-6
+    },
+    "maximum_simple_regret": 0.2,
+    "median_simple_regret": 0.15,
+    "acceptance_policy": "all_seed_regrets_and_median_must_pass_declared_thresholds",
+    "objective_execution_policy": "reference_test_harness_only_not_product_runtime"
+  },
   "sources": [
     {
       "title": "Efficient Global Optimization of Expensive Black-Box Functions",
@@ -95,7 +127,7 @@
     {
       "title": "scikit-learn Gaussian Process user guide",
       "url": "https://scikit-learn.org/stable/modules/gaussian_process.html",
-      "use": "future_product_surrogate_API_and_Matern_semantics"
+      "use": "product_surrogate_API_and_Matern_semantics"
     },
     {
       "title": "BoTorch synthetic test functions: Branin",

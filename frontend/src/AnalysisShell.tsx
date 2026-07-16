@@ -6,22 +6,13 @@ import {
   type AnalysisWorkbenchHistoryState,
   type AnalysisWorkbenchRestoredState,
 } from "./AnalysisWorkbench";
-import { AttributeControlChartPanel } from "./AttributeControlChartPanel";
-import { CapabilityPanel } from "./CapabilityPanel";
 import { ChiSquareAssociationPanel } from "./ChiSquareAssociationPanel";
 import { DescriptiveAnalysisPanel } from "./DescriptiveAnalysisPanel";
 import { EqualVariancesPanel } from "./EqualVariancesPanel";
 import { EquivalenceTostPanel } from "./EquivalenceTostPanel";
-import { FactorialDesignPanel } from "./FactorialDesignPanel";
-import { GageRrPreflightPanel } from "./GageRrPreflightPanel";
-import { GageRunChartPanel } from "./GageRunChartPanel";
 import { GraphicalSummaryPanel } from "./GraphicalSummaryPanel";
-import { IndividualsChartPanel } from "./IndividualsChartPanel";
 import { KruskalWallisPanel } from "./KruskalWallisPanel";
-import {
-  LinearModelPanel,
-  type LinearModelPredictionRowsState,
-} from "./LinearModelPanel";
+import type { LinearModelPredictionRowsState } from "./LinearModelPanel";
 import { MannWhitneyPanel } from "./MannWhitneyPanel";
 import { NormalityAnalysisPanel } from "./NormalityAnalysisPanel";
 import { OneProportionPanel } from "./OneProportionPanel";
@@ -29,13 +20,23 @@ import { OneWayAnovaPanel } from "./OneWayAnovaPanel";
 import { OneSampleTPanel } from "./OneSampleTPanel";
 import { OneSampleWilcoxonPanel } from "./OneSampleWilcoxonPanel";
 import { PairedTPanel } from "./PairedTPanel";
-import { PearsonCorrelationPanel } from "./PearsonCorrelationPanel";
-import { ResponseSurfacePanel } from "./ResponseSurfacePanel";
-import { RunChartPanel } from "./RunChartPanel";
-import { SubgroupChartPanel } from "./SubgroupChartPanel";
 import { TwoSampleTPanel } from "./TwoSampleTPanel";
 import { TwoProportionPanel } from "./TwoProportionPanel";
-import { XyCorrelationPanel } from "./XyCorrelationPanel";
+import {
+  AttributeControlChartPanel,
+  BayesianOptimizationPanel,
+  CapabilityPanel,
+  FactorialDesignPanel,
+  GageRrPreflightPanel,
+  GageRunChartPanel,
+  IndividualsChartPanel,
+  LinearModelPanel,
+  PearsonCorrelationPanel,
+  ResponseSurfacePanel,
+  RunChartPanel,
+  SubgroupChartPanel,
+  XyCorrelationPanel,
+} from "./lazyAnalysisPanels";
 import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
@@ -1614,6 +1615,12 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return <ResponseSurfacePanel />;
+            }
+            if (
+              method.method_id === "doe.bayesian_optimization" &&
+              method.availability === "available"
+            ) {
+              return <BayesianOptimizationPanel />;
             }
             return null;
           }}

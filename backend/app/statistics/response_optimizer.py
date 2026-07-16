@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from itertools import product
 from math import exp, isfinite, log
 from time import perf_counter
-from typing import Any, Literal, TypedDict
+from typing import Any, Final, Literal, TypedDict
 
 import numpy as np
 from scipy.optimize import minimize  # type: ignore[import-untyped]
 
-RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION = 1
+RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION: Final[Literal[2]] = 2
 MIN_OPTIMIZER_OBJECTIVES = 1
 MAX_OPTIMIZER_OBJECTIVES = 8
 MAX_OPTIMIZER_FACTORS = 5
@@ -83,6 +83,22 @@ class OptimizerSearchOptions:
     max_iterations: int
     max_evaluations: int
     time_budget_ms: int
+
+
+@dataclass(frozen=True)
+class OptimizerEligibilityIssue:
+    source_analysis_id: str | None
+    code: str
+    severity: Literal["blocking", "acknowledgment_required", "informational"]
+    source_warning_code: str | None = None
+
+
+@dataclass(frozen=True)
+class OptimizerSourceEligibility:
+    eligible: bool
+    acknowledgment_required: bool
+    issues: tuple[OptimizerEligibilityIssue, ...]
+    acknowledged_source_warning_codes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -205,6 +221,7 @@ def calculate_response_optimizer(
     factor_bounds: list[OptimizerFactorBound],
     linear_constraints: list[OptimizerLinearConstraint],
     search_options: OptimizerSearchOptions,
+    source_model_eligibility: OptimizerSourceEligibility | None = None,
 ) -> dict[str, object]:
     objective_tuple = tuple(objectives)
     constraint_tuple = tuple(linear_constraints)
@@ -215,6 +232,11 @@ def calculate_response_optimizer(
         search_options,
     )
     factor_names = tuple(factor.name for factor in factors)
+    eligibility = source_model_eligibility or OptimizerSourceEligibility(
+        eligible=True,
+        acknowledgment_required=False,
+        issues=(),
+    )
     search_bounds = _search_bounds(factors, factor_bounds)
     scipy_bounds = [(bound.lower, bound.upper) for bound in search_bounds]
     state = _EvaluationState(objective_tuple, factor_names, constraint_tuple, search_options)
@@ -416,6 +438,23 @@ def calculate_response_optimizer(
             "termination_reason": termination_reason,
             "global_optimum_guaranteed": False,
         },
+        "source_model_eligibility": {
+            "eligible": eligibility.eligible,
+            "acknowledgment_required": eligibility.acknowledgment_required,
+            "issues": [
+                {
+                    "source_analysis_id": issue.source_analysis_id,
+                    "code": issue.code,
+                    "severity": issue.severity,
+                    "source_warning_code": issue.source_warning_code,
+                }
+                for issue in eligibility.issues
+            ],
+            "acknowledged_source_warning_codes": list(
+                eligibility.acknowledged_source_warning_codes
+            ),
+        },
+        "acknowledged_source_warning_codes": list(eligibility.acknowledged_source_warning_codes),
         "warnings": warnings,
     }
 

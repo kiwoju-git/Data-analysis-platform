@@ -2,90 +2,93 @@
 
 Last updated: 2026-07-15
 
-## Status And Scope
+## Current Status
 
-`doe.bayesian_optimization` is a planning-only catalog method at version
-`0.1.0`. This slice fixes the product, safety, reference, and reproducibility
-contract. It does not create a study, fit a surrogate, recommend a point, store
-a result, or expose an executable API. The generic analysis-run endpoint must
-return `analysis_method_not_available` without a recommendation or fake value.
+`doe.bayesian_optimization` is an available dedicated API/UI method at version
+`0.2.0`. The application stores an immutable bounded study and observation
+history, fits a Matérn 5/2 Gaussian Process to explicit completed trials, and
+uses analytic Expected Improvement to create one pending confirmation-trial
+candidate. It never runs the user's objective.
 
-The first executable slice, if separately approved, will support one bounded
-sequential study with:
+No generic analysis-run execution API is provided. `POST /api/v1/analysis-runs`
+returns `analysis_method_uses_dedicated_api` with
+`/api/v1/bayesian-studies`; the method is executed only through its dedicated
+study lifecycle. A recommendation is not an observation and is not a claim of
+a guaranteed global optimum.
 
-- one numeric objective with explicit `minimize` or `maximize` direction;
-- one to six continuous factors with finite actual-unit low/high bounds;
-- deterministic completed trial observations entered by the user;
-- optional known linear `<=` or `>=` constraints in actual factor units;
-- one next-point recommendation at a time;
-- explicit seed, trial, candidate, local-search, iteration, evaluation, and
-  wall-time budgets.
+Current routes are:
 
-The app will not call user code, equipment, an external service, arbitrary Python,
-shell, `eval`, pickle, or joblib. It will never fabricate an objective
-value. A recommendation becomes a completed trial only after the user performs
-the experiment and explicitly records the observed response.
+- `POST/GET /api/v1/bayesian-studies`;
+- `GET /api/v1/bayesian-studies/{study_id}`;
+- paged `GET .../{study_id}/trials`;
+- `PUT .../{study_id}/trials/{trial_id}/observation`;
+- `POST .../{study_id}/trials/{trial_id}/abandon`;
+- paged immutable `GET .../{study_id}/history` and revision restore;
+- `POST/GET .../{study_id}/recommendations`;
+- `GET .../{study_id}/recommendations/{recommendation_id}`.
 
-## Study Lifecycle
+The frontend route uses the DOE module's dynamically loaded
+`BayesianOptimizationPanel`. It creates/restores studies, distinguishes initial
+and recommendation trials, records or abandons pending trials, and renders the
+next candidate's posterior mean, posterior standard deviation, EI, warnings,
+and confirmation requirement.
 
-The proposed immutable lifecycle is:
+## Lifecycle And Inputs
 
-1. Create a study definition and factor space.
-2. Generate or record a seeded initial design.
-3. Enter actual observations for completed trials.
-4. Verify the ordered observation history and checksum.
-5. Fit one surrogate from all valid completed trials.
-6. optimize one acquisition function inside the feasible region and budget.
-7. Persist one pending recommendation with model/acquisition provenance.
-8. Accept an observation or explicitly abandon the recommendation.
-9. Append a new history version; never overwrite a completed observation.
+1. Create one immutable study with one to six continuous factors, finite actual
+   low/high bounds, one numeric minimize/maximize objective, and up to 16 known
+   actual-unit linear inequalities.
+2. Generate deterministic bounded initial trials with
+   `sha256_counter_uniform_feasible_v1` and an explicit seed.
+3. Record one finite user-observed value for each pending trial or explicitly
+   abandon it. Completed and abandoned trials are terminal.
+4. Append an immutable ordered observation-history revision. No completed trial
+   or history revision is overwritten.
+5. After all initial trials are closed and at least `max(2, factor_count + 1)`
+   observations are completed, fit the versioned GP and optimize EI.
+6. Persist one recommendation and its pending `origin=recommendation` trial.
+   Only one pending recommendation is allowed.
+7. The user performs the experiment and records the actual response, or
+   abandons the trial. Completion appends a new history revision before another
+   recommendation is permitted.
 
-Only one pending recommendation is allowed in the localhost single-user P0
-contract. A stale recommendation cannot be accepted after the factor space,
-objective policy, constraints, or completed history changes.
+P0 rejects categorical, ordinal, integer, conditional, unbounded, nonlinear,
+learned, probabilistic, and hidden constraints. The dedicated frontend accepts
+up to 16 typed actual-unit linear inequalities, requires a stable ID/name and
+at least one nonzero finite coefficient, and renders both the stored equation
+and recommendation-time feasibility evaluation. Study definitions have no
+update endpoint.
 
-## Input Contract
-
-Each factor records a stable ID, name, actual-unit low/high, unit, order, and
-scaling rule. Values are transformed to `[0, 1]` only for surrogate fitting and
-acquisition optimization; stored recommendations include both actual and
-normalized coordinates. P0 rejects categorical, ordinal, integer, conditional,
-and unbounded factors.
-
-The objective records a stable name, unit, direction, and deterministic
-observation policy. P0 does not infer direction, transform an objective without
-an explicit versioned rule, average replicates, or silently switch to a noisy
-model. Replicates and noisy objectives require a later contract.
-
-Known constraints are evaluated before acquisition ranking. P0 permits only
-finite actual-unit linear inequalities. Equality, nonlinear, learned,
-probabilistic, safety-critical, and hidden constraints remain out of scope.
+The app does not call equipment, external services, arbitrary Python, shell,
+`eval`, pickle, or joblib. It does not fabricate, average, impute, or infer an
+objective value.
 
 ## Surrogate Policy
 
-The proposed first implementation uses the existing pinned scikit-learn
-dependency and `GaussianProcessRegressor` with:
+The calculation worker imports scikit-learn only inside the spawned CPU worker
+and limits numerical thread pools to one. It uses scikit-learn 1.7.2
+`GaussianProcessRegressor` with:
 
-- factors scaled by their declared bounds;
-- objective values direction-normalized so larger is better and standardized
-  from completed history with the transformation parameters persisted;
-- `ConstantKernel * Matérn 5/2` with one length scale per factor;
-- explicit finite hyperparameter bounds, deterministic restart count, and seed;
-- a recorded diagonal numerical jitter policy rather than silently increasing
-  noise until fitting succeeds;
-- Cholesky/numerical failures returned as stable errors without changing the
-  kernel or falling back to another model.
+- factor values scaled from declared bounds to `[0, 1]`;
+- objective direction normalized so larger is better;
+- completed observations standardized with persisted mean and scale;
+- `ConstantKernel * Matérn 5/2` with one ARD length scale per factor;
+- constant bounds `[1e-3, 1e3]` and length-scale bounds `[1e-2, 1e2]`;
+- explicit diagonal jitter, seed, restart count, fit iteration/evaluation
+  budgets, and wall-time checks;
+- no kernel substitution, silent jitter escalation, or model fallback.
 
-Kernel specification, optimized hyperparameters, log marginal likelihood,
-normalization values, jitter, scikit-learn/NumPy/SciPy versions, warnings, and
-fit duration must be persisted. GP posterior standard deviation is model
-uncertainty, not a process tolerance or guaranteed confidence interval.
+The model artifact records the fitted kernel string, constant, length scales,
+log marginal likelihood, direction multiplier, normalization, jitter,
+observation count, restart/evaluation counts, fit duration, and exact
+NumPy/SciPy/scikit-learn/joblib/threadpoolctl versions. Posterior standard
+deviation is model uncertainty, not a process tolerance or guaranteed
+confidence interval.
 
 ## Acquisition Policy
 
-P0 uses analytic Expected Improvement (EI) after objective direction
-normalization. For posterior mean `mu`, standard deviation `sigma`, incumbent
-`best`, and exploration parameter `xi >= 0`:
+For direction-normalized posterior mean `mu`, standard deviation `sigma`,
+incumbent completed observation `best`, and exploration `xi >= 0`:
 
 ```text
 I = mu - best - xi
@@ -93,59 +96,37 @@ EI = I * Phi(I / sigma) + sigma * phi(I / sigma), when sigma > 0
 EI = 0, when sigma <= 0
 ```
 
-The incumbent is the best feasible completed observation, not the best
-surrogate prediction. Candidate generation and local acquisition refinement
-must be seeded and bounded. Already completed points and a current pending point
-are excluded using a versioned normalized-distance tolerance. If no novel
-feasible point exists, execution fails explicitly; it does not return a
-duplicate or random fallback.
+The incumbent is the best completed trial, never a predicted value. A seeded
+bounded candidate pool is filtered by actual-unit constraints and normalized
+duplicate tolerance, ranked by EI, then refined with bounded SLSQP local starts.
+No feasible novel point is an explicit error; the service does not return a
+random point or duplicate fallback.
 
-The result must distinguish GP posterior mean, posterior standard deviation,
-EI, incumbent objective, and observed values. It must state that neither the
-acquisition maximum nor the recommendation is a guaranteed global optimum.
+The persisted result keeps actual/normalized coordinates, predicted mean,
+posterior standard deviation, EI, incumbent, objective direction, constraint
+evaluations, model artifact, requested/consumed budgets, termination reason,
+warnings, and limitations. Every result retains
+`bayesian_optimization_confirmation_required` and
+`bayesian_optimization_no_global_optimum_guarantee`.
 
-## Budgets And Performance
+## Budgets And Failures
 
-The first executable contract must set conservative Windows/CPU-only limits:
+Requests are bounded to six factors, 200 completed observations, 4,096 initial
+acquisition candidates, 16 local starts, 20,000 acquisition evaluations, three
+hyperparameter restarts, 2,000 model evaluations, and 60 seconds calculation
+time. The parent starts a Windows spawn-safe worker, applies a startup allowance,
+terminates it on timeout, and returns a redacted stable error. History is never
+silently sampled.
 
-- at most six factors and 200 completed observations;
-- explicit initial-design size and total trial budget;
-- bounded candidate pool, local starts, optimizer iterations, and evaluations;
-- a wall-time budget and single-process execution;
-- no silent sampling of history and no unbounded hyperparameter restarts.
+Budget exhaustion during local refinement may retain the best fully evaluated
+candidate only with an explicit termination reason and warning. Fit-budget
+exhaustion fails rather than persisting a partially fitted model.
 
-Budget exhaustion may return the best fully evaluated feasible acquisition
-candidate only when the termination reason and persistent warning are stored.
-It must never claim search completion when the budget stopped the calculation.
+Stable execution codes are:
 
-## Persistence And Provenance
-
-Future study, history, model-fit, and recommendation artifacts require separate
-schema/version decisions. At minimum, persisted provenance must include:
-
-- study/study-version/recommendation IDs and method/config/result versions;
-- factor space, objective direction, constraint definitions, and their hashes;
-- ordered completed trial IDs and `observation_history_sha256`;
-- pending/abandoned/completed trial state transitions and timestamps;
-- normalized and actual coordinates without internal paths;
-- seed and every requested/consumed budget;
-- kernel, hyperparameters, normalization, jitter, acquisition, `xi`, incumbent,
-  duplicate tolerance, termination reason, and warnings;
-- app/build/Python/platform/scikit-learn/NumPy/SciPy versions and creation time.
-
-Raw filenames, internal absolute paths, arbitrary request bodies, and equipment
-credentials must not enter provenance or logs. Storage must validate history,
-config, model, recommendation, and checksum relationships on restore.
-
-## Planned Errors
-
-These codes are reserved for the future executable contract and are not emitted
-by this planning-only slice:
-
-- `bayesian_optimization_factor_space_invalid`
-- `bayesian_optimization_objective_invalid`
 - `bayesian_optimization_history_incomplete`
 - `bayesian_optimization_history_stale`
+- `bayesian_optimization_pending_recommendation_exists`
 - `bayesian_optimization_constraint_invalid`
 - `bayesian_optimization_no_feasible_candidate`
 - `bayesian_optimization_duplicate_candidate`
@@ -153,50 +134,129 @@ by this planning-only slice:
 - `bayesian_optimization_budget_exhausted`
 - `bayesian_optimization_artifact_mismatch`
 
-Until an executable route exists, the only public execution error is the
-existing `analysis_method_not_available` response.
+Foundation metadata, trial, and history errors retain the stable
+`bayesian_study_*`, `bayesian_trial_*`, and
+`bayesian_observation_history_*` families. Errors expose no objective value,
+internal absolute path, traceback, SQL, or arbitrary request body.
 
-## Reference Policy
+## Persistence And Provenance
 
-`backend/tests/reference/fixtures/doe_bayesian_optimization_reference_policy.json`
-is a machine-readable planning fixture. It contains hand-checkable EI cases, a
-one-dimensional quadratic, and the independently documented two-dimensional
-Branin function with its three global minimizers. It also records the planned
-no-objective-execution and no-global-optimum-claim policies.
+SQLite schema 12 preserves schema-11 studies and recreates `bayesian_trials`
+with `initial_design` and `recommendation` origins. It adds
+`bayesian_recommendations`, which relates each immutable recommendation to its
+study version, pending trial, source history revision, method/config/result/model
+versions, canonical config/result checksums, creation time, and app version.
+Schema-11 `0.1.0` study assets remain restorable without being relabeled.
 
-The future implementation gate requires all of the following:
+Study schema 1 and history schema 1 are unchanged.
+`observation_history_sha256` hashes the definition SHA and ordered completed
+trial ID, trial number, coordinate SHA, and full-precision objective. Every
+completion stores `previous_history_sha256`; request-side
+`expected_history_revision_id` provides optimistic locking.
 
-- GP posterior mean/variance parity against an independently generated fixture;
-- EI parity for zero/positive uncertainty and both objective directions;
-- deterministic identical recommendations for identical seed/history/config;
-- Branin convergence behavior across several declared seeds and budgets,
-  without treating one exact trajectory as a proof of global convergence;
-- boundary, linear-constraint, duplicate, singular-kernel, stale-history,
-  tamper, budget, and path/value-redaction tests;
-- browser coverage that records observations explicitly and never displays a
-  recommendation as an observed result.
+Recommendation config, result, and surrogate-model schemas are each 1. The
+provenance records study/study-version/recommendation/trial IDs, source history
+ID/SHA, definition SHA, method and all artifact schema versions, app/build/
+Python/platform metadata, exact model package versions, and creation time.
+Requested/consumed algorithm budgets and transformations remain in the result
+and config. Raw filenames, raw request bodies, equipment credentials, and
+internal paths are prohibited.
 
-Primary method references are Jones, Schonlau, and Welch's
-[EGO paper](https://openturns.github.io/openturns/papers/jones1998.pdf) and
-Rasmussen and Williams' [Gaussian Processes for Machine Learning](https://gaussianprocess.org/gpml/chapters/RW.pdf).
-The future product API policy is tied to the
-[scikit-learn Gaussian Process documentation](https://scikit-learn.org/stable/modules/gaussian_process.html),
-while the independent Branin values are recorded from the
-[BoTorch synthetic-function reference](https://botorch.readthedocs.io/en/latest/test_functions.html).
+Restore validates definition, factor, constraint, trial, history, config,
+result, model, and recommendation relations plus every stored checksum. It also
+cross-checks result coordinates against the pending trial and factor scaling,
+the model observation count/incumbent against the source history, requested
+search settings against consumed-budget metadata, constraint evaluations
+against the immutable study definition, required warnings, package versions,
+and finite model/result values. The
+recommendation's immutable pending-trial snapshot must retain its ID, number,
+origin, coordinates, coordinate SHA, and creation time. The current trial may
+legitimately transition to completed or abandoned without mutating the stored
+recommendation snapshot.
 
 ## Version Decision
 
-The planned catalog entry starts at `0.1.0` because it has never produced a
-stored result. No config/result/history schema number is assigned yet and no
-SQLite migration is added. If the first executable implementation changes this
-contract materially, its method version must be decided before any result is
-persisted; documentation alone is not a silent promise of compatibility.
+The catalog method moves from planning `0.1.0` to dedicated executable `0.2.0`
+because it now persists numerical GP/EI recommendations. There was no prior
+executable result to reinterpret. Study/history schemas remain 1 because their
+meaning and checksums are unchanged. Recommendation config/result/model schemas
+start at 1. SQLite moves from schema 11 to 12 for the new recommendation table
+and expanded trial-origin constraint.
+
+An incompatible algorithm, default, result field meaning, hash payload, or
+provenance relationship requires a method or artifact schema decision under
+`docs/method_versioning.md`. Old records are never silently assigned a new
+version.
+
+The sequential-lifecycle stabilization keeps method `0.2.0` and recommendation
+config/result/model schemas 1. It adds stricter rejection of internally
+inconsistent artifacts, reference/benchmark evidence, and frontend construction
+of the already-versioned linear-constraint request. It does not change the GP,
+EI formula, defaults, persisted field meaning, or checksum payload.
+
+## Reference And Validation Policy
+
+`backend/tests/reference/fixtures/doe_bayesian_optimization_reference_policy.json`
+records hand-checkable EI cases, a one-dimensional quadratic, independently
+documented Branin optima, and a five-seed sequential characterization. The
+Branin gate starts from six declared normalized points, permits 14 recommendations
+for a total 20-trial budget, and requires every simple regret to be at most
+`0.20` with median regret at most `0.15`. Tests compare the production EI calculation to the
+hand formula and independently reconstruct the fitted Matérn covariance,
+posterior mean, and variance with direct linear algebra. They also cover both
+objective directions, seed determinism, constraints, duplicate/feasibility and
+fit budgets, spawn-worker API persistence, one-pending recommendation, history
+staleness, trial completion, migration, checksum tamper, redaction, and typed
+OpenAPI/frontend alignment.
+
+## Local Performance Characterization
+
+Run the CPU-only benchmark with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\benchmark-bayesian.ps1 `
+  -Repetitions 3
+```
+
+The 2026-07-15 development measurement used Windows 10 Home build 19045,
+CPython 3.10.11, one numerical thread, and three fresh spawned workers per
+case. Times below are medians in milliseconds:
+
+| Case | Worker round trip | Child calculation | GP fit | Non-fit calculation | Round-trip overhead |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 factor / 8 observations / 256 candidates | 3086.439 | 279.275 | 223.817 | 56.119 | 2860.770 |
+| 2 factors / 20 observations / 512 candidates | 2890.613 | 259.589 | 144.691 | 114.898 | 2600.577 |
+| 4 factors / 48 observations / 512 candidates | 3135.319 | 712.763 | 165.704 | 537.908 | 2409.312 |
+
+The empty spawn/IPC median was `475.103 ms`. `Non-fit calculation` is child
+total minus GP fit and therefore includes imports, validation, candidate
+generation, acquisition search, and final prediction; it is not presented as a
+pure acquisition-only timer. `Round-trip overhead` includes Windows process
+bootstrap and IPC before/after the timed calculation. These observations are
+descriptive, not a CI threshold, and actual Windows 11 release measurements
+remain pending. Peak memory was not measured in this slice.
+
+Primary method references are Jones, Schonlau, and Welch's
+[EGO paper](https://openturns.github.io/openturns/papers/jones1998.pdf) and
+Rasmussen and Williams'
+[Gaussian Processes for Machine Learning](https://gaussianprocess.org/gpml/chapters/RW.pdf).
+The product API policy is tied to the
+[scikit-learn Gaussian Process documentation](https://scikit-learn.org/stable/modules/gaussian_process.html),
+and Branin values are recorded from the
+[BoTorch synthetic-function reference](https://botorch.readthedocs.io/en/latest/test_functions.html).
+
+The dependency spike and 45-wheel Windows AMD64 hash lock are documented in
+`docs/scikit_learn_dependency_spike.md`. The measured development host is
+Windows 10 build 19045. By product-owner decision, actual Windows 11 x64,
+CPython 3.10, CPU-only validation remains a mandatory release gate and does not
+block this development slice. No Windows 11 evidence is inferred from Windows
+Server or the current host.
 
 ## Explicit Non-Goals
 
-No executable API, UI execution control, recommendation, surrogate artifact,
-or migration is added in this slice. Multiobjective/Pareto optimization, noisy
-or heteroscedastic objectives, batches, asynchronous workers, categorical or
-integer variables, nonlinear/learned constraints, cost-aware/multi-fidelity
-optimization, Thompson sampling, knowledge gradient, guaranteed safe
-optimization, and guaranteed global optimum claims remain out of scope.
+Objective execution, completed-observation correction, study-definition edits,
+multiobjective/Pareto optimization, noisy or heteroscedastic objectives,
+batches, categorical/integer factors, nonlinear or learned constraints,
+cost-aware or multi-fidelity optimization, Thompson sampling, knowledge
+gradient, guaranteed safe optimization, and guaranteed global optimum claims
+remain out of scope.

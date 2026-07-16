@@ -26,6 +26,13 @@ export interface AnalysisRunsRouteParams {
   status?: AnalysisRunState | null;
 }
 
+export interface AttributeControlLimitSetsRouteParams {
+  sourceDatasetVersionId?: string | null;
+  chartType?: "p" | "np" | "c" | "u" | null;
+  limit?: number;
+  offset?: number;
+}
+
 export const apiRoutes = {
   health(): string {
     return apiUrl("/health");
@@ -69,6 +76,93 @@ export const apiRoutes = {
 
   analysisMethods(): string {
     return apiUrl("/analysis-methods");
+  },
+
+  attributeControlLimitSets({
+    sourceDatasetVersionId,
+    chartType,
+    limit = 20,
+    offset = 0,
+  }: AttributeControlLimitSetsRouteParams = {}): string {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (sourceDatasetVersionId !== undefined && sourceDatasetVersionId !== null) {
+      params.set("source_dataset_version_id", sourceDatasetVersionId);
+    }
+    if (chartType !== undefined && chartType !== null) {
+      params.set("chart_type", chartType);
+    }
+    return urlWithQuery("/quality/attribute-control-limit-sets", params);
+  },
+
+  attributeControlLimitSetsBase(): string {
+    return apiUrl("/quality/attribute-control-limit-sets");
+  },
+
+  attributeControlLimitSet(limitSetId: string): string {
+    return apiUrl(`/quality/attribute-control-limit-sets/${pathId(limitSetId)}`);
+  },
+
+  bayesianStudies(offset?: number, limit?: number): string {
+    if (offset === undefined || limit === undefined) {
+      return apiUrl("/bayesian-studies");
+    }
+    return urlWithQuery(
+      "/bayesian-studies",
+      new URLSearchParams({ offset: String(offset), limit: String(limit) }),
+    );
+  },
+
+  bayesianStudy(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}`);
+  },
+
+  bayesianTrials(studyId: string, offset: number, limit: number): string {
+    return urlWithQuery(
+      `/bayesian-studies/${pathId(studyId)}/trials`,
+      new URLSearchParams({ offset: String(offset), limit: String(limit) }),
+    );
+  },
+
+  bayesianTrialObservation(studyId: string, trialId: string): string {
+    return apiUrl(
+      `/bayesian-studies/${pathId(studyId)}/trials/${pathId(trialId)}/observation`,
+    );
+  },
+
+  bayesianTrialAbandon(studyId: string, trialId: string): string {
+    return apiUrl(
+      `/bayesian-studies/${pathId(studyId)}/trials/${pathId(trialId)}/abandon`,
+    );
+  },
+
+  bayesianHistory(studyId: string, offset: number, limit: number): string {
+    return urlWithQuery(
+      `/bayesian-studies/${pathId(studyId)}/history`,
+      new URLSearchParams({ offset: String(offset), limit: String(limit) }),
+    );
+  },
+
+  bayesianHistoryRevision(studyId: string, historyRevisionId: string): string {
+    return apiUrl(
+      `/bayesian-studies/${pathId(studyId)}/history/${pathId(historyRevisionId)}`,
+    );
+  },
+
+  bayesianRecommendations(studyId: string, offset?: number, limit?: number): string {
+    const path = `/bayesian-studies/${pathId(studyId)}/recommendations`;
+    if (offset === undefined || limit === undefined) {
+      return apiUrl(path);
+    }
+    return urlWithQuery(
+      path,
+      new URLSearchParams({ offset: String(offset), limit: String(limit) }),
+    );
+  },
+
+  bayesianRecommendation(studyId: string, recommendationId: string): string {
+    return apiUrl(
+      `/bayesian-studies/${pathId(studyId)}/recommendations/${pathId(recommendationId)}`,
+    );
   },
 
   analysisRunsBase(): string {
@@ -182,6 +276,36 @@ export const apiRoutes = {
 
   doeDesignResponses(designId: string): string {
     return apiUrl(`/doe-designs/${pathId(designId)}/responses`);
+  },
+
+  doeResponseRevisions(
+    designId: string,
+    responseName?: string,
+    offset = 0,
+    limit = 20,
+  ): string {
+    const path = `/doe-designs/${pathId(designId)}/response-revisions`;
+    if (responseName === undefined) return apiUrl(path);
+    return urlWithQuery(
+      path,
+      new URLSearchParams({
+        response_name: responseName,
+        offset: String(offset),
+        limit: String(limit),
+      }),
+    );
+  },
+
+  doeResponseRevision(designId: string, responseRevisionId: string): string {
+    return apiUrl(
+      `/doe-designs/${pathId(designId)}/response-revisions/${pathId(responseRevisionId)}`,
+    );
+  },
+
+  doeResponseRevisionAbandon(designId: string, responseRevisionId: string): string {
+    return apiUrl(
+      `/doe-designs/${pathId(designId)}/response-revisions/${pathId(responseRevisionId)}/abandon`,
+    );
   },
 
   doeDesignAnalyses(designId: string): string {

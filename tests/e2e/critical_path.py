@@ -18,7 +18,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import (
+    BrowserContext,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+)
 from playwright.sync_api import expect, sync_playwright
 
 
@@ -421,6 +425,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_doe_factorial_analysis(page)
             diagnostics.step("verify DOE response surface analysis and optimization")
             verify_doe_response_surface_analysis(page)
+            diagnostics.step("verify Bayesian study observations and recommendation")
+            verify_bayesian_optimization(page)
             diagnostics.step("verify XLSX browser upload")
             verify_xlsx_file_upload(
                 page, Path(tempfile.mkdtemp(prefix="datalab-e2e-upload-"))
@@ -450,6 +456,10 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
                 page,
                 Path(tempfile.mkdtemp(prefix="datalab-e2e-encoding-options-")),
             )
+            diagnostics.step("verify lazy panel direct routes")
+            verify_lazy_panel_direct_routes(page, frontend_base_url)
+            diagnostics.step("verify lazy panel error boundary")
+            verify_lazy_panel_error_boundary(context, frontend_base_url)
         except PlaywrightTimeoutError as exc:
             message = (
                 f"Playwright wait timed out during '{diagnostics.current_step_label}': "
@@ -577,6 +587,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
         name=re.compile(r"^회귀모형 적합"),
     ).click()
     expect(page.get_by_role("heading", name="회귀모형 적합 실행")).to_be_visible()
+    expect_lazy_analysis_module(page, "RegressionAnalysisPanels")
 
     page.get_by_label("반응 변수").select_option(label="y")
     predictor_options = page.get_by_label("예측변수")
@@ -656,6 +667,9 @@ def verify_attribute_control_chart(page: Page) -> None:
     page.get_by_role("button", name="분석", exact=True).click()
     page.get_by_role("button", name="계수형 관리도 메서드 보기").click()
     expect(page.get_by_role("heading", name="계수형 관리도 실행")).to_be_visible()
+    expect_lazy_analysis_module(page, "QualityAnalysisPanels")
+    expect(page.get_by_text("현재 화면은 Phase I 기준선 추정만 실행합니다", exact=False)).to_be_visible()
+    expect(page.get_by_text("저장된 Phase II 관리한계는 아직 적용하지 않습니다", exact=False)).to_be_visible()
     expect(page.get_by_role("radio", name="P", exact=True)).to_have_attribute(
         "aria-checked", "true"
     )
@@ -666,6 +680,8 @@ def verify_attribute_control_chart(page: Page) -> None:
     summary = page.get_by_label("계수형 관리도 요약")
     expect(summary).to_be_visible(timeout=20_000)
     expect(summary).to_contain_text("30 / 30")
+    expect(summary).to_contain_text("Phase I")
+    expect(summary).to_contain_text("필터 후 유효 관측에서 추정")
     expect(summary).to_contain_text("2개")
     expect(
         page.get_by_role("img", name=re.compile(r"P 관리도.*신호 2개"))
@@ -682,6 +698,7 @@ def verify_doe_factorial_analysis(page: Page) -> None:
     expect(
         page.get_by_role("heading", name="2-level full factorial 설계 생성")
     ).to_be_visible()
+    expect_lazy_analysis_module(page, "DoeAnalysisPanels")
 
     page.get_by_label("반복", exact=True).fill("2")
     page.get_by_label("센터점", exact=True).fill("1")
@@ -690,6 +707,9 @@ def verify_doe_factorial_analysis(page: Page) -> None:
     expect(page.get_by_text("2-level screening design", exact=True)).to_be_visible(
         timeout=20_000
     )
+    expect(
+        page.get_by_text("분석을 실행하면 현재 설계의 반응값이 잠깁니다.", exact=False)
+    ).to_be_visible()
 
     for run_order in range(1, 10):
         page.get_by_label(f"run {run_order} response").fill(
@@ -709,8 +729,88 @@ def verify_doe_factorial_analysis(page: Page) -> None:
     expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
     expect(page.get_by_role("img", name="주효과 평균 차트")).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
-    expect(page.locator(".analysis-result-section")).to_contain_text("0.2.0")
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.3.0")
     expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
+    expect(page.get_by_label("run 1 response")).to_be_disabled()
+    expect(page.get_by_role("button", name="분석 후 반응 잠금")).to_be_disabled()
+    expect(page.get_by_text("읽기 전용입니다", exact=False)).to_be_visible()
+    page.get_by_role("button", name="새 revision으로 수정").click()
+    expect(page.get_by_label("반응 이름")).to_be_disabled()
+    expect(page.get_by_label("run 1 response")).to_be_enabled()
+    expect(page.get_by_role("button", name="새 revision 저장")).to_be_enabled()
+
+
+def expect_lazy_analysis_module(page: Page, module_name: str) -> None:
+    page.wait_for_function(
+        """
+        (expectedModule) => performance.getEntriesByType("resource").some(
+          (entry) => entry.name.includes(expectedModule)
+        )
+        """,
+        arg=module_name,
+        timeout=10_000,
+    )
+    expect(page.get_by_label("분석 패널 로딩")).to_have_count(0)
+
+
+def verify_lazy_panel_direct_routes(page: Page, frontend_base_url: str) -> None:
+    routes = [
+        (
+            "/analysis/regression/regression.linear_model",
+            "회귀모형 적합 실행",
+            "RegressionAnalysisPanels",
+        ),
+        (
+            "/analysis/quality/quality.attribute_control_chart",
+            "계수형 관리도 실행",
+            "QualityAnalysisPanels",
+        ),
+        (
+            "/analysis/doe/doe.factorial_design",
+            "2-level full factorial 설계 생성",
+            "DoeAnalysisPanels",
+        ),
+        (
+            "/analysis/doe/doe.bayesian_optimization",
+            "Bayesian 최적화",
+            "DoeAnalysisPanels",
+        ),
+    ]
+    for route_path, heading, module_name in routes:
+        page.goto(f"{frontend_base_url}{route_path}", wait_until="networkidle")
+        expect(page.get_by_role("heading", name=heading)).to_be_visible(timeout=15_000)
+        expect_lazy_analysis_module(page, module_name)
+        expect(page.get_by_label("분석 패널 로드 오류")).to_have_count(0)
+
+
+def verify_lazy_panel_error_boundary(
+    context: BrowserContext,
+    frontend_base_url: str,
+) -> None:
+    page = context.new_page()
+    try:
+        page.route("**/RegressionAnalysisPanels.ts*", lambda route: route.abort())
+        page.goto(
+            f"{frontend_base_url}/analysis/regression/regression.linear_model",
+            wait_until="networkidle",
+        )
+        error_state = page.get_by_label("분석 패널 로드 오류")
+        expect(error_state).to_be_visible(timeout=15_000)
+        expect(error_state).to_contain_text("분석 화면을 불러오지 못했습니다.")
+        expect(
+            error_state.get_by_role("button", name="화면 다시 불러오기")
+        ).to_be_visible()
+        expect(page.locator("body")).not_to_contain_text(
+            "Failed to fetch dynamically imported module"
+        )
+        page.unroute("**/RegressionAnalysisPanels.ts*")
+        page.get_by_role("button", name=re.compile(r"실험 계획법")).click()
+        expect(
+            page.get_by_role("heading", name="2-level full factorial 설계 생성")
+        ).to_be_visible(timeout=15_000)
+        expect(page.get_by_label("분석 패널 로드 오류")).to_have_count(0)
+    finally:
+        page.close()
 
 
 def verify_doe_response_surface_analysis(page: Page) -> None:
@@ -722,7 +822,24 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
     expect(page.get_by_role("heading", name="CCD 실행표와 반응 입력")).to_be_visible(
         timeout=20_000
     )
-    responses = [90, 94, 96, 100, 92, 98, 91, 99, 95.0, 95.2, 94.9, 95.1, 94.8]
+    expect(
+        page.get_by_text("분석을 실행하면 현재 설계의 반응값이 잠깁니다.", exact=False)
+    ).to_be_visible()
+    responses = [
+        97.608745,
+        95.220633,
+        98.399868,
+        96.011756,
+        97.177787,
+        98.321712,
+        97.455212,
+        94.044287,
+        99.833687,
+        99.574266,
+        99.915654,
+        99.749356,
+        99.827037,
+    ]
     for run_order, response in enumerate(responses, start=1):
         page.get_by_label(f"Run {run_order} 반응").fill(str(response))
 
@@ -740,6 +857,13 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
     expect(page.get_by_role("columnheader", name="계수")).to_be_visible()
     expect(page.get_by_label("반응표면 적합 요약")).to_contain_text("R²")
     expect(page.get_by_label("반응표면 진단 요약")).to_be_visible()
+    expect(page.get_by_label("Run 1 반응")).to_be_disabled()
+    expect(page.get_by_label("반응 이름")).to_be_disabled()
+    expect(page.get_by_label("반응 단위")).to_be_disabled()
+    expect(page.get_by_role("button", name="반응 저장")).to_be_disabled()
+    expect(
+        page.get_by_text("현재 revision은 읽기 전용입니다", exact=False)
+    ).to_be_visible()
 
     optimizer_button = page.get_by_role("button", name="Response Optimizer 실행")
     expect(optimizer_button).to_be_enabled()
@@ -753,7 +877,74 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
     expect(optimizer_summary).to_contain_text("전역 최적 보장")
     expect(page.get_by_role("columnheader", name="권장 실제값")).to_be_visible()
     expect(page.get_by_role("columnheader", name="개별 desirability")).to_be_visible()
-    expect(page.get_by_text("response_optimizer_confirmation_run_required")).to_be_visible()
+    expect(
+        page.get_by_text("response_optimizer_confirmation_run_required", exact=True)
+    ).to_be_visible()
+
+    page.get_by_role("button", name="새 revision으로 수정").click()
+    expect(page.get_by_label("반응 이름")).to_be_disabled()
+    expect(page.get_by_label("Run 1 반응")).to_be_enabled()
+    page.get_by_label("Run 1 반응").fill(str(responses[0] + 0.1))
+    page.get_by_role("button", name="새 revision 저장").click()
+    history = page.get_by_label("RSM response revision history")
+    expect(history).to_be_visible(timeout=20_000)
+    expect(history).to_contain_text("r2")
+    expect(history).to_contain_text("r1")
+
+
+def verify_bayesian_optimization(page: Page) -> None:
+    page.get_by_role("button", name="베이지안 최적화 메서드 보기").click()
+    expect(page.get_by_role("heading", name="Bayesian 최적화")).to_be_visible(
+        timeout=15_000
+    )
+    expect(
+        page.get_by_text("앱은 목적함수를 실행하지 않습니다", exact=False)
+    ).to_be_visible()
+
+    page.get_by_role("button", name="제약 추가").click()
+    page.get_by_label("제약 1 x 계수").fill("1")
+    page.get_by_label("제약 1 우변").fill("0.75")
+    page.get_by_role("button", name="Study 생성").click()
+    summary = page.get_by_label("Bayesian study 상태")
+    expect(summary).to_be_visible(timeout=20_000)
+    expect(summary).to_contain_text("0 / 2")
+    stored_constraints = page.get_by_label("Bayesian stored constraints")
+    expect(stored_constraints).to_contain_text("constraint_1")
+    expect(stored_constraints).to_contain_text("0.750000")
+
+    page.get_by_label("Trial 1 관측값").fill("0.8")
+    observation_buttons = page.get_by_role("button", name="관측 저장")
+    observation_buttons.nth(0).click()
+    expect(page.get_by_label("Trial 1 관측값")).to_have_count(0, timeout=20_000)
+
+    page.get_by_label("Trial 2 관측값").fill("1.0")
+    observation_buttons.nth(1).click()
+    recommendation_button = page.get_by_role("button", name="다음 실험 추천")
+    expect(recommendation_button).to_be_enabled(timeout=20_000)
+    recommendation_button.click()
+
+    expect(page.get_by_role("heading", name="추천 결과")).to_be_visible(timeout=45_000)
+    result_section = page.locator(
+        'section[aria-labelledby="bayesian-recommendation-result-title"]'
+    )
+    expect(
+        result_section.get_by_text("관측값이 아닌 다음 확인 실험 후보입니다.")
+    ).to_be_visible()
+    expect(page.get_by_text("추천", exact=True)).to_be_visible()
+    expect(
+        result_section.get_by_text("bayesian_optimization_confirmation_required")
+    ).to_be_visible()
+    expect(
+        result_section.get_by_text("bayesian_optimization_no_global_optimum_guarantee")
+    ).to_be_visible()
+    recommendation_constraints = page.get_by_label(
+        "Bayesian recommendation constraints"
+    )
+    expect(recommendation_constraints).to_contain_text("constraint_1")
+    expect(recommendation_constraints).to_contain_text("충족")
+    expect(
+        result_section.get_by_text("전역 최적을 보장하지 않습니다", exact=False)
+    ).to_be_visible()
 
 
 def verify_xlsx_file_upload(page: Page, temp_dir: Path) -> None:

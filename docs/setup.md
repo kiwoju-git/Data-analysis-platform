@@ -9,16 +9,20 @@ DataLab Studio is developed as a local single-user application for Windows 11, P
 
 ## Initial Setup
 
-Run from the repository root in PowerShell:
+Run the shared bootstrap from the repository root in PowerShell:
 
 ```powershell
-py -3.10 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e ".\backend[dev]"
-npm --prefix .\frontend ci
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```
 
-After `scripts/` are available, prefer the shared entry points:
+The bootstrap creates `.venv` when needed, installs the CPython 3.10 Windows
+AMD64 wheel set from `backend/requirements-py310-win.lock` with
+`--require-hashes --only-binary=:all:`, installs the backend editable without
+dependency resolution or build isolation, runs `pip check`, and then runs
+`npm ci`. Stop an active Vite process before bootstrap because Windows keeps
+its native build module open and `npm ci` cannot replace a locked file.
+
+Use the shared entry points for routine work:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
@@ -26,6 +30,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
+
+Regenerate the Python lock only when an exact input pin is intentionally
+reviewed. The generator downloads CPython 3.10 Windows AMD64 wheels to an
+external TEMP directory, hashes wheel bytes, and validates the resulting lock:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-python-lock.ps1
+```
+
+The committed lock is platform-specific. Windows 11 client validation remains
+a release gate; development checks may run on the currently measured Windows
+10 workstation, but a release must not be approved from that result alone.
 
 ## Browser E2E Smoke
 

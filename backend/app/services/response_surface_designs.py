@@ -14,6 +14,7 @@ from app.api.v1.schemas.doe import (
     DoeDesignResponsesUpsertRequest,
     DoeDesignResponseValue,
     DoeFactorResponse,
+    DoeResponseRevisionCreateRequest,
     ResponseSurfaceDesignCreateRequest,
     ResponseSurfaceDesignOptionsResponse,
     ResponseSurfaceDesignResponse,
@@ -21,8 +22,12 @@ from app.api.v1.schemas.doe import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
+from app.services.doe_response_revisions import create_response_revision
 from app.statistics.response_surface import (
+    RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION,
     RESPONSE_SURFACE_FAMILY,
+    RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION,
+    RESPONSE_SURFACE_LEGACY_FAMILY,
     ResponseSurfaceDesignOptions,
     ResponseSurfaceDesignRun,
     ResponseSurfaceError,
@@ -35,14 +40,15 @@ from app.statistics.response_surface import (
 from app.storage.metadata import (
     ExperimentDesignRecord,
     ExperimentDesignVersionRecord,
+    ExperimentResponseRevisionRecord,
     ExperimentRunRecord,
     ExperimentRunResponseRecord,
+    get_current_experiment_response_revision_record,
     get_experiment_design_record,
     get_experiment_design_version_record,
     insert_experiment_design_records,
     list_experiment_run_records,
     list_experiment_run_response_records,
-    replace_experiment_run_response_records,
 )
 
 APP_VERSION = "0.1.0"
@@ -95,6 +101,7 @@ def create_response_surface_design(
         app_version=APP_VERSION,
     )
     options_payload = response_surface_options_payload(generated.options)
+    options_payload["design_schema_version"] = generated.schema_version
     options_payload["alpha"] = generated.alpha
     version_record = ExperimentDesignVersionRecord(
         design_version_id=str(design_version_id),
@@ -144,44 +151,17 @@ def save_response_surface_responses(
     design_id: UUID,
     body: DoeDesignResponsesUpsertRequest,
 ) -> DoeDesignResponsesResponse:
-    design, version, runs = load_response_surface_design_records(settings, design_id)
-    _design_response(design, version, runs)
+    design, _version, _runs = load_response_surface_design_records(settings, design_id)
     if design.status == "analyzed":
         raise _metadata_error("doe_rsm_design_already_analyzed")
-    response_name = body.response_name.strip()
-    if not response_name:
-        raise _metadata_error("doe_rsm_response_name_required")
-    unit = None if body.unit is None else body.unit.strip() or None
-    run_by_order = {run.run_order: run for run in runs}
-    submitted: dict[int, float] = {}
-    for value in body.values:
-        if value.run_order in submitted:
-            raise _metadata_error("doe_rsm_response_run_order_duplicate")
-        submitted[value.run_order] = float(value.value)
-    if set(submitted) != set(run_by_order):
-        raise _metadata_error("doe_rsm_response_run_set_mismatch")
-    now = _utc_now()
-    records = [
-        ExperimentRunResponseRecord(
-            response_id=str(uuid4()),
-            design_version_id=version.design_version_id,
-            run_id=run_by_order[run_order].run_id,
-            response_name=response_name,
-            response_value=value,
-            unit=unit,
-            created_at=now,
-            updated_at=now,
-        )
-        for run_order, value in sorted(submitted.items())
-    ]
-    replace_experiment_run_response_records(
-        settings.workspace_root,
-        design_id=design.design_id,
-        design_version_id=version.design_version_id,
-        response_name=response_name,
-        records=records,
-        design_status="completed",
-        updated_at=now,
+    create_response_revision(
+        settings,
+        design_id,
+        DoeResponseRevisionCreateRequest(**body.model_dump()),
+        allow_analyzed=False,
+        require_explicit_supersedes=False,
+        duplicate_run_error_code="doe_rsm_response_run_order_duplicate",
+        run_set_error_code="doe_rsm_response_run_set_mismatch",
     )
     return list_response_surface_responses(settings, design_id)
 
@@ -195,7 +175,13 @@ def list_response_surface_responses(
     records = list_experiment_run_response_records(
         settings.workspace_root, version.design_version_id
     )
-    return _responses_response(design, version, runs, records)
+    revisions = {
+        name: get_current_experiment_response_revision_record(
+            settings.workspace_root, version.design_version_id, name
+        )
+        for name in {record.response_name for record in records}
+    }
+    return _responses_response(design, version, runs, records, revisions)
 
 
 def load_response_surface_design_records(
@@ -209,10 +195,10 @@ def load_response_surface_design_records(
             message="요청한 반응표면 설계를 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    if (
-        design.method_id != DOE_RESPONSE_SURFACE_METHOD_ID
-        or design.family != RESPONSE_SURFACE_FAMILY
-    ):
+    if design.method_id != DOE_RESPONSE_SURFACE_METHOD_ID or design.family not in {
+        RESPONSE_SURFACE_FAMILY,
+        RESPONSE_SURFACE_LEGACY_FAMILY,
+    }:
         raise _metadata_error("doe_rsm_design_family_mismatch")
     version = get_experiment_design_version_record(
         settings.workspace_root,
@@ -250,6 +236,24 @@ def _design_response(
     factors_payload = _json_list(version.factors_json)
     options_payload = _json_dict(version.options_json)
     try:
+        stored_schema_version = int(
+            options_payload.get(
+                "design_schema_version",
+                RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION,
+            )
+        )
+        design_schema_version: Literal[1, 2]
+        family: Literal["central_composite", "central_composite_inscribed"]
+        if stored_schema_version == RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION:
+            design_schema_version = RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION
+            family = RESPONSE_SURFACE_LEGACY_FAMILY
+        elif stored_schema_version == RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION:
+            design_schema_version = RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION
+            family = RESPONSE_SURFACE_FAMILY
+        else:
+            raise _metadata_error("doe_rsm_design_family_mismatch")
+        if design.family != family:
+            raise _metadata_error("doe_rsm_design_family_mismatch")
         alpha = float(options_payload["alpha"])
         options = ResponseSurfaceDesignOptions(
             alpha_mode=str(options_payload["alpha_mode"]),  # type: ignore[arg-type]
@@ -296,7 +300,8 @@ def _design_response(
             raise
         raise _metadata_error("doe_rsm_design_metadata_invalid") from exc
     canonical = canonical_response_surface_design_payload(
-        family=design.family,
+        schema_version=design_schema_version,
+        family=family,
         alpha=alpha,
         factors=factors,
         options=options,
@@ -311,7 +316,8 @@ def _design_response(
         version_number=version.version_number,
         method_id="doe.response_surface",
         method_version=design.method_version,
-        family="central_composite_inscribed",
+        design_schema_version=design_schema_version,
+        family=family,
         name=design.name,
         status=design.status,
         created_at=design.created_at,
@@ -332,6 +338,7 @@ def _responses_response(
     version: ExperimentDesignVersionRecord,
     runs: list[ExperimentRunRecord],
     records: list[ExperimentRunResponseRecord],
+    revisions: dict[str, ExperimentResponseRevisionRecord | None],
 ) -> DoeDesignResponsesResponse:
     run_order_by_id = {run.run_id: run.run_order for run in runs}
     grouped: dict[str, list[DoeDesignResponseValue]] = {}
@@ -344,15 +351,30 @@ def _responses_response(
             DoeDesignResponseValue(run_order=run_order, value=record.response_value)
         )
         units.setdefault(record.response_name, record.unit)
-    responses = [
-        DoeDesignResponseSeries(
-            response_name=name,
-            unit=units[name],
-            response_count=len(values),
-            values=sorted(values, key=lambda value: value.run_order),
+    responses = []
+    for name, values in sorted(grouped.items()):
+        revision = revisions.get(name)
+        if (
+            revision is None
+            or revision.schema_version != 1
+            or revision.state != "completed"
+            or revision.value_count != len(values)
+        ):
+            raise _metadata_error("doe_response_revision_dependency_mismatch")
+        responses.append(
+            DoeDesignResponseSeries(
+                response_name=name,
+                unit=units[name],
+                response_revision_id=UUID(revision.response_revision_id),
+                response_revision_number=revision.revision_number,
+                response_revision_schema_version=1,
+                response_revision_sha256=revision.response_sha256,
+                created_at=revision.created_at,
+                closed_at=revision.closed_at,
+                response_count=len(values),
+                values=sorted(values, key=lambda value: value.run_order),
+            )
         )
-        for name, values in sorted(grouped.items())
-    ]
     return DoeDesignResponsesResponse(
         design_id=UUID(design.design_id),
         design_version_id=UUID(version.design_version_id),
