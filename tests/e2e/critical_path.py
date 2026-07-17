@@ -61,6 +61,11 @@ ATTRIBUTE_CONTROL_CHART_DATA = """defectives\tsample_size
 6\t20
 """
 
+PASTE_GRID_REVIEW_DATA = """이름\t값\t메모\r
+검토 A\t1\t긴 값 전체 확인\r
+검토 B\t2\t\r
+검토 C\t3"""
+
 ATTRIBUTE_CONTROL_BASELINE_DATA = """defectives\tsample_size
 8\t20
 12\t20
@@ -369,16 +374,77 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             expect(page.get_by_text("API ready")).to_be_visible(timeout=15_000)
             diagnostics.step("paste synthetic TSV and confirm schema")
 
-            page.get_by_label("복사한 표 붙여넣기").fill(SAMPLE_DATA)
+            paste_plain_text(page, PASTE_GRID_REVIEW_DATA)
+            expect(page.get_by_text("4행 x 3열", exact=True).first).to_be_visible()
+            expect(page.get_by_text("must-not-render", exact=True)).to_have_count(0)
+            expect(page.locator(".paste-summary")).to_contain_text("빈 셀1")
+            expect(page.locator(".paste-summary")).to_contain_text("열 수가 다른 행1")
+            expect(page.get_by_text("행마다 열 수가 다릅니다.", exact=False)).to_be_visible()
+            long_preview_cell = page.locator(".paste-preview-grid td").filter(
+                has_text="긴 값 전체 확인"
+            )
+            long_preview_cell.focus()
+            expect(
+                page.locator(".cell-inspector-value").filter(
+                    has_text="긴 값 전체 확인"
+                )
+            ).to_be_visible()
+            long_preview_cell.press("ArrowLeft")
+            expect(
+                page.locator(".cell-inspector-value").filter(has_text="1")
+            ).to_be_visible()
+
+            failed_paste_contents: list[str] = []
+
+            def fail_paste_request(route) -> None:
+                request_payload = route.request.post_data_json
+                failed_paste_contents.append(request_payload["content"])
+                route.fulfill(
+                    status=503,
+                    content_type="application/json",
+                    body=json.dumps(
+                        {"error": {"code": "dataset_paste_test_failure"}}
+                    ),
+                )
+
+            page.route("**/api/v1/datasets/paste", fail_paste_request)
+            page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+            expect(page.get_by_text("dataset_paste_test_failure")).to_be_visible()
+            assert failed_paste_contents == [PASTE_GRID_REVIEW_DATA]
+            page.get_by_role("button", name="원문 보기").click()
+            expect(page.get_by_label("붙여넣기 원문")).to_have_value(
+                PASTE_GRID_REVIEW_DATA.replace("\r\n", "\n")
+            )
+            page.unroute("**/api/v1/datasets/paste")
+            page.reload(wait_until="networkidle")
+            expect(page.get_by_label("붙여넣기 원문")).to_have_value("")
+
+            paste_plain_text(page, SAMPLE_DATA)
+            expect(page.get_by_text("7행 x 2열", exact=True).first).to_be_visible()
             page.get_by_role("button", name="붙여넣기 데이터 등록").click()
             expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
                 timeout=15_000
             )
+            expect(page.get_by_label("붙여넣기 원문")).to_have_value("")
 
             page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
             expect(
                 page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
             ).to_be_visible(timeout=20_000)
+            expect_dataset_context_counts(page, row_label="6행", column_label="2컬럼")
+            page.get_by_label("미리보기 페이지 크기").select_option("25")
+            expect(page.get_by_label("미리보기 페이지 크기")).to_have_value("25")
+            page.locator(".canonical-preview-grid tbody tr").first.locator("td").nth(1).click()
+            expect(
+                page.locator(".canonical-preview-section .cell-inspector-value").filter(
+                    has_text="10"
+                )
+            ).to_be_visible()
+            page.reload(wait_until="networkidle")
+            expect(
+                page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
+            ).to_be_visible(timeout=20_000)
+            expect(page.get_by_label("붙여넣기 원문")).to_have_value("")
             expect_dataset_context_counts(page, row_label="6행", column_label="2컬럼")
 
             page.get_by_role("button", name="분석", exact=True).click()
@@ -606,13 +672,13 @@ def verify_schema_stale_behavior(page: Page) -> None:
 
 def verify_linear_model_fit_and_prediction(page: Page) -> None:
     page.get_by_role("button", name="데이터셋", exact=True).click()
-    page.get_by_label("복사한 표 붙여넣기").fill(REGRESSION_TARGET_DATA)
+    paste_plain_text(page, REGRESSION_TARGET_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
     page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
     expect_dataset_context_counts(page, row_label="4행", column_label="3컬럼")
 
-    page.get_by_label("복사한 표 붙여넣기").fill(REGRESSION_SAMPLE_DATA)
+    paste_plain_text(page, REGRESSION_SAMPLE_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
 
@@ -783,7 +849,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
 
 def verify_attribute_control_chart(page: Page) -> None:
     page.get_by_role("button", name="데이터셋", exact=True).click()
-    page.get_by_label("복사한 표 붙여넣기").fill(ATTRIBUTE_CONTROL_BASELINE_DATA)
+    paste_plain_text(page, ATTRIBUTE_CONTROL_BASELINE_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
     page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
@@ -821,7 +887,7 @@ def verify_attribute_control_chart(page: Page) -> None:
         raise AssertionError(f"limit-set creation failed: {limit_set_response.text()}")
 
     page.get_by_role("button", name="데이터셋", exact=True).click()
-    page.get_by_label("복사한 표 붙여넣기").fill(ATTRIBUTE_CONTROL_CHART_DATA)
+    paste_plain_text(page, ATTRIBUTE_CONTROL_CHART_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
     page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
@@ -1358,7 +1424,11 @@ def verify_parser_option_editing(page: Page, temp_dir: Path) -> None:
         expect_dataset_context_counts(page, row_label="2행", column_label="2컬럼")
         expect(page.get_by_role("columnheader", name="Alpha")).to_be_visible()
         expect(page.get_by_role("columnheader", name="Beta")).to_be_visible()
-        expect(page.get_by_text("(missing)")).to_be_visible()
+        expect(
+            page.locator(".canonical-preview-grid .missing-cell").filter(
+                has_text="결측"
+            )
+        ).to_be_visible()
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -1394,8 +1464,8 @@ def verify_delimiter_option_editing(page: Page, temp_dir: Path) -> None:
         expect_dataset_context_counts(page, row_label="2행", column_label="2컬럼")
         expect(page.get_by_role("columnheader", name="Category")).to_be_visible()
         expect(page.get_by_role("columnheader", name="Value")).to_be_visible()
-        expect(page.get_by_role("cell", name="Left", exact=True)).to_be_visible()
-        expect(page.get_by_role("cell", name="20", exact=True)).to_be_visible()
+        expect(page.get_by_role("gridcell", name="Left", exact=True)).to_be_visible()
+        expect(page.get_by_role("gridcell", name="20", exact=True)).to_be_visible()
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -1429,8 +1499,8 @@ def verify_xlsx_sheet_selection(page: Page, temp_dir: Path) -> None:
         expect_dataset_context_counts(page, row_label="2행", column_label="2컬럼")
         expect(page.get_by_role("columnheader", name="Station")).to_be_visible()
         expect(page.get_by_role("columnheader", name="Reading")).to_be_visible()
-        expect(page.get_by_role("cell", name="S2", exact=True)).to_be_visible()
-        expect(page.get_by_role("cell", name="43", exact=True)).to_be_visible()
+        expect(page.get_by_role("gridcell", name="S2", exact=True)).to_be_visible()
+        expect(page.get_by_role("gridcell", name="43", exact=True)).to_be_visible()
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -1473,10 +1543,30 @@ def verify_text_encoding_selection(page: Page, temp_dir: Path) -> None:
             page.get_by_role("columnheader", name="이름", exact=True)
         ).to_be_visible()
         expect(page.get_by_role("columnheader", name="값", exact=True)).to_be_visible()
-        expect(page.get_by_role("cell", name="홍길동", exact=True)).to_be_visible()
-        expect(page.get_by_role("cell", name="김철수", exact=True)).to_be_visible()
+        expect(page.get_by_role("gridcell", name="홍길동", exact=True)).to_be_visible()
+        expect(page.get_by_role("gridcell", name="김철수", exact=True)).to_be_visible()
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def paste_plain_text(page: Page, text: str) -> None:
+    surface = page.get_by_role("textbox", name="복사한 표 붙여넣기")
+    surface.focus()
+    surface.evaluate(
+        """
+        (element, value) => {
+          const clipboard = new DataTransfer();
+          clipboard.setData("text/plain", value);
+          clipboard.setData("text/html", "<table><tr><td>must-not-render</td></tr></table>");
+          element.dispatchEvent(new ClipboardEvent("paste", {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: clipboard,
+          }));
+        }
+        """,
+        text,
+    )
 
 
 def expect_dataset_context_counts(

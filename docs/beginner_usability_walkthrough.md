@@ -5,6 +5,44 @@ not add new methods or change calculations. Use it to verify that the role
 guide, purpose helper, preflight explanation, and result panels keep users from
 overclaiming.
 
+## Spreadsheet Paste Review
+
+User task: copy a rectangular range from Excel or another spreadsheet, review
+its apparent structure, then register it for authoritative parsing.
+
+QA pass criteria:
+
+- The empty paste surface can receive keyboard focus and `Ctrl+V` without a
+  browser Clipboard permission prompt.
+- A view-only grid appears immediately with A/B/C column letters, row numbers,
+  visible empty cells, ragged-row markers, truncation warnings, and a selected
+  cell inspector.
+- Grid and raw modes are both available. Formula-like and HTML-looking text is
+  displayed literally and is never executed or rendered as markup.
+- The first-row-as-header switch clearly says it changes presentation only.
+  After registration, any difference from the server header suggestion is
+  visible and the parsing-confirmation controls remain authoritative.
+- A failed registration keeps the current draft for correction/retry. A
+  successful registration clears it, and reloading the application never
+  restores raw pasted text from browser storage.
+- After parsing confirmation, page size 10/25/50/100, row jump, sticky headers,
+  explicit missing values, and the canonical selected-cell inspector work
+  without loading the whole dataset.
+
+Fail examples:
+
+- The request is rebuilt from preview cells, changing CRLF, quotes, trailing
+  tabs, or empty cells.
+- Clipboard HTML is interpreted, formula text runs, or a pasted value is sent
+  to logs/storage/telemetry.
+- A capped preview is presented as the complete source, or the staging header
+  toggle silently confirms server parsing.
+
+Recovery: use **원문 보기** to inspect ambiguous quotes or delimiters, **다시
+붙여넣기** to replace the current transient draft, and the parsing-confirmation
+panel to set the authoritative delimiter/header/missing-token options. Cell
+editing is not available in P0.
+
 ## Two Group Mean Comparison
 
 User question: Are the average measurements different between two independent

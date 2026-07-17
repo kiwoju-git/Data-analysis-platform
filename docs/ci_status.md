@@ -5,32 +5,36 @@ Last updated: 2026-07-17
 ## Local Validation
 
 - Clean pushed-main baseline: local `main` and `origin/main` both resolved to
-  `d9e20fb8f588429e2b48003327b489e39b9deaa9` with an empty working tree.
-  `scripts/check.ps1` passed in 804.6 seconds with backend pytest 750 and
-  frontend Vitest 111. Chromium E2E passed in 63.8 seconds with diagnostics at
-  `.tmp/e2e-diagnostics-baseline-d9e20fb`.
-- Current stabilization worktree: based on that pushed SHA, but not committed.
-  `scripts/check.ps1` passed in 771.5 seconds with Ruff over 158 Python files,
-  format check, mypy over 101 source files, backend pytest 763, frontend lint,
-  typecheck, Vitest 114, and production build. Direct collection of
-  `test_openapi_frontend_contract.py` contains 148 tests.
+  `702e20f0ed1a377d411cb8d7d3a6faa2c4fcbd6f` with an empty working tree.
+  `scripts/bootstrap.ps1` passed, `scripts/check.ps1` passed in 806.7 seconds
+  with backend pytest 763 and frontend Vitest 114, and Chromium E2E passed in
+  68.4 seconds with diagnostics at
+  `.tmp/e2e-diagnostics-paste-grid-baseline`.
+- Current paste-grid worktree: based on that pushed SHA, but not committed or
+  pushed. `scripts/check.ps1` passed in 769.0 seconds with Ruff/format over 158
+  Python files, mypy over 101 source files, backend pytest 763, frontend lint,
+  typecheck, Vitest 131, and production build. The OpenAPI/frontend contract
+  count remains 148 and is recorded separately from the frontend count.
 - The latest recorded backend pytest count is 763.
-- The latest recorded frontend Vitest count is 114.
+- The latest recorded frontend Vitest count is 131.
 - The latest OpenAPI/frontend contract count is 148. These counts belong to
-  the current uncommitted worktree validation, not the clean pushed baseline
-  or remote Actions.
-- Current production assets are 491.75 kB / 114.96 kB gzip for main,
-  46.17 kB / 9.54 kB for Regression, 64.25 kB / 11.97 kB for Quality, and
-  90.79 kB / 20.77 kB for DOE. No JavaScript asset crosses the configured
-  500 kB warning threshold.
-- The final full Chromium critical path passed in 69.2 seconds with the exact
-  requested diagnostics root `.tmp/e2e-diagnostics`. It includes one-point
-  Phase II result/export/restore and regression-model deletion followed by
-  reload, stored fit restore, and prediction-action blocking.
+  the current uncommitted worktree validation, not remote Actions.
+- Current production assets are 508.32 kB / 120.48 kB gzip for main,
+  46.75 kB / 9.69 kB for Regression, 64.25 kB / 11.97 kB for Quality, and
+  90.79 kB / 20.77 kB for DOE. The main asset crosses the configured 500 kB
+  threshold and emits the Vite chunk-size warning; the other JavaScript assets
+  remain below it. The paste grid is first-screen functionality, so code
+  splitting it requires a separate measured loading/error-boundary review.
+- The final expanded Chromium critical path passed in 70.8 seconds on ports
+  `8030`/`5230` with diagnostics at `.tmp/e2e-diagnostics`. It dispatches `text/plain` paste,
+  ignores clipboard HTML, verifies exact CRLF-preserving request content,
+  failure retention, reload non-restoration, keyboard selection, successful
+  clear, canonical page size/inspector, and every prior critical path.
 - The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
   24.17.0. These are development results, not Windows 11/Python 3.10/Node 22
   release evidence. The Windows 11/Node 22 clean release gate remains open.
-- `gh auth status --hostname github.com` failed because `gh` is not installed.
+- `gh auth status --hostname github.com` and the requested `gh run list` failed
+  because `gh` is not installed.
   No latest run ID/head SHA, hosted Windows/E2E job result/order, artifact
   contents, or workflow-dispatch UI was independently verified.
 
@@ -49,6 +53,22 @@ Last updated: 2026-07-17
 This satisfies the current repository-side requirement that main pushes should start the Windows CI workflow and the browser E2E smoke workflow job.
 
 ## Recent Local Validation History
+
+- The paste staging/canonical preview slice was validated on 2026-07-17 from
+  an uncommitted worktree based on pushed main SHA
+  `702e20f0ed1a377d411cb8d7d3a6faa2c4fcbd6f`. Full `scripts/check.ps1`
+  passed in 769.0 seconds with backend pytest 763, frontend Vitest 131,
+  OpenAPI/frontend contracts 148, Ruff/format, mypy, lint/typecheck, and build.
+  Final Chromium E2E passed in 70.8 seconds on `8030`/`5230` with diagnostics
+  at `.tmp/e2e-diagnostics`.
+- The final assets were 508.32 kB / 120.48 kB gzip for main, 46.75 kB / 9.69
+  kB for Regression, 64.25 kB / 11.97 kB for Quality, and 90.79 kB / 20.77 kB
+  for DOE. Main emitted the 500 kB Vite warning. The measured host was Windows
+  10 Home build 19045, CPython 3.10.11, and Node 24.17.0, so this is development
+  evidence and not the Windows 11/Node 22 release gate.
+- The first final-E2E attempt on defaults stopped before application flow due
+  to an existing port-8000 listener; port 5242 was separately denied by Windows
+  bind permissions. The stable-port run above is the passing application result.
 
 - The regression-model and attribute-control-limit-set deletion slice was
   validated locally on 2026-07-17 from an uncommitted working tree based on

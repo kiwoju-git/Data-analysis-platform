@@ -520,6 +520,28 @@ describe("async workbench hooks", () => {
     corruptRunner.unmount();
   });
 
+  it("keeps transient model availability errors visible and retries explicitly", async () => {
+    apiMocks.fetchRegressionModelManifest
+      .mockRejectedValueOnce(new Error("api_unreachable"))
+      .mockResolvedValueOnce({});
+    const runner = new HookRunner<
+      Parameters<typeof useRegressionModelRetentionState>[0],
+      ReturnType<typeof useRegressionModelRetentionState>
+    >(useRegressionModelRetentionState, "model-transient");
+    await runner.flush();
+
+    expect(runner.output.availability).toBeNull();
+    expect(runner.output.availabilityError).toBe("api_unreachable");
+    expect(runner.output.isCheckingAvailability).toBe(false);
+
+    await runner.act(() => runner.output.onRetryAvailability());
+
+    expect(apiMocks.fetchRegressionModelManifest).toHaveBeenCalledTimes(2);
+    expect(runner.output.availability).toBe("available");
+    expect(runner.output.availabilityError).toBeNull();
+    runner.unmount();
+  });
+
   it("disables the current model immediately after successful asset deletion", async () => {
     apiMocks.fetchRegressionModelDeletionPreflight.mockResolvedValue({
       model_id: "model-a",

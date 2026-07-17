@@ -8,6 +8,7 @@ import { AnalysisExportDeletionConfirmation } from "./AnalysisResultExportPanel"
 import { AnalysisRunDeletionConfirmation } from "./AnalysisHistoryPanel";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { DatasetPreparationPage } from "./DatasetPreparationPage";
+import { PastePreviewGrid } from "./PastePreviewGrid";
 import {
   BayesianOptimizationPanel,
   BayesianStudyCloseConfirmation,
@@ -49,6 +50,7 @@ import type {
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
+  DatasetRowsPreviewResponse,
   DatasetUploadResponse,
   DatasetVersionCatalogResponse,
   DatasetVersionResponse,
@@ -107,6 +109,7 @@ import {
 } from "./useDatasetWorkflow";
 import { WorkspaceRouter } from "./WorkspaceRouter";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
+import { parsePastedTablePreview } from "./pastedTablePreview";
 
 vi.mock("./lazyAnalysisPanels", async () => {
   const [regression, quality, doe] = await Promise.all([
@@ -4487,7 +4490,84 @@ describe("App", () => {
     expect(html).toContain("데이터셋 파싱 확정");
     expect(html).toContain("원본 데이터 파일");
     expect(html).toContain("복사한 표 붙여넣기");
+    expect(html).toContain("여기를 클릭하고 Ctrl+V");
+    expect(html).toContain("표 보기");
+    expect(html).toContain("원문 보기");
     expect(html).toContain("작업 흐름");
+  });
+
+  it("renders a safe spreadsheet staging grid with ragged and empty-cell cues", () => {
+    const preview = parsePastedTablePreview("이름\t메모\n홍길동\t<img src=x>\n김민수");
+    const html = renderToString(
+      <PastePreviewGrid
+        hasHeaderPreview
+        preview={preview}
+        selection={{
+          address: "B2",
+          columnIndex: 1,
+          rowIndex: 1,
+          value: "<img src=x>",
+        }}
+        onCellSelect={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('role="grid"');
+    expect(html).toContain(">A<");
+    expect(html).toContain(">B<");
+    expect(html).toContain("열 수 다름");
+    expect(html).toContain("구조상 없음");
+    expect(html).toContain("B2");
+    expect(html).toContain("&lt;img src=x&gt;");
+    expect(html).not.toContain("<img src=x>");
+  });
+
+  it("shows paste header-preview disagreement without overriding server parsing", () => {
+    const upload = datasetUploadTestResponse();
+    const html = renderToString(
+      <DatasetPreparationPage
+        {...datasetPageTestProps()}
+        canConfirm
+        parsingOptions={parsingSuggestionToConfirmation(upload)}
+        pastedHeaderPreference
+        upload={upload}
+      />,
+    );
+
+    expect(html).toMatch(/붙여넣기 표시는 첫 행을 (?:<!-- -->)?헤더처럼/);
+    expect(html).toMatch(/서버 제안은 (?:<!-- -->)?헤더 없음/);
+    expect(html).toContain("아래 파싱 옵션이 최종 기준");
+  });
+
+  it("renders paged canonical preview controls, missing values, and inspector", () => {
+    const version = datasetVersionTestResponse();
+    const preview: DatasetRowsPreviewResponse = {
+      version_id: version.version_id,
+      offset: 0,
+      limit: 25,
+      total_rows: 3,
+      returned_rows: 2,
+      columns: version.columns,
+      rows: [
+        { row_index: 0, values: ["A", "긴 값 전체"] },
+        { row_index: 1, values: ["B", null] },
+      ],
+    };
+    const html = renderToString(
+      <DatasetPreparationPage
+        {...datasetPageTestProps()}
+        preview={preview}
+        previewLimit={25}
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("Canonical 행 미리보기");
+    expect(html).toContain("미리보기 페이지 크기");
+    expect(html).toContain("이동할 행 번호");
+    expect(html).toContain("전체");
+    expect(html).toContain("결측");
+    expect(html).toContain("선택 셀");
   });
 
   it("routes the workspace between dataset preparation and analysis pages", () => {
@@ -6491,8 +6571,7 @@ function datasetPageTestProps(): ComponentProps<typeof DatasetPreparationPage> {
     isSavingSchema: false,
     isUploading: false,
     parsingOptions: null,
-    pasteTextAreaRef: null,
-    pastedTextLength: 0,
+    pastedHeaderPreference: null,
     preview: null,
     previewLimit: 10,
     previewOffset: 0,
@@ -6507,8 +6586,8 @@ function datasetPageTestProps(): ComponentProps<typeof DatasetPreparationPage> {
     onLoadDatasetProfile: () => undefined,
     onLoadRowsPreview: () => undefined,
     onParsingOptionsChange: () => undefined,
-    onPasteDataset: () => undefined,
-    onPastedTextLengthChange: () => undefined,
+    onPasteDataset: () => Promise.resolve(true),
+    onPreviewLimitChange: () => undefined,
     onSaveSchema: () => undefined,
     onSchemaDraftChange: () => undefined,
     onUpload: () => undefined,

@@ -1,4 +1,4 @@
-import type { ChangeEvent, FormEvent, Ref } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 
 import type {
   ConfirmedParsingOptions,
@@ -10,6 +10,7 @@ import type {
 import { ParsingConfirmationPanel } from "./DatasetParsingPanel";
 import { DatasetVersionPanel } from "./DatasetVersionPanel";
 import type { SchemaDraftPatch } from "./datasetPreparationTypes";
+import { PasteDatasetPanel } from "./PasteDatasetPanel";
 import type { SchemaDraft } from "./schemaPresets";
 
 export interface DatasetPreparationPageProps {
@@ -24,8 +25,7 @@ export interface DatasetPreparationPageProps {
   isSavingSchema: boolean;
   isUploading: boolean;
   parsingOptions: ConfirmedParsingOptions | null;
-  pasteTextAreaRef: Ref<HTMLTextAreaElement>;
-  pastedTextLength: number;
+  pastedHeaderPreference: boolean | null;
   preview: DatasetRowsPreviewResponse | null;
   previewLimit: number;
   previewOffset: number;
@@ -40,8 +40,8 @@ export interface DatasetPreparationPageProps {
   onLoadDatasetProfile: (versionId: string) => void;
   onLoadRowsPreview: (versionId: string, offset: number) => void;
   onParsingOptionsChange: (options: ConfirmedParsingOptions) => void;
-  onPasteDataset: (event: FormEvent<HTMLFormElement>) => void;
-  onPastedTextLengthChange: (length: number) => void;
+  onPasteDataset: (content: string, previewHasHeader: boolean) => Promise<boolean>;
+  onPreviewLimitChange: (limit: number) => void;
   onSaveSchema: () => void;
   onSchemaDraftChange: (columnId: string, patch: SchemaDraftPatch) => void;
   onUpload: (event: FormEvent<HTMLFormElement>) => void;
@@ -66,8 +66,7 @@ export function DatasetPreparationPage({
   isSavingSchema,
   isUploading,
   parsingOptions,
-  pasteTextAreaRef,
-  pastedTextLength,
+  pastedHeaderPreference,
   preview,
   previewLimit,
   previewOffset,
@@ -83,7 +82,7 @@ export function DatasetPreparationPage({
   onLoadRowsPreview,
   onParsingOptionsChange,
   onPasteDataset,
-  onPastedTextLengthChange,
+  onPreviewLimitChange,
   onSaveSchema,
   onSchemaDraftChange,
   onUpload,
@@ -115,34 +114,7 @@ export function DatasetPreparationPage({
           {isUploading ? "업로드 중" : "업로드"}
         </button>
       </form>
-      <form
-        className="paste-panel"
-        onSubmit={(event) => {
-          onPasteDataset(event);
-        }}
-      >
-        <label className="paste-control">
-          <span>복사한 표 붙여넣기</span>
-          <textarea
-            ref={pasteTextAreaRef}
-            onChange={(event) => {
-              onPastedTextLengthChange(event.currentTarget.value.length);
-            }}
-            placeholder="Excel이나 스프레드시트에서 범위를 복사한 뒤 여기에 붙여넣으세요."
-            rows={6}
-          />
-        </label>
-        <div className="paste-actions">
-          <span>{pastedTextLength.toLocaleString()}자</span>
-          <button
-            className="primary-button"
-            disabled={pastedTextLength === 0 || isPastingDataset}
-            type="submit"
-          >
-            {isPastingDataset ? "등록 중" : "붙여넣기 데이터 등록"}
-          </button>
-        </div>
-      </form>
+      <PasteDatasetPanel isSubmitting={isPastingDataset} onRegister={onPasteDataset} />
       {flowError !== null ? (
         <div className="error-box" role="alert">
           오류 코드: {flowError}
@@ -154,6 +126,7 @@ export function DatasetPreparationPage({
           delimiterOptions={delimiterOptions}
           isConfirming={isConfirming}
           parsingOptions={parsingOptions}
+          pastedHeaderPreference={pastedHeaderPreference}
           upload={upload}
           onConfirmParsing={onConfirmParsing}
           onParsingOptionsChange={onParsingOptionsChange}
@@ -174,6 +147,7 @@ export function DatasetPreparationPage({
           onApplyBayesianPreset={onApplyBayesianPreset}
           onLoadDatasetProfile={onLoadDatasetProfile}
           onLoadRowsPreview={onLoadRowsPreview}
+          onPreviewLimitChange={onPreviewLimitChange}
           onSaveSchema={onSaveSchema}
           onSchemaDraftChange={onSchemaDraftChange}
         />

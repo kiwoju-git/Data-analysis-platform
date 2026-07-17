@@ -62,11 +62,20 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 
 ## Canonical Parsed Artifact Decision
 
+- The browser paste staging grid is not a storage format. Its parser creates
+  only capped in-memory preview cells/metadata, and the exact raw string remains
+  in a ref or textarea DOM node until the unchanged paste API accepts it. Raw
+  paste content is never written to localStorage/sessionStorage. Only the
+  backend-created raw dataset artifact, SHA-256 metadata, and later immutable
+  canonical version are durable sources of truth.
 - The current stdlib canonical materialization writes UTF-8 JSONL rows plus a JSON manifest under `workspaces/datasets/{dataset_id}/versions/{version_id}/`.
 - SQLite records only relative artifact paths, SHA-256 hashes, media types, and byte sizes; raw row values are not stored in metadata tables.
 - `confirm-parsing` re-reads the preserved raw upload in streaming mode and compares SHA-256 plus byte size against `datasets` metadata before schema scan or canonical materialization.
 - Rows preview, profile, `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` all read validated canonical rows after parsing confirmation. They do not reparse the raw upload as a fallback.
 - Paginated rows preview now verifies the entire canonical JSONL artifact before returning a page, so `limit` cannot stop validation before row count, size, SHA-256, row-index order, column count, and value-type checks complete.
+- Frontend page-size and row-jump controls remain bounded by backend
+  `1 <= limit <= 100`; changing the UI page does not bypass full artifact
+  verification or cache canonical rows in browser storage.
 - This preview policy intentionally spends a full artifact scan before serving a small page. It is the safer Gate B default, but large datasets should later move to a verified-artifact cache, row offset index, chunk-level hash manifest, or verified-session cache so repeated previews do not rescan unchanged artifacts every time.
 - Profile scans persist raw-value-free `profile_summary` JSON artifacts under the dataset version workspace and upsert the latest profile artifact metadata in `dataset_artifacts`.
 - Profile artifacts include `schema_hash`, `profile_schema_version`, and `source_canonical_artifact_sha256`; `GET /profile` reuses the latest artifact only when those values and the artifact checksums still match.

@@ -2,7 +2,7 @@
 
 Gate B currently covers upload, parsing confirmation, canonical JSONL materialization, schema metadata update, paginated row preview, and a profile/preflight scan with persisted profile artifacts for delimited text and basic XLSX datasets.
 
-The current React data-preparation surface is rendered through `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, profile/schema/preview section components, and shared formatting and label helpers in `frontend/src/datasetDisplay.ts`; `frontend/src/AppChrome.tsx` owns the sidebar, topbar, and dataset context layout, while `frontend/src/useDatasetWorkflow.ts` owns dataset upload/paste/parsing/schema/preview/profile workflow state and handlers. `App.tsx` still owns API bootstrap, route state, and analysis orchestration, so this split does not change dataset behavior.
+The current React data-preparation surface is rendered through `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/PasteDatasetPanel.tsx`, `frontend/src/PastePreviewGrid.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, profile/schema/preview section components, and shared formatting and label helpers. `usePastedDatasetDraft` owns only the transient raw-ref/limited-preview staging state, while `useDatasetWorkflow` owns upload registration, parsing, schema, canonical preview, and profile API state. `App.tsx` still owns API bootstrap, route state, and analysis orchestration, so this split does not change backend dataset behavior.
 `frontend/src/WorkspaceRouter.tsx` chooses between this data-preparation surface on root/dataset routes and the analysis page on `/analysis/{module_id}/{method_id}` routes against the same in-memory dataset state.
 
 ## Current API
@@ -23,7 +23,15 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 - Stores the pasted text as a preserved local raw dataset with SHA-256, byte size, sanitized filename, detected format, and parsing suggestions.
 - Defaults to `pasted-data.txt`, so delimiter detection can choose tab, comma, semicolon, or pipe from the pasted content.
 - Uses the same parsing confirmation, immutable version, canonical artifact, preview, profile, and analysis path as file uploads.
-- The current UI clears the textarea after a successful paste registration and keeps only the returned upload metadata in React state.
+- The current UI accepts direct `text/plain` paste on a focusable surface,
+  renders a capped view-only spreadsheet staging preview, and keeps the exact
+  source string only in an in-memory ref/fallback textarea DOM node.
+- The preview parser is not authoritative and is never serialized back into
+  the request. Successful registration clears raw text, preview cells, and
+  selection; request failure retains the current draft, while reload never
+  restores it from browser storage.
+- Staging limits and future edit-version rules are defined in
+  `docs/pasted_data_grid_contract.md`.
 
 `POST /api/v1/datasets/{dataset_id}/confirm-parsing`
 
@@ -66,6 +74,10 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 - Detects row count, file size, SHA-256, row-index order, column count, and value-type mismatches before exposing preview values.
 - For headerless datasets, row index `0` maps to the confirmed `data_start_row`.
 - Current performance tradeoff: every preview request pays a full canonical JSONL verification cost before paging, which favors corruption detection over speed for large datasets. Future optimization candidates are a verified-artifact cache keyed by artifact hash, a row offset index, chunk-level hashes, and a verified-session cache.
+- The current canonical UI offers page sizes 10/25/50/100, bounded row jump,
+  sticky headers, horizontal scrolling, explicit missing/empty labels, and one
+  selected-cell inspector. It still requests at most 100 rows and never loads
+  the complete canonical artifact into browser state.
 
 `GET /api/v1/dataset-versions/{version_id}/profile`
 
@@ -84,7 +96,11 @@ The current React data-preparation surface is rendered through `frontend/src/Dat
 - Stored raw upload paths are UUID-based relative paths.
 - Unsupported binary files, path traversal filenames, extension/type mismatches, empty files, oversized files, invalid XLSX containers, and excessive XLSX decompression ratios are rejected.
 - Client errors must not include raw cell values, absolute paths, SQL, or tracebacks.
-- Browser state must not hold the full dataset; the current UI stores upload metadata, parsing options, version/schema/artifact metadata, one preview page, aggregate profile/preflight data, and transient pasted text only until successful registration.
+- Browser state must not hold the full dataset. The current UI stores upload
+  metadata, parsing options, version/schema/artifact metadata, one canonical
+  preview page, aggregate profile/preflight data, and at most 20,000 staging
+  preview cells. The exact transient paste is confined to a ref/textarea and is
+  never persisted in browser storage.
 
 ## Analysis Use
 

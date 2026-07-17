@@ -109,6 +109,10 @@ export function LinearModelPanel({
   const modelUnavailable =
     modelRetentionState.availability === "unavailable_or_deleted";
   const modelIntegrityError = modelRetentionState.availability === "integrity_error";
+  const modelAvailabilityTransientError =
+    modelRetentionState.availability === null &&
+    modelRetentionState.availabilityError !== null &&
+    !modelRetentionState.isCheckingAvailability;
   const canRun =
     version !== null &&
     responseColumnId !== null &&
@@ -442,6 +446,21 @@ export function LinearModelPanel({
                   {modelRetentionState.isCheckingAvailability ? (
                     <div className="notice-box" role="status">
                       예측용 모델 자산의 사용 가능 상태를 확인하고 있습니다.
+                    </div>
+                  ) : null}
+                  {modelAvailabilityTransientError ? (
+                    <div className="error-box" role="alert">
+                      <p>
+                        예측용 모델 자산의 상태를 확인하지 못했습니다. 네트워크/API 상태를
+                        확인한 뒤 다시 시도하세요. 오류 코드: {modelRetentionState.availabilityError}
+                      </p>
+                      <button
+                        className="secondary-button"
+                        onClick={modelRetentionState.onRetryAvailability}
+                        type="button"
+                      >
+                        모델 상태 다시 확인
+                      </button>
                     </div>
                   ) : null}
                   {modelRetentionState.error ? (

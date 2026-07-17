@@ -19,7 +19,7 @@ import type { DatasetPreparationPageProps } from "./DatasetPreparationPage";
 import type { SchemaDraftPatch } from "./datasetPreparationTypes";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
 
-const previewLimit = 10;
+const defaultPreviewLimit = 10;
 const defaultMissingTokens = ["", "NA", "N/A", "null", "N/T"];
 const currentDatasetVersionStorageKey = "datalab.current_dataset_version_id";
 
@@ -71,8 +71,8 @@ export function useDatasetWorkflow({
   const [schemaDrafts, setSchemaDrafts] = useState<SchemaDraft[]>([]);
   const [preview, setPreview] = useState<DatasetRowsPreviewResponse | null>(null);
   const [profile, setProfile] = useState<DatasetProfileResponse | null>(null);
-  const pasteTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [pastedTextLength, setPastedTextLength] = useState(0);
+  const [pastedHeaderPreference, setPastedHeaderPreference] = useState<boolean | null>(null);
+  const [previewLimit, setPreviewLimit] = useState(defaultPreviewLimit);
   const [previewOffset, setPreviewOffset] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isPastingDataset, setIsPastingDataset] = useState(false);
@@ -95,7 +95,7 @@ export function useDatasetWorkflow({
     setIsLoadingProfile(true);
     void Promise.all([
       fetchDatasetVersion(versionId),
-      fetchRowsPreview(versionId, 0, previewLimit),
+      fetchRowsPreview(versionId, 0, defaultPreviewLimit),
       fetchDatasetProfile(versionId),
     ])
       .then(([restoredVersion, restoredPreview, restoredProfile]) => {
@@ -160,6 +160,7 @@ export function useDatasetWorkflow({
     setSelectedFile(event.currentTarget.files?.[0] ?? null);
     setUpload(null);
     setParsingOptions(null);
+    setPastedHeaderPreference(null);
     resetDatasetDerivedState();
     setFlowError(null);
   }
@@ -173,6 +174,7 @@ export function useDatasetWorkflow({
 
     setIsUploading(true);
     setFlowError(null);
+    setPastedHeaderPreference(null);
     resetDatasetDerivedState();
     try {
       const response = await uploadDataset(selectedFile);
@@ -187,12 +189,13 @@ export function useDatasetWorkflow({
     }
   }
 
-  async function handlePasteDataset(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const content = pasteTextAreaRef.current?.value ?? "";
+  async function handlePasteDataset(
+    content: string,
+    previewHasHeader: boolean,
+  ): Promise<boolean> {
     if (content.trim() === "") {
       setFlowError("empty_pasted_data");
-      return;
+      return false;
     }
 
     setIsPastingDataset(true);
@@ -208,14 +211,13 @@ export function useDatasetWorkflow({
       });
       setUpload(response);
       setParsingOptions(parsingSuggestionToConfirmation(response));
-      if (pasteTextAreaRef.current !== null) {
-        pasteTextAreaRef.current.value = "";
-      }
-      setPastedTextLength(0);
+      setPastedHeaderPreference(previewHasHeader);
+      return true;
     } catch (error) {
       setUpload(null);
       setParsingOptions(null);
       setFlowError(error instanceof Error ? error.message : "dataset_paste_failed");
+      return false;
     } finally {
       setIsPastingDataset(false);
     }
@@ -285,10 +287,14 @@ export function useDatasetWorkflow({
     }
   }
 
-  async function loadRowsPreview(versionId: string, offset: number) {
+  async function loadRowsPreview(
+    versionId: string,
+    offset: number,
+    limit = previewLimit,
+  ) {
     setIsLoadingPreview(true);
     try {
-      const response = await fetchRowsPreview(versionId, offset, previewLimit);
+      const response = await fetchRowsPreview(versionId, offset, limit);
       setPreview(response);
       setPreviewOffset(offset);
     } catch (error) {
@@ -321,6 +327,15 @@ export function useDatasetWorkflow({
     setSchemaDrafts((current) => applyBayesianOptimizationPreset(current));
   }
 
+  function handlePreviewLimitChange(limit: number) {
+    if (version === null || ![10, 25, 50, 100].includes(limit)) return;
+    const lastAlignedOffset =
+      version.row_count === 0 ? 0 : Math.floor((version.row_count - 1) / limit) * limit;
+    const nextOffset = Math.min(Math.floor(previewOffset / limit) * limit, lastAlignedOffset);
+    setPreviewLimit(limit);
+    void loadRowsPreview(version.version_id, nextOffset, limit);
+  }
+
   const datasetPageProps = {
     canApplyBayesianPreset,
     canConfirm,
@@ -333,8 +348,7 @@ export function useDatasetWorkflow({
     isSavingSchema,
     isUploading,
     parsingOptions,
-    pasteTextAreaRef,
-    pastedTextLength,
+    pastedHeaderPreference,
     preview,
     previewLimit,
     previewOffset,
@@ -354,13 +368,11 @@ export function useDatasetWorkflow({
     onLoadRowsPreview: (versionId: string, offset: number) => {
       void loadRowsPreview(versionId, offset);
     },
+    onPreviewLimitChange: handlePreviewLimitChange,
     onParsingOptionsChange: (options: ConfirmedParsingOptions) => {
       setParsingOptions(options);
     },
-    onPasteDataset: (event: FormEvent<HTMLFormElement>) => {
-      void handlePasteDataset(event);
-    },
-    onPastedTextLengthChange: setPastedTextLength,
+    onPasteDataset: handlePasteDataset,
     onSaveSchema: () => {
       void handleSaveSchema();
     },

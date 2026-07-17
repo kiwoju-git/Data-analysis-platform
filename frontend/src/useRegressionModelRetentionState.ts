@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   deleteRegressionModel,
@@ -34,6 +34,7 @@ export interface RegressionModelRetentionState {
   onClear: () => void;
   onDelete: (preflight: RegressionModelDeletionPreflightResponse) => void;
   onLoadPreflight: () => void;
+  onRetryAvailability: () => void;
 }
 
 export function useRegressionModelRetentionState(
@@ -53,20 +54,11 @@ export function useRegressionModelRetentionState(
   const preflightRequest = useRef(createLatestRequestGuard()).current;
   const deletionRequest = useRef(createLatestRequestGuard()).current;
 
-  useEffect(() => {
-    availabilityRequest.cancel();
-    preflightRequest.cancel();
-    deletionRequest.cancel();
-    setPreflight(null);
-    setDeletion(null);
-    setError(null);
-    setIsLoadingPreflight(false);
-    setIsDeleting(false);
-    setAvailability(null);
-    setAvailabilityError(null);
-    setIsCheckingAvailability(false);
+  const checkAvailability = useCallback(() => {
     if (modelId === null) return;
     const request = availabilityRequest.begin();
+    setAvailability(null);
+    setAvailabilityError(null);
     setIsCheckingAvailability(true);
     void fetchRegressionModelManifest(modelId)
       .then(() => {
@@ -88,7 +80,23 @@ export function useRegressionModelRetentionState(
       .finally(() => {
         if (availabilityRequest.isCurrent(request)) setIsCheckingAvailability(false);
       });
-  }, [availabilityRequest, deletionRequest, modelId, preflightRequest]);
+  }, [availabilityRequest, modelId]);
+
+  useEffect(() => {
+    availabilityRequest.cancel();
+    preflightRequest.cancel();
+    deletionRequest.cancel();
+    setPreflight(null);
+    setDeletion(null);
+    setError(null);
+    setIsLoadingPreflight(false);
+    setIsDeleting(false);
+    setAvailability(null);
+    setAvailabilityError(null);
+    setIsCheckingAvailability(false);
+    if (modelId === null) return;
+    checkAvailability();
+  }, [availabilityRequest, checkAvailability, deletionRequest, modelId, preflightRequest]);
 
   const clear = () => {
     preflightRequest.cancel();
@@ -135,6 +143,7 @@ export function useRegressionModelRetentionState(
           if (preflightRequest.isCurrent(request)) setIsLoadingPreflight(false);
         });
     },
+    onRetryAvailability: checkAvailability,
     onDelete: (currentPreflight) => {
       if (modelId === null || currentPreflight.model_id !== modelId) return;
       const request = deletionRequest.begin();

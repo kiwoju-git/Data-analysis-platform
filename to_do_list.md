@@ -21,8 +21,10 @@ Current source-of-truth note:
 
 Current and next development order:
 
-The Phase II boundary/model-availability stabilization slice is complete in
-the current worktree. Next allowed work is:
+The product-owner-approved paste staging grid/canonical preview UX slice is the
+current bounded work. It keeps the existing paste API and immutable dataset
+version contract, adds no statistical method, and implements only the P0
+view-only behavior in `docs/pasted_data_grid_contract.md`. After this slice:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the resulting main push in remote GitHub Actions and review required
@@ -90,7 +92,8 @@ Already implemented:
 - Canonical UTF-8 JSONL rows and JSON manifest materialization for confirmed delimited text and basic XLSX dataset versions
 - Basic profile/preflight API with aggregate missing, unique-count, numeric, date/time, constant-column, possible-ID, non-numeric-in-numeric, non-datetime-in-datetime, duplicate-row, canonical-artifact, persisted profile-artifact, and memory-estimate warnings
 - Minimal React UI for upload, parsing confirmation, dataset Context Bar, schema update, and row preview
-- Minimal React UI for pasted spreadsheet text intake without keeping successful paste contents in React state
+- View-only React paste staging grid with exact raw-ref submission, raw/grid
+  modes, capped cells, structural warnings, and no browser-storage persistence
 - Minimal React UI for profile/preflight warnings, canonical/profile artifact summary, preflight summary, and column-level aggregate/numeric/date-time profile table
 - Minimal React schema UI includes a guarded 34-column headerless Bayesian sample role preset: `column_1` as ID, `column_2`-`column_25` as X/features, and `column_26`-`column_34` as Y/responses
 - App chrome rendering is split into `frontend/src/AppChrome.tsx`, while `App.tsx` keeps API bootstrap and analysis state ownership
@@ -308,7 +311,8 @@ Completed in this slice:
 - Dataset-preparation component split:
   - sidebar, topbar, and dataset context layout are split into `frontend/src/AppChrome.tsx`
   - dataset upload, pasted text, parsing confirmation, schema, preview, and profile workflow state/handlers are split into `frontend/src/useDatasetWorkflow.ts`
-  - upload and pasted text intake are composed by `frontend/src/DatasetPreparationPage.tsx`
+  - upload and pasted text intake are composed by `DatasetPreparationPage`,
+    `PasteDatasetPanel`, `PastePreviewGrid`, and `usePastedDatasetDraft`
   - parsing confirmation is split into `frontend/src/DatasetParsingPanel.tsx`
   - dataset version context is split into `frontend/src/DatasetVersionPanel.tsx`
   - profile/preflight, schema, and preview rendering are split into `frontend/src/DatasetProfileSection.tsx`, `frontend/src/DatasetSchemaSection.tsx`, and `frontend/src/DatasetPreviewSection.tsx`
@@ -8670,3 +8674,45 @@ Next allowed work:
 4. Add dataset-root and DOE-root retention only through separately reviewed
    ownership graphs with explicit blockers and quarantine recovery.
 5. Continue advanced quality/statistics only through an approved contract.
+
+## Progress Update 185 - Paste Staging Grid And Canonical Preview UX
+
+Completed:
+
+- Added a `text/plain`-only, view-only paste staging grid with exact raw-string
+  submission, raw/grid modes, A1 coordinates, empty/ragged/truncation warnings,
+  inert formula-like text, selected-cell inspection, and keyboard navigation.
+- Capped materialized preview state at 200 rows, 100 columns, and 20,000 cells;
+  a 2,000,000-character browser scan cap labels structural counts as lower
+  bounds without changing the submitted full source.
+- Added presentation-only first-row header review and explicit server-suggestion
+  comparison while keeping parsing confirmation authoritative.
+- Added canonical preview page sizes 10/25/50/100, bounded row jump, sticky
+  headers, explicit missing/empty labels, and selected-cell inspection without
+  loading all canonical rows.
+- Kept the paste API, backend size enforcement, immutable dataset version,
+  canonical artifact, SQLite schema, and all method/result versions unchanged.
+  The P1/P2 edit/version requirements are frozen in
+  `docs/pasted_data_grid_contract.md`; cell editing remains unimplemented.
+- Added transient regression-model availability error/retry UX without merging
+  not-found and integrity-error states.
+- Full local development validation passed with backend 763, frontend 131, and
+  OpenAPI/frontend contracts 148. The expanded Chromium critical path passed,
+  including exact CRLF request preservation, failure retention, reload
+  non-restoration, successful clearing, canonical inspection, and all prior
+  workflows. Exact duration/evidence is maintained in `docs/ci_status.md`.
+- Main production JavaScript is 508.32 kB / 120.48 kB gzip and emits the Vite
+  500 kB warning. This is recorded for measured follow-up rather than hidden.
+- The development host is Windows 10 build 19045, Python 3.10.11, and Node
+  24.17.0 on pushed base SHA
+  `702e20f0ed1a377d411cb8d7d3a6faa2c4fcbd6f`; this is not Windows 11/Node 22
+  release evidence. Remote Actions are unverified because `gh` is unavailable.
+
+Next allowed work:
+
+1. Run the clean Windows 11/Python 3.10/Node 22 release gate.
+2. Verify remote GitHub Actions and required Windows/E2E checks.
+3. Improve Bayesian catalog/successor UX without changing GP/EI behavior.
+4. Implement dataset-root and then DOE-root retention through separate reviewed
+   ownership graphs with explicit inbound blockers and quarantine recovery.
+5. Continue advanced quality/statistics only through approved contracts.

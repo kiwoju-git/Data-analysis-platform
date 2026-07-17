@@ -6,6 +6,7 @@ interface ParsingConfirmationPanelProps {
   delimiterOptions: string[];
   isConfirming: boolean;
   parsingOptions: ConfirmedParsingOptions;
+  pastedHeaderPreference: boolean | null;
   upload: DatasetUploadResponse;
   onConfirmParsing: () => void;
   onParsingOptionsChange: (options: ConfirmedParsingOptions) => void;
@@ -16,6 +17,7 @@ export function ParsingConfirmationPanel({
   delimiterOptions,
   isConfirming,
   parsingOptions,
+  pastedHeaderPreference,
   upload,
   onConfirmParsing,
   onParsingOptionsChange,
@@ -43,6 +45,20 @@ export function ParsingConfirmationPanel({
             <li key={warning.code}>{warning.message}</li>
           ))}
         </ul>
+      ) : null}
+      {pastedHeaderPreference !== null ? (
+        <div
+          className={
+            pastedHeaderPreference === upload.parsing.has_header
+              ? "notice-box"
+              : "warning-box"
+          }
+          role="status"
+        >
+          붙여넣기 표시는 첫 행을 {pastedHeaderPreference ? "헤더처럼" : "데이터처럼"}
+          보았습니다. 서버 제안은 {upload.parsing.has_header ? "헤더 있음" : "헤더 없음"}
+          입니다. 아래 파싱 옵션이 최종 기준이며 자동 확정되지 않습니다.
+        </div>
       ) : null}
       {parsingOptions.kind === "delimited_text" ? (
         <DelimitedParsingOptions

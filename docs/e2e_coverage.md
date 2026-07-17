@@ -6,15 +6,23 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-17 Phase II boundary and regression-model availability regression
-run passed in 69.2 seconds with:
+The 2026-07-17 paste staging/canonical preview regression run passed in 70.8
+seconds on stable local ports `8030`/`5230` with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
+  -BackendPort 8030 -FrontendPort 5230 `
   -DiagnosticsRoot .\.tmp\e2e-diagnostics
 ```
 
-The run first verifies that a stored prediction blocks deletion of its
+The run first dispatches a real `text/plain` spreadsheet paste while providing
+ignored clipboard HTML. It reviews empty/ragged cells, uses keyboard cell
+navigation and the inspector, captures exact CRLF-preserving API content on an
+intentional failure, verifies the failed draft remains in the current page,
+reloads to prove it was not persisted, registers the real dataset, and verifies
+successful raw clearing. After parsing it changes canonical page size, selects
+a full-value cell, and reloads the confirmed version. It then verifies that a
+stored prediction blocks deletion of its
 regression model. It then deletes the prediction through its reviewed analysis
 ownership graph, deletes the now-unreferenced model, reloads the app, restores
 the preserved fit result, and verifies that model availability remains
@@ -34,7 +42,10 @@ latest recommendation restore, completed close, read-only state, lifecycle
 restore after reload, deletion impact counts, separate irreversible
 confirmation, and catalog removal. It also retains the existing
 Phase I/II attribute charts, prediction/export, Factorial, RSM/Optimizer,
-parser-recovery, and lazy-panel paths.
+parser-recovery, and lazy-panel paths. The first default-port attempt did not
+reach the app because an existing port-8000 listener returned an invalid health
+response; a separate 5242 bind attempt was denied by Windows. Neither is
+reported as an application test failure, and the stable-port run above passed.
 
 ## Covered Flows
 
@@ -42,8 +53,19 @@ The current smoke test is `tests/e2e/critical_path.py`.
 
 - Starts the FastAPI backend on `127.0.0.1` and the Vite frontend on
   `127.0.0.1`.
-- Uses a synthetic pasted TSV dataset with `Group` and `Value` columns.
+- Dispatches a real browser `ClipboardEvent` with a synthetic `text/plain` TSV
+  plus ignored clipboard HTML. Before registration it verifies the capped grid,
+  row/column headers, empty/ragged summaries, full-value inspector, and keyboard
+  cell movement.
+- Forces one paste API failure and verifies the exact raw draft remains in the
+  fallback textarea, then reloads and verifies the draft was not restored from
+  browser storage.
+- Registers a synthetic pasted TSV dataset with `Group` and `Value` columns and
+  verifies successful registration clears the raw textarea.
 - Confirms parsing options and creates dataset version `v1`.
+- Changes the canonical preview page size to 25, selects a canonical cell,
+  verifies the full-value inspector, reloads the app, and restores only the
+  confirmed dataset version through backend APIs.
 - Verifies the dataset context bar row/column counts.
 - Runs `eda.descriptive` and waits for the result table.
 - Switches to `hypothesis.two_sample_t`, runs it, and waits for the Hedges g
@@ -183,7 +205,9 @@ The current smoke test is `tests/e2e/critical_path.py`.
   covered by backend API tests rather than browser automation.
 - Chart export artifacts.
 - Browser matrix coverage beyond Chromium.
-- Large dataset performance or memory budget E2E.
+- Large dataset performance or memory budget E2E. The paste staging parser is
+  unit-tested at its materialization/scan boundaries rather than with a 100 MB
+  browser fixture.
 - Network-disconnected runtime validation after dependencies are installed.
 - Accessibility audits beyond the assertions embedded in current component
   tests.

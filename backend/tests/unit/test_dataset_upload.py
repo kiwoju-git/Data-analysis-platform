@@ -848,8 +848,10 @@ def test_dataset_rows_preview_rejects_tampered_canonical_artifact_before_page_re
         )
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "canonical_artifact_invalid"
-    assert "999" not in response.text
+    error = response.json()["error"]
+    assert error["code"] == "canonical_artifact_invalid"
+    assert "999" not in error["message"]
+    assert error["developer_detail"] is None
 
 
 def test_dataset_profile_reports_quality_without_echoing_cell_values(tmp_path) -> None:

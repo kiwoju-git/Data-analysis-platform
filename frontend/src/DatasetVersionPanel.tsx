@@ -24,6 +24,7 @@ interface DatasetVersionPanelProps {
   onApplyBayesianPreset: () => void;
   onLoadDatasetProfile: (versionId: string) => void;
   onLoadRowsPreview: (versionId: string, offset: number) => void;
+  onPreviewLimitChange: (limit: number) => void;
   onSaveSchema: () => void;
   onSchemaDraftChange: (columnId: string, patch: SchemaDraftPatch) => void;
 }
@@ -42,6 +43,7 @@ export function DatasetVersionPanel({
   onApplyBayesianPreset,
   onLoadDatasetProfile,
   onLoadRowsPreview,
+  onPreviewLimitChange,
   onSaveSchema,
   onSchemaDraftChange,
 }: DatasetVersionPanelProps) {
@@ -92,6 +94,7 @@ export function DatasetVersionPanel({
         previewOffset={previewOffset}
         version={version}
         onLoadRowsPreview={onLoadRowsPreview}
+        onPreviewLimitChange={onPreviewLimitChange}
       />
     </section>
   );

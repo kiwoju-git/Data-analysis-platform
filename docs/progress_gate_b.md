@@ -84,7 +84,7 @@ Current stabilization update:
 | Basic profile/preflight API | Done for canonical versions | `GET /api/v1/dataset-versions/{version_id}/profile`, aggregate counts/warnings, canonical artifact metadata, duplicate-row count, memory estimate, no raw value samples |
 | Profile summary artifact | Done for delimited text | profile scans persist raw-value-free `profile_summary` JSON artifacts, include schema/canonical hashes, and reuse matching artifacts without churn |
 | Date/time preflight | Done for delimited text | column-level parse counts, min/max, format candidates, timezone-aware/naive counts, mixed-format and mixed-timezone warnings without coercion |
-| Minimal UI | Done for B0/profile slices | upload, paste intake, parsing option confirmation with header/no-header controls, Context Bar, schema controls, Bayesian sample role preset, paginated preview, profile/preflight table, canonical/preflight summary, rendered through `AppChrome`, `useDatasetWorkflow`, split dataset-preparation components, and `datasetDisplay` helpers |
+| Dataset UI | Done for B0/profile/paste staging slices | upload, text/plain paste staging grid/raw mode, parsing confirmation with header/no-header comparison, Context Bar, schema controls, Bayesian sample role preset, 10/25/50/100-row canonical paging/jump/inspector, profile/preflight table, rendered through `AppChrome`, `useDatasetWorkflow`, `usePastedDatasetDraft`, and split dataset-preparation components |
 | Analysis method registry | Done for current methods | `GET /api/v1/analysis-methods`, 6 modules, 30 stable method IDs, 28 available and two disabled. Factorial, RSM, and Bayesian Optimization use dedicated APIs; no fake result is returned from the generic route. |
 | Analysis run request guard | Done for current methods | `POST /api/v1/analysis-runs` executes the 25 generic methods. `doe.factorial_design`, `doe.response_surface`, and `doe.bayesian_optimization` return `analysis_method_uses_dedicated_api` with their dedicated route. Disabled generic pages still reject without a result body. |
 | Analysis run status/cancel API | Done for B0 storage/run slice | `GET/DELETE /api/v1/analysis-runs/{analysis_id}` skeleton |
@@ -3755,3 +3755,58 @@ Next development order:
 4. Implement dataset-root and then DOE-root retention through separate reviewed
    dependency graphs with no silent cascade.
 5. Continue advanced quality/statistics only through an approved contract.
+
+## Progress Update 185 - Safe Paste Staging And Canonical Preview UX
+
+Status: implemented and validated in the current working tree.
+
+Completed:
+
+- Split pasted-data intake into `PasteDatasetPanel`, `PastePreviewGrid`, a pure
+  preview parser, and `usePastedDatasetDraft`. The exact clipboard string stays
+  in a ref/fallback textarea and is sent unchanged to the existing paste API;
+  parser cells are never serialized back into the request.
+- Added a focusable `text/plain` paste surface, raw/grid modes, spreadsheet
+  row/column headers, empty and ragged-row cues, selected-cell inspector,
+  keyboard movement, presentation-only header toggle, and explicit comparison
+  with the authoritative server header suggestion.
+- Materialization is capped at 200 rows, 100 columns, and 20,000 cells. Browser
+  structure scanning is capped at 2,000,000 characters and labels counts as
+  lower bounds when reached. Formula-like/HTML-looking values remain inert text.
+- Successful registration clears raw ref/textarea/preview/selection. Failure
+  keeps the in-session draft, while reload restores only a confirmed dataset
+  version ID and never raw paste text from browser storage.
+- Canonical preview remains checksum-validated and server-paged, with 10/25/50/
+  100 page sizes, bounded row jump, sticky headers, horizontal scroll, explicit
+  missing/empty labels, and one full-value inspector.
+- A generic regression-model availability request failure now remains visible
+  as a transient error with explicit retry; it is not conflated with missing or
+  integrity-error states.
+- The backend paste/OpenAPI/result contracts, SQLite schema, dataset/version
+  meaning, and every statistical method/result version remain unchanged. A
+  probabilistic raw-value-redaction assertion was narrowed to error message and
+  developer-detail fields so random correlation UUID digits cannot cause a
+  false failure.
+- Full `scripts/check.ps1` passed in 769.0 seconds with backend pytest 763,
+  frontend Vitest 131, OpenAPI/frontend contracts 148, Ruff/format over 158
+  Python files, mypy over 101 source files, lint/typecheck, and production
+  build. The final expanded Chromium E2E passed in 70.8 seconds with diagnostics
+  at `.tmp/e2e-diagnostics` and retained every prior critical path.
+- Production assets are 508.32 kB / 120.48 kB gzip for main, 46.75 kB / 9.69
+  kB for Regression, 64.25 kB / 11.97 kB for Quality, and 90.79 kB / 20.77 kB
+  for DOE. Main now emits the Vite 500 kB warning; a measured first-screen
+  loading/code-splitting follow-up is required rather than hiding the warning.
+- Validation used Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0 from pushed base SHA
+  `702e20f0ed1a377d411cb8d7d3a6faa2c4fcbd6f`. It is development evidence, not
+  the Windows 11/Node 22 release gate. Remote Actions remain unverified because
+  `gh` is not installed.
+
+Next development order:
+
+1. Run the clean Windows 11/Python 3.10/Node 22 release gate.
+2. Verify remote GitHub Actions and required Windows/E2E checks.
+3. Improve Bayesian catalog/successor UX without changing GP/EI behavior.
+4. Implement dataset-root and then DOE-root retention through separately
+   reviewed dependency graphs with explicit blockers and quarantine recovery.
+5. Continue advanced quality/statistics only through approved contracts.
