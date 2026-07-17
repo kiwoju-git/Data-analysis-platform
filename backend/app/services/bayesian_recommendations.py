@@ -12,7 +12,11 @@ from pydantic import ValidationError
 
 from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.bayesian import (
+    MAX_BAYESIAN_TRIALS,
+    MAX_COMPLETED_OBSERVATIONS,
+    BayesianLatestRecommendationResponse,
     BayesianRecommendationCreateRequest,
+    BayesianRecommendationCurrentTrialResponse,
     BayesianRecommendationListResponse,
     BayesianRecommendationProvenance,
     BayesianRecommendationResponse,
@@ -43,6 +47,7 @@ from app.storage.bayesian_studies import (
     count_bayesian_recommendation_records,
     get_bayesian_history_revision_record,
     get_bayesian_recommendation_record,
+    get_latest_bayesian_recommendation_record,
     insert_bayesian_recommendation_bundle,
     list_bayesian_recommendation_records,
 )
@@ -59,7 +64,7 @@ def create_bayesian_recommendation(
 ) -> BayesianRecommendationResponse:
     study = get_bayesian_study(settings, study_id)
     if study.status != "active":
-        raise _optimization_error("bayesian_optimization_history_incomplete")
+        raise _optimization_error("bayesian_study_closed")
     if str(body.expected_history_revision_id) != str(study.observation_history.history_revision_id):
         raise _optimization_error("bayesian_optimization_history_stale")
     if any(trial.origin == "initial_design" and trial.state == "pending" for trial in study.trials):
@@ -67,36 +72,18 @@ def create_bayesian_recommendation(
     if any(trial.origin == "recommendation" and trial.state == "pending" for trial in study.trials):
         raise _optimization_error("bayesian_optimization_pending_recommendation_exists")
     completed = [trial for trial in study.trials if trial.state == "completed"]
-    if len(completed) < max(2, len(study.factors) + 1) or len(completed) > 200:
+    if (
+        len(completed) < study.recommendation_minimum_completed_observations
+        or len(completed) > MAX_COMPLETED_OBSERVATIONS
+    ):
         raise _optimization_error("bayesian_optimization_history_incomplete")
-    if len(study.trials) >= body.search.total_trial_budget or len(study.trials) >= 200:
+    if _trial_budget_reached(
+        trial_count=len(study.trials),
+        total_trial_budget=body.search.total_trial_budget,
+    ):
         raise _optimization_error("bayesian_optimization_budget_exhausted")
 
-    worker_payload = {
-        "factors": [
-            {"factor_id": factor.factor_id, "low": factor.low, "high": factor.high}
-            for factor in study.factors
-        ],
-        "constraints": [item.model_dump(mode="json") for item in study.constraints],
-        "observations": [
-            {
-                "normalized": trial.normalized_coordinates,
-                "objective_value": trial.objective_value,
-            }
-            for trial in completed
-        ],
-        "excluded_normalized": [
-            [trial.normalized_coordinates[factor.factor_id] for factor in study.factors]
-            for trial in study.trials
-            if trial.state != "abandoned"
-        ],
-        "objective_direction": study.objective.direction,
-        "search": {
-            key: value
-            for key, value in body.search.model_dump(mode="json").items()
-            if key != "total_trial_budget"
-        },
-    }
+    worker_payload = _recommendation_worker_payload(study, body, completed)
     result_payload = _run_worker(
         worker_payload,
         timeout_ms=body.search.time_budget_ms + WORKER_STARTUP_ALLOWANCE_MS,
@@ -210,7 +197,12 @@ def create_bayesian_recommendation(
         result=result,
         provenance=provenance,
     )
-    result_json = _json_dumps(response.model_dump(mode="json"))
+    result_json = _json_dumps(
+        response.model_dump(
+            mode="json",
+            exclude={"current_trial", "is_latest", "requested_total_trial_budget"},
+        )
+    )
     record = BayesianRecommendationRecord(
         recommendation_id=str(recommendation_id),
         study_version_id=str(study.study_version_id),
@@ -240,7 +232,12 @@ def create_bayesian_recommendation(
         )
     except BayesianStorageConflict as exc:
         raise _optimization_error(exc.code) from exc
-    return response
+    return _with_current_context(
+        response,
+        current_trial=trial,
+        is_latest=True,
+        requested_total_trial_budget=body.search.total_trial_budget,
+    )
 
 
 def get_bayesian_recommendation(
@@ -256,7 +253,34 @@ def get_bayesian_recommendation(
             message="요청한 Bayesian recommendation을 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    return _validated_response(settings, study, record)
+    latest = get_latest_bayesian_recommendation_record(
+        settings.workspace_root,
+        str(study.study_version_id),
+    )
+    return _validated_response(
+        settings,
+        study,
+        record,
+        is_latest=latest is not None and latest.recommendation_id == record.recommendation_id,
+    )
+
+
+def get_latest_bayesian_recommendation(
+    settings: Settings,
+    study_id: UUID,
+) -> BayesianLatestRecommendationResponse:
+    study = get_bayesian_study(settings, study_id)
+    record = get_latest_bayesian_recommendation_record(
+        settings.workspace_root,
+        str(study.study_version_id),
+    )
+    return BayesianLatestRecommendationResponse(
+        study_id=study.study_id,
+        study_version_id=study.study_version_id,
+        item=(
+            None if record is None else _validated_response(settings, study, record, is_latest=True)
+        ),
+    )
 
 
 def list_bayesian_recommendations(
@@ -273,6 +297,10 @@ def list_bayesian_recommendations(
         offset=offset,
         limit=limit,
     )
+    latest = get_latest_bayesian_recommendation_record(
+        settings.workspace_root,
+        str(study.study_version_id),
+    )
     return BayesianRecommendationListResponse(
         study_id=study.study_id,
         study_version_id=study.study_version_id,
@@ -281,7 +309,17 @@ def list_bayesian_recommendations(
         ),
         offset=offset,
         limit=limit,
-        items=[_validated_response(settings, study, record) for record in records],
+        items=[
+            _validated_response(
+                settings,
+                study,
+                record,
+                is_latest=(
+                    latest is not None and latest.recommendation_id == record.recommendation_id
+                ),
+            )
+            for record in records
+        ],
     )
 
 
@@ -289,6 +327,8 @@ def _validated_response(
     settings: Settings,
     study: Any,
     record: BayesianRecommendationRecord,
+    *,
+    is_latest: bool,
 ) -> BayesianRecommendationResponse:
     trial = next(
         (item for item in study.trials if str(item.trial_id) == record.trial_id),
@@ -298,7 +338,7 @@ def _validated_response(
         raise _optimization_error("bayesian_optimization_artifact_mismatch")
     try:
         source_observation_values = _source_observation_values(settings, study, record)
-        return validate_bayesian_recommendation_record(
+        response = validate_bayesian_recommendation_record(
             record=record,
             study_id=str(study.study_id),
             study_version_id=str(study.study_version_id),
@@ -310,10 +350,73 @@ def _validated_response(
             constraints=study.constraints,
             objective_direction=study.objective.direction,
             current_trial=trial,
-            current_method_version=METHOD_VERSIONS[BAYESIAN_METHOD_ID],
+        )
+        config = json.loads(record.config_json)
+        request = BayesianRecommendationCreateRequest.model_validate(config["request"])
+        return _with_current_context(
+            response,
+            current_trial=trial,
+            is_latest=is_latest,
+            requested_total_trial_budget=request.search.total_trial_budget,
         )
     except ValueError as exc:
         raise _optimization_error("bayesian_optimization_artifact_mismatch") from exc
+
+
+def _with_current_context(
+    response: BayesianRecommendationResponse,
+    *,
+    current_trial: BayesianTrialResponse,
+    is_latest: bool,
+    requested_total_trial_budget: int,
+) -> BayesianRecommendationResponse:
+    return response.model_copy(
+        update={
+            "current_trial": BayesianRecommendationCurrentTrialResponse(
+                trial_id=current_trial.trial_id,
+                state=current_trial.state,
+                objective_value=current_trial.objective_value,
+                closed_at=current_trial.closed_at,
+            ),
+            "is_latest": is_latest,
+            "requested_total_trial_budget": requested_total_trial_budget,
+        }
+    )
+
+
+def _recommendation_worker_payload(
+    study: Any,
+    body: BayesianRecommendationCreateRequest,
+    completed: list[BayesianTrialResponse],
+) -> dict[str, Any]:
+    return {
+        "factors": [
+            {"factor_id": factor.factor_id, "low": factor.low, "high": factor.high}
+            for factor in study.factors
+        ],
+        "constraints": [item.model_dump(mode="json") for item in study.constraints],
+        "observations": [
+            {
+                "normalized": trial.normalized_coordinates,
+                "objective_value": trial.objective_value,
+            }
+            for trial in completed
+        ],
+        "excluded_normalized": [
+            [trial.normalized_coordinates[factor.factor_id] for factor in study.factors]
+            for trial in study.trials
+        ],
+        "objective_direction": study.objective.direction,
+        "search": {
+            key: value
+            for key, value in body.search.model_dump(mode="json").items()
+            if key != "total_trial_budget"
+        },
+    }
+
+
+def _trial_budget_reached(*, trial_count: int, total_trial_budget: int) -> bool:
+    return trial_count >= min(total_trial_budget, MAX_BAYESIAN_TRIALS)
 
 
 def _source_observation_values(
@@ -359,6 +462,7 @@ def _run_worker(payload: dict[str, Any], *, timeout_ms: int) -> dict[str, Any]:
         process.join(timeout=5.0)
         output_queue.close()
         output_queue.join_thread()
+        process.close()
         raise _optimization_error("bayesian_optimization_budget_exhausted")
     try:
         message = output_queue.get(timeout=2.0)
@@ -392,8 +496,12 @@ def _optimization_error(code: str) -> ApiError:
         "bayesian_optimization_surrogate_fit_failed",
         "bayesian_optimization_budget_exhausted",
         "bayesian_optimization_artifact_mismatch",
+        "bayesian_study_closed",
     }
-    stable_code = code if code in allowed else "bayesian_optimization_surrogate_fit_failed"
+    if code == "bayesian_optimization_time_budget_exhausted":
+        stable_code = "bayesian_optimization_budget_exhausted"
+    else:
+        stable_code = code if code in allowed else "bayesian_optimization_surrogate_fit_failed"
     return ApiError(
         code=stable_code,
         message="Bayesian recommendation을 안전하게 생성하거나 복원할 수 없습니다.",

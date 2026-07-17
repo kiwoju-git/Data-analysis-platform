@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  deleteStoredAnalysisRun,
   fetchAnalysisRuns,
+  fetchAnalysisRunDeletionPreflight,
+  type AnalysisRunDeleteResponse,
+  type AnalysisRunDeletionPreflightResponse,
   type AnalysisRunListResponse,
   type AnalysisRunState,
 } from "./api";
@@ -67,10 +71,31 @@ export function useAnalysisHistoryState({
   const [analysisHistoryResultAvailabilityFilter, setAnalysisHistoryResultAvailabilityFilter] =
     useState<AnalysisHistoryResultAvailabilityFilter>("all");
   const [analysisHistoryOffset, setAnalysisHistoryOffset] = useState(0);
+  const [analysisRunDeletionPreflight, setAnalysisRunDeletionPreflight] =
+    useState<AnalysisRunDeletionPreflightResponse | null>(null);
+  const [analysisRunDeletion, setAnalysisRunDeletion] =
+    useState<AnalysisRunDeleteResponse | null>(null);
+  const [analysisRunDeletionError, setAnalysisRunDeletionError] = useState<string | null>(null);
+  const [isLoadingAnalysisRunDeletionPreflight, setIsLoadingAnalysisRunDeletionPreflight] =
+    useState(false);
+  const [isDeletingAnalysisRun, setIsDeletingAnalysisRun] = useState(false);
   const historyRequest = useRef(createLatestRequestGuard()).current;
+  const deletionPreflightRequest = useRef(createLatestRequestGuard()).current;
+  const deletionRequest = useRef(createLatestRequestGuard()).current;
+
+  const resetAnalysisRunDeletionState = useCallback(() => {
+    deletionPreflightRequest.cancel();
+    deletionRequest.cancel();
+    setAnalysisRunDeletionPreflight(null);
+    setAnalysisRunDeletion(null);
+    setAnalysisRunDeletionError(null);
+    setIsLoadingAnalysisRunDeletionPreflight(false);
+    setIsDeletingAnalysisRun(false);
+  }, [deletionPreflightRequest, deletionRequest]);
 
   const resetAnalysisHistoryState = useCallback(() => {
     historyRequest.cancel();
+    resetAnalysisRunDeletionState();
     setAnalysisHistory(null);
     setAnalysisHistoryError(null);
     setIsLoadingAnalysisHistory(false);
@@ -79,7 +104,7 @@ export function useAnalysisHistoryState({
     setAnalysisHistoryStaleFilter("all");
     setAnalysisHistoryResultAvailabilityFilter("all");
     setAnalysisHistoryOffset(0);
-  }, [historyRequest]);
+  }, [historyRequest, resetAnalysisRunDeletionState]);
 
   async function refreshAnalysisHistory() {
     if (currentDatasetVersionId === null) {
@@ -118,6 +143,62 @@ export function useAnalysisHistoryState({
     } finally {
       if (historyRequest.isCurrent(request)) {
         setIsLoadingAnalysisHistory(false);
+      }
+    }
+  }
+
+  async function loadAnalysisRunDeletionPreflight(analysisId: string) {
+    deletionRequest.cancel();
+    const request = deletionPreflightRequest.begin();
+    setIsLoadingAnalysisRunDeletionPreflight(true);
+    setAnalysisRunDeletionPreflight(null);
+    setAnalysisRunDeletion(null);
+    setAnalysisRunDeletionError(null);
+    try {
+      const response = await fetchAnalysisRunDeletionPreflight(analysisId);
+      if (deletionPreflightRequest.isCurrent(request)) {
+        setAnalysisRunDeletionPreflight(response);
+      }
+    } catch (error) {
+      if (deletionPreflightRequest.isCurrent(request)) {
+        setAnalysisRunDeletionError(
+          error instanceof Error ? error.message : "analysis_run_deletion_preflight_failed",
+        );
+      }
+    } finally {
+      if (deletionPreflightRequest.isCurrent(request)) {
+        setIsLoadingAnalysisRunDeletionPreflight(false);
+      }
+    }
+  }
+
+  async function deleteAnalysisRun(preflight: AnalysisRunDeletionPreflightResponse) {
+    deletionPreflightRequest.cancel();
+    const request = deletionRequest.begin();
+    setIsLoadingAnalysisRunDeletionPreflight(false);
+    setIsDeletingAnalysisRun(true);
+    setAnalysisRunDeletion(null);
+    setAnalysisRunDeletionError(null);
+    try {
+      const response = await deleteStoredAnalysisRun(preflight.analysis_id, {
+        confirmation_analysis_id: preflight.analysis_id,
+        expected_deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+      });
+      if (!deletionRequest.isCurrent(request)) {
+        return;
+      }
+      setAnalysisRunDeletion(response);
+      setAnalysisRunDeletionPreflight(null);
+      await refreshAnalysisHistory();
+    } catch (error) {
+      if (deletionRequest.isCurrent(request)) {
+        setAnalysisRunDeletionError(
+          error instanceof Error ? error.message : "analysis_run_delete_failed",
+        );
+      }
+    } finally {
+      if (deletionRequest.isCurrent(request)) {
+        setIsDeletingAnalysisRun(false);
       }
     }
   }
@@ -194,6 +275,10 @@ export function useAnalysisHistoryState({
     resetKey,
   ]);
 
+  useEffect(() => {
+    resetAnalysisRunDeletionState();
+  }, [currentDatasetVersionId, resetAnalysisRunDeletionState, resetKey]);
+
   return {
     analysisHistory,
     analysisHistoryError,
@@ -202,12 +287,24 @@ export function useAnalysisHistoryState({
     analysisHistoryResultAvailabilityFilter,
     analysisHistoryStaleFilter,
     analysisHistoryStatus,
+    analysisRunDeletion,
+    analysisRunDeletionError,
+    analysisRunDeletionPreflight,
+    isDeletingAnalysisRun,
     isLoadingAnalysisHistory,
+    isLoadingAnalysisRunDeletionPreflight,
     onChangeAnalysisHistoryFilters: handleChangeAnalysisHistoryFilters,
     onChangeAnalysisHistoryPage: handleChangeAnalysisHistoryPage,
     onRefreshAnalysisHistory: () => {
       void refreshAnalysisHistory();
     },
+    onLoadAnalysisRunDeletionPreflight: (analysisId: string) => {
+      void loadAnalysisRunDeletionPreflight(analysisId);
+    },
+    onDeleteAnalysisRun: (preflight: AnalysisRunDeletionPreflightResponse) => {
+      void deleteAnalysisRun(preflight);
+    },
+    onClearAnalysisRunDeletion: resetAnalysisRunDeletionState,
     resetAnalysisHistoryState,
   };
 }

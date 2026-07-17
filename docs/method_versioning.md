@@ -3,7 +3,9 @@
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
 `doe.factorial_design` and `regression.response_optimizer` are `0.3.0`, and
-`doe.response_surface` is `0.2.0`; the other stable IDs remain on `0.1.0`.
+`doe.response_surface` is `0.2.0`. `doe.bayesian_optimization` is `0.2.2`, and
+`quality.attribute_control_chart` is `0.2.0`; the other stable IDs remain on
+`0.1.0`.
 
 ## Source Of Truth
 
@@ -206,6 +208,44 @@ request, and an external benchmark measures the existing worker. None of these
 changes alters the GP kernel, EI formula, numerical defaults, persisted field
 meaning, canonical hash payload, or compatibility of valid `0.2.0` records.
 
+The lifecycle-correctness stabilization uses patch version `0.2.1` because it
+enforces the existing no-duplicate/no-random-fallback contract for abandoned
+trial coordinates. It also aligns the backend initial-design minimum, 200
+completed/201-history boundary, stranded-study abandonment guard, latest/current
+view, request trial budget UI, and public time-budget error. Study/history and
+recommendation config/result/model schemas remain 1, SQLite remains schema 13,
+and no existing checksum payload is rewritten. Valid `0.2.0` recommendations
+remain restorable with their recorded method version; they are not relabeled.
+Changing the GP kernel, EI formula, duplicate tolerance, stored coordinate
+meaning, or artifact hash payload would require a new minor/schema decision.
+
+The explicit study-close lifecycle uses patch version `0.2.2`. The GP/EI
+algorithm, defaults, duplicate policy, study/history schema 1, and
+recommendation config/result/model schemas 1 are unchanged. SQLite advances
+from schema 13 to 14 to store lifecycle event schema 1 and nullable successor
+`predecessor_study_id`. A lifecycle event pins the exact final history and
+counts but does not rewrite any earlier checksum payload. Legacy active studies
+receive no invented close event, and valid `0.2.0`/`0.2.1` recommendation
+artifacts retain their recorded method versions.
+
+The closed-study metadata-deletion slice keeps method `0.2.2`, SQLite schema
+14, and every existing Bayesian artifact schema unchanged. Deletion does not
+rewrite or reinterpret a surviving statistical artifact. Its preflight and
+response are operational API schemas starting at 1, and the canonical deletion
+manifest is a confirmation token rather than a stored recommendation/result
+schema. A future change that adds file ownership, cascade semantics, retention
+timestamps, or restorable trash metadata must make a separate storage/API
+schema decision; it does not automatically imply a statistical method bump.
+
+The individual analysis-export deletion slice also keeps every statistical
+method version, existing JSON/CSV/HTML/prediction-export schema, and SQLite
+schema 14 unchanged. It removes one verified app-created file and its one
+metadata ownership row without rewriting the parent result or another export.
+Deletion preflight and response are operational schema 1; the manifest and
+startup quarantine recovery describe mutation safety, not statistical output
+meaning. Full analysis/dataset ownership-graph deletion or restorable trash
+would require a separate storage/API schema review.
+
 The earlier scikit-learn spike and dependency-promotion evidence schema is an
 external TEMP validation artifact and does not change these method or asset
 versions. Windows 11 client validation remains a release gate; it is not a
@@ -222,23 +262,23 @@ and no result artifact was previously produced. Future changes to P/NP/C/U
 formulas, count/denominator meaning, limit policy, signal rules, or persisted
 field interpretation require a method-version decision under this policy.
 
-The Phase II frozen-limit contract foundation does not change executable
-versions. The implementation remains `0.1.0`/result schema `1`, estimates its
-baseline from all filtered valid observations, and rejects unknown Phase II
-options. The first executable Phase II slice is reserved for method version
-`0.2.0`, result schema `2`, and immutable limit-set asset schema `1`. This is a
+The executable Phase II frozen-limit slice moves the method to version `0.2.0`
+and result schema `2`, while immutable limit-set asset schema remains `1`. This is a
 minor bump because the stable method family remains P/NP/C/U while request
 options, persisted dependencies, limit source, and result interpretation are
 extended. Existing `0.1.0` results remain Phase I and are never reinterpreted
-or migrated to Phase II.
+or migrated to Phase II. New `0.2.0` Phase I results use schema `2` with an
+explicit `phase_1` marker; limit-set promotion explicitly supports both
+`0.1.0`/schema `1` and `0.2.0`/schema `2` sources.
 
-Limit-set asset schema `1` becomes executable storage metadata in SQLite schema
-`13` before Phase II monitoring exists. This does not bump the statistical
-method or result schema: it copies and independently verifies an eligible
-stored `0.1.0` Phase I dependency without changing that result. Any change to
+Limit-set asset schema `1` remains executable storage metadata in SQLite schema
+`13`. Its canonical field meaning is unchanged; expanding the source-version
+enum to include the new Phase I representation does not rewrite an existing
+asset or source result. Any change to
 the asset's canonical fields, eligibility meaning, or checksum interpretation
-requires an asset-schema decision; enabling frozen-limit monitoring still
-requires the reserved method/result bump above.
+requires an asset-schema decision. The common analysis config remains schema
+`2`, and SQLite remains schema `13`, because both already persist arbitrary
+typed analysis options and asset relationships.
 
 ## Minor Version
 
@@ -284,3 +324,21 @@ new results, it must show the version difference.
 - Add or update reference fixtures and explicit tolerance tests.
 - Confirm catalog and handler version alignment tests still pass.
 - Record the version rationale in `docs/progress_gate_b.md` or the PR summary.
+
+## Analysis-Run Retention Decision
+
+Analysis-run deletion preflight, exact confirmation, file quarantine, metadata
+removal, and startup recovery are operational lifecycle behavior. They do not
+change a statistical calculation, request default, result/config meaning,
+artifact checksum payload, or comparison semantics. Therefore this slice does
+not bump any method version or stored statistical schema. SQLite remains schema
+14, while the new deletion preflight and response contracts start at schema 1.
+
+## Model And Limit-Set Retention Decision
+
+Regression-model and attribute-control-limit-set deletion add operational
+preflight/delete schemas 1 only. They do not change model fitting, prediction,
+Phase I/II calculations, persisted result/config meaning, model manifest schema
+2, or limit-set asset schema 1. Therefore `regression.linear_model`,
+`regression.predict`, and `quality.attribute_control_chart` versions remain
+unchanged and SQLite remains schema 14.

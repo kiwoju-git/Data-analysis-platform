@@ -33,6 +33,7 @@ export interface BayesianStudyCreateRequest {
   constraints: BayesianLinearConstraintRequest[];
   initial_design_seed: number;
   initial_design_size: number;
+  predecessor_study_id?: string | null;
 }
 
 export interface BayesianFactorResponse extends BayesianFactorRequest {
@@ -90,6 +91,56 @@ export interface BayesianHistoryRevisionResponse {
   created_at: string;
 }
 
+export type BayesianStudyStatus = "active" | "completed" | "abandoned";
+
+export type BayesianStudyCloseReason =
+  | "objective_satisfied"
+  | "budget_reached"
+  | "confirmation_complete"
+  | "unsafe_or_infeasible"
+  | "resources_unavailable"
+  | "study_cancelled";
+
+export interface BayesianStudyLifecycleEventResponse {
+  schema_version: 1;
+  lifecycle_event_id: string;
+  study_id: string;
+  study_version_id: string;
+  lifecycle_revision: 1;
+  previous_status: "active";
+  resulting_status: "completed" | "abandoned";
+  reason_code: BayesianStudyCloseReason;
+  note: string | null;
+  request_id: string;
+  final_history_revision_id: string;
+  final_observation_history_sha256: string;
+  final_trial_count: number;
+  final_completed_trial_count: number;
+  final_abandoned_trial_count: number;
+  latest_recommendation_id: string | null;
+  definition_sha256: string;
+  event_sha256: string;
+  closed_at: string;
+  created_at: string;
+  app_version: string;
+  build_commit: string | null;
+}
+
+export interface BayesianStudyCloseRequest {
+  target_status: "completed" | "abandoned";
+  reason_code: BayesianStudyCloseReason;
+  note?: string | null;
+  request_id: string;
+  expected_study_version_id: string;
+  expected_history_revision_id: string;
+  expected_observation_history_sha256: string;
+}
+
+export interface BayesianTrialAbandonRequest {
+  expected_history_revision_id?: string | null;
+  intent?: "continue_study" | "close_study";
+}
+
 export interface BayesianStudyResponse {
   study_id: string;
   study_version_id: string;
@@ -98,7 +149,8 @@ export interface BayesianStudyResponse {
   method_id: "doe.bayesian_optimization";
   method_version: string;
   name: string;
-  status: "active" | "completed" | "abandoned";
+  status: BayesianStudyStatus;
+  predecessor_study_id: string | null;
   created_at: string;
   updated_at: string;
   app_version: string;
@@ -115,6 +167,60 @@ export interface BayesianStudyResponse {
   trials: BayesianTrialResponse[];
   surrogate_available: boolean;
   recommendation_available: boolean;
+  recommendation_minimum_completed_observations: number;
+  recommendation_hard_trial_limit: number;
+  recommendation_blockers: Array<
+    | "bayesian_optimization_history_incomplete"
+    | "bayesian_optimization_pending_recommendation_exists"
+    | "bayesian_optimization_budget_exhausted"
+    | "bayesian_study_not_active"
+  >;
+  lifecycle_event: BayesianStudyLifecycleEventResponse | null;
+}
+
+export interface BayesianStudyCloseResponse {
+  study: BayesianStudyResponse;
+  lifecycle_event: BayesianStudyLifecycleEventResponse;
+}
+
+export interface BayesianStudyDeletionCounts {
+  study_count: 1;
+  study_version_count: number;
+  trial_count: number;
+  history_revision_count: number;
+  history_head_count: number;
+  recommendation_count: number;
+  lifecycle_event_count: number;
+  metadata_record_count: number;
+  file_count: 0;
+  file_bytes: 0;
+}
+
+export interface BayesianStudyDeletionPreflightResponse {
+  preflight_schema_version: 1;
+  study_id: string;
+  study_version_id: string;
+  status: BayesianStudyStatus;
+  eligible: boolean;
+  blockers: Array<
+    "bayesian_study_deletion_active" | "bayesian_study_deletion_referenced"
+  >;
+  successor_study_count: number;
+  counts: BayesianStudyDeletionCounts;
+  deletion_manifest_sha256: string;
+}
+
+export interface BayesianStudyDeleteRequest {
+  confirmation_study_id: string;
+  expected_deletion_manifest_sha256: string;
+}
+
+export interface BayesianStudyDeleteResponse {
+  deletion_schema_version: 1;
+  study_id: string;
+  deletion_manifest_sha256: string;
+  deleted_at: string;
+  deleted_counts: BayesianStudyDeletionCounts;
 }
 
 export interface BayesianStudySummaryResponse {
@@ -123,7 +229,8 @@ export interface BayesianStudySummaryResponse {
   method_id: "doe.bayesian_optimization";
   method_version: string;
   name: string;
-  status: "active" | "completed" | "abandoned";
+  status: BayesianStudyStatus;
+  predecessor_study_id: string | null;
   updated_at: string;
   definition_sha256: string;
   pending_trial_count: number;
@@ -271,6 +378,13 @@ export interface BayesianRecommendationProvenance {
   created_at: string;
 }
 
+export interface BayesianRecommendationCurrentTrialResponse {
+  trial_id: string;
+  state: "pending" | "completed" | "abandoned";
+  objective_value: number | null;
+  closed_at: string | null;
+}
+
 export interface BayesianRecommendationResponse {
   recommendation_id: string;
   study_id: string;
@@ -289,6 +403,9 @@ export interface BayesianRecommendationResponse {
   trial: BayesianTrialResponse;
   result: BayesianRecommendationResult;
   provenance: BayesianRecommendationProvenance;
+  current_trial?: BayesianRecommendationCurrentTrialResponse | null;
+  is_latest?: boolean;
+  requested_total_trial_budget?: number | null;
 }
 
 export interface BayesianRecommendationListResponse {
@@ -298,4 +415,10 @@ export interface BayesianRecommendationListResponse {
   offset: number;
   limit: number;
   items: BayesianRecommendationResponse[];
+}
+
+export interface BayesianLatestRecommendationResponse {
+  study_id: string;
+  study_version_id: string;
+  item: BayesianRecommendationResponse | null;
 }

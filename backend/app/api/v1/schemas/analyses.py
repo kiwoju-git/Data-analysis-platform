@@ -3,7 +3,7 @@ from math import isfinite
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class AnalysisModuleId(str, Enum):
@@ -473,6 +473,8 @@ class IndividualsChartOptions(BaseModel):
 class AttributeControlChartOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    phase: Literal["phase_1", "phase_2"] = "phase_1"
+    limit_set_id: UUID | None = None
     chart_type: Literal["p", "np", "c", "u"]
     count_definition: Literal["defectives", "defects"]
     count_column_id: str = Field(min_length=1)
@@ -510,6 +512,14 @@ class AttributeControlChartOptions(BaseModel):
         if isinstance(value, bool) or not isinstance(value, int):
             raise ValueError("must be an integer")
         return value
+
+    @model_validator(mode="after")
+    def validate_phase_dependency(self) -> "AttributeControlChartOptions":
+        if self.phase == "phase_1" and self.limit_set_id is not None:
+            raise ValueError("phase_1 must not include limit_set_id")
+        if self.phase == "phase_2" and self.limit_set_id is None:
+            raise ValueError("phase_2 requires limit_set_id")
+        return self
 
 
 class SubgroupChartOptions(BaseModel):
@@ -784,6 +794,56 @@ class AnalysisRunListResponse(BaseModel):
     returned_count: int = Field(ge=0)
     has_more: bool
     runs: list[AnalysisRunListItemResponse]
+
+
+class AnalysisRunDeletionCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_run_count: Literal[1]
+    analysis_artifact_count: int = Field(ge=0)
+    result_file_count: int = Field(ge=0, le=1)
+    artifact_file_count: int = Field(ge=0)
+    export_file_count: int = Field(ge=0)
+    total_file_count: int = Field(ge=0)
+    file_bytes: int = Field(ge=0)
+    metadata_record_count: int = Field(ge=1)
+    regression_model_count: int = Field(ge=0)
+    regression_prediction_count: int = Field(ge=0)
+    attribute_control_limit_set_count: int = Field(ge=0)
+    job_reference_count: int = Field(ge=0)
+
+
+class AnalysisRunDeletionPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preflight_schema_version: Literal[1]
+    analysis_id: UUID
+    method_id: str
+    method_version: str
+    status: AnalysisRunState
+    stale: bool
+    deletion_ready: bool
+    blockers: list[str]
+    counts: AnalysisRunDeletionCounts
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class AnalysisRunDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_analysis_id: UUID
+    expected_deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class AnalysisRunDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deletion_schema_version: Literal[1]
+    analysis_id: UUID
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    deleted_at: str
+    deleted_counts: AnalysisRunDeletionCounts
+    cleanup_status: Literal["deleted", "quarantined_pending_cleanup"]
 
 
 class AnalysisRunComparisonSideResponse(BaseModel):
@@ -1209,6 +1269,52 @@ class AnalysisResultExportListResponse(BaseModel):
     exports: list[AnalysisResultExportListItemResponse]
 
 
+class AnalysisResultExportDeletionCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metadata_record_count: Literal[1]
+    file_count: Literal[1]
+    file_bytes: int = Field(ge=0)
+
+
+class AnalysisResultExportDeletionPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preflight_schema_version: Literal[1]
+    analysis_id: UUID
+    export_id: UUID
+    artifact_kind: Literal[
+        "analysis_result_json_export",
+        "analysis_result_csv_export",
+        "analysis_result_html_report",
+        "regression_prediction_csv_export",
+    ]
+    media_type: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    counts: AnalysisResultExportDeletionCounts
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class AnalysisResultExportDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_analysis_id: UUID
+    confirmation_export_id: UUID
+    expected_deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class AnalysisResultExportDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deletion_schema_version: Literal[1]
+    analysis_id: UUID
+    export_id: UUID
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    deleted_at: str
+    deleted_counts: AnalysisResultExportDeletionCounts
+    cleanup_status: Literal["deleted", "quarantined_pending_cleanup"]
+
+
 class GageRrPreflightRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1317,6 +1423,50 @@ class RegressionModelManifestResponse(BaseModel):
     created_at: str
     app_version: str
     manifest: dict[str, Any]
+
+
+class RegressionModelDeletionCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    regression_model_count: Literal[1]
+    manifest_artifact_count: Literal[1]
+    manifest_file_count: Literal[1]
+    manifest_file_bytes: int = Field(ge=0)
+    metadata_record_count: Literal[2]
+    dependent_prediction_count: int = Field(ge=0)
+
+
+class RegressionModelDeletionPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preflight_schema_version: Literal[1]
+    model_id: UUID
+    source_analysis_id: UUID
+    method_id: Literal["regression.linear_model"]
+    method_version: str
+    deletion_ready: bool
+    blockers: list[str]
+    counts: RegressionModelDeletionCounts
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RegressionModelDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_model_id: UUID
+    expected_deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RegressionModelDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deletion_schema_version: Literal[1]
+    model_id: UUID
+    source_analysis_id: UUID
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    deleted_at: str
+    deleted_counts: RegressionModelDeletionCounts
+    cleanup_status: Literal["deleted", "quarantined_pending_cleanup"]
 
 
 class RegressionPredictionPreflightRequest(BaseModel):

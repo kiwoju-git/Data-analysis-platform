@@ -12,11 +12,15 @@ import type {
   AnalysisModuleId,
   AnalysisRunComparisonResponse,
   AnalysisResultExportListResponse,
+  AnalysisResultExportDeleteResponse,
+  AnalysisResultExportDeletionPreflightResponse,
   AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
   AnalysisResultHtmlReportResponse,
   AnalysisResultJsonExportResponse,
   AnalysisRunListResponse,
+  AnalysisRunDeleteResponse,
+  AnalysisRunDeletionPreflightResponse,
   AnalysisRunState,
   DatasetProfileResponse,
   DatasetVersionResponse,
@@ -33,6 +37,9 @@ export interface AnalysisWorkbenchExportState {
   analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
   analysisResultCsvExportError?: string | null;
   analysisResultExportDownloadError?: string | null;
+  analysisResultExportDeletion?: AnalysisResultExportDeleteResponse | null;
+  analysisResultExportDeletionError?: string | null;
+  analysisResultExportDeletionPreflight?: AnalysisResultExportDeletionPreflightResponse | null;
   analysisResultExportList?: AnalysisResultExportListResponse | null;
   analysisResultExportListError?: string | null;
   analysisResultHtmlReport?: AnalysisResultHtmlReportResponse | null;
@@ -43,11 +50,21 @@ export interface AnalysisWorkbenchExportState {
   isCreatingAnalysisResultHtmlReport?: boolean;
   isCreatingAnalysisResultJsonExport?: boolean;
   isDownloadingAnalysisResultExport?: boolean;
+  isDeletingAnalysisResultExport?: boolean;
   isLoadingAnalysisResultExportList?: boolean;
+  isLoadingAnalysisResultExportDeletionPreflight?: boolean;
   onCreateAnalysisResultCsvExport?: (analysisId: string) => void;
   onCreateAnalysisResultHtmlReport?: (analysisId: string) => void;
   onCreateAnalysisResultJsonExport?: (analysisId: string) => void;
   onDownloadAnalysisResultExport?: (analysisId: string, exportId: string) => void;
+  onLoadAnalysisResultExportDeletionPreflight?: (
+    analysisId: string,
+    exportId: string,
+  ) => void;
+  onDeleteAnalysisResultExport?: (
+    preflight: AnalysisResultExportDeletionPreflightResponse,
+  ) => void;
+  onClearAnalysisResultExportDeletion?: () => void;
 }
 
 export interface AnalysisWorkbenchHistoryState {
@@ -58,7 +75,12 @@ export interface AnalysisWorkbenchHistoryState {
   analysisHistoryResultAvailabilityFilter?: AnalysisHistoryResultAvailabilityFilter;
   analysisHistoryStaleFilter?: AnalysisHistoryStaleFilter;
   analysisHistoryStatus?: AnalysisRunState | "";
+  analysisRunDeletion?: AnalysisRunDeleteResponse | null;
+  analysisRunDeletionError?: string | null;
+  analysisRunDeletionPreflight?: AnalysisRunDeletionPreflightResponse | null;
+  isDeletingAnalysisRun?: boolean;
   isLoadingAnalysisHistory?: boolean;
+  isLoadingAnalysisRunDeletionPreflight?: boolean;
   onChangeAnalysisHistoryFilters?: (filters: {
     methodId: string;
     resultAvailability: AnalysisHistoryResultAvailabilityFilter;
@@ -67,6 +89,9 @@ export interface AnalysisWorkbenchHistoryState {
   }) => void;
   onChangeAnalysisHistoryPage?: (offset: number) => void;
   onRefreshAnalysisHistory?: () => void;
+  onClearAnalysisRunDeletion?: () => void;
+  onDeleteAnalysisRun?: (preflight: AnalysisRunDeletionPreflightResponse) => void;
+  onLoadAnalysisRunDeletionPreflight?: (analysisId: string) => void;
 }
 
 export interface AnalysisWorkbenchComparisonState {
@@ -141,6 +166,10 @@ export function AnalysisWorkbench({
     analysisResultCsvExport: exportState?.analysisResultCsvExport ?? null,
     analysisResultCsvExportError: exportState?.analysisResultCsvExportError ?? null,
     analysisResultExportDownloadError: exportState?.analysisResultExportDownloadError ?? null,
+    analysisResultExportDeletion: exportState?.analysisResultExportDeletion ?? null,
+    analysisResultExportDeletionError: exportState?.analysisResultExportDeletionError ?? null,
+    analysisResultExportDeletionPreflight:
+      exportState?.analysisResultExportDeletionPreflight ?? null,
     analysisResultExportList: exportState?.analysisResultExportList ?? null,
     analysisResultExportListError: exportState?.analysisResultExportListError ?? null,
     analysisResultHtmlReport: exportState?.analysisResultHtmlReport ?? null,
@@ -151,7 +180,10 @@ export function AnalysisWorkbench({
     isCreatingAnalysisResultHtmlReport: exportState?.isCreatingAnalysisResultHtmlReport ?? false,
     isCreatingAnalysisResultJsonExport: exportState?.isCreatingAnalysisResultJsonExport ?? false,
     isDownloadingAnalysisResultExport: exportState?.isDownloadingAnalysisResultExport ?? false,
+    isDeletingAnalysisResultExport: exportState?.isDeletingAnalysisResultExport ?? false,
     isLoadingAnalysisResultExportList: exportState?.isLoadingAnalysisResultExportList ?? false,
+    isLoadingAnalysisResultExportDeletionPreflight:
+      exportState?.isLoadingAnalysisResultExportDeletionPreflight ?? false,
     onCreateAnalysisResultCsvExport:
       exportState?.onCreateAnalysisResultCsvExport ?? (() => undefined),
     onCreateAnalysisResultHtmlReport:
@@ -160,6 +192,12 @@ export function AnalysisWorkbench({
       exportState?.onCreateAnalysisResultJsonExport ?? (() => undefined),
     onDownloadAnalysisResultExport:
       exportState?.onDownloadAnalysisResultExport ?? (() => undefined),
+    onLoadAnalysisResultExportDeletionPreflight:
+      exportState?.onLoadAnalysisResultExportDeletionPreflight ?? (() => undefined),
+    onDeleteAnalysisResultExport:
+      exportState?.onDeleteAnalysisResultExport ?? (() => undefined),
+    onClearAnalysisResultExportDeletion:
+      exportState?.onClearAnalysisResultExportDeletion ?? (() => undefined),
   };
   const effectiveHistoryState = {
     analysisHistory: historyState?.analysisHistory ?? null,
@@ -170,12 +208,23 @@ export function AnalysisWorkbench({
       historyState?.analysisHistoryResultAvailabilityFilter ?? "all",
     analysisHistoryStaleFilter: historyState?.analysisHistoryStaleFilter ?? "all",
     analysisHistoryStatus: historyState?.analysisHistoryStatus ?? "",
+    analysisRunDeletion: historyState?.analysisRunDeletion ?? null,
+    analysisRunDeletionError: historyState?.analysisRunDeletionError ?? null,
+    analysisRunDeletionPreflight: historyState?.analysisRunDeletionPreflight ?? null,
+    isDeletingAnalysisRun: historyState?.isDeletingAnalysisRun ?? false,
     isLoadingAnalysisHistory: historyState?.isLoadingAnalysisHistory ?? false,
+    isLoadingAnalysisRunDeletionPreflight:
+      historyState?.isLoadingAnalysisRunDeletionPreflight ?? false,
     onChangeAnalysisHistoryFilters:
       historyState?.onChangeAnalysisHistoryFilters ?? (() => undefined),
     onChangeAnalysisHistoryPage:
       historyState?.onChangeAnalysisHistoryPage ?? (() => undefined),
     onRefreshAnalysisHistory: historyState?.onRefreshAnalysisHistory ?? (() => undefined),
+    onClearAnalysisRunDeletion:
+      historyState?.onClearAnalysisRunDeletion ?? (() => undefined),
+    onDeleteAnalysisRun: historyState?.onDeleteAnalysisRun ?? (() => undefined),
+    onLoadAnalysisRunDeletionPreflight:
+      historyState?.onLoadAnalysisRunDeletionPreflight ?? (() => undefined),
   };
   const effectiveComparisonState = {
     analysisComparison: comparisonState?.analysisComparison ?? null,
@@ -399,12 +448,24 @@ export function AnalysisWorkbench({
             comparisonRightId={effectiveComparisonState.analysisComparisonRightId}
             isComparing={effectiveComparisonState.isComparingAnalysisRuns}
             restoredResult={effectiveRestoredState.restoredAnalysisResult}
+            deletion={effectiveHistoryState.analysisRunDeletion}
+            deletionError={effectiveHistoryState.analysisRunDeletionError}
+            deletionPreflight={effectiveHistoryState.analysisRunDeletionPreflight}
+            isDeleting={effectiveHistoryState.isDeletingAnalysisRun}
+            isLoadingDeletionPreflight={
+              effectiveHistoryState.isLoadingAnalysisRunDeletionPreflight
+            }
             version={version}
             onChangeFilters={effectiveHistoryState.onChangeAnalysisHistoryFilters}
             onCompare={effectiveComparisonState.onCompareAnalysisRuns}
             onPageChange={effectiveHistoryState.onChangeAnalysisHistoryPage}
             onRefresh={effectiveHistoryState.onRefreshAnalysisHistory}
             onRestore={effectiveRestoredState.onRestoreAnalysisRun}
+            onClearDeletion={effectiveHistoryState.onClearAnalysisRunDeletion}
+            onDelete={effectiveHistoryState.onDeleteAnalysisRun}
+            onLoadDeletionPreflight={
+              effectiveHistoryState.onLoadAnalysisRunDeletionPreflight
+            }
             onSelectComparisonRun={effectiveComparisonState.onSelectAnalysisComparisonRun}
           />
           <AnalysisResultExportPanel
@@ -412,6 +473,9 @@ export function AnalysisWorkbench({
             csvExportError={effectiveExportState.analysisResultCsvExportError}
             csvExportResult={effectiveExportState.analysisResultCsvExport}
             downloadError={effectiveExportState.analysisResultExportDownloadError}
+            deletion={effectiveExportState.analysisResultExportDeletion}
+            deletionError={effectiveExportState.analysisResultExportDeletionError}
+            deletionPreflight={effectiveExportState.analysisResultExportDeletionPreflight}
             exportList={effectiveExportState.analysisResultExportList}
             exportListError={effectiveExportState.analysisResultExportListError}
             htmlReportError={effectiveExportState.analysisResultHtmlReportError}
@@ -420,13 +484,22 @@ export function AnalysisWorkbench({
             isExportingHtml={effectiveExportState.isCreatingAnalysisResultHtmlReport}
             isExportingJson={effectiveExportState.isCreatingAnalysisResultJsonExport}
             isDownloadingExport={effectiveExportState.isDownloadingAnalysisResultExport}
+            isDeletingExport={effectiveExportState.isDeletingAnalysisResultExport}
             isLoadingExportList={effectiveExportState.isLoadingAnalysisResultExportList}
+            isLoadingDeletionPreflight={
+              effectiveExportState.isLoadingAnalysisResultExportDeletionPreflight
+            }
             exportError={effectiveExportState.analysisResultJsonExportError}
             exportResult={effectiveExportState.analysisResultJsonExport}
             onCreateCsvExport={effectiveExportState.onCreateAnalysisResultCsvExport}
             onCreateExport={effectiveExportState.onCreateAnalysisResultJsonExport}
             onCreateHtmlReport={effectiveExportState.onCreateAnalysisResultHtmlReport}
             onDownloadExport={effectiveExportState.onDownloadAnalysisResultExport}
+            onLoadDeletionPreflight={
+              effectiveExportState.onLoadAnalysisResultExportDeletionPreflight
+            }
+            onDeleteExport={effectiveExportState.onDeleteAnalysisResultExport}
+            onClearDeletion={effectiveExportState.onClearAnalysisResultExportDeletion}
           />
           {analysisRunError !== null ? (
             <AnalysisRunErrorNotice errorCode={analysisRunError} />

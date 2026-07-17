@@ -12,7 +12,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 
 ## Migration Skeleton
 
-- Current schema version: `8`.
+- Current schema version: `14`.
 - Migration history is recorded in `schema_migrations`.
 - `PRAGMA user_version` is set to the current schema version after migrations run.
 - Startup initializes the metadata store during FastAPI lifespan startup.
@@ -23,6 +23,12 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - Version `6` adds `regression_models` for safe app-created regression model manifest metadata.
 - Version `7` adds `experiment_designs`, `experiment_design_versions`, and `experiment_runs` for DOE design assets.
 - Version `8` adds `experiment_run_responses` for numeric DOE response entry keyed to immutable design versions and run IDs.
+- Version `9` adds persisted experiment-design analyses.
+- Version `10` adds immutable DOE response revisions and their current head.
+- Version `11` adds Bayesian studies, trials, and observation-history revisions.
+- Version `12` adds persisted Bayesian GP/EI recommendations.
+- Version `13` adds immutable attribute-control limit-set assets.
+- Version `14` adds Bayesian lifecycle events and successor lineage.
 - `dataset_versions.parsing_options_json` stores confirmed parsing options as canonical JSON.
 - `dataset_columns` preserves the original header text separately from the unique display name.
 - `analysis_runs.config_json` stores request/config snapshots and must include `schema_version`.
@@ -34,7 +40,25 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - `experiment_designs`, `experiment_design_versions`, and `experiment_runs` store DOE design assets, generated run order, factor settings, and design checksum metadata.
 - `experiment_run_responses` stores numeric DOE response values by design version and run ID; response saving updates the design status in the same SQLite transaction without mutating run metadata.
 - `jobs` stores job state, progress, cancellation request state, and sanitized error codes.
-- Upgrade from schema versions `1`, `2`, `3`, `4`, `5`, `6`, and `7` to `8` is covered by unit tests.
+- Upgrade from schema versions `1` through `13` to `14` is covered by unit tests.
+- Closed Bayesian study deletion uses the existing schema-14 ownership keys. It
+  checksum-validates the graph, blocks successor references, requires an exact
+  deletion-manifest SHA, and removes only metadata in one SQLite transaction.
+  The broader file-owning deletion policy is in
+  `docs/workspace_retention_contract.md`.
+- Succeeded analysis-run deletion also uses existing schema-14 keys. Preflight
+  validates the stored result, row snapshot relation, every approved artifact
+  file, prediction consistency when applicable, and inbound model/limit-set/job
+  references. It uses short same-directory quarantine names, rechecks the
+  exact run/artifact snapshot under `BEGIN IMMEDIATE`, restores all moved files
+  on failure, and recovers committed or metadata-owned quarantines at startup.
+  No migration or cascade expansion is introduced.
+- Regression-model and attribute-control-limit-set deletion use existing
+  schema-14 ownership rows. Each checksum-validates one exact asset, blocks
+  inbound prediction or Phase II references, quarantines the file, rechecks the
+  row/source snapshot under `BEGIN IMMEDIATE`, and removes only its own
+  metadata. Startup recovery restores metadata-owned quarantines and removes
+  committed orphans. Source analyses and datasets are preserved.
 
 ## Canonical Parsed Artifact Decision
 
@@ -51,6 +75,8 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
   `analysis_run_results.py` owns stored result checksum validation,
   `analysis_run_history.py` owns metadata-only list/status/cancel responses,
   `analysis_run_exports.py` owns export artifact creation/list/download, and
+  `analysis_run_retention.py` owns analysis-run deletion preflight, quarantine,
+  conditional metadata removal, and startup recovery, while
   `analysis_run_comparisons.py` owns checksum-validated stored-result
   comparisons. This is an implementation boundary change only; API shapes and
   artifact paths are unchanged.
@@ -63,8 +89,9 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - `POST /api/v1/analysis-runs/{analysis_id}/exports/json` creates a checksum-recorded `analysis_result_json_export` artifact under the analysis workspace after revalidating the stored result file. The response exposes export IDs, media type, size, SHA-256, stale flag, and the exported envelope, but not internal relative or absolute filesystem paths.
 - `POST /api/v1/analysis-runs/{analysis_id}/exports/csv` creates a checksum-recorded `analysis_result_csv_export` artifact under the analysis workspace after revalidating the stored result file. The first CSV contract is a generic long-form `section,path,value` table over the stored result envelope. Each cell is escaped for spreadsheet formula injection when it begins, after leading whitespace, with `=`, `+`, `-`, or `@`, or begins with tab/newline control characters. The response exposes export IDs, media type, size, SHA-256, stale flag, row count, columns, and a small preview, but not internal relative or absolute filesystem paths.
 - `POST /api/v1/analysis-runs/{analysis_id}/exports/html` creates a checksum-recorded `analysis_result_html_report` artifact under the analysis workspace after revalidating the stored result file. The HTML report is self-contained and static, with escaped text content, no scripts, no external resources, and no internal relative or absolute filesystem paths. It includes method-specific stored-result sections for `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, the current generic `hypothesis.*` analysis-run methods, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, and the current generic `quality.*` analysis-run methods, and falls back to the generic result-envelope table for every method.
-- `GET /api/v1/analysis-runs/{analysis_id}/exports/{export_id}/download` downloads created JSON/CSV/HTML export artifacts only after validating the `analysis_artifacts` row, artifact kind, relative path safety, file existence, and SHA-256 checksum. Download responses stream validated bytes with an attachment filename derived only from IDs and do not expose internal workspace paths. Recovery failures use stable codes: `analysis_export_not_found`, `analysis_export_path_invalid`, `analysis_export_file_missing`, and `analysis_export_checksum_mismatch`.
+- `GET /api/v1/analysis-runs/{analysis_id}/exports/{export_id}/download` downloads created JSON/CSV/HTML or regression-prediction CSV export artifacts only after validating the `analysis_artifacts` row, app-created artifact kind and media type, exact kind-specific relative path, file existence, and SHA-256 checksum. Download responses stream validated bytes with an attachment filename derived only from IDs and do not expose internal workspace paths. Recovery failures use stable codes including `analysis_export_not_found`, `analysis_export_metadata_invalid`, `analysis_export_path_invalid`, `analysis_export_file_missing`, and `analysis_export_checksum_mismatch`.
 - `GET /api/v1/analysis-runs/{analysis_id}/exports` lists created JSON/CSV/HTML export artifact metadata with export IDs, artifact kind, media type, SHA-256, creation time, and download endpoint URL. It does not expose `analysis_artifacts.path`, relative workspace paths, or absolute filesystem paths.
+- Individual app-created exports can be removed through deletion preflight plus exact confirmation. The service revalidates kind/media/path/file/SHA/size, quarantines the file with a same-directory atomic rename, conditionally deletes exactly one `analysis_artifacts` row under `BEGIN IMMEDIATE`, restores the file on metadata conflict, and retries committed quarantine cleanup on startup. A checksum-mismatched quarantine is left pending rather than restored. This operation never deletes the owning analysis result, row snapshots, model/prediction artifacts, or other exports. A separate analysis-run root operation deletes a succeeded run only with all verified owned result/artifact files; regression-model, limit-set, and job references block it, and no dependent-root cascade is available. See `docs/workspace_retention_contract.md`.
 - New generic analysis-run result envelopes include runtime/build provenance fields: Python version, platform, `Settings.git_commit` with `DATALAB_GIT_COMMIT` fallback, and NumPy/SciPy package versions.
 - Available inline analysis methods freeze filter snapshots as `analysis_row_snapshot` JSON artifacts under `workspaces/analyses/{analysis_id}/row_snapshot.json`. The payload records the dataset version, source schema hash, source canonical artifact hash, filter snapshot hash, row identity, and included row count without raw cell values.
 - `regression.linear_model` also writes a safe JSON regression model manifest under the analysis workspace, records it as a `regression_model_manifest` analysis artifact, and stores a `regression_models` metadata row in the same SQLite transaction as the analysis run. The manifest contains the app-created OLS specification, coefficients, fit summary, diagnostic summary, dataset version, schema hash, canonical artifact hash, row snapshot hash, package versions, and OLS prediction basis. It does not use pickle/joblib or external model uploads.

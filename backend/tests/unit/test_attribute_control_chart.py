@@ -7,6 +7,7 @@ from app.statistics.attribute_control_chart import (
     AttributeControlChartColumn,
     AttributeControlChartError,
     calculate_attribute_control_chart,
+    calculate_attribute_control_chart_phase_2,
 )
 
 REFERENCE_FIXTURE = Path(
@@ -237,6 +238,55 @@ def test_attribute_chart_rejects_invalid_inputs_without_fallback(
             chart_type=chart_type,
             count_definition=definition,
             constant_opportunity_confirmed=confirmed,
+        )
+
+
+def test_phase_2_uses_frozen_center_without_refitting_monitoring_rows() -> None:
+    result = calculate_attribute_control_chart_phase_2(
+        [["0", "20"], ["0", "40"]],
+        _count_column(),
+        _denominator_column(),
+        chart_type="p",
+        count_definition="defectives",
+        frozen_center_line=0.25,
+        fixed_sample_size=None,
+    )
+
+    assert result["center_line"] == 0.25
+    assert result["total_count"] == 0
+    assert result["control_limit_method"] == "phase_2_frozen_three_sigma"
+    assert "attribute_control_chart_phase_2_limits_frozen_from_verified_asset" in result["warnings"]
+
+
+def test_phase_2_np_rejects_sample_size_different_from_frozen_asset() -> None:
+    with pytest.raises(
+        AttributeControlChartError,
+        match="attribute_control_chart_phase_2_np_sample_size_mismatch",
+    ):
+        calculate_attribute_control_chart_phase_2(
+            [["2", "20"], ["3", "21"]],
+            _count_column(),
+            _denominator_column(),
+            chart_type="np",
+            count_definition="defectives",
+            frozen_center_line=5.0,
+            fixed_sample_size=20,
+        )
+
+
+def test_phase_2_c_requires_current_equal_opportunity_confirmation() -> None:
+    with pytest.raises(
+        AttributeControlChartError,
+        match="attribute_control_chart_phase_2_c_opportunity_confirmation_required",
+    ):
+        calculate_attribute_control_chart_phase_2(
+            [["2"], ["3"]],
+            _count_column(),
+            None,
+            chart_type="c",
+            count_definition="defects",
+            frozen_center_line=5.0,
+            fixed_sample_size=None,
         )
 
 

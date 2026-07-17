@@ -15,6 +15,111 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     message: "브라우저가 로컬 API 서버에 연결하지 못했습니다.",
     action: "프론트와 백엔드 포트가 맞는지 확인하고 페이지를 새로고침하세요.",
   },
+  attribute_control_chart_limit_set_method_version_mismatch: {
+    title: "Limit set 버전 불일치",
+    message: "선택한 limit set을 현재 Phase II 관리도 버전에서 사용할 수 없습니다.",
+    action: "현재 앱 버전에서 생성한 호환 limit set을 선택하세요.",
+  },
+  attribute_control_chart_limit_set_chart_type_mismatch: {
+    title: "관리도 유형 불일치",
+    message: "선택한 limit set과 관리도 유형이 다릅니다.",
+    action: "P, NP, C, U 유형이 같은 limit set을 선택하세요.",
+  },
+  attribute_control_chart_limit_set_count_definition_mismatch: {
+    title: "계수 정의 불일치",
+    message: "선택한 limit set과 불량품/결점 정의가 다릅니다.",
+    action: "기준선과 같은 계수 정의를 사용하세요.",
+  },
+  attribute_control_chart_phase_2_target_schema_mismatch: {
+    title: "대상 스키마 불일치",
+    message: "대상 계수·분모 열의 측정수준, 역할 또는 단위가 기준선과 호환되지 않습니다.",
+    action: "기준선과 의미가 같은 숫자 열을 선택하거나 대상 스키마를 확인하세요.",
+  },
+  attribute_control_chart_phase_2_np_sample_size_mismatch: {
+    title: "NP 표본 크기 불일치",
+    message: "NP Phase II의 모든 표본 크기는 기준선의 고정 표본 크기와 같아야 합니다.",
+    action: "표본 크기를 확인하거나 가변 표본 크기라면 P 관리도를 사용하세요.",
+  },
+  attribute_control_chart_phase_2_c_opportunity_confirmation_required: {
+    title: "검사 기회 확인 필요",
+    message: "C Phase II를 실행하려면 현재 검사 기회가 기준선과 동일함을 확인해야 합니다.",
+    action: "검사 기회가 실제로 동일한지 검토한 뒤 확인란을 선택하세요.",
+  },
+  attribute_control_chart_phase_2_dependency_mismatch: {
+    title: "Phase II 의존성 검증 실패",
+    message: "저장 결과, 대상 데이터 또는 limit set의 관계가 생성 당시와 일치하지 않습니다.",
+    action: "변경되지 않은 원본 자산을 복원하거나 검증된 limit set으로 다시 실행하세요.",
+  },
+  bayesian_study_initial_design_too_small: {
+    title: "초기 trial 수 부족",
+    message: "Bayesian 추천에 필요한 최소 관측 수보다 초기 trial 수가 적습니다.",
+    action: "현재 요인 수 옆에 표시된 최소 trial 수 이상으로 늘린 뒤 study를 생성하세요.",
+  },
+  bayesian_trial_abandon_would_strand_study: {
+    title: "초기 trial 중단 불가",
+    message: "이 trial을 중단하면 추천에 필요한 최소 완료 관측 수를 채울 수 없습니다.",
+    action: "남은 초기 trial을 먼저 완료하세요. 이 버전에서는 대체 초기 trial을 만들지 않습니다.",
+  },
+  bayesian_optimization_trial_budget_invalid: {
+    title: "전체 trial 예산 오류",
+    message: "전체 trial 예산은 2~200 사이의 정수여야 합니다.",
+    action: "현재 trial 수보다 큰 예산을 입력하고 다시 추천하세요.",
+  },
+  bayesian_optimization_budget_exhausted: {
+    title: "Bayesian 예산 도달",
+    message: "전체 trial 수, 계산 시간, 또는 계산 평가 예산에 도달했습니다.",
+    action: "화면의 trial 예산과 저장된 종료 사유를 확인하세요. 오류를 surrogate 적합 실패로 해석하지 마세요.",
+  },
+  bayesian_observation_invalid: {
+    title: "관측값 오류",
+    message: "저장할 objective 관측값은 유한한 숫자여야 합니다.",
+    action: "실제 실험에서 얻은 값을 확인한 뒤 숫자로 입력하세요.",
+  },
+  bayesian_study_close_pending_trials: {
+    title: "Pending trial 정리 필요",
+    message: "Study를 종료하기 전에 모든 pending trial을 완료하거나 명시적으로 중단해야 합니다.",
+    action: "trial 표에서 남은 항목을 처리한 뒤 종료를 다시 확인하세요.",
+  },
+  bayesian_study_completion_requirements_not_met: {
+    title: "Study 완료 조건 미충족",
+    message: "완료 종료에는 최소 관측 수와 하나 이상의 저장된 recommendation이 필요합니다.",
+    action: "필요한 관측과 확인 실험을 기록하거나, 중단 종료가 맞는지 검토하세요.",
+  },
+  bayesian_study_close_conflict: {
+    title: "Study 종료 상태 변경됨",
+    message: "화면에 표시된 version 또는 관측 history 이후 study 상태가 변경되었습니다.",
+    action: "Study를 다시 불러와 최신 상태와 종료 기록을 확인하세요.",
+  },
+  bayesian_study_closed: {
+    title: "종료된 Study",
+    message: "종료된 Bayesian study에는 관측, trial 중단 또는 추천을 추가할 수 없습니다.",
+    action: "기존 기록은 읽기 전용으로 확인하고, 계속하려면 successor study를 만드세요.",
+  },
+  bayesian_study_deletion_active: {
+    title: "활성 Study 삭제 불가",
+    message: "Bayesian study는 완료 또는 중단으로 종료한 뒤에만 삭제할 수 있습니다.",
+    action: "Pending trial을 정리하고 Study 종료 절차를 먼저 완료하세요.",
+  },
+  bayesian_study_deletion_referenced: {
+    title: "참조 중인 Study 삭제 불가",
+    message: "Successor study가 이 predecessor study를 참조하고 있어 삭제할 수 없습니다.",
+    action: "참조 관계를 보존하세요. 현재 버전은 cascade 삭제를 지원하지 않습니다.",
+  },
+  bayesian_study_deletion_confirmation_mismatch: {
+    title: "삭제 영향이 변경됨",
+    message: "삭제 확인 이후 Study graph 또는 확인 대상이 변경되었습니다.",
+    action: "삭제 영향 확인을 다시 실행한 뒤 최신 metadata 수와 상태를 검토하세요.",
+  },
+  bayesian_study_deletion_conflict: {
+    title: "Study 삭제 충돌",
+    message: "삭제 transaction을 시작하기 전에 Study graph가 변경되었습니다.",
+    action: "Study를 다시 불러오고 삭제 영향 확인부터 다시 진행하세요.",
+  },
+  bayesian_study_predecessor_invalid: {
+    title: "Predecessor Study 오류",
+    message: "종료가 검증된 Bayesian study만 successor의 predecessor로 사용할 수 있습니다.",
+    action: "원 study의 종료 기록을 확인한 뒤 successor 생성을 다시 시도하세요.",
+  },
   dataset_version_required: {
     title: "데이터셋 버전 필요",
     message: "분석은 업로드 직후 raw 파일이 아니라 파싱 확정된 dataset version에서 실행됩니다.",

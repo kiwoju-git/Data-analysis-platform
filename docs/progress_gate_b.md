@@ -1,6 +1,6 @@
 # Gate B Progress
 
-Last updated: 2026-07-15
+Last updated: 2026-07-17
 
 ## Summary
 
@@ -3375,3 +3375,326 @@ Next allowed PR:
   with target compatibility preflight, stored provenance, restore/export
   consistency, typed UI selection, and browser E2E. Keep WECO/Nelson, Laney,
   exact limits, naked user limits, and automatic baseline refit out of scope.
+
+## Progress Update 177 - Bayesian Lifecycle Correctness Stabilization
+
+Status: implemented in the current working tree; final full validation is
+recorded in `docs/ci_status.md`.
+
+Completed:
+
+- Bumped `doe.bayesian_optimization` to patch version `0.2.1` while retaining
+  study/history and recommendation config/result/model schemas 1, SQLite schema
+  13, and restore of valid stored `0.2.0` recommendations without relabeling.
+- Enforced `max(2, factor_count + 1)` initial trials in the backend and UI,
+  centralized the 200-trial/200-completed/201-history limits, and covered exact
+  upper-bound restore plus over-limit rejection.
+- Prevented an initial-trial abandonment that would leave too few possible
+  completed observations, while retaining surplus-initial and recommendation
+  abandonment. Completed, pending, and abandoned coordinates are all excluded
+  from later candidates within the declared duplicate tolerance.
+- Added the actual latest-recommendation endpoint and transient current-trial
+  reconciliation without changing the immutable checksummed snapshot. The UI
+  distinguishes pending, completed with actual observation, abandoned, and
+  historical recommendations.
+- Exposed the effective request-level total-trial budget, aligned frontend
+  blockers with the backend hard limit, and mapped fit/acquisition/worker time
+  exhaustion to `bayesian_optimization_budget_exhausted` rather than a
+  surrogate-fit error.
+- Added accessible inline confirmation for irreversible observation and
+  abandonment transitions, transition locking, error input retention, and
+  refresh of study/latest state after success.
+- Added `docs/bayesian_study_lifecycle_contract.md` for the still-unimplemented
+  study close/abandon API, optimistic close transition, read-only restore,
+  retention, migration, audit, and acceptance criteria.
+- The initial targeted Bayesian/OpenAPI backend run passed 155 tests, the
+  follow-up recommendation compatibility suite passed 36 tests, frontend Vitest
+  passed 98 tests, and the lifecycle-expanded browser E2E passed on ports
+  `8027`/`5227`. The final full critical-path rerun also passed in 57.9 seconds
+  on ports `8028`/`5228`; after the restore-boundary review it passed again in
+  56.8 seconds on ports `8029`/`5229`.
+- Full `scripts/check.ps1` passed with Ruff/format over 150 Python files, mypy
+  over 98 source files, backend pytest 687, frontend lint/typecheck, frontend
+  Vitest 98, and production build. The direct OpenAPI/frontend contract suite
+  passed 117 tests. Main JavaScript is 467.18 kB / 110.05 kB gzip and the DOE
+  chunk is 79.80 kB / 18.32 kB gzip.
+- The measured host remains Windows 10 Home build 19045 with CPython 3.10.11
+  and Node 24.17.0. Windows 11/Node 22 remains a mandatory release gate and is
+  not inferred from this development validation.
+
+Next development order:
+
+1. Implement Phase II frozen-limit monitoring only from verified app-created
+   limit sets.
+2. Run clean Windows 11/Python 3.10/Node 22 release validation.
+3. Implement Bayesian study close/abandon and retention from the new contract.
+4. Continue the advanced quality/statistics backlog.
+
+## Progress Update 178 - Phase II Frozen-Limit Monitoring
+
+Status: implemented and validated in the current working tree.
+
+Completed:
+
+- Bumped `quality.attribute_control_chart` to method `0.2.0` and result schema
+  `2`. New Phase I results explicitly record `phase_1`; stored method `0.1.0` /
+  schema-1 results remain restorable and promotable without relabeling or
+  migration. Limit-set asset schema 1, common config schema 2, and SQLite
+  schema 13 remain unchanged.
+- Added explicit Phase II options and a typed monitoring preflight. The target
+  must match chart/count meaning and compatible column semantics; NP requires
+  the frozen sample size and C requires current-target equal-opportunity
+  confirmation. Phase II accepts only a verified app-created `limit_set_id`.
+- Added production P/NP/C/U frozen-limit calculations with natural bounds and
+  strict outside-only signals. Monitoring never refits the center or limits,
+  switches chart type, or falls back to Phase I.
+- Persisted limit-set source identity and SHA, source analysis/dataset/result,
+  close time, target dataset/schema/canonical/filter/row snapshot, selected
+  target columns, row counts, and fixed-limit policy. Restore and common
+  JSON/CSV/HTML export reject result/config/asset/target relationship or
+  checksum mismatches with a redacted stable dependency error.
+- Added an explicit Phase I/Phase II panel, deliberate verified-limit selector,
+  target preflight, latest-request stale-response protection, run blockers, and
+  Phase II source/close-time result labels.
+- Added formula/reference, cross-dataset API, schema mismatch, NP/C gate,
+  legacy promotion, tamper, restore/export, frontend race/rendering, and
+  OpenAPI contract tests. Full `scripts/check.ps1` passed with Ruff/format over
+  152 Python files, mypy over 99 source files, backend pytest 702, frontend
+  Vitest 100, OpenAPI/frontend contracts 120, lint/typecheck, and production
+  build.
+- Chromium E2E passed in 58.1 seconds on ports `8030`/`5230`, including real
+  Phase I baseline promotion and Phase II monitoring on a separate dataset.
+  The measured host is Windows 10 Home build 19045 with CPython 3.10.11 and
+  Node 24.17.0; Windows 11/Python 3.10/Node 22 remains a mandatory release
+  gate. Remote Actions remain unverified because `gh` is not installed.
+
+Next development order:
+
+1. Run clean Windows 11/Python 3.10/Node 22/CPU-only release validation.
+2. Implement Bayesian study close/abandon and retention from the lifecycle
+   contract.
+3. Continue Phase II rules/limits and advanced quality/statistics only through
+   separately approved contracts.
+
+## Progress Update 179 - Bayesian Study Close And Read-Only Lifecycle
+
+Status: implemented and validated in the current working tree.
+
+Completed:
+
+- Bumped `doe.bayesian_optimization` to patch `0.2.2` without changing the GP,
+  EI, duplicate policy, study/history schema 1, or recommendation config/result/
+  model schemas 1. Valid `0.2.0`/`0.2.1` artifacts retain their recorded
+  versions.
+- Advanced SQLite metadata from schema 13 to 14 with immutable lifecycle-event
+  schema 1 and nullable `predecessor_study_id`. Schema-13 active studies upgrade
+  without invented close status, reason, or timestamp.
+- Added optimistic `active -> completed|abandoned` close, exact idempotent retry,
+  pending/completion requirement gates, stable redacted errors, canonical event
+  SHA, and final history/count/definition/latest-recommendation relationships.
+- Added explicit `close_study` abandon intent so a user can terminate below the
+  recommendation minimum without silently abandoning pending trials. After
+  close, recommendation, observation, and abandon storage transactions reject
+  mutation under a write lock while all restore endpoints remain available.
+- Added typed frontend/OpenAPI fields and route, inline close confirmation,
+  completed/abandoned reason selection, read-only restore, and successor draft
+  creation that copies only the immutable definition inputs and records lineage.
+  Close is not deletion; retention remains separate.
+- Full `scripts/check.ps1` passed in 734.4 seconds with Ruff/format over 153
+  Python files, mypy over 99 source files, backend pytest 712, frontend Vitest
+  101, lint/typecheck, and production build. OpenAPI/frontend contracts remain
+  120; the targeted lifecycle/Bayesian/OpenAPI suite passed 189 tests.
+- Chromium E2E passed in 58.6 seconds on ports `8031`/`5231`, including final
+  Bayesian observation, completed close, read-only controls, reload restore,
+  and the successor command. Main is 473.59 kB and DOE is 87.24 kB.
+- Validation used Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0 from an uncommitted tree based on
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Windows 11/Python 3.10/Node 22
+  remains the release gate. Remote Actions remain unverified because `gh` is
+  not installed.
+
+Next development order:
+
+1. Run clean Windows 11/Python 3.10/Node 22/CPU-only release validation.
+2. Implement retention/deletion and workspace management with inbound-reference
+   checks and explicit ownership-graph confirmation. Do not equate close with
+   deletion.
+3. Continue advanced quality/statistics only through an approved contract.
+
+## Progress Update 180 - Closed Bayesian Study Metadata Deletion
+
+Status: implemented and validated in the current working tree.
+
+Completed:
+
+- Added typed deletion preflight and confirmed delete routes for a closed
+  Bayesian study. Preflight validates the complete immutable graph, reports
+  exact metadata/file counts, and hashes status, version, current history,
+  lifecycle event, successor references, and counts into a canonical manifest.
+- Active studies and referenced predecessors return stable blockers. Delete
+  requires the exact study ID and latest manifest, reacquires a SQLite write
+  lock, compares the graph, and removes all owned metadata in one transaction
+  without cascade into a successor.
+- Added frontend impact review and separate irreversible confirmation, stale
+  response guards, catalog refresh, stable Korean error guidance, OpenAPI/type
+  guards, API/tamper/redaction tests, and browser removal verification.
+- Added `docs/workspace_retention_contract.md`. The implemented Bayesian graph
+  is metadata-only (`file_count=0`); dataset, analysis/export, DOE, model, and
+  limit-set files require later trusted-path, quarantine, Windows-lock, and
+  crash-recovery work.
+- Kept Bayesian method `0.2.2`, SQLite schema 14, and existing study/history/
+  recommendation/lifecycle schemas unchanged. Preflight and delete-response
+  operational schemas start at 1.
+- Full `scripts/check.ps1` passed in 764.9 seconds: 721 backend tests, 102
+  frontend tests, 131 OpenAPI/frontend contract tests, Ruff/format over 153
+  files, mypy over 99 source files, lint/typecheck, and production build. Main
+  is 474.80 kB / 111.96 kB gzip and DOE is 90.79 kB / 20.76 kB gzip.
+- Chromium E2E passed in 62.2 seconds on `8031`/`5231`. Two preliminary runs
+  were blocked before app execution by Windows socket-bind `EACCES` on alternate
+  ports; the final isolated workspace run passed every existing flow.
+- The host remains Windows 10 Home build 19045, Python 3.10.11, and Node
+  24.17.0 on base SHA `0cbce01d2fa2914459c5be69f070e1703cb631dd`.
+  Windows 11/Node 22 remains release evidence, and remote Actions are unverified
+  because `gh` is unavailable.
+
+Next development order:
+
+1. Run clean Windows 11/Python 3.10/Node 22 release validation.
+2. Implement analysis/export file-owning deletion as the next bounded retention
+   slice with quarantine and recovery tests.
+3. Expand ownership graphs to datasets, DOE, models, and limit sets only after
+   that file lifecycle is proven.
+
+## Progress Update 181 - Individual Analysis Export File Deletion
+
+Status: implemented and validated in the current working tree.
+
+Completed:
+
+- Added typed preflight and exact-confirmation DELETE APIs for one app-created
+  JSON/CSV/HTML analysis export or regression-prediction CSV export. The
+  operation preserves the parent analysis result, row snapshots, model,
+  prediction, and every other export.
+- Bound deletion to the exact analysis/export ownership row, approved artifact
+  kind/media type, kind-specific relative path, non-symlink regular file,
+  SHA-256, byte size, parent method/version/update/stale/result state, and a
+  canonical manifest. Responses expose no internal path or raw result value.
+- Added same-directory quarantine rename, post-rename SHA/size recheck,
+  conditional `BEGIN IMMEDIATE` metadata deletion, compensating restore on DB
+  conflict, pending-cleanup status, and startup recovery. Recovery removes a
+  committed orphan, restores a metadata-owned file only when SHA matches, and
+  leaves tampered quarantine pending.
+- Added export-list impact review, separate irreversible confirmation, exact
+  file/metadata counts, parent-result preservation copy, list refresh, and
+  latest-request guards for late preflight/delete responses after reset.
+- Kept all statistical method versions, existing export/result schemas, and
+  SQLite schema 14 unchanged. Operational deletion preflight/response schemas
+  start at 1.
+- Full `scripts/check.ps1` passed in 746.7 seconds: backend pytest 731,
+  frontend Vitest 105, OpenAPI/frontend contracts 137, Ruff/format over 154
+  Python files, mypy over 99 source files, lint/typecheck, and production
+  build. Main is 480.68 kB / 112.99 kB gzip.
+- Chromium E2E passed in 59.9 seconds on `8031`/`5231`, including three export
+  creations, JSON download, one export impact/confirmation/deletion, list
+  reduction, and parent analysis-result preservation.
+- Validation used Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0 on base SHA `0cbce01d2fa2914459c5be69f070e1703cb631dd`.
+  Windows 11/Python 3.10/Node 22 remains release evidence. Remote Actions are
+  unverified because `gh` is unavailable.
+
+Next development order:
+
+1. Run clean Windows 11/Python 3.10/Node 22 release validation.
+2. Implement analysis-run root deletion as a separate ownership-graph slice:
+   include its result, row snapshots, and exports, but block model, prediction,
+   limit-set, or other inbound dependencies instead of cascading silently.
+3. Extend reviewed root-graph deletion to datasets, DOE, models, and limit sets.
+
+## Progress Update 182 - Analysis-Run Root Deletion
+
+Completed:
+
+- Added deletion preflight and exact analysis-ID/manifest confirmation for one
+  succeeded stored analysis run. Preflight verifies the result envelope,
+  config-to-row-snapshot relation, every approved artifact kind/path/media type,
+  SHA-256, byte size, and prediction cross-artifact relationships.
+- Added independent blockers for app-created regression models, dependent
+  regression predictions, attribute-control limit sets, and job audit records.
+  The operation never silently cascades or severs those relationships.
+- Added Windows-safe short same-directory quarantine names, post-move integrity
+  checks, exact run/artifact revalidation under `BEGIN IMMEDIATE`, reverse-order
+  restoration after partial move or DB failure, and startup recovery for
+  committed, metadata-owned, and tampered quarantines.
+- Added typed API/OpenAPI/frontend contracts, impact counts, separate
+  irreversible confirmation, history refresh, and clearing of deleted current,
+  restored, comparison, and export state. Independent latest-request guards
+  prevent late preflight/delete responses from reviving reset state.
+- Kept all statistical method versions, result/config meanings, artifact
+  checksum payloads, and SQLite schema 14 unchanged. Operational deletion
+  preflight/response schemas start at 1.
+- Backend retention tests cover exact deletion, unrelated-run preservation,
+  stale confirmation, path/checksum tamper, model/prediction/limit-set/job
+  blockers, partial quarantine failure, DB rollback restoration, pending
+  cleanup, and next-start restore/removal.
+- Final `scripts/check.ps1` passed in 792.7 seconds with backend pytest 738,
+  frontend Vitest 109, OpenAPI/frontend contracts 139, Ruff/format over 156
+  Python files, mypy over 100 source files, lint/typecheck, and production
+  build. Main JavaScript is 487.56 kB / 114.21 kB gzip.
+- Chromium E2E passed in 66.5 seconds on `8031`/`5231` with workspace
+  `.tmp/e2e-workspace-analysis-run-retention-final`. It verifies two-to-one
+  history reduction and clears deleted restore/comparison state while retaining
+  all existing prediction, Phase II, DOE, Bayesian, parser, and lazy-panel paths.
+
+Next development order:
+
+1. Add explicit regression-model and attribute-control-limit-set deletion
+   foundations so their dependent source analyses can later become eligible.
+2. Run clean Windows 11/Python 3.10/Node 22/CPU-only release validation.
+3. Extend the reviewed ownership graph to datasets and DOE designs before any
+   bulk, age-based, or automatic cleanup.
+4. Continue advanced quality/statistics only through an approved contract.
+
+## Progress Update 183 - Regression Model And Limit-Set Deletion
+
+Completed:
+
+- Added checksum-validated deletion preflight and exact manifest confirmation
+  for app-created regression models and attribute-control limit sets. Neither
+  response exposes an internal path, source filename, predictor value, or
+  control-chart observation.
+- Regression-model deletion preserves the source linear-model analysis and is
+  blocked by every stored prediction that references the model or source
+  analysis. Attribute-control-limit-set deletion preserves its Phase I source
+  analysis and is blocked by every Phase II analysis that references the
+  `limit_set_id`; a stale Phase I source does not by itself prevent explicit
+  deletion of an otherwise valid immutable limit set.
+- Added short same-directory quarantine names, post-move SHA/size validation,
+  conditional `BEGIN IMMEDIATE` metadata deletion, compensating restoration,
+  pending cleanup, and startup recovery for both asset kinds.
+- Added typed API/OpenAPI/frontend contracts, impact counts, separate exact
+  confirmation, read-only dependency blockers, and latest-request guards for
+  late model/limit-set preflight or delete responses.
+- Statistical method versions, persisted result/config meanings, regression
+  model manifest schema 2, limit-set asset schema 1, and SQLite schema 14 remain
+  unchanged. The two operational deletion contracts start at schema 1.
+- Final `scripts/check.ps1` passed in 781.8 seconds with backend pytest 750,
+  frontend Vitest 111, OpenAPI/frontend contracts 150, Ruff/format over 158
+  Python files, mypy over 101 source files, lint/typecheck, and production
+  build. Main JavaScript is 490.15 kB / 114.58 kB gzip.
+- Chromium E2E passed in 99.3 seconds on `8031`/`5231` with workspace
+  `.tmp/e2e-workspace-asset-retention-final-3`, including the prediction and
+  Phase II dependency blockers while retaining all earlier critical paths.
+- Validation used Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0 from base SHA `0cbce01d2fa2914459c5be69f070e1703cb631dd`.
+  Windows 11/Python 3.10/Node 22 remains release evidence; remote Actions are
+  unverified because `gh` is unavailable.
+
+Next development order:
+
+1. Run clean Windows 11/Python 3.10/Node 22/CPU-only release validation.
+2. Define and implement dataset-root deletion with explicit inbound-reference
+   blockers and no silent cascade.
+3. Extend reviewed retention to DOE designs and immutable response revisions.
+4. Add bulk, age-based, or automatic cleanup only after those ownership graphs
+   and recovery behavior are validated.
+5. Continue advanced quality/statistics only through an approved contract.

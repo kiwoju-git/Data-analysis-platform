@@ -33,6 +33,16 @@ class _AttributePoint:
     denominator: float | None
 
 
+@dataclass(frozen=True)
+class _CollectedPoints:
+    n_total: int
+    n_excluded_missing_count: int
+    n_excluded_non_numeric_count: int
+    n_excluded_missing_denominator: int
+    n_excluded_non_numeric_denominator: int
+    points: list[_AttributePoint]
+
+
 def calculate_attribute_control_chart(
     rows: Iterable[Sequence[str | None]],
     count_column: AttributeControlChartColumn,
@@ -55,53 +65,15 @@ def calculate_attribute_control_chart(
         point_limit=point_limit,
     )
 
-    n_total = 0
-    n_excluded_missing_count = 0
-    n_excluded_non_numeric_count = 0
-    n_excluded_missing_denominator = 0
-    n_excluded_non_numeric_denominator = 0
-    points: list[_AttributePoint] = []
-
-    for row in rows:
-        n_total += 1
-        raw_count = _row_value(row, count_column.column_index)
-        if raw_count is None or raw_count.strip() == "":
-            n_excluded_missing_count += 1
-            continue
-        parsed_count = _parse_decimal(raw_count, decimal=decimal, thousands=thousands)
-        if parsed_count is None:
-            n_excluded_non_numeric_count += 1
-            continue
-        count = _validated_count(parsed_count)
-
-        denominator: float | None = None
-        if denominator_column is not None:
-            raw_denominator = _row_value(row, denominator_column.column_index)
-            if raw_denominator is None or raw_denominator.strip() == "":
-                n_excluded_missing_denominator += 1
-                continue
-            parsed_denominator = _parse_decimal(
-                raw_denominator,
-                decimal=decimal,
-                thousands=thousands,
-            )
-            if parsed_denominator is None:
-                n_excluded_non_numeric_denominator += 1
-                continue
-            denominator = _validated_denominator(parsed_denominator, chart_type=chart_type)
-            if chart_type in {"p", "np"} and count > denominator:
-                raise AttributeControlChartError(
-                    "attribute_control_chart_defectives_exceed_sample_size"
-                )
-
-        points.append(
-            _AttributePoint(
-                position=len(points) + 1,
-                canonical_position=n_total,
-                count=count,
-                denominator=denominator,
-            )
-        )
+    collected = _collect_attribute_points(
+        rows,
+        count_column=count_column,
+        denominator_column=denominator_column,
+        chart_type=chart_type,
+        decimal=decimal,
+        thousands=thousands,
+    )
+    points = collected.points
 
     if len(points) < MIN_BASELINE_POINT_COUNT:
         raise AttributeControlChartError("attribute_control_chart_point_count_too_small")
@@ -125,10 +97,10 @@ def calculate_attribute_control_chart(
         chart_type=chart_type,
         center_line=center_line,
         dispersion_ratio=dispersion_ratio,
-        n_excluded_missing_count=n_excluded_missing_count,
-        n_excluded_non_numeric_count=n_excluded_non_numeric_count,
-        n_excluded_missing_denominator=n_excluded_missing_denominator,
-        n_excluded_non_numeric_denominator=n_excluded_non_numeric_denominator,
+        n_excluded_missing_count=collected.n_excluded_missing_count,
+        n_excluded_non_numeric_count=collected.n_excluded_non_numeric_count,
+        n_excluded_missing_denominator=collected.n_excluded_missing_denominator,
+        n_excluded_non_numeric_denominator=collected.n_excluded_non_numeric_denominator,
         point_limit=point_limit,
     )
 
@@ -160,12 +132,12 @@ def calculate_attribute_control_chart(
         "count": _column_payload(count_column),
         "denominator": _column_payload(denominator_column),
         "denominator_role": _denominator_role(chart_type),
-        "n_total": n_total,
+        "n_total": collected.n_total,
         "n_used": len(points),
-        "n_excluded_missing_count": n_excluded_missing_count,
-        "n_excluded_non_numeric_count": n_excluded_non_numeric_count,
-        "n_excluded_missing_denominator": n_excluded_missing_denominator,
-        "n_excluded_non_numeric_denominator": n_excluded_non_numeric_denominator,
+        "n_excluded_missing_count": collected.n_excluded_missing_count,
+        "n_excluded_non_numeric_count": collected.n_excluded_non_numeric_count,
+        "n_excluded_missing_denominator": collected.n_excluded_missing_denominator,
+        "n_excluded_non_numeric_denominator": collected.n_excluded_non_numeric_denominator,
         "total_count": sum(point.count for point in points),
         "total_denominator": sum(denominators) if denominators else None,
         "center_line": center_line,
@@ -197,6 +169,209 @@ def calculate_attribute_control_chart(
         },
         "signals": signals,
     }
+
+
+def calculate_attribute_control_chart_phase_2(
+    rows: Iterable[Sequence[str | None]],
+    count_column: AttributeControlChartColumn,
+    denominator_column: AttributeControlChartColumn | None,
+    *,
+    chart_type: str,
+    count_definition: str,
+    frozen_center_line: float,
+    fixed_sample_size: int | None,
+    constant_opportunity_confirmed: bool = False,
+    decimal: str = ".",
+    thousands: str | None = None,
+    missing_policy: str = "complete_case",
+    point_limit: int = DEFAULT_POINT_LIMIT,
+) -> dict[str, object]:
+    _validate_contract(
+        chart_type=chart_type,
+        count_definition=count_definition,
+        denominator_column=denominator_column,
+        constant_opportunity_confirmed=(
+            constant_opportunity_confirmed if chart_type != "c" else True
+        ),
+        missing_policy=missing_policy,
+        point_limit=point_limit,
+    )
+    if chart_type == "c" and not constant_opportunity_confirmed:
+        raise AttributeControlChartError(
+            "attribute_control_chart_phase_2_c_opportunity_confirmation_required"
+        )
+    _validate_center_line(frozen_center_line, chart_type=chart_type)
+    if chart_type == "np":
+        if fixed_sample_size is None or frozen_center_line >= fixed_sample_size:
+            raise AttributeControlChartError("attribute_control_chart_center_invalid")
+    elif fixed_sample_size is not None:
+        raise AttributeControlChartError("attribute_control_chart_center_invalid")
+
+    collected = _collect_attribute_points(
+        rows,
+        count_column=count_column,
+        denominator_column=denominator_column,
+        chart_type=chart_type,
+        decimal=decimal,
+        thousands=thousands,
+    )
+    points = collected.points
+    if len(points) < MIN_BASELINE_POINT_COUNT:
+        raise AttributeControlChartError("attribute_control_chart_point_count_too_small")
+    if chart_type == "np":
+        assert fixed_sample_size is not None
+        if any(point.denominator != float(fixed_sample_size) for point in points):
+            raise AttributeControlChartError(
+                "attribute_control_chart_phase_2_np_sample_size_mismatch"
+            )
+
+    limits = [
+        _point_limits(point, chart_type=chart_type, center_line=frozen_center_line)
+        for point in points
+    ]
+    signals = _limit_signals(points, limits=limits, chart_type=chart_type)
+    dispersion_ratio = _dispersion_ratio(
+        points,
+        chart_type=chart_type,
+        center_line=frozen_center_line,
+    )
+    warnings = _phase_2_warnings(
+        points=points,
+        limits=limits,
+        signals=signals,
+        chart_type=chart_type,
+        center_line=frozen_center_line,
+        dispersion_ratio=dispersion_ratio,
+        collected=collected,
+        point_limit=point_limit,
+    )
+    denominators = [point.denominator for point in points if point.denominator is not None]
+    limits_vary = len(set(denominators)) > 1 if chart_type in {"p", "u"} else False
+
+    return {
+        "schema_version": 2,
+        "phase": "phase_2",
+        "summary_type": "attribute_control_chart",
+        "method": f"{chart_type}_chart",
+        "chart_type": chart_type,
+        "count_definition": count_definition,
+        "distribution_assumption": "binomial" if chart_type in {"p", "np"} else "poisson",
+        "control_limit_method": "phase_2_frozen_three_sigma",
+        "baseline": "verified_immutable_limit_set",
+        "order_source": "canonical_row_order",
+        "missing_policy": missing_policy,
+        "constant_opportunity_confirmed": constant_opportunity_confirmed,
+        "control_rules": [
+            {
+                "code": "attribute_control_chart_point_beyond_control_limits",
+                "definition": "one_point_strictly_outside_three_sigma_control_limits",
+                "enabled": True,
+            }
+        ],
+        "warnings": warnings,
+        "count": _column_payload(count_column),
+        "denominator": _column_payload(denominator_column),
+        "denominator_role": _denominator_role(chart_type),
+        "n_total": collected.n_total,
+        "n_used": len(points),
+        "n_excluded_missing_count": collected.n_excluded_missing_count,
+        "n_excluded_non_numeric_count": collected.n_excluded_non_numeric_count,
+        "n_excluded_missing_denominator": collected.n_excluded_missing_denominator,
+        "n_excluded_non_numeric_denominator": collected.n_excluded_non_numeric_denominator,
+        "total_count": sum(point.count for point in points),
+        "total_denominator": sum(denominators) if denominators else None,
+        "center_line": frozen_center_line,
+        "limits_vary": limits_vary,
+        "lcl_truncated_count": sum(1 for limit in limits if limit["lcl_truncated"]),
+        "ucl_truncated_count": sum(1 for limit in limits if limit["ucl_truncated"]),
+        "dispersion": {
+            "method": "pearson_chi_square_over_degrees_of_freedom_against_frozen_center",
+            "degrees_of_freedom": len(points) - 1,
+            "ratio": dispersion_ratio,
+            "warning_threshold": 2.0,
+            "used_to_adjust_limits": False,
+        },
+        "chart": {
+            "x_axis": "canonical_row_position",
+            "y_axis": _y_axis(chart_type),
+            "center_line": frozen_center_line,
+            "limits_vary": limits_vary,
+            "point_count": len(points),
+            "points_truncated": len(points) > point_limit,
+            "point_limit": point_limit,
+            "points": _chart_points(
+                points,
+                limits=limits,
+                signals=signals,
+                chart_type=chart_type,
+                point_limit=point_limit,
+            ),
+        },
+        "signals": signals,
+    }
+
+
+def _collect_attribute_points(
+    rows: Iterable[Sequence[str | None]],
+    *,
+    count_column: AttributeControlChartColumn,
+    denominator_column: AttributeControlChartColumn | None,
+    chart_type: str,
+    decimal: str,
+    thousands: str | None,
+) -> _CollectedPoints:
+    n_total = 0
+    n_excluded_missing_count = 0
+    n_excluded_non_numeric_count = 0
+    n_excluded_missing_denominator = 0
+    n_excluded_non_numeric_denominator = 0
+    points: list[_AttributePoint] = []
+    for row in rows:
+        n_total += 1
+        raw_count = _row_value(row, count_column.column_index)
+        if raw_count is None or raw_count.strip() == "":
+            n_excluded_missing_count += 1
+            continue
+        parsed_count = _parse_decimal(raw_count, decimal=decimal, thousands=thousands)
+        if parsed_count is None:
+            n_excluded_non_numeric_count += 1
+            continue
+        count = _validated_count(parsed_count)
+        denominator: float | None = None
+        if denominator_column is not None:
+            raw_denominator = _row_value(row, denominator_column.column_index)
+            if raw_denominator is None or raw_denominator.strip() == "":
+                n_excluded_missing_denominator += 1
+                continue
+            parsed_denominator = _parse_decimal(
+                raw_denominator,
+                decimal=decimal,
+                thousands=thousands,
+            )
+            if parsed_denominator is None:
+                n_excluded_non_numeric_denominator += 1
+                continue
+            denominator = _validated_denominator(parsed_denominator, chart_type=chart_type)
+            if chart_type in {"p", "np"} and count > denominator:
+                raise AttributeControlChartError(
+                    "attribute_control_chart_defectives_exceed_sample_size"
+                )
+        points.append(
+            _AttributePoint(
+                position=len(points) + 1,
+                canonical_position=n_total,
+                count=count,
+                denominator=denominator,
+            )
+        )
+    return _CollectedPoints(
+        n_total=n_total,
+        n_excluded_missing_count=n_excluded_missing_count,
+        n_excluded_non_numeric_count=n_excluded_non_numeric_count,
+        n_excluded_missing_denominator=n_excluded_missing_denominator,
+        n_excluded_non_numeric_denominator=n_excluded_non_numeric_denominator,
+        points=points,
+    )
 
 
 def _validate_contract(
@@ -415,6 +590,47 @@ def _result_warnings(
     if n_excluded_missing_denominator:
         warnings.append("attribute_control_chart_missing_denominator_excluded")
     if n_excluded_non_numeric_denominator:
+        warnings.append("attribute_control_chart_non_numeric_denominator_excluded")
+    if signals:
+        warnings.append("attribute_control_chart_limit_signal_detected")
+    if len(points) > point_limit:
+        warnings.append("attribute_control_chart_points_truncated")
+    return warnings
+
+
+def _phase_2_warnings(
+    *,
+    points: Sequence[_AttributePoint],
+    limits: Sequence[dict[str, float | bool]],
+    signals: Sequence[dict[str, object]],
+    chart_type: str,
+    center_line: float,
+    dispersion_ratio: float,
+    collected: _CollectedPoints,
+    point_limit: int,
+) -> list[str]:
+    warnings = [
+        "attribute_control_chart_uses_canonical_row_order",
+        "attribute_control_chart_phase_2_limits_frozen_from_verified_asset",
+        "attribute_control_chart_process_assumptions_not_proven",
+    ]
+    if chart_type == "c":
+        warnings.append("attribute_control_chart_c_constant_opportunity_user_confirmed")
+    if _normal_approximation_is_weak(points, chart_type=chart_type, center_line=center_line):
+        warnings.append("attribute_control_chart_normal_approximation_weak")
+    if dispersion_ratio > 2.0:
+        warnings.append("attribute_control_chart_overdispersion_detected")
+    if any(bool(limit["lcl_truncated"]) for limit in limits):
+        warnings.append("attribute_control_chart_lcl_truncated_to_zero")
+    if any(bool(limit["ucl_truncated"]) for limit in limits):
+        warnings.append("attribute_control_chart_ucl_truncated_to_natural_bound")
+    if collected.n_excluded_missing_count:
+        warnings.append("attribute_control_chart_missing_count_excluded")
+    if collected.n_excluded_non_numeric_count:
+        warnings.append("attribute_control_chart_non_numeric_count_excluded")
+    if collected.n_excluded_missing_denominator:
+        warnings.append("attribute_control_chart_missing_denominator_excluded")
+    if collected.n_excluded_non_numeric_denominator:
         warnings.append("attribute_control_chart_non_numeric_denominator_excluded")
     if signals:
         warnings.append("attribute_control_chart_limit_signal_detected")

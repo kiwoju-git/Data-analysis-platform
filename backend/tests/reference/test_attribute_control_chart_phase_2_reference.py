@@ -10,7 +10,7 @@ from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.analyses import AttributeControlChartOptions
 from app.statistics.attribute_control_chart import (
     AttributeControlChartColumn,
-    calculate_attribute_control_chart,
+    calculate_attribute_control_chart_phase_2,
 )
 
 FIXTURE_PATH = Path(
@@ -33,50 +33,67 @@ def test_phase_2_policy_fixture_matches_frozen_limit_formulas() -> None:
         assert _strict_signal_positions(values, lcl, ucl) == expected["strict_signal_positions"]
 
 
-def test_phase_2_fixture_and_contract_keep_current_execution_phase_1_only() -> None:
+def test_phase_2_fixture_and_registry_match_executable_contract() -> None:
     fixture = _fixture()
     current = fixture["current_executable"]
-    proposed = fixture["proposed_executable"]
 
     assert METHOD_VERSIONS["quality.attribute_control_chart"] == current["method_version"]
     assert current == {
-        "method_version": "0.1.0",
-        "result_schema_version": 1,
-        "phase": "phase_1_only",
-    }
-    assert proposed == {
         "method_version": "0.2.0",
         "result_schema_version": 2,
         "limit_set_schema_version": 1,
     }
 
-    result = calculate_attribute_control_chart(
-        [["1", "10"], ["2", "10"]],
+
+def test_phase_2_options_require_verified_limit_set_id() -> None:
+    with pytest.raises(ValidationError):
+        AttributeControlChartOptions.model_validate(
+            {
+                "phase": "phase_2",
+                "chart_type": "p",
+                "count_definition": "defectives",
+                "count_column_id": "count",
+                "denominator_column_id": "sample-size",
+            }
+        )
+
+
+@pytest.mark.parametrize("case_index", [0, 1, 2, 3])
+def test_executable_phase_2_matches_independent_policy_fixture(case_index: int) -> None:
+    case = _fixture()["cases"][case_index]
+    chart_type = case["chart_type"]
+    monitoring = case["monitoring"]
+    expected = case["expected"]
+    denominators = monitoring.get("denominators")
+    rows = [
+        [str(count)] if denominators is None else [str(count), str(denominators[index])]
+        for index, count in enumerate(monitoring["counts"])
+    ]
+    result = calculate_attribute_control_chart_phase_2(
+        rows,
         _column("count", 0),
-        _column("sample-size", 1),
-        chart_type="p",
-        count_definition="defectives",
+        None if denominators is None else _column("sample-size", 1),
+        chart_type=chart_type,
+        count_definition=case["count_definition"],
+        frozen_center_line=expected["center_line"],
+        fixed_sample_size=(case["baseline"]["denominators"][0] if chart_type == "np" else None),
+        constant_opportunity_confirmed=chart_type == "c",
     )
-    assert result["schema_version"] == current["result_schema_version"]
-    assert result["control_limit_method"] == "phase_1_estimated_three_sigma"
-    assert result["baseline"] == "all_filtered_valid_points"
-
-
-@pytest.mark.parametrize("field,value", [("phase", "phase_2"), ("limit_set_id", "asset-1")])
-def test_current_options_reject_unimplemented_phase_2_fields(field: str, value: str) -> None:
-    payload: dict[str, object] = {
-        "chart_type": "p",
-        "count_definition": "defectives",
-        "count_column_id": "count",
-        "denominator_column_id": "sample-size",
-        field: value,
-    }
-
-    with pytest.raises(ValidationError) as exc_info:
-        AttributeControlChartOptions.model_validate(payload)
-
-    assert exc_info.value.errors()[0]["type"] == "extra_forbidden"
-    assert exc_info.value.errors()[0]["loc"] == (field,)
+    assert result["schema_version"] == 2
+    assert result["phase"] == "phase_2"
+    assert result["center_line"] == pytest.approx(expected["center_line"], abs=1e-12)
+    assert [point["value"] for point in result["chart"]["points"]] == pytest.approx(
+        expected["values"], abs=1e-12
+    )
+    assert [point["lcl"] for point in result["chart"]["points"]] == pytest.approx(
+        expected["lcl"], abs=1e-12
+    )
+    assert [point["ucl"] for point in result["chart"]["points"]] == pytest.approx(
+        expected["ucl"], abs=1e-12
+    )
+    assert [signal["position"] for signal in result["signals"]] == expected[
+        "strict_signal_positions"
+    ]
 
 
 def test_phase_2_contract_reserves_immutable_dependency_and_version_policy() -> None:

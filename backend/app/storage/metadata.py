@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Final
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 13
+SCHEMA_VERSION: Final = 14
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -21,6 +21,24 @@ class Migration:
 class MetadataStoreInfo:
     path: Path
     schema_version: int
+
+
+class AnalysisArtifactStorageConflict(RuntimeError):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+class AnalysisRunStorageConflict(RuntimeError):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+class WorkspaceAssetStorageConflict(RuntimeError):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -885,6 +903,68 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
 
         CREATE INDEX idx_attribute_control_limit_sets_chart_created
         ON attribute_control_limit_sets(chart_type, created_at, limit_set_id);
+        """,
+    ),
+    Migration(
+        version=14,
+        name="create_bayesian_study_lifecycle_events",
+        sql="""
+        ALTER TABLE bayesian_studies
+        ADD COLUMN predecessor_study_id TEXT
+            REFERENCES bayesian_studies(study_id) ON DELETE RESTRICT;
+
+        CREATE INDEX idx_bayesian_studies_predecessor
+        ON bayesian_studies(predecessor_study_id);
+
+        CREATE TABLE bayesian_study_lifecycle_events (
+            lifecycle_event_id TEXT PRIMARY KEY,
+            study_id TEXT NOT NULL UNIQUE
+                REFERENCES bayesian_studies(study_id) ON DELETE RESTRICT,
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE RESTRICT,
+            schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+            lifecycle_revision INTEGER NOT NULL CHECK (lifecycle_revision = 1),
+            previous_status TEXT NOT NULL CHECK (previous_status = 'active'),
+            resulting_status TEXT NOT NULL CHECK (
+                resulting_status IN ('completed', 'abandoned')
+            ),
+            reason_code TEXT NOT NULL CHECK (reason_code IN (
+                'objective_satisfied', 'budget_reached', 'confirmation_complete',
+                'unsafe_or_infeasible', 'resources_unavailable', 'study_cancelled'
+            )),
+            note TEXT CHECK (note IS NULL OR length(note) <= 500),
+            request_id TEXT NOT NULL,
+            final_history_revision_id TEXT NOT NULL
+                REFERENCES bayesian_observation_history_revisions(history_revision_id)
+                ON DELETE RESTRICT,
+            final_observation_history_sha256 TEXT NOT NULL CHECK (
+                length(final_observation_history_sha256) = 64
+            ),
+            final_trial_count INTEGER NOT NULL CHECK (
+                final_trial_count >= 1 AND final_trial_count <= 200
+            ),
+            final_completed_trial_count INTEGER NOT NULL CHECK (
+                final_completed_trial_count >= 0 AND
+                final_completed_trial_count <= 200
+            ),
+            final_abandoned_trial_count INTEGER NOT NULL CHECK (
+                final_abandoned_trial_count >= 0 AND
+                final_abandoned_trial_count <= 200
+            ),
+            latest_recommendation_id TEXT
+                REFERENCES bayesian_recommendations(recommendation_id) ON DELETE RESTRICT,
+            definition_sha256 TEXT NOT NULL CHECK (length(definition_sha256) = 64),
+            event_sha256 TEXT NOT NULL CHECK (length(event_sha256) = 64),
+            closed_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            app_version TEXT NOT NULL,
+            build_commit TEXT,
+            UNIQUE(study_id, lifecycle_revision),
+            UNIQUE(study_id, request_id)
+        );
+
+        CREATE INDEX idx_bayesian_lifecycle_version
+        ON bayesian_study_lifecycle_events(study_version_id, closed_at);
         """,
     ),
 )
@@ -2395,6 +2475,65 @@ def get_regression_model_record(
     return _regression_model_from_row(row)
 
 
+def get_regression_model_record_by_analysis(
+    workspace_root: Path,
+    analysis_id: str,
+) -> RegressionModelRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT
+                model_id,
+                analysis_id,
+                dataset_version_id,
+                method_id,
+                method_version,
+                manifest_path,
+                manifest_sha256,
+                schema_hash,
+                created_at,
+                app_version
+            FROM regression_models
+            WHERE analysis_id = ?;
+            """,
+            (analysis_id,),
+        ).fetchone()
+    return None if row is None else _regression_model_from_row(row)
+
+
+def count_regression_prediction_records_by_source(
+    workspace_root: Path,
+    *,
+    source_analysis_id: str,
+    model_id: str | None,
+) -> int:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            "SELECT config_json FROM analysis_runs WHERE method_id = 'regression.predict';"
+        ).fetchall()
+    count = 0
+    for row in rows:
+        if _regression_prediction_config_references(
+            str(row[0]), source_analysis_id=source_analysis_id, model_id=model_id
+        ):
+            count += 1
+    return count
+
+
+def count_attribute_control_phase_2_records_by_limit_set(
+    workspace_root: Path,
+    limit_set_id: str,
+) -> int:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            "SELECT config_json FROM analysis_runs "
+            "WHERE method_id = 'quality.attribute_control_chart';"
+        ).fetchall()
+    return sum(
+        _attribute_control_phase_2_config_references(str(row[0]), limit_set_id) for row in rows
+    )
+
+
 def insert_attribute_control_limit_set_record(
     workspace_root: Path,
     record: AttributeControlLimitSetRecord,
@@ -2588,6 +2727,15 @@ def count_analysis_artifact_records(workspace_root: Path, analysis_id: str) -> i
     return _row_int(row[0])
 
 
+def count_job_records_by_analysis(workspace_root: Path, analysis_id: str) -> int:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM jobs WHERE analysis_id = ?;",
+            (analysis_id,),
+        ).fetchone()
+    return 0 if row is None else _row_int(row[0])
+
+
 def get_analysis_artifact_record(
     workspace_root: Path,
     analysis_id: str,
@@ -2694,6 +2842,280 @@ def insert_analysis_artifact_record(
         connection.execute("PRAGMA foreign_keys = ON;")
         with connection:
             _insert_analysis_artifact(connection, record)
+
+
+def delete_analysis_artifact_record(
+    workspace_root: Path,
+    *,
+    expected_artifact: AnalysisArtifactRecord,
+    expected_analysis_updated_at: str,
+    expected_analysis_stale: bool,
+    expected_result_sha256: str | None,
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        artifact_row = connection.execute(
+            """
+            SELECT artifact_id, analysis_id, kind, path, sha256, media_type, created_at
+            FROM analysis_artifacts
+            WHERE analysis_id = ? AND artifact_id = ?;
+            """,
+            (expected_artifact.analysis_id, expected_artifact.artifact_id),
+        ).fetchone()
+        analysis_row = connection.execute(
+            """
+            SELECT updated_at, stale, result_sha256
+            FROM analysis_runs
+            WHERE analysis_id = ?;
+            """,
+            (expected_artifact.analysis_id,),
+        ).fetchone()
+        if artifact_row is None or analysis_row is None:
+            raise AnalysisArtifactStorageConflict("analysis_export_not_found")
+        current_artifact = _analysis_artifact_from_row(artifact_row)
+        if (
+            current_artifact != expected_artifact
+            or str(analysis_row[0]) != expected_analysis_updated_at
+            or bool(analysis_row[1]) != expected_analysis_stale
+            or (None if analysis_row[2] is None else str(analysis_row[2])) != expected_result_sha256
+        ):
+            raise AnalysisArtifactStorageConflict("analysis_export_deletion_conflict")
+        deleted = connection.execute(
+            """
+            DELETE FROM analysis_artifacts
+            WHERE analysis_id = ? AND artifact_id = ?;
+            """,
+            (expected_artifact.analysis_id, expected_artifact.artifact_id),
+        )
+        if deleted.rowcount != 1:
+            raise AnalysisArtifactStorageConflict("analysis_export_deletion_conflict")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_analysis_run_record(
+    workspace_root: Path,
+    *,
+    expected_run: AnalysisRunRecord,
+    expected_artifacts: list[AnalysisArtifactRecord],
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        run_row = connection.execute(
+            """
+            SELECT
+                analysis_id,
+                method_id,
+                method_version,
+                dataset_version_id,
+                config_json,
+                status,
+                result_path,
+                result_sha256,
+                stale,
+                created_at,
+                updated_at,
+                completed_at,
+                app_version
+            FROM analysis_runs
+            WHERE analysis_id = ?;
+            """,
+            (expected_run.analysis_id,),
+        ).fetchone()
+        if run_row is None:
+            raise AnalysisRunStorageConflict("analysis_run_not_found")
+        current_run = _analysis_run_from_row(run_row)
+        artifact_rows = connection.execute(
+            """
+            SELECT artifact_id, analysis_id, kind, path, sha256, media_type, created_at
+            FROM analysis_artifacts
+            WHERE analysis_id = ?
+            ORDER BY created_at DESC, rowid DESC;
+            """,
+            (expected_run.analysis_id,),
+        ).fetchall()
+        current_artifacts = [_analysis_artifact_from_row(row) for row in artifact_rows]
+        regression_model_count = _connection_count(
+            connection,
+            "SELECT COUNT(*) FROM regression_models WHERE analysis_id = ?;",
+            expected_run.analysis_id,
+        )
+        limit_set_count = _connection_count(
+            connection,
+            "SELECT COUNT(*) FROM attribute_control_limit_sets WHERE source_analysis_id = ?;",
+            expected_run.analysis_id,
+        )
+        job_count = _connection_count(
+            connection,
+            "SELECT COUNT(*) FROM jobs WHERE analysis_id = ?;",
+            expected_run.analysis_id,
+        )
+        prediction_count = _connection_regression_prediction_count(
+            connection,
+            source_analysis_id=expected_run.analysis_id,
+            model_id=None,
+        )
+        if current_run != expected_run or current_artifacts != expected_artifacts:
+            raise AnalysisRunStorageConflict("analysis_run_deletion_conflict")
+        if regression_model_count or prediction_count or limit_set_count or job_count:
+            raise AnalysisRunStorageConflict("analysis_run_deletion_blocked")
+        deleted = connection.execute(
+            "DELETE FROM analysis_runs WHERE analysis_id = ?;",
+            (expected_run.analysis_id,),
+        )
+        if deleted.rowcount != 1:
+            raise AnalysisRunStorageConflict("analysis_run_deletion_conflict")
+        remaining_artifact_count = _connection_count(
+            connection,
+            "SELECT COUNT(*) FROM analysis_artifacts WHERE analysis_id = ?;",
+            expected_run.analysis_id,
+        )
+        if remaining_artifact_count:
+            raise AnalysisRunStorageConflict("analysis_run_deletion_conflict")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_regression_model_record(
+    workspace_root: Path,
+    *,
+    expected_model: RegressionModelRecord,
+    expected_source_run: AnalysisRunRecord,
+    expected_artifact: AnalysisArtifactRecord,
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        model_row = connection.execute(
+            """
+            SELECT model_id, analysis_id, dataset_version_id, method_id, method_version,
+                   manifest_path, manifest_sha256, schema_hash, created_at, app_version
+            FROM regression_models
+            WHERE model_id = ?;
+            """,
+            (expected_model.model_id,),
+        ).fetchone()
+        run_row = connection.execute(
+            """
+            SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
+                   status, result_path, result_sha256, stale, created_at, updated_at,
+                   completed_at, app_version
+            FROM analysis_runs
+            WHERE analysis_id = ?;
+            """,
+            (expected_model.analysis_id,),
+        ).fetchone()
+        artifact_row = connection.execute(
+            """
+            SELECT artifact_id, analysis_id, kind, path, sha256, media_type, created_at
+            FROM analysis_artifacts
+            WHERE analysis_id = ? AND artifact_id = ?;
+            """,
+            (expected_artifact.analysis_id, expected_artifact.artifact_id),
+        ).fetchone()
+        if model_row is None or run_row is None or artifact_row is None:
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+        if (
+            _regression_model_from_row(model_row) != expected_model
+            or _analysis_run_from_row(run_row) != expected_source_run
+            or _analysis_artifact_from_row(artifact_row) != expected_artifact
+        ):
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+        if _connection_regression_prediction_count(
+            connection,
+            source_analysis_id=expected_model.analysis_id,
+            model_id=expected_model.model_id,
+        ):
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_blocked")
+        artifact_deleted = connection.execute(
+            "DELETE FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;",
+            (expected_artifact.analysis_id, expected_artifact.artifact_id),
+        )
+        model_deleted = connection.execute(
+            "DELETE FROM regression_models WHERE model_id = ?;",
+            (expected_model.model_id,),
+        )
+        if artifact_deleted.rowcount != 1 or model_deleted.rowcount != 1:
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_attribute_control_limit_set_record(
+    workspace_root: Path,
+    *,
+    expected_limit_set: AttributeControlLimitSetRecord,
+    expected_source_run: AnalysisRunRecord,
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        limit_set_row = connection.execute(
+            f"""
+            SELECT {_ATTRIBUTE_CONTROL_LIMIT_SET_COLUMNS}
+            FROM attribute_control_limit_sets
+            WHERE limit_set_id = ?;
+            """,
+            (expected_limit_set.limit_set_id,),
+        ).fetchone()
+        run_row = connection.execute(
+            """
+            SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
+                   status, result_path, result_sha256, stale, created_at, updated_at,
+                   completed_at, app_version
+            FROM analysis_runs
+            WHERE analysis_id = ?;
+            """,
+            (expected_limit_set.source_analysis_id,),
+        ).fetchone()
+        if limit_set_row is None or run_row is None:
+            raise WorkspaceAssetStorageConflict("attribute_control_limit_set_deletion_conflict")
+        if (
+            _attribute_control_limit_set_from_row(limit_set_row) != expected_limit_set
+            or _analysis_run_from_row(run_row) != expected_source_run
+        ):
+            raise WorkspaceAssetStorageConflict("attribute_control_limit_set_deletion_conflict")
+        phase_2_rows = connection.execute(
+            "SELECT config_json FROM analysis_runs "
+            "WHERE method_id = 'quality.attribute_control_chart';"
+        ).fetchall()
+        if any(
+            _attribute_control_phase_2_config_references(
+                str(row[0]), expected_limit_set.limit_set_id
+            )
+            for row in phase_2_rows
+        ):
+            raise WorkspaceAssetStorageConflict("attribute_control_limit_set_deletion_blocked")
+        deleted = connection.execute(
+            "DELETE FROM attribute_control_limit_sets WHERE limit_set_id = ?;",
+            (expected_limit_set.limit_set_id,),
+        )
+        if deleted.rowcount != 1:
+            raise WorkspaceAssetStorageConflict("attribute_control_limit_set_deletion_conflict")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def insert_job_record(workspace_root: Path, record: JobRecord) -> None:
@@ -3150,6 +3572,63 @@ def _job_from_row(row: tuple[object, ...]) -> JobRecord:
         updated_at=str(row[8]),
         completed_at=None if row[9] is None else str(row[9]),
     )
+
+
+def _connection_count(
+    connection: sqlite3.Connection,
+    query: str,
+    value: str,
+) -> int:
+    row = connection.execute(query, (value,)).fetchone()
+    return 0 if row is None else _row_int(row[0])
+
+
+def _connection_regression_prediction_count(
+    connection: sqlite3.Connection,
+    *,
+    source_analysis_id: str,
+    model_id: str | None,
+) -> int:
+    rows = connection.execute(
+        "SELECT config_json FROM analysis_runs WHERE method_id = 'regression.predict';"
+    ).fetchall()
+    return sum(
+        _regression_prediction_config_references(
+            str(row[0]), source_analysis_id=source_analysis_id, model_id=model_id
+        )
+        for row in rows
+    )
+
+
+def _regression_prediction_config_references(
+    config_json: str,
+    *,
+    source_analysis_id: str,
+    model_id: str | None,
+) -> bool:
+    try:
+        payload = json.loads(config_json)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    return payload.get("source_analysis_id") == source_analysis_id or (
+        model_id is not None and payload.get("model_id") == model_id
+    )
+
+
+def _attribute_control_phase_2_config_references(
+    config_json: str,
+    limit_set_id: str,
+) -> bool:
+    try:
+        payload = json.loads(config_json)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    options = payload.get("options")
+    return isinstance(options, dict) and options.get("limit_set_id") == limit_set_id
 
 
 def _row_int(value: object) -> int:

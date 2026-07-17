@@ -6,21 +6,35 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-16 immutable attribute-limit-set storage/API regression run passed
-with:
+The 2026-07-17 regression-model and attribute-control-limit-set deletion
+regression run passed in 99.3
+seconds with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -BackendPort 8025 `
-  -FrontendPort 5225 `
-  -WorkspaceRoot .\.tmp\e2e-workspace-attribute-limit-set-storage `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics-attribute-limit-set-storage
+  -BackendPort 8031 `
+  -FrontendPort 5231 `
+  -WorkspaceRoot .\.tmp\e2e-workspace-asset-retention-final-3 `
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-asset-retention-final-3
 ```
 
-The new limit-set create/get/list contract is backend-only and adds no Phase II
-browser control. This run therefore verifies that the existing Phase I chart,
-prediction/export, Factorial, RSM/Optimizer, Bayesian, parser-recovery, and lazy
-panel paths remain intact; it does not claim Phase II monitoring execution.
+The run verifies that a stored prediction blocks deletion of its regression
+model and that a Phase II chart blocks deletion of its frozen control-limit
+set. Both impact panels expose dependency counts without paths or raw values
+and keep the irreversible delete action disabled. The run also retains
+individual export deletion, then restores and compares two
+analysis runs, reviews and separately confirms deletion of the dependency-free
+run, verifies history shrinks from two to one, and verifies deleted restore and
+comparison state are cleared. It then verifies no-op and real schema changes
+against the remaining run. It also verifies
+explicit initial-observation confirmations, a pending GP/EI
+recommendation, actual-observation completion and completed status, an
+abandoned recommendation that is not repeated, effective trial-budget blocking,
+latest recommendation restore, completed close, read-only state, lifecycle
+restore after reload, deletion impact counts, separate irreversible
+confirmation, and catalog removal. It also retains the existing
+Phase I/II attribute charts, prediction/export, Factorial, RSM/Optimizer,
+parser-recovery, and lazy-panel paths.
 
 ## Covered Flows
 
@@ -36,8 +50,16 @@ The current smoke test is `tests/e2e/critical_path.py`.
   result row.
 - Creates JSON, CSV, and HTML stored-result exports.
 - Downloads the JSON export and verifies the suggested filename is `.json`.
+- Reviews the exact one-file/one-metadata-row deletion impact for the newest
+  export, uses the separate irreversible confirmation, verifies the export
+  list shrinks from three to two, and confirms the stored analysis result stays
+  rendered.
 - Opens saved analysis history, restores a stored result, selects left/right
   saved runs, and renders comparison output.
+- Restores the dependency-free run, reviews its exact two-file/two-metadata-row
+  deletion impact, uses a separate irreversible confirmation, verifies history
+  shrinks from two runs to one, and verifies deleted restore/comparison state
+  is cleared while the unrelated run remains.
 - Saves schema metadata with no actual change and verifies saved runs are not
   marked stale.
 - Changes a display name and verifies saved runs become stale.
@@ -52,11 +74,15 @@ The current smoke test is `tests/e2e/critical_path.py`.
   table, and four rendered interval lines.
 - Generates a full stored prediction CSV and verifies the browser starts a
   `.csv` download through the checksum-validated analysis export route.
-- Registers the published NIST 30-point defectives/sample-size fixture, opens
-  `quality.attribute_control_chart`, executes a P chart, and verifies the
-  explicit Phase I-only/stored-Phase-II-unavailable notice, 30-row summary,
-  Phase I limit source, two strict 3-sigma signals, accessible SVG chart, and
-  first 25 displayed point rows.
+- Loads regression-model deletion impact after the prediction exists, verifies
+  the dependent-prediction count, and verifies confirmed deletion is disabled.
+- Creates a stable 20-point P-chart Phase I baseline, closes it through the
+  app-created immutable limit-set API, registers a separate 30-point monitoring
+  dataset, selects the verified asset in the Phase II UI, waits for target
+  compatibility preflight, and verifies frozen-limit execution, source/close
+  metadata, 30-row summary, and accessible SVG chart.
+- Loads limit-set deletion impact after the Phase II result exists, verifies
+  the dependent Phase II count, and verifies confirmed deletion is disabled.
 - Creates a deterministic replicated 2-factor DOE with one center point, saves
   all nine response values as response revision 1, runs the dedicated factorial
   analysis, and verifies method v0.3.0, effect and main-effect SVGs, ANOVA table,
@@ -73,11 +99,22 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - Creates RSM response revision 2 through the explicit correction flow after
   analysis and verifies that newest-first revision history retains revision 1.
 - Creates a one-factor Bayesian study with an actual-unit upper-bound linear
-  constraint, records two explicit synthetic initial observations, runs the
-  bounded Matérn-5/2 GP/Expected Improvement worker,
-  and verifies that the new candidate is a pending recommendation rather than
-  an observation. The stored equation and recommendation feasibility are
-  visible, and the page retains confirmation-run and no-global-optimum warnings.
+  constraint and an effective total-trial budget of five, then records two
+  explicit synthetic initial observations through immutable-action
+  confirmations. It runs the bounded Matérn-5/2 GP/Expected Improvement worker,
+  verifies the first candidate is pending, records its actual observation, and
+  verifies completed state plus separation of actual and predicted values. It
+  creates and abandons a second recommendation through confirmation, verifies a
+  third candidate does not repeat the abandoned coordinates, verifies the
+  budget-reached blocker, reloads the page, and restores the actual latest
+  pending recommendation and its request budget. It then records the final
+  confirmation observation, closes the study as completed through the inline
+  immutable-action confirmation, verifies recommendation/budget controls are
+  read-only, reloads, and restores the lifecycle reason plus successor command.
+  It then loads the deletion preflight, verifies zero owned files and three
+  recommendation records, uses the separate irreversible confirmation, and
+  verifies the study disappears from the refreshed catalog. Confirmation-run
+  and no-global-optimum warnings remain visible before deletion.
 - Observes the actual Regression, Quality, and DOE dynamic module resources
   during their existing workflows and verifies no loading state remains after
   each panel is ready.
@@ -104,8 +141,9 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - `paste synthetic TSV and confirm schema`
 - `run descriptive statistics`
 - `run two-sample t test`
-- `create and download exports`
+- `create, download, and delete one export`
 - `restore and compare saved results`
+- `delete one stored analysis run`
 - `verify schema stale behavior`
 - `verify linear model fit and prediction`
 - `verify attribute control chart`
@@ -126,11 +164,18 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - Remote GitHub Actions status or branch protection settings.
 - Full OpenAPI-to-TypeScript generation.
 - Every available statistical method panel.
-- Immutable attribute limit-set creation/listing and Phase II monitoring UI;
-  the former is covered by backend/OpenAPI tests and the latter is not yet
-  implemented.
-- Additional Bayesian benchmark families/budgets, non-normal capability,
+- Limit-set tamper and every P/NP/C/U Phase II mismatch branch; backend unit,
+  reference, API, and OpenAPI tests cover those cases while E2E covers the P
+  vertical path.
+- Bayesian abandoned-study close and successor creation submission, additional
+  Bayesian benchmark families/budgets, non-normal capability,
   advanced Gage R&R, or fractional-factorial alias analysis.
+- Root-graph retention for datasets and DOE designs. Individual export and
+  analysis-run deletion are covered in E2E. Model/limit-set dependency blockers
+  are covered in E2E and their successful deletion is covered by API tests;
+  Windows locked-file,
+  rollback restoration, cleanup retry, and tampered-quarantine branches are
+  covered by backend API tests rather than browser automation.
 - Chart export artifacts.
 - Browser matrix coverage beyond Chromium.
 - Large dataset performance or memory budget E2E.
@@ -156,7 +201,7 @@ The current smoke test is `tests/e2e/critical_path.py`.
   when a process exits early, and prints recent backend/frontend log tails when
   a readiness URL times out while processes are still running.
 
-## Bayesian Foundation Regression
+## Historical Bayesian Foundation Regression
 
 The schema-11 Bayesian study/history foundation has no browser study editor,
 surrogate, recommendation, or executable method in this slice. Its dedicated

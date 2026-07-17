@@ -37,7 +37,7 @@ def test_bayesian_optimization_uses_dedicated_api_without_generic_handler() -> N
     method = get_analysis_method("doe.bayesian_optimization")
 
     assert method is not None
-    assert method.method_version == METHOD_VERSIONS[method.method_id] == "0.2.0"
+    assert method.method_version == METHOD_VERSIONS[method.method_id] == "0.2.2"
     assert method.availability == MethodAvailability.AVAILABLE
     assert method.requires_dataset is False
     assert method.method_id not in _METHOD_EXECUTION_HANDLERS

@@ -1,9 +1,18 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Final, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+
+MAX_BAYESIAN_TRIALS: Final = 200
+MAX_COMPLETED_OBSERVATIONS: Final = 200
+MAX_HISTORY_REVISIONS: Final = MAX_COMPLETED_OBSERVATIONS + 1
+DEFAULT_TOTAL_TRIAL_BUDGET: Final = 50
+
+
+def minimum_bayesian_initial_design_size(factor_count: int) -> int:
+    return max(2, factor_count + 1)
 
 
 class BayesianFactorRequest(BaseModel):
@@ -51,6 +60,7 @@ class BayesianStudyCreateRequest(BaseModel):
     constraints: list[BayesianLinearConstraintRequest] = Field(default_factory=list, max_length=16)
     initial_design_seed: int = Field(ge=0, le=2_147_483_647)
     initial_design_size: int = Field(ge=1, le=64)
+    predecessor_study_id: UUID | None = None
 
 
 class BayesianFactorResponse(BaseModel):
@@ -132,6 +142,88 @@ class BayesianHistoryRevisionResponse(BaseModel):
     created_at: str
 
 
+BayesianStudyStatus = Literal["active", "completed", "abandoned"]
+BayesianStudyCloseReason = Literal[
+    "objective_satisfied",
+    "budget_reached",
+    "confirmation_complete",
+    "unsafe_or_infeasible",
+    "resources_unavailable",
+    "study_cancelled",
+]
+
+
+class BayesianStudyLifecycleEventResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1]
+    lifecycle_event_id: UUID
+    study_id: UUID
+    study_version_id: UUID
+    lifecycle_revision: Literal[1]
+    previous_status: Literal["active"]
+    resulting_status: Literal["completed", "abandoned"]
+    reason_code: BayesianStudyCloseReason
+    note: str | None
+    request_id: UUID
+    final_history_revision_id: UUID
+    final_observation_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    final_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
+    final_completed_trial_count: int = Field(ge=0, le=MAX_COMPLETED_OBSERVATIONS)
+    final_abandoned_trial_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
+    latest_recommendation_id: UUID | None
+    definition_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    event_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    closed_at: str
+    created_at: str
+    app_version: str
+    build_commit: str | None
+
+
+class BayesianStudyCloseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_status: Literal["completed", "abandoned"]
+    reason_code: BayesianStudyCloseReason
+    note: str | None = Field(default=None, max_length=500)
+    request_id: UUID
+    expected_study_version_id: UUID
+    expected_history_revision_id: UUID
+    expected_observation_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_reason_for_status(self) -> BayesianStudyCloseRequest:
+        completion_reasons = {
+            "objective_satisfied",
+            "budget_reached",
+            "confirmation_complete",
+        }
+        abandonment_reasons = {
+            "unsafe_or_infeasible",
+            "resources_unavailable",
+            "study_cancelled",
+        }
+        allowed = completion_reasons if self.target_status == "completed" else abandonment_reasons
+        if self.reason_code not in allowed:
+            raise ValueError("reason_code does not match target_status")
+        if self.note is not None and not self.note.strip():
+            self.note = None
+        return self
+
+
+class BayesianTrialAbandonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_history_revision_id: UUID | None = None
+    intent: Literal["continue_study", "close_study"] = "continue_study"
+
+    @model_validator(mode="after")
+    def require_history_for_close_intent(self) -> BayesianTrialAbandonRequest:
+        if self.intent == "close_study" and self.expected_history_revision_id is None:
+            raise ValueError("close_study intent requires expected_history_revision_id")
+        return self
+
+
 class BayesianStudyResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -142,7 +234,8 @@ class BayesianStudyResponse(BaseModel):
     method_id: Literal["doe.bayesian_optimization"]
     method_version: str
     name: str
-    status: Literal["active", "completed", "abandoned"]
+    status: BayesianStudyStatus
+    predecessor_study_id: UUID | None
     created_at: str
     updated_at: str
     app_version: str
@@ -159,6 +252,75 @@ class BayesianStudyResponse(BaseModel):
     trials: list[BayesianTrialResponse]
     surrogate_available: bool
     recommendation_available: bool
+    recommendation_minimum_completed_observations: int = Field(ge=2, le=7)
+    recommendation_hard_trial_limit: int = Field(ge=1)
+    recommendation_blockers: list[
+        Literal[
+            "bayesian_optimization_history_incomplete",
+            "bayesian_optimization_pending_recommendation_exists",
+            "bayesian_optimization_budget_exhausted",
+            "bayesian_study_not_active",
+        ]
+    ]
+    lifecycle_event: BayesianStudyLifecycleEventResponse | None
+
+
+class BayesianStudyCloseResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    study: BayesianStudyResponse
+    lifecycle_event: BayesianStudyLifecycleEventResponse
+
+
+class BayesianStudyDeletionCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    study_count: Literal[1]
+    study_version_count: int = Field(ge=1)
+    trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
+    history_revision_count: int = Field(ge=1, le=MAX_HISTORY_REVISIONS)
+    history_head_count: int = Field(ge=1)
+    recommendation_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
+    lifecycle_event_count: int = Field(ge=0, le=1)
+    metadata_record_count: int = Field(ge=4)
+    file_count: Literal[0]
+    file_bytes: Literal[0]
+
+
+class BayesianStudyDeletionPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preflight_schema_version: Literal[1]
+    study_id: UUID
+    study_version_id: UUID
+    status: BayesianStudyStatus
+    eligible: bool
+    blockers: list[
+        Literal[
+            "bayesian_study_deletion_active",
+            "bayesian_study_deletion_referenced",
+        ]
+    ]
+    successor_study_count: int = Field(ge=0)
+    counts: BayesianStudyDeletionCounts
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class BayesianStudyDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_study_id: UUID
+    expected_deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class BayesianStudyDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deletion_schema_version: Literal[1]
+    study_id: UUID
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    deleted_at: str
+    deleted_counts: BayesianStudyDeletionCounts
 
 
 class BayesianStudySummaryResponse(BaseModel):
@@ -169,7 +331,8 @@ class BayesianStudySummaryResponse(BaseModel):
     method_id: Literal["doe.bayesian_optimization"]
     method_version: str
     name: str
-    status: Literal["active", "completed", "abandoned"]
+    status: BayesianStudyStatus
+    predecessor_study_id: UUID | None
     updated_at: str
     definition_sha256: str
     pending_trial_count: int = Field(ge=0)
@@ -239,7 +402,11 @@ class BayesianRecommendationSearchRequest(BaseModel):
     time_budget_ms: int = Field(default=15_000, ge=1000, le=60_000)
     jitter: FiniteFloat = Field(default=1e-8, ge=1e-12, le=1e-3)
     duplicate_tolerance: FiniteFloat = Field(default=1e-6, ge=1e-12, le=0.1)
-    total_trial_budget: int = Field(default=50, ge=2, le=200)
+    total_trial_budget: int = Field(
+        default=DEFAULT_TOTAL_TRIAL_BUDGET,
+        ge=2,
+        le=MAX_BAYESIAN_TRIALS,
+    )
 
     @model_validator(mode="after")
     def require_candidate_budget(self) -> BayesianRecommendationSearchRequest:
@@ -282,7 +449,7 @@ class BayesianSurrogateModelResponse(BaseModel):
     objective_normalization_mean: float
     objective_normalization_scale: float = Field(gt=0.0)
     jitter: float = Field(gt=0.0)
-    completed_observation_count: int = Field(ge=2, le=200)
+    completed_observation_count: int = Field(ge=2, le=MAX_COMPLETED_OBSERVATIONS)
     hyperparameter_restart_count: int = Field(ge=0, le=3)
     model_evaluations: int = Field(ge=0)
     fit_elapsed_ms: float = Field(ge=0.0)
@@ -349,6 +516,15 @@ class BayesianRecommendationProvenance(BaseModel):
     created_at: str
 
 
+class BayesianRecommendationCurrentTrialResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trial_id: UUID
+    state: Literal["pending", "completed", "abandoned"]
+    objective_value: float | None
+    closed_at: str | None
+
+
 class BayesianRecommendationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -369,6 +545,13 @@ class BayesianRecommendationResponse(BaseModel):
     trial: BayesianTrialResponse
     result: BayesianRecommendationResult
     provenance: BayesianRecommendationProvenance
+    current_trial: BayesianRecommendationCurrentTrialResponse | None = None
+    is_latest: bool = False
+    requested_total_trial_budget: int | None = Field(
+        default=None,
+        ge=2,
+        le=MAX_BAYESIAN_TRIALS,
+    )
 
 
 class BayesianRecommendationListResponse(BaseModel):
@@ -380,3 +563,11 @@ class BayesianRecommendationListResponse(BaseModel):
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=100)
     items: list[BayesianRecommendationResponse]
+
+
+class BayesianLatestRecommendationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    study_id: UUID
+    study_version_id: UUID
+    item: BayesianRecommendationResponse | None

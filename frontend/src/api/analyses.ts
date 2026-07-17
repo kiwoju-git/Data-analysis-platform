@@ -10,9 +10,15 @@ import type {
   AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
   AnalysisResultExportListResponse,
+  AnalysisResultExportDeleteRequest,
+  AnalysisResultExportDeleteResponse,
+  AnalysisResultExportDeletionPreflightResponse,
   AnalysisResultHtmlReportResponse,
   AnalysisResultJsonExportResponse,
+  AnalysisRunDeleteRequest,
+  AnalysisRunDeleteResponse,
   AnalysisRunComparisonResponse,
+  AnalysisRunDeletionPreflightResponse,
   AnalysisRunListResponse,
   AnalysisRunRequest,
 } from "./types";
@@ -112,6 +118,35 @@ export async function fetchAnalysisRunResult(analysisId: string): Promise<Analys
   }
 
   return (await response.json()) as AnalysisResultEnvelope;
+}
+
+export async function fetchAnalysisRunDeletionPreflight(
+  analysisId: string,
+): Promise<AnalysisRunDeletionPreflightResponse> {
+  const response = await fetchApi(apiRoutes.analysisRunDeletionPreflight(analysisId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(
+      await apiErrorCode(response, "analysis_run_deletion_preflight_failed"),
+    );
+  }
+  return (await response.json()) as AnalysisRunDeletionPreflightResponse;
+}
+
+export async function deleteStoredAnalysisRun(
+  analysisId: string,
+  request: AnalysisRunDeleteRequest,
+): Promise<AnalysisRunDeleteResponse> {
+  const response = await fetchApi(apiRoutes.analysisRunDelete(analysisId), {
+    method: "DELETE",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_run_delete_failed"));
+  }
+  return (await response.json()) as AnalysisRunDeleteResponse;
 }
 
 export async function createAnalysisResultJsonExport(
@@ -214,4 +249,36 @@ export async function downloadAnalysisResultExport(
     filenameFromContentDisposition(response.headers.get("content-disposition")) ??
     `datalab-analysis-${analysisId}-export-${exportId}`;
   triggerBrowserDownload(blob, filename);
+}
+
+export async function fetchAnalysisResultExportDeletionPreflight(
+  analysisId: string,
+  exportId: string,
+): Promise<AnalysisResultExportDeletionPreflightResponse> {
+  const response = await fetchApi(
+    apiRoutes.analysisRunExportDeletionPreflight(analysisId, exportId),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw new Error(
+      await apiErrorCode(response, "analysis_export_deletion_preflight_failed"),
+    );
+  }
+  return (await response.json()) as AnalysisResultExportDeletionPreflightResponse;
+}
+
+export async function deleteAnalysisResultExport(
+  analysisId: string,
+  exportId: string,
+  request: AnalysisResultExportDeleteRequest,
+): Promise<AnalysisResultExportDeleteResponse> {
+  const response = await fetchApi(apiRoutes.analysisRunExportDelete(analysisId, exportId), {
+    method: "DELETE",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_export_delete_failed"));
+  }
+  return (await response.json()) as AnalysisResultExportDeleteResponse;
 }

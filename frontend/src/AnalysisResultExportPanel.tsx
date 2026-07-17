@@ -1,6 +1,10 @@
+import { useState } from "react";
+
 import type {
   AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
+  AnalysisResultExportDeleteResponse,
+  AnalysisResultExportDeletionPreflightResponse,
   AnalysisResultExportListResponse,
   AnalysisResultHtmlReportResponse,
   AnalysisResultJsonExportResponse,
@@ -16,6 +20,9 @@ export function AnalysisResultExportPanel({
   analysisResult,
   csvExportError,
   csvExportResult,
+  deletion,
+  deletionError,
+  deletionPreflight,
   downloadError,
   exportError,
   exportList,
@@ -27,15 +34,23 @@ export function AnalysisResultExportPanel({
   isExportingHtml,
   isExportingJson,
   isDownloadingExport,
+  isDeletingExport,
   isLoadingExportList,
+  isLoadingDeletionPreflight,
   onCreateCsvExport,
   onCreateExport,
   onCreateHtmlReport,
   onDownloadExport,
+  onLoadDeletionPreflight,
+  onDeleteExport,
+  onClearDeletion,
 }: {
   analysisResult: AnalysisResultEnvelope | null;
   csvExportError: string | null;
   csvExportResult: AnalysisResultCsvExportResponse | null;
+  deletion: AnalysisResultExportDeleteResponse | null;
+  deletionError: string | null;
+  deletionPreflight: AnalysisResultExportDeletionPreflightResponse | null;
   downloadError: string | null;
   exportError: string | null;
   exportList: AnalysisResultExportListResponse | null;
@@ -47,12 +62,18 @@ export function AnalysisResultExportPanel({
   isExportingHtml: boolean;
   isExportingJson: boolean;
   isDownloadingExport: boolean;
+  isDeletingExport: boolean;
   isLoadingExportList: boolean;
+  isLoadingDeletionPreflight: boolean;
   onCreateCsvExport: (analysisId: string) => void;
   onCreateExport: (analysisId: string) => void;
   onCreateHtmlReport: (analysisId: string) => void;
   onDownloadExport: (analysisId: string, exportId: string) => void;
+  onLoadDeletionPreflight: (analysisId: string, exportId: string) => void;
+  onDeleteExport: (preflight: AnalysisResultExportDeletionPreflightResponse) => void;
+  onClearDeletion: () => void;
 }) {
+  const [pendingDeletionExportId, setPendingDeletionExportId] = useState<string | null>(null);
   if (analysisResult === null || analysisResult.status !== "succeeded") {
     return null;
   }
@@ -188,9 +209,69 @@ export function AnalysisResultExportPanel({
                 >
                   다운로드
                 </button>
+                <button
+                  className="secondary-button compact-button"
+                  disabled={isLoadingDeletionPreflight || isDeletingExport}
+                  onClick={() => {
+                    setPendingDeletionExportId(null);
+                    onLoadDeletionPreflight(analysisResult.analysis_id, item.export_id);
+                  }}
+                  type="button"
+                >
+                  삭제 영향 확인
+                </button>
               </div>
             ))
           )}
+        </div>
+      ) : null}
+      {isLoadingDeletionPreflight ? (
+        <div className="notice-box">export 삭제 영향 확인 중</div>
+      ) : null}
+      {deletionPreflight !== null &&
+      deletionPreflight.analysis_id === analysisResult.analysis_id ? (
+        <div className="notice-box" aria-label="analysis export 삭제 영향">
+          <strong>{exportKindLabel(deletionPreflight.artifact_kind)}</strong>
+          <span>{formatBytes(deletionPreflight.counts.file_bytes)}</span>
+          <code>sha256:{shortHash(deletionPreflight.sha256)}</code>
+          <p>파일 1개와 export metadata 1건만 삭제합니다. 분석 결과는 유지됩니다.</p>
+          <button
+            className="secondary-button compact-button"
+            disabled={isDeletingExport}
+            onClick={() => setPendingDeletionExportId(deletionPreflight.export_id)}
+            type="button"
+          >
+            영구 삭제 확인
+          </button>
+        </div>
+      ) : null}
+      {pendingDeletionExportId !== null &&
+      deletionPreflight !== null &&
+      pendingDeletionExportId === deletionPreflight.export_id &&
+      deletionPreflight.analysis_id === analysisResult.analysis_id ? (
+        <AnalysisExportDeletionConfirmation
+          preflight={deletionPreflight}
+          isDeleting={isDeletingExport}
+          onConfirm={() => onDeleteExport(deletionPreflight)}
+          onCancel={() => {
+            setPendingDeletionExportId(null);
+            onClearDeletion();
+          }}
+        />
+      ) : null}
+      {deletion !== null && deletion.analysis_id === analysisResult.analysis_id ? (
+        <div className="notice-box" role="status">
+          export 삭제 완료 · {formatBytes(deletion.deleted_counts.file_bytes)}
+          {deletion.cleanup_status === "quarantined_pending_cleanup"
+            ? " · 파일 cleanup은 다음 앱 시작에서 재시도됩니다."
+            : ""}
+        </div>
+      ) : null}
+      {deletionError !== null ? (
+        <div className="error-box analysis-error-box" role="alert">
+          <h4>export 삭제 실패</h4>
+          <p>목록과 삭제 영향을 다시 확인한 뒤 재시도하세요.</p>
+          <code>오류 코드: {deletionError}</code>
         </div>
       ) : null}
       {exportError !== null ? (
@@ -219,6 +300,46 @@ export function AnalysisResultExportPanel({
         </div>
       ) : null}
     </section>
+  );
+}
+
+export function AnalysisExportDeletionConfirmation({
+  preflight,
+  isDeleting,
+  onConfirm,
+  onCancel,
+}: {
+  preflight: AnalysisResultExportDeletionPreflightResponse;
+  isDeleting: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="error-box" aria-label="analysis export irreversible deletion 확인">
+      <strong>{exportKindLabel(preflight.artifact_kind)}</strong>
+      <p>
+        {`파일 ${preflight.counts.file_count}개 · ${formatBytes(preflight.counts.file_bytes)}와 metadata ${preflight.counts.metadata_record_count}건을 영구 삭제합니다.`}
+      </p>
+      <p>이 export는 복원할 수 없습니다. 저장된 분석 결과와 다른 export는 유지됩니다.</p>
+      <div className="button-row">
+        <button
+          className="secondary-button compact-button"
+          disabled={isDeleting}
+          onClick={onConfirm}
+          type="button"
+        >
+          {isDeleting ? "영구 삭제 중" : "export 영구 삭제"}
+        </button>
+        <button
+          className="secondary-button compact-button"
+          disabled={isDeleting}
+          onClick={onCancel}
+          type="button"
+        >
+          취소
+        </button>
+      </div>
+    </div>
   );
 }
 

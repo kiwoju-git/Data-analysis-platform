@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 ## 1. Required Reading And Priority
 
@@ -19,19 +19,25 @@ Current source-of-truth note:
 - `data_prd_addendum.md` remains authoritative for security, privacy, statistical correctness, reproducibility, Windows/Python 3.10, CPU-only, and local-only constraints.
 - `to_do_list.md` tracks the current implementation state and the next allowed PR slice.
 
-Next allowed PR after the immutable control-limit-set storage/API foundation:
+Current and next development order:
 
-- Implement the first Phase II frozen-limit monitoring vertical slice using
-  only verified app-created limit sets: method `0.2.0`, result schema `2`,
-  explicit target dataset/column compatibility preflight, P/NP/C/U frozen
-  formulas, stored dependency provenance, restore/export consistency, typed UI
-  selection, and browser E2E.
-- Do not add WECO/Nelson rules, Laney correction, exact probability limits,
-  user-entered naked limits, automatic baseline refit, or a new chart family,
-  and do not reinterpret existing Phase I `0.1.0` results.
-- Run the unchanged dependency spike on an actual Windows 11 x64 workstation
-  before release. This is a release gate, not a blocker for development on the
-  currently measured Windows 10 workstation.
+1. Run clean Windows 11 x64/Python 3.10/Node 22/CPU-only release validation.
+   This is a release gate, not a blocker for development on the measured
+   Windows 10/Node 24 workstation.
+2. Extend retention/deletion from the implemented closed-Bayesian metadata
+   graph and individual export-file deletion to an analysis-run ownership
+   graph. Include owned result/row-snapshot/export files, but block model,
+   prediction, limit-set, or other inbound dependencies instead of cascading
+   silently. Use `docs/workspace_retention_contract.md`.
+3. Continue the advanced quality/statistics backlog through a separately
+   approved contract.
+
+The completed Phase II slice retains explicit target compatibility, P/NP/C/U
+frozen formulas, dependency provenance, restore/export consistency, typed UI
+selection, and browser E2E. Any later chart expansion requires a separate
+approved contract. Do not add WECO/Nelson rules, Laney correction, exact
+probability limits, naked user-entered limits, automatic baseline refit, or a
+new chart family, and never reinterpret Phase I `0.1.0` results.
 
 ## 2. Current Code State
 
@@ -42,7 +48,7 @@ Already implemented:
 - Local-only default host `127.0.0.1` and narrow CORS
 - React 18 + Vite + TypeScript shell with API health display
 - PowerShell workflow scripts: `bootstrap.ps1`, `dev.ps1`, `test.ps1`, `check.ps1`
-- SQLite migration skeleton through schema version `13`
+- SQLite migration skeleton through schema version `14`
 - `datasets` metadata table for raw upload provenance
 - `dataset_versions` metadata table for immutable parsing-confirmed versions
 - `dataset_columns` metadata table preserving original names and unique display names
@@ -136,7 +142,7 @@ Already implemented:
 - `doe.factorial_design` is the Gate D1 2-level full factorial method at version `0.3.0`; analysis envelope/config schema 2 pins immutable response revision schema 1 in SQLite schema 10 while result calculation schema remains 1. Dedicated APIs provide current/history/correction, analysis restore, -1/+1 effects, hierarchy-fixed OLS/ANOVA, diagnostics, charts, and HTML report. Fractional alias analysis and optimization remain out of scope
 - `doe.response_surface` is the Gate D2 CCD/full-quadratic method at version `0.2.0`; analysis envelope/config schema 2 pins immutable response revision schema 1, design payload schema 2 uses generic `central_composite` family plus `alpha_mode`, legacy schema-1 family/SHA restore is preserved, and analyzed revisions remain read-only while corrections create new revisions
 - `regression.response_optimizer` is a disabled generic catalog method with a dedicated RSM-panel API at version `0.3.0`; config/result schema 2 and source-bundle schema 2 pin the source RSM analysis and response revision while preserving typed eligibility, exact advisory acknowledgments, desirability, bounded factor regions, linear constraints, deterministic budgets, limitations, and common provenance
-- `doe.bayesian_optimization` is available through dedicated APIs/UI at version `0.2.0`; study/history schemas remain 1, recommendation config/result/model schemas start at 1, and SQLite schema 12 persists source history, GP/EI model metadata, checksums, deterministic budgets, one pending recommendation, typed actual-unit linear constraints, rehashed relationship-tamper rejection, five-seed Branin regret evidence, and confirmation/no-global-optimum warnings while preserving legacy `0.1.0` studies
+- `doe.bayesian_optimization` is available through dedicated APIs/UI at version `0.2.2`; study/history and recommendation config/result/model schemas remain 1, lifecycle-event schema 1 and SQLite schema 14 add immutable close metadata and successor lineage, backend/UI enforce initial-design and 200/201 boundaries, stranded-study abandonment protection, all-trial duplicate exclusion, latest/current reconciliation, explicit trial budgets, terminal confirmations, typed time-budget errors, and read-only closed restore while preserving legacy `0.1.0` studies and valid `0.2.0`/`0.2.1` recommendations
 - scikit-learn 1.7.2 is production-pinned after the isolated CPython 3.10 wheel-only, current NumPy/SciPy, offline, CPU/thread, and deterministic fixed-kernel GP checks; joblib 1.5.2/threadpoolctl 3.6.0 and the full Windows backend environment are protected by a 45-wheel SHA-256 lock. Windows 11 client validation remains a release gate
 - NumPy 2.2.6/SciPy 1.15.3 are production-pinned after the native Windows Python 3.10.11 dependency spike, and a SciPy-backed normality reference fixture was generated and validated
 - Descriptive statistics result persistence stores app-owned JSON under the workspace and records result SHA-256 in `analysis_runs`
@@ -180,7 +186,7 @@ Already implemented:
   - numeric columns expose `gt`/`gte`/`lt`/`lte`; all columns expose missing and equality conditions
   - filter drafts are validated in the shared UI slot
   - current executable payload serialization into `filter_snapshot.conditions` covers `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.attribute_control_chart`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
-  - `quality.attribute_control_chart` implements Phase I P/NP/C/U formulas with explicit defective/defect semantics, sample-size/opportunity validation, natural-bound truncation, one-point 3-sigma signals, dispersion/approximation warnings, stored provenance, common exports, and inline SVG UI
+  - `quality.attribute_control_chart` v0.2.0 implements Phase I P/NP/C/U estimation plus Phase II frozen-limit monitoring from verified immutable limit-set assets, target compatibility preflight, dependency-validated restore/export, and explicit Phase I/II UI
   - `quality.individuals_chart` uses canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks, complete-case exclusions, arithmetic mean center line, `MRbar / d2` sigma estimate, I chart 3-sigma limits, MR chart `D3/D4` limits, I/MR single-point limit signals, I chart same-side centerline signals, I chart strict trend signals, I chart alternating signals, and explicit I chart zone/pattern signals
   - `quality.subgroup_chart` uses canonical first-seen subgroup order, fixed subgroup size 2-10, complete-case exclusions, Xbar-R/Xbar-S standard constants, Xbar/R/S control limits, and Xbar/R/S single-point limit signals
   - `quality.run_chart` uses canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks, median center line, complete-case exclusions, above/below median run counts, tie-to-median exclusion policy, strict 6-point trend signal, strict 14-point oscillation signal, and exact conditional run-count clustering/mixture signals without control limits
@@ -8356,3 +8362,270 @@ Next allowed PR:
 - Keep WECO/Nelson rules, Laney correction, exact probability limits,
   user-entered naked limits, automatic baseline refit, and new chart families
   out of that slice.
+
+## Progress Update 177 - Bayesian Lifecycle Correctness Stabilization
+
+Completed:
+
+- Bumped `doe.bayesian_optimization` to patch `0.2.1`; study/history and
+  recommendation config/result/model schemas remain 1, SQLite remains schema
+  13, and valid stored `0.2.0` recommendations restore without relabeling.
+- Enforced the shared `max(2, factor_count + 1)` initial-design rule in the
+  backend and frontend. Shared limits now distinguish 200 total trials, 200
+  completed observations, and 201 history revisions including the empty first
+  revision.
+- Prevented initial-trial abandonment that would strand the minimum observation
+  requirement. Surplus initial trials and recommendation trials remain
+  abandonable, and abandonment does not create a history revision.
+- Excluded completed, pending, and abandoned coordinates from every later
+  candidate within the existing duplicate tolerance. No random or duplicate
+  fallback was added.
+- Added a latest-recommendation API, current-trial reconciliation, pending/
+  completed/abandoned/historical labels, and separation of stored predicted
+  values from an actual completed observation.
+- Displayed and enforced the effective request-level total-trial budget,
+  retained the hard 200 limit, and unified fit/acquisition/worker time
+  exhaustion under `bayesian_optimization_budget_exhausted`.
+- Added accessible inline confirmations for immutable observation completion
+  and abandonment, transition action locking, retained input after errors, and
+  study/latest refresh after success.
+- Added `docs/bayesian_study_lifecycle_contract.md`. Study-level completion and
+  abandonment remain unimplemented until a later migration/API PR.
+
+Validation:
+
+- Initial targeted Bayesian/OpenAPI backend pytest: 155 passed; follow-up
+  recommendation-version compatibility suite: 36 passed.
+- Frontend lint/typecheck passed and Vitest: 98 passed.
+- Browser E2E passed on ports `8027`/`5227` with diagnostics root
+  `.tmp\e2e-diagnostics-bayesian-lifecycle-correctness`; the final full rerun
+  also passed in 57.9 seconds on ports `8028`/`5228` with diagnostics root
+  `.tmp\e2e-diagnostics-bayesian-lifecycle-correctness-final`. After the final
+  restore-boundary review it passed again in 56.8 seconds on ports `8029`/
+  `5229` with diagnostics root `.tmp\e2e-diagnostics-bayesian-lifecycle-final`.
+- Full `scripts/check.ps1` passed with Ruff/format over 150 Python files, mypy
+  over 98 source files, backend pytest 687, frontend lint/typecheck, frontend
+  Vitest 98, and production build. The direct OpenAPI/frontend contract suite
+  passed 117 tests. Main JavaScript is 467.18 kB and the DOE chunk is 79.80 kB;
+  both remain below the 500 kB warning threshold.
+- Final environment evidence is recorded in `docs/ci_status.md`; Windows 11/
+  Node 22 remains a release gate.
+
+Next development order:
+
+1. Phase II frozen-limit monitoring.
+2. Windows 11/Python 3.10/Node 22 clean release validation.
+3. Bayesian study close/abandon and retention implementation.
+4. Advanced quality/statistics backlog.
+
+## Progress Update 178 - Phase II Frozen-Limit Monitoring
+
+Completed:
+
+- Promoted `quality.attribute_control_chart` to method `0.2.0` and result
+  schema 2 for explicit Phase I/Phase II meaning while preserving verbatim
+  restore and limit-set promotion of stored `0.1.0`/schema-1 Phase I results.
+- Added verified app-created limit-set selection, target compatibility
+  preflight, P/NP/C/U frozen-limit execution, NP fixed-sample-size and C current
+  opportunity gates, and stable redacted errors. No target refit, naked limit,
+  chart switch, or silent fallback exists.
+- Added source-limit and target dependency provenance plus checksum/relation
+  validation across result, config, asset, dataset schema/canonical artifact,
+  filter, row snapshot, columns, and counts for restore and common exports.
+- Added explicit Phase I/II UI, latest-request-guarded asset/preflight state,
+  disabled run reasons, immutable source labels, cross-dataset API tests, legacy
+  compatibility, tamper coverage, and a full browser path.
+- Full `scripts/check.ps1` passed with backend pytest 702, frontend Vitest 100,
+  OpenAPI/frontend contracts 120, Ruff/format over 152 Python files, mypy over
+  99 source files, frontend lint/typecheck, and production build. Chromium E2E
+  passed in 58.1 seconds on ports `8030`/`5230`.
+- Validation ran on Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0 from an uncommitted working tree based on main SHA
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Windows 11/Python 3.10/Node 22
+  remains a release gate. Remote Actions were not verified because `gh` is not
+  installed.
+
+Next development order:
+
+1. Windows 11/Python 3.10/Node 22 clean release validation.
+2. Bayesian study close/abandon and retention implementation.
+3. Advanced quality/statistics backlog through separately approved contracts.
+
+## Progress Update 179 - Bayesian Study Close And Read-Only Lifecycle
+
+Completed:
+
+- Bumped `doe.bayesian_optimization` to patch `0.2.2`; existing study/history
+  and recommendation config/result/model schemas remain 1 and legacy executable
+  recommendations are not relabeled.
+- Added SQLite schema 14 immutable lifecycle-event schema 1, optimistic close,
+  canonical event SHA, final trial/history/recommendation relationships, stable
+  reason codes, exact idempotency, and successor `predecessor_study_id`.
+- Added explicit close-intent trial abandonment, pending and completion gates,
+  storage-level post-close mutation blocking, schema-13 upgrade coverage, and
+  tamper/redaction tests. Close does not delete any artifact.
+- Added typed API/OpenAPI/frontend lifecycle contracts, accessible inline
+  confirmation, active/completed/abandoned labels, closed read-only restore,
+  and successor definition preparation without copying observations or results.
+- Full `scripts/check.ps1` passed with backend pytest 712, frontend Vitest 101,
+  OpenAPI/frontend contracts 120, Ruff/format over 153 Python files, mypy over
+  99 source files, lint/typecheck, and production build. Targeted lifecycle/
+  Bayesian/OpenAPI tests passed 189.
+- Chromium E2E passed in 58.6 seconds on ports `8031`/`5231`. Validation used
+  Windows 10 Home build 19045, Python 3.10.11, and Node 24.17.0 from main base
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`; it is not Windows 11/Node 22
+  release evidence. `gh` is not installed, so remote Actions remain unverified.
+
+Next development order:
+
+1. Windows 11/Python 3.10/Node 22 clean release validation.
+2. Retention/deletion and workspace management with explicit reference-graph
+   review and no dangling lifecycle/history/recommendation artifacts.
+3. Advanced quality/statistics backlog through separately approved contracts.
+
+## Progress Update 180 - Closed Bayesian Study Metadata Deletion
+
+Completed:
+
+- Added checksum-validated deletion preflight and exact study-ID/manifest
+  confirmation for closed Bayesian studies. Active studies and predecessor
+  studies referenced by successors are blocked; no cascade or lineage severing
+  occurs.
+- Added a `BEGIN IMMEDIATE` storage transaction that rechecks the complete
+  graph, deletes lifecycle/recommendation/history-head rows in dependency order,
+  and removes the owning study/version/trial/history graph atomically. Count or
+  graph disagreement rolls back.
+- Added typed API/OpenAPI/frontend schemas, exact metadata/file counts, stable
+  redacted error codes, an impact-review step, and a separate irreversible
+  confirmation. The current Bayesian graph owns no files and reports zero
+  files/bytes.
+- Kept `doe.bayesian_optimization` at `0.2.2`, SQLite at schema 14, and all
+  existing Bayesian artifact schemas at 1. Deletion preflight/response schemas
+  start at 1 and do not reinterpret stored recommendations.
+- Added `docs/workspace_retention_contract.md` for later file-aware cleanup,
+  including Windows locking, trusted relative paths, quarantine boundaries,
+  crash recovery, and inbound-reference acceptance criteria.
+- Full `scripts/check.ps1` passed in 764.9 seconds with backend pytest 721,
+  frontend Vitest 102, OpenAPI/frontend contracts 131, Ruff/format over 153
+  Python files, mypy over 99 source files, lint/typecheck, and production build.
+- Chromium E2E passed in 62.2 seconds on ports `8031`/`5231`, including impact
+  review, deletion confirmation, and catalog removal after reload. Two earlier
+  launch attempts on other ports ended before browser execution because Windows
+  denied one frontend/backend socket bind; the final isolated run passed.
+- Validation used Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0 from an uncommitted tree based on main SHA
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Windows 11/Python 3.10/Node 22
+  remains the release gate. Remote Actions remain unverified because `gh` is
+  not installed.
+
+Next development order:
+
+1. Run clean Windows 11/Python 3.10/Node 22/CPU-only release validation.
+2. Implement one file-owning retention vertical slice, starting with analysis
+   exports and their owning analysis graph, including quarantine/recovery tests.
+3. Extend the same reviewed ownership model to datasets, DOE, models, and limit
+   sets before adding bulk or automatic cleanup.
+4. Continue advanced quality/statistics only through an approved contract.
+
+## Progress Update 181 - Individual Analysis Export File Deletion
+
+Completed:
+
+- Added deletion preflight and exact analysis/export/manifest confirmation for
+  one app-created JSON/CSV/HTML or regression-prediction CSV export.
+- Validated ownership, approved kind/media type, exact relative path,
+  non-symlink file, SHA-256, byte size, and parent analysis state without
+  exposing paths or raw result values.
+- Added same-directory quarantine, post-move integrity recheck, conditional
+  metadata transaction, rollback restoration, pending cleanup, and startup
+  recovery for committed, metadata-owned, and tampered quarantine cases.
+- Added frontend impact review, separate irreversible confirmation, list
+  refresh, parent-result preservation copy, and stale-response/reset guards.
+- Kept statistical methods, existing export/result schemas, and SQLite schema
+  14 unchanged; operational deletion schemas start at 1.
+- Full `scripts/check.ps1` passed in 746.7 seconds with backend pytest 731,
+  frontend Vitest 105, OpenAPI/frontend contracts 137, Ruff/format over 154
+  Python files, mypy over 99 source files, lint/typecheck, and build.
+- Chromium E2E passed in 59.9 seconds on `8031`/`5231`, including export
+  deletion impact, exact confirmation, list reduction, and parent result
+  preservation.
+- Validation used Windows 10 build 19045, Python 3.10.11, Node 24.17.0, and
+  base SHA `0cbce01d2fa2914459c5be69f070e1703cb631dd`. It is not Windows 11/Node
+  22 release evidence; remote Actions remain unverified because `gh` is absent.
+
+Next development order:
+
+1. Run clean Windows 11/Python 3.10/Node 22/CPU-only release validation.
+2. Implement analysis-run root deletion with complete owned-file preflight and
+   blockers for model/prediction/limit-set/other inbound dependencies.
+3. Extend reviewed ownership graphs to datasets, DOE, models, and limit sets
+   before any bulk or automatic cleanup.
+
+## Progress Update 182 - Analysis-Run Root Deletion
+
+Completed:
+
+- Added exact-manifest deletion preflight for a succeeded stored analysis run,
+  covering its result, row snapshot, supported prediction rows, and all stored
+  exports without returning paths or raw values.
+- Added explicit model, prediction, limit-set, and job blockers. Deletion does
+  not cascade into or silently detach these references.
+- Added short Windows-safe quarantine names, full rollback restoration, an
+  exact `BEGIN IMMEDIATE` run/artifact transaction, committed cleanup retry,
+  and startup restore/removal with checksum validation.
+- Added typed UI impact review and irreversible confirmation, history refresh,
+  deleted restore/comparison/export clearing, and hook-level stale-response
+  tests for both preflight and deletion.
+- Method versions, statistical result/config schemas, checksums, and SQLite
+  schema 14 remain unchanged. Deletion operational schemas start at 1.
+- Browser E2E passed in 66.5 seconds on `8031`/`5231`, including analysis
+  history reduction from two to one and clearing deleted result references.
+- Final `scripts/check.ps1` passed in 792.7 seconds with backend pytest 738,
+  frontend Vitest 109, OpenAPI/frontend contracts 139, Ruff/format over 156
+  Python files, mypy over 100 source files, lint/typecheck, and build.
+
+Next allowed work:
+
+1. Implement regression-model deletion with dependent-prediction blockers and
+   attribute-control-limit-set deletion with source/audit preservation.
+2. Run the clean Windows 11/Python 3.10/Node 22 release gate.
+3. Only then extend reviewed ownership graphs to datasets and DOE designs;
+   bulk and automatic deletion remain prohibited.
+
+## Progress Update 183 - Regression Model And Limit-Set Deletion
+
+Completed:
+
+- Added explicit, manifest-confirmed deletion for an app-created regression
+  model and an immutable attribute-control limit set without deleting either
+  source analysis.
+- Model deletion is blocked by stored prediction dependencies. Limit-set
+  deletion is blocked by Phase II dependencies. No relationship is silently
+  detached and no dependent result is cascaded.
+- Added exact artifact ownership/path/media/checksum/size validation,
+  same-directory quarantine, transactional metadata rechecks, compensating
+  restoration, pending cleanup, and startup recovery.
+- Added typed backend/frontend contracts, impact review, separate irreversible
+  confirmation, dependency guidance, and hook-level stale-response guards.
+- Kept statistical method versions, result/config schemas, SQLite schema 14,
+  regression model manifest schema 2, and limit-set asset schema 1 unchanged.
+  Operational deletion request/response schemas start at 1.
+- Final `scripts/check.ps1` passed in 781.8 seconds with backend pytest 750,
+  frontend Vitest 111, OpenAPI/frontend contracts 150, Ruff/format over 158
+  Python files, mypy over 101 source files, lint/typecheck, and build.
+- Chromium E2E passed in 99.3 seconds on `8031`/`5231`, including the model-to-
+  prediction and limit-set-to-Phase-II blockers. Validation used Windows 10
+  build 19045, Python 3.10.11, Node 24.17.0, and base SHA
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`; this is not Windows 11/Node 22
+  release evidence. Remote Actions remain unverified because `gh` is absent.
+
+Next allowed work:
+
+1. Run the clean Windows 11/Python 3.10/Node 22/CPU-only release gate.
+2. Implement dataset-root deletion only after documenting every inbound owner
+   and using explicit blockers instead of cascade.
+3. Extend the same reviewed lifecycle to DOE designs and immutable response
+   revisions.
+4. Keep bulk, age-based, and automatic cleanup out of scope until all root
+   ownership graphs and recovery paths are validated.
+5. Continue advanced methods only through a separately approved contract.

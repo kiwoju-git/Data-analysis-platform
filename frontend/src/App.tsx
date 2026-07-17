@@ -59,6 +59,10 @@ import { useAnalysisSelection } from "./analysisSelection";
 import { currentAppRoute } from "./appRoute";
 import { startRetryingRequest } from "./startupRequest";
 import { useAnalysisComparisonState } from "./useAnalysisComparisonState";
+import {
+  useAttributeControlPhase2State,
+  type AttributeControlPhase,
+} from "./useAttributeControlPhase2State";
 import { useAnalysisExportState } from "./useAnalysisExportState";
 import { useAnalysisHistoryState } from "./useAnalysisHistoryState";
 import { useDatasetWorkflow } from "./useDatasetWorkflow";
@@ -217,6 +221,8 @@ export default function App() {
   const [xyCorrelationConfidenceLevel, setXyCorrelationConfidenceLevel] = useState(0.95);
   const [selectedAttributeControlChartType, setSelectedAttributeControlChartType] =
     useState<AttributeControlChartType>("p");
+  const [attributeControlChartPhase, setAttributeControlChartPhase] =
+    useState<AttributeControlPhase>("phase_1");
   const [selectedAttributeControlChartCountColumnId, setSelectedAttributeControlChartCountColumnId] =
     useState<string | null>(null);
   const [
@@ -400,6 +406,7 @@ export default function App() {
       setSelectedXyCorrelationXColumnIds(defaultXyCorrelationXColumnIds(columns));
       setSelectedXyCorrelationYColumnIds(defaultXyCorrelationYColumnIds(columns));
       const attributeCountColumnId = defaultAttributeControlChartCountColumnId(columns);
+      setAttributeControlChartPhase("phase_1");
       setSelectedAttributeControlChartType("p");
       setSelectedAttributeControlChartCountColumnId(attributeCountColumnId);
       setSelectedAttributeControlChartDenominatorColumnId(
@@ -535,6 +542,47 @@ export default function App() {
     onSelectMethod: handleSelectAnalysisMethod,
     resetKey: datasetStateRevision,
   });
+  const deletedAnalysisRunId = analysisHistoryState.analysisRunDeletion?.analysis_id ?? null;
+  const comparisonLeftAnalysisId = analysisComparisonState.analysisComparisonLeftId;
+  const comparisonRightAnalysisId = analysisComparisonState.analysisComparisonRightId;
+  const resetAnalysisComparisonState = analysisComparisonState.resetAnalysisComparisonState;
+  const exportListAnalysisId = analysisExportState.analysisResultExportList?.analysis_id ?? null;
+  const resetAnalysisExportState = analysisExportState.resetAnalysisExportState;
+  const restoredAnalysisRunId =
+    restoredAnalysisResultState.restoredAnalysisResult?.analysis_id ?? null;
+  const resetRestoredAnalysisResultState =
+    restoredAnalysisResultState.resetRestoredAnalysisResultState;
+
+  useEffect(() => {
+    if (deletedAnalysisRunId === null) {
+      return;
+    }
+    if (analysisResult?.analysis_id === deletedAnalysisRunId) {
+      setAnalysisResult(null);
+    }
+    if (restoredAnalysisRunId === deletedAnalysisRunId) {
+      resetRestoredAnalysisResultState();
+    }
+    if (
+      comparisonLeftAnalysisId === deletedAnalysisRunId ||
+      comparisonRightAnalysisId === deletedAnalysisRunId
+    ) {
+      resetAnalysisComparisonState();
+    }
+    if (exportListAnalysisId === deletedAnalysisRunId) {
+      resetAnalysisExportState();
+    }
+  }, [
+    analysisResult?.analysis_id,
+    comparisonLeftAnalysisId,
+    comparisonRightAnalysisId,
+    deletedAnalysisRunId,
+    exportListAnalysisId,
+    resetAnalysisComparisonState,
+    resetAnalysisExportState,
+    resetRestoredAnalysisResultState,
+    restoredAnalysisRunId,
+  ]);
 
   useEffect(() => {
     const stopHealthRequest = startRetryingRequest({
@@ -705,6 +753,14 @@ export default function App() {
           ),
     [selectedAttributeControlChartCountColumnId, version],
   );
+  const attributeControlPhase2State = useAttributeControlPhase2State({
+    chartType: selectedAttributeControlChartType,
+    constantOpportunityConfirmed: attributeControlChartConstantOpportunityConfirmed,
+    countColumnId: selectedAttributeControlChartCountColumnId,
+    denominatorColumnId: selectedAttributeControlChartDenominatorColumnId,
+    phase: attributeControlChartPhase,
+    targetDatasetVersionId: version?.version_id ?? null,
+  });
   const individualsChartValueColumns = useMemo(
     () => (version === null ? [] : selectableIndividualsChartValueColumns(version.columns)),
     [version],
@@ -1497,6 +1553,11 @@ export default function App() {
   function handleAttributeControlChartTypeChange(chartType: AttributeControlChartType) {
     setSelectedAttributeControlChartType(chartType);
     setAttributeControlChartConstantOpportunityConfirmed(false);
+    setAnalysisResult(null);
+  }
+
+  function handleAttributeControlChartPhaseChange(phase: AttributeControlPhase) {
+    setAttributeControlChartPhase(phase);
     setAnalysisResult(null);
   }
 
@@ -3060,7 +3121,11 @@ export default function App() {
       selectedAttributeControlChartCountColumnId === null ||
       (needsDenominator && selectedAttributeControlChartDenominatorColumnId === null) ||
       (selectedAttributeControlChartType === "c" &&
-        !attributeControlChartConstantOpportunityConfirmed)
+        !attributeControlChartConstantOpportunityConfirmed) ||
+      (attributeControlChartPhase === "phase_2" &&
+        (attributeControlPhase2State.selectedLimitSet === null ||
+          attributeControlPhase2State.preflight?.ready !== true ||
+          attributeControlPhase2State.isLoading))
     ) {
       setFlowError("attribute_control_chart_required_inputs_missing");
       return;
@@ -3081,12 +3146,16 @@ export default function App() {
         count: selectedAttributeControlChartCountColumnId,
       };
       const options: Record<string, unknown> = {
+        phase: attributeControlChartPhase,
         chart_type: selectedAttributeControlChartType,
         count_definition:
-          selectedAttributeControlChartType === "p" ||
-          selectedAttributeControlChartType === "np"
-            ? "defectives"
-            : "defects",
+          attributeControlChartPhase === "phase_2" &&
+          attributeControlPhase2State.selectedLimitSet !== null
+            ? attributeControlPhase2State.selectedLimitSet.count_definition
+            : selectedAttributeControlChartType === "p" ||
+                selectedAttributeControlChartType === "np"
+              ? "defectives"
+              : "defects",
         count_column_id: selectedAttributeControlChartCountColumnId,
         constant_opportunity_confirmed:
           selectedAttributeControlChartType === "c" &&
@@ -3094,6 +3163,12 @@ export default function App() {
         point_limit: 1000,
         missing_policy: "complete_case",
       };
+      if (
+        attributeControlChartPhase === "phase_2" &&
+        attributeControlPhase2State.selectedLimitSet !== null
+      ) {
+        options.limit_set_id = attributeControlPhase2State.selectedLimitSet.limit_set_id;
+      }
       if (needsDenominator && selectedAttributeControlChartDenominatorColumnId !== null) {
         roles[
           selectedAttributeControlChartType === "u" ? "inspection_opportunity" : "sample_size"
@@ -3347,6 +3422,8 @@ export default function App() {
     workbenchRestoredState: restoredAnalysisResultState,
     attributeControlChartAnalysisResult,
     attributeControlChartConstantOpportunityConfirmed,
+    attributeControlChartPhase,
+    attributeControlPhase2State,
     attributeControlChartCountColumnId: selectedAttributeControlChartCountColumnId,
     attributeControlChartCountColumns,
     attributeControlChartDenominatorColumnId: selectedAttributeControlChartDenominatorColumnId,
@@ -3566,6 +3643,11 @@ export default function App() {
     onAttributeControlChartCountColumnChange: handleAttributeControlChartCountColumnChange,
     onAttributeControlChartDenominatorColumnChange:
       handleAttributeControlChartDenominatorColumnChange,
+    onAttributeControlChartPhaseChange: handleAttributeControlChartPhaseChange,
+    onAttributeControlChartLimitSetChange: (limitSetId: string) => {
+      attributeControlPhase2State.onSelectLimitSet(limitSetId);
+      setAnalysisResult(null);
+    },
     onAttributeControlChartTypeChange: handleAttributeControlChartTypeChange,
     onCapabilityLslChange: handleCapabilityLslChange,
     onCapabilityTargetChange: handleCapabilityTargetChange,

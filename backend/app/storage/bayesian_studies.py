@@ -4,6 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.api.v1.schemas.bayesian import MAX_BAYESIAN_TRIALS, MAX_HISTORY_REVISIONS
 from app.storage.metadata import metadata_db_path
 
 
@@ -24,6 +25,7 @@ class BayesianStudyRecord:
     created_at: str
     updated_at: str
     app_version: str
+    predecessor_study_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,50 @@ class BayesianRecommendationRecord:
     app_version: str
 
 
+@dataclass(frozen=True)
+class BayesianStudyLifecycleEventRecord:
+    lifecycle_event_id: str
+    study_id: str
+    study_version_id: str
+    schema_version: int
+    lifecycle_revision: int
+    previous_status: str
+    resulting_status: str
+    reason_code: str
+    note: str | None
+    request_id: str
+    final_history_revision_id: str
+    final_observation_history_sha256: str
+    final_trial_count: int
+    final_completed_trial_count: int
+    final_abandoned_trial_count: int
+    latest_recommendation_id: str | None
+    definition_sha256: str
+    event_sha256: str
+    closed_at: str
+    created_at: str
+    app_version: str
+    build_commit: str | None
+
+
+@dataclass(frozen=True)
+class BayesianStudyDeletionGraphRecord:
+    study_id: str
+    status: str
+    updated_at: str
+    current_version: int
+    current_study_version_id: str
+    current_history_revision_id: str
+    lifecycle_event_id: str | None
+    study_version_count: int
+    trial_count: int
+    history_revision_count: int
+    history_head_count: int
+    recommendation_count: int
+    lifecycle_event_count: int
+    successor_study_ids: tuple[str, ...]
+
+
 def insert_bayesian_study_bundle(
     workspace_root: Path,
     *,
@@ -104,8 +150,9 @@ def insert_bayesian_study_bundle(
                 """
                 INSERT INTO bayesian_studies (
                     study_id, method_id, method_version, name, status,
-                    current_version, created_at, updated_at, app_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    current_version, created_at, updated_at, app_version,
+                    predecessor_study_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     study.study_id,
@@ -117,6 +164,7 @@ def insert_bayesian_study_bundle(
                     study.created_at,
                     study.updated_at,
                     study.app_version,
+                    study.predecessor_study_id,
                 ),
             )
             connection.execute(
@@ -170,7 +218,8 @@ def get_bayesian_study_record(workspace_root: Path, study_id: str) -> BayesianSt
         row = connection.execute(
             """
             SELECT study_id, method_id, method_version, name, status,
-                   current_version, created_at, updated_at, app_version
+                   current_version, created_at, updated_at, app_version,
+                   predecessor_study_id
             FROM bayesian_studies
             WHERE study_id = ?;
             """,
@@ -186,7 +235,8 @@ def list_bayesian_study_records(
         rows = connection.execute(
             """
             SELECT study_id, method_id, method_version, name, status,
-                   current_version, created_at, updated_at, app_version
+                   current_version, created_at, updated_at, app_version,
+                   predecessor_study_id
             FROM bayesian_studies
             ORDER BY created_at DESC, rowid DESC
             LIMIT ? OFFSET ?;
@@ -200,6 +250,78 @@ def count_bayesian_study_records(workspace_root: Path) -> int:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         row = connection.execute("SELECT COUNT(*) FROM bayesian_studies;").fetchone()
     return 0 if row is None else _row_int(row[0])
+
+
+def get_bayesian_study_deletion_graph_record(
+    workspace_root: Path,
+    study_id: str,
+) -> BayesianStudyDeletionGraphRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        return _deletion_graph_from_connection(connection, study_id)
+
+
+def delete_bayesian_study_graph_record(
+    workspace_root: Path,
+    *,
+    expected: BayesianStudyDeletionGraphRecord,
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        current = _deletion_graph_from_connection(connection, expected.study_id)
+        if current is None:
+            raise BayesianStorageConflict("bayesian_study_not_found")
+        if current.status == "active":
+            raise BayesianStorageConflict("bayesian_study_deletion_active")
+        if current.successor_study_ids:
+            raise BayesianStorageConflict("bayesian_study_deletion_referenced")
+        if current != expected:
+            raise BayesianStorageConflict("bayesian_study_deletion_conflict")
+
+        lifecycle = connection.execute(
+            "DELETE FROM bayesian_study_lifecycle_events WHERE study_id = ?;",
+            (expected.study_id,),
+        )
+        recommendations = connection.execute(
+            """
+            DELETE FROM bayesian_recommendations
+            WHERE study_version_id IN (
+                SELECT study_version_id FROM bayesian_study_versions
+                WHERE study_id = ?
+            );
+            """,
+            (expected.study_id,),
+        )
+        history_heads = connection.execute(
+            """
+            DELETE FROM bayesian_observation_history_heads
+            WHERE study_version_id IN (
+                SELECT study_version_id FROM bayesian_study_versions
+                WHERE study_id = ?
+            );
+            """,
+            (expected.study_id,),
+        )
+        if (
+            lifecycle.rowcount != expected.lifecycle_event_count
+            or recommendations.rowcount != expected.recommendation_count
+            or history_heads.rowcount != expected.history_head_count
+        ):
+            raise BayesianStorageConflict("bayesian_study_deletion_conflict")
+        deleted = connection.execute(
+            "DELETE FROM bayesian_studies WHERE study_id = ?;",
+            (expected.study_id,),
+        )
+        if deleted.rowcount != 1:
+            raise BayesianStorageConflict("bayesian_study_deletion_conflict")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def get_bayesian_study_version_record(
@@ -239,7 +361,7 @@ def list_bayesian_trial_records(
     study_version_id: str,
     *,
     offset: int = 0,
-    limit: int = 200,
+    limit: int = MAX_BAYESIAN_TRIALS,
 ) -> list[BayesianTrialRecord]:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         rows = connection.execute(
@@ -276,7 +398,10 @@ def insert_bayesian_recommendation_bundle(
 ) -> None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
         with connection:
+            if not _study_is_active(connection, recommendation.study_version_id):
+                raise BayesianStorageConflict("bayesian_study_closed")
             head = connection.execute(
                 """
                 SELECT revision.history_revision_id,
@@ -315,7 +440,10 @@ def insert_bayesian_recommendation_bundle(
                 """,
                 (recommendation.study_version_id,),
             ).fetchone()
-            if row is None or _row_int(row[0]) + 1 != trial.trial_number:
+            current_trial_count = 0 if row is None else _row_int(row[0])
+            if current_trial_count >= MAX_BAYESIAN_TRIALS:
+                raise BayesianStorageConflict("bayesian_optimization_budget_exhausted")
+            if current_trial_count + 1 != trial.trial_number:
                 raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
             connection.execute(
                 """
@@ -401,7 +529,7 @@ def list_bayesian_recommendation_records(
     study_version_id: str,
     *,
     offset: int = 0,
-    limit: int = 200,
+    limit: int = MAX_BAYESIAN_TRIALS,
 ) -> list[BayesianRecommendationRecord]:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         rows = connection.execute(
@@ -423,6 +551,30 @@ def list_bayesian_recommendation_records(
     return [_recommendation_from_row(row) for row in rows]
 
 
+def get_latest_bayesian_recommendation_record(
+    workspace_root: Path,
+    study_version_id: str,
+) -> BayesianRecommendationRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT recommendation_id, study_version_id, trial_id,
+                   source_history_revision_id,
+                   source_observation_history_sha256,
+                   method_id, method_version, config_schema_version,
+                   result_schema_version, model_schema_version,
+                   config_json, config_sha256, result_json, result_sha256,
+                   result_payload_sha256, created_at, app_version
+            FROM bayesian_recommendations
+            WHERE study_version_id = ?
+            ORDER BY rowid DESC
+            LIMIT 1;
+            """,
+            (study_version_id,),
+        ).fetchone()
+    return None if row is None else _recommendation_from_row(row)
+
+
 def count_bayesian_recommendation_records(workspace_root: Path, study_version_id: str) -> int:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         row = connection.execute(
@@ -430,6 +582,159 @@ def count_bayesian_recommendation_records(workspace_root: Path, study_version_id
             (study_version_id,),
         ).fetchone()
     return 0 if row is None else _row_int(row[0])
+
+
+def get_bayesian_study_lifecycle_event_record(
+    workspace_root: Path, study_id: str
+) -> BayesianStudyLifecycleEventRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT lifecycle_event_id, study_id, study_version_id,
+                   schema_version, lifecycle_revision, previous_status,
+                   resulting_status, reason_code, note, request_id,
+                   final_history_revision_id,
+                   final_observation_history_sha256, final_trial_count,
+                   final_completed_trial_count, final_abandoned_trial_count,
+                   latest_recommendation_id, definition_sha256, event_sha256,
+                   closed_at, created_at, app_version, build_commit
+            FROM bayesian_study_lifecycle_events
+            WHERE study_id = ?;
+            """,
+            (study_id,),
+        ).fetchone()
+    return None if row is None else _lifecycle_event_from_row(row)
+
+
+def close_bayesian_study_record(
+    workspace_root: Path,
+    *,
+    event: BayesianStudyLifecycleEventRecord,
+    expected_current_version: int,
+) -> BayesianStudyLifecycleEventRecord:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        existing = connection.execute(
+            """
+            SELECT lifecycle_event_id, study_id, study_version_id,
+                   schema_version, lifecycle_revision, previous_status,
+                   resulting_status, reason_code, note, request_id,
+                   final_history_revision_id,
+                   final_observation_history_sha256, final_trial_count,
+                   final_completed_trial_count, final_abandoned_trial_count,
+                   latest_recommendation_id, definition_sha256, event_sha256,
+                   closed_at, created_at, app_version, build_commit
+            FROM bayesian_study_lifecycle_events
+            WHERE study_id = ?;
+            """,
+            (event.study_id,),
+        ).fetchone()
+        if existing is not None:
+            connection.commit()
+            return _lifecycle_event_from_row(existing)
+        study = connection.execute(
+            """
+            SELECT status, current_version
+            FROM bayesian_studies
+            WHERE study_id = ?;
+            """,
+            (event.study_id,),
+        ).fetchone()
+        if study is None or str(study[0]) != "active":
+            raise BayesianStorageConflict("bayesian_study_closed")
+        if _row_int(study[1]) != expected_current_version:
+            raise BayesianStorageConflict("bayesian_study_close_conflict")
+        head = connection.execute(
+            """
+            SELECT head.history_revision_id,
+                   revision.observation_history_sha256
+            FROM bayesian_observation_history_heads AS head
+            INNER JOIN bayesian_observation_history_revisions AS revision
+                ON revision.history_revision_id = head.history_revision_id
+            WHERE head.study_version_id = ?;
+            """,
+            (event.study_version_id,),
+        ).fetchone()
+        if head is None or (
+            str(head[0]) != event.final_history_revision_id
+            or str(head[1]) != event.final_observation_history_sha256
+        ):
+            raise BayesianStorageConflict("bayesian_study_close_conflict")
+        counts = connection.execute(
+            """
+            SELECT COUNT(*),
+                   SUM(CASE WHEN state = 'pending' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN state = 'completed' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN state = 'abandoned' THEN 1 ELSE 0 END)
+            FROM bayesian_trials
+            WHERE study_version_id = ?;
+            """,
+            (event.study_version_id,),
+        ).fetchone()
+        if counts is None:
+            raise BayesianStorageConflict("bayesian_study_close_conflict")
+        trial_count = _row_int(counts[0])
+        pending_count = 0 if counts[1] is None else _row_int(counts[1])
+        completed_count = 0 if counts[2] is None else _row_int(counts[2])
+        abandoned_count = 0 if counts[3] is None else _row_int(counts[3])
+        latest = connection.execute(
+            """
+            SELECT recommendation_id
+            FROM bayesian_recommendations
+            WHERE study_version_id = ?
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT 1;
+            """,
+            (event.study_version_id,),
+        ).fetchone()
+        latest_id = None if latest is None else str(latest[0])
+        if (
+            pending_count != 0
+            or trial_count != event.final_trial_count
+            or completed_count != event.final_completed_trial_count
+            or abandoned_count != event.final_abandoned_trial_count
+            or latest_id != event.latest_recommendation_id
+        ):
+            raise BayesianStorageConflict("bayesian_study_close_conflict")
+        cursor = connection.execute(
+            """
+            UPDATE bayesian_studies
+            SET status = ?, updated_at = ?
+            WHERE study_id = ? AND status = 'active' AND current_version = ?;
+            """,
+            (
+                event.resulting_status,
+                event.closed_at,
+                event.study_id,
+                expected_current_version,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise BayesianStorageConflict("bayesian_study_close_conflict")
+        connection.execute(
+            """
+            INSERT INTO bayesian_study_lifecycle_events (
+                lifecycle_event_id, study_id, study_version_id,
+                schema_version, lifecycle_revision, previous_status,
+                resulting_status, reason_code, note, request_id,
+                final_history_revision_id,
+                final_observation_history_sha256, final_trial_count,
+                final_completed_trial_count, final_abandoned_trial_count,
+                latest_recommendation_id, definition_sha256, event_sha256,
+                closed_at, created_at, app_version, build_commit
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            _lifecycle_event_values(event),
+        )
+        connection.commit()
+        return event
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def get_current_bayesian_history_revision_record(
@@ -478,7 +783,7 @@ def list_bayesian_history_revision_records(
     study_version_id: str,
     *,
     offset: int = 0,
-    limit: int = 200,
+    limit: int = MAX_HISTORY_REVISIONS,
     ascending: bool = False,
 ) -> list[BayesianHistoryRevisionRecord]:
     direction = "ASC" if ascending else "DESC"
@@ -523,7 +828,20 @@ def complete_bayesian_trial_record(
 ) -> None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
         with connection:
+            if not _study_is_active(connection, new_history.study_version_id):
+                raise BayesianStorageConflict("bayesian_study_closed")
+            history_count = connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM bayesian_observation_history_revisions
+                WHERE study_version_id = ?;
+                """,
+                (new_history.study_version_id,),
+            ).fetchone()
+            if history_count is None or _row_int(history_count[0]) >= MAX_HISTORY_REVISIONS:
+                raise BayesianStorageConflict("bayesian_observation_limit_reached")
             head = connection.execute(
                 """
                 SELECT history_revision_id
@@ -584,10 +902,45 @@ def abandon_bayesian_trial_record(
     trial_id: str,
     study_version_id: str,
     closed_at: str,
+    required_minimum_completed_observations: int | None = None,
+    expected_history_revision_id: str | None = None,
 ) -> None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
         with connection:
+            if not _study_is_active(connection, study_version_id):
+                raise BayesianStorageConflict("bayesian_study_closed")
+            if expected_history_revision_id is not None:
+                head = connection.execute(
+                    """
+                    SELECT history_revision_id
+                    FROM bayesian_observation_history_heads
+                    WHERE study_version_id = ?;
+                    """,
+                    (study_version_id,),
+                ).fetchone()
+                if head is None or str(head[0]) != expected_history_revision_id:
+                    raise BayesianStorageConflict("bayesian_observation_history_stale")
+            if required_minimum_completed_observations is not None:
+                counts = connection.execute(
+                    """
+                    SELECT
+                        SUM(CASE WHEN state = 'completed' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN origin = 'initial_design'
+                                      AND state = 'pending'
+                                      AND trial_id <> ? THEN 1 ELSE 0 END)
+                    FROM bayesian_trials
+                    WHERE study_version_id = ?;
+                    """,
+                    (trial_id, study_version_id),
+                ).fetchone()
+                completed = 0 if counts is None or counts[0] is None else _row_int(counts[0])
+                remaining_initial = (
+                    0 if counts is None or counts[1] is None else _row_int(counts[1])
+                )
+                if completed + remaining_initial < required_minimum_completed_observations:
+                    raise BayesianStorageConflict("bayesian_trial_abandon_would_strand_study")
             cursor = connection.execute(
                 """
                 UPDATE bayesian_trials
@@ -676,6 +1029,144 @@ def _recommendation_values(
     )
 
 
+def _lifecycle_event_values(
+    event: BayesianStudyLifecycleEventRecord,
+) -> tuple[object, ...]:
+    return (
+        event.lifecycle_event_id,
+        event.study_id,
+        event.study_version_id,
+        event.schema_version,
+        event.lifecycle_revision,
+        event.previous_status,
+        event.resulting_status,
+        event.reason_code,
+        event.note,
+        event.request_id,
+        event.final_history_revision_id,
+        event.final_observation_history_sha256,
+        event.final_trial_count,
+        event.final_completed_trial_count,
+        event.final_abandoned_trial_count,
+        event.latest_recommendation_id,
+        event.definition_sha256,
+        event.event_sha256,
+        event.closed_at,
+        event.created_at,
+        event.app_version,
+        event.build_commit,
+    )
+
+
+def _study_is_active(connection: sqlite3.Connection, study_version_id: str) -> bool:
+    row = connection.execute(
+        """
+        SELECT study.status
+        FROM bayesian_studies AS study
+        INNER JOIN bayesian_study_versions AS version
+            ON version.study_id = study.study_id
+        WHERE version.study_version_id = ?;
+        """,
+        (study_version_id,),
+    ).fetchone()
+    return row is not None and str(row[0]) == "active"
+
+
+def _deletion_graph_from_connection(
+    connection: sqlite3.Connection,
+    study_id: str,
+) -> BayesianStudyDeletionGraphRecord | None:
+    study = connection.execute(
+        """
+        SELECT status, updated_at, current_version
+        FROM bayesian_studies WHERE study_id = ?;
+        """,
+        (study_id,),
+    ).fetchone()
+    if study is None:
+        return None
+    current_version = _row_int(study[2])
+    version = connection.execute(
+        """
+        SELECT study_version_id
+        FROM bayesian_study_versions
+        WHERE study_id = ? AND version_number = ?;
+        """,
+        (study_id, current_version),
+    ).fetchone()
+    if version is None:
+        raise BayesianStorageConflict("bayesian_study_deletion_conflict")
+    current_study_version_id = str(version[0])
+    head = connection.execute(
+        """
+        SELECT history_revision_id
+        FROM bayesian_observation_history_heads
+        WHERE study_version_id = ?;
+        """,
+        (current_study_version_id,),
+    ).fetchone()
+    if head is None:
+        raise BayesianStorageConflict("bayesian_study_deletion_conflict")
+    lifecycle = connection.execute(
+        """
+        SELECT lifecycle_event_id
+        FROM bayesian_study_lifecycle_events
+        WHERE study_id = ?;
+        """,
+        (study_id,),
+    ).fetchone()
+    counts = connection.execute(
+        """
+        SELECT
+            (SELECT COUNT(*) FROM bayesian_study_versions WHERE study_id = ?),
+            (SELECT COUNT(*) FROM bayesian_trials AS trial
+             INNER JOIN bayesian_study_versions AS version
+                ON version.study_version_id = trial.study_version_id
+             WHERE version.study_id = ?),
+            (SELECT COUNT(*) FROM bayesian_observation_history_revisions AS history
+             INNER JOIN bayesian_study_versions AS version
+                ON version.study_version_id = history.study_version_id
+             WHERE version.study_id = ?),
+            (SELECT COUNT(*) FROM bayesian_observation_history_heads AS head
+             INNER JOIN bayesian_study_versions AS version
+                ON version.study_version_id = head.study_version_id
+             WHERE version.study_id = ?),
+            (SELECT COUNT(*) FROM bayesian_recommendations AS recommendation
+             INNER JOIN bayesian_study_versions AS version
+                ON version.study_version_id = recommendation.study_version_id
+             WHERE version.study_id = ?),
+            (SELECT COUNT(*) FROM bayesian_study_lifecycle_events WHERE study_id = ?);
+        """,
+        (study_id, study_id, study_id, study_id, study_id, study_id),
+    ).fetchone()
+    if counts is None:
+        raise BayesianStorageConflict("bayesian_study_deletion_conflict")
+    successors = connection.execute(
+        """
+        SELECT study_id FROM bayesian_studies
+        WHERE predecessor_study_id = ?
+        ORDER BY study_id;
+        """,
+        (study_id,),
+    ).fetchall()
+    return BayesianStudyDeletionGraphRecord(
+        study_id=study_id,
+        status=str(study[0]),
+        updated_at=str(study[1]),
+        current_version=current_version,
+        current_study_version_id=current_study_version_id,
+        current_history_revision_id=str(head[0]),
+        lifecycle_event_id=None if lifecycle is None else str(lifecycle[0]),
+        study_version_count=_row_int(counts[0]),
+        trial_count=_row_int(counts[1]),
+        history_revision_count=_row_int(counts[2]),
+        history_head_count=_row_int(counts[3]),
+        recommendation_count=_row_int(counts[4]),
+        lifecycle_event_count=_row_int(counts[5]),
+        successor_study_ids=tuple(str(row[0]) for row in successors),
+    )
+
+
 def _study_from_row(row: tuple[object, ...]) -> BayesianStudyRecord:
     return BayesianStudyRecord(
         study_id=str(row[0]),
@@ -687,6 +1178,7 @@ def _study_from_row(row: tuple[object, ...]) -> BayesianStudyRecord:
         created_at=str(row[6]),
         updated_at=str(row[7]),
         app_version=str(row[8]),
+        predecessor_study_id=None if row[9] is None else str(row[9]),
     )
 
 
@@ -754,6 +1246,35 @@ def _recommendation_from_row(row: tuple[object, ...]) -> BayesianRecommendationR
         result_payload_sha256=str(row[14]),
         created_at=str(row[15]),
         app_version=str(row[16]),
+    )
+
+
+def _lifecycle_event_from_row(
+    row: tuple[object, ...],
+) -> BayesianStudyLifecycleEventRecord:
+    return BayesianStudyLifecycleEventRecord(
+        lifecycle_event_id=str(row[0]),
+        study_id=str(row[1]),
+        study_version_id=str(row[2]),
+        schema_version=_row_int(row[3]),
+        lifecycle_revision=_row_int(row[4]),
+        previous_status=str(row[5]),
+        resulting_status=str(row[6]),
+        reason_code=str(row[7]),
+        note=None if row[8] is None else str(row[8]),
+        request_id=str(row[9]),
+        final_history_revision_id=str(row[10]),
+        final_observation_history_sha256=str(row[11]),
+        final_trial_count=_row_int(row[12]),
+        final_completed_trial_count=_row_int(row[13]),
+        final_abandoned_trial_count=_row_int(row[14]),
+        latest_recommendation_id=None if row[15] is None else str(row[15]),
+        definition_sha256=str(row[16]),
+        event_sha256=str(row[17]),
+        closed_at=str(row[18]),
+        created_at=str(row[19]),
+        app_version=str(row[20]),
+        build_commit=None if row[21] is None else str(row[21]),
     )
 
 

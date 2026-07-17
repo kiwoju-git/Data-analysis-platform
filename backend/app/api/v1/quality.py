@@ -9,15 +9,25 @@ from app.api.v1.schemas.analyses import (
 )
 from app.api.v1.schemas.quality import (
     AttributeControlLimitSetCreateRequest,
+    AttributeControlLimitSetDeleteRequest,
+    AttributeControlLimitSetDeleteResponse,
+    AttributeControlLimitSetDeletionPreflightResponse,
     AttributeControlLimitSetListResponse,
     AttributeControlLimitSetResponse,
+    AttributeControlMonitoringPreflightRequest,
+    AttributeControlMonitoringPreflightResponse,
 )
 from app.services.attribute_control_limit_sets import (
     create_attribute_control_limit_set,
     get_attribute_control_limit_set,
     list_attribute_control_limit_sets,
 )
+from app.services.attribute_control_phase_2 import get_attribute_control_monitoring_preflight
 from app.services.gage_rr import get_gage_rr_preflight
+from app.services.workspace_asset_retention import (
+    delete_stored_attribute_control_limit_set,
+    get_attribute_control_limit_set_deletion_preflight,
+)
 
 router = APIRouter(prefix="/quality", tags=["quality"])
 
@@ -68,6 +78,52 @@ def get_attribute_control_limit_set_route(
     return get_attribute_control_limit_set(
         settings=request.app.state.settings,
         limit_set_id=limit_set_id,
+    )
+
+
+@router.get(
+    "/attribute-control-limit-sets/{limit_set_id}/deletion-preflight",
+    response_model=AttributeControlLimitSetDeletionPreflightResponse,
+)
+def get_attribute_control_limit_set_deletion_preflight_route(
+    request: Request,
+    limit_set_id: UUID,
+) -> AttributeControlLimitSetDeletionPreflightResponse:
+    return get_attribute_control_limit_set_deletion_preflight(
+        settings=request.app.state.settings,
+        limit_set_id=limit_set_id,
+    )
+
+
+@router.delete(
+    "/attribute-control-limit-sets/{limit_set_id}",
+    response_model=AttributeControlLimitSetDeleteResponse,
+)
+def delete_attribute_control_limit_set_route(
+    request: Request,
+    limit_set_id: UUID,
+    body: AttributeControlLimitSetDeleteRequest,
+) -> AttributeControlLimitSetDeleteResponse:
+    return delete_stored_attribute_control_limit_set(
+        settings=request.app.state.settings,
+        limit_set_id=limit_set_id,
+        body=body,
+    )
+
+
+@router.post(
+    "/attribute-control-limit-sets/{limit_set_id}/monitoring-preflight",
+    response_model=AttributeControlMonitoringPreflightResponse,
+)
+def get_attribute_control_monitoring_preflight_route(
+    request: Request,
+    limit_set_id: UUID,
+    body: AttributeControlMonitoringPreflightRequest,
+) -> AttributeControlMonitoringPreflightResponse:
+    return get_attribute_control_monitoring_preflight(
+        settings=request.app.state.settings,
+        limit_set_id=limit_set_id,
+        body=body,
     )
 
 

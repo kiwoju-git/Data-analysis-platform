@@ -62,3 +62,40 @@ export interface AnalysisResultExportListResponse {
   analysis_id: string;
   exports: AnalysisResultExportListItem[];
 }
+
+export interface AnalysisResultExportDeletionCounts {
+  metadata_record_count: 1;
+  file_count: 1;
+  file_bytes: number;
+}
+
+export interface AnalysisResultExportDeletionPreflightResponse {
+  preflight_schema_version: 1;
+  analysis_id: string;
+  export_id: string;
+  artifact_kind:
+    | "analysis_result_json_export"
+    | "analysis_result_csv_export"
+    | "analysis_result_html_report"
+    | "regression_prediction_csv_export";
+  media_type: string;
+  sha256: string;
+  counts: AnalysisResultExportDeletionCounts;
+  deletion_manifest_sha256: string;
+}
+
+export interface AnalysisResultExportDeleteRequest {
+  confirmation_analysis_id: string;
+  confirmation_export_id: string;
+  expected_deletion_manifest_sha256: string;
+}
+
+export interface AnalysisResultExportDeleteResponse {
+  deletion_schema_version: 1;
+  analysis_id: string;
+  export_id: string;
+  deletion_manifest_sha256: string;
+  deleted_at: string;
+  deleted_counts: AnalysisResultExportDeletionCounts;
+  cleanup_status: "deleted" | "quarantined_pending_cleanup";
+}

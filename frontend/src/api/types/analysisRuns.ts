@@ -33,6 +33,48 @@ export interface AnalysisRunListResponse {
   runs: AnalysisRunListItem[];
 }
 
+export interface AnalysisRunDeletionCounts {
+  analysis_run_count: 1;
+  analysis_artifact_count: number;
+  result_file_count: number;
+  artifact_file_count: number;
+  export_file_count: number;
+  total_file_count: number;
+  file_bytes: number;
+  metadata_record_count: number;
+  regression_model_count: number;
+  regression_prediction_count: number;
+  attribute_control_limit_set_count: number;
+  job_reference_count: number;
+}
+
+export interface AnalysisRunDeletionPreflightResponse {
+  preflight_schema_version: 1;
+  analysis_id: string;
+  method_id: string;
+  method_version: string;
+  status: AnalysisRunState;
+  stale: boolean;
+  deletion_ready: boolean;
+  blockers: string[];
+  counts: AnalysisRunDeletionCounts;
+  deletion_manifest_sha256: string;
+}
+
+export interface AnalysisRunDeleteRequest {
+  confirmation_analysis_id: string;
+  expected_deletion_manifest_sha256: string;
+}
+
+export interface AnalysisRunDeleteResponse {
+  deletion_schema_version: 1;
+  analysis_id: string;
+  deletion_manifest_sha256: string;
+  deleted_at: string;
+  deleted_counts: AnalysisRunDeletionCounts;
+  cleanup_status: "deleted" | "quarantined_pending_cleanup";
+}
+
 export interface AnalysisRunComparisonSide {
   analysis_id: string;
   method_id: string;

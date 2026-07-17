@@ -3,14 +3,21 @@ import { apiRoutes } from "./routes";
 import type {
   BayesianHistoryListResponse,
   BayesianHistoryRevisionResponse,
+  BayesianLatestRecommendationResponse,
   BayesianObservationCreateRequest,
   BayesianRecommendationCreateRequest,
   BayesianRecommendationListResponse,
   BayesianRecommendationResponse,
   BayesianStudyCreateRequest,
+  BayesianStudyCloseRequest,
+  BayesianStudyCloseResponse,
   BayesianStudyListResponse,
   BayesianStudyResponse,
+  BayesianStudyDeleteRequest,
+  BayesianStudyDeleteResponse,
+  BayesianStudyDeletionPreflightResponse,
   BayesianTrialListResponse,
+  BayesianTrialAbandonRequest,
   BayesianTrialTransitionResponse,
 } from "./types";
 
@@ -58,6 +65,18 @@ export async function fetchBayesianRecommendations(
   return (await response.json()) as BayesianRecommendationListResponse;
 }
 
+export async function fetchLatestBayesianRecommendation(
+  studyId: string,
+): Promise<BayesianLatestRecommendationResponse> {
+  const response = await fetchApi(apiRoutes.bayesianLatestRecommendation(studyId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "bayesian_recommendation_latest_failed"));
+  }
+  return (await response.json()) as BayesianLatestRecommendationResponse;
+}
+
 export async function fetchBayesianRecommendation(
   studyId: string,
   recommendationId: string,
@@ -94,6 +113,48 @@ export async function fetchBayesianStudy(studyId: string): Promise<BayesianStudy
   return (await response.json()) as BayesianStudyResponse;
 }
 
+export async function closeBayesianStudy(
+  studyId: string,
+  request: BayesianStudyCloseRequest,
+): Promise<BayesianStudyCloseResponse> {
+  const response = await fetchApi(apiRoutes.bayesianStudyClose(studyId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "bayesian_study_close_failed"));
+  }
+  return (await response.json()) as BayesianStudyCloseResponse;
+}
+
+export async function fetchBayesianStudyDeletionPreflight(
+  studyId: string,
+): Promise<BayesianStudyDeletionPreflightResponse> {
+  const response = await fetchApi(apiRoutes.bayesianStudyDeletionPreflight(studyId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "bayesian_study_deletion_preflight_failed"));
+  }
+  return (await response.json()) as BayesianStudyDeletionPreflightResponse;
+}
+
+export async function deleteBayesianStudy(
+  studyId: string,
+  request: BayesianStudyDeleteRequest,
+): Promise<BayesianStudyDeleteResponse> {
+  const response = await fetchApi(apiRoutes.bayesianStudyDelete(studyId), {
+    method: "DELETE",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "bayesian_study_delete_failed"));
+  }
+  return (await response.json()) as BayesianStudyDeleteResponse;
+}
+
 export async function fetchBayesianTrials(
   studyId: string,
   offset = 0,
@@ -127,10 +188,15 @@ export async function recordBayesianObservation(
 export async function abandonBayesianTrial(
   studyId: string,
   trialId: string,
+  request?: BayesianTrialAbandonRequest,
 ): Promise<BayesianTrialTransitionResponse> {
   const response = await fetchApi(apiRoutes.bayesianTrialAbandon(studyId, trialId), {
     method: "POST",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      ...(request === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+    ...(request === undefined ? {} : { body: JSON.stringify(request) }),
   });
   if (!response.ok) {
     throw new Error(await apiErrorCode(response, "bayesian_trial_abandon_failed"));

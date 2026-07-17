@@ -161,6 +161,23 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("analysis_id", "path")}),
     ),
     OperationContract(
+        route_name="analysisRunDeletionPreflight",
+        method="get",
+        path="/api/v1/analysis-runs/{analysis_id}/deletion-preflight",
+        success_status="200",
+        response_schema="AnalysisRunDeletionPreflightResponse",
+        parameters=frozenset({("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="analysisRunDelete",
+        method="delete",
+        path="/api/v1/analysis-runs/{analysis_id}/deletion",
+        success_status="200",
+        response_schema="AnalysisRunDeleteResponse",
+        parameters=frozenset({("analysis_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="analysisRunExportJson",
         method="post",
         path="/api/v1/analysis-runs/{analysis_id}/exports/json",
@@ -191,6 +208,23 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema="AnalysisResultExportListResponse",
         parameters=frozenset({("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="analysisRunExportDeletionPreflight",
+        method="get",
+        path=("/api/v1/analysis-runs/{analysis_id}/exports/" "{export_id}/deletion-preflight"),
+        success_status="200",
+        response_schema="AnalysisResultExportDeletionPreflightResponse",
+        parameters=frozenset({("analysis_id", "path"), ("export_id", "path")}),
+    ),
+    OperationContract(
+        route_name="analysisRunExportDelete",
+        method="delete",
+        path="/api/v1/analysis-runs/{analysis_id}/exports/{export_id}",
+        success_status="200",
+        response_schema="AnalysisResultExportDeleteResponse",
+        parameters=frozenset({("analysis_id", "path"), ("export_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
         route_name="analysisRunExportDownload",
@@ -378,6 +412,32 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("study_id", "path")}),
     ),
     OperationContract(
+        route_name="bayesianStudyClose",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/close",
+        success_status="200",
+        response_schema="BayesianStudyCloseResponse",
+        parameters=frozenset({("study_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="bayesianStudyDeletionPreflight",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/deletion-preflight",
+        success_status="200",
+        response_schema="BayesianStudyDeletionPreflightResponse",
+        parameters=frozenset({("study_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianStudyDelete",
+        method="delete",
+        path="/api/v1/bayesian-studies/{study_id}",
+        success_status="200",
+        response_schema="BayesianStudyDeleteResponse",
+        parameters=frozenset({("study_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="bayesianTrials",
         method="get",
         path="/api/v1/bayesian-studies/{study_id}/trials",
@@ -401,6 +461,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema="BayesianTrialTransitionResponse",
         parameters=frozenset({("study_id", "path"), ("trial_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
         route_name="bayesianHistory",
@@ -442,6 +503,31 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema="BayesianRecommendationResponse",
         parameters=frozenset({("study_id", "path"), ("recommendation_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianLatestRecommendation",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/recommendations/latest",
+        success_status="200",
+        response_schema="BayesianLatestRecommendationResponse",
+        parameters=frozenset({("study_id", "path")}),
+    ),
+    OperationContract(
+        route_name="regressionModel",
+        method="delete",
+        path="/api/v1/regression-models/{model_id}",
+        success_status="200",
+        response_schema="RegressionModelDeleteResponse",
+        parameters=frozenset({("model_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="regressionModelDeletionPreflight",
+        method="get",
+        path="/api/v1/regression-models/{model_id}/deletion-preflight",
+        success_status="200",
+        response_schema="RegressionModelDeletionPreflightResponse",
+        parameters=frozenset({("model_id", "path")}),
     ),
     OperationContract(
         route_name="regressionPredictionPreflight",
@@ -516,6 +602,32 @@ FRONTEND_ROUTE_CONTRACTS = [
         response_schema="AttributeControlLimitSetResponse",
         parameters=frozenset({("limit_set_id", "path")}),
     ),
+    OperationContract(
+        route_name="attributeControlLimitSet",
+        method="delete",
+        path="/api/v1/quality/attribute-control-limit-sets/{limit_set_id}",
+        success_status="200",
+        response_schema="AttributeControlLimitSetDeleteResponse",
+        parameters=frozenset({("limit_set_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="attributeControlLimitSetDeletionPreflight",
+        method="get",
+        path=("/api/v1/quality/attribute-control-limit-sets/{limit_set_id}/deletion-preflight"),
+        success_status="200",
+        response_schema="AttributeControlLimitSetDeletionPreflightResponse",
+        parameters=frozenset({("limit_set_id", "path")}),
+    ),
+    OperationContract(
+        route_name="attributeControlMonitoringPreflight",
+        method="post",
+        path=("/api/v1/quality/attribute-control-limit-sets/{limit_set_id}/monitoring-preflight"),
+        success_status="200",
+        response_schema="AttributeControlMonitoringPreflightResponse",
+        request_media_types=frozenset({"application/json"}),
+        parameters=frozenset({("limit_set_id", "path")}),
+    ),
 ]
 
 
@@ -525,9 +637,138 @@ FRONTEND_ROUTE_CONTRACTS = [
 # broader schema generation/diffing remains a separate hardening task.
 FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
     SchemaComponentContract(
+        name="RegressionModelDeletionPreflightResponse",
+        properties=frozenset(
+            {
+                "preflight_schema_version",
+                "model_id",
+                "source_analysis_id",
+                "method_id",
+                "method_version",
+                "deletion_ready",
+                "blockers",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "preflight_schema_version",
+                "model_id",
+                "source_analysis_id",
+                "method_id",
+                "method_version",
+                "deletion_ready",
+                "blockers",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+    ),
+    SchemaComponentContract(
+        name="RegressionModelDeleteRequest",
+        properties=frozenset({"confirmation_model_id", "expected_deletion_manifest_sha256"}),
+        required_fields=frozenset({"confirmation_model_id", "expected_deletion_manifest_sha256"}),
+    ),
+    SchemaComponentContract(
+        name="AttributeControlLimitSetDeletionPreflightResponse",
+        properties=frozenset(
+            {
+                "preflight_schema_version",
+                "limit_set_id",
+                "source_analysis_id",
+                "method_id",
+                "source_method_version",
+                "deletion_ready",
+                "blockers",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "preflight_schema_version",
+                "limit_set_id",
+                "source_analysis_id",
+                "method_id",
+                "source_method_version",
+                "deletion_ready",
+                "blockers",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+    ),
+    SchemaComponentContract(
+        name="AttributeControlLimitSetDeleteRequest",
+        properties=frozenset({"confirmation_limit_set_id", "expected_deletion_manifest_sha256"}),
+        required_fields=frozenset(
+            {"confirmation_limit_set_id", "expected_deletion_manifest_sha256"}
+        ),
+    ),
+    SchemaComponentContract(
         name="AttributeControlLimitSetCreateRequest",
         properties=frozenset({"source_analysis_id"}),
         required_fields=frozenset({"source_analysis_id"}),
+    ),
+    SchemaComponentContract(
+        name="AttributeControlMonitoringPreflightRequest",
+        properties=frozenset(
+            {
+                "target_dataset_version_id",
+                "chart_type",
+                "count_definition",
+                "count_column_id",
+                "denominator_column_id",
+                "constant_opportunity_confirmed",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "target_dataset_version_id",
+                "chart_type",
+                "count_definition",
+                "count_column_id",
+            }
+        ),
+    ),
+    SchemaComponentContract(
+        name="AttributeControlMonitoringPreflightResponse",
+        properties=frozenset(
+            {
+                "schema_version",
+                "method_id",
+                "method_version",
+                "phase",
+                "limit_set_id",
+                "limit_set_asset_sha256",
+                "target_dataset_version_id",
+                "target_schema_hash",
+                "target_canonical_sha256",
+                "chart_type",
+                "count_definition",
+                "ready",
+                "issues",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "schema_version",
+                "method_id",
+                "method_version",
+                "phase",
+                "limit_set_id",
+                "limit_set_asset_sha256",
+                "target_dataset_version_id",
+                "target_schema_hash",
+                "target_canonical_sha256",
+                "chart_type",
+                "count_definition",
+                "ready",
+                "issues",
+            }
+        ),
+        array_item_refs=(("issues", "AttributeControlMonitoringPreflightIssue"),),
     ),
     SchemaComponentContract(
         name="AttributeControlLimitSetResponse",
@@ -606,9 +847,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         property_consts=(
             ("asset_schema_version", 1),
             ("method_id", "quality.attribute_control_chart"),
-            ("source_method_version", "0.1.0"),
             ("phase2_method_version", "0.2.0"),
-            ("source_result_schema_version", 1),
         ),
     ),
     SchemaComponentContract(
@@ -627,6 +866,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "constraints",
                 "initial_design_seed",
                 "initial_design_size",
+                "predecessor_study_id",
             }
         ),
         required_fields=frozenset(
@@ -650,6 +890,10 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "method_version",
                 "name",
                 "status",
+                "predecessor_study_id",
+                "created_at",
+                "updated_at",
+                "app_version",
                 "definition_sha256",
                 "factors",
                 "objective",
@@ -663,6 +907,10 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "trials",
                 "surrogate_available",
                 "recommendation_available",
+                "recommendation_minimum_completed_observations",
+                "recommendation_hard_trial_limit",
+                "recommendation_blockers",
+                "lifecycle_event",
             }
         ),
         required_fields=frozenset(
@@ -672,17 +920,25 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "study_schema_version",
                 "method_id",
                 "method_version",
+                "predecessor_study_id",
                 "definition_sha256",
                 "observation_history",
                 "trials",
                 "surrogate_available",
                 "recommendation_available",
+                "recommendation_minimum_completed_observations",
+                "recommendation_hard_trial_limit",
+                "recommendation_blockers",
+                "lifecycle_event",
             }
         ),
         property_refs=(
             ("objective", "BayesianObjectiveResponse"),
             ("initial_design", "BayesianInitialDesignResponse"),
             ("observation_history", "BayesianHistoryRevisionResponse"),
+        ),
+        property_any_of_refs=(
+            ("lifecycle_event", frozenset({"BayesianStudyLifecycleEventResponse"})),
         ),
         array_item_refs=(
             ("factors", "BayesianFactorResponse"),
@@ -693,6 +949,190 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("study_schema_version", 1),
             ("method_id", "doe.bayesian_optimization"),
         ),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyLifecycleEventResponse",
+        properties=frozenset(
+            {
+                "schema_version",
+                "lifecycle_event_id",
+                "study_id",
+                "study_version_id",
+                "lifecycle_revision",
+                "previous_status",
+                "resulting_status",
+                "reason_code",
+                "note",
+                "request_id",
+                "final_history_revision_id",
+                "final_observation_history_sha256",
+                "final_trial_count",
+                "final_completed_trial_count",
+                "final_abandoned_trial_count",
+                "latest_recommendation_id",
+                "definition_sha256",
+                "event_sha256",
+                "closed_at",
+                "created_at",
+                "app_version",
+                "build_commit",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "schema_version",
+                "lifecycle_event_id",
+                "study_id",
+                "study_version_id",
+                "lifecycle_revision",
+                "previous_status",
+                "resulting_status",
+                "reason_code",
+                "note",
+                "request_id",
+                "final_history_revision_id",
+                "final_observation_history_sha256",
+                "final_trial_count",
+                "final_completed_trial_count",
+                "final_abandoned_trial_count",
+                "latest_recommendation_id",
+                "definition_sha256",
+                "event_sha256",
+                "closed_at",
+                "created_at",
+                "app_version",
+                "build_commit",
+            }
+        ),
+        property_consts=(("schema_version", 1), ("lifecycle_revision", 1)),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyCloseRequest",
+        properties=frozenset(
+            {
+                "target_status",
+                "reason_code",
+                "note",
+                "request_id",
+                "expected_study_version_id",
+                "expected_history_revision_id",
+                "expected_observation_history_sha256",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "target_status",
+                "reason_code",
+                "request_id",
+                "expected_study_version_id",
+                "expected_history_revision_id",
+                "expected_observation_history_sha256",
+            }
+        ),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyCloseResponse",
+        properties=frozenset({"study", "lifecycle_event"}),
+        required_fields=frozenset({"study", "lifecycle_event"}),
+        property_refs=(
+            ("study", "BayesianStudyResponse"),
+            ("lifecycle_event", "BayesianStudyLifecycleEventResponse"),
+        ),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyDeletionCounts",
+        properties=frozenset(
+            {
+                "study_count",
+                "study_version_count",
+                "trial_count",
+                "history_revision_count",
+                "history_head_count",
+                "recommendation_count",
+                "lifecycle_event_count",
+                "metadata_record_count",
+                "file_count",
+                "file_bytes",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "study_count",
+                "study_version_count",
+                "trial_count",
+                "history_revision_count",
+                "history_head_count",
+                "recommendation_count",
+                "lifecycle_event_count",
+                "metadata_record_count",
+                "file_count",
+                "file_bytes",
+            }
+        ),
+        property_consts=(("study_count", 1), ("file_count", 0), ("file_bytes", 0)),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyDeletionPreflightResponse",
+        properties=frozenset(
+            {
+                "preflight_schema_version",
+                "study_id",
+                "study_version_id",
+                "status",
+                "eligible",
+                "blockers",
+                "successor_study_count",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "preflight_schema_version",
+                "study_id",
+                "study_version_id",
+                "status",
+                "eligible",
+                "blockers",
+                "successor_study_count",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+        property_consts=(("preflight_schema_version", 1),),
+        property_refs=(("counts", "BayesianStudyDeletionCounts"),),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyDeleteRequest",
+        properties=frozenset({"confirmation_study_id", "expected_deletion_manifest_sha256"}),
+        required_fields=frozenset({"confirmation_study_id", "expected_deletion_manifest_sha256"}),
+    ),
+    SchemaComponentContract(
+        name="BayesianStudyDeleteResponse",
+        properties=frozenset(
+            {
+                "deletion_schema_version",
+                "study_id",
+                "deletion_manifest_sha256",
+                "deleted_at",
+                "deleted_counts",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "deletion_schema_version",
+                "study_id",
+                "deletion_manifest_sha256",
+                "deleted_at",
+                "deleted_counts",
+            }
+        ),
+        property_consts=(("deletion_schema_version", 1),),
+        property_refs=(("deleted_counts", "BayesianStudyDeletionCounts"),),
+    ),
+    SchemaComponentContract(
+        name="BayesianTrialAbandonRequest",
+        properties=frozenset({"expected_history_revision_id", "intent"}),
     ),
     SchemaComponentContract(
         name="BayesianTrialResponse",
@@ -832,6 +1272,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "trial",
                 "result",
                 "provenance",
+                "current_trial",
+                "is_latest",
+                "requested_total_trial_budget",
             }
         ),
         required_fields=frozenset(
@@ -1747,6 +2190,85 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         required_fields=frozenset({"analysis_id", "exports"}),
         array_item_refs=(("exports", "AnalysisResultExportListItemResponse"),),
     ),
+    SchemaComponentContract(
+        name="AnalysisResultExportDeletionCounts",
+        properties=frozenset({"metadata_record_count", "file_count", "file_bytes"}),
+        required_fields=frozenset({"metadata_record_count", "file_count", "file_bytes"}),
+        property_consts=(("metadata_record_count", 1), ("file_count", 1)),
+    ),
+    SchemaComponentContract(
+        name="AnalysisResultExportDeletionPreflightResponse",
+        properties=frozenset(
+            {
+                "preflight_schema_version",
+                "analysis_id",
+                "export_id",
+                "artifact_kind",
+                "media_type",
+                "sha256",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "preflight_schema_version",
+                "analysis_id",
+                "export_id",
+                "artifact_kind",
+                "media_type",
+                "sha256",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+        property_refs=(("counts", "AnalysisResultExportDeletionCounts"),),
+        property_consts=(("preflight_schema_version", 1),),
+    ),
+    SchemaComponentContract(
+        name="AnalysisResultExportDeleteRequest",
+        properties=frozenset(
+            {
+                "confirmation_analysis_id",
+                "confirmation_export_id",
+                "expected_deletion_manifest_sha256",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "confirmation_analysis_id",
+                "confirmation_export_id",
+                "expected_deletion_manifest_sha256",
+            }
+        ),
+    ),
+    SchemaComponentContract(
+        name="AnalysisResultExportDeleteResponse",
+        properties=frozenset(
+            {
+                "deletion_schema_version",
+                "analysis_id",
+                "export_id",
+                "deletion_manifest_sha256",
+                "deleted_at",
+                "deleted_counts",
+                "cleanup_status",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "deletion_schema_version",
+                "analysis_id",
+                "export_id",
+                "deletion_manifest_sha256",
+                "deleted_at",
+                "deleted_counts",
+                "cleanup_status",
+            }
+        ),
+        property_refs=(("deleted_counts", "AnalysisResultExportDeletionCounts"),),
+        property_consts=(("deletion_schema_version", 1),),
+    ),
 ]
 
 
@@ -2063,12 +2585,18 @@ def test_workbench_saved_result_state_is_owned_by_dedicated_hooks() -> None:
         assert symbol not in app_api_import_body
 
     expected_hook_api_symbols = {
-        "frontend/src/useAnalysisHistoryState.ts": {"fetchAnalysisRuns"},
+        "frontend/src/useAnalysisHistoryState.ts": {
+            "deleteStoredAnalysisRun",
+            "fetchAnalysisRunDeletionPreflight",
+            "fetchAnalysisRuns",
+        },
         "frontend/src/useAnalysisExportState.ts": {
             "createAnalysisResultCsvExport",
             "createAnalysisResultHtmlReport",
             "createAnalysisResultJsonExport",
+            "deleteAnalysisResultExport",
             "downloadAnalysisResultExport",
+            "fetchAnalysisResultExportDeletionPreflight",
             "fetchAnalysisResultExports",
         },
         "frontend/src/useAnalysisComparisonState.ts": {"fetchAnalysisRunComparison"},
@@ -2079,6 +2607,9 @@ def test_workbench_saved_result_state_is_owned_by_dedicated_hooks() -> None:
             "resetAnalysisHistoryState",
             "onRefreshAnalysisHistory",
             "ANALYSIS_HISTORY_PAGE_SIZE",
+            "onDeleteAnalysisRun",
+            "onLoadAnalysisRunDeletionPreflight",
+            "resetAnalysisRunDeletionState",
             "useEffect(() =>",
             "resetKey",
         },
@@ -2217,9 +2748,9 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ):
         assert phrase in workflow_section
 
-    assert "latest recorded backend pytest count is 603" in local_validation_section
-    assert "latest recorded frontend Vitest count is 93" in local_validation_section
-    assert "latest OpenAPI/frontend contract count is 104" in local_validation_section
+    assert "latest recorded backend pytest count is 750" in local_validation_section
+    assert "latest recorded frontend Vitest count is 111" in local_validation_section
+    assert "latest OpenAPI/frontend contract count is 150" in local_validation_section
     assert "The latest run passed backend ruff check" not in local_validation_section
     assert "That 2026-07-09 run passed backend ruff check" in historical_validation_section
     assert "That 2026-07-07 run passed backend ruff check" in historical_validation_section

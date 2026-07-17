@@ -1,6 +1,6 @@
 # CI Status
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 ## Workflow Configuration
 
@@ -18,6 +18,179 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Local Validation
 
+- The regression-model and attribute-control-limit-set deletion slice was
+  validated locally on 2026-07-17 from an uncommitted working tree based on
+  main SHA `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Final
+  `scripts\check.ps1` passed in 781.8 seconds with Ruff/format over 158 Python
+  files, mypy over 101 source files, backend pytest 750, frontend
+  lint/typecheck, frontend Vitest 111, and production build. The direct
+  OpenAPI/frontend contract suite contains 150 tests and passed.
+- The clean final Chromium E2E passed in 99.3 seconds on `8031`/`5231` with
+  workspace `.tmp\e2e-workspace-asset-retention-final-3` and diagnostics root
+  `.tmp\e2e-diagnostics-asset-retention-final-3`. It verifies regression-model
+  deletion is blocked by one stored prediction and attribute-control-limit-set
+  deletion is blocked by one Phase II run, while retaining every earlier
+  upload, prediction/export, Phase I/II, DOE, Bayesian, and retention path.
+  Two preliminary browser runs reached these new controls but failed only
+  ambiguous/partial Playwright selectors; both selectors were scoped exactly
+  before the clean passing run.
+- Final production assets are 490.15 kB / 114.58 kB gzip for main, 44.86 kB /
+  9.23 kB for Regression, 63.97 kB / 11.88 kB for Quality, and 90.79 kB /
+  20.77 kB for DOE. No JavaScript asset exceeds the 500 kB warning threshold.
+- The measured host is Windows 10 Home build 19045 with CPython 3.10.11 and
+  Node 24.17.0. This is development evidence, not the required Windows 11 /
+  Python 3.10 / Node 22 release evidence. Remote Actions verification is
+  recorded separately and is not inferred from local checks or a Git push.
+
+- The analysis-run root deletion slice was validated locally on 2026-07-17
+  from an uncommitted working tree based on main SHA
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Final
+  `scripts\check.ps1` passed in 792.7 seconds with Ruff/format over 156 Python
+  files, mypy over 100 source files, backend pytest 738, frontend
+  lint/typecheck, frontend Vitest 109, and production build. The direct
+  OpenAPI/frontend contract suite contains 139 tests.
+- The first full run completed 737 of 738 backend tests and failed only the
+  documentation guard because the newly added E2E step marker was not yet in
+  `docs/e2e_coverage.md`. After synchronizing the marker and adding the final
+  prediction-dependency blocker, the complete final run above passed.
+- The first browser run successfully deleted the run and cleared restore/
+  comparison state, then failed an incorrect assertion that expected the
+  previously selected t-test table while the restored method selection was
+  descriptive. That assertion was removed. The clean final Chromium E2E passed
+  in 66.5 seconds on `8031`/`5231` with workspace
+  `.tmp\e2e-workspace-analysis-run-retention-final` and diagnostics root
+  `.tmp\e2e-diagnostics-analysis-run-retention-final`.
+- Final production assets are 487.56 kB / 114.21 kB gzip for main, 41.53 kB /
+  8.37 kB for Regression, 62.14 kB / 11.48 kB for Quality, and 90.79 kB /
+  20.76 kB for DOE. No JavaScript asset exceeds the 500 kB warning threshold.
+- The measured host is Windows 10 Home build 19045 with CPython 3.10.11 and
+  Node 24.17.0. This is development evidence, not the required Windows 11 /
+  Python 3.10 / Node 22 release evidence. Remote Actions verification is
+  recorded separately and is not inferred from local checks.
+
+- The individual analysis-export file-retention slice was validated locally on
+  2026-07-16 from an uncommitted working tree based on main SHA
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Full
+  `scripts\check.ps1` passed in 746.7 seconds with Ruff/format over 154 Python
+  files, mypy over 99 source files, backend pytest 731 tests, frontend
+  lint/typecheck, frontend Vitest 105 tests, and production build. The direct
+  OpenAPI/frontend contract suite passed 137 tests.
+- The complete Chromium E2E passed in 59.9 seconds on ports `8031`/`5231` with
+  workspace `.tmp\e2e-workspace-analysis-export-retention` and diagnostics root
+  `.tmp\e2e-diagnostics-analysis-export-retention`. It creates three stored
+  result exports, downloads JSON, reviews and confirms deletion of one export,
+  verifies the list shrinks while the parent analysis result remains, and
+  retains every prior prediction, Phase I/II, DOE, Bayesian, parser-recovery,
+  and lazy-panel path.
+- Production assets are 480.68 kB / 112.99 kB gzip for main, 41.53 kB /
+  8.36 kB for Regression, 62.14 kB / 11.48 kB for Quality, and 90.79 kB /
+  20.76 kB for DOE. No JavaScript asset exceeds the 500 kB warning threshold.
+- The measured host is Windows 10 Home build 19045 with CPython 3.10.11 and
+  Node 24.17.0. This is development evidence, not Windows 11/Python 3.10/Node
+  22 release evidence. `gh auth status` and `gh run list` could not run because
+  `gh` is not installed, so remote Actions and artifacts remain independently
+  unverified.
+
+- The closed Bayesian study metadata-deletion slice was validated locally on
+  2026-07-16 from an uncommitted working tree based on main SHA
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Full
+  `scripts\check.ps1` passed in 764.9 seconds with Ruff/format over 153 Python
+  files, mypy over 99 source files, backend pytest 721 tests, frontend
+  lint/typecheck, frontend Vitest 102 tests, and production build. The direct
+  OpenAPI/frontend contract suite passed 131 tests.
+- The complete Chromium E2E passed in 62.2 seconds on ports `8031`/`5231` with
+  workspace `.tmp\e2e-workspace-bayesian-retention-final` and diagnostics root
+  `.tmp\e2e-diagnostics-bayesian-retention-final`. It retains every prior flow
+  and adds closed-study deletion impact review, exact confirmation, and catalog
+  removal. Preliminary launches on `5232` and `8040` were denied by Windows
+  socket-bind permissions before application/browser execution; they are not
+  test failures and the clean final run passed.
+- Production assets are 474.80 kB / 111.96 kB gzip for main, 41.53 kB /
+  8.37 kB for Regression, 62.14 kB / 11.48 kB for Quality, and 90.79 kB /
+  20.76 kB for DOE. No JavaScript asset exceeds the 500 kB warning threshold.
+- The measured host is Windows 10 Home build 19045 with CPython 3.10.11 and
+  Node 24.17.0. This remains development evidence, not Windows 11/Python 3.10/
+  Node 22 release evidence. `gh auth status` and `gh run list` could not run
+  because `gh` is not installed, so remote Actions remain independently
+  unverified.
+
+- The Bayesian study close/abandon lifecycle slice was validated locally on
+  2026-07-16 from an uncommitted working tree based on main SHA
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Full
+  `scripts\check.ps1` passed in 734.4 seconds with Ruff/format over 153 Python
+  files, mypy over 99 source files, backend pytest 712 tests, frontend
+  lint/typecheck, frontend Vitest 101 tests, and the production build. The
+  direct OpenAPI/frontend contract suite remains 120 tests and passed within
+  the full backend run; a lifecycle/Bayesian/OpenAPI targeted run passed 189
+  tests.
+- The complete Chromium E2E passed in 58.6 seconds on ports `8031`/`5231` with
+  workspace `.tmp\e2e-workspace-bayesian-study-close` and diagnostics root
+  `.tmp\e2e-diagnostics-bayesian-study-close`. The Bayesian path now records
+  the final recommendation observation, closes the study as completed through
+  inline confirmation, verifies read-only controls, and restores the lifecycle
+  event after reload while retaining all previous critical paths.
+- Production assets are 473.59 kB / 111.64 kB gzip for main, 41.53 kB /
+  8.36 kB for Regression, 62.14 kB / 11.48 kB for Quality, and 87.24 kB /
+  20.00 kB for DOE. No JavaScript asset exceeds the 500 kB warning threshold.
+- The measured host is Windows 10 Home build 19045 with CPython 3.10.11 and
+  Node 24.17.0. This remains development evidence, not the required Windows
+  11/Python 3.10/Node 22 release evidence. `gh auth status` and `gh run list`
+  could not run because the `gh` executable is not installed, so remote Actions
+  and artifacts remain independently unverified.
+
+- The Phase II frozen-limit attribute-control-chart vertical slice was
+  validated locally on 2026-07-16 from an uncommitted working tree based on
+  main SHA `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Full
+  `scripts\check.ps1` passed with Ruff/format over 152 Python files, mypy over
+  99 source files, backend pytest 702 tests, frontend lint/typecheck, frontend
+  Vitest 100 tests, and the production build. The direct OpenAPI/frontend
+  contract suite contains 120 tests and passed.
+- The complete browser E2E passed in 58.1 seconds on ports `8030`/`5230` with
+  workspace `.tmp\e2e-workspace-attribute-phase2` and diagnostics root
+  `.tmp\e2e-diagnostics-attribute-phase2`. It creates a stable Phase I P-chart
+  baseline, promotes the verified app-created limit set, uploads a separate
+  monitoring dataset, passes the Phase II compatibility preflight, executes
+  frozen-limit monitoring, and verifies the immutable source identity in the
+  result while retaining every prior critical path.
+- Production assets are 472.13 kB / 111.23 kB gzip for main, 41.53 kB /
+  8.37 kB for Regression, 62.14 kB / 11.48 kB for Quality, and 79.80 kB /
+  18.32 kB for DOE. No JavaScript asset exceeds the 500 kB warning threshold.
+- The measured host is Windows 10 Home build 19045 with CPython 3.10.11 and
+  Node 24.17.0. This is development evidence, not Windows 11/Python 3.10/Node
+  22 release evidence; that clean environment remains a mandatory release
+  gate. The `gh` command is not installed in this environment, so remote
+  GitHub Actions jobs and artifacts were not independently verified.
+
+- The Bayesian lifecycle-correctness stabilization was validated locally on
+  2026-07-16 from an uncommitted working tree based on main SHA
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. Full
+  `scripts\check.ps1` passed with Ruff/format over 150 Python files, mypy over
+  98 source files, backend pytest 687 tests, frontend lint/typecheck, frontend
+  Vitest 98 tests, and production build. The OpenAPI/frontend contract suite is
+  117 tests and passed in a separate direct run.
+- Production assets are 467.18 kB / 110.05 kB gzip for main, 41.53 kB /
+  8.36 kB for Regression, 59.29 kB / 10.79 kB for Quality, and 79.80 kB /
+  18.32 kB for DOE. No JavaScript asset exceeds the 500 kB warning threshold.
+- The first full run completed 685 tests and failed one stale contract assertion
+  that still expected Bayesian method `0.2.0`. After changing that method-source
+  assertion to `0.2.1`, its targeted file passed 5 tests and the complete second
+  run passed all 686 backend tests. A final restore-boundary review then limited
+  recommendation versions to executable `0.2.0/0.2.1`; its 36-test compatibility
+  suite and the final full run passed all 687 backend tests. These were not
+  disk-space failures.
+- The initial targeted Bayesian/OpenAPI backend run passed 155 tests, and the
+  follow-up restore-boundary suite passed 36 tests. Frontend
+  lint/typecheck and all 98 Vitest tests passed. The lifecycle-expanded browser
+  E2E first passed on ports `8027`/`5227`, then the final full critical path
+  passed in 57.9 seconds on ports `8028`/`5228`. After the final recommendation
+  restore-boundary review, the complete path passed again in 56.8 seconds on
+  ports `8029`/`5229` with workspace
+  `.tmp\e2e-workspace-bayesian-lifecycle-final` and diagnostics root
+  `.tmp\e2e-diagnostics-bayesian-lifecycle-final`.
+- The measured host is Windows 10 Home build 19045 with CPython 3.10.11 and
+  Node 24.17.0. This is development evidence, not Windows 11/Python 3.10/Node
+  22 release evidence. That clean environment remains a mandatory release gate.
+  Remote GitHub Actions verification is recorded separately below.
 - The immutable attribute-control-limit-set storage/API foundation was
   validated locally on 2026-07-16 from a working tree based on main SHA
   `de72b82fcba02aa69ea9adfdbe198e12f86e9e78`. Full
@@ -350,7 +523,7 @@ This satisfies the current repository-side requirement that main pushes should s
   cross-dataset rows through the real API with full page checksum/count/schema
   verification and full CSV creation. It is a benchmark record, not a CI
   pass/fail gate.
-- The latest recorded backend pytest count is 603. The latest recorded frontend Vitest count is 93. The latest OpenAPI/frontend contract count is 104.
+- The latest recorded backend pytest count is 750. The latest recorded frontend Vitest count is 111. The latest OpenAPI/frontend contract count is 150.
 
 ## Historical Local Validation
 
@@ -454,16 +627,17 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Remote GitHub Actions Verification
 
-- On 2026-07-15, `Get-Command gh` confirmed that GitHub CLI is not installed,
-  so `gh auth status --hostname github.com` could not start. The requested `gh run
-  list`, `gh run view`, and artifact download checks therefore remain
-  unavailable.
+- On 2026-07-17, invoking `gh auth status --hostname github.com` and the
+  requested `gh run list` command returned
+  PowerShell command-not-found error, confirming that GitHub CLI is not
+  installed. The requested `gh run list`, `gh run view`, and artifact download
+  checks therefore remain unavailable.
 - Therefore no current run ID/head SHA, Windows/e2e job result/order, or
   `e2e-logs` artifact contents were verified. No artifact download was
   attempted after the CLI prerequisite failed.
 - Remote GitHub Actions execution has not been directly verified from this
   environment for the working tree validated from local base `main` commit
-  `de72b82fcba02aa69ea9adfdbe198e12f86e9e78`. A successful Git push confirms
+  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. A successful Git push confirms
   only remote ref transfer; it does not verify the resulting Actions jobs.
 - GitHub app checks against that commit returned no PR-filtered workflow runs
   and no legacy commit statuses on 2026-07-10. The available connector endpoint

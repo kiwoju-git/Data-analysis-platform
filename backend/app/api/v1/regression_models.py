@@ -3,6 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, status
 
 from app.api.v1.schemas.analyses import (
+    RegressionModelDeleteRequest,
+    RegressionModelDeleteResponse,
+    RegressionModelDeletionPreflightResponse,
     RegressionModelManifestResponse,
     RegressionPredictionCsvExportResponse,
     RegressionPredictionPreflightRequest,
@@ -17,6 +20,10 @@ from app.services.regression_models import (
     get_regression_model_manifest,
     get_regression_prediction_preflight,
     get_regression_prediction_rows,
+)
+from app.services.workspace_asset_retention import (
+    delete_stored_regression_model,
+    get_regression_model_deletion_preflight,
 )
 
 router = APIRouter(prefix="/regression-models", tags=["regression-models"])
@@ -63,6 +70,33 @@ def get_regression_model_route(
     return get_regression_model_manifest(
         settings=request.app.state.settings,
         model_id=model_id,
+    )
+
+
+@router.get(
+    "/{model_id}/deletion-preflight",
+    response_model=RegressionModelDeletionPreflightResponse,
+)
+def get_regression_model_deletion_preflight_route(
+    request: Request,
+    model_id: UUID,
+) -> RegressionModelDeletionPreflightResponse:
+    return get_regression_model_deletion_preflight(
+        settings=request.app.state.settings,
+        model_id=model_id,
+    )
+
+
+@router.delete("/{model_id}", response_model=RegressionModelDeleteResponse)
+def delete_regression_model_route(
+    request: Request,
+    model_id: UUID,
+    body: RegressionModelDeleteRequest,
+) -> RegressionModelDeleteResponse:
+    return delete_stored_regression_model(
+        settings=request.app.state.settings,
+        model_id=model_id,
+        body=body,
     )
 
 

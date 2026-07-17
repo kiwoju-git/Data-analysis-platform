@@ -84,6 +84,7 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (11, "create_bayesian_study_history"),
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
+        (14, "create_bayesian_study_lifecycle_events"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -152,6 +153,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (11, "create_bayesian_study_history"),
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
+        (14, "create_bayesian_study_lifecycle_events"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -232,6 +234,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (11, "create_bayesian_study_history"),
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
+        (14, "create_bayesian_study_lifecycle_events"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -344,6 +347,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (11, "create_bayesian_study_history"),
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
+        (14, "create_bayesian_study_lifecycle_events"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -510,6 +514,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (11, "create_bayesian_study_history"),
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
+        (14, "create_bayesian_study_lifecycle_events"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -563,6 +568,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (11, "create_bayesian_study_history"),
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
+        (14, "create_bayesian_study_lifecycle_events"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -624,6 +630,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (11, "create_bayesian_study_history"),
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
+        (14, "create_bayesian_study_lifecycle_events"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -681,6 +688,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (11, "create_bayesian_study_history"),
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
+        (14, "create_bayesian_study_lifecycle_events"),
     ]
     assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION
@@ -866,6 +874,7 @@ def test_initialize_metadata_store_upgrades_v10_with_empty_bayesian_foundation(
         "bayesian_observation_history_revisions",
         "bayesian_observation_history_heads",
         "bayesian_recommendations",
+        "bayesian_study_lifecycle_events",
     }
     assert study_count == 0
     assert user_version == SCHEMA_VERSION
@@ -991,6 +1000,51 @@ def test_initialize_metadata_store_upgrades_v12_with_empty_attribute_limit_sets(
 
     assert table == ("attribute_control_limit_sets",)
     assert count == 0
+    assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_v13_without_inventing_lifecycle_events(
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspace with spaces"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 13:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
+        connection.execute(
+            """
+            INSERT INTO bayesian_studies (
+                study_id, method_id, method_version, name, status,
+                current_version, created_at, updated_at, app_version
+            ) VALUES ('legacy-study', 'doe.bayesian_optimization', '0.2.1',
+                      'legacy active study', 'active', 1, 'created', 'created', '0.1.0');
+            """
+        )
+        connection.execute("PRAGMA user_version = 13")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        study = connection.execute(
+            """
+            SELECT status, predecessor_study_id
+            FROM bayesian_studies WHERE study_id = 'legacy-study';
+            """
+        ).fetchone()
+        event_count = connection.execute(
+            "SELECT COUNT(*) FROM bayesian_study_lifecycle_events;"
+        ).fetchone()[0]
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert study == ("active", None)
+    assert event_count == 0
     assert user_version == SCHEMA_VERSION
 
 

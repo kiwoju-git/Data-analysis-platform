@@ -102,6 +102,18 @@ export const apiRoutes = {
     return apiUrl(`/quality/attribute-control-limit-sets/${pathId(limitSetId)}`);
   },
 
+  attributeControlLimitSetDeletionPreflight(limitSetId: string): string {
+    return apiUrl(
+      `/quality/attribute-control-limit-sets/${pathId(limitSetId)}/deletion-preflight`,
+    );
+  },
+
+  attributeControlMonitoringPreflight(limitSetId: string): string {
+    return apiUrl(
+      `/quality/attribute-control-limit-sets/${pathId(limitSetId)}/monitoring-preflight`,
+    );
+  },
+
   bayesianStudies(offset?: number, limit?: number): string {
     if (offset === undefined || limit === undefined) {
       return apiUrl("/bayesian-studies");
@@ -113,6 +125,18 @@ export const apiRoutes = {
   },
 
   bayesianStudy(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}`);
+  },
+
+  bayesianStudyClose(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/close`);
+  },
+
+  bayesianStudyDeletionPreflight(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/deletion-preflight`);
+  },
+
+  bayesianStudyDelete(studyId: string): string {
     return apiUrl(`/bayesian-studies/${pathId(studyId)}`);
   },
 
@@ -165,6 +189,10 @@ export const apiRoutes = {
     );
   },
 
+  bayesianLatestRecommendation(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/recommendations/latest`);
+  },
+
   analysisRunsBase(): string {
     return apiUrl("/analysis-runs");
   },
@@ -212,6 +240,14 @@ export const apiRoutes = {
     return apiUrl(`/analysis-runs/${pathId(analysisId)}/result`);
   },
 
+  analysisRunDeletionPreflight(analysisId: string): string {
+    return apiUrl(`/analysis-runs/${pathId(analysisId)}/deletion-preflight`);
+  },
+
+  analysisRunDelete(analysisId: string): string {
+    return apiUrl(`/analysis-runs/${pathId(analysisId)}/deletion`);
+  },
+
   analysisRunExports(analysisId: string): string {
     return apiUrl(`/analysis-runs/${pathId(analysisId)}/exports`);
   },
@@ -236,6 +272,16 @@ export const apiRoutes = {
 
   doeFactorialDesign(): string {
     return apiUrl("/doe-designs/factorial");
+  },
+
+  analysisRunExportDeletionPreflight(analysisId: string, exportId: string): string {
+    return apiUrl(
+      `/analysis-runs/${pathId(analysisId)}/exports/${pathId(exportId)}/deletion-preflight`,
+    );
+  },
+
+  analysisRunExportDelete(analysisId: string, exportId: string): string {
+    return apiUrl(`/analysis-runs/${pathId(analysisId)}/exports/${pathId(exportId)}`);
   },
 
   doeResponseSurfaceDesign(): string {
@@ -320,6 +366,14 @@ export const apiRoutes = {
 
   regressionPredictionPreflight(modelId: string): string {
     return apiUrl(`/regression-models/${pathId(modelId)}/prediction-preflight`);
+  },
+
+  regressionModel(modelId: string): string {
+    return apiUrl(`/regression-models/${pathId(modelId)}`);
+  },
+
+  regressionModelDeletionPreflight(modelId: string): string {
+    return apiUrl(`/regression-models/${pathId(modelId)}/deletion-preflight`);
   },
 
   regressionPredictions(modelId: string): string {

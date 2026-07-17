@@ -1,10 +1,14 @@
 import math
+import queue
 
 import numpy as np
 import pytest
 
 from app.statistics.bayesian_optimization import (
     BayesianOptimizationError,
+    _novel,
+    _SearchBudget,
+    bayesian_worker_entry,
     calculate_bayesian_recommendation,
 )
 
@@ -137,3 +141,46 @@ def test_no_feasible_novel_candidate_fails_without_fallback() -> None:
     with pytest.raises(BayesianOptimizationError) as error:
         calculate_bayesian_recommendation(payload)
     assert error.value.code == "bayesian_optimization_no_feasible_candidate"
+
+
+def test_duplicate_tolerance_boundary_is_excluded_without_random_fallback() -> None:
+    excluded = [[0.5]]
+
+    assert _novel(np.asarray([0.625]), excluded, 0.125) is False
+    assert _novel(np.asarray([0.625001]), excluded, 0.125) is True
+
+
+def test_model_fit_and_acquisition_time_exhaustion_are_typed(monkeypatch) -> None:
+    calls = iter([0.0, 0.0, 2.0])
+    monkeypatch.setattr(
+        "app.statistics.bayesian_optimization.time.perf_counter",
+        lambda: next(calls, 2.0),
+    )
+    payload = _payload()
+    payload["search"]["time_budget_ms"] = 1_000
+    with pytest.raises(BayesianOptimizationError) as fit_error:
+        calculate_bayesian_recommendation(payload)
+    assert fit_error.value.code == "bayesian_optimization_time_budget_exhausted"
+
+    budget = _SearchBudget(started=0.0, deadline=1.0, max_evaluations=10)
+    with pytest.raises(BayesianOptimizationError) as acquisition_error:
+        budget.consume()
+    assert acquisition_error.value.code == "bayesian_optimization_time_budget_exhausted"
+
+
+def test_worker_maps_internal_time_exhaustion_to_public_budget_code(monkeypatch) -> None:
+    def exhausted(_payload: dict) -> dict:
+        raise BayesianOptimizationError("bayesian_optimization_time_budget_exhausted")
+
+    monkeypatch.setattr(
+        "app.statistics.bayesian_optimization.calculate_bayesian_recommendation",
+        exhausted,
+    )
+    output: queue.Queue = queue.Queue()
+
+    bayesian_worker_entry(output, _payload())
+
+    assert output.get_nowait() == {
+        "status": "error",
+        "code": "bayesian_optimization_budget_exhausted",
+    }

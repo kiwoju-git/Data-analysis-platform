@@ -36,15 +36,48 @@ export interface AttributeControlChartSignal {
   definition: string;
 }
 
+export interface AttributeControlChartLimitSetDependency {
+  limit_set_id: string;
+  asset_schema_version: 1;
+  asset_sha256: string;
+  source_analysis_id: string;
+  source_method_version: "0.1.0" | "0.2.0";
+  source_result_schema_version: 1 | 2;
+  source_dataset_version_id: string;
+  source_schema_hash: string;
+  source_canonical_sha256: string;
+  source_result_sha256: string;
+  baseline_closed_at: string;
+  baseline_point_count: number;
+  frozen_center_line: number;
+  fixed_sample_size: number | null;
+  calculation_policy: "phase_2_frozen_three_sigma_v1";
+}
+
+export interface AttributeControlChartTargetDependency {
+  dataset_version_id: string;
+  schema_hash: string;
+  canonical_sha256: string;
+  filter_snapshot_sha256: string;
+  row_snapshot_sha256: string;
+  row_count_total: number;
+  row_count_included: number;
+  count_column_id: string;
+  denominator_column_id: string | null;
+}
+
 export interface AttributeControlChartResult {
   schema_version: number;
+  phase?: "phase_1" | "phase_2";
   summary_type: "attribute_control_chart";
   method: "p_chart" | "np_chart" | "c_chart" | "u_chart";
   chart_type: AttributeControlChartType;
   count_definition: "defectives" | "defects";
   distribution_assumption: "binomial" | "poisson";
-  control_limit_method: "phase_1_estimated_three_sigma";
-  baseline: "all_filtered_valid_points";
+  control_limit_method: "phase_1_estimated_three_sigma" | "phase_2_frozen_three_sigma";
+  baseline: "all_filtered_valid_points" | "verified_immutable_limit_set";
+  limit_set_dependency?: AttributeControlChartLimitSetDependency | null;
+  target_dependency?: AttributeControlChartTargetDependency;
   order_source: "canonical_row_order";
   missing_policy: "complete_case";
   constant_opportunity_confirmed: boolean;

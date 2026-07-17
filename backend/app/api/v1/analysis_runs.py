@@ -6,10 +6,16 @@ from fastapi import APIRouter, Query, Request, Response, status
 from app.api.v1.schemas.analyses import (
     AnalysisResultCsvExportResponse,
     AnalysisResultEnvelope,
+    AnalysisResultExportDeleteRequest,
+    AnalysisResultExportDeleteResponse,
+    AnalysisResultExportDeletionPreflightResponse,
     AnalysisResultExportListResponse,
     AnalysisResultHtmlReportResponse,
     AnalysisResultJsonExportResponse,
     AnalysisRunComparisonResponse,
+    AnalysisRunDeleteRequest,
+    AnalysisRunDeleteResponse,
+    AnalysisRunDeletionPreflightResponse,
     AnalysisRunListResponse,
     AnalysisRunRequest,
     AnalysisRunState,
@@ -20,6 +26,8 @@ from app.services.analysis_run_exports import (
     create_analysis_result_csv_export,
     create_analysis_result_html_report_export,
     create_analysis_result_json_export,
+    delete_analysis_result_export,
+    get_analysis_result_export_deletion_preflight,
     get_analysis_result_export_download,
     list_analysis_result_exports,
 )
@@ -29,6 +37,10 @@ from app.services.analysis_run_history import (
     request_analysis_run_cancellation,
 )
 from app.services.analysis_run_results import get_analysis_run_result
+from app.services.analysis_run_retention import (
+    delete_stored_analysis_run,
+    get_analysis_run_deletion_preflight,
+)
 from app.services.analysis_runs import (
     create_analysis_run,
 )
@@ -154,6 +166,40 @@ def list_analysis_result_exports_route(
     )
 
 
+@router.get(
+    "/{analysis_id}/exports/{export_id}/deletion-preflight",
+    response_model=AnalysisResultExportDeletionPreflightResponse,
+)
+def get_analysis_result_export_deletion_preflight_route(
+    request: Request,
+    analysis_id: UUID,
+    export_id: UUID,
+) -> AnalysisResultExportDeletionPreflightResponse:
+    return get_analysis_result_export_deletion_preflight(
+        settings=request.app.state.settings,
+        analysis_id=analysis_id,
+        export_id=export_id,
+    )
+
+
+@router.delete(
+    "/{analysis_id}/exports/{export_id}",
+    response_model=AnalysisResultExportDeleteResponse,
+)
+def delete_analysis_result_export_route(
+    request: Request,
+    analysis_id: UUID,
+    export_id: UUID,
+    body: AnalysisResultExportDeleteRequest,
+) -> AnalysisResultExportDeleteResponse:
+    return delete_analysis_result_export(
+        settings=request.app.state.settings,
+        analysis_id=analysis_id,
+        export_id=export_id,
+        body=body,
+    )
+
+
 @router.get("/{analysis_id}/exports/{export_id}/download")
 def download_analysis_result_export_route(
     request: Request,
@@ -184,6 +230,36 @@ def get_analysis_run_route(
     return get_analysis_run_status(
         workspace_root=request.app.state.settings.workspace_root,
         analysis_id=analysis_id,
+    )
+
+
+@router.get(
+    "/{analysis_id}/deletion-preflight",
+    response_model=AnalysisRunDeletionPreflightResponse,
+)
+def get_analysis_run_deletion_preflight_route(
+    request: Request,
+    analysis_id: UUID,
+) -> AnalysisRunDeletionPreflightResponse:
+    return get_analysis_run_deletion_preflight(
+        settings=request.app.state.settings,
+        analysis_id=analysis_id,
+    )
+
+
+@router.delete(
+    "/{analysis_id}/deletion",
+    response_model=AnalysisRunDeleteResponse,
+)
+def delete_stored_analysis_run_route(
+    request: Request,
+    analysis_id: UUID,
+    body: AnalysisRunDeleteRequest,
+) -> AnalysisRunDeleteResponse:
+    return delete_stored_analysis_run(
+        settings=request.app.state.settings,
+        analysis_id=analysis_id,
+        body=body,
     )
 
 

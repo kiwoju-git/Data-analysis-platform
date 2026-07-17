@@ -5,26 +5,26 @@ Last updated: 2026-07-16
 ## Scope And Version
 
 - Method ID: `quality.attribute_control_chart`
-- Method version: `0.1.0`
-- Result schema: `1`
+- Method version: `0.2.0`
+- Result schema: `2` for new Phase I and Phase II runs; stored `0.1.0`/schema-1
+  Phase I results restore without relabeling
 - Execution: generic inline `POST /api/v1/analysis-runs`
 - Storage/export: checksum-validated stored result, row snapshot, JSON, long CSV,
   and HTML through the common analysis-run paths
 - UI: Quality Control > Control Chart, rendered by
   `AttributeControlChartPanel`
 
-This Phase I slice estimates the center line and three-sigma limits from all
-valid rows remaining after the explicit analysis filter. It does not silently
-change chart type, adjust limits for dispersion, remove signaled points, or
-reuse the estimated limits for Phase II monitoring.
+Phase I estimates the center line and three-sigma limits from all valid rows
+remaining after the explicit analysis filter. Phase II applies a separately
+verified, app-created immutable limit-set asset to compatible monitoring rows.
+Neither phase silently changes chart type, adjusts limits for dispersion,
+removes signaled points, or refits a monitoring target.
 
-The panel explicitly labels this as Phase I-only execution and identifies the
-limit source as all filtered valid observations. The future immutable
-frozen-limit policy, version decision, reference fixture, and implementation
-acceptance criteria are defined separately in
-`docs/attribute_control_chart_phase_2_contract.md`. Its schema-13 immutable
-limit-set create/get/list API is implemented, but it does not make Phase II
-monitoring executable and does not change this method version or result schema.
+The panel requires an explicit Phase I/Phase II choice. Phase II requires a
+verified limit set and a ready target compatibility preflight; it never accepts
+user-entered naked limits. The immutable dependency, compatibility, frozen
+calculation, restore/export, and error contracts are defined in
+`docs/attribute_control_chart_phase_2_contract.md`.
 
 ## Input Contract
 
@@ -40,6 +40,8 @@ order is the chart order.
 
 Options are closed by `AttributeControlChartOptions`:
 
+- `phase`: `phase_1` or `phase_2`
+- `limit_set_id`: forbidden for Phase I and required for Phase II
 - `chart_type`: `p`, `np`, `c`, or `u`
 - `count_definition`: `defectives` for P/NP, `defects` for C/U
 - `count_column_id`
@@ -125,11 +127,12 @@ conventions, and full-precision expectations. Tests verify:
 - hand-checkable weighted P limits, exclusions, truncation, dispersion policy,
   and every contract failure class.
 
-The separate contract-only
+The separate policy-adjusted
 `quality_attribute_control_chart_phase_2_reference_policy.json` independently
 checks frozen P/NP/C/U formula and strict-boundary semantics. It is classified
 as policy-adjusted formula parity, not direct published-output parity, and is
-not passed to the production Phase I calculator as a Phase II result.
+is executed against the production Phase II calculator without fabricated
+observations or expected results.
 
 Primary references:
 
@@ -147,11 +150,16 @@ E2E including the explicit Phase I notice and a real P-chart run. Current
 details are recorded in `docs/ci_status.md`. These are local Windows 10
 working-tree results, not remote Actions or Windows 11 release evidence.
 
+The executable Phase II slice passed full backend pytest with 702 tests,
+frontend Vitest with 100 tests, the 120-test OpenAPI/frontend contract suite,
+production build, and Chromium E2E that promotes a Phase I baseline and applies
+its verified frozen limits to a separate target dataset. Current details are in
+`docs/ci_status.md`.
+
 ## Limitations
 
-- Phase II monitoring and user-supplied historical limits are not included;
-  app-created immutable limit-set storage exists, while the current closed
-  analysis options still reject Phase II fields.
+- User-supplied historical or naked limits are not supported; Phase II accepts
+  only verified app-created immutable limit sets.
 - Only the one-point-outside-three-sigma rule is enabled; WECO/Nelson pattern
   rules are not claimed.
 - Exact binomial/Poisson probability limits, Laney P'/U', rare-event charts,

@@ -4,10 +4,14 @@ import {
   createAnalysisResultCsvExport,
   createAnalysisResultHtmlReport,
   createAnalysisResultJsonExport,
+  deleteAnalysisResultExport,
   downloadAnalysisResultExport,
+  fetchAnalysisResultExportDeletionPreflight,
   fetchAnalysisResultExports,
   type AnalysisResultCsvExportResponse,
   type AnalysisResultExportListResponse,
+  type AnalysisResultExportDeleteResponse,
+  type AnalysisResultExportDeletionPreflightResponse,
   type AnalysisResultHtmlReportResponse,
   type AnalysisResultJsonExportResponse,
 } from "./api";
@@ -57,11 +61,23 @@ export function useAnalysisExportState({
   );
   const [isLoadingAnalysisResultExportList, setIsLoadingAnalysisResultExportList] =
     useState(false);
+  const [analysisResultExportDeletionPreflight, setAnalysisResultExportDeletionPreflight] =
+    useState<AnalysisResultExportDeletionPreflightResponse | null>(null);
+  const [analysisResultExportDeletion, setAnalysisResultExportDeletion] =
+    useState<AnalysisResultExportDeleteResponse | null>(null);
+  const [analysisResultExportDeletionError, setAnalysisResultExportDeletionError] = useState<
+    string | null
+  >(null);
+  const [isLoadingAnalysisResultExportDeletionPreflight, setIsLoadingAnalysisResultExportDeletionPreflight] =
+    useState(false);
+  const [isDeletingAnalysisResultExport, setIsDeletingAnalysisResultExport] = useState(false);
   const exportListRequest = useRef(createLatestRequestGuard()).current;
   const jsonExportRequest = useRef(createLatestRequestGuard()).current;
   const csvExportRequest = useRef(createLatestRequestGuard()).current;
   const htmlReportRequest = useRef(createLatestRequestGuard()).current;
   const exportDownloadRequest = useRef(createLatestRequestGuard()).current;
+  const exportDeletionPreflightRequest = useRef(createLatestRequestGuard()).current;
+  const exportDeletionRequest = useRef(createLatestRequestGuard()).current;
 
   const cancelAnalysisExportRequests = useCallback(() => {
     exportListRequest.cancel();
@@ -69,9 +85,13 @@ export function useAnalysisExportState({
     csvExportRequest.cancel();
     htmlReportRequest.cancel();
     exportDownloadRequest.cancel();
+    exportDeletionPreflightRequest.cancel();
+    exportDeletionRequest.cancel();
   }, [
     csvExportRequest,
     exportDownloadRequest,
+    exportDeletionPreflightRequest,
+    exportDeletionRequest,
     exportListRequest,
     htmlReportRequest,
     jsonExportRequest,
@@ -93,6 +113,11 @@ export function useAnalysisExportState({
     setIsCreatingAnalysisResultHtmlReport(false);
     setIsDownloadingAnalysisResultExport(false);
     setIsLoadingAnalysisResultExportList(false);
+    setAnalysisResultExportDeletionPreflight(null);
+    setAnalysisResultExportDeletion(null);
+    setAnalysisResultExportDeletionError(null);
+    setIsLoadingAnalysisResultExportDeletionPreflight(false);
+    setIsDeletingAnalysisResultExport(false);
   }, [cancelAnalysisExportRequests]);
 
   function clearAnalysisExportErrors() {
@@ -100,6 +125,7 @@ export function useAnalysisExportState({
     setAnalysisResultCsvExportError(null);
     setAnalysisResultHtmlReportError(null);
     setAnalysisResultExportDownloadError(null);
+    setAnalysisResultExportDeletionError(null);
   }
 
   const refreshAnalysisResultExports = useCallback(async (analysisId: string) => {
@@ -219,6 +245,75 @@ export function useAnalysisExportState({
     }
   }
 
+  async function loadExportDeletionPreflight(analysisId: string, exportId: string) {
+    const request = exportDeletionPreflightRequest.begin();
+    setIsLoadingAnalysisResultExportDeletionPreflight(true);
+    setAnalysisResultExportDeletionPreflight(null);
+    setAnalysisResultExportDeletion(null);
+    setAnalysisResultExportDeletionError(null);
+    try {
+      const response = await fetchAnalysisResultExportDeletionPreflight(
+        analysisId,
+        exportId,
+      );
+      if (exportDeletionPreflightRequest.isCurrent(request)) {
+        setAnalysisResultExportDeletionPreflight(response);
+      }
+    } catch (error) {
+      if (exportDeletionPreflightRequest.isCurrent(request)) {
+        setAnalysisResultExportDeletionError(
+          error instanceof Error
+            ? error.message
+            : "analysis_export_deletion_preflight_failed",
+        );
+      }
+    } finally {
+      if (exportDeletionPreflightRequest.isCurrent(request)) {
+        setIsLoadingAnalysisResultExportDeletionPreflight(false);
+      }
+    }
+  }
+
+  async function deleteExport(preflight: AnalysisResultExportDeletionPreflightResponse) {
+    const request = exportDeletionRequest.begin();
+    setIsDeletingAnalysisResultExport(true);
+    setAnalysisResultExportDeletionError(null);
+    try {
+      const response = await deleteAnalysisResultExport(
+        preflight.analysis_id,
+        preflight.export_id,
+        {
+          confirmation_analysis_id: preflight.analysis_id,
+          confirmation_export_id: preflight.export_id,
+          expected_deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+        },
+      );
+      if (!exportDeletionRequest.isCurrent(request)) return;
+      setAnalysisResultExportDeletion(response);
+      setAnalysisResultExportDeletionPreflight(null);
+      setAnalysisResultJsonExport((current) =>
+        current?.export_id === preflight.export_id ? null : current,
+      );
+      setAnalysisResultCsvExport((current) =>
+        current?.export_id === preflight.export_id ? null : current,
+      );
+      setAnalysisResultHtmlReport((current) =>
+        current?.export_id === preflight.export_id ? null : current,
+      );
+      await refreshAnalysisResultExports(preflight.analysis_id);
+    } catch (error) {
+      if (exportDeletionRequest.isCurrent(request)) {
+        setAnalysisResultExportDeletionError(
+          error instanceof Error ? error.message : "analysis_export_delete_failed",
+        );
+      }
+    } finally {
+      if (exportDeletionRequest.isCurrent(request)) {
+        setIsDeletingAnalysisResultExport(false);
+      }
+    }
+  }
+
   useEffect(() => {
     resetAnalysisExportState();
     if (currentAnalysisId !== null) {
@@ -238,6 +333,9 @@ export function useAnalysisExportState({
     analysisResultCsvExport,
     analysisResultCsvExportError,
     analysisResultExportDownloadError,
+    analysisResultExportDeletion,
+    analysisResultExportDeletionError,
+    analysisResultExportDeletionPreflight,
     analysisResultExportList,
     analysisResultExportListError,
     analysisResultHtmlReport,
@@ -248,7 +346,9 @@ export function useAnalysisExportState({
     isCreatingAnalysisResultHtmlReport,
     isCreatingAnalysisResultJsonExport,
     isDownloadingAnalysisResultExport,
+    isDeletingAnalysisResultExport,
     isLoadingAnalysisResultExportList,
+    isLoadingAnalysisResultExportDeletionPreflight,
     clearAnalysisExportErrors,
     onCreateAnalysisResultCsvExport: (analysisId: string) => {
       void createCsvExport(analysisId);
@@ -261,6 +361,18 @@ export function useAnalysisExportState({
     },
     onDownloadAnalysisResultExport: (analysisId: string, exportId: string) => {
       void downloadExport(analysisId, exportId);
+    },
+    onLoadAnalysisResultExportDeletionPreflight: (analysisId: string, exportId: string) => {
+      void loadExportDeletionPreflight(analysisId, exportId);
+    },
+    onDeleteAnalysisResultExport: (preflight: AnalysisResultExportDeletionPreflightResponse) => {
+      void deleteExport(preflight);
+    },
+    onClearAnalysisResultExportDeletion: () => {
+      exportDeletionPreflightRequest.cancel();
+      setAnalysisResultExportDeletionPreflight(null);
+      setAnalysisResultExportDeletionError(null);
+      setIsLoadingAnalysisResultExportDeletionPreflight(false);
     },
     onRefreshAnalysisResultExports: refreshAnalysisResultExports,
     resetAnalysisExportState,

@@ -20,11 +20,17 @@ from app.services.analysis_run_execution import (
     store_succeeded_analysis_result,
     utc_now,
 )
+from app.services.attribute_control_limit_sets import get_attribute_control_limit_set
+from app.services.attribute_control_phase_2 import (
+    phase_2_dependency_payloads,
+    validate_attribute_control_phase_2_target,
+)
 from app.services.dataset_rows import DatasetRowsContext, get_dataset_rows_context
 from app.statistics.attribute_control_chart import (
     AttributeControlChartColumn,
     AttributeControlChartError,
     calculate_attribute_control_chart,
+    calculate_attribute_control_chart_phase_2,
 )
 from app.storage.metadata import DatasetColumnRecord
 
@@ -46,6 +52,23 @@ def run_attribute_control_chart_analysis(
     count_column = _selected_count_column(context, options)
     denominator_column = _selected_denominator_column(context, options, count_column)
     point_limit = _point_limit(options)
+    limit_set = None
+    if options["phase"] == "phase_2":
+        limit_set_id = options.get("limit_set_id")
+        if limit_set_id is None:
+            raise _api_error("attribute_control_chart_limit_set_required")
+        limit_set = get_attribute_control_limit_set(settings, limit_set_id)
+        validate_attribute_control_phase_2_target(
+            asset=limit_set,
+            context=context,
+            chart_type=str(options["chart_type"]),
+            count_definition=str(options["count_definition"]),
+            count_column_id=count_column.column_id,
+            denominator_column_id=(
+                None if denominator_column is None else denominator_column.column_id
+            ),
+            constant_opportunity_confirmed=bool(options["constant_opportunity_confirmed"]),
+        )
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -57,18 +80,48 @@ def run_attribute_control_chart_analysis(
     )
     try:
         try:
-            result = calculate_attribute_control_chart(
-                iter_rows_for_snapshot(context, row_snapshot),
-                count_column,
-                denominator_column,
-                chart_type=str(options["chart_type"]),
-                count_definition=str(options["count_definition"]),
-                constant_opportunity_confirmed=bool(options["constant_opportunity_confirmed"]),
-                decimal=context.parsing.decimal,
-                thousands=context.parsing.thousands,
-                missing_policy=str(options["missing_policy"]),
-                point_limit=point_limit,
-            )
+            if limit_set is None:
+                result = calculate_attribute_control_chart(
+                    iter_rows_for_snapshot(context, row_snapshot),
+                    count_column,
+                    denominator_column,
+                    chart_type=str(options["chart_type"]),
+                    count_definition=str(options["count_definition"]),
+                    constant_opportunity_confirmed=bool(options["constant_opportunity_confirmed"]),
+                    decimal=context.parsing.decimal,
+                    thousands=context.parsing.thousands,
+                    missing_policy=str(options["missing_policy"]),
+                    point_limit=point_limit,
+                )
+                result["schema_version"] = 2
+                result["phase"] = "phase_1"
+                result["limit_set_dependency"] = None
+            else:
+                result = calculate_attribute_control_chart_phase_2(
+                    iter_rows_for_snapshot(context, row_snapshot),
+                    count_column,
+                    denominator_column,
+                    chart_type=str(options["chart_type"]),
+                    count_definition=str(options["count_definition"]),
+                    frozen_center_line=limit_set.frozen_center_line,
+                    fixed_sample_size=limit_set.fixed_sample_size,
+                    constant_opportunity_confirmed=bool(options["constant_opportunity_confirmed"]),
+                    decimal=context.parsing.decimal,
+                    thousands=context.parsing.thousands,
+                    missing_policy=str(options["missing_policy"]),
+                    point_limit=point_limit,
+                )
+                limit_dependency, target_dependency = phase_2_dependency_payloads(
+                    asset=limit_set,
+                    context=context,
+                    row_snapshot=row_snapshot,
+                    count_column_id=count_column.column_id,
+                    denominator_column_id=(
+                        None if denominator_column is None else denominator_column.column_id
+                    ),
+                )
+                result["limit_set_dependency"] = limit_dependency
+                result["target_dependency"] = target_dependency
         except AttributeControlChartError as exc:
             raise _api_error(exc.code) from exc
         return store_succeeded_analysis_result(
@@ -237,6 +290,15 @@ def _api_error(code: str) -> ApiError:
             "기준선의 추정 분산이 0이라 관리한계를 계산할 수 없습니다."
         ),
         "attribute_control_chart_center_invalid": "계수형 관리도 중심선을 계산할 수 없습니다.",
+        "attribute_control_chart_limit_set_required": (
+            "Phase II 관리도에는 검증된 limit set이 필요합니다."
+        ),
+        "attribute_control_chart_phase_2_np_sample_size_mismatch": (
+            "NP Phase II 대상의 모든 표본 크기는 기준선의 고정 표본 크기와 같아야 합니다."
+        ),
+        "attribute_control_chart_phase_2_c_opportunity_confirmation_required": (
+            "C Phase II 대상의 검사 기회가 기준선과 동일함을 확인해야 합니다."
+        ),
     }
     return ApiError(
         code=code,
@@ -255,6 +317,9 @@ def _warnings(result: dict[str, object]) -> list[AnalysisWarning]:
         ),
         "attribute_control_chart_phase_1_limits_estimated_from_data": (
             "Phase I 중심선과 3-sigma 관리한계는 필터 후 유효 관측 전체에서 추정했습니다."
+        ),
+        "attribute_control_chart_phase_2_limits_frozen_from_verified_asset": (
+            "중심선과 3-sigma 관리한계는 검증된 immutable limit set에서 고정 적용되었습니다."
         ),
         "attribute_control_chart_process_assumptions_not_proven": (
             "관측 독립성, 시간 순서, 공정 안정성, 결함 기회의 동질성은 "
@@ -301,6 +366,7 @@ def _warnings(result: dict[str, object]) -> list[AnalysisWarning]:
     info_codes = {
         "attribute_control_chart_uses_canonical_row_order",
         "attribute_control_chart_phase_1_limits_estimated_from_data",
+        "attribute_control_chart_phase_2_limits_frozen_from_verified_asset",
         "attribute_control_chart_process_assumptions_not_proven",
         "attribute_control_chart_c_constant_opportunity_user_confirmed",
     }

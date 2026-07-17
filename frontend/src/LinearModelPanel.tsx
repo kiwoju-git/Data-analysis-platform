@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type {
   AnalysisResultEnvelope,
@@ -12,6 +12,8 @@ import type {
 } from "./api";
 import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
 import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
+import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
+import { formatBytes } from "./analysisWorkbenchUtils";
 
 export interface LinearModelPredictionRowsState {
   error: string | null;
@@ -100,6 +102,11 @@ export function LinearModelPanel({
   onTogglePredictorColumn,
   onToggleQuadraticColumn,
 }: LinearModelPanelProps) {
+  const modelId = result?.model_manifest?.model_id ?? null;
+  const modelRetentionState = useRegressionModelRetentionState(modelId);
+  const [modelDeletionConfirmed, setModelDeletionConfirmed] = useState(false);
+  const modelDeleted =
+    modelId !== null && modelRetentionState.deletedModelId === modelId;
   const canRun =
     version !== null &&
     responseColumnId !== null &&
@@ -127,7 +134,8 @@ export function LinearModelPanel({
     version !== null &&
     result?.model_manifest !== undefined &&
     predictionTargetState.selectedTargetVersionId !== null &&
-    !isRunningPredictionPreflight;
+    !isRunningPredictionPreflight &&
+    !modelDeleted;
   const canRunPrediction =
     version !== null &&
     result?.model_manifest !== undefined &&
@@ -137,7 +145,8 @@ export function LinearModelPanel({
     predictionPreflight.target_dataset_version_id ===
       predictionTargetState.selectedTargetVersionId &&
     !isRunningPrediction &&
-    !isRunningPredictionPreflight;
+    !isRunningPredictionPreflight &&
+    !modelDeleted;
   const preflightErrorCount =
     predictionPreflight?.issues.filter((issue) => issue.severity === "error").length ?? 0;
   const preflightWarningCount =
@@ -332,6 +341,101 @@ export function LinearModelPanel({
                   </>
                 ) : null}
               </div>
+              {result.model_manifest ? (
+                <section className="result-section" aria-labelledby="linear-model-retention-title">
+                  <div className="panel-heading">
+                    <div>
+                      <h4 id="linear-model-retention-title">저장 모델 관리</h4>
+                      <p>
+                        모델 manifest만 삭제합니다. 적합 결과와 원본 데이터는 유지되며,
+                        이 모델을 사용한 예측 결과가 있으면 삭제가 차단됩니다.
+                      </p>
+                    </div>
+                    <button
+                      className="secondary-button"
+                      disabled={
+                        modelDeleted ||
+                        modelRetentionState.isDeleting ||
+                        modelRetentionState.isLoadingPreflight
+                      }
+                      onClick={() => {
+                        setModelDeletionConfirmed(false);
+                        modelRetentionState.onLoadPreflight();
+                      }}
+                      type="button"
+                    >
+                      {modelRetentionState.isLoadingPreflight
+                        ? "영향 확인 중"
+                        : "삭제 영향 확인"}
+                    </button>
+                  </div>
+                  {modelRetentionState.preflight ? (
+                    <div className="notice-box">
+                      <strong>
+                        예측 참조 {modelRetentionState.preflight.counts.dependent_prediction_count.toLocaleString()}건
+                      </strong>
+                      <span>
+                        manifest {formatBytes(
+                          modelRetentionState.preflight.counts.manifest_file_bytes,
+                        )}
+                      </span>
+                      {modelRetentionState.preflight.deletion_ready ? (
+                        <label className="checkbox-field">
+                          <input
+                            checked={modelDeletionConfirmed}
+                            type="checkbox"
+                            onChange={(event) => {
+                              setModelDeletionConfirmed(event.currentTarget.checked);
+                            }}
+                          />
+                          <span>이 모델로 새 예측을 실행할 수 없게 됨을 확인했습니다.</span>
+                        </label>
+                      ) : (
+                        <span>
+                          종속 예측 결과를 먼저 삭제해야 모델을 삭제할 수 있습니다.
+                        </span>
+                      )}
+                      <div className="button-row">
+                        <button
+                          className="secondary-button"
+                          disabled={
+                            !modelRetentionState.preflight.deletion_ready ||
+                            !modelDeletionConfirmed ||
+                            modelRetentionState.isDeleting
+                          }
+                          onClick={() => {
+                            modelRetentionState.onDelete(modelRetentionState.preflight!);
+                          }}
+                          type="button"
+                        >
+                          {modelRetentionState.isDeleting ? "삭제 중" : "모델 삭제"}
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={modelRetentionState.isDeleting}
+                          onClick={() => {
+                            setModelDeletionConfirmed(false);
+                            modelRetentionState.onClear();
+                          }}
+                          type="button"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {modelDeleted ? (
+                    <div className="notice-box" role="status">
+                      모델 manifest를 삭제했습니다. 적합 결과는 기록에 유지됩니다.
+                    </div>
+                  ) : null}
+                  {modelRetentionState.error ? (
+                    <div className="error-box" role="alert">
+                      오류 코드: {modelRetentionState.error}
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
               <section
                 className="result-section"
                 aria-labelledby="linear-model-prediction-preflight-title"

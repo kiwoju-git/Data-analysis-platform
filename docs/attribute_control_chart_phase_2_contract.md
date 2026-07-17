@@ -4,13 +4,9 @@ Last updated: 2026-07-16
 
 ## Status And Scope
 
-The immutable limit-set storage/API foundation in this document is implemented,
-but Phase II monitoring is not executable. The current
-`quality.attribute_control_chart` implementation remains method version
-`0.1.0`, result schema `1`, and Phase I only. Its closed analysis request model
-does not accept a phase or limit-set identifier.
-
-The first executable Phase II slice will retain the stable method ID and use:
+The immutable limit-set storage/API foundation and first Phase II monitoring
+vertical slice are implemented. `quality.attribute_control_chart` retains its
+stable method ID and uses:
 
 - method version `0.2.0`;
 - result schema `2`;
@@ -21,15 +17,18 @@ The minor method/result bump is required because the source of the center and
 limits, the dependency graph, request options, result fields, and statistical
 meaning change. Existing `0.1.0` results remain Phase I results and must never
 be migrated or displayed as Phase II. The common analysis-run config envelope
-will record the new per-method option shape when implementation begins; this
-foundation does not change its current schema or stored records.
+remains schema `2` and records the new per-method option shape, so no SQLite or
+common-config migration is required. New Phase I executions also use method
+`0.2.0`/result schema `2` with `phase=phase_1`; eligible sources from both
+`0.1.0`/schema `1` and `0.2.0`/schema `2` may be promoted without rewriting
+either stored result.
 
 WECO/Nelson pattern rules, Laney P'/U', exact probability limits, user-entered
 numeric limits, and new chart families are outside this contract.
 
 ## Immutable Limit-Set Asset
 
-Phase II will accept only a checksum-validated limit set created by this app.
+Phase II accepts only a checksum-validated limit set created by this app.
 A user cannot supply naked center/LCL/UCL numbers in the first slice. Limit-set
 schema `1` contains at least:
 
@@ -70,7 +69,11 @@ by the API.
   after file checksum, DB/file relationship, and live source dependency checks.
 - `GET /api/v1/quality/attribute-control-limit-sets` lists verified assets with
   optional source dataset and chart-type filters plus pagination.
-- No PUT, PATCH, or DELETE route exists. No monitoring/execution route exists.
+- `POST /api/v1/quality/attribute-control-limit-sets/{limit_set_id}/monitoring-preflight`
+  verifies target dataset and column compatibility before execution.
+- Phase II executes through `POST /api/v1/analysis-runs` with an explicit
+  `phase=phase_2` and verified `limit_set_id`.
+- No PUT, PATCH, or DELETE route exists.
 
 Promotion policy `phase_2_baseline_eligibility_v1` requires at least 20 complete
 points, a complete untruncated point payload, no Phase I limit signal, usable
@@ -87,7 +90,7 @@ is introduced in this slice.
 
 ## Monitoring Request And Dependency Gates
 
-An executable Phase II request will explicitly select Phase II and provide a
+An executable Phase II request explicitly selects Phase II and provides a
 `limit_set_id`. Before calculation, the service validates the asset checksum,
 method/version, chart/count semantics, baseline dataset dependency, column
 IDs, and target dataset schema/canonical artifact dependency. It never falls
@@ -111,7 +114,7 @@ Stable storage error meanings implemented by the limit-set APIs are:
 - `attribute_control_chart_limit_set_metadata_invalid`
 - `attribute_control_chart_limit_set_source_dependency_mismatch`
 
-Monitoring-specific meanings reserved for the executable slice are:
+Monitoring-specific stable meanings are:
 
 - `attribute_control_chart_limit_set_method_version_mismatch`
 - `attribute_control_chart_limit_set_chart_type_mismatch`
@@ -119,10 +122,10 @@ Monitoring-specific meanings reserved for the executable slice are:
 - `attribute_control_chart_phase_2_target_schema_mismatch`
 - `attribute_control_chart_phase_2_np_sample_size_mismatch`
 - `attribute_control_chart_phase_2_c_opportunity_confirmation_required`
+- `attribute_control_chart_phase_2_dependency_mismatch`
 
-The current Phase I analysis endpoint still has no Phase II request shape.
-Storage-specific codes are exposed only by the implemented limit-set APIs;
-monitoring-specific codes remain reserved until the executable Phase II slice.
+Preflight returns compatibility issues without creating an analysis. Execution
+returns the same stable codes and never falls back to Phase I estimation.
 
 ## Frozen-Limit Calculations
 
@@ -148,16 +151,13 @@ silently switch chart family or adjust limits.
 
 ## Result And UI Contract
 
-Result schema `2` will distinguish `phase_1_estimated_three_sigma` from
-`phase_2_frozen_three_sigma` and include a typed limit-set dependency block.
-The UI will show Phase I/Phase II as an explicit mode, identify the frozen
-limit-set source and baseline close time, and distinguish current monitoring
+Result schema `2` distinguishes `phase_1_estimated_three_sigma` from
+`phase_2_frozen_three_sigma` and includes typed limit-set and target dependency
+blocks. Restore and every JSON/CSV/HTML export revalidate those relationships.
+The UI shows Phase I/Phase II as an explicit mode, identifies the frozen
+limit-set source and baseline close time, and distinguishes current monitoring
 data from baseline history. Phase II execution must require a deliberate asset
 selection and show incompatibility before the run button is enabled.
-
-Until that slice exists, the current panel must say that it executes Phase I
-only, estimates limits from all filtered valid observations, and does not apply
-stored Phase II limits.
 
 ## Reference And Acceptance Criteria
 
@@ -166,10 +166,11 @@ hand-checkable policy fixture. It independently evaluates P/NP/C/U frozen-limit
 formulas and strict signal behavior from the NIST definitions. It is
 policy-adjusted formula parity, not a claim of direct published output parity.
 
-The storage/API foundation has completed items 1-3, controlled frontend client
-types for the asset API, and its own full local validation. The monitoring
-vertical slice remains responsible for items 4-7 and must rerun item 7 after
-adding executable behavior:
+The storage/API foundation and monitoring vertical slice complete items 1-6.
+For item 7, local `scripts/check.ps1` and browser E2E are complete; the actual
+Windows 11/Python 3.10/Node 22 evidence remains a mandatory release gate and
+remote Actions remain independently unverified. Exact evidence is recorded in
+`docs/ci_status.md` for each validated commit/worktree:
 
 1. a SQLite migration and immutable limit-set create/get/list contract;
 2. schema/hash/relation tamper tests and previous-schema upgrade coverage;

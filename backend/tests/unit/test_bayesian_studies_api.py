@@ -1,14 +1,31 @@
 import hashlib
 import json
 import sqlite3
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.analyses.registry import METHOD_VERSIONS
+from app.api.v1.schemas.bayesian import (
+    MAX_COMPLETED_OBSERVATIONS,
+    MAX_HISTORY_REVISIONS,
+)
 from app.core.config import Settings
+from app.core.errors import ApiError
 from app.main import create_app
+from app.services.bayesian_studies import (
+    _load_complete_history_records,
+    _load_validated_study,
+    _validate_histories,
+    canonical_bayesian_observation_history_sha256,
+)
+from app.storage.bayesian_studies import (
+    BayesianHistoryRevisionRecord,
+    BayesianStudyVersionRecord,
+    BayesianTrialRecord,
+)
 from app.storage.metadata import metadata_db_path
 
 
@@ -291,7 +308,7 @@ def test_bayesian_trial_abandon_is_terminal_and_does_not_change_observation_hist
 ) -> None:
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:
-        study = _create_study(client, initial_design_size=2)
+        study = _create_study(client, initial_design_size=4)
         trial = study["trials"][0]
         abandoned_response = client.post(
             f"/api/v1/bayesian-studies/{study['study_id']}" f"/trials/{trial['trial_id']}/abandon"
@@ -311,13 +328,33 @@ def test_bayesian_trial_abandon_is_terminal_and_does_not_change_observation_hist
     assert restored["observation_history"] == study["observation_history"]
 
 
+def test_bayesian_initial_trial_abandon_cannot_strand_minimum_design(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        study = _create_study(client, initial_design_size=3)
+        trial = study["trials"][0]
+        response = client.post(
+            f"/api/v1/bayesian-studies/{study['study_id']}" f"/trials/{trial['trial_id']}/abandon"
+        )
+        restored = client.get(f"/api/v1/bayesian-studies/{study['study_id']}").json()
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == ("bayesian_trial_abandon_would_strand_study")
+    assert restored["pending_trial_count"] == 3
+    assert restored["abandoned_trial_count"] == 0
+    assert restored["observation_history"] == study["observation_history"]
+    public_error = json.dumps(response.json()["error"], ensure_ascii=False).lower()
+    assert "objective" not in public_error
+    assert str(tmp_path).lower() not in public_error
+
+
 def test_bayesian_study_rejects_invalid_semantics_without_fallback(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     duplicate = _study_request()
     duplicate["factors"][1]["factor_id"] = "temperature"
     unknown_constraint = _study_request()
     unknown_constraint["constraints"][0]["terms"][0]["factor_id"] = "missing"
-    infeasible = _study_request(initial_design_size=1)
+    infeasible = _study_request(initial_design_size=3)
     infeasible["constraints"] = [
         {
             "constraint_id": "impossible",
@@ -491,7 +528,7 @@ def test_bayesian_history_checksum_depends_on_ordered_ids_coordinates_and_values
 ) -> None:
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:
-        study = _create_study(client, initial_design_size=2)
+        study = _create_study(client, initial_design_size=3)
         first = _complete_trial(client, study, 1, objective_value=20.0).json()
         current = first["observation_history"]
         second_response = _complete_trial(
@@ -532,7 +569,7 @@ def test_bayesian_missing_resources_return_stable_errors(tmp_path) -> None:
     missing_study_id = uuid4()
     with TestClient(create_app(settings)) as client:
         study_response = client.get(f"/api/v1/bayesian-studies/{missing_study_id}")
-        study = _create_study(client, initial_design_size=1)
+        study = _create_study(client, initial_design_size=3)
         trial_response = client.post(
             f"/api/v1/bayesian-studies/{study['study_id']}" f"/trials/{uuid4()}/abandon"
         )
@@ -546,3 +583,195 @@ def test_bayesian_missing_resources_return_stable_errors(tmp_path) -> None:
     assert trial_response.json()["error"]["code"] == "bayesian_trial_not_found"
     assert history_response.status_code == 404
     assert history_response.json()["error"]["code"] == ("bayesian_observation_history_not_found")
+
+
+@pytest.mark.parametrize("factor_count", [1, 2, 6])
+def test_bayesian_initial_design_minimum_matches_factor_count(
+    tmp_path,
+    factor_count: int,
+) -> None:
+    settings = Settings(workspace_root=tmp_path / str(factor_count))
+    minimum = max(2, factor_count + 1)
+    request = _study_request(initial_design_size=minimum)
+    request["factors"] = [
+        {
+            "factor_id": f"x{index + 1}",
+            "name": f"Input {index + 1}",
+            "low": -1.0,
+            "high": 1.0,
+            "unit": None,
+        }
+        for index in range(factor_count)
+    ]
+    request["constraints"] = []
+    too_small = {**request, "initial_design_size": minimum - 1}
+    with TestClient(create_app(settings)) as client:
+        rejected = client.post("/api/v1/bayesian-studies", json=too_small)
+        accepted = client.post("/api/v1/bayesian-studies", json=request)
+
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "bayesian_study_initial_design_too_small"
+    assert accepted.status_code == 201
+    assert accepted.json()["initial_design"]["generated_size"] == minimum
+
+
+@pytest.mark.parametrize("completed_count", [199, MAX_COMPLETED_OBSERVATIONS])
+def test_bayesian_history_validation_accepts_completed_observation_boundary(
+    completed_count: int,
+) -> None:
+    version, trials, histories = _history_boundary_records(completed_count)
+
+    _validate_histories(version, trials, histories, histories[-1])
+
+    assert len(histories) == completed_count + 1
+    if completed_count == MAX_COMPLETED_OBSERVATIONS:
+        assert len(histories) == MAX_HISTORY_REVISIONS
+
+
+def test_bayesian_history_validation_rejects_observation_over_limit() -> None:
+    version, trials, histories = _history_boundary_records(MAX_COMPLETED_OBSERVATIONS + 1)
+
+    with pytest.raises(ApiError) as captured:
+        _validate_histories(version, trials, histories, histories[-1])
+
+    assert captured.value.code == "bayesian_study_artifact_mismatch"
+
+
+def test_internal_history_loader_and_public_page_accept_201_revision_boundary(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        study = _create_study(client, initial_design_size=3)
+        bundle = _load_validated_study(settings, study["study_id"])
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            for revision_number in range(2, MAX_HISTORY_REVISIONS + 1):
+                connection.execute(
+                    """
+                    INSERT INTO bayesian_observation_history_revisions (
+                        history_revision_id, study_version_id, revision_number,
+                        schema_version, completed_trial_ids_json,
+                        completed_trial_count, observation_history_sha256,
+                        previous_history_sha256, created_at
+                    ) VALUES (?, ?, ?, 1, '[]', 0, ?, ?, ?);
+                    """,
+                    (
+                        str(uuid4()),
+                        study["study_version_id"],
+                        revision_number,
+                        f"{revision_number:064x}",
+                        f"{revision_number - 1:064x}",
+                        "2026-07-16T00:00:01Z",
+                    ),
+                )
+        loaded = _load_complete_history_records(
+            tmp_path,
+            study["study_version_id"],
+        )
+        monkeypatch.setattr(
+            "app.services.bayesian_studies._load_validated_study",
+            lambda _settings, _study_id: replace(
+                bundle,
+                histories=loaded,
+                current_history=loaded[-1],
+            ),
+        )
+        page = client.get(
+            f"/api/v1/bayesian-studies/{study['study_id']}/history" "?offset=190&limit=100"
+        )
+
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            connection.execute(
+                """
+                INSERT INTO bayesian_observation_history_revisions (
+                    history_revision_id, study_version_id, revision_number,
+                    schema_version, completed_trial_ids_json,
+                    completed_trial_count, observation_history_sha256,
+                    previous_history_sha256, created_at
+                ) VALUES (?, ?, 202, 1, '[]', 0, ?, ?, ?);
+                """,
+                (
+                    str(uuid4()),
+                    study["study_version_id"],
+                    "f" * 64,
+                    "e" * 64,
+                    "2026-07-16T00:00:02Z",
+                ),
+            )
+        with pytest.raises(ApiError) as over_limit:
+            _load_complete_history_records(tmp_path, study["study_version_id"])
+
+    assert len(loaded) == MAX_HISTORY_REVISIONS
+    assert page.status_code == 200
+    assert page.json()["total"] == MAX_HISTORY_REVISIONS
+    assert len(page.json()["items"]) == 11
+    assert page.json()["items"][0]["revision_number"] == 11
+    assert page.json()["items"][-1]["revision_number"] == 1
+    assert over_limit.value.code == "bayesian_study_artifact_mismatch"
+
+
+def _history_boundary_records(
+    completed_count: int,
+) -> tuple[
+    BayesianStudyVersionRecord,
+    list[BayesianTrialRecord],
+    list[BayesianHistoryRevisionRecord],
+]:
+    study_id = str(uuid4())
+    study_version_id = str(uuid4())
+    definition_sha256 = "d" * 64
+    version = BayesianStudyVersionRecord(
+        study_version_id=study_version_id,
+        study_id=study_id,
+        version_number=1,
+        schema_version=1,
+        factors_json="[]",
+        objective_json="{}",
+        constraints_json="[]",
+        initial_design_json="{}",
+        definition_sha256=definition_sha256,
+        created_at="2026-07-16T00:00:00Z",
+    )
+    trials = [
+        BayesianTrialRecord(
+            trial_id=str(uuid4()),
+            study_version_id=study_version_id,
+            trial_number=index + 1,
+            origin="initial_design" if index < 64 else "recommendation",
+            state="completed",
+            actual_coordinates_json=json.dumps({"x": index / max(1, completed_count)}),
+            normalized_coordinates_json=json.dumps({"x": index / max(1, completed_count)}),
+            coordinates_sha256=f"{index:064x}",
+            objective_value=float(index),
+            created_at="2026-07-16T00:00:00Z",
+            closed_at="2026-07-16T00:00:01Z",
+        )
+        for index in range(completed_count)
+    ]
+    histories: list[BayesianHistoryRevisionRecord] = []
+    previous_sha: str | None = None
+    for completed_so_far in range(completed_count + 1):
+        included = trials[:completed_so_far]
+        history_sha = canonical_bayesian_observation_history_sha256(
+            definition_sha256=definition_sha256,
+            completed_trials=included,
+        )
+        histories.append(
+            BayesianHistoryRevisionRecord(
+                history_revision_id=str(uuid4()),
+                study_version_id=study_version_id,
+                revision_number=completed_so_far + 1,
+                schema_version=1,
+                completed_trial_ids_json=json.dumps(
+                    [item.trial_id for item in included],
+                    separators=(",", ":"),
+                ),
+                completed_trial_count=completed_so_far,
+                observation_history_sha256=history_sha,
+                previous_history_sha256=previous_sha,
+                created_at="2026-07-16T00:00:01Z",
+            )
+        )
+        previous_sha = history_sha
+    return version, trials, histories

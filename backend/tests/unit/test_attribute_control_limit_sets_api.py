@@ -50,9 +50,9 @@ def test_create_restore_list_and_idempotently_reuse_attribute_limit_set(tmp_path
     assert listed.json()["total"] == 1
     assert listed.json()["items"] == [payload]
     assert payload["asset_schema_version"] == 1
-    assert payload["source_method_version"] == "0.1.0"
+    assert payload["source_method_version"] == "0.2.0"
     assert payload["phase2_method_version"] == "0.2.0"
-    assert payload["source_result_schema_version"] == 1
+    assert payload["source_result_schema_version"] == 2
     assert payload["status"] == "closed"
     assert payload["chart_type"] == "p"
     assert payload["baseline_point_count"] == 20
@@ -115,6 +115,46 @@ def test_promotes_np_c_and_u_phase_one_baselines(
         assert payload["constant_opportunity_confirmed"] is True
     else:
         assert payload["denominator"] is not None
+
+
+def test_promotes_legacy_v1_phase_one_result_without_reinterpretation(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        source = _create_eligible_phase_one_chart(client)
+        record = get_analysis_run_record(tmp_path, source["analysis_id"])
+        assert record is not None and record.result_path is not None
+        result_path = tmp_path / record.result_path
+        envelope = json.loads(result_path.read_bytes())
+        envelope["method_version"] = "0.1.0"
+        envelope["provenance"]["method_version"] = "0.1.0"
+        envelope["result"]["schema_version"] = 1
+        envelope["result"].pop("phase")
+        envelope["result"].pop("limit_set_dependency")
+        result_bytes = json.dumps(
+            envelope,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        result_path.write_bytes(result_bytes)
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            connection.execute(
+                "UPDATE analysis_runs SET method_version = ?, result_sha256 = ? "
+                "WHERE analysis_id = ?",
+                (
+                    "0.1.0",
+                    hashlib.sha256(result_bytes).hexdigest(),
+                    source["analysis_id"],
+                ),
+            )
+        response = client.post(
+            "/api/v1/quality/attribute-control-limit-sets",
+            json={"source_analysis_id": source["analysis_id"]},
+        )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["source_method_version"] == "0.1.0"
+    assert response.json()["source_result_schema_version"] == 1
 
 
 def test_rejects_small_phase_one_baseline_without_creating_asset(tmp_path) -> None:
@@ -341,7 +381,7 @@ def test_restore_rejects_absolute_asset_path_without_disclosure(tmp_path) -> Non
     _assert_public_error(response, tmp_path)
 
 
-def test_limit_set_has_no_overwrite_or_delete_route(tmp_path) -> None:
+def test_limit_set_has_no_overwrite_and_delete_requires_confirmation_body(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:
         payload = _create_limit_set(client)
@@ -351,7 +391,7 @@ def test_limit_set_has_no_overwrite_or_delete_route(tmp_path) -> None:
         restored = client.get(path)
 
     assert overwrite.status_code == 405
-    assert delete.status_code == 405
+    assert delete.status_code == 422
     assert restored.status_code == 200
     assert restored.json() == payload
 

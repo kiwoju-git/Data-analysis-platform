@@ -1,6 +1,9 @@
 import { apiErrorCode, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type {
+  RegressionModelDeleteRequest,
+  RegressionModelDeleteResponse,
+  RegressionModelDeletionPreflightResponse,
   RegressionPredictionPreflightRequest,
   RegressionPredictionPreflightResponse,
   RegressionPredictionRequest,
@@ -8,6 +11,33 @@ import type {
   RegressionPredictionRowsPageResponse,
   RegressionPredictionCsvExportResponse,
 } from "./types";
+
+export async function fetchRegressionModelDeletionPreflight(
+  modelId: string,
+): Promise<RegressionModelDeletionPreflightResponse> {
+  const response = await fetchApi(apiRoutes.regressionModelDeletionPreflight(modelId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_model_deletion_preflight_failed"));
+  }
+  return (await response.json()) as RegressionModelDeletionPreflightResponse;
+}
+
+export async function deleteRegressionModel(
+  modelId: string,
+  request: RegressionModelDeleteRequest,
+): Promise<RegressionModelDeleteResponse> {
+  const response = await fetchApi(apiRoutes.regressionModel(modelId), {
+    method: "DELETE",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_model_deletion_failed"));
+  }
+  return (await response.json()) as RegressionModelDeleteResponse;
+}
 
 export async function fetchRegressionPredictionPreflight(
   modelId: string,

@@ -91,6 +91,42 @@ export interface RegressionPredictionRow {
   warnings: string[];
 }
 
+export interface RegressionModelDeletionCounts {
+  regression_model_count: 1;
+  manifest_artifact_count: 1;
+  manifest_file_count: 1;
+  manifest_file_bytes: number;
+  metadata_record_count: 2;
+  dependent_prediction_count: number;
+}
+
+export interface RegressionModelDeletionPreflightResponse {
+  preflight_schema_version: 1;
+  model_id: string;
+  source_analysis_id: string;
+  method_id: "regression.linear_model";
+  method_version: string;
+  deletion_ready: boolean;
+  blockers: string[];
+  counts: RegressionModelDeletionCounts;
+  deletion_manifest_sha256: string;
+}
+
+export interface RegressionModelDeleteRequest {
+  confirmation_model_id: string;
+  expected_deletion_manifest_sha256: string;
+}
+
+export interface RegressionModelDeleteResponse {
+  deletion_schema_version: 1;
+  model_id: string;
+  source_analysis_id: string;
+  deletion_manifest_sha256: string;
+  deleted_at: string;
+  deleted_counts: RegressionModelDeletionCounts;
+  cleanup_status: "deleted" | "quarantined_pending_cleanup";
+}
+
 export interface RegressionPredictionProvenance extends AnalysisProvenance {
   source_analysis_id: string;
   source_analysis_stale_at_prediction: boolean;

@@ -82,6 +82,10 @@ import type {
   XyCorrelationResult,
 } from "./api";
 import type { AnalysisFilterDraft } from "./analysisFilters";
+import type {
+  AttributeControlPhase,
+  AttributeControlPhase2State,
+} from "./useAttributeControlPhase2State";
 import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
 import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
 
@@ -133,6 +137,8 @@ export interface AnalysisShellProps {
   attributeControlChartCountColumns?: DatasetColumnResponse[];
   attributeControlChartDenominatorColumnId?: string | null;
   attributeControlChartDenominatorColumns?: DatasetColumnResponse[];
+  attributeControlChartPhase?: AttributeControlPhase;
+  attributeControlPhase2State?: AttributeControlPhase2State;
   attributeControlChartResult?: AttributeControlChartResult | null;
   attributeControlChartType?: AttributeControlChartType;
   capabilityAnalysisResult?: AnalysisResultEnvelope | null;
@@ -346,6 +352,8 @@ export interface AnalysisShellProps {
   onAttributeControlChartConstantOpportunityConfirmedChange?: (confirmed: boolean) => void;
   onAttributeControlChartCountColumnChange?: (columnId: string) => void;
   onAttributeControlChartDenominatorColumnChange?: (columnId: string) => void;
+  onAttributeControlChartLimitSetChange?: (limitSetId: string) => void;
+  onAttributeControlChartPhaseChange?: (phase: AttributeControlPhase) => void;
   onAttributeControlChartTypeChange?: (chartType: AttributeControlChartType) => void;
   onCapabilityLslChange?: (value: string) => void;
   onCapabilityTargetChange?: (value: string) => void;
@@ -498,6 +506,8 @@ export function AnalysisShell({
   attributeControlChartCountColumns = [],
   attributeControlChartDenominatorColumnId = null,
   attributeControlChartDenominatorColumns = [],
+  attributeControlChartPhase = "phase_1",
+  attributeControlPhase2State,
   attributeControlChartResult = null,
   attributeControlChartType = "p",
   capabilityAnalysisResult = null,
@@ -731,6 +741,8 @@ export function AnalysisShell({
   onAttributeControlChartConstantOpportunityConfirmedChange = () => undefined,
   onAttributeControlChartCountColumnChange = () => undefined,
   onAttributeControlChartDenominatorColumnChange = () => undefined,
+  onAttributeControlChartLimitSetChange = () => undefined,
+  onAttributeControlChartPhaseChange = () => undefined,
   onAttributeControlChartTypeChange = () => undefined,
   onCapabilityLslChange = () => undefined,
   onCapabilityTargetChange = () => undefined,
@@ -1424,6 +1436,8 @@ export function AnalysisShell({
                   countColumns={attributeControlChartCountColumns}
                   denominatorColumnId={attributeControlChartDenominatorColumnId}
                   denominatorColumns={attributeControlChartDenominatorColumns}
+                  phase={attributeControlChartPhase}
+                  phase2State={attributeControlPhase2State}
                   filterValidationError={analysisFilterValidationError}
                   isRunningAnalysis={isRunningAnalysis}
                   methodId={method.method_id}
@@ -1435,6 +1449,8 @@ export function AnalysisShell({
                   }
                   onCountColumnChange={onAttributeControlChartCountColumnChange}
                   onDenominatorColumnChange={onAttributeControlChartDenominatorColumnChange}
+                  onLimitSetChange={onAttributeControlChartLimitSetChange}
+                  onPhaseChange={onAttributeControlChartPhaseChange}
                   onRun={onRunAttributeControlChartAnalysis}
                 />
               );

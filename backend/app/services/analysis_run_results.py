@@ -39,6 +39,16 @@ def load_analysis_run_result(
             stored_result=stored,
             verify_rows=True,
         )
+    elif stored.record.method_id == "quality.attribute_control_chart":
+        from app.services.attribute_control_phase_2 import (
+            validate_attribute_control_phase_2_consistency,
+        )
+
+        validate_attribute_control_phase_2_consistency(
+            settings,
+            analysis_id,
+            stored_result=stored,
+        )
     return stored
 
 

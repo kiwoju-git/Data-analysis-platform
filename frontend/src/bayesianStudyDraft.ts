@@ -1,7 +1,9 @@
 import type {
   BayesianFactorRequest,
   BayesianLinearConstraintRequest,
+  BayesianRecommendationResponse,
   BayesianStudyCreateRequest,
+  BayesianStudyResponse,
 } from "./api";
 
 export interface FactorDraft {
@@ -20,6 +22,82 @@ export interface ConstraintDraft {
   coefficients: Record<number, string>;
   relation: "less_than_or_equal" | "greater_than_or_equal";
   bound: string;
+}
+
+export function minimumBayesianInitialDesignSize(factorCount: number) {
+  return Math.max(2, factorCount + 1);
+}
+
+export function bayesianRecommendationBudgetBlocker(
+  trialCount: number,
+  totalTrialBudget: number,
+  hardTrialLimit: number,
+): "bayesian_optimization_trial_budget_invalid" | "bayesian_optimization_budget_exhausted" | null {
+  if (
+    !Number.isInteger(totalTrialBudget) ||
+    totalTrialBudget < 2 ||
+    totalTrialBudget > hardTrialLimit
+  ) {
+    return "bayesian_optimization_trial_budget_invalid";
+  }
+  return trialCount >= Math.min(totalTrialBudget, hardTrialLimit)
+    ? "bayesian_optimization_budget_exhausted"
+    : null;
+}
+
+export function bayesianStudyCloseBlocker(
+  study: Pick<
+    BayesianStudyResponse,
+    | "status"
+    | "pending_trial_count"
+    | "completed_trial_count"
+    | "recommendation_minimum_completed_observations"
+  >,
+  target: "completed" | "abandoned",
+  hasRecommendation: boolean,
+) {
+  if (study.status !== "active") return "bayesian_study_closed";
+  if (study.pending_trial_count > 0) return "bayesian_study_close_pending_trials";
+  if (
+    target === "completed" &&
+    (study.completed_trial_count < study.recommendation_minimum_completed_observations ||
+      !hasRecommendation)
+  ) {
+    return "bayesian_study_completion_requirements_not_met";
+  }
+  return null;
+}
+
+export function bayesianRecommendationStatus(
+  recommendation: BayesianRecommendationResponse,
+): { label: string; description: string; className: string } {
+  const currentState = recommendation.current_trial?.state ?? recommendation.trial.state;
+  if (recommendation.is_latest === false) {
+    return {
+      label: "과거 추천",
+      description: `과거 recommendation snapshot이며 현재 연결 trial 상태는 ${currentState}입니다.`,
+      className: "",
+    };
+  }
+  if (currentState === "completed") {
+    return {
+      label: "관측 완료",
+      description: "추천 당시 예측과 이후 저장된 실제 관측값을 구분해 표시합니다.",
+      className: "status-ready",
+    };
+  }
+  if (currentState === "abandoned") {
+    return {
+      label: "중단됨",
+      description: "중단된 추천이며 동일 조건은 향후 추천 후보에서 제외됩니다.",
+      className: "status-error",
+    };
+  }
+  return {
+    label: "확인 대기",
+    description: "관측값이 아닌 다음 확인 실험 후보입니다.",
+    className: "status-warning",
+  };
 }
 
 export function buildBayesianStudyRequest(input: {
@@ -64,6 +142,13 @@ export function buildBayesianStudyRequest(input: {
     }),
   );
   if (
+    Number.isInteger(size) &&
+    size >= 1 &&
+    size < minimumBayesianInitialDesignSize(parsedFactors.length)
+  ) {
+    return "bayesian_study_initial_design_too_small";
+  }
+  if (
     input.studyName.trim().length === 0 ||
     input.objectiveName.trim().length === 0 ||
     new Set(factorIds).size !== factorIds.length ||
@@ -76,7 +161,7 @@ export function buildBayesianStudyRequest(input: {
         factor.low >= factor.high,
     ) ||
     !Number.isInteger(size) ||
-    size < Math.max(2, parsedFactors.length + 1) ||
+    size < minimumBayesianInitialDesignSize(parsedFactors.length) ||
     size > 64 ||
     !Number.isInteger(seed) ||
     seed < 0 ||

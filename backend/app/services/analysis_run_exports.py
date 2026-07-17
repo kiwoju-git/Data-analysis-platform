@@ -3,10 +3,11 @@ import hashlib
 import io
 import json
 import os
+import re
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import status
@@ -14,6 +15,10 @@ from fastapi import status
 from app.api.v1.schemas.analyses import (
     AnalysisResultCsvExportResponse,
     AnalysisResultEnvelope,
+    AnalysisResultExportDeleteRequest,
+    AnalysisResultExportDeleteResponse,
+    AnalysisResultExportDeletionCounts,
+    AnalysisResultExportDeletionPreflightResponse,
     AnalysisResultExportListItemResponse,
     AnalysisResultExportListResponse,
     AnalysisResultHtmlReportResponse,
@@ -35,6 +40,8 @@ from app.services.regression_models import (
 from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
+    AnalysisArtifactStorageConflict,
+    delete_analysis_artifact_record,
     get_analysis_artifact_record,
     get_analysis_run_record,
     insert_analysis_artifact_record,
@@ -126,6 +133,17 @@ ANALYSIS_RESULT_EXPORT_DOWNLOAD_KINDS = {
     ANALYSIS_RESULT_HTML_REPORT_KIND,
     REGRESSION_PREDICTION_CSV_EXPORT_KIND,
 }
+ANALYSIS_RESULT_EXPORT_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[1] = 1
+ANALYSIS_RESULT_EXPORT_DELETION_SCHEMA_VERSION: Literal[1] = 1
+AnalysisResultExportKind = Literal[
+    "analysis_result_json_export",
+    "analysis_result_csv_export",
+    "analysis_result_html_report",
+    "regression_prediction_csv_export",
+]
+_ANALYSIS_EXPORT_QUARANTINE_PATTERN = re.compile(
+    r"^\.delete-([0-9a-fA-F-]{36})-([0-9a-f]{32})\.quarantine$"
+)
 
 
 @dataclass(frozen=True)
@@ -134,6 +152,187 @@ class AnalysisResultExportDownload:
     filename: str
     media_type: str
     sha256: str
+
+
+@dataclass(frozen=True)
+class AnalysisExportQuarantineRecovery:
+    restored_file_count: int
+    deleted_file_count: int
+    pending_file_count: int
+
+
+@dataclass(frozen=True)
+class _AnalysisExportDeletionContext:
+    artifact: AnalysisArtifactRecord
+    analysis_updated_at: str
+    analysis_stale: bool
+    result_sha256: str | None
+    export_path: Path
+    file_bytes: int
+    deletion_manifest_sha256: str
+
+
+def analysis_export_expected_relative_path(
+    analysis_id: str,
+    export_id: str,
+    artifact_kind: str,
+) -> Path:
+    return _analysis_export_relative_path(analysis_id, export_id, artifact_kind)
+
+
+def analysis_export_expected_media_type(artifact_kind: str) -> str:
+    return _analysis_export_expected_media_type(artifact_kind)
+
+
+def get_analysis_result_export_deletion_preflight(
+    settings: Settings,
+    analysis_id: UUID,
+    export_id: UUID,
+) -> AnalysisResultExportDeletionPreflightResponse:
+    context = _analysis_export_deletion_context(settings, analysis_id, export_id)
+    return _analysis_export_deletion_preflight(analysis_id, export_id, context)
+
+
+def delete_analysis_result_export(
+    settings: Settings,
+    analysis_id: UUID,
+    export_id: UUID,
+    body: AnalysisResultExportDeleteRequest,
+) -> AnalysisResultExportDeleteResponse:
+    if body.confirmation_analysis_id != analysis_id or body.confirmation_export_id != export_id:
+        raise _analysis_export_deletion_confirmation_error()
+    context = _analysis_export_deletion_context(settings, analysis_id, export_id)
+    preflight = _analysis_export_deletion_preflight(analysis_id, export_id, context)
+    if body.expected_deletion_manifest_sha256 != preflight.deletion_manifest_sha256:
+        raise _analysis_export_deletion_confirmation_error()
+
+    quarantine_path = context.export_path.with_name(f".delete-{export_id}-{uuid4().hex}.quarantine")
+    try:
+        os.replace(context.export_path, quarantine_path)
+    except OSError as exc:
+        raise ApiError(
+            code="analysis_export_quarantine_failed",
+            message="내보내기 파일을 안전한 삭제 대기 상태로 옮길 수 없습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+
+    try:
+        quarantined_file_matches = (
+            not quarantine_path.is_symlink()
+            and quarantine_path.is_file()
+            and quarantine_path.stat().st_size == context.file_bytes
+            and _file_sha256(quarantine_path) == context.artifact.sha256
+        )
+    except OSError:
+        quarantined_file_matches = False
+    if not quarantined_file_matches:
+        _restore_quarantined_export(quarantine_path, context.export_path)
+        raise ApiError(
+            code="analysis_export_deletion_conflict",
+            message="삭제 확인 이후 내보내기 파일이 변경되었습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    try:
+        delete_analysis_artifact_record(
+            settings.workspace_root,
+            expected_artifact=context.artifact,
+            expected_analysis_updated_at=context.analysis_updated_at,
+            expected_analysis_stale=context.analysis_stale,
+            expected_result_sha256=context.result_sha256,
+        )
+    except AnalysisArtifactStorageConflict as exc:
+        _restore_quarantined_export(quarantine_path, context.export_path)
+        code = (
+            "analysis_export_not_found"
+            if exc.code == "analysis_export_not_found"
+            else "analysis_export_deletion_conflict"
+        )
+        raise ApiError(
+            code=code,
+            message="삭제 확인 이후 내보내기 소유 관계가 변경되었습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+    except Exception:
+        _restore_quarantined_export(quarantine_path, context.export_path)
+        raise
+
+    cleanup_status: Literal["deleted", "quarantined_pending_cleanup"] = "deleted"
+    try:
+        quarantine_path.unlink()
+    except OSError:
+        cleanup_status = "quarantined_pending_cleanup"
+
+    return AnalysisResultExportDeleteResponse(
+        deletion_schema_version=ANALYSIS_RESULT_EXPORT_DELETION_SCHEMA_VERSION,
+        analysis_id=analysis_id,
+        export_id=export_id,
+        deletion_manifest_sha256=preflight.deletion_manifest_sha256,
+        deleted_at=_utc_now(),
+        deleted_counts=preflight.counts,
+        cleanup_status=cleanup_status,
+    )
+
+
+def recover_analysis_export_quarantine_files(
+    workspace_root: Path,
+) -> AnalysisExportQuarantineRecovery:
+    analyses_root = workspace_root / "workspaces" / "analyses"
+    restored = 0
+    deleted = 0
+    pending = 0
+    if not analyses_root.exists():
+        return AnalysisExportQuarantineRecovery(0, 0, 0)
+    for quarantine_path in analyses_root.glob("*/exports/.delete-*-*.quarantine"):
+        match = _ANALYSIS_EXPORT_QUARANTINE_PATTERN.fullmatch(quarantine_path.name)
+        try:
+            analysis_id = UUID(quarantine_path.parent.parent.name)
+            export_id = UUID(match.group(1)) if match is not None else None
+        except ValueError:
+            pending += 1
+            continue
+        if export_id is None or quarantine_path.is_symlink() or not quarantine_path.is_file():
+            pending += 1
+            continue
+        artifact = get_analysis_artifact_record(
+            workspace_root,
+            str(analysis_id),
+            str(export_id),
+        )
+        if artifact is None:
+            try:
+                quarantine_path.unlink()
+                deleted += 1
+            except OSError:
+                pending += 1
+            continue
+        try:
+            original_path = _safe_analysis_export_path(
+                workspace_root,
+                artifact.path,
+                analysis_id=str(analysis_id),
+                export_id=str(export_id),
+                artifact_kind=artifact.kind,
+            )
+        except ApiError:
+            pending += 1
+            continue
+        if original_path.exists():
+            pending += 1
+            continue
+        try:
+            if _file_sha256(quarantine_path) != artifact.sha256:
+                pending += 1
+                continue
+        except OSError:
+            pending += 1
+            continue
+        try:
+            os.replace(quarantine_path, original_path)
+            restored += 1
+        except OSError:
+            pending += 1
+    return AnalysisExportQuarantineRecovery(restored, deleted, pending)
 
 
 def list_analysis_result_exports(
@@ -496,8 +695,20 @@ def get_analysis_result_export_download(
             message="요청한 분석 결과 내보내기 파일을 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
+    if artifact.media_type != _analysis_export_expected_media_type(artifact.kind):
+        raise ApiError(
+            code="analysis_export_metadata_invalid",
+            message="저장된 분석 결과 내보내기 메타데이터가 올바르지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
 
-    export_path = _safe_analysis_export_path(settings.workspace_root, artifact.path)
+    export_path = _safe_analysis_export_path(
+        settings.workspace_root,
+        artifact.path,
+        analysis_id=str(analysis_id),
+        export_id=str(export_id),
+        artifact_kind=artifact.kind,
+    )
     if not export_path.exists() or not export_path.is_file():
         raise ApiError(
             code="analysis_export_file_missing",
@@ -521,15 +732,203 @@ def get_analysis_result_export_download(
     )
 
 
-def _safe_analysis_export_path(workspace_root: Path, stored_path: str) -> Path:
+def _safe_analysis_export_path(
+    workspace_root: Path,
+    stored_path: str,
+    *,
+    analysis_id: str,
+    export_id: str,
+    artifact_kind: str,
+) -> Path:
     relative_path = Path(stored_path)
-    if relative_path.is_absolute() or ".." in relative_path.parts:
+    expected_path = _analysis_export_relative_path(analysis_id, export_id, artifact_kind)
+    if (
+        relative_path.is_absolute()
+        or ".." in relative_path.parts
+        or relative_path.as_posix() != expected_path.as_posix()
+    ):
         raise ApiError(
             code="analysis_export_path_invalid",
             message="저장된 분석 결과 내보내기 메타데이터가 올바르지 않습니다.",
             status_code=status.HTTP_409_CONFLICT,
         )
     return workspace_root / relative_path
+
+
+def _analysis_export_relative_path(
+    analysis_id: str,
+    export_id: str,
+    artifact_kind: str,
+) -> Path:
+    if artifact_kind == ANALYSIS_RESULT_JSON_EXPORT_KIND:
+        return _result_json_export_relative_path(analysis_id, export_id)
+    if artifact_kind == ANALYSIS_RESULT_CSV_EXPORT_KIND:
+        return _result_csv_export_relative_path(analysis_id, export_id)
+    if artifact_kind == ANALYSIS_RESULT_HTML_REPORT_KIND:
+        return _result_html_report_relative_path(analysis_id, export_id)
+    if artifact_kind == REGRESSION_PREDICTION_CSV_EXPORT_KIND:
+        return _prediction_csv_export_relative_path(analysis_id, export_id)
+    raise ApiError(
+        code="analysis_export_not_found",
+        message="요청한 분석 결과 내보내기 파일을 찾을 수 없습니다.",
+        status_code=status.HTTP_404_NOT_FOUND,
+    )
+
+
+def _analysis_export_expected_media_type(artifact_kind: str) -> str:
+    if artifact_kind == ANALYSIS_RESULT_JSON_EXPORT_KIND:
+        return ANALYSIS_RESULT_JSON_EXPORT_MEDIA_TYPE
+    if artifact_kind in {
+        ANALYSIS_RESULT_CSV_EXPORT_KIND,
+        REGRESSION_PREDICTION_CSV_EXPORT_KIND,
+    }:
+        return ANALYSIS_RESULT_CSV_EXPORT_MEDIA_TYPE
+    if artifact_kind == ANALYSIS_RESULT_HTML_REPORT_KIND:
+        return ANALYSIS_RESULT_HTML_REPORT_MEDIA_TYPE
+    raise ApiError(
+        code="analysis_export_not_found",
+        message="요청한 분석 결과 내보내기 파일을 찾을 수 없습니다.",
+        status_code=status.HTTP_404_NOT_FOUND,
+    )
+
+
+def _analysis_export_deletion_context(
+    settings: Settings,
+    analysis_id: UUID,
+    export_id: UUID,
+) -> _AnalysisExportDeletionContext:
+    record = get_analysis_run_record(settings.workspace_root, str(analysis_id))
+    if record is None:
+        raise ApiError(
+            code="analysis_run_not_found",
+            message="요청한 분석 실행을 찾을 수 없습니다.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    if record.method_id == REGRESSION_PREDICTION_METHOD_ID:
+        validate_regression_prediction_consistency(settings, analysis_id, verify_rows=True)
+    artifact = get_analysis_artifact_record(
+        settings.workspace_root,
+        str(analysis_id),
+        str(export_id),
+    )
+    if artifact is None or artifact.kind not in ANALYSIS_RESULT_EXPORT_DOWNLOAD_KINDS:
+        raise ApiError(
+            code="analysis_export_not_found",
+            message="요청한 분석 결과 내보내기 파일을 찾을 수 없습니다.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    if artifact.media_type != _analysis_export_expected_media_type(artifact.kind):
+        raise ApiError(
+            code="analysis_export_metadata_invalid",
+            message="저장된 분석 결과 내보내기 메타데이터가 올바르지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    export_path = _safe_analysis_export_path(
+        settings.workspace_root,
+        artifact.path,
+        analysis_id=str(analysis_id),
+        export_id=str(export_id),
+        artifact_kind=artifact.kind,
+    )
+    if export_path.is_symlink():
+        raise ApiError(
+            code="analysis_export_path_invalid",
+            message="저장된 분석 결과 내보내기 메타데이터가 올바르지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if not export_path.exists() or not export_path.is_file():
+        raise ApiError(
+            code="analysis_export_file_missing",
+            message="저장된 분석 결과 내보내기 파일을 찾을 수 없습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    file_bytes = export_path.stat().st_size
+    if _file_sha256(export_path) != artifact.sha256:
+        raise ApiError(
+            code="analysis_export_checksum_mismatch",
+            message="저장된 분석 결과 내보내기 파일이 메타데이터와 일치하지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    manifest_sha256 = hashlib.sha256(
+        canonical_json_bytes(
+            {
+                "preflight_schema_version": (
+                    ANALYSIS_RESULT_EXPORT_DELETION_PREFLIGHT_SCHEMA_VERSION
+                ),
+                "analysis_id": str(analysis_id),
+                "analysis_method_id": record.method_id,
+                "analysis_method_version": record.method_version,
+                "analysis_updated_at": record.updated_at,
+                "analysis_stale": record.stale,
+                "analysis_result_sha256": record.result_sha256,
+                "export_id": str(export_id),
+                "artifact_kind": artifact.kind,
+                "artifact_path": artifact.path,
+                "artifact_sha256": artifact.sha256,
+                "artifact_media_type": artifact.media_type,
+                "artifact_created_at": artifact.created_at,
+                "file_bytes": file_bytes,
+            }
+        )
+    ).hexdigest()
+    return _AnalysisExportDeletionContext(
+        artifact=artifact,
+        analysis_updated_at=record.updated_at,
+        analysis_stale=record.stale,
+        result_sha256=record.result_sha256,
+        export_path=export_path,
+        file_bytes=file_bytes,
+        deletion_manifest_sha256=manifest_sha256,
+    )
+
+
+def _analysis_export_deletion_preflight(
+    analysis_id: UUID,
+    export_id: UUID,
+    context: _AnalysisExportDeletionContext,
+) -> AnalysisResultExportDeletionPreflightResponse:
+    return AnalysisResultExportDeletionPreflightResponse(
+        preflight_schema_version=ANALYSIS_RESULT_EXPORT_DELETION_PREFLIGHT_SCHEMA_VERSION,
+        analysis_id=analysis_id,
+        export_id=export_id,
+        artifact_kind=cast(AnalysisResultExportKind, context.artifact.kind),
+        media_type=context.artifact.media_type,
+        sha256=context.artifact.sha256,
+        counts=AnalysisResultExportDeletionCounts(
+            metadata_record_count=1,
+            file_count=1,
+            file_bytes=context.file_bytes,
+        ),
+        deletion_manifest_sha256=context.deletion_manifest_sha256,
+    )
+
+
+def _analysis_export_deletion_confirmation_error() -> ApiError:
+    return ApiError(
+        code="analysis_export_deletion_confirmation_mismatch",
+        message="내보내기 삭제 확인 대상 또는 영향 정보가 변경되었습니다.",
+        status_code=status.HTTP_409_CONFLICT,
+    )
+
+
+def _restore_quarantined_export(
+    quarantine_path: Path,
+    export_path: Path,
+) -> None:
+    if export_path.exists():
+        raise ApiError(
+            code="analysis_export_restore_failed",
+            message="삭제 실패 후 내보내기 파일을 안전하게 원위치로 복구하지 못했습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    try:
+        os.replace(quarantine_path, export_path)
+    except OSError as restore_error:
+        raise ApiError(
+            code="analysis_export_restore_failed",
+            message="삭제 실패 후 내보내기 파일을 원위치로 복구하지 못했습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from restore_error
 
 
 def _analysis_export_download_filename(

@@ -18,9 +18,9 @@ export interface AttributeControlLimitSetResponse {
   limit_set_id: string;
   status: "closed";
   method_id: "quality.attribute_control_chart";
-  source_method_version: "0.1.0";
+  source_method_version: "0.1.0" | "0.2.0";
   phase2_method_version: "0.2.0";
-  source_result_schema_version: 1;
+  source_result_schema_version: 1 | 2;
   source_analysis_id: string;
   source_dataset_version_id: string;
   source_schema_hash: string;
@@ -74,4 +74,70 @@ export interface AttributeControlLimitSetListResponse {
   offset: number;
   limit: number;
   items: AttributeControlLimitSetResponse[];
+}
+
+export interface AttributeControlLimitSetDeletionCounts {
+  limit_set_count: 1;
+  asset_file_count: 1;
+  asset_file_bytes: number;
+  metadata_record_count: 1;
+  dependent_phase_2_analysis_count: number;
+}
+
+export interface AttributeControlLimitSetDeletionPreflightResponse {
+  preflight_schema_version: 1;
+  limit_set_id: string;
+  source_analysis_id: string;
+  method_id: "quality.attribute_control_chart";
+  source_method_version: "0.1.0" | "0.2.0";
+  deletion_ready: boolean;
+  blockers: string[];
+  counts: AttributeControlLimitSetDeletionCounts;
+  deletion_manifest_sha256: string;
+}
+
+export interface AttributeControlLimitSetDeleteRequest {
+  confirmation_limit_set_id: string;
+  expected_deletion_manifest_sha256: string;
+}
+
+export interface AttributeControlLimitSetDeleteResponse {
+  deletion_schema_version: 1;
+  limit_set_id: string;
+  source_analysis_id: string;
+  deletion_manifest_sha256: string;
+  deleted_at: string;
+  deleted_counts: AttributeControlLimitSetDeletionCounts;
+  cleanup_status: "deleted" | "quarantined_pending_cleanup";
+}
+
+export interface AttributeControlMonitoringPreflightRequest {
+  target_dataset_version_id: string;
+  chart_type: AttributeControlLimitSetChartType;
+  count_definition: "defectives" | "defects";
+  count_column_id: string;
+  denominator_column_id: string | null;
+  constant_opportunity_confirmed: boolean;
+}
+
+export interface AttributeControlMonitoringPreflightIssue {
+  code: string;
+  severity: "error";
+  message: string;
+}
+
+export interface AttributeControlMonitoringPreflightResponse {
+  schema_version: 1;
+  method_id: "quality.attribute_control_chart";
+  method_version: "0.2.0";
+  phase: "phase_2";
+  limit_set_id: string;
+  limit_set_asset_sha256: string;
+  target_dataset_version_id: string;
+  target_schema_hash: string;
+  target_canonical_sha256: string;
+  chart_type: AttributeControlLimitSetChartType;
+  count_definition: "defectives" | "defects";
+  ready: boolean;
+  issues: AttributeControlMonitoringPreflightIssue[];
 }

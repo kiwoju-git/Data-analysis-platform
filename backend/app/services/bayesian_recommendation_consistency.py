@@ -1,10 +1,12 @@
 import hashlib
 import json
 import math
+from typing import Final
 from uuid import UUID
 
 from pydantic import ValidationError
 
+from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.bayesian import (
     BayesianFactorResponse,
     BayesianLinearConstraintResponse,
@@ -14,6 +16,11 @@ from app.api.v1.schemas.bayesian import (
 )
 from app.services.analysis_run_execution import canonical_json_bytes
 from app.storage.bayesian_studies import BayesianRecommendationRecord
+
+BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
+SUPPORTED_BAYESIAN_RECOMMENDATION_METHOD_VERSIONS: Final = frozenset(
+    {"0.2.0", "0.2.1", METHOD_VERSIONS[BAYESIAN_METHOD_ID]}
+)
 
 
 def recommendation_trial_snapshot_matches(
@@ -49,7 +56,6 @@ def validate_bayesian_recommendation_record(
     constraints: list[BayesianLinearConstraintResponse],
     objective_direction: str,
     current_trial: BayesianTrialResponse,
-    current_method_version: str,
 ) -> BayesianRecommendationResponse:
     try:
         response = BayesianRecommendationResponse.model_validate_json(record.result_json)
@@ -70,8 +76,8 @@ def validate_bayesian_recommendation_record(
         or record.trial_id != str(current_trial.trial_id)
         or record.source_history_revision_id != source_history_revision_id
         or record.source_observation_history_sha256 != source_history_sha256
-        or record.method_id != "doe.bayesian_optimization"
-        or record.method_version != current_method_version
+        or record.method_id != BAYESIAN_METHOD_ID
+        or record.method_version not in SUPPORTED_BAYESIAN_RECOMMENDATION_METHOD_VERSIONS
         or record.config_schema_version != 1
         or record.result_schema_version != 1
         or record.model_schema_version != 1

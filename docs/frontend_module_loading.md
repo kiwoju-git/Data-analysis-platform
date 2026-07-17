@@ -1,6 +1,6 @@
 # Frontend Module Loading
 
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 
 ## Current Contract
 
@@ -13,8 +13,8 @@ unchanged.
 | Module chunk | Panels |
 | --- | --- |
 | `RegressionAnalysisPanels` | Pearson, X-Y correlation, Linear Model and its dedicated prediction flow |
-| `QualityAnalysisPanels` | Attribute, Individuals, Subgroup, Run, Capability, Gage R&R, Gage Run Chart |
-| `DoeAnalysisPanels` | Factorial DOE, RSM, and the nested Response Optimizer |
+| `QualityAnalysisPanels` | Attribute Phase I/II, Individuals, Subgroup, Run, Capability, Gage R&R, Gage Run Chart |
+| `DoeAnalysisPanels` | Factorial DOE, RSM, the nested Response Optimizer, and Bayesian Optimization |
 
 No dependency was added. `React.lazy`, `Suspense`, and the existing React 18
 runtime provide the loading boundary.
@@ -34,7 +34,8 @@ runtime provide the loading boundary.
 
 ## Bundle Measurement
 
-Both measurements used Windows 11, Node 22, Vite 8.0.16, and
+Both development measurements used Windows 10 Home build 19045, Node 24.17.0,
+Vite 8.0.16, and
 `npm --prefix .\frontend run build`.
 
 | Asset | Before | After |
@@ -56,6 +57,29 @@ client but no UI panel. Its current production build is 464.68 kB / 109.49 kB
 gzip for main, while the three module chunks remain 41.53/58.83/57.26 kB. The
 0.79 kB main increase is recorded separately from the code-splitting before/
 after measurement above and remains below the 500 kB warning threshold.
+
+The executable Bayesian and lifecycle-correctness slices remain inside the DOE
+on-demand chunk. The 2026-07-16 lifecycle build measured main at 467.18 kB /
+110.05 kB gzip, Regression at 41.53 kB / 8.36 kB, Quality at 59.29 kB /
+10.79 kB, and DOE at 79.80 kB / 18.32 kB. No JavaScript asset exceeds the
+500 kB warning threshold. These Windows 10/Node 24 development measurements are
+not Windows 11/Node 22 release evidence; that clean release validation remains
+a mandatory gate.
+
+The Phase II frozen-limit monitoring slice remains inside the existing Quality
+on-demand chunk. Its 2026-07-16 development build measured main at 472.13 kB /
+111.23 kB gzip, Regression at 41.53 kB / 8.37 kB, Quality at 62.14 kB /
+11.48 kB, and DOE at 79.80 kB / 18.32 kB. The Quality chunk now includes the
+verified limit-set selector, compatibility preflight, latest-request guard, and
+Phase II result view. No new frontend dependency or eager module was added.
+
+The Bayesian study-close lifecycle remains inside the DOE on-demand chunk. Its
+2026-07-16 development build measured main at 473.59 kB / 111.64 kB gzip,
+Regression at 41.53 kB / 8.36 kB, Quality at 62.14 kB / 11.48 kB, and DOE at
+87.24 kB / 20.00 kB. The DOE increase contains close confirmation, read-only
+restore, lifecycle reason display, and successor-draft UI. No dependency or
+eager import was added, and every asset remains below the 500 kB warning
+threshold. This Windows 10/Node 24 measurement is not Node 22 release evidence.
 
 ## Validation
 

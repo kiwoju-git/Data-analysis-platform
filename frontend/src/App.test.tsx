@@ -4,9 +4,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 import { AnalysisPage } from "./AnalysisPage";
+import { AnalysisExportDeletionConfirmation } from "./AnalysisResultExportPanel";
+import { AnalysisRunDeletionConfirmation } from "./AnalysisHistoryPanel";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { DatasetPreparationPage } from "./DatasetPreparationPage";
-import { BayesianOptimizationPanel } from "./BayesianOptimizationPanel";
+import {
+  BayesianOptimizationPanel,
+  BayesianStudyCloseConfirmation,
+  BayesianStudyDeletionConfirmation,
+  BayesianTrialTransitionConfirmation,
+} from "./BayesianOptimizationPanel";
 import { FactorialDesignPreview } from "./FactorialDesignPanel";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 import {
@@ -14,21 +21,31 @@ import {
   ResponseSurfaceResponseEntry,
 } from "./ResponseSurfacePanel";
 import {
+  deleteAnalysisResultExport,
+  deleteStoredAnalysisRun,
+  fetchAnalysisResultExportDeletionPreflight,
   fetchAnalysisResultExports,
   fetchAnalysisRunComparison,
+  fetchAnalysisRunDeletionPreflight,
   fetchAnalysisRunResult,
   fetchAnalysisRuns,
 } from "./api";
 import type {
   AnalysisMethodListResponse,
   AnalysisRunComparisonResponse,
+  AnalysisRunDeletionPreflightResponse,
   AnalysisResultExportListResponse,
+  AnalysisResultExportDeletionPreflightResponse,
   AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
   AnalysisResultHtmlReportResponse,
   AnalysisResultJsonExportResponse,
   AnalysisRunListResponse,
+  BayesianRecommendationResponse,
+  BayesianStudyDeletionPreflightResponse,
+  BayesianTrialResponse,
   AttributeControlChartResult,
+  AttributeControlLimitSetResponse,
   CapabilityResult,
   ChiSquareAssociationResult,
   DatasetColumnResponse,
@@ -58,7 +75,13 @@ import type {
 } from "./api";
 import { apiRoutes } from "./api/routes";
 import { AppChrome } from "./AppChrome";
-import { buildBayesianStudyRequest } from "./bayesianStudyDraft";
+import {
+  bayesianRecommendationBudgetBlocker,
+  bayesianRecommendationStatus,
+  bayesianStudyCloseBlocker,
+  buildBayesianStudyRequest,
+  minimumBayesianInitialDesignSize,
+} from "./bayesianStudyDraft";
 import {
   analysisMethodGuidanceIds,
   getAnalysisMethodGuidance,
@@ -510,6 +533,209 @@ describe("App", () => {
         ],
       }),
     ).toBe("bayesian_study_input_invalid");
+  });
+
+  it("keeps frontend Bayesian initial-design and trial-budget boundaries aligned", () => {
+    expect([1, 2, 6].map(minimumBayesianInitialDesignSize)).toEqual([2, 3, 7]);
+    const twoFactorDraft = {
+      studyName: "Boundary study",
+      factors: [
+        { key: 1, factorId: "x1", name: "Input 1", low: "0", high: "1", unit: "" },
+        { key: 2, factorId: "x2", name: "Input 2", low: "0", high: "1", unit: "" },
+      ],
+      constraints: [],
+      objectiveName: "Response",
+      objectiveUnit: "",
+      direction: "maximize" as const,
+      initialDesignSeed: "17",
+    };
+
+    expect(
+      buildBayesianStudyRequest({ ...twoFactorDraft, initialDesignSize: "2" }),
+    ).toBe("bayesian_study_initial_design_too_small");
+    expect(
+      buildBayesianStudyRequest({ ...twoFactorDraft, initialDesignSize: "3" }),
+    ).not.toBe("bayesian_study_initial_design_too_small");
+    expect(bayesianRecommendationBudgetBlocker(49, 50, 200)).toBeNull();
+    expect(bayesianRecommendationBudgetBlocker(50, 50, 200)).toBe(
+      "bayesian_optimization_budget_exhausted",
+    );
+    expect(bayesianRecommendationBudgetBlocker(199, 200, 200)).toBeNull();
+    expect(bayesianRecommendationBudgetBlocker(200, 200, 200)).toBe(
+      "bayesian_optimization_budget_exhausted",
+    );
+  });
+
+  it("renders explicit immutable completion and abandon confirmations", () => {
+    const trial = {
+      trial_id: "00000000-0000-4000-8000-000000000301",
+      study_version_id: "00000000-0000-4000-8000-000000000302",
+      trial_number: 3,
+      origin: "initial_design",
+      state: "pending",
+      actual_coordinates: { temperature: 72.5 },
+      normalized_coordinates: { temperature: 0.625 },
+      coordinates_sha256: "a".repeat(64),
+      objective_value: null,
+      created_at: "2026-07-16T00:00:00Z",
+      closed_at: null,
+    } satisfies BayesianTrialResponse;
+    const completionHtml = renderToString(
+      <BayesianTrialTransitionConfirmation
+        trial={trial}
+        action="complete"
+        objectiveValue="91.25"
+        isSaving={false}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    const abandonHtml = renderToString(
+      <BayesianTrialTransitionConfirmation
+        trial={trial}
+        action="abandon"
+        objectiveValue=""
+        isSaving={false}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    expect(completionHtml).toContain("objective 91.25");
+    expect(completionHtml).toContain("이후 수정할 수 없습니다");
+    expect(completionHtml).toContain("관측 저장 확인");
+    expect(abandonHtml).toContain("향후 추천에서 제외");
+    expect(abandonHtml).toContain("최소 완료 관측 수");
+    expect(abandonHtml).toContain("Abandon 확인");
+  });
+
+  it("renders immutable Bayesian study close confirmation and enforces blockers", () => {
+    const closeHtml = renderToString(
+      <BayesianStudyCloseConfirmation
+        study={{
+          study_id: "00000000-0000-4000-8000-000000000501",
+          name: "Lifecycle study",
+          completed_trial_count: 3,
+          abandoned_trial_count: 1,
+        }}
+        target="completed"
+        reason="confirmation_complete"
+        note="Confirmation run reviewed"
+        isClosing={false}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    expect(closeHtml).toContain("종료 후에는 수정하거나 다시 열 수 없습니다");
+    expect(closeHtml).toContain("전역 최적해 달성");
+    expect(closeHtml).toContain("Confirmation run reviewed");
+    expect(
+      bayesianStudyCloseBlocker(
+        {
+          status: "active",
+          pending_trial_count: 1,
+          completed_trial_count: 2,
+          recommendation_minimum_completed_observations: 2,
+        },
+        "abandoned",
+        false,
+      ),
+    ).toBe("bayesian_study_close_pending_trials");
+    expect(
+      bayesianStudyCloseBlocker(
+        {
+          status: "active",
+          pending_trial_count: 0,
+          completed_trial_count: 2,
+          recommendation_minimum_completed_observations: 2,
+        },
+        "completed",
+        false,
+      ),
+    ).toBe("bayesian_study_completion_requirements_not_met");
+    expect(
+      bayesianStudyCloseBlocker(
+        {
+          status: "completed",
+          pending_trial_count: 0,
+          completed_trial_count: 3,
+          recommendation_minimum_completed_observations: 2,
+        },
+        "completed",
+        true,
+      ),
+    ).toBe("bayesian_study_closed");
+  });
+
+  it("shows exact Bayesian deletion impact before enabling irreversible deletion", () => {
+    const preflight = {
+      preflight_schema_version: 1,
+      study_id: "00000000-0000-4000-8000-000000000601",
+      study_version_id: "00000000-0000-4000-8000-000000000602",
+      status: "abandoned",
+      eligible: true,
+      blockers: [],
+      successor_study_count: 0,
+      counts: {
+        study_count: 1,
+        study_version_count: 1,
+        trial_count: 3,
+        history_revision_count: 2,
+        history_head_count: 1,
+        recommendation_count: 1,
+        lifecycle_event_count: 1,
+        metadata_record_count: 10,
+        file_count: 0,
+        file_bytes: 0,
+      },
+      deletion_manifest_sha256: "a".repeat(64),
+    } satisfies BayesianStudyDeletionPreflightResponse;
+    const html = renderToString(
+      <BayesianStudyDeletionConfirmation
+        study={{ study_id: preflight.study_id, name: "Closed study" }}
+        preflight={preflight}
+        isDeleting={false}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("metadata 10건");
+    expect(html).toContain("파일 0개 · 0 bytes");
+    expect(html).toContain("복원할 수 없으며");
+    expect(html).toContain("cascade 또는 successor 삭제는 수행하지 않습니다");
+    expect(html).toContain("영구 삭제 확인");
+  });
+
+  it("labels latest recommendation current trial state separately from its snapshot", () => {
+    const recommendation = {
+      trial: { state: "pending" },
+      current_trial: {
+        trial_id: "00000000-0000-4000-8000-000000000401",
+        state: "pending",
+        objective_value: null,
+        closed_at: null,
+      },
+      is_latest: true,
+    } as BayesianRecommendationResponse;
+
+    expect(bayesianRecommendationStatus(recommendation).label).toBe("확인 대기");
+    recommendation.current_trial = {
+      ...recommendation.current_trial!,
+      state: "completed",
+      objective_value: 0.95,
+      closed_at: "2026-07-16T00:01:00Z",
+    };
+    expect(bayesianRecommendationStatus(recommendation).label).toBe("관측 완료");
+    recommendation.current_trial = {
+      ...recommendation.current_trial,
+      state: "abandoned",
+      objective_value: null,
+    };
+    expect(bayesianRecommendationStatus(recommendation).label).toBe("중단됨");
+    recommendation.is_latest = false;
+    expect(bayesianRecommendationStatus(recommendation).label).toBe("과거 추천");
   });
 
   it("renders the response surface dedicated design and analysis controls", () => {
@@ -1255,6 +1481,20 @@ describe("App", () => {
     expect(apiRoutes.analysisRunExportDownload("analysis/1", "export/1")).toBe(
       "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/exports/export%2F1/download",
     );
+    expect(
+      apiRoutes.analysisRunExportDeletionPreflight("analysis/1", "export/1"),
+    ).toBe(
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/exports/export%2F1/deletion-preflight",
+    );
+    expect(apiRoutes.analysisRunExportDelete("analysis/1", "export/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/exports/export%2F1",
+    );
+    expect(apiRoutes.analysisRunDeletionPreflight("analysis/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/deletion-preflight",
+    );
+    expect(apiRoutes.analysisRunDelete("analysis/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/deletion",
+    );
     expect(apiRoutes.attributeControlLimitSetsBase()).toBe(
       "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets",
     );
@@ -1271,6 +1511,208 @@ describe("App", () => {
     expect(apiRoutes.attributeControlLimitSet("limit/1")).toBe(
       "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets/limit%2F1",
     );
+    expect(apiRoutes.attributeControlLimitSetDeletionPreflight("limit/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets/limit%2F1/deletion-preflight",
+    );
+    expect(apiRoutes.attributeControlMonitoringPreflight("limit/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets/limit%2F1/monitoring-preflight",
+    );
+    expect(apiRoutes.bayesianStudyClose("study/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/bayesian-studies/study%2F1/close",
+    );
+    expect(apiRoutes.bayesianStudyDeletionPreflight("study/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/bayesian-studies/study%2F1/deletion-preflight",
+    );
+    expect(apiRoutes.bayesianStudyDelete("study/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/bayesian-studies/study%2F1",
+    );
+    expect(apiRoutes.regressionModel("model/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/regression-models/model%2F1",
+    );
+    expect(apiRoutes.regressionModelDeletionPreflight("model/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/regression-models/model%2F1/deletion-preflight",
+    );
+  });
+
+  it("calls exact-manifest export deletion API wrappers", async () => {
+    const preflight: AnalysisResultExportDeletionPreflightResponse = {
+      preflight_schema_version: 1,
+      analysis_id: "analysis-1",
+      export_id: "export-1",
+      artifact_kind: "analysis_result_json_export",
+      media_type: "application/json",
+      sha256: "a".repeat(64),
+      counts: { metadata_record_count: 1, file_count: 1, file_bytes: 2048 },
+      deletion_manifest_sha256: "b".repeat(64),
+    };
+    const deleted = {
+      deletion_schema_version: 1 as const,
+      analysis_id: preflight.analysis_id,
+      export_id: preflight.export_id,
+      deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+      deleted_at: "2026-07-16T00:00:00Z",
+      deleted_counts: preflight.counts,
+      cleanup_status: "deleted" as const,
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(preflight))
+      .mockResolvedValueOnce(jsonResponse(deleted));
+
+    expect(
+      await fetchAnalysisResultExportDeletionPreflight(
+        preflight.analysis_id,
+        preflight.export_id,
+      ),
+    ).toEqual(preflight);
+    expect(
+      await deleteAnalysisResultExport(preflight.analysis_id, preflight.export_id, {
+        confirmation_analysis_id: preflight.analysis_id,
+        confirmation_export_id: preflight.export_id,
+        expected_deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+      }),
+    ).toEqual(deleted);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/exports/export-1/deletion-preflight",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/exports/export-1",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({
+          confirmation_analysis_id: "analysis-1",
+          confirmation_export_id: "export-1",
+          expected_deletion_manifest_sha256: "b".repeat(64),
+        }),
+      }),
+    );
+  });
+
+  it("shows the exact irreversible export deletion impact", () => {
+    const preflight: AnalysisResultExportDeletionPreflightResponse = {
+      preflight_schema_version: 1,
+      analysis_id: "analysis-1",
+      export_id: "export-1",
+      artifact_kind: "analysis_result_json_export",
+      media_type: "application/json",
+      sha256: "a".repeat(64),
+      counts: { metadata_record_count: 1, file_count: 1, file_bytes: 2048 },
+      deletion_manifest_sha256: "b".repeat(64),
+    };
+
+    const html = renderToString(
+      <AnalysisExportDeletionConfirmation
+        preflight={preflight}
+        isDeleting={false}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("파일 1개");
+    expect(html).toContain("2.0 KB");
+    expect(html).toContain("metadata 1건");
+    expect(html).toContain("복원할 수 없습니다");
+    expect(html).toContain("저장된 분석 결과와 다른 export는 유지됩니다");
+    expect(html).toContain("export 영구 삭제");
+  });
+
+  it("calls exact-manifest analysis run deletion API wrappers", async () => {
+    const preflight = analysisRunDeletionPreflightTestResponse();
+    const deleted = {
+      deletion_schema_version: 1 as const,
+      analysis_id: preflight.analysis_id,
+      deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+      deleted_at: "2026-07-17T00:00:00Z",
+      deleted_counts: preflight.counts,
+      cleanup_status: "deleted" as const,
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(preflight))
+      .mockResolvedValueOnce(jsonResponse(deleted));
+
+    expect(await fetchAnalysisRunDeletionPreflight(preflight.analysis_id)).toEqual(preflight);
+    expect(
+      await deleteStoredAnalysisRun(preflight.analysis_id, {
+        confirmation_analysis_id: preflight.analysis_id,
+        expected_deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+      }),
+    ).toEqual(deleted);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/deletion-preflight",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/deletion",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({
+          confirmation_analysis_id: "analysis-1",
+          expected_deletion_manifest_sha256: "d".repeat(64),
+        }),
+      }),
+    );
+  });
+
+  it("shows exact irreversible analysis run impact and dependency blockers", () => {
+    const preflight = analysisRunDeletionPreflightTestResponse();
+    const confirmationHtml = renderToString(
+      <AnalysisRunDeletionConfirmation
+        isDeleting={false}
+        onCancel={() => undefined}
+        onConfirm={() => undefined}
+        preflight={preflight}
+      />,
+    );
+    const confirmationText = confirmationHtml.replace(/<!-- -->/g, "");
+    expect(confirmationText).toContain("파일 5개");
+    expect(confirmationText).toContain("2.0 KB");
+    expect(confirmationText).toContain("metadata 5건");
+    expect(confirmationText).toContain("복원할 수 없습니다");
+    expect(confirmationText).toContain("분석 실행 영구 삭제");
+
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const result = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
+    const blockedHtml = renderToString(
+      <AnalysisWorkbench
+        analysisRunError={null}
+        catalog={catalog}
+        historyState={{
+          analysisHistory: analysisRunListTestResponse(result),
+          analysisRunDeletionPreflight: {
+            ...preflight,
+            deletion_ready: false,
+            blockers: [
+              "analysis_run_deletion_regression_model_dependency",
+              "analysis_run_deletion_limit_set_dependency",
+            ],
+            counts: {
+              ...preflight.counts,
+              regression_model_count: 1,
+              attribute_control_limit_set_count: 1,
+            },
+          },
+        }}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onSelectMethod={() => undefined}
+        renderExecutableMethod={() => <div />}
+      />,
+    );
+    expect(blockedHtml).toContain("참조 중인 자산이 있어");
+    expect(blockedHtml).toContain("저장 회귀모형이 참조 중");
+    expect(blockedHtml).toContain("Phase II limit set이 참조 중");
+    expect(blockedHtml).not.toContain("분석 실행 영구 삭제");
   });
 
   it("shows JSON export metadata only for the matching analysis result", () => {
@@ -2006,6 +2448,8 @@ describe("App", () => {
     expect(html).toContain("Residuals vs Fitted");
     expect(html).toContain("Leverage vs Cook");
     expect(html).toContain("Model ID");
+    expect(html).toContain("저장 모델 관리");
+    expect(html).toContain("삭제 영향 확인");
     expect(html).toContain("12345678-90");
     expect(html).toContain("예측 사전점검");
     expect(html).toContain("예측 대상 데이터셋 버전");
@@ -2051,7 +2495,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "quality.attribute_control_chart",
-          method_version: "0.1.0",
+          method_version: "0.2.0",
           module_id: "quality",
           label_ko: "계수형 관리도",
           label_en: "Control Chart",
@@ -2094,8 +2538,9 @@ describe("App", () => {
     );
 
     expect(html).toContain("계수형 관리도 실행");
-    expect(html).toContain("현재 화면은 Phase I 기준선 추정만 실행합니다");
-    expect(html).toContain("저장된 Phase II 관리한계는 아직 적용하지 않습니다");
+    expect(html).toContain("Phase I 기준선 추정");
+    expect(html).toContain("Phase II 고정 한계 모니터링");
+    expect(html).toContain("Phase I은 현재 데이터에서 기준선을 추정합니다");
     expect(html).toContain('role="radiogroup"');
     expect(html).toContain("P 관리도 실행");
     expect(html).toContain("불량품 수");
@@ -2124,7 +2569,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "quality.attribute_control_chart",
-          method_version: "0.1.0",
+          method_version: "0.2.0",
           module_id: "quality",
           label_ko: "계수형 관리도",
           label_en: "Control Chart",
@@ -2156,6 +2601,112 @@ describe("App", () => {
     expect(html).toContain("동일 검사 기회의 결점 수");
     expect(html).toContain("C 관리도 실행");
     expect(html).toContain("disabled");
+  });
+
+  it("renders verified Phase II limit-set selection and compatibility state", () => {
+    const columns = filterTestColumns();
+    const version = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const limitSet = attributeControlLimitSetTestResponse();
+    const result: AttributeControlChartResult = {
+      ...attributeControlChartTestResult(),
+      schema_version: 2,
+      phase: "phase_2",
+      control_limit_method: "phase_2_frozen_three_sigma",
+      baseline: "verified_immutable_limit_set",
+      center_line: limitSet.frozen_center_line,
+      limit_set_dependency: {
+        limit_set_id: limitSet.limit_set_id,
+        asset_schema_version: 1,
+        asset_sha256: limitSet.asset_sha256,
+        source_analysis_id: limitSet.source_analysis_id,
+        source_method_version: limitSet.source_method_version,
+        source_result_schema_version: limitSet.source_result_schema_version,
+        source_dataset_version_id: limitSet.source_dataset_version_id,
+        source_schema_hash: limitSet.source_schema_hash,
+        source_canonical_sha256: limitSet.source_canonical_sha256,
+        source_result_sha256: limitSet.source_result_sha256,
+        baseline_closed_at: limitSet.closed_at,
+        baseline_point_count: limitSet.baseline_point_count,
+        frozen_center_line: limitSet.frozen_center_line,
+        fixed_sample_size: null,
+        calculation_policy: "phase_2_frozen_three_sigma_v1",
+      },
+    };
+    const catalog = attributeControlCatalogTestResponse();
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        attributeControlChartCountColumnId="column-a"
+        attributeControlChartCountColumns={[columns[0]]}
+        attributeControlChartDenominatorColumnId="column-b"
+        attributeControlChartDenominatorColumns={[columns[1]]}
+        attributeControlChartPhase="phase_2"
+        attributeControlChartResult={result}
+        attributeControlChartType="p"
+        attributeControlPhase2State={{
+          deletion: null,
+          deletionError: null,
+          deletionPreflight: {
+            preflight_schema_version: 1,
+            limit_set_id: limitSet.limit_set_id,
+            source_analysis_id: limitSet.source_analysis_id,
+            method_id: "quality.attribute_control_chart",
+            source_method_version: "0.2.0",
+            deletion_ready: false,
+            blockers: ["attribute_control_limit_set_deletion_phase_2_dependency"],
+            counts: {
+              limit_set_count: 1,
+              asset_file_count: 1,
+              asset_file_bytes: 2048,
+              metadata_record_count: 1,
+              dependent_phase_2_analysis_count: 1,
+            },
+            deletion_manifest_sha256: "f".repeat(64),
+          },
+          error: null,
+          isDeleting: false,
+          isLoading: false,
+          isLoadingDeletionPreflight: false,
+          limitSets: [limitSet],
+          preflight: {
+            schema_version: 1,
+            method_id: "quality.attribute_control_chart",
+            method_version: "0.2.0",
+            phase: "phase_2",
+            limit_set_id: limitSet.limit_set_id,
+            limit_set_asset_sha256: limitSet.asset_sha256,
+            target_dataset_version_id: version.version_id,
+            target_schema_hash: version.schema_hash,
+            target_canonical_sha256: "b".repeat(64),
+            chart_type: "p",
+            count_definition: "defectives",
+            ready: true,
+            issues: [],
+          },
+          selectedLimitSet: limitSet,
+          selectedLimitSetId: limitSet.limit_set_id,
+          onClearDeletion: () => undefined,
+          onDeleteLimitSet: () => undefined,
+          onLoadDeletionPreflight: () => undefined,
+          onSelectLimitSet: () => undefined,
+        }}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("Phase II는 선택한 immutable limit set");
+    expect(html).toContain("검증된 limit set");
+    expect(html).toContain("기준선 종료");
+    expect(html).toContain("검증된 immutable limit set");
+    expect(html).not.toContain("호환성 확인 중");
   });
 
   it("renders the individuals chart execution panel for the first quality method", () => {
@@ -4365,6 +4916,34 @@ function analysisRunListTestResponse(result: AnalysisResultEnvelope): AnalysisRu
   };
 }
 
+function analysisRunDeletionPreflightTestResponse(): AnalysisRunDeletionPreflightResponse {
+  return {
+    preflight_schema_version: 1,
+    analysis_id: "analysis-1",
+    method_id: "eda.descriptive",
+    method_version: "0.1.0",
+    status: "succeeded",
+    stale: false,
+    deletion_ready: true,
+    blockers: [],
+    counts: {
+      analysis_run_count: 1,
+      analysis_artifact_count: 4,
+      result_file_count: 1,
+      artifact_file_count: 4,
+      export_file_count: 3,
+      total_file_count: 5,
+      file_bytes: 2048,
+      metadata_record_count: 5,
+      regression_model_count: 0,
+      regression_prediction_count: 0,
+      attribute_control_limit_set_count: 0,
+      job_reference_count: 0,
+    },
+    deletion_manifest_sha256: "d".repeat(64),
+  };
+}
+
 function analysisResultExportListTestResponse(
   result: AnalysisResultEnvelope,
 ): AnalysisResultExportListResponse {
@@ -5908,6 +6487,101 @@ function datasetPageTestProps(): ComponentProps<typeof DatasetPreparationPage> {
     onSaveSchema: () => undefined,
     onSchemaDraftChange: () => undefined,
     onUpload: () => undefined,
+  };
+}
+
+function attributeControlCatalogTestResponse(): AnalysisMethodListResponse {
+  return {
+    modules: [
+      {
+        module_id: "quality",
+        label_ko: "품질 관리",
+        label_en: "Quality Control",
+        order: 5,
+      },
+    ],
+    methods: [
+      {
+        method_id: "quality.attribute_control_chart",
+        method_version: "0.2.0",
+        module_id: "quality",
+        label_ko: "계수형 관리도",
+        label_en: "Control Chart",
+        availability: "available",
+        execution_mode: "inline",
+        requires_dataset: true,
+        order: 1,
+        disabled_reason: null,
+      },
+    ],
+  };
+}
+
+function attributeControlLimitSetTestResponse(): AttributeControlLimitSetResponse {
+  return {
+    asset_schema_version: 1,
+    asset_sha256: "a".repeat(64),
+    limit_set_id: "11111111-1111-4111-8111-111111111111",
+    status: "closed",
+    method_id: "quality.attribute_control_chart",
+    source_method_version: "0.2.0",
+    phase2_method_version: "0.2.0",
+    source_result_schema_version: 2,
+    source_analysis_id: "22222222-2222-4222-8222-222222222222",
+    source_dataset_version_id: "33333333-3333-4333-8333-333333333333",
+    source_schema_hash: "c".repeat(64),
+    source_canonical_sha256: "d".repeat(64),
+    source_config_sha256: "e".repeat(64),
+    source_result_sha256: "f".repeat(64),
+    filter_snapshot_sha256: "1".repeat(64),
+    row_snapshot_sha256: "2".repeat(64),
+    chart_type: "p",
+    count_definition: "defectives",
+    count: {
+      column_id: "44444444-4444-4444-8444-444444444444",
+      data_type: "integer",
+      measurement_level: "count",
+      role: "target",
+      unit: null,
+    },
+    denominator: {
+      column_id: "55555555-5555-4555-8555-555555555555",
+      data_type: "integer",
+      measurement_level: "count",
+      role: "unspecified",
+      unit: null,
+    },
+    denominator_role: "sample_size",
+    baseline_point_count: 20,
+    total_count: 100,
+    total_denominator: 1000,
+    frozen_center_line: 0.1,
+    fixed_sample_size: null,
+    constant_opportunity_confirmed: false,
+    sigma_multiplier: 3,
+    calculation_policy: "phase_2_frozen_three_sigma_v1",
+    natural_bound_policy: "binomial_zero_one",
+    eligibility: {
+      eligible: true,
+      policy: "phase_2_baseline_eligibility_v1",
+      minimum_point_count: 20,
+      checks_passed: [
+        "minimum_point_count",
+        "no_phase_1_limit_signals",
+        "usable_normal_approximation",
+        "pearson_dispersion_not_above_two",
+        "complete_untruncated_point_payload",
+      ],
+    },
+    creator_provenance: {
+      app_version: "0.1.0",
+      python_version: "3.10.11",
+      platform: "Windows",
+      build_commit: null,
+      package_versions: {},
+    },
+    created_at: "2026-07-16T00:00:00Z",
+    closed_at: "2026-07-16T00:00:00Z",
   };
 }
 

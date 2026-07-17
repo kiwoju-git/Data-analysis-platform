@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, Final, Literal, cast
 from uuid import UUID, uuid4
 
@@ -13,6 +14,9 @@ from pydantic import ValidationError
 from app.analyses.registry import METHOD_VERSIONS, get_analysis_method
 from app.api.v1.schemas.analyses import MethodAvailability
 from app.api.v1.schemas.bayesian import (
+    MAX_BAYESIAN_TRIALS,
+    MAX_COMPLETED_OBSERVATIONS,
+    MAX_HISTORY_REVISIONS,
     BayesianConstraintTermResponse,
     BayesianFactorResponse,
     BayesianHistoryListResponse,
@@ -21,17 +25,31 @@ from app.api.v1.schemas.bayesian import (
     BayesianLinearConstraintResponse,
     BayesianObjectiveResponse,
     BayesianObservationCreateRequest,
+    BayesianStudyCloseRequest,
+    BayesianStudyCloseResponse,
     BayesianStudyCreateRequest,
+    BayesianStudyDeleteRequest,
+    BayesianStudyDeleteResponse,
+    BayesianStudyDeletionCounts,
+    BayesianStudyDeletionPreflightResponse,
+    BayesianStudyLifecycleEventResponse,
     BayesianStudyListResponse,
     BayesianStudyResponse,
     BayesianStudySummaryResponse,
+    BayesianTrialAbandonRequest,
     BayesianTrialListResponse,
     BayesianTrialResponse,
     BayesianTrialTransitionResponse,
+    minimum_bayesian_initial_design_size,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
-from app.services.analysis_run_execution import APP_VERSION, canonical_json_bytes, utc_now
+from app.services.analysis_run_execution import (
+    APP_VERSION,
+    canonical_json_bytes,
+    runtime_build_provenance,
+    utc_now,
+)
 from app.services.bayesian_recommendation_consistency import (
     validate_bayesian_recommendation_record,
 )
@@ -39,17 +57,23 @@ from app.storage.bayesian_studies import (
     BayesianHistoryRevisionRecord,
     BayesianRecommendationRecord,
     BayesianStorageConflict,
+    BayesianStudyDeletionGraphRecord,
+    BayesianStudyLifecycleEventRecord,
     BayesianStudyRecord,
     BayesianStudyVersionRecord,
     BayesianTrialRecord,
     abandon_bayesian_trial_record,
+    close_bayesian_study_record,
     complete_bayesian_trial_record,
     count_bayesian_history_revision_records,
     count_bayesian_recommendation_records,
     count_bayesian_study_records,
     count_bayesian_trial_records,
+    delete_bayesian_study_graph_record,
     get_bayesian_history_revision_record,
     get_bayesian_recommendation_record_for_trial,
+    get_bayesian_study_deletion_graph_record,
+    get_bayesian_study_lifecycle_event_record,
     get_bayesian_study_record,
     get_bayesian_study_version_record,
     get_current_bayesian_history_revision_record,
@@ -63,7 +87,11 @@ from app.storage.bayesian_studies import (
 BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
 BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[1]] = 1
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
-SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset({"0.1.0", "0.2.0"})
+SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset({"0.1.0", "0.2.0", "0.2.1", "0.2.2"})
+SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
+BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[1]] = 1
+BAYESIAN_DELETION_PREFLIGHT_SCHEMA_VERSION: Final[Literal[1]] = 1
+BAYESIAN_DELETION_SCHEMA_VERSION: Final[Literal[1]] = 1
 INITIAL_DESIGN_POLICY: Final[Literal["sha256_counter_uniform_feasible_v1"]] = (
     "sha256_counter_uniform_feasible_v1"
 )
@@ -82,6 +110,7 @@ class _ValidatedStudy:
     histories: list[BayesianHistoryRevisionRecord]
     current_history: BayesianHistoryRevisionRecord
     recommendations: list[BayesianRecommendationRecord]
+    lifecycle_event: BayesianStudyLifecycleEventRecord | None
 
 
 def create_bayesian_study(
@@ -102,7 +131,28 @@ def create_bayesian_study(
             status_code=status.HTTP_409_CONFLICT,
         )
 
+    predecessor_id: str | None = None
+    if body.predecessor_study_id is not None:
+        predecessor = _load_validated_study(settings, str(body.predecessor_study_id))
+        if predecessor.study.status == "active" or predecessor.lifecycle_event is None:
+            raise ApiError(
+                code="bayesian_study_predecessor_invalid",
+                message="종료된 Bayesian study만 후속 study의 predecessor로 사용할 수 있습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        predecessor_id = predecessor.study.study_id
+
     factors = _validated_factor_payload(body)
+    minimum_initial_size = minimum_bayesian_initial_design_size(len(factors))
+    if body.initial_design_size < minimum_initial_size:
+        raise ApiError(
+            code="bayesian_study_initial_design_too_small",
+            message=(
+                f"요인 {len(factors)}개에는 초기 trial이 최소 "
+                f"{minimum_initial_size}개 필요합니다."
+            ),
+            status_code=status.HTTP_409_CONFLICT,
+        )
     objective = _validated_objective_payload(body)
     constraints = _validated_constraint_payload(body, factors)
     actual_points, normalized_points, attempts_consumed = _generate_initial_design(
@@ -140,6 +190,7 @@ def create_bayesian_study(
         created_at=now,
         updated_at=now,
         app_version=APP_VERSION,
+        predecessor_study_id=predecessor_id,
     )
     version = BayesianStudyVersionRecord(
         study_version_id=study_version_id,
@@ -193,6 +244,7 @@ def create_bayesian_study(
             histories=[initial_history],
             current_history=initial_history,
             recommendations=[],
+            lifecycle_event=None,
         )
     )
 
@@ -240,11 +292,19 @@ def complete_bayesian_trial(
     body: BayesianObservationCreateRequest,
 ) -> BayesianTrialTransitionResponse:
     bundle = _load_validated_study(settings, str(study_id))
+    if bundle.study.status != "active":
+        raise _study_closed_error()
     trial = _trial_for_transition(bundle, str(trial_id))
     if trial.state != "pending":
         raise _trial_state_error()
     if str(body.expected_history_revision_id) != bundle.current_history.history_revision_id:
         raise _history_stale_error()
+    if sum(item.state == "completed" for item in bundle.trials) >= MAX_COMPLETED_OBSERVATIONS:
+        raise ApiError(
+            code="bayesian_observation_limit_reached",
+            message="완료 관측 수 상한에 도달하여 새 관측을 저장할 수 없습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
     if trial.origin == "recommendation":
         recommendation = get_bayesian_recommendation_record_for_trial(
             settings.workspace_root, trial.trial_id
@@ -288,6 +348,14 @@ def complete_bayesian_trial(
             new_history=new_history,
         )
     except BayesianStorageConflict as exc:
+        if exc.code == "bayesian_study_closed":
+            raise _study_closed_error() from exc
+        if exc.code == "bayesian_observation_limit_reached":
+            raise ApiError(
+                code=exc.code,
+                message="완료 관측 수 상한에 도달하여 새 관측을 저장할 수 없습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            ) from exc
         raise _history_stale_error() from exc
     return BayesianTrialTransitionResponse(
         study_id=study_id,
@@ -297,12 +365,42 @@ def complete_bayesian_trial(
 
 
 def abandon_bayesian_trial(
-    settings: Settings, study_id: UUID, trial_id: UUID
+    settings: Settings,
+    study_id: UUID,
+    trial_id: UUID,
+    body: BayesianTrialAbandonRequest | None = None,
 ) -> BayesianTrialTransitionResponse:
     bundle = _load_validated_study(settings, str(study_id))
+    if bundle.study.status != "active":
+        raise _study_closed_error()
+    request = body or BayesianTrialAbandonRequest()
+    if (
+        request.expected_history_revision_id is not None
+        and str(request.expected_history_revision_id) != bundle.current_history.history_revision_id
+    ):
+        raise _history_stale_error()
     trial = _trial_for_transition(bundle, str(trial_id))
     if trial.state != "pending":
         raise _trial_state_error()
+    if trial.origin == "initial_design" and request.intent == "continue_study":
+        required = minimum_bayesian_initial_design_size(len(bundle.factors))
+        completed = sum(item.state == "completed" for item in bundle.trials)
+        remaining_initial = sum(
+            item.origin == "initial_design"
+            and item.state == "pending"
+            and item.trial_id != trial.trial_id
+            for item in bundle.trials
+        )
+        remaining_possible = completed + remaining_initial
+        if remaining_possible < required:
+            raise ApiError(
+                code="bayesian_trial_abandon_would_strand_study",
+                message=(
+                    f"추천을 시작하려면 완료 관측이 {required}개 필요하지만, "
+                    f"이 trial을 중단하면 최대 {remaining_possible}개만 완료할 수 있습니다."
+                ),
+                status_code=status.HTTP_409_CONFLICT,
+            )
     now = utc_now()
     abandoned = replace(trial, state="abandoned", closed_at=now)
     try:
@@ -311,13 +409,222 @@ def abandon_bayesian_trial(
             trial_id=trial.trial_id,
             study_version_id=bundle.version.study_version_id,
             closed_at=now,
+            required_minimum_completed_observations=(
+                minimum_bayesian_initial_design_size(len(bundle.factors))
+                if trial.origin == "initial_design" and request.intent == "continue_study"
+                else None
+            ),
+            expected_history_revision_id=(
+                None
+                if request.expected_history_revision_id is None
+                else str(request.expected_history_revision_id)
+            ),
         )
     except BayesianStorageConflict as exc:
+        if exc.code == "bayesian_study_closed":
+            raise _study_closed_error() from exc
+        if exc.code == "bayesian_observation_history_stale":
+            raise _history_stale_error() from exc
+        if exc.code == "bayesian_trial_abandon_would_strand_study":
+            raise ApiError(
+                code=exc.code,
+                message="이 초기 trial을 중단하면 추천에 필요한 완료 관측 수를 채울 수 없습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            ) from exc
         raise _trial_state_error() from exc
     return BayesianTrialTransitionResponse(
         study_id=study_id,
         trial=_trial_response(abandoned),
         observation_history=_history_response(bundle.current_history),
+    )
+
+
+def close_bayesian_study(
+    settings: Settings,
+    study_id: UUID,
+    body: BayesianStudyCloseRequest,
+) -> BayesianStudyCloseResponse:
+    bundle = _load_validated_study(settings, str(study_id))
+    if bundle.study.status != "active":
+        if bundle.lifecycle_event is not None and _close_request_matches_event(
+            bundle.lifecycle_event, body
+        ):
+            return _close_response(bundle)
+        raise _close_conflict_error()
+    if bundle.study.method_version not in SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS:
+        raise ApiError(
+            code="bayesian_study_close_unsupported_version",
+            message="이 Bayesian study 버전은 종료 lifecycle을 지원하지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if (
+        str(body.expected_study_version_id) != bundle.version.study_version_id
+        or str(body.expected_history_revision_id) != bundle.current_history.history_revision_id
+        or body.expected_observation_history_sha256
+        != bundle.current_history.observation_history_sha256
+    ):
+        raise _close_conflict_error()
+    counts = _trial_counts(bundle.trials)
+    if counts["pending"]:
+        raise ApiError(
+            code="bayesian_study_close_pending_trials",
+            message="Study 종료 전에 모든 pending trial을 완료하거나 명시적으로 중단해야 합니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if body.target_status == "completed" and (
+        counts["completed"] < minimum_bayesian_initial_design_size(len(bundle.factors))
+        or not bundle.recommendations
+    ):
+        raise ApiError(
+            code="bayesian_study_completion_requirements_not_met",
+            message="Study 완료에는 최소 관측 수와 하나 이상의 저장된 recommendation이 필요합니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    now = utc_now()
+    runtime = runtime_build_provenance(settings)
+    latest_recommendation_id = (
+        None if not bundle.recommendations else bundle.recommendations[-1].recommendation_id
+    )
+    event = BayesianStudyLifecycleEventRecord(
+        lifecycle_event_id=str(uuid4()),
+        study_id=bundle.study.study_id,
+        study_version_id=bundle.version.study_version_id,
+        schema_version=BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION,
+        lifecycle_revision=1,
+        previous_status="active",
+        resulting_status=body.target_status,
+        reason_code=body.reason_code,
+        note=None if body.note is None else body.note.strip() or None,
+        request_id=str(body.request_id),
+        final_history_revision_id=bundle.current_history.history_revision_id,
+        final_observation_history_sha256=(bundle.current_history.observation_history_sha256),
+        final_trial_count=len(bundle.trials),
+        final_completed_trial_count=counts["completed"],
+        final_abandoned_trial_count=counts["abandoned"],
+        latest_recommendation_id=latest_recommendation_id,
+        definition_sha256=bundle.version.definition_sha256,
+        event_sha256="",
+        closed_at=now,
+        created_at=now,
+        app_version=APP_VERSION,
+        build_commit=cast(str | None, runtime["build_commit"]),
+    )
+    event = replace(
+        event,
+        event_sha256=canonical_bayesian_lifecycle_event_sha256(event),
+    )
+    try:
+        stored = close_bayesian_study_record(
+            settings.workspace_root,
+            event=event,
+            expected_current_version=bundle.study.current_version,
+        )
+    except BayesianStorageConflict as exc:
+        if exc.code == "bayesian_study_closed":
+            raise _study_closed_error() from exc
+        raise _close_conflict_error() from exc
+    if not _close_request_matches_event(stored, body):
+        raise _close_conflict_error()
+    return _close_response(_load_validated_study(settings, str(study_id)))
+
+
+def canonical_bayesian_lifecycle_event_sha256(
+    event: BayesianStudyLifecycleEventRecord,
+) -> str:
+    return _sha256(
+        {
+            "schema_version": event.schema_version,
+            "lifecycle_event_id": event.lifecycle_event_id,
+            "study_id": event.study_id,
+            "study_version_id": event.study_version_id,
+            "lifecycle_revision": event.lifecycle_revision,
+            "previous_status": event.previous_status,
+            "resulting_status": event.resulting_status,
+            "reason_code": event.reason_code,
+            "note": event.note,
+            "request_id": event.request_id,
+            "final_history_revision_id": event.final_history_revision_id,
+            "final_observation_history_sha256": (event.final_observation_history_sha256),
+            "final_trial_count": event.final_trial_count,
+            "final_completed_trial_count": event.final_completed_trial_count,
+            "final_abandoned_trial_count": event.final_abandoned_trial_count,
+            "latest_recommendation_id": event.latest_recommendation_id,
+            "definition_sha256": event.definition_sha256,
+            "closed_at": event.closed_at,
+            "created_at": event.created_at,
+            "app_version": event.app_version,
+            "build_commit": event.build_commit,
+        }
+    )
+
+
+def get_bayesian_study_deletion_preflight(
+    settings: Settings,
+    study_id: UUID,
+) -> BayesianStudyDeletionPreflightResponse:
+    bundle = _load_validated_study(settings, str(study_id))
+    preflight, _ = _build_bayesian_study_deletion_preflight(settings, bundle)
+    return preflight
+
+
+def delete_bayesian_study(
+    settings: Settings,
+    study_id: UUID,
+    body: BayesianStudyDeleteRequest,
+) -> BayesianStudyDeleteResponse:
+    if body.confirmation_study_id != study_id:
+        raise _deletion_confirmation_error()
+    bundle = _load_validated_study(settings, str(study_id))
+    preflight, graph = _build_bayesian_study_deletion_preflight(settings, bundle)
+    if body.expected_deletion_manifest_sha256 != preflight.deletion_manifest_sha256:
+        raise _deletion_confirmation_error()
+    if "bayesian_study_deletion_active" in preflight.blockers:
+        raise ApiError(
+            code="bayesian_study_deletion_active",
+            message="Active Bayesian study는 종료한 뒤에만 삭제할 수 있습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if "bayesian_study_deletion_referenced" in preflight.blockers:
+        raise ApiError(
+            code="bayesian_study_deletion_referenced",
+            message="Successor study가 참조하는 predecessor는 삭제할 수 없습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    try:
+        delete_bayesian_study_graph_record(
+            settings.workspace_root,
+            expected=graph,
+        )
+    except BayesianStorageConflict as exc:
+        if exc.code == "bayesian_study_deletion_active":
+            raise ApiError(
+                code=exc.code,
+                message="Active Bayesian study는 종료한 뒤에만 삭제할 수 있습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            ) from exc
+        if exc.code == "bayesian_study_deletion_referenced":
+            raise ApiError(
+                code=exc.code,
+                message="Successor study가 참조하는 predecessor는 삭제할 수 없습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            ) from exc
+        if exc.code == "bayesian_study_not_found":
+            raise ApiError(
+                code=exc.code,
+                message="요청한 Bayesian study를 찾을 수 없습니다.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            ) from exc
+        raise ApiError(
+            code="bayesian_study_deletion_conflict",
+            message="삭제 영향 범위가 preflight 이후 변경되었습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+    return BayesianStudyDeleteResponse(
+        deletion_schema_version=BAYESIAN_DELETION_SCHEMA_VERSION,
+        study_id=study_id,
+        deletion_manifest_sha256=preflight.deletion_manifest_sha256,
+        deleted_at=utc_now(),
+        deleted_counts=preflight.counts,
     )
 
 
@@ -407,6 +714,14 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         or not study.name.strip()
     ):
         raise _metadata_error()
+    if study.predecessor_study_id is not None:
+        predecessor = get_bayesian_study_record(settings.workspace_root, study.predecessor_study_id)
+        if (
+            predecessor is None
+            or predecessor.study_id == study.study_id
+            or predecessor.status not in {"completed", "abandoned"}
+        ):
+            raise _metadata_error()
     version = get_bayesian_study_version_record(
         settings.workspace_root,
         study_id=study.study_id,
@@ -466,12 +781,14 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
     ):
         raise _artifact_error()
     trials = list_bayesian_trial_records(
-        settings.workspace_root, version.study_version_id, limit=200
+        settings.workspace_root,
+        version.study_version_id,
+        limit=MAX_BAYESIAN_TRIALS,
     )
     if (
         count_bayesian_trial_records(settings.workspace_root, version.study_version_id)
         != len(trials)
-        or not initial_design.generated_size <= len(trials) <= 200
+        or not initial_design.generated_size <= len(trials) <= MAX_BAYESIAN_TRIALS
     ):
         raise _artifact_error()
     _validate_trials(
@@ -482,16 +799,10 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         expected_actual=expected_actual,
         expected_normalized=expected_normalized,
     )
-    histories = list_bayesian_history_revision_records(
+    histories = _load_complete_history_records(
         settings.workspace_root,
         version.study_version_id,
-        limit=200,
-        ascending=True,
     )
-    if count_bayesian_history_revision_records(
-        settings.workspace_root, version.study_version_id
-    ) != len(histories):
-        raise _artifact_error()
     current_history = get_current_bayesian_history_revision_record(
         settings.workspace_root, version.study_version_id
     )
@@ -501,7 +812,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
     recommendations = list_bayesian_recommendation_records(
         settings.workspace_root,
         version.study_version_id,
-        limit=200,
+        limit=MAX_BAYESIAN_TRIALS,
     )
     if count_bayesian_recommendation_records(
         settings.workspace_root, version.study_version_id
@@ -516,6 +827,17 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         histories,
         recommendations,
     )
+    lifecycle_event = get_bayesian_study_lifecycle_event_record(
+        settings.workspace_root, study.study_id
+    )
+    _validate_lifecycle_event(
+        study=study,
+        version=version,
+        trials=trials,
+        current_history=current_history,
+        recommendations=recommendations,
+        event=lifecycle_event,
+    )
     return _ValidatedStudy(
         study=study,
         version=version,
@@ -527,6 +849,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         histories=histories,
         current_history=current_history,
         recommendations=recommendations,
+        lifecycle_event=lifecycle_event,
     )
 
 
@@ -839,7 +1162,9 @@ def _validate_histories(
 ) -> None:
     completed_by_id = {item.trial_id: item for item in trials if item.state == "completed"}
     if (
-        len(histories) != len(completed_by_id) + 1
+        len(completed_by_id) > MAX_COMPLETED_OBSERVATIONS
+        or len(histories) > MAX_HISTORY_REVISIONS
+        or len(histories) != len(completed_by_id) + 1
         or [item.revision_number for item in histories] != list(range(1, len(histories) + 1))
         or current.history_revision_id != histories[-1].history_revision_id
         or current.study_version_id != version.study_version_id
@@ -933,7 +1258,6 @@ def _validate_recommendations(
                 constraints=constraints,
                 objective_direction=objective.direction,
                 current_trial=_trial_response(trial),
-                current_method_version=METHOD_VERSIONS[BAYESIAN_METHOD_ID],
             )
         except ValueError as exc:
             raise _artifact_error() from exc
@@ -941,8 +1265,176 @@ def _validate_recommendations(
         raise _artifact_error()
 
 
+def _validate_lifecycle_event(
+    *,
+    study: BayesianStudyRecord,
+    version: BayesianStudyVersionRecord,
+    trials: list[BayesianTrialRecord],
+    current_history: BayesianHistoryRevisionRecord,
+    recommendations: list[BayesianRecommendationRecord],
+    event: BayesianStudyLifecycleEventRecord | None,
+) -> None:
+    if study.status == "active":
+        if event is not None:
+            raise _artifact_error()
+        return
+    if event is None:
+        raise _artifact_error()
+    counts = _trial_counts(trials)
+    latest_recommendation_id = (
+        None if not recommendations else recommendations[-1].recommendation_id
+    )
+    if (
+        event.schema_version != BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION
+        or event.lifecycle_revision != 1
+        or event.study_id != study.study_id
+        or event.study_version_id != version.study_version_id
+        or event.previous_status != "active"
+        or event.resulting_status != study.status
+        or event.reason_code
+        not in {
+            "objective_satisfied",
+            "budget_reached",
+            "confirmation_complete",
+            "unsafe_or_infeasible",
+            "resources_unavailable",
+            "study_cancelled",
+        }
+        or (event.note is not None and len(event.note) > 500)
+        or event.final_history_revision_id != current_history.history_revision_id
+        or event.final_observation_history_sha256 != current_history.observation_history_sha256
+        or event.final_trial_count != len(trials)
+        or event.final_completed_trial_count != counts["completed"]
+        or event.final_abandoned_trial_count != counts["abandoned"]
+        or counts["pending"] != 0
+        or event.latest_recommendation_id != latest_recommendation_id
+        or event.definition_sha256 != version.definition_sha256
+        or event.closed_at != event.created_at
+        or study.updated_at != event.closed_at
+        or canonical_bayesian_lifecycle_event_sha256(event) != event.event_sha256
+    ):
+        raise _artifact_error()
+    completion_reasons = {
+        "objective_satisfied",
+        "budget_reached",
+        "confirmation_complete",
+    }
+    abandonment_reasons = {
+        "unsafe_or_infeasible",
+        "resources_unavailable",
+        "study_cancelled",
+    }
+    if (event.resulting_status == "completed" and event.reason_code not in completion_reasons) or (
+        event.resulting_status == "abandoned" and event.reason_code not in abandonment_reasons
+    ):
+        raise _artifact_error()
+
+
+def _build_bayesian_study_deletion_preflight(
+    settings: Settings,
+    bundle: _ValidatedStudy,
+) -> tuple[BayesianStudyDeletionPreflightResponse, BayesianStudyDeletionGraphRecord]:
+    try:
+        graph = get_bayesian_study_deletion_graph_record(
+            settings.workspace_root,
+            bundle.study.study_id,
+        )
+    except BayesianStorageConflict as exc:
+        raise _artifact_error() from exc
+    lifecycle_event_id = (
+        None if bundle.lifecycle_event is None else bundle.lifecycle_event.lifecycle_event_id
+    )
+    lifecycle_event_count = 0 if bundle.lifecycle_event is None else 1
+    if (
+        graph is None
+        or graph.study_id != bundle.study.study_id
+        or graph.status != bundle.study.status
+        or graph.updated_at != bundle.study.updated_at
+        or graph.current_version != bundle.study.current_version
+        or graph.current_study_version_id != bundle.version.study_version_id
+        or graph.current_history_revision_id != bundle.current_history.history_revision_id
+        or graph.lifecycle_event_id != lifecycle_event_id
+        or graph.study_version_count != 1
+        or graph.trial_count != len(bundle.trials)
+        or graph.history_revision_count != len(bundle.histories)
+        or graph.history_head_count != 1
+        or graph.recommendation_count != len(bundle.recommendations)
+        or graph.lifecycle_event_count != lifecycle_event_count
+    ):
+        raise _artifact_error()
+    counts = BayesianStudyDeletionCounts(
+        study_count=1,
+        study_version_count=graph.study_version_count,
+        trial_count=graph.trial_count,
+        history_revision_count=graph.history_revision_count,
+        history_head_count=graph.history_head_count,
+        recommendation_count=graph.recommendation_count,
+        lifecycle_event_count=graph.lifecycle_event_count,
+        metadata_record_count=(
+            1
+            + graph.study_version_count
+            + graph.trial_count
+            + graph.history_revision_count
+            + graph.history_head_count
+            + graph.recommendation_count
+            + graph.lifecycle_event_count
+        ),
+        file_count=0,
+        file_bytes=0,
+    )
+    blockers: list[
+        Literal[
+            "bayesian_study_deletion_active",
+            "bayesian_study_deletion_referenced",
+        ]
+    ] = []
+    if bundle.study.status == "active":
+        blockers.append("bayesian_study_deletion_active")
+    if graph.successor_study_ids:
+        blockers.append("bayesian_study_deletion_referenced")
+    manifest_sha256 = _sha256(
+        {
+            "preflight_schema_version": BAYESIAN_DELETION_PREFLIGHT_SCHEMA_VERSION,
+            "study_id": bundle.study.study_id,
+            "study_version_id": bundle.version.study_version_id,
+            "method_id": bundle.study.method_id,
+            "method_version": bundle.study.method_version,
+            "status": bundle.study.status,
+            "updated_at": bundle.study.updated_at,
+            "predecessor_study_id": bundle.study.predecessor_study_id,
+            "definition_sha256": bundle.version.definition_sha256,
+            "current_history_revision_id": bundle.current_history.history_revision_id,
+            "current_observation_history_sha256": (
+                bundle.current_history.observation_history_sha256
+            ),
+            "lifecycle_event_id": lifecycle_event_id,
+            "lifecycle_event_sha256": (
+                None if bundle.lifecycle_event is None else bundle.lifecycle_event.event_sha256
+            ),
+            "successor_study_ids": list(graph.successor_study_ids),
+            "counts": counts.model_dump(mode="json"),
+        }
+    )
+    return (
+        BayesianStudyDeletionPreflightResponse(
+            preflight_schema_version=BAYESIAN_DELETION_PREFLIGHT_SCHEMA_VERSION,
+            study_id=UUID(bundle.study.study_id),
+            study_version_id=UUID(bundle.version.study_version_id),
+            status=cast(Literal["active", "completed", "abandoned"], bundle.study.status),
+            eligible=not blockers,
+            blockers=blockers,
+            successor_study_count=len(graph.successor_study_ids),
+            counts=counts,
+            deletion_manifest_sha256=manifest_sha256,
+        ),
+        graph,
+    )
+
+
 def _study_response(bundle: _ValidatedStudy) -> BayesianStudyResponse:
     counts = _trial_counts(bundle.trials)
+    minimum_completed = minimum_bayesian_initial_design_size(len(bundle.factors))
+    blockers = _recommendation_blockers(bundle)
     return BayesianStudyResponse(
         study_id=UUID(bundle.study.study_id),
         study_version_id=UUID(bundle.version.study_version_id),
@@ -952,6 +1444,11 @@ def _study_response(bundle: _ValidatedStudy) -> BayesianStudyResponse:
         method_version=bundle.study.method_version,
         name=bundle.study.name,
         status=cast(Literal["active", "completed", "abandoned"], bundle.study.status),
+        predecessor_study_id=(
+            None
+            if bundle.study.predecessor_study_id is None
+            else UUID(bundle.study.predecessor_study_id)
+        ),
         created_at=bundle.study.created_at,
         updated_at=bundle.study.updated_at,
         app_version=bundle.study.app_version,
@@ -967,7 +1464,15 @@ def _study_response(bundle: _ValidatedStudy) -> BayesianStudyResponse:
         observation_history=_history_response(bundle.current_history),
         trials=[_trial_response(item) for item in bundle.trials],
         surrogate_available=_surrogate_available(bundle),
-        recommendation_available=_recommendation_available(bundle),
+        recommendation_available=not blockers,
+        recommendation_minimum_completed_observations=minimum_completed,
+        recommendation_hard_trial_limit=MAX_BAYESIAN_TRIALS,
+        recommendation_blockers=blockers,
+        lifecycle_event=(
+            None
+            if bundle.lifecycle_event is None
+            else _lifecycle_event_response(bundle.lifecycle_event)
+        ),
     )
 
 
@@ -980,6 +1485,11 @@ def _study_summary(bundle: _ValidatedStudy) -> BayesianStudySummaryResponse:
         method_version=bundle.study.method_version,
         name=bundle.study.name,
         status=cast(Literal["active", "completed", "abandoned"], bundle.study.status),
+        predecessor_study_id=(
+            None
+            if bundle.study.predecessor_study_id is None
+            else UUID(bundle.study.predecessor_study_id)
+        ),
         updated_at=bundle.study.updated_at,
         definition_sha256=bundle.version.definition_sha256,
         pending_trial_count=counts["pending"],
@@ -1020,6 +1530,61 @@ def _history_response(
         observation_history_sha256=history.observation_history_sha256,
         previous_history_sha256=history.previous_history_sha256,
         created_at=history.created_at,
+    )
+
+
+def _lifecycle_event_response(
+    event: BayesianStudyLifecycleEventRecord,
+) -> BayesianStudyLifecycleEventResponse:
+    return BayesianStudyLifecycleEventResponse(
+        schema_version=cast(Literal[1], event.schema_version),
+        lifecycle_event_id=UUID(event.lifecycle_event_id),
+        study_id=UUID(event.study_id),
+        study_version_id=UUID(event.study_version_id),
+        lifecycle_revision=cast(Literal[1], event.lifecycle_revision),
+        previous_status=cast(Literal["active"], event.previous_status),
+        resulting_status=cast(Literal["completed", "abandoned"], event.resulting_status),
+        reason_code=cast(Any, event.reason_code),
+        note=event.note,
+        request_id=UUID(event.request_id),
+        final_history_revision_id=UUID(event.final_history_revision_id),
+        final_observation_history_sha256=event.final_observation_history_sha256,
+        final_trial_count=event.final_trial_count,
+        final_completed_trial_count=event.final_completed_trial_count,
+        final_abandoned_trial_count=event.final_abandoned_trial_count,
+        latest_recommendation_id=(
+            None if event.latest_recommendation_id is None else UUID(event.latest_recommendation_id)
+        ),
+        definition_sha256=event.definition_sha256,
+        event_sha256=event.event_sha256,
+        closed_at=event.closed_at,
+        created_at=event.created_at,
+        app_version=event.app_version,
+        build_commit=event.build_commit,
+    )
+
+
+def _close_response(bundle: _ValidatedStudy) -> BayesianStudyCloseResponse:
+    if bundle.lifecycle_event is None:
+        raise _artifact_error()
+    return BayesianStudyCloseResponse(
+        study=_study_response(bundle),
+        lifecycle_event=_lifecycle_event_response(bundle.lifecycle_event),
+    )
+
+
+def _close_request_matches_event(
+    event: BayesianStudyLifecycleEventRecord,
+    body: BayesianStudyCloseRequest,
+) -> bool:
+    return bool(
+        event.resulting_status == body.target_status
+        and event.reason_code == body.reason_code
+        and event.note == (None if body.note is None else body.note.strip() or None)
+        and event.request_id == str(body.request_id)
+        and event.study_version_id == str(body.expected_study_version_id)
+        and event.final_history_revision_id == str(body.expected_history_revision_id)
+        and event.final_observation_history_sha256 == body.expected_observation_history_sha256
     )
 
 
@@ -1083,15 +1648,59 @@ def _surrogate_available(bundle: _ValidatedStudy) -> bool:
     return (
         bundle.study.status == "active"
         and not pending_initial
-        and completed >= max(2, len(bundle.factors) + 1)
+        and completed >= minimum_bayesian_initial_design_size(len(bundle.factors))
     )
 
 
 def _recommendation_available(bundle: _ValidatedStudy) -> bool:
+    return not _recommendation_blockers(bundle)
+
+
+def _recommendation_blockers(
+    bundle: _ValidatedStudy,
+) -> list[
+    Literal[
+        "bayesian_optimization_history_incomplete",
+        "bayesian_optimization_pending_recommendation_exists",
+        "bayesian_optimization_budget_exhausted",
+        "bayesian_study_not_active",
+    ]
+]:
+    blockers: list[
+        Literal[
+            "bayesian_optimization_history_incomplete",
+            "bayesian_optimization_pending_recommendation_exists",
+            "bayesian_optimization_budget_exhausted",
+            "bayesian_study_not_active",
+        ]
+    ] = []
+    if bundle.study.status != "active":
+        blockers.append("bayesian_study_not_active")
+    if not _surrogate_available(bundle):
+        blockers.append("bayesian_optimization_history_incomplete")
     pending_recommendation = any(
         item.origin == "recommendation" and item.state == "pending" for item in bundle.trials
     )
-    return _surrogate_available(bundle) and not pending_recommendation and len(bundle.trials) < 200
+    if pending_recommendation:
+        blockers.append("bayesian_optimization_pending_recommendation_exists")
+    if len(bundle.trials) >= MAX_BAYESIAN_TRIALS:
+        blockers.append("bayesian_optimization_budget_exhausted")
+    return list(dict.fromkeys(blockers))
+
+
+def _load_complete_history_records(
+    workspace_root: Path,
+    study_version_id: str,
+) -> list[BayesianHistoryRevisionRecord]:
+    records = list_bayesian_history_revision_records(
+        workspace_root,
+        study_version_id,
+        limit=MAX_HISTORY_REVISIONS,
+        ascending=True,
+    )
+    if count_bayesian_history_revision_records(workspace_root, study_version_id) != len(records):
+        raise _artifact_error()
+    return records
 
 
 def _json_list(payload: str) -> list[dict[str, Any]]:
@@ -1171,5 +1780,31 @@ def _history_stale_error() -> ApiError:
     return ApiError(
         code="bayesian_observation_history_stale",
         message="관측 history가 변경되었습니다. 최신 revision을 확인한 뒤 다시 시도하세요.",
+        status_code=status.HTTP_409_CONFLICT,
+    )
+
+
+def _study_closed_error() -> ApiError:
+    return ApiError(
+        code="bayesian_study_closed",
+        message=(
+            "종료된 Bayesian study는 관측, trial 중단 또는 recommendation을 " "변경할 수 없습니다."
+        ),
+        status_code=status.HTTP_409_CONFLICT,
+    )
+
+
+def _close_conflict_error() -> ApiError:
+    return ApiError(
+        code="bayesian_study_close_conflict",
+        message="Bayesian study 종료 기준이 최신 상태와 일치하지 않습니다.",
+        status_code=status.HTTP_409_CONFLICT,
+    )
+
+
+def _deletion_confirmation_error() -> ApiError:
+    return ApiError(
+        code="bayesian_study_deletion_confirmation_mismatch",
+        message="삭제 확인 대상 또는 deletion manifest가 최신 preflight와 일치하지 않습니다.",
         status_code=status.HTTP_409_CONFLICT,
     )

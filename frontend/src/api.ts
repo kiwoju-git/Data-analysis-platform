@@ -2,23 +2,31 @@ export { downloadAnalysisResultExport } from "./api/analyses";
 export { createAnalysisResultCsvExport } from "./api/analyses";
 export { createAnalysisResultHtmlReport } from "./api/analyses";
 export { createAnalysisResultJsonExport } from "./api/analyses";
+export { deleteAnalysisResultExport } from "./api/analyses";
+export { deleteStoredAnalysisRun } from "./api/analyses";
 export { createAnalysisRun } from "./api/analyses";
 export { fetchAnalysisMethods } from "./api/analyses";
 export { fetchAnalysisResultExports } from "./api/analyses";
+export { fetchAnalysisResultExportDeletionPreflight } from "./api/analyses";
 export { fetchAnalysisRunComparison } from "./api/analyses";
+export { fetchAnalysisRunDeletionPreflight } from "./api/analyses";
 export { fetchAnalysisRunResult } from "./api/analyses";
 export { fetchAnalysisRuns } from "./api/analyses";
 export { getApiBaseUrl } from "./api/client";
 export {
   abandonBayesianTrial,
+  closeBayesianStudy,
   createBayesianRecommendation,
   createBayesianStudy,
+  deleteBayesianStudy,
   fetchBayesianHistory,
   fetchBayesianHistoryRevision,
+  fetchLatestBayesianRecommendation,
   fetchBayesianRecommendation,
   fetchBayesianRecommendations,
   fetchBayesianStudies,
   fetchBayesianStudy,
+  fetchBayesianStudyDeletionPreflight,
   fetchBayesianTrials,
   recordBayesianObservation,
 } from "./api/bayesian";
@@ -52,9 +60,16 @@ export { fetchHealth } from "./api/health";
 export { fetchGageRrPreflight } from "./api/quality";
 export {
   createAttributeControlLimitSet,
+  deleteAttributeControlLimitSet,
   fetchAttributeControlLimitSet,
+  fetchAttributeControlLimitSetDeletionPreflight,
   fetchAttributeControlLimitSets,
+  fetchAttributeControlMonitoringPreflight,
 } from "./api/quality";
+export {
+  deleteRegressionModel,
+  fetchRegressionModelDeletionPreflight,
+} from "./api/regression";
 export { fetchRegressionPredictionPreflight } from "./api/regression";
 export { createRegressionPredictionCsvExport } from "./api/regression";
 export { fetchRegressionPredictionRows } from "./api/regression";

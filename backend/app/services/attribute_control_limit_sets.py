@@ -11,7 +11,6 @@ from uuid import UUID, uuid4
 from fastapi import status
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, ValidationError
 
-from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.quality import (
     AttributeControlLimitSetAsset,
     AttributeControlLimitSetColumnDependency,
@@ -60,6 +59,7 @@ ATTRIBUTE_CONTROL_LIMIT_SET_ELIGIBILITY_POLICY: Final[
 ] = "phase_2_baseline_eligibility_v1"
 MINIMUM_PHASE2_BASELINE_POINT_COUNT: Final = 20
 _ROW_SNAPSHOT_KIND: Final = "analysis_row_snapshot"
+_SUPPORTED_PHASE1_SOURCE_RESULTS: Final = {("0.1.0", 1), ("0.2.0", 2)}
 
 
 class _ResultColumn(BaseModel):
@@ -103,7 +103,8 @@ class _ResultDispersion(BaseModel):
 class _PhaseOneResult(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
+    phase: Literal["phase_1"] | None = None
     summary_type: Literal["attribute_control_chart"]
     chart_type: Literal["p", "np", "c", "u"]
     count_definition: Literal["defectives", "defects"]
@@ -156,9 +157,9 @@ def create_attribute_control_limit_set(
         limit_set_id=limit_set_id,
         status="closed",
         method_id=ATTRIBUTE_CONTROL_METHOD_ID,
-        source_method_version=cast(Literal["0.1.0"], baseline.record.method_version),
+        source_method_version=cast(Literal["0.1.0", "0.2.0"], baseline.record.method_version),
         phase2_method_version=ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION,
-        source_result_schema_version=1,
+        source_result_schema_version=baseline.result.schema_version,
         source_analysis_id=source_analysis_id,
         source_dataset_version_id=UUID(baseline.context.version.version_id),
         source_schema_hash=baseline.context.version.schema_hash,
@@ -283,7 +284,6 @@ def _validate_source_baseline(settings: Settings, source_analysis_id: UUID) -> _
         )
     if (
         record.method_id != ATTRIBUTE_CONTROL_METHOD_ID
-        or record.method_version != METHOD_VERSIONS[ATTRIBUTE_CONTROL_METHOD_ID]
         or record.status != "succeeded"
         or record.completed_at is None
         or record.dataset_version_id is None
@@ -321,6 +321,12 @@ def _validate_source_baseline(settings: Settings, source_analysis_id: UUID) -> _
         dataset_version_id = UUID(record.dataset_version_id)
     except (ValidationError, ValueError) as exc:
         raise _source_invalid() from exc
+    if (record.method_version, result.schema_version) not in _SUPPORTED_PHASE1_SOURCE_RESULTS:
+        raise _source_invalid()
+    if result.schema_version == 1 and result.phase is not None:
+        raise _source_invalid()
+    if result.schema_version == 2 and result.phase != "phase_1":
+        raise _source_invalid()
     try:
         context = get_dataset_rows_context(settings, dataset_version_id)
         verify_canonical_rows_artifact(context)
@@ -459,7 +465,9 @@ def _validate_result_config_and_columns(
     denominator_column: DatasetColumnRecord | None,
 ) -> None:
     options = config.get("options")
-    if not isinstance(options, dict) or any(key in options for key in ("phase", "limit_set_id")):
+    if not isinstance(options, dict):
+        raise _source_invalid()
+    if options.get("phase", "phase_1") != "phase_1" or options.get("limit_set_id") is not None:
         raise _source_invalid()
     expected_denominator_id = None if denominator_column is None else denominator_column.column_id
     if (
@@ -641,6 +649,24 @@ def _load_limit_set(
     settings: Settings,
     record: AttributeControlLimitSetRecord,
 ) -> AttributeControlLimitSetResponse:
+    response = validate_attribute_control_limit_set_for_retention(settings, record)
+    asset = AttributeControlLimitSetAsset.model_validate(
+        response.model_dump(mode="python", exclude={"asset_sha256"})
+    )
+    baseline = _validate_source_baseline(settings, asset.source_analysis_id)
+    if not _asset_matches_source(asset, baseline):
+        raise _error(
+            "attribute_control_chart_limit_set_source_dependency_mismatch",
+            "계수형 관리도 limit set의 source dependency가 현재 검증 결과와 다릅니다.",
+        )
+    return response
+
+
+def validate_attribute_control_limit_set_for_retention(
+    settings: Settings,
+    record: AttributeControlLimitSetRecord,
+) -> AttributeControlLimitSetResponse:
+    """Validate the immutable asset without requiring a currently fresh source."""
     path = _safe_asset_path(
         settings.workspace_root,
         record.asset_path,
@@ -683,12 +709,6 @@ def _load_limit_set(
         raise _error(
             "attribute_control_chart_limit_set_source_dependency_mismatch",
             "계수형 관리도 limit set의 source dependency가 현재 metadata와 다릅니다.",
-        )
-    baseline = _validate_source_baseline(settings, asset.source_analysis_id)
-    if not _asset_matches_source(asset, baseline):
-        raise _error(
-            "attribute_control_chart_limit_set_source_dependency_mismatch",
-            "계수형 관리도 limit set의 source dependency가 현재 검증 결과와 다릅니다.",
         )
     return AttributeControlLimitSetResponse(**asset.model_dump(mode="python"), asset_sha256=digest)
 
@@ -740,6 +760,7 @@ def _asset_matches_source(
     )
     return (
         asset.source_method_version == baseline.record.method_version
+        and asset.source_result_schema_version == baseline.result.schema_version
         and str(asset.source_dataset_version_id) == baseline.context.version.version_id
         and asset.source_schema_hash == baseline.context.version.schema_hash
         and asset.source_canonical_sha256 == baseline.context.canonical_rows_artifact.sha256

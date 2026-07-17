@@ -5,27 +5,38 @@ from fastapi import APIRouter, Query, Request, status
 from app.api.v1.schemas.bayesian import (
     BayesianHistoryListResponse,
     BayesianHistoryRevisionResponse,
+    BayesianLatestRecommendationResponse,
     BayesianObservationCreateRequest,
     BayesianRecommendationCreateRequest,
     BayesianRecommendationListResponse,
     BayesianRecommendationResponse,
+    BayesianStudyCloseRequest,
+    BayesianStudyCloseResponse,
     BayesianStudyCreateRequest,
+    BayesianStudyDeleteRequest,
+    BayesianStudyDeleteResponse,
+    BayesianStudyDeletionPreflightResponse,
     BayesianStudyListResponse,
     BayesianStudyResponse,
+    BayesianTrialAbandonRequest,
     BayesianTrialListResponse,
     BayesianTrialTransitionResponse,
 )
 from app.services.bayesian_recommendations import (
     create_bayesian_recommendation,
     get_bayesian_recommendation,
+    get_latest_bayesian_recommendation,
     list_bayesian_recommendations,
 )
 from app.services.bayesian_studies import (
     abandon_bayesian_trial,
+    close_bayesian_study,
     complete_bayesian_trial,
     create_bayesian_study,
+    delete_bayesian_study,
     get_bayesian_history,
     get_bayesian_study,
+    get_bayesian_study_deletion_preflight,
     list_bayesian_history,
     list_bayesian_studies,
     list_bayesian_trials,
@@ -57,6 +68,35 @@ def list_bayesian_studies_route(
 @router.get("/{study_id}", response_model=BayesianStudyResponse)
 def get_bayesian_study_route(request: Request, study_id: UUID) -> BayesianStudyResponse:
     return get_bayesian_study(request.app.state.settings, study_id)
+
+
+@router.get(
+    "/{study_id}/deletion-preflight",
+    response_model=BayesianStudyDeletionPreflightResponse,
+)
+def get_bayesian_study_deletion_preflight_route(
+    request: Request,
+    study_id: UUID,
+) -> BayesianStudyDeletionPreflightResponse:
+    return get_bayesian_study_deletion_preflight(request.app.state.settings, study_id)
+
+
+@router.delete("/{study_id}", response_model=BayesianStudyDeleteResponse)
+def delete_bayesian_study_route(
+    request: Request,
+    study_id: UUID,
+    body: BayesianStudyDeleteRequest,
+) -> BayesianStudyDeleteResponse:
+    return delete_bayesian_study(request.app.state.settings, study_id, body)
+
+
+@router.post("/{study_id}/close", response_model=BayesianStudyCloseResponse)
+def close_bayesian_study_route(
+    request: Request,
+    study_id: UUID,
+    body: BayesianStudyCloseRequest,
+) -> BayesianStudyCloseResponse:
+    return close_bayesian_study(request.app.state.settings, study_id, body)
 
 
 @router.get("/{study_id}/trials", response_model=BayesianTrialListResponse)
@@ -92,9 +132,12 @@ def complete_bayesian_trial_route(
     response_model=BayesianTrialTransitionResponse,
 )
 def abandon_bayesian_trial_route(
-    request: Request, study_id: UUID, trial_id: UUID
+    request: Request,
+    study_id: UUID,
+    trial_id: UUID,
+    body: BayesianTrialAbandonRequest | None = None,
 ) -> BayesianTrialTransitionResponse:
-    return abandon_bayesian_trial(request.app.state.settings, study_id, trial_id)
+    return abandon_bayesian_trial(request.app.state.settings, study_id, trial_id, body)
 
 
 @router.get("/{study_id}/history", response_model=BayesianHistoryListResponse)
@@ -150,6 +193,20 @@ def list_bayesian_recommendations_route(
         study_id,
         offset=offset,
         limit=limit,
+    )
+
+
+@router.get(
+    "/{study_id}/recommendations/latest",
+    response_model=BayesianLatestRecommendationResponse,
+)
+def get_latest_bayesian_recommendation_route(
+    request: Request,
+    study_id: UUID,
+) -> BayesianLatestRecommendationResponse:
+    return get_latest_bayesian_recommendation(
+        request.app.state.settings,
+        study_id,
     )
 
 

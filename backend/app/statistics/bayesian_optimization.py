@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from importlib.metadata import version
 from typing import Any, Final, Literal
 
+from app.api.v1.schemas.bayesian import MAX_COMPLETED_OBSERVATIONS
+
 BAYESIAN_RECOMMENDATION_RESULT_SCHEMA_VERSION: Final[Literal[1]] = 1
 BAYESIAN_SURROGATE_MODEL_SCHEMA_VERSION: Final[Literal[1]] = 1
 MIN_COMPLETED_OBSERVATIONS = 2
-MAX_COMPLETED_OBSERVATIONS = 200
 
 
 class BayesianOptimizationError(ValueError):
@@ -347,7 +348,12 @@ def bayesian_worker_entry(output_queue: Any, payload: dict[str, Any]) -> None:
     try:
         result = calculate_bayesian_recommendation(payload)
     except BayesianOptimizationError as exc:
-        output_queue.put({"status": "error", "code": exc.code})
+        code = (
+            "bayesian_optimization_budget_exhausted"
+            if exc.code == "bayesian_optimization_time_budget_exhausted"
+            else exc.code
+        )
+        output_queue.put({"status": "error", "code": code})
     except Exception:
         output_queue.put({"status": "error", "code": "bayesian_optimization_surrogate_fit_failed"})
     else:
