@@ -93,7 +93,7 @@ def run_attribute_control_chart_analysis(
                     missing_policy=str(options["missing_policy"]),
                     point_limit=point_limit,
                 )
-                result["schema_version"] = 2
+                result["schema_version"] = 3
                 result["phase"] = "phase_1"
                 result["limit_set_dependency"] = None
             else:
@@ -282,6 +282,9 @@ def _api_error(code: str) -> ApiError:
         "attribute_control_chart_point_count_too_small": (
             "계수형 관리도에는 필터와 제외 후 유효 관측이 최소 2개 필요합니다."
         ),
+        "attribute_control_chart_phase_2_no_usable_points": (
+            "Phase II 관리도에는 필터와 제외 후 유효 모니터링 관측이 최소 1개 필요합니다."
+        ),
         "attribute_control_chart_np_varying_sample_size": (
             "NP 관리도는 모든 관측의 표본 크기가 같아야 합니다. "
             "가변 표본 크기에는 P 관리도를 선택하세요."
@@ -338,6 +341,9 @@ def _warnings(result: dict[str, object]) -> list[AnalysisWarning]:
             "Pearson dispersion ratio가 2를 초과했습니다. 군집, 기회 차이 또는 "
             "공정 혼합을 검토하세요. 관리한계는 자동 보정하지 않았습니다."
         ),
+        "attribute_control_chart_dispersion_insufficient_points": (
+            "유효 모니터링 관측이 1개이므로 Pearson dispersion을 계산하지 않았습니다."
+        ),
         "attribute_control_chart_lcl_truncated_to_zero": (
             "자연 하한보다 낮은 LCL은 0으로 절단했습니다."
         ),
@@ -369,6 +375,7 @@ def _warnings(result: dict[str, object]) -> list[AnalysisWarning]:
         "attribute_control_chart_phase_2_limits_frozen_from_verified_asset",
         "attribute_control_chart_process_assumptions_not_proven",
         "attribute_control_chart_c_constant_opportunity_user_confirmed",
+        "attribute_control_chart_dispersion_insufficient_points",
     }
     warnings: list[AnalysisWarning] = []
     for code in codes:

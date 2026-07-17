@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import {
   confirmDatasetParsing,
   createDatasetFromPastedText,
   fetchDatasetProfile,
+  fetchDatasetVersion,
   fetchRowsPreview,
   uploadDataset,
   updateDatasetSchema,
@@ -20,6 +21,29 @@ import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPrese
 
 const previewLimit = 10;
 const defaultMissingTokens = ["", "NA", "N/A", "null", "N/T"];
+const currentDatasetVersionStorageKey = "datalab.current_dataset_version_id";
+
+function readStoredDatasetVersionId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(currentDatasetVersionStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function storeDatasetVersionId(versionId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (versionId === null) {
+      window.sessionStorage.removeItem(currentDatasetVersionStorageKey);
+    } else {
+      window.sessionStorage.setItem(currentDatasetVersionStorageKey, versionId);
+    }
+  } catch {
+    // Browser storage availability must not block the local analysis workflow.
+  }
+}
 
 export interface DatasetWorkflowCallbacks {
   onDatasetReset: () => void;
@@ -57,6 +81,49 @@ export function useDatasetWorkflow({
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [flowError, setFlowError] = useState<string | null>(null);
+  const restoreRequestRef = useRef(0);
+  const callbacksRef = useRef({ onDatasetColumnsChanged });
+  callbacksRef.current = { onDatasetColumnsChanged };
+
+  useEffect(() => {
+    const versionId = readStoredDatasetVersionId();
+    if (versionId === null) return;
+
+    const request = restoreRequestRef.current + 1;
+    restoreRequestRef.current = request;
+    setIsLoadingPreview(true);
+    setIsLoadingProfile(true);
+    void Promise.all([
+      fetchDatasetVersion(versionId),
+      fetchRowsPreview(versionId, 0, previewLimit),
+      fetchDatasetProfile(versionId),
+    ])
+      .then(([restoredVersion, restoredPreview, restoredProfile]) => {
+        if (restoreRequestRef.current !== request) return;
+        setVersion(restoredVersion);
+        setSchemaDrafts(schemaDraftsFromColumns(restoredVersion.columns));
+        setPreview(restoredPreview);
+        setPreviewOffset(0);
+        setProfile(restoredProfile);
+        callbacksRef.current.onDatasetColumnsChanged(restoredVersion.columns);
+      })
+      .catch((error) => {
+        if (restoreRequestRef.current !== request) return;
+        storeDatasetVersionId(null);
+        setFlowError(
+          error instanceof Error ? error.message : "dataset_version_restore_failed",
+        );
+      })
+      .finally(() => {
+        if (restoreRequestRef.current !== request) return;
+        setIsLoadingPreview(false);
+        setIsLoadingProfile(false);
+      });
+
+    return () => {
+      if (restoreRequestRef.current === request) restoreRequestRef.current += 1;
+    };
+  }, []);
 
   const delimiterOptions = useMemo(() => {
     const candidates =
@@ -79,6 +146,8 @@ export function useDatasetWorkflow({
       .every((column, index) => column.original_name === `column_${index + 1}`);
 
   function resetDatasetDerivedState() {
+    restoreRequestRef.current += 1;
+    storeDatasetVersionId(null);
     setVersion(null);
     setSchemaDrafts([]);
     setPreview(null);
@@ -165,6 +234,7 @@ export function useDatasetWorkflow({
         columns: [],
       });
       setVersion(response);
+      storeDatasetVersionId(response.version_id);
       setSchemaDrafts(schemaDraftsFromColumns(response.columns));
       onDatasetColumnsChanged(response.columns);
       setPreviewOffset(0);

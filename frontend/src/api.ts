@@ -33,6 +33,7 @@ export {
 export { confirmDatasetParsing } from "./api/datasets";
 export { createDatasetFromPastedText } from "./api/datasets";
 export { fetchDatasetProfile } from "./api/datasets";
+export { fetchDatasetVersion } from "./api/datasets";
 export { fetchDatasetVersions } from "./api/datasets";
 export { fetchRowsPreview } from "./api/datasets";
 export { updateDatasetSchema } from "./api/datasets";
@@ -69,6 +70,7 @@ export {
 export {
   deleteRegressionModel,
   fetchRegressionModelDeletionPreflight,
+  fetchRegressionModelManifest,
 } from "./api/regression";
 export { fetchRegressionPredictionPreflight } from "./api/regression";
 export { createRegressionPredictionCsvExport } from "./api/regression";

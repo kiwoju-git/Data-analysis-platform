@@ -4,13 +4,13 @@
   "execution_status": "executable",
   "parity_classification": "policy_adjusted_formula_parity",
   "previous_executable": {
-    "method_version": "0.1.0",
-    "result_schema_version": 1,
-    "phase": "phase_1_only"
-  },
-  "current_executable": {
     "method_version": "0.2.0",
     "result_schema_version": 2,
+    "phase": "phase_1_and_phase_2"
+  },
+  "current_executable": {
+    "method_version": "0.3.0",
+    "result_schema_version": 3,
     "limit_set_schema_version": 1
   },
   "sources": [

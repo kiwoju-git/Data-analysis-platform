@@ -79,6 +79,14 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="datasetVersion",
+        method="get",
+        path="/api/v1/dataset-versions/{version_id}",
+        success_status="200",
+        response_schema="DatasetVersionResponse",
+        parameters=frozenset({("version_id", "path")}),
+    ),
+    OperationContract(
         route_name="datasetVersionSchema",
         method="patch",
         path="/api/v1/dataset-versions/{version_id}/schema",
@@ -747,6 +755,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "target_canonical_sha256",
                 "chart_type",
                 "count_definition",
+                "validation_scope",
+                "row_data_validated",
                 "ready",
                 "issues",
             }
@@ -764,6 +774,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "target_canonical_sha256",
                 "chart_type",
                 "count_definition",
+                "validation_scope",
+                "row_data_validated",
                 "ready",
                 "issues",
             }
@@ -847,7 +859,6 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         property_consts=(
             ("asset_schema_version", 1),
             ("method_id", "quality.attribute_control_chart"),
-            ("phase2_method_version", "0.2.0"),
         ),
     ),
     SchemaComponentContract(
@@ -2748,9 +2759,9 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ):
         assert phrase in workflow_section
 
-    assert "latest recorded backend pytest count is 750" in local_validation_section
-    assert "latest recorded frontend Vitest count is 111" in local_validation_section
-    assert "latest OpenAPI/frontend contract count is 150" in local_validation_section
+    assert "latest recorded backend pytest count is 763" in local_validation_section
+    assert "latest recorded frontend Vitest count is 114" in local_validation_section
+    assert "latest OpenAPI/frontend contract count is 148" in local_validation_section
     assert "The latest run passed backend ruff check" not in local_validation_section
     assert "That 2026-07-09 run passed backend ruff check" in historical_validation_section
     assert "That 2026-07-07 run passed backend ruff check" in historical_validation_section

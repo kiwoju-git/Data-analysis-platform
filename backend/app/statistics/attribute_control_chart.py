@@ -5,6 +5,7 @@ from math import isfinite, sqrt
 
 DEFAULT_POINT_LIMIT = 1000
 MIN_BASELINE_POINT_COUNT = 2
+MIN_MONITORING_POINT_COUNT = 1
 RECOMMENDED_BASELINE_POINT_COUNT = 20
 
 
@@ -145,9 +146,11 @@ def calculate_attribute_control_chart(
         "lcl_truncated_count": lcl_truncated_count,
         "ucl_truncated_count": ucl_truncated_count,
         "dispersion": {
+            "available": True,
             "method": "pearson_chi_square_over_degrees_of_freedom",
             "degrees_of_freedom": len(points) - 1,
             "ratio": dispersion_ratio,
+            "reason_code": None,
             "warning_threshold": 2.0,
             "used_to_adjust_limits": False,
         },
@@ -216,8 +219,8 @@ def calculate_attribute_control_chart_phase_2(
         thousands=thousands,
     )
     points = collected.points
-    if len(points) < MIN_BASELINE_POINT_COUNT:
-        raise AttributeControlChartError("attribute_control_chart_point_count_too_small")
+    if len(points) < MIN_MONITORING_POINT_COUNT:
+        raise AttributeControlChartError("attribute_control_chart_phase_2_no_usable_points")
     if chart_type == "np":
         assert fixed_sample_size is not None
         if any(point.denominator != float(fixed_sample_size) for point in points):
@@ -230,10 +233,14 @@ def calculate_attribute_control_chart_phase_2(
         for point in points
     ]
     signals = _limit_signals(points, limits=limits, chart_type=chart_type)
-    dispersion_ratio = _dispersion_ratio(
-        points,
-        chart_type=chart_type,
-        center_line=frozen_center_line,
+    dispersion_ratio = (
+        None
+        if len(points) == 1
+        else _dispersion_ratio(
+            points,
+            chart_type=chart_type,
+            center_line=frozen_center_line,
+        )
     )
     warnings = _phase_2_warnings(
         points=points,
@@ -249,7 +256,7 @@ def calculate_attribute_control_chart_phase_2(
     limits_vary = len(set(denominators)) > 1 if chart_type in {"p", "u"} else False
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "phase": "phase_2",
         "summary_type": "attribute_control_chart",
         "method": f"{chart_type}_chart",
@@ -285,9 +292,15 @@ def calculate_attribute_control_chart_phase_2(
         "lcl_truncated_count": sum(1 for limit in limits if limit["lcl_truncated"]),
         "ucl_truncated_count": sum(1 for limit in limits if limit["ucl_truncated"]),
         "dispersion": {
+            "available": dispersion_ratio is not None,
             "method": "pearson_chi_square_over_degrees_of_freedom_against_frozen_center",
             "degrees_of_freedom": len(points) - 1,
             "ratio": dispersion_ratio,
+            "reason_code": (
+                None
+                if dispersion_ratio is not None
+                else "attribute_control_chart_dispersion_insufficient_points"
+            ),
             "warning_threshold": 2.0,
             "used_to_adjust_limits": False,
         },
@@ -605,7 +618,7 @@ def _phase_2_warnings(
     signals: Sequence[dict[str, object]],
     chart_type: str,
     center_line: float,
-    dispersion_ratio: float,
+    dispersion_ratio: float | None,
     collected: _CollectedPoints,
     point_limit: int,
 ) -> list[str]:
@@ -618,7 +631,9 @@ def _phase_2_warnings(
         warnings.append("attribute_control_chart_c_constant_opportunity_user_confirmed")
     if _normal_approximation_is_weak(points, chart_type=chart_type, center_line=center_line):
         warnings.append("attribute_control_chart_normal_approximation_weak")
-    if dispersion_ratio > 2.0:
+    if dispersion_ratio is None:
+        warnings.append("attribute_control_chart_dispersion_insufficient_points")
+    elif dispersion_ratio > 2.0:
         warnings.append("attribute_control_chart_overdispersion_detected")
     if any(bool(limit["lcl_truncated"]) for limit in limits):
         warnings.append("attribute_control_chart_lcl_truncated_to_zero")

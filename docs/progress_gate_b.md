@@ -3698,3 +3698,60 @@ Next development order:
 4. Add bulk, age-based, or automatic cleanup only after those ownership graphs
    and recovery behavior are validated.
 5. Continue advanced quality/statistics only through an approved contract.
+
+## Progress Update 184 - Phase II Boundary And Model Availability Stabilization
+
+Completed:
+
+- Bumped `quality.attribute_control_chart` to method `0.3.0` and result schema
+  3. Phase I still requires two usable points and limit-set promotion still
+  requires 20, while Phase II accepts one valid monitoring point without
+  refitting the baseline.
+- One-point Phase II results preserve frozen center/LCL/UCL and strict outside-
+  limit signals, but store dispersion as unavailable with degrees of freedom 0,
+  ratio null, and
+  `attribute_control_chart_dispersion_insufficient_points`. At n>=2 the prior
+  Pearson calculation is unchanged. Zero usable points return
+  `attribute_control_chart_phase_2_no_usable_points`.
+- Kept immutable limit-set asset schema 1, analysis config schema 2, and SQLite
+  schema 14 unchanged. Stored v0.1/schema-1 and v0.2/schema-2 results restore and
+  export under their original versions without rewriting.
+- Bumped monitoring preflight to schema 2 and added typed
+  `validation_scope=schema_and_dependency_only` plus
+  `row_data_validated=false`. The UI states that row values and filter results
+  are revalidated during execution; NP/count/denominator and usable-row checks
+  remain mandatory at execution.
+- Added checksum-validated regression-model availability checks for current and
+  restored linear-model results. Missing models map to
+  `unavailable_or_deleted`; manifest/path/checksum failures map separately to
+  `integrity_error`. Both states preserve the fit result while disabling
+  prediction preflight, execution, and CSV actions.
+- The current dataset version UUID, and no raw rows or filename, is kept in
+  session storage so a reload can restore version/profile/preview through
+  validated backend APIs. This makes model deletion and restored-fit
+  availability consistent before and after reload.
+- Backend tests cover one-point P/NP/C/U, n=1/n=2 dispersion, zero usable rows,
+  strict signal equality/outside boundaries, schema-ready NP row mismatch,
+  old-result restore, all common exports, availability error distinction, and
+  OpenAPI/frontend alignment. Frontend tests cover one-point rendering,
+  preflight wording, availability states, deletion, stale response handling,
+  and retained fit output.
+- `scripts/check.ps1` passed in 771.5 seconds: backend pytest 763, frontend
+  Vitest 114, direct OpenAPI/frontend contract collection 148, Ruff/format,
+  mypy, lint, typecheck, and production build. Main JavaScript is 491.75 kB /
+  114.96 kB gzip.
+- Final Chromium E2E passed in 69.2 seconds with diagnostics at
+  `.tmp/e2e-diagnostics`, including one-point Phase II result/export/restore
+  and model deletion/reload/stored-fit restore. The host
+  was Windows 10 build 19045, CPython 3.10.11, and Node 24.17.0, so this remains
+  development evidence rather than the Windows 11/Node 22 release gate.
+- Remote Actions remain unverified because `gh` is not installed.
+
+Next development order:
+
+1. Run the clean Windows 11/Python 3.10/Node 22/CPU-only release gate.
+2. Verify the resulting main run and required Windows/E2E checks in GitHub.
+3. Improve Bayesian catalog/successor UX without changing GP/EI behavior.
+4. Implement dataset-root and then DOE-root retention through separate reviewed
+   dependency graphs with no silent cascade.
+5. Continue advanced quality/statistics only through an approved contract.

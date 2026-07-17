@@ -54,9 +54,9 @@ class AttributeControlLimitSetAsset(BaseModel):
     limit_set_id: UUID
     status: Literal["closed"]
     method_id: Literal["quality.attribute_control_chart"]
-    source_method_version: Literal["0.1.0", "0.2.0"]
-    phase2_method_version: Literal["0.2.0"]
-    source_result_schema_version: Literal[1, 2]
+    source_method_version: Literal["0.1.0", "0.2.0", "0.3.0"]
+    phase2_method_version: Literal["0.2.0", "0.3.0"]
+    source_result_schema_version: Literal[1, 2, 3]
     source_analysis_id: UUID
     source_dataset_version_id: UUID
     source_schema_hash: str = Field(min_length=64, max_length=64)
@@ -119,7 +119,7 @@ class AttributeControlLimitSetDeletionPreflightResponse(BaseModel):
     limit_set_id: UUID
     source_analysis_id: UUID
     method_id: Literal["quality.attribute_control_chart"]
-    source_method_version: Literal["0.1.0", "0.2.0"]
+    source_method_version: Literal["0.1.0", "0.2.0", "0.3.0"]
     deletion_ready: bool
     blockers: list[str]
     counts: AttributeControlLimitSetDeletionCounts
@@ -167,9 +167,9 @@ class AttributeControlMonitoringPreflightIssue(BaseModel):
 class AttributeControlMonitoringPreflightResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     method_id: Literal["quality.attribute_control_chart"]
-    method_version: Literal["0.2.0"]
+    method_version: Literal["0.3.0"]
     phase: Literal["phase_2"]
     limit_set_id: UUID
     limit_set_asset_sha256: str = Field(min_length=64, max_length=64)
@@ -178,5 +178,7 @@ class AttributeControlMonitoringPreflightResponse(BaseModel):
     target_canonical_sha256: str = Field(min_length=64, max_length=64)
     chart_type: Literal["p", "np", "c", "u"]
     count_definition: Literal["defectives", "defects"]
+    validation_scope: Literal["schema_and_dependency_only"]
+    row_data_validated: Literal[False]
     ready: bool
     issues: list[AttributeControlMonitoringPreflightIssue]

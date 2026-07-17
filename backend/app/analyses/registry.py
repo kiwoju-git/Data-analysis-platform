@@ -29,7 +29,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "regression.linear_model": METHOD_VERSION,
     "regression.predict": "0.2.0",
     "regression.response_optimizer": "0.3.0",
-    "quality.attribute_control_chart": "0.2.0",
+    "quality.attribute_control_chart": "0.3.0",
     "quality.individuals_chart": METHOD_VERSION,
     "quality.subgroup_chart": METHOD_VERSION,
     "quality.run_chart": METHOD_VERSION,

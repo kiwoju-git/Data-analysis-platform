@@ -70,6 +70,20 @@ export async function confirmDatasetParsing(
   return (await response.json()) as DatasetVersionResponse;
 }
 
+export async function fetchDatasetVersion(
+  versionId: string,
+): Promise<DatasetVersionResponse> {
+  const response = await fetchApi(apiRoutes.datasetVersion(versionId), {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "dataset_version_fetch_failed"));
+  }
+
+  return (await response.json()) as DatasetVersionResponse;
+}
+
 export async function updateDatasetSchema(
   versionId: string,
   request: DatasetSchemaUpdateRequest,

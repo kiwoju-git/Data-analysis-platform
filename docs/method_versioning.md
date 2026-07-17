@@ -4,7 +4,7 @@ This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
 `doe.factorial_design` and `regression.response_optimizer` are `0.3.0`, and
 `doe.response_surface` is `0.2.0`. `doe.bayesian_optimization` is `0.2.2`, and
-`quality.attribute_control_chart` is `0.2.0`; the other stable IDs remain on
+`quality.attribute_control_chart` is `0.3.0`; the other stable IDs remain on
 `0.1.0`.
 
 ## Source Of Truth
@@ -280,6 +280,17 @@ requires an asset-schema decision. The common analysis config remains schema
 `2`, and SQLite remains schema `13`, because both already persist arbitrary
 typed analysis options and asset relationships.
 
+The Phase II single-point stabilization moves the method to `0.3.0` and new
+results to schema `3`. This is a minor bump because a previously rejected
+one-point monitoring target now produces a persisted result and dispersion
+changes from always numeric to a typed availability contract with nullable
+ratio and reason code. Phase I still needs two points and limit-set promotion
+still needs 20. Existing `0.1.0`/schema `1` and `0.2.0`/schema `2` results
+restore verbatim. Limit-set asset schema `1`, calculation policy, canonical
+checksum meaning, common config schema `2`, and SQLite schema `14` do not
+change. Old `0.2.0` limit sets remain valid inputs; new assets record the
+current `0.3.0` execution version.
+
 ## Minor Version
 
 Use a minor bump when the method remains the same broad analysis but a stored
@@ -339,6 +350,8 @@ not bump any method version or stored statistical schema. SQLite remains schema
 Regression-model and attribute-control-limit-set deletion add operational
 preflight/delete schemas 1 only. They do not change model fitting, prediction,
 Phase I/II calculations, persisted result/config meaning, model manifest schema
-2, or limit-set asset schema 1. Therefore `regression.linear_model`,
-`regression.predict`, and `quality.attribute_control_chart` versions remain
-unchanged and SQLite remains schema 14.
+2, or limit-set asset schema 1. Therefore that deletion slice left
+`regression.linear_model`, `regression.predict`, and the then-current
+`quality.attribute_control_chart` version unchanged. The later single-point
+monitoring contract independently bumps only the attribute chart as described
+above. SQLite remains schema 14.

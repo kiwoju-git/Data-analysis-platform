@@ -50,6 +50,10 @@ export const apiRoutes = {
     return apiUrl(`/datasets/${pathId(datasetId)}/confirm-parsing`);
   },
 
+  datasetVersion(versionId: string): string {
+    return apiUrl(`/dataset-versions/${pathId(versionId)}`);
+  },
+
   datasetVersionSchema(versionId: string): string {
     return apiUrl(`/dataset-versions/${pathId(versionId)}/schema`);
   },

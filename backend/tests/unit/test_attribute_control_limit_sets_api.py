@@ -50,9 +50,9 @@ def test_create_restore_list_and_idempotently_reuse_attribute_limit_set(tmp_path
     assert listed.json()["total"] == 1
     assert listed.json()["items"] == [payload]
     assert payload["asset_schema_version"] == 1
-    assert payload["source_method_version"] == "0.2.0"
-    assert payload["phase2_method_version"] == "0.2.0"
-    assert payload["source_result_schema_version"] == 2
+    assert payload["source_method_version"] == "0.3.0"
+    assert payload["phase2_method_version"] == "0.3.0"
+    assert payload["source_result_schema_version"] == 3
     assert payload["status"] == "closed"
     assert payload["chart_type"] == "p"
     assert payload["baseline_point_count"] == 20

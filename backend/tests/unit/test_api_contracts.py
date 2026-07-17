@@ -4493,7 +4493,7 @@ def test_analysis_run_executes_and_exports_attribute_p_chart(tmp_path) -> None:
     assert payload["provenance"]["row_count_included"] == 4
     result = payload["result"]
     assert result["summary_type"] == "attribute_control_chart"
-    assert result["schema_version"] == 2
+    assert result["schema_version"] == 3
     assert result["phase"] == "phase_1"
     assert result["limit_set_dependency"] is None
     assert result["chart_type"] == "p"

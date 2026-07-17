@@ -258,6 +258,110 @@ def test_phase_2_uses_frozen_center_without_refitting_monitoring_rows() -> None:
     assert "attribute_control_chart_phase_2_limits_frozen_from_verified_asset" in result["warnings"]
 
 
+@pytest.mark.parametrize(
+    ("rows", "chart_type", "count_definition", "center", "fixed_sample_size", "denominator"),
+    [
+        ([["6", "20"]], "p", "defectives", 0.5, None, True),
+        ([["6", "20"]], "np", "defectives", 10.0, 20, True),
+        ([["6"]], "c", "defects", 10.0, None, False),
+        ([["6", "20"]], "u", "defects", 0.5, None, True),
+    ],
+)
+def test_phase_2_accepts_one_monitoring_point_without_fake_dispersion(
+    rows,
+    chart_type,
+    count_definition,
+    center,
+    fixed_sample_size,
+    denominator,
+) -> None:
+    result = calculate_attribute_control_chart_phase_2(
+        rows,
+        _count_column(),
+        _denominator_column() if denominator else None,
+        chart_type=chart_type,
+        count_definition=count_definition,
+        frozen_center_line=center,
+        fixed_sample_size=fixed_sample_size,
+        constant_opportunity_confirmed=chart_type == "c",
+    )
+
+    assert result["schema_version"] == 3
+    assert result["n_used"] == 1
+    assert result["chart"]["point_count"] == 1
+    assert result["dispersion"] == {
+        "available": False,
+        "method": "pearson_chi_square_over_degrees_of_freedom_against_frozen_center",
+        "degrees_of_freedom": 0,
+        "ratio": None,
+        "reason_code": "attribute_control_chart_dispersion_insufficient_points",
+        "warning_threshold": 2.0,
+        "used_to_adjust_limits": False,
+    }
+
+
+def test_phase_2_two_points_restore_available_dispersion() -> None:
+    result = calculate_attribute_control_chart_phase_2(
+        [["9"], ["11"]],
+        _count_column(),
+        None,
+        chart_type="c",
+        count_definition="defects",
+        frozen_center_line=10.0,
+        fixed_sample_size=None,
+        constant_opportunity_confirmed=True,
+    )
+
+    assert result["dispersion"]["available"] is True
+    assert result["dispersion"]["degrees_of_freedom"] == 1
+    assert result["dispersion"]["ratio"] == pytest.approx(0.2)
+    assert result["dispersion"]["reason_code"] is None
+
+
+def test_phase_2_uses_strict_limit_boundary_for_single_point() -> None:
+    equality = calculate_attribute_control_chart_phase_2(
+        [["4"]],
+        _count_column(),
+        None,
+        chart_type="c",
+        count_definition="defects",
+        frozen_center_line=1.0,
+        fixed_sample_size=None,
+        constant_opportunity_confirmed=True,
+    )
+    outside = calculate_attribute_control_chart_phase_2(
+        [["5"]],
+        _count_column(),
+        None,
+        chart_type="c",
+        count_definition="defects",
+        frozen_center_line=1.0,
+        fixed_sample_size=None,
+        constant_opportunity_confirmed=True,
+    )
+
+    assert equality["chart"]["points"][0]["value"] == equality["chart"]["points"][0]["ucl"]
+    assert equality["signals"] == []
+    assert [signal["limit"] for signal in outside["signals"]] == ["upper"]
+
+
+def test_phase_2_rejects_zero_usable_monitoring_points() -> None:
+    with pytest.raises(
+        AttributeControlChartError,
+        match="attribute_control_chart_phase_2_no_usable_points",
+    ):
+        calculate_attribute_control_chart_phase_2(
+            [[""], ["not-a-count"]],
+            _count_column(),
+            None,
+            chart_type="c",
+            count_definition="defects",
+            frozen_center_line=10.0,
+            fixed_sample_size=None,
+            constant_opportunity_confirmed=True,
+        )
+
+
 def test_phase_2_np_rejects_sample_size_different_from_frozen_asset() -> None:
     with pytest.raises(
         AttributeControlChartError,

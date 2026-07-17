@@ -91,6 +91,19 @@ export interface RegressionPredictionRow {
   warnings: string[];
 }
 
+export interface RegressionModelManifestResponse {
+  model_id: string;
+  analysis_id: string;
+  dataset_version_id: string;
+  method_id: string;
+  method_version: string;
+  schema_hash: string;
+  manifest_sha256: string;
+  created_at: string;
+  app_version: string;
+  manifest: Record<string, unknown>;
+}
+
 export interface RegressionModelDeletionCounts {
   regression_model_count: 1;
   manifest_artifact_count: 1;

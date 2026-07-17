@@ -18,9 +18,9 @@ export interface AttributeControlLimitSetResponse {
   limit_set_id: string;
   status: "closed";
   method_id: "quality.attribute_control_chart";
-  source_method_version: "0.1.0" | "0.2.0";
-  phase2_method_version: "0.2.0";
-  source_result_schema_version: 1 | 2;
+  source_method_version: "0.1.0" | "0.2.0" | "0.3.0";
+  phase2_method_version: "0.2.0" | "0.3.0";
+  source_result_schema_version: 1 | 2 | 3;
   source_analysis_id: string;
   source_dataset_version_id: string;
   source_schema_hash: string;
@@ -89,7 +89,7 @@ export interface AttributeControlLimitSetDeletionPreflightResponse {
   limit_set_id: string;
   source_analysis_id: string;
   method_id: "quality.attribute_control_chart";
-  source_method_version: "0.1.0" | "0.2.0";
+  source_method_version: "0.1.0" | "0.2.0" | "0.3.0";
   deletion_ready: boolean;
   blockers: string[];
   counts: AttributeControlLimitSetDeletionCounts;
@@ -127,9 +127,9 @@ export interface AttributeControlMonitoringPreflightIssue {
 }
 
 export interface AttributeControlMonitoringPreflightResponse {
-  schema_version: 1;
+  schema_version: 2;
   method_id: "quality.attribute_control_chart";
-  method_version: "0.2.0";
+  method_version: "0.3.0";
   phase: "phase_2";
   limit_set_id: string;
   limit_set_asset_sha256: string;
@@ -138,6 +138,8 @@ export interface AttributeControlMonitoringPreflightResponse {
   target_canonical_sha256: string;
   chart_type: AttributeControlLimitSetChartType;
   count_definition: "defectives" | "defects";
+  validation_scope: "schema_and_dependency_only";
+  row_data_validated: false;
   ready: boolean;
   issues: AttributeControlMonitoringPreflightIssue[];
 }

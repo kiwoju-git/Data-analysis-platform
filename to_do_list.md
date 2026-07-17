@@ -21,23 +21,27 @@ Current source-of-truth note:
 
 Current and next development order:
 
-1. Run clean Windows 11 x64/Python 3.10/Node 22/CPU-only release validation.
-   This is a release gate, not a blocker for development on the measured
-   Windows 10/Node 24 workstation.
-2. Extend retention/deletion from the implemented closed-Bayesian metadata
-   graph and individual export-file deletion to an analysis-run ownership
-   graph. Include owned result/row-snapshot/export files, but block model,
-   prediction, limit-set, or other inbound dependencies instead of cascading
-   silently. Use `docs/workspace_retention_contract.md`.
-3. Continue the advanced quality/statistics backlog through a separately
+The Phase II boundary/model-availability stabilization slice is complete in
+the current worktree. Next allowed work is:
+
+1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
+2. Verify the resulting main push in remote GitHub Actions and review required
+   Windows/E2E checks and repository protection outside this code PR.
+3. Improve Bayesian catalog and successor UX without changing GP/EI behavior.
+4. Add dataset-root and then DOE-root retention only through separate reviewed
+   ownership graphs with explicit inbound-reference blockers.
+5. Continue the advanced quality/statistics backlog through a separately
    approved contract.
 
-The completed Phase II slice retains explicit target compatibility, P/NP/C/U
+The current Phase II slice retains explicit target compatibility, P/NP/C/U
 frozen formulas, dependency provenance, restore/export consistency, typed UI
-selection, and browser E2E. Any later chart expansion requires a separate
-approved contract. Do not add WECO/Nelson rules, Laney correction, exact
-probability limits, naked user-entered limits, automatic baseline refit, or a
-new chart family, and never reinterpret Phase I `0.1.0` results.
+selection, and browser E2E. Method `0.3.0`/result schema `3` permits one valid
+monitoring point and records dispersion as unavailable rather than inventing a
+numeric ratio. Phase I still requires two usable points and limit-set promotion
+still requires 20. Any later chart expansion requires a separate approved
+contract. Do not add WECO/Nelson rules, Laney correction, exact probability
+limits, naked user-entered limits, automatic baseline refit, or a new chart
+family, and never reinterpret stored `0.1.0` or `0.2.0` results.
 
 ## 2. Current Code State
 
@@ -186,7 +190,7 @@ Already implemented:
   - numeric columns expose `gt`/`gte`/`lt`/`lte`; all columns expose missing and equality conditions
   - filter drafts are validated in the shared UI slot
   - current executable payload serialization into `filter_snapshot.conditions` covers `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.attribute_control_chart`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart`
-  - `quality.attribute_control_chart` v0.2.0 implements Phase I P/NP/C/U estimation plus Phase II frozen-limit monitoring from verified immutable limit-set assets, target compatibility preflight, dependency-validated restore/export, and explicit Phase I/II UI
+  - `quality.attribute_control_chart` v0.3.0/result schema 3 implements Phase I P/NP/C/U estimation plus Phase II frozen-limit monitoring from verified immutable limit-set assets; Phase II accepts one valid point with typed unavailable dispersion, preflight declares schema/dependency-only scope, execution revalidates rows, and old v0.1/schema-1 and v0.2/schema-2 results restore without rewriting
   - `quality.individuals_chart` uses canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks, complete-case exclusions, arithmetic mean center line, `MRbar / d2` sigma estimate, I chart 3-sigma limits, MR chart `D3/D4` limits, I/MR single-point limit signals, I chart same-side centerline signals, I chart strict trend signals, I chart alternating signals, and explicit I chart zone/pattern signals
   - `quality.subgroup_chart` uses canonical first-seen subgroup order, fixed subgroup size 2-10, complete-case exclusions, Xbar-R/Xbar-S standard constants, Xbar/R/S control limits, and Xbar/R/S single-point limit signals
   - `quality.run_chart` uses canonical row order by default or an optional numeric/datetime order column sorted ascending with canonical row position tie-breaks, median center line, complete-case exclusions, above/below median run counts, tie-to-median exclusion policy, strict 6-point trend signal, strict 14-point oscillation signal, and exact conditional run-count clustering/mixture signals without control limits
@@ -250,9 +254,11 @@ Near-term visualization plan:
 - Do not create fake or decorative chart images. If a method does not yet return sufficient chart data, first add the real result payload and tests, then render it.
 - Keep chart exports/artifact images, grouped/small-multiple graphical summary, KDE/density rendering, and high-volume canvas/WebGL rendering as later slices.
 
-## 3. Next Actual Implementation PR
+## 3. Historical Gate B0 Implementation Record
 
-Gate B0 first, second, catalog/navigation, and storage/run foundation slices are now implemented in the working tree.
+This section preserves the original Gate B0 implementation record. It is not
+the current next-work source of truth; use the ordered list at the top of this
+document.
 
 Completed in this slice:
 
@@ -8629,3 +8635,38 @@ Next allowed work:
 4. Keep bulk, age-based, and automatic cleanup out of scope until all root
    ownership graphs and recovery paths are validated.
 5. Continue advanced methods only through a separately approved contract.
+
+## Progress Update 184 - Phase II Boundary And Retained-Model Availability
+
+Completed:
+
+- `quality.attribute_control_chart` is now method `0.3.0` with result schema 3.
+  Phase II accepts one valid P/NP/C/U monitoring point; Phase I still requires
+  two points and immutable limit-set promotion still requires 20.
+- One-point dispersion is explicitly unavailable with df 0 and null ratio.
+  No zero, NaN, infinity, or fabricated statistic is stored. Existing
+  v0.1/schema-1 and v0.2/schema-2 results retain their stored meaning.
+- Phase II preflight schema 2 declares schema/dependency-only validation and
+  the UI states that row/filter contracts are checked again at execution.
+- Current and restored linear-model results verify the model manifest before
+  enabling prediction. Missing/deleted and integrity-error states are separate;
+  both preserve the fit result and disable all prediction actions.
+- Reload restores only the current dataset version UUID from session storage,
+  then refetches version/profile/preview through backend validation. Raw rows,
+  filenames, and result payloads are not stored in browser storage.
+- Full check passed with backend 763, frontend 114, and direct OpenAPI/frontend
+  contract collection 148. Final Chromium E2E passed in 69.2 seconds with
+  diagnostics at `.tmp/e2e-diagnostics` and one-point Phase II
+  result/export/restore plus model delete/reload/fit restore coverage.
+- Validation used Windows 10 build 19045, Python 3.10.11, and Node 24.17.0; it
+  is not Windows 11/Node 22 release evidence. Remote Actions are unverified
+  because `gh` is unavailable.
+
+Next allowed work:
+
+1. Run the clean Windows 11/Python 3.10/Node 22/CPU-only release gate.
+2. Verify the resulting main run and repository required checks in GitHub.
+3. Improve Bayesian catalog and successor UX without changing GP/EI behavior.
+4. Add dataset-root and DOE-root retention only through separately reviewed
+   ownership graphs with explicit blockers and quarantine recovery.
+5. Continue advanced quality/statistics only through an approved contract.

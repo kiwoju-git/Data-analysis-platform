@@ -1,6 +1,6 @@
 # Attribute Control Chart Phase II Limits Contract
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 ## Status And Scope
 
@@ -8,20 +8,18 @@ The immutable limit-set storage/API foundation and first Phase II monitoring
 vertical slice are implemented. `quality.attribute_control_chart` retains its
 stable method ID and uses:
 
-- method version `0.2.0`;
-- result schema `2`;
+- method version `0.3.0`;
+- result schema `3`;
 - immutable control-limit-set asset schema `1`; and
 - an explicit Phase II request that references an app-created `limit_set_id`.
 
-The minor method/result bump is required because the source of the center and
-limits, the dependency graph, request options, result fields, and statistical
-meaning change. Existing `0.1.0` results remain Phase I results and must never
-be migrated or displayed as Phase II. The common analysis-run config envelope
-remains schema `2` and records the new per-method option shape, so no SQLite or
-common-config migration is required. New Phase I executions also use method
-`0.2.0`/result schema `2` with `phase=phase_1`; eligible sources from both
-`0.1.0`/schema `1` and `0.2.0`/schema `2` may be promoted without rewriting
-either stored result.
+The current minor bump from `0.2.0`/schema `2` to `0.3.0`/schema `3` adds a
+typed unavailable-dispersion state and permits one valid Phase II monitoring
+point. Existing `0.1.0`/schema `1` Phase I and `0.2.0`/schema `2` Phase I/II
+results restore without relabeling or rewriting. Limit-set asset schema `1`,
+its checksum meaning, the common analysis-run config schema `2`, and SQLite
+schema `14` are unchanged. New Phase I executions use `0.3.0`/schema `3`, and
+promotion accepts the corresponding source in addition to both older forms.
 
 WECO/Nelson pattern rules, Laney P'/U', exact probability limits, user-entered
 numeric limits, and new chart families are outside this contract.
@@ -73,7 +71,9 @@ by the API.
   verifies target dataset and column compatibility before execution.
 - Phase II executes through `POST /api/v1/analysis-runs` with an explicit
   `phase=phase_2` and verified `limit_set_id`.
-- No PUT, PATCH, or DELETE route exists.
+- No PUT or PATCH route exists. Checksum-validated deletion preflight and
+  exact-confirmation DELETE routes are implemented; deletion is blocked while
+  any Phase II analysis references the limit set.
 
 Promotion policy `phase_2_baseline_eligibility_v1` requires at least 20 complete
 points, a complete untruncated point payload, no Phase I limit signal, usable
@@ -123,14 +123,23 @@ Monitoring-specific stable meanings are:
 - `attribute_control_chart_phase_2_np_sample_size_mismatch`
 - `attribute_control_chart_phase_2_c_opportunity_confirmation_required`
 - `attribute_control_chart_phase_2_dependency_mismatch`
+- `attribute_control_chart_phase_2_no_usable_points`
 
 Preflight returns compatibility issues without creating an analysis. Execution
 returns the same stable codes and never falls back to Phase I estimation.
+Preflight schema `2` explicitly reports
+`validation_scope=schema_and_dependency_only` and `row_data_validated=false`.
+`ready=true` means the asset, target schema, canonical dependency, and selected
+columns are structurally compatible; it does not promise calculation success.
+Execution always revalidates NP sample-size equality, integer/count bounds,
+denominators, C opportunity confirmation, exclusions, filters, and usable N.
 
 ## Frozen-Limit Calculations
 
 Let the immutable baseline provide frozen `pbar`, `npbar`, `cbar`, or `ubar`.
-Monitoring points are evaluated in canonical target-row order. A signal occurs
+Monitoring points are evaluated in canonical target-row order. Phase II needs
+at least one valid monitoring point; Phase I estimation still needs at least
+two, and limit-set promotion still needs at least 20. A signal occurs
 only when the value is strictly outside its limits; equality is not a signal.
 The baseline is never refit and signaled monitoring points are never removed.
 
@@ -146,18 +155,24 @@ The baseline is never refit and signaled monitoring points are never removed.
   use `ubar +/- 3*sqrt(ubar/n_i)`, with LCL bounded at zero.
 
 A baseline with zero or unusable estimated variance is invalid and cannot be
-promoted to a limit set. Dispersion diagnostics remain warnings and do not
-silently switch chart family or adjust limits.
+promoted to a limit set. With one Phase II point, frozen limits and strict
+signals are stored while dispersion is `available=false`, has zero degrees of
+freedom, a null ratio, and reason
+`attribute_control_chart_dispersion_insufficient_points`. No zero, NaN,
+infinity, or fabricated ratio is used. At two or more points the existing
+Pearson calculation remains available. Dispersion never changes the limits.
 
 ## Result And UI Contract
 
-Result schema `2` distinguishes `phase_1_estimated_three_sigma` from
+Result schema `3` distinguishes `phase_1_estimated_three_sigma` from
 `phase_2_frozen_three_sigma` and includes typed limit-set and target dependency
 blocks. Restore and every JSON/CSV/HTML export revalidate those relationships.
 The UI shows Phase I/Phase II as an explicit mode, identifies the frozen
 limit-set source and baseline close time, and distinguishes current monitoring
 data from baseline history. Phase II execution must require a deliberate asset
 selection and show incompatibility before the run button is enabled.
+The UI always states that preflight covers structure/dependencies only and
+renders the one-point dispersion state as unavailable rather than a number.
 
 ## Reference And Acceptance Criteria
 

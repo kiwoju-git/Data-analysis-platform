@@ -4,6 +4,7 @@ import type {
   RegressionModelDeleteRequest,
   RegressionModelDeleteResponse,
   RegressionModelDeletionPreflightResponse,
+  RegressionModelManifestResponse,
   RegressionPredictionPreflightRequest,
   RegressionPredictionPreflightResponse,
   RegressionPredictionRequest,
@@ -11,6 +12,18 @@ import type {
   RegressionPredictionRowsPageResponse,
   RegressionPredictionCsvExportResponse,
 } from "./types";
+
+export async function fetchRegressionModelManifest(
+  modelId: string,
+): Promise<RegressionModelManifestResponse> {
+  const response = await fetchApi(apiRoutes.regressionModel(modelId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_model_availability_failed"));
+  }
+  return (await response.json()) as RegressionModelManifestResponse;
+}
 
 export async function fetchRegressionModelDeletionPreflight(
   modelId: string,

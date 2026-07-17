@@ -58,36 +58,7 @@ REGRESSION_TARGET_DATA = """y\tx\tgroup
 """
 
 ATTRIBUTE_CONTROL_CHART_DATA = """defectives\tsample_size
-12\t50
-15\t50
-8\t50
-10\t50
-4\t50
-7\t50
-16\t50
-9\t50
-14\t50
-10\t50
-5\t50
-6\t50
-17\t50
-12\t50
-22\t50
-8\t50
-10\t50
-5\t50
-13\t50
-11\t50
-20\t50
-18\t50
-24\t50
-15\t50
-9\t50
-12\t50
-7\t50
-13\t50
-9\t50
-6\t50
+6\t20
 """
 
 ATTRIBUTE_CONTROL_BASELINE_DATA = """defectives\tsample_size
@@ -670,7 +641,12 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(x_predictor).to_be_checked()
     expect(group_predictor).to_be_checked()
 
-    page.get_by_role("button", name="회귀모형 적합 실행").click()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/api/v1/analysis-runs")
+    ) as model_response_info:
+        page.get_by_role("button", name="회귀모형 적합 실행").click()
+    model_response = model_response_info.value
     model_summary = page.get_by_label("회귀모형 요약")
     expect(model_summary).to_be_visible(timeout=20_000)
     expect(model_summary).to_contain_text("12 / 12")
@@ -696,7 +672,13 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(preflight_summary).to_contain_text("4 / 4")
     expect(preflight_summary).to_contain_text("다름")
 
-    page.get_by_role("button", name="예측 실행").click()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/predictions")
+    ) as prediction_response_info:
+        page.get_by_role("button", name="예측 실행").click()
+    prediction_response = prediction_response_info.value
+    prediction_id = prediction_response.json()["prediction_id"]
     prediction_summary = page.get_by_label("예측 결과 요약")
     expect(prediction_summary).to_be_visible(timeout=20_000)
     expect(prediction_summary).to_contain_text("4 / 4")
@@ -736,6 +718,67 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
         )
     ).to_be_visible()
     expect(model_retention.get_by_role("button", name="모델 삭제")).to_be_disabled()
+
+    api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
+    prediction_delete_preflight = page.request.get(
+        f"{api_v1}/analysis-runs/{prediction_id}/deletion-preflight"
+    )
+    if not prediction_delete_preflight.ok:
+        raise AssertionError(
+            "prediction deletion preflight failed: "
+            + prediction_delete_preflight.text()
+        )
+    prediction_delete_manifest = prediction_delete_preflight.json()
+    prediction_delete = page.request.delete(
+        f"{api_v1}/analysis-runs/{prediction_id}/deletion",
+        data={
+            "confirmation_analysis_id": prediction_id,
+            "expected_deletion_manifest_sha256": prediction_delete_manifest[
+                "deletion_manifest_sha256"
+            ],
+        },
+    )
+    if not prediction_delete.ok:
+        raise AssertionError(f"prediction deletion failed: {prediction_delete.text()}")
+
+    model_retention.get_by_role("button", name="삭제 영향 확인").click()
+    expect(model_retention.get_by_text("예측 참조 0건", exact=True)).to_be_visible(
+        timeout=15_000
+    )
+    model_retention.get_by_text(
+        "이 모델로 새 예측을 실행할 수 없게 됨을 확인했습니다."
+    ).click()
+    model_retention.get_by_role("button", name="모델 삭제").click()
+    unavailable_message = (
+        "모형 적합 결과는 보존되어 있지만 예측용 모델 자산은 사용할 수 없습니다."
+    )
+    expect(
+        model_retention.get_by_text(unavailable_message, exact=True)
+    ).to_be_visible(timeout=15_000)
+    expect(model_summary).to_be_visible()
+    expect(page.get_by_role("button", name="사전점검 실행")).to_be_disabled()
+    expect(page.get_by_role("button", name="예측 실행")).to_be_disabled()
+    expect(page.get_by_role("button", name="전체 예측 CSV 생성")).to_be_disabled()
+
+    page.reload(wait_until="networkidle")
+    expect(page.get_by_role("heading", name="회귀모형 적합 실행")).to_be_visible(
+        timeout=20_000
+    )
+    history_panel = page.locator(".analysis-history-panel")
+    history_panel.get_by_role("button", name="새로고침").click()
+    saved_linear_model = history_panel.locator(".analysis-history-item").filter(
+        has_text="regression.linear_model"
+    )
+    expect(saved_linear_model).to_have_count(1, timeout=15_000)
+    saved_linear_model.get_by_role("button", name="결과 불러오기").click()
+    expect(page.get_by_text("불러온 결과")).to_be_visible(timeout=15_000)
+    expect(page.get_by_label("회귀모형 요약")).to_be_visible(timeout=15_000)
+    restored_retention = page.get_by_role("region", name="저장 모델 관리")
+    expect(
+        restored_retention.get_by_text(unavailable_message, exact=True)
+    ).to_be_visible(timeout=15_000)
+    expect(page.get_by_role("button", name="사전점검 실행")).to_be_disabled()
+    expect(page.get_by_role("button", name="예측 실행")).to_be_disabled()
 
 
 def verify_attribute_control_chart(page: Page) -> None:
@@ -782,7 +825,7 @@ def verify_attribute_control_chart(page: Page) -> None:
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
     page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-    expect_dataset_context_counts(page, row_label="30행", column_label="2컬럼")
+    expect_dataset_context_counts(page, row_label="1행", column_label="2컬럼")
     page.get_by_role("button", name="분석", exact=True).click()
     page.get_by_role("button", name="계수형 관리도 메서드 보기").click()
     page.get_by_role("radio", name="Phase II 고정 한계 모니터링").click()
@@ -790,15 +833,50 @@ def verify_attribute_control_chart(page: Page) -> None:
     expect(limit_set_select).to_be_enabled(timeout=20_000)
     limit_set_select.select_option(index=1)
     expect(page.get_by_text("호환성 확인 중...")).to_have_count(0, timeout=20_000)
+    expect(
+        page.get_by_text(
+            "구조 호환성 확인 완료. 실제 행 값과 필터 결과는 실행 시 다시 검증됩니다.",
+            exact=True,
+        )
+    ).to_be_visible()
     phase_2_button = page.get_by_role("button", name="P 관리도 실행")
     expect(phase_2_button).to_be_enabled(timeout=20_000)
-    phase_2_button.click()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/api/v1/analysis-runs")
+    ) as phase_2_response_info:
+        phase_2_button.click()
+    phase_2_response = phase_2_response_info.value
+    phase_2_payload = phase_2_response.json()
     expect(summary).to_be_visible(timeout=20_000)
-    expect(summary).to_contain_text("30 / 30")
+    expect(summary).to_contain_text("1 / 1")
+    expect(summary).to_contain_text("사용 불가 · 관측점 부족")
     expect(summary).to_contain_text("Phase II")
     expect(summary).to_contain_text("검증된 immutable limit set")
     expect(summary).to_contain_text("Limit set")
     expect(page.get_by_role("img", name=re.compile(r"P 관리도.*신호"))).to_be_visible()
+
+    phase_2_analysis_id = phase_2_payload["analysis_id"]
+    for export_kind in ("json", "csv", "html"):
+        export_response = page.request.post(
+            f"{api_v1}/analysis-runs/{phase_2_analysis_id}/exports/{export_kind}"
+        )
+        if not export_response.ok:
+            raise AssertionError(
+                f"Phase II {export_kind} export failed: {export_response.text()}"
+            )
+
+    history_panel = page.locator(".analysis-history-panel")
+    history_panel.get_by_role("button", name="새로고침").click()
+    stored_phase_2 = history_panel.locator(".analysis-history-item").filter(
+        has_text="quality.attribute_control_chart"
+    )
+    expect(stored_phase_2).to_have_count(1, timeout=15_000)
+    stored_phase_2.get_by_role("button", name="결과 불러오기").click()
+    expect(page.get_by_text("불러온 결과")).to_be_visible(timeout=15_000)
+    expect(summary).to_contain_text("1 / 1")
+    expect(summary).to_contain_text("사용 불가 · 관측점 부족")
+
     page.get_by_role("button", name="limit set 삭제 영향 확인").click()
     expect(page.get_by_text("Phase II 참조 1건", exact=True)).to_be_visible(timeout=15_000)
     expect(
@@ -1162,7 +1240,9 @@ def verify_bayesian_optimization(page: Page) -> None:
     restored_selector.select_option(study_id)
     expect(page.get_by_label("Bayesian study 종료 기록")).to_be_visible(timeout=20_000)
     expect(page.get_by_role("button", name="이 정의로 successor study 준비")).to_be_visible()
-    page.get_by_role("button", name="삭제 영향 확인").click()
+    page.get_by_label("Bayesian 최적화").get_by_role(
+        "button", name="삭제 영향 확인"
+    ).click()
     deletion_impact = page.get_by_label("Bayesian study 삭제 영향")
     expect(deletion_impact).to_be_visible(timeout=20_000)
     expect(deletion_impact).to_contain_text("파일 0개")

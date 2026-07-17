@@ -105,8 +105,10 @@ export function LinearModelPanel({
   const modelId = result?.model_manifest?.model_id ?? null;
   const modelRetentionState = useRegressionModelRetentionState(modelId);
   const [modelDeletionConfirmed, setModelDeletionConfirmed] = useState(false);
-  const modelDeleted =
-    modelId !== null && modelRetentionState.deletedModelId === modelId;
+  const modelAvailable = modelRetentionState.availability === "available";
+  const modelUnavailable =
+    modelRetentionState.availability === "unavailable_or_deleted";
+  const modelIntegrityError = modelRetentionState.availability === "integrity_error";
   const canRun =
     version !== null &&
     responseColumnId !== null &&
@@ -135,7 +137,7 @@ export function LinearModelPanel({
     result?.model_manifest !== undefined &&
     predictionTargetState.selectedTargetVersionId !== null &&
     !isRunningPredictionPreflight &&
-    !modelDeleted;
+    modelAvailable;
   const canRunPrediction =
     version !== null &&
     result?.model_manifest !== undefined &&
@@ -146,7 +148,7 @@ export function LinearModelPanel({
       predictionTargetState.selectedTargetVersionId &&
     !isRunningPrediction &&
     !isRunningPredictionPreflight &&
-    !modelDeleted;
+    modelAvailable;
   const preflightErrorCount =
     predictionPreflight?.issues.filter((issue) => issue.severity === "error").length ?? 0;
   const preflightWarningCount =
@@ -354,9 +356,10 @@ export function LinearModelPanel({
                     <button
                       className="secondary-button"
                       disabled={
-                        modelDeleted ||
+                        !modelAvailable ||
                         modelRetentionState.isDeleting ||
-                        modelRetentionState.isLoadingPreflight
+                        modelRetentionState.isLoadingPreflight ||
+                        modelRetentionState.isCheckingAvailability
                       }
                       onClick={() => {
                         setModelDeletionConfirmed(false);
@@ -424,9 +427,21 @@ export function LinearModelPanel({
                       </div>
                     </div>
                   ) : null}
-                  {modelDeleted ? (
+                  {modelUnavailable ? (
                     <div className="notice-box" role="status">
-                      모델 manifest를 삭제했습니다. 적합 결과는 기록에 유지됩니다.
+                      모형 적합 결과는 보존되어 있지만 예측용 모델 자산은 사용할 수
+                      없습니다.
+                    </div>
+                  ) : null}
+                  {modelIntegrityError ? (
+                    <div className="error-box" role="alert">
+                      예측용 모델 자산의 무결성을 확인할 수 없습니다. 모형 적합 결과만
+                      표시합니다. 오류 코드: {modelRetentionState.availabilityError}
+                    </div>
+                  ) : null}
+                  {modelRetentionState.isCheckingAvailability ? (
+                    <div className="notice-box" role="status">
+                      예측용 모델 자산의 사용 가능 상태를 확인하고 있습니다.
                     </div>
                   ) : null}
                   {modelRetentionState.error ? (
@@ -480,6 +495,7 @@ export function LinearModelPanel({
                       aria-label="예측 대상 데이터셋 버전"
                       disabled={
                         predictionTargetState.selectedTargetVersionId === null ||
+                        !modelAvailable ||
                         isRunningPredictionPreflight ||
                         isRunningPrediction ||
                         predictionExportState.isCreating ||
@@ -742,6 +758,7 @@ export function LinearModelPanel({
                       <button
                         className="secondary-button"
                         disabled={
+                          !modelAvailable ||
                           predictionExportState.isCreating ||
                           predictionExportState.isDownloading
                         }
@@ -760,7 +777,9 @@ export function LinearModelPanel({
                           </span>
                           <button
                             className="secondary-button"
-                            disabled={predictionExportState.isDownloading}
+                            disabled={
+                              !modelAvailable || predictionExportState.isDownloading
+                            }
                             onClick={predictionExportState.onDownload}
                             type="button"
                           >

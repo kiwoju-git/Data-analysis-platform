@@ -3,6 +3,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.analyses.registry import METHOD_VERSIONS
@@ -37,15 +38,22 @@ def test_phase_2_preflight_execute_restore_and_export_cross_dataset(tmp_path) ->
         )
         payload = executed.json()
         restored = client.get(f"/api/v1/analysis-runs/{payload['analysis_id']}/result")
-        exported = client.post(f"/api/v1/analysis-runs/{payload['analysis_id']}/exports/json")
+        exports = [
+            client.post(f"/api/v1/analysis-runs/{payload['analysis_id']}/exports/{format_name}")
+            for format_name in ("json", "csv", "html")
+        ]
 
     assert preflight.status_code == 200
     assert preflight.json()["ready"] is True
+    assert preflight.json()["schema_version"] == 2
+    assert preflight.json()["method_version"] == "0.3.0"
+    assert preflight.json()["validation_scope"] == "schema_and_dependency_only"
+    assert preflight.json()["row_data_validated"] is False
     assert executed.status_code == 201, executed.text
     assert restored.status_code == 200, restored.text
-    assert exported.status_code == 201, exported.text
+    assert all(response.status_code == 201 for response in exports)
     result = payload["result"]
-    assert result["schema_version"] == 2
+    assert result["schema_version"] == 3
     assert result["phase"] == "phase_2"
     assert result["center_line"] == limit_set["frozen_center_line"]
     assert result["limit_set_dependency"]["limit_set_id"] == limit_set["limit_set_id"]
@@ -56,6 +64,102 @@ def test_phase_2_preflight_execute_restore_and_export_cross_dataset(tmp_path) ->
         == preflight.json()["target_canonical_sha256"]
     )
     assert [signal["position"] for signal in result["signals"]] == [2]
+
+
+@pytest.mark.parametrize(
+    ("chart_type", "content", "has_denominator"),
+    [
+        ("p", b"defectives,denominator\n6,20\n", True),
+        ("np", b"defectives,denominator\n6,20\n", True),
+        ("c", b"defects\n6\n", False),
+        ("u", b"defects,denominator\n6,20\n", True),
+    ],
+)
+def test_phase_2_one_point_restore_and_exports(
+    tmp_path,
+    chart_type,
+    content,
+    has_denominator,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        limit_set = _create_limit_set(client, chart_type=chart_type)
+        target = _upload_confirmed_csv(client, content)
+        count_id = target["columns"][0]["column_id"]
+        denominator_id = target["columns"][1]["column_id"] if has_denominator else None
+        executed = _run_phase_2(
+            client,
+            limit_set,
+            target,
+            count_id=count_id,
+            denominator_id=denominator_id,
+        )
+        assert executed.status_code == 201, executed.text
+        analysis_id = executed.json()["analysis_id"]
+        restored = client.get(f"/api/v1/analysis-runs/{analysis_id}/result")
+        exports = [
+            client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/{format_name}")
+            for format_name in ("json", "csv", "html")
+        ]
+
+    result = executed.json()["result"]
+    assert result["n_used"] == 1
+    assert result["chart"]["point_count"] == 1
+    assert result["dispersion"]["available"] is False
+    assert result["dispersion"]["degrees_of_freedom"] == 0
+    assert result["dispersion"]["ratio"] is None
+    assert result["dispersion"]["reason_code"] == (
+        "attribute_control_chart_dispersion_insufficient_points"
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["result"] == result
+    assert all(response.status_code == 201 for response in exports)
+
+
+def test_phase_2_restores_legacy_v020_schema_2_without_rewriting(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        limit_set = _create_limit_set(client, chart_type="p")
+        target = _upload_confirmed_csv(client, b"defectives,denominator\n6,20\n7,20\n")
+        executed = _run_phase_2(
+            client,
+            limit_set,
+            target,
+            count_id=target["columns"][0]["column_id"],
+            denominator_id=target["columns"][1]["column_id"],
+        )
+        assert executed.status_code == 201, executed.text
+        analysis_id = executed.json()["analysis_id"]
+        record = get_analysis_run_record(tmp_path, analysis_id)
+        assert record is not None and record.result_path is not None
+        result_path = tmp_path / record.result_path
+        envelope = json.loads(result_path.read_bytes())
+        envelope["method_version"] = "0.2.0"
+        envelope["provenance"]["method_version"] = "0.2.0"
+        envelope["result"]["schema_version"] = 2
+        envelope["result"]["dispersion"].pop("available")
+        envelope["result"]["dispersion"].pop("reason_code")
+        result_bytes = json.dumps(
+            envelope,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        result_path.write_bytes(result_bytes)
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            connection.execute(
+                "UPDATE analysis_runs SET method_version = ?, result_sha256 = ? "
+                "WHERE analysis_id = ?",
+                ("0.2.0", hashlib.sha256(result_bytes).hexdigest(), analysis_id),
+            )
+        restored = client.get(f"/api/v1/analysis-runs/{analysis_id}/result")
+        exported = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/json")
+
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["method_version"] == "0.2.0"
+    assert restored.json()["result"]["schema_version"] == 2
+    assert "available" not in restored.json()["result"]["dispersion"]
+    assert exported.status_code == 201, exported.text
 
 
 def test_phase_2_preflight_reports_chart_count_and_target_schema_mismatch(tmp_path) -> None:
@@ -106,6 +210,13 @@ def test_phase_2_np_rejects_target_sample_size_mismatch(tmp_path) -> None:
     with TestClient(create_app(settings)) as client:
         limit_set = _create_limit_set(client, chart_type="np")
         target = _upload_confirmed_csv(client, b"defectives,denominator\n2,20\n3,21\n")
+        preflight = _preflight(
+            client,
+            limit_set,
+            target,
+            count_id=target["columns"][0]["column_id"],
+            denominator_id=target["columns"][1]["column_id"],
+        )
         response = _run_phase_2(
             client,
             limit_set,
@@ -114,6 +225,10 @@ def test_phase_2_np_rejects_target_sample_size_mismatch(tmp_path) -> None:
             denominator_id=target["columns"][1]["column_id"],
         )
 
+    assert preflight.status_code == 200
+    assert preflight.json()["ready"] is True
+    assert preflight.json()["validation_scope"] == "schema_and_dependency_only"
+    assert preflight.json()["row_data_validated"] is False
     assert response.status_code == 400
     assert response.json()["error"]["code"] == (
         "attribute_control_chart_phase_2_np_sample_size_mismatch"

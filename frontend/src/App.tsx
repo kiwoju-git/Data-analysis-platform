@@ -856,56 +856,64 @@ export default function App() {
     [version],
   );
 
+  const displayedAnalysisResult =
+    analysisResult ?? restoredAnalysisResultState.restoredAnalysisResult;
   const descriptiveAnalysisResult =
-    analysisResult?.method_id === "eda.descriptive" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "eda.descriptive" ? displayedAnalysisResult : null;
   const graphicalSummaryAnalysisResult =
-    analysisResult?.method_id === "eda.graphical_summary" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "eda.graphical_summary" ? displayedAnalysisResult : null;
   const normalityAnalysisResult =
-    analysisResult?.method_id === "eda.normality" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "eda.normality" ? displayedAnalysisResult : null;
   const equalVariancesAnalysisResult =
-    analysisResult?.method_id === "eda.equal_variances" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "eda.equal_variances" ? displayedAnalysisResult : null;
   const oneSampleTAnalysisResult =
-    analysisResult?.method_id === "hypothesis.one_sample_t" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "hypothesis.one_sample_t" ? displayedAnalysisResult : null;
   const equivalenceTostAnalysisResult =
-    analysisResult?.method_id === "hypothesis.equivalence_tost" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "hypothesis.equivalence_tost" ? displayedAnalysisResult : null;
   const pairedTAnalysisResult =
-    analysisResult?.method_id === "hypothesis.paired_t" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "hypothesis.paired_t" ? displayedAnalysisResult : null;
   const oneSampleWilcoxonAnalysisResult =
-    analysisResult?.method_id === "hypothesis.one_sample_wilcoxon" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "hypothesis.one_sample_wilcoxon" ? displayedAnalysisResult : null;
   const twoSampleTAnalysisResult =
-    analysisResult?.method_id === "hypothesis.two_sample_t" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "hypothesis.two_sample_t" ? displayedAnalysisResult : null;
   const mannWhitneyAnalysisResult =
-    analysisResult?.method_id === "hypothesis.mann_whitney" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "hypothesis.mann_whitney" ? displayedAnalysisResult : null;
   const kruskalWallisAnalysisResult =
-    analysisResult?.method_id === "hypothesis.kruskal_wallis" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "hypothesis.kruskal_wallis" ? displayedAnalysisResult : null;
   const oneWayAnovaAnalysisResult =
-    analysisResult?.method_id === "hypothesis.one_way_anova" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "hypothesis.one_way_anova" ? displayedAnalysisResult : null;
   const oneProportionAnalysisResult =
-    analysisResult?.method_id === "categorical.one_proportion" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "categorical.one_proportion" ? displayedAnalysisResult : null;
   const twoProportionAnalysisResult =
-    analysisResult?.method_id === "categorical.two_proportion" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "categorical.two_proportion" ? displayedAnalysisResult : null;
   const chiSquareAssociationAnalysisResult =
-    analysisResult?.method_id === "categorical.chi_square_association" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "categorical.chi_square_association"
+      ? displayedAnalysisResult
+      : null;
   const pearsonAnalysisResult =
-    analysisResult?.method_id === "regression.pearson" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "regression.pearson" ? displayedAnalysisResult : null;
   const xyCorrelationAnalysisResult =
-    analysisResult?.method_id === "regression.xy_correlation" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "regression.xy_correlation"
+      ? displayedAnalysisResult
+      : null;
   const linearModelAnalysisResult =
-    analysisResult?.method_id === "regression.linear_model" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "regression.linear_model" ? displayedAnalysisResult : null;
   const attributeControlChartAnalysisResult =
-    analysisResult?.method_id === "quality.attribute_control_chart" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "quality.attribute_control_chart"
+      ? displayedAnalysisResult
+      : null;
   const individualsChartAnalysisResult =
-    analysisResult?.method_id === "quality.individuals_chart" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "quality.individuals_chart" ? displayedAnalysisResult : null;
   const subgroupChartAnalysisResult =
-    analysisResult?.method_id === "quality.subgroup_chart" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "quality.subgroup_chart" ? displayedAnalysisResult : null;
   const runChartAnalysisResult =
-    analysisResult?.method_id === "quality.run_chart" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "quality.run_chart" ? displayedAnalysisResult : null;
   const capabilityAnalysisResult =
-    analysisResult?.method_id === "quality.capability" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "quality.capability" ? displayedAnalysisResult : null;
   const gageRrAnalysisResult =
-    analysisResult?.method_id === "quality.gage_rr" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "quality.gage_rr" ? displayedAnalysisResult : null;
   const gageRunChartAnalysisResult =
-    analysisResult?.method_id === "quality.gage_run_chart" ? analysisResult : null;
+    displayedAnalysisResult?.method_id === "quality.gage_run_chart" ? displayedAnalysisResult : null;
   const descriptiveResult = isDescriptiveStatisticsResult(descriptiveAnalysisResult?.result)
     ? descriptiveAnalysisResult.result
     : null;

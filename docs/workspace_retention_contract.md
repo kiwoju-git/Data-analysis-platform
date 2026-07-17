@@ -4,7 +4,7 @@ Last updated: 2026-07-17
 
 ## Scope And Current Slice
 
-This contract separates lifecycle close from physical deletion. Three bounded
+This contract separates lifecycle close from physical deletion. Five bounded
 slices are implemented:
 
 1. deletion of one closed Bayesian Optimization study's metadata ownership
@@ -23,6 +23,14 @@ other artifact. Analysis-run deletion is intentionally narrower than cascade
 deletion: a run that owns a regression model, is the source of an attribute
 control limit set, or is referenced by a job is blocked. Dataset, DOE-design,
 response-revision, bulk, and automatic deletion remain unavailable.
+
+Deleting a regression-model asset never deletes or rewrites its source linear-
+model analysis result. The source fit remains restorable, but the UI rechecks
+the checksum-validated model GET on every displayed current or restored fit.
+A missing model is shown as `unavailable_or_deleted`; manifest/path/checksum
+failures are shown separately as `integrity_error`. Both states disable new
+prediction preflight, execution, and prediction CSV actions while preserving
+the fit table and provenance.
 
 The current Bayesian graph owns no filesystem artifact. Its deletion preflight
 therefore reports `file_count=0` and `file_bytes=0`; this is a verified property

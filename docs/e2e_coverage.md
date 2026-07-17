@@ -6,22 +6,22 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-17 regression-model and attribute-control-limit-set deletion
-regression run passed in 99.3
-seconds with:
+The 2026-07-17 Phase II boundary and regression-model availability regression
+run passed in 69.2 seconds with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -BackendPort 8031 `
-  -FrontendPort 5231 `
-  -WorkspaceRoot .\.tmp\e2e-workspace-asset-retention-final-3 `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics-asset-retention-final-3
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics
 ```
 
-The run verifies that a stored prediction blocks deletion of its regression
-model and that a Phase II chart blocks deletion of its frozen control-limit
-set. Both impact panels expose dependency counts without paths or raw values
-and keep the irreversible delete action disabled. The run also retains
+The run first verifies that a stored prediction blocks deletion of its
+regression model. It then deletes the prediction through its reviewed analysis
+ownership graph, deletes the now-unreferenced model, reloads the app, restores
+the preserved fit result, and verifies that model availability remains
+unavailable and all prediction actions stay disabled. It also runs a one-point
+Phase II chart, displays unavailable dispersion, creates JSON/CSV/HTML exports,
+restores the saved result, and confirms the limit-set dependency blocker. Both
+impact panels remain path/raw-value free. The run also retains
 individual export deletion, then restores and compares two
 analysis runs, reviews and separately confirms deletion of the dependency-free
 run, verifies history shrinks from two to one, and verifies deleted restore and
@@ -76,11 +76,16 @@ The current smoke test is `tests/e2e/critical_path.py`.
   `.csv` download through the checksum-validated analysis export route.
 - Loads regression-model deletion impact after the prediction exists, verifies
   the dependent-prediction count, and verifies confirmed deletion is disabled.
+  It deletes the prediction through exact analysis-run preflight, deletes the
+  model, verifies the fit remains rendered while prediction/preflight/CSV are
+  disabled, reloads the app, restores the selected dataset version and stored
+  fit through validated APIs, and verifies the same unavailable state.
 - Creates a stable 20-point P-chart Phase I baseline, closes it through the
-  app-created immutable limit-set API, registers a separate 30-point monitoring
-  dataset, selects the verified asset in the Phase II UI, waits for target
-  compatibility preflight, and verifies frozen-limit execution, source/close
-  metadata, 30-row summary, and accessible SVG chart.
+  app-created immutable limit-set API, registers a separate one-point monitoring
+  dataset, selects the verified asset in the Phase II UI, verifies the
+  schema/dependency-only preflight notice, and verifies frozen-limit execution,
+  source/close metadata, one-row summary, unavailable dispersion, accessible
+  SVG chart, JSON/CSV/HTML exports, and stored-result restore.
 - Loads limit-set deletion impact after the Phase II result exists, verifies
   the dependent Phase II count, and verifies confirmed deletion is disabled.
 - Creates a deterministic replicated 2-factor DOE with one center point, saves

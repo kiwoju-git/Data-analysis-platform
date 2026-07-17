@@ -109,6 +109,11 @@ export function AttributeControlChartPanel({
           ? "Phase I은 현재 데이터에서 기준선을 추정합니다. 안정성을 확인한 결과만 immutable limit set으로 닫으세요."
           : "Phase II는 선택한 immutable limit set의 중심선과 3-sigma 한계를 현재 데이터에 그대로 적용합니다."}
       </div>
+      {phase === "phase_2" ? (
+        <div className="notice-box" role="status">
+          구조 호환성 확인 완료. 실제 행 값과 필터 결과는 실행 시 다시 검증됩니다.
+        </div>
+      ) : null}
       {version === null ? (
         <div className="notice-box">데이터셋 버전 생성 후 실행할 수 있습니다.</div>
       ) : (
@@ -391,7 +396,12 @@ export function AttributeControlChartPanel({
                 <span>중심선</span>
                 <strong>{formatNumber(result.center_line)}</strong>
                 <span>Dispersion ratio</span>
-                <strong>{formatNumber(result.dispersion.ratio)}</strong>
+                <strong>
+                  {result.dispersion.available === false ||
+                  result.dispersion.ratio === null
+                    ? "사용 불가 · 관측점 부족"
+                    : formatNumber(result.dispersion.ratio)}
+                </strong>
                 <span>관측별 한계</span>
                 <strong>{result.limits_vary ? "가변" : "고정"}</strong>
                 <span>신호</span>

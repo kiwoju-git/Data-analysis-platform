@@ -2,6 +2,38 @@
 
 Last updated: 2026-07-17
 
+## Local Validation
+
+- Clean pushed-main baseline: local `main` and `origin/main` both resolved to
+  `d9e20fb8f588429e2b48003327b489e39b9deaa9` with an empty working tree.
+  `scripts/check.ps1` passed in 804.6 seconds with backend pytest 750 and
+  frontend Vitest 111. Chromium E2E passed in 63.8 seconds with diagnostics at
+  `.tmp/e2e-diagnostics-baseline-d9e20fb`.
+- Current stabilization worktree: based on that pushed SHA, but not committed.
+  `scripts/check.ps1` passed in 771.5 seconds with Ruff over 158 Python files,
+  format check, mypy over 101 source files, backend pytest 763, frontend lint,
+  typecheck, Vitest 114, and production build. Direct collection of
+  `test_openapi_frontend_contract.py` contains 148 tests.
+- The latest recorded backend pytest count is 763.
+- The latest recorded frontend Vitest count is 114.
+- The latest OpenAPI/frontend contract count is 148. These counts belong to
+  the current uncommitted worktree validation, not the clean pushed baseline
+  or remote Actions.
+- Current production assets are 491.75 kB / 114.96 kB gzip for main,
+  46.17 kB / 9.54 kB for Regression, 64.25 kB / 11.97 kB for Quality, and
+  90.79 kB / 20.77 kB for DOE. No JavaScript asset crosses the configured
+  500 kB warning threshold.
+- The final full Chromium critical path passed in 69.2 seconds with the exact
+  requested diagnostics root `.tmp/e2e-diagnostics`. It includes one-point
+  Phase II result/export/restore and regression-model deletion followed by
+  reload, stored fit restore, and prediction-action blocking.
+- The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0. These are development results, not Windows 11/Python 3.10/Node 22
+  release evidence. The Windows 11/Node 22 clean release gate remains open.
+- `gh auth status --hostname github.com` failed because `gh` is not installed.
+  No latest run ID/head SHA, hosted Windows/E2E job result/order, artifact
+  contents, or workflow-dispatch UI was independently verified.
+
 ## Workflow Configuration
 
 - Workflow file: `.github/workflows/ci.yml`
@@ -16,7 +48,7 @@ Last updated: 2026-07-17
 
 This satisfies the current repository-side requirement that main pushes should start the Windows CI workflow and the browser E2E smoke workflow job.
 
-## Local Validation
+## Recent Local Validation History
 
 - The regression-model and attribute-control-limit-set deletion slice was
   validated locally on 2026-07-17 from an uncommitted working tree based on
@@ -637,7 +669,7 @@ This satisfies the current repository-side requirement that main pushes should s
   attempted after the CLI prerequisite failed.
 - Remote GitHub Actions execution has not been directly verified from this
   environment for the working tree validated from local base `main` commit
-  `0cbce01d2fa2914459c5be69f070e1703cb631dd`. A successful Git push confirms
+  `d9e20fb8f588429e2b48003327b489e39b9deaa9`. A successful Git push confirms
   only remote ref transfer; it does not verify the resulting Actions jobs.
 - GitHub app checks against that commit returned no PR-filtered workflow runs
   and no legacy commit statuses on 2026-07-10. The available connector endpoint

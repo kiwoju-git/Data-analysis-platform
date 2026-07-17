@@ -41,8 +41,8 @@ export interface AttributeControlChartLimitSetDependency {
   asset_schema_version: 1;
   asset_sha256: string;
   source_analysis_id: string;
-  source_method_version: "0.1.0" | "0.2.0";
-  source_result_schema_version: 1 | 2;
+  source_method_version: "0.1.0" | "0.2.0" | "0.3.0";
+  source_result_schema_version: 1 | 2 | 3;
   source_dataset_version_id: string;
   source_schema_hash: string;
   source_canonical_sha256: string;
@@ -103,9 +103,11 @@ export interface AttributeControlChartResult {
   lcl_truncated_count: number;
   ucl_truncated_count: number;
   dispersion: {
+    available?: boolean;
     method: string;
     degrees_of_freedom: number;
-    ratio: number;
+    ratio: number | null;
+    reason_code?: "attribute_control_chart_dispersion_insufficient_points" | null;
     warning_threshold: number;
     used_to_adjust_limits: false;
   };

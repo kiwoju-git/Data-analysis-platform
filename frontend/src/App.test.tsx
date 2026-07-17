@@ -1450,6 +1450,9 @@ describe("App", () => {
     expect(apiRoutes.datasetConfirmParsing("dataset/1")).toBe(
       "http://127.0.0.1:8000/api/v1/datasets/dataset%2F1/confirm-parsing",
     );
+    expect(apiRoutes.datasetVersion("version/1")).toBe(
+      "http://127.0.0.1:8000/api/v1/dataset-versions/version%2F1",
+    );
     expect(apiRoutes.datasetVersionRows("version/1", 5, 10)).toBe(
       "http://127.0.0.1:8000/api/v1/dataset-versions/version%2F1/rows?limit=10&offset=5",
     );
@@ -2495,7 +2498,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "quality.attribute_control_chart",
-          method_version: "0.2.0",
+          method_version: "0.3.0",
           module_id: "quality",
           label_ko: "계수형 관리도",
           label_en: "Control Chart",
@@ -2569,7 +2572,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "quality.attribute_control_chart",
-          method_version: "0.2.0",
+          method_version: "0.3.0",
           module_id: "quality",
           label_ko: "계수형 관리도",
           label_en: "Control Chart",
@@ -2613,11 +2616,27 @@ describe("App", () => {
     const limitSet = attributeControlLimitSetTestResponse();
     const result: AttributeControlChartResult = {
       ...attributeControlChartTestResult(),
-      schema_version: 2,
+      schema_version: 3,
       phase: "phase_2",
       control_limit_method: "phase_2_frozen_three_sigma",
       baseline: "verified_immutable_limit_set",
       center_line: limitSet.frozen_center_line,
+      n_total: 1,
+      n_used: 1,
+      dispersion: {
+        available: false,
+        method: "pearson_chi_square_over_degrees_of_freedom_against_frozen_center",
+        degrees_of_freedom: 0,
+        ratio: null,
+        reason_code: "attribute_control_chart_dispersion_insufficient_points",
+        warning_threshold: 2,
+        used_to_adjust_limits: false,
+      },
+      chart: {
+        ...attributeControlChartTestResult().chart,
+        point_count: 1,
+        points: attributeControlChartTestResult().chart.points.slice(0, 1),
+      },
       limit_set_dependency: {
         limit_set_id: limitSet.limit_set_id,
         asset_schema_version: 1,
@@ -2656,7 +2675,7 @@ describe("App", () => {
             limit_set_id: limitSet.limit_set_id,
             source_analysis_id: limitSet.source_analysis_id,
             method_id: "quality.attribute_control_chart",
-            source_method_version: "0.2.0",
+            source_method_version: "0.3.0",
             deletion_ready: false,
             blockers: ["attribute_control_limit_set_deletion_phase_2_dependency"],
             counts: {
@@ -2674,9 +2693,9 @@ describe("App", () => {
           isLoadingDeletionPreflight: false,
           limitSets: [limitSet],
           preflight: {
-            schema_version: 1,
+            schema_version: 2,
             method_id: "quality.attribute_control_chart",
-            method_version: "0.2.0",
+            method_version: "0.3.0",
             phase: "phase_2",
             limit_set_id: limitSet.limit_set_id,
             limit_set_asset_sha256: limitSet.asset_sha256,
@@ -2685,6 +2704,8 @@ describe("App", () => {
             target_canonical_sha256: "b".repeat(64),
             chart_type: "p",
             count_definition: "defectives",
+            validation_scope: "schema_and_dependency_only",
+            row_data_validated: false,
             ready: true,
             issues: [],
           },
@@ -2706,6 +2727,10 @@ describe("App", () => {
     expect(html).toContain("검증된 limit set");
     expect(html).toContain("기준선 종료");
     expect(html).toContain("검증된 immutable limit set");
+    expect(html).toContain(
+      "구조 호환성 확인 완료. 실제 행 값과 필터 결과는 실행 시 다시 검증됩니다.",
+    );
+    expect(html).toContain("사용 불가 · 관측점 부족");
     expect(html).not.toContain("호환성 확인 중");
   });
 
@@ -6503,7 +6528,7 @@ function attributeControlCatalogTestResponse(): AnalysisMethodListResponse {
     methods: [
       {
         method_id: "quality.attribute_control_chart",
-        method_version: "0.2.0",
+        method_version: "0.3.0",
         module_id: "quality",
         label_ko: "계수형 관리도",
         label_en: "Control Chart",
@@ -6524,9 +6549,9 @@ function attributeControlLimitSetTestResponse(): AttributeControlLimitSetRespons
     limit_set_id: "11111111-1111-4111-8111-111111111111",
     status: "closed",
     method_id: "quality.attribute_control_chart",
-    source_method_version: "0.2.0",
-    phase2_method_version: "0.2.0",
-    source_result_schema_version: 2,
+    source_method_version: "0.3.0",
+    phase2_method_version: "0.3.0",
+    source_result_schema_version: 3,
     source_analysis_id: "22222222-2222-4222-8222-222222222222",
     source_dataset_version_id: "33333333-3333-4333-8333-333333333333",
     source_schema_hash: "c".repeat(64),
@@ -6587,7 +6612,7 @@ function attributeControlLimitSetTestResponse(): AttributeControlLimitSetRespons
 
 function attributeControlChartTestResult(): AttributeControlChartResult {
   return {
-    schema_version: 1,
+    schema_version: 3,
     summary_type: "attribute_control_chart",
     method: "p_chart",
     chart_type: "p",
@@ -6638,9 +6663,11 @@ function attributeControlChartTestResult(): AttributeControlChartResult {
     lcl_truncated_count: 2,
     ucl_truncated_count: 0,
     dispersion: {
+      available: true,
       method: "pearson_chi_square_over_degrees_of_freedom",
       degrees_of_freedom: 1,
       ratio: 2.3,
+      reason_code: null,
       warning_threshold: 2,
       used_to_adjust_limits: false,
     },

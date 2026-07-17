@@ -1,13 +1,13 @@
 # Attribute Control Chart Method Contract
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 ## Scope And Version
 
 - Method ID: `quality.attribute_control_chart`
-- Method version: `0.2.0`
-- Result schema: `2` for new Phase I and Phase II runs; stored `0.1.0`/schema-1
-  Phase I results restore without relabeling
+- Method version: `0.3.0`
+- Result schema: `3` for new Phase I and Phase II runs; stored `0.1.0`/schema-1
+  and `0.2.0`/schema-2 results restore without relabeling
 - Execution: generic inline `POST /api/v1/analysis-runs`
 - Storage/export: checksum-validated stored result, row snapshot, JSON, long CSV,
   and HTML through the common analysis-run paths
@@ -80,6 +80,12 @@ limits or chart type. Binomial expected successes/failures below `5`, Poisson
 expected counts below `5`, and fewer than `20` Phase I points also create
 interpretation warnings.
 
+Phase I estimation requires at least two valid points and limit-set promotion
+requires at least 20. Phase II monitoring requires at least one. For a single
+Phase II point, the frozen limit and strict signal remain valid, but Pearson
+dispersion is explicitly unavailable with zero degrees of freedom, null ratio,
+and `attribute_control_chart_dispersion_insufficient_points` as its reason.
+
 ## Errors And Warnings
 
 Stable errors include:
@@ -97,6 +103,7 @@ Stable errors include:
 - `attribute_control_chart_defectives_exceed_sample_size`
 - `attribute_control_chart_np_varying_sample_size`
 - `attribute_control_chart_point_count_too_small`
+- `attribute_control_chart_phase_2_no_usable_points`
 - `attribute_control_chart_zero_variation`
 
 Persistent warnings cover Phase I estimation, canonical order, unprovable

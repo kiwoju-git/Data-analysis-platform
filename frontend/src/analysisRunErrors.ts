@@ -50,6 +50,11 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     message: "저장 결과, 대상 데이터 또는 limit set의 관계가 생성 당시와 일치하지 않습니다.",
     action: "변경되지 않은 원본 자산을 복원하거나 검증된 limit set으로 다시 실행하세요.",
   },
+  attribute_control_chart_phase_2_no_usable_points: {
+    title: "Phase II 유효 관측 없음",
+    message: "필터와 complete-case 제외 후 평가할 모니터링 관측이 없습니다.",
+    action: "필터, 계수 값, 표본 크기 또는 검사 기회 값을 확인한 뒤 다시 실행하세요.",
+  },
   bayesian_study_initial_design_too_small: {
     title: "초기 trial 수 부족",
     message: "Bayesian 추천에 필요한 최소 관측 수보다 초기 trial 수가 적습니다.",

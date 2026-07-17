@@ -96,6 +96,8 @@ def test_regression_model_deletion_preserves_source_analysis_and_blocks_predicti
     assert source_delete.json()["counts"]["regression_model_count"] == 0
     assert source_delete.json()["counts"]["analysis_artifact_count"] == 1
     assert missing_model.status_code == 404
+    assert missing_model.json()["error"]["code"] == "regression_model_not_found"
+    assert str(tmp_path) not in json.dumps(missing_model.json())
     assert prediction.status_code == 200, prediction.text
     assert blocked_preflight_response.status_code == 200
     assert blocked_preflight["deletion_ready"] is False

@@ -1,7 +1,8 @@
 import hashlib
 import json
+from math import isfinite
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Literal, cast
 from uuid import UUID
 
 from fastapi import status
@@ -29,7 +30,11 @@ from app.storage.metadata import (
 )
 
 ATTRIBUTE_CONTROL_METHOD_ID: Final = "quality.attribute_control_chart"
-ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION: Final = "0.2.0"
+ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION: Final[Literal["0.3.0"]] = cast(
+    Literal["0.3.0"], METHOD_VERSIONS[ATTRIBUTE_CONTROL_METHOD_ID]
+)
+_SUPPORTED_PHASE2_RESULTS: Final = {"0.2.0": 2, "0.3.0": 3}
+_SUPPORTED_LIMIT_SET_METHOD_VERSIONS: Final = {"0.2.0", "0.3.0"}
 _NUMERIC_DATA_TYPES: Final = {"integer", "decimal"}
 _ROW_SNAPSHOT_KIND: Final = "analysis_row_snapshot"
 _COMPATIBILITY_CODES: Final = {
@@ -72,7 +77,7 @@ def get_attribute_control_monitoring_preflight(
             message=exc.message,
         )
     return AttributeControlMonitoringPreflightResponse(
-        schema_version=1,
+        schema_version=2,
         method_id=ATTRIBUTE_CONTROL_METHOD_ID,
         method_version=ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION,
         phase="phase_2",
@@ -83,6 +88,8 @@ def get_attribute_control_monitoring_preflight(
         target_canonical_sha256=context.canonical_rows_artifact.sha256,
         chart_type=asset.chart_type,
         count_definition=asset.count_definition,
+        validation_scope="schema_and_dependency_only",
+        row_data_validated=False,
         ready=issue is None,
         issues=[] if issue is None else [issue],
     )
@@ -99,7 +106,7 @@ def validate_attribute_control_phase_2_target(
     constant_opportunity_confirmed: bool,
 ) -> tuple[DatasetColumnRecord, DatasetColumnRecord | None]:
     if (
-        asset.phase2_method_version != ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION
+        asset.phase2_method_version not in _SUPPORTED_LIMIT_SET_METHOD_VERSIONS
         or METHOD_VERSIONS[ATTRIBUTE_CONTROL_METHOD_ID] != ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION
     ):
         raise _error(
@@ -184,7 +191,10 @@ def validate_attribute_control_phase_2_consistency(
 ) -> None:
     record = stored_result.record
     envelope = stored_result.envelope
-    if record.method_id != ATTRIBUTE_CONTROL_METHOD_ID or record.method_version != "0.2.0":
+    if record.method_id != ATTRIBUTE_CONTROL_METHOD_ID:
+        return
+    expected_result_schema = _SUPPORTED_PHASE2_RESULTS.get(record.method_version)
+    if expected_result_schema is None:
         return
     result = envelope.result
     if not isinstance(result, dict) or result.get("phase") != "phase_2":
@@ -256,7 +266,7 @@ def validate_attribute_control_phase_2_consistency(
     ):
         raise _dependency_mismatch()
     if (
-        result.get("schema_version") != 2
+        result.get("schema_version") != expected_result_schema
         or result.get("control_limit_method") != "phase_2_frozen_three_sigma"
         or result.get("baseline") != "verified_immutable_limit_set"
         or result.get("chart_type") != asset.chart_type
@@ -265,7 +275,36 @@ def validate_attribute_control_phase_2_consistency(
         or result.get("n_total") != target_dependency.get("row_count_included")
     ):
         raise _dependency_mismatch()
+    if expected_result_schema == 3 and not _valid_dispersion_relationship(result):
+        raise _dependency_mismatch()
     _validate_row_snapshot_dependency(settings, record.analysis_id, config, context)
+
+
+def _valid_dispersion_relationship(result: dict[str, Any]) -> bool:
+    n_used = result.get("n_used")
+    dispersion = result.get("dispersion")
+    if isinstance(n_used, bool) or not isinstance(n_used, int) or n_used < 1:
+        return False
+    if not isinstance(dispersion, dict):
+        return False
+    degrees_of_freedom = dispersion.get("degrees_of_freedom")
+    if degrees_of_freedom != n_used - 1 or dispersion.get("used_to_adjust_limits") is not False:
+        return False
+    if n_used == 1:
+        return bool(
+            dispersion.get("available") is False
+            and dispersion.get("ratio") is None
+            and dispersion.get("reason_code")
+            == "attribute_control_chart_dispersion_insufficient_points"
+        )
+    ratio = dispersion.get("ratio")
+    return bool(
+        dispersion.get("available") is True
+        and dispersion.get("reason_code") is None
+        and not isinstance(ratio, bool)
+        and isinstance(ratio, int | float)
+        and isfinite(float(ratio))
+    )
 
 
 def _expected_dependency_payloads(
@@ -319,7 +358,8 @@ def _envelope_relationships_match(
     return bool(
         str(envelope.analysis_id) == record.analysis_id == str(analysis_id)
         and envelope.method_id == record.method_id == ATTRIBUTE_CONTROL_METHOD_ID
-        and envelope.method_version == record.method_version == "0.2.0"
+        and envelope.method_version == record.method_version
+        and record.method_version in _SUPPORTED_PHASE2_RESULTS
         and envelope.dataset_version_id is not None
         and str(envelope.dataset_version_id) == record.dataset_version_id
         and record.dataset_version_id == context.version.version_id

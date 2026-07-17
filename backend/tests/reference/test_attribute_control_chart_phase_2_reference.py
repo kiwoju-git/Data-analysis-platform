@@ -39,8 +39,8 @@ def test_phase_2_fixture_and_registry_match_executable_contract() -> None:
 
     assert METHOD_VERSIONS["quality.attribute_control_chart"] == current["method_version"]
     assert current == {
-        "method_version": "0.2.0",
-        "result_schema_version": 2,
+        "method_version": "0.3.0",
+        "result_schema_version": 3,
         "limit_set_schema_version": 1,
     }
 
@@ -79,7 +79,7 @@ def test_executable_phase_2_matches_independent_policy_fixture(case_index: int) 
         fixed_sample_size=(case["baseline"]["denominators"][0] if chart_type == "np" else None),
         constant_opportunity_confirmed=chart_type == "c",
     )
-    assert result["schema_version"] == 2
+    assert result["schema_version"] == 3
     assert result["phase"] == "phase_2"
     assert result["center_line"] == pytest.approx(expected["center_line"], abs=1e-12)
     assert [point["value"] for point in result["chart"]["points"]] == pytest.approx(
@@ -100,8 +100,8 @@ def test_phase_2_contract_reserves_immutable_dependency_and_version_policy() -> 
     contract = CONTRACT_PATH.read_text(encoding="utf-8")
 
     for required in (
-        "method version `0.2.0`",
-        "result schema `2`",
+        "method version `0.3.0`",
+        "result schema `3`",
         "limit-set asset schema `1`",
         "app-created `limit_set_id`",
         "canonical payload SHA-256",

@@ -56,6 +56,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchRegressionPredictions: vi.fn(),
   fetchRegressionPredictionRows: vi.fn(),
   fetchRegressionModelDeletionPreflight: vi.fn(),
+  fetchRegressionModelManifest: vi.fn(),
 }));
 
 vi.mock("./api", () => apiMocks);
@@ -365,6 +366,7 @@ beforeEach(() => {
   for (const mock of Object.values(apiMocks)) {
     mock.mockReset();
   }
+  apiMocks.fetchRegressionModelManifest.mockResolvedValue({});
 });
 
 describe("async workbench hooks", () => {
@@ -474,6 +476,70 @@ describe("async workbench hooks", () => {
     expect(runner.output.deletedModelId).toBeNull();
     expect(runner.output.deletion).toBeNull();
     expect(runner.output.isDeleting).toBe(false);
+    runner.unmount();
+  });
+
+  it("restores regression model availability from the checksum-validated asset", async () => {
+    const runner = new HookRunner<
+      Parameters<typeof useRegressionModelRetentionState>[0],
+      ReturnType<typeof useRegressionModelRetentionState>
+    >(useRegressionModelRetentionState, "model-a");
+    await runner.flush();
+
+    expect(apiMocks.fetchRegressionModelManifest).toHaveBeenCalledWith("model-a");
+    expect(runner.output.availability).toBe("available");
+    expect(runner.output.isCheckingAvailability).toBe(false);
+    runner.unmount();
+  });
+
+  it("distinguishes an unavailable model from an integrity failure after restore", async () => {
+    apiMocks.fetchRegressionModelManifest.mockRejectedValueOnce(
+      new Error("regression_model_not_found"),
+    );
+    const missingRunner = new HookRunner<
+      Parameters<typeof useRegressionModelRetentionState>[0],
+      ReturnType<typeof useRegressionModelRetentionState>
+    >(useRegressionModelRetentionState, "model-missing");
+    await missingRunner.flush();
+    expect(missingRunner.output.availability).toBe("unavailable_or_deleted");
+    expect(missingRunner.output.availabilityError).toBe("regression_model_not_found");
+    missingRunner.unmount();
+
+    apiMocks.fetchRegressionModelManifest.mockRejectedValueOnce(
+      new Error("regression_model_manifest_checksum_mismatch"),
+    );
+    const corruptRunner = new HookRunner<
+      Parameters<typeof useRegressionModelRetentionState>[0],
+      ReturnType<typeof useRegressionModelRetentionState>
+    >(useRegressionModelRetentionState, "model-corrupt");
+    await corruptRunner.flush();
+    expect(corruptRunner.output.availability).toBe("integrity_error");
+    expect(corruptRunner.output.availabilityError).toBe(
+      "regression_model_manifest_checksum_mismatch",
+    );
+    corruptRunner.unmount();
+  });
+
+  it("disables the current model immediately after successful asset deletion", async () => {
+    apiMocks.fetchRegressionModelDeletionPreflight.mockResolvedValue({
+      model_id: "model-a",
+      deletion_ready: true,
+      deletion_manifest_sha256: "a".repeat(64),
+    } as RegressionModelDeletionPreflightResponse);
+    apiMocks.deleteRegressionModel.mockResolvedValue({
+      model_id: "model-a",
+    } as RegressionModelDeleteResponse);
+    const runner = new HookRunner<
+      Parameters<typeof useRegressionModelRetentionState>[0],
+      ReturnType<typeof useRegressionModelRetentionState>
+    >(useRegressionModelRetentionState, "model-a");
+    await runner.flush();
+    await runner.act(() => runner.output.onLoadPreflight());
+    await runner.act(() => runner.output.onDelete(runner.output.preflight!));
+
+    expect(runner.output.deletedModelId).toBe("model-a");
+    expect(runner.output.availability).toBe("unavailable_or_deleted");
+    expect(runner.output.availabilityError).toBe("regression_model_not_found");
     runner.unmount();
   });
 

@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from fastapi import status
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, ValidationError
 
+from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.quality import (
     AttributeControlLimitSetAsset,
     AttributeControlLimitSetColumnDependency,
@@ -50,7 +51,9 @@ from app.storage.metadata import (
 
 ATTRIBUTE_CONTROL_METHOD_ID: Final = "quality.attribute_control_chart"
 ATTRIBUTE_CONTROL_LIMIT_SET_ASSET_SCHEMA_VERSION: Final[Literal[1]] = 1
-ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION: Final[Literal["0.2.0"]] = "0.2.0"
+ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION: Final[Literal["0.3.0"]] = cast(
+    Literal["0.3.0"], METHOD_VERSIONS[ATTRIBUTE_CONTROL_METHOD_ID]
+)
 ATTRIBUTE_CONTROL_LIMIT_SET_CALCULATION_POLICY: Final[Literal["phase_2_frozen_three_sigma_v1"]] = (
     "phase_2_frozen_three_sigma_v1"
 )
@@ -59,7 +62,11 @@ ATTRIBUTE_CONTROL_LIMIT_SET_ELIGIBILITY_POLICY: Final[
 ] = "phase_2_baseline_eligibility_v1"
 MINIMUM_PHASE2_BASELINE_POINT_COUNT: Final = 20
 _ROW_SNAPSHOT_KIND: Final = "analysis_row_snapshot"
-_SUPPORTED_PHASE1_SOURCE_RESULTS: Final = {("0.1.0", 1), ("0.2.0", 2)}
+_SUPPORTED_PHASE1_SOURCE_RESULTS: Final = {
+    ("0.1.0", 1),
+    ("0.2.0", 2),
+    ("0.3.0", 3),
+}
 
 
 class _ResultColumn(BaseModel):
@@ -103,7 +110,7 @@ class _ResultDispersion(BaseModel):
 class _PhaseOneResult(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    schema_version: Literal[1, 2]
+    schema_version: Literal[1, 2, 3]
     phase: Literal["phase_1"] | None = None
     summary_type: Literal["attribute_control_chart"]
     chart_type: Literal["p", "np", "c", "u"]
@@ -157,7 +164,9 @@ def create_attribute_control_limit_set(
         limit_set_id=limit_set_id,
         status="closed",
         method_id=ATTRIBUTE_CONTROL_METHOD_ID,
-        source_method_version=cast(Literal["0.1.0", "0.2.0"], baseline.record.method_version),
+        source_method_version=cast(
+            Literal["0.1.0", "0.2.0", "0.3.0"], baseline.record.method_version
+        ),
         phase2_method_version=ATTRIBUTE_CONTROL_PHASE2_METHOD_VERSION,
         source_result_schema_version=baseline.result.schema_version,
         source_analysis_id=source_analysis_id,
@@ -325,7 +334,7 @@ def _validate_source_baseline(settings: Settings, source_analysis_id: UUID) -> _
         raise _source_invalid()
     if result.schema_version == 1 and result.phase is not None:
         raise _source_invalid()
-    if result.schema_version == 2 and result.phase != "phase_1":
+    if result.schema_version in {2, 3} and result.phase != "phase_1":
         raise _source_invalid()
     try:
         context = get_dataset_rows_context(settings, dataset_version_id)
