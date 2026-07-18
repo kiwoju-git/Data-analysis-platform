@@ -11,6 +11,8 @@ from pydantic import ValidationError
 
 from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.doe import (
+    DoeResponseSurfaceAnalysisCatalogItem,
+    DoeResponseSurfaceAnalysisCatalogResponse,
     DoeResponseSurfaceAnalysisResponse,
     ResponseOptimizerCreateRequest,
     ResponseOptimizerResponse,
@@ -43,8 +45,10 @@ from app.statistics.response_optimizer import (
 )
 from app.storage.metadata import (
     ExperimentDesignAnalysisRecord,
+    count_response_surface_analysis_catalog_records,
     get_experiment_design_analysis_record,
     insert_experiment_design_analysis_record,
+    list_response_surface_analysis_catalog_records,
 )
 
 RESPONSE_OPTIMIZER_METHOD_ID: Final[Literal["regression.response_optimizer"]] = (
@@ -52,6 +56,91 @@ RESPONSE_OPTIMIZER_METHOD_ID: Final[Literal["regression.response_optimizer"]] = 
 )
 RESPONSE_OPTIMIZER_CONFIG_SCHEMA_VERSION: Final[Literal[2]] = 2
 RESPONSE_OPTIMIZER_RECORD_RESPONSE_NAME = "response_optimizer"
+
+
+def list_response_surface_analysis_catalog(
+    settings: Settings,
+    *,
+    offset: int,
+    limit: int,
+) -> DoeResponseSurfaceAnalysisCatalogResponse:
+    total = count_response_surface_analysis_catalog_records(settings.workspace_root)
+    records = list_response_surface_analysis_catalog_records(
+        settings.workspace_root,
+        offset=offset,
+        limit=limit,
+    )
+    items: list[DoeResponseSurfaceAnalysisCatalogItem] = []
+    for catalog_record in records:
+        record = catalog_record.analysis
+        blocking_count = 0
+        advisory_count = 0
+        informational_count = 0
+        availability_code: str | None = None
+        if record.method_version != METHOD_VERSIONS["doe.response_surface"]:
+            eligibility_status: Literal[
+                "eligible",
+                "acknowledgment_required",
+                "ineligible",
+                "integrity_error",
+                "incompatible_method_version",
+            ] = "incompatible_method_version"
+            availability_code = "doe_rsm_analysis_method_mismatch"
+        else:
+            try:
+                source = get_response_surface_analysis(
+                    settings,
+                    UUID(catalog_record.design_id),
+                    UUID(record.analysis_id),
+                )
+                issues = _source_model_eligibility_issues(
+                    source,
+                    _source_confidence_level(record.config_json),
+                )
+                blocking_count = sum(item.severity == "blocking" for item in issues)
+                advisory_count = sum(item.severity == "acknowledgment_required" for item in issues)
+                informational_count = sum(item.severity == "informational" for item in issues)
+                if blocking_count:
+                    eligibility_status = "ineligible"
+                    availability_code = "response_optimizer_source_model_ineligible"
+                elif advisory_count:
+                    eligibility_status = "acknowledgment_required"
+                else:
+                    eligibility_status = "eligible"
+            except (ApiError, ValueError):
+                eligibility_status = "integrity_error"
+                availability_code = "doe_rsm_analysis_integrity_error"
+        items.append(
+            DoeResponseSurfaceAnalysisCatalogItem(
+                analysis_id=UUID(record.analysis_id),
+                design_id=UUID(catalog_record.design_id),
+                design_name=catalog_record.design_name,
+                response_name=record.response_name,
+                response_revision_id=(
+                    None
+                    if record.response_revision_id is None
+                    else UUID(record.response_revision_id)
+                ),
+                response_revision_number=catalog_record.response_revision_number,
+                method_id="doe.response_surface",
+                method_version=record.method_version,
+                created_at=record.created_at,
+                eligibility_status=eligibility_status,
+                blocking_issue_count=blocking_count,
+                advisory_issue_count=advisory_count,
+                informational_issue_count=informational_count,
+                availability_code=availability_code,
+            )
+        )
+    return DoeResponseSurfaceAnalysisCatalogResponse(
+        analyses=items,
+        total=total,
+        returned=len(items),
+        limit=limit,
+        offset=offset,
+        has_previous=offset > 0,
+        has_next=offset + len(items) < total,
+    )
 
 
 def create_response_optimizer(

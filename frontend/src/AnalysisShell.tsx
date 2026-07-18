@@ -32,6 +32,8 @@ import {
   IndividualsChartPanel,
   LinearModelPanel,
   PearsonCorrelationPanel,
+  RegressionPredictionWorkspace,
+  ResponseOptimizerWorkspace,
   ResponseSurfacePanel,
   RunChartPanel,
   SubgroupChartPanel,
@@ -1418,6 +1420,30 @@ export function AnalysisShell({
                   onToggleInteractionTerm={onToggleLinearModelInteractionTerm}
                   onTogglePredictorColumn={onToggleLinearModelPredictorColumn}
                   onToggleQuadraticColumn={onToggleLinearModelQuadraticColumn}
+                />
+              );
+            }
+            if (
+              method.method_id === "regression.predict" &&
+              method.availability === "available"
+            ) {
+              return (
+                <RegressionPredictionWorkspace
+                  onNavigateToLinearModel={() =>
+                    onSelectMethod("regression", "regression.linear_model")
+                  }
+                />
+              );
+            }
+            if (
+              method.method_id === "regression.response_optimizer" &&
+              method.availability === "available"
+            ) {
+              return (
+                <ResponseOptimizerWorkspace
+                  onNavigateToResponseSurface={() =>
+                    onSelectMethod("doe", "doe.response_surface")
+                  }
                 />
               );
             }

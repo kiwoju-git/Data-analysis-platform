@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## 1. Required Reading And Priority
 
@@ -21,18 +21,19 @@ Current source-of-truth note:
 
 Current and next development order:
 
-The product-owner-approved paste staging grid/canonical preview UX slice is the
-current bounded work. It keeps the existing paste API and immutable dataset
-version contract, adds no statistical method, and implements only the P0
-view-only behavior in `docs/pasted_data_grid_contract.md`. After this slice:
+The current bounded work makes Predict and Response Optimizer first-class
+dedicated Workbench entrypoints without moving either calculation into the
+generic analysis-run API. The completed paste-grid P0 contract remains intact.
+After this slice:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the resulting main push in remote GitHub Actions and review required
    Windows/E2E checks and repository protection outside this code PR.
-3. Improve Bayesian catalog and successor UX without changing GP/EI behavior.
-4. Add dataset-root and then DOE-root retention only through separate reviewed
+3. Measure and reduce the main bundle without changing workflow behavior.
+4. Improve Bayesian catalog and successor UX without changing GP/EI behavior.
+5. Add dataset-root and then DOE-root retention only through separate reviewed
    ownership graphs with explicit inbound-reference blockers.
-5. Continue the advanced quality/statistics backlog through a separately
+6. Continue the advanced quality/statistics backlog through a separately
    approved contract.
 
 The current Phase II slice retains explicit target compatibility, P/NP/C/U
@@ -100,8 +101,8 @@ Already implemented:
 - Dataset workflow state and handlers are split into `frontend/src/useDatasetWorkflow.ts`
 - Dataset preparation rendering is split into `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, `frontend/src/DatasetProfileSection.tsx`, and `frontend/src/DatasetPreviewSection.tsx`, while `WorkspaceRouter` chooses the active dataset/analysis page
 - Dataset formatting, labels, and profile summary helpers are centralized in `frontend/src/datasetDisplay.ts`
-- Analysis method registry with 6 modules and 30 stable method IDs: 28
-  available and 2 disabled generic pages
+- Analysis method registry with 6 modules and 30 stable available method IDs:
+  25 generic analysis-run methods and 5 dedicated workflow methods
 - Common analysis request, filter snapshot, warning, provenance, and result envelope schemas
 - Common analysis run status and job status schemas
 - `analysis_runs`, `analysis_artifacts`, and `jobs` metadata tables
@@ -116,7 +117,7 @@ Already implemented:
   - workspace route boundary is split into `frontend/src/WorkspaceRouter.tsx`
   - analysis page boundary is split into `frontend/src/AnalysisPage.tsx`
   - common shell rendering is split into `frontend/src/AnalysisWorkbench.tsx`
-  - analysis area rendering is further split into method panels, including dedicated `FactorialDesignPanel`, `ResponseSurfacePanel`, `ResponseOptimizerPanel`, and `BayesianOptimizationPanel` DOE workflows
+  - analysis area rendering is further split into method panels, including dedicated `RegressionPredictionWorkspace`, `ResponseOptimizerWorkspace`, `FactorialDesignPanel`, `ResponseSurfacePanel`, `ResponseOptimizerPanel`, and `BayesianOptimizationPanel` workflows
   - root/dataset routes render the dataset preparation page and `/analysis/{module_id}/{method_id}` routes render the analysis page
   - Regression, Quality, and DOE execution panels load through three module-level dynamic imports with accessible loading/error boundaries and transition-safe method selection
   - supported filter controls render through a common Workbench slot for dataset-backed methods
@@ -124,7 +125,8 @@ Already implemented:
   - all 30 documented methods show UI guidance for required roles, options, preflight checks, and result focus
   - `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.equal_variances`, `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.one_sample_wilcoxon`, `hypothesis.two_sample_t`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis`, `hypothesis.one_way_anova`, `hypothesis.equivalence_tost`, `categorical.one_proportion`, `categorical.two_proportion`, `categorical.chi_square_association`, `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `quality.attribute_control_chart`, `quality.individuals_chart`, `quality.subgroup_chart`, `quality.run_chart`, `quality.capability`, `quality.gage_rr`, and `quality.gage_run_chart` expose analysis execution controls
   - `doe.factorial_design` exposes dedicated design, response-entry, effects/ANOVA, diagnostic, and report controls; it remains outside the generic analysis-run API
-  - `doe.response_surface` exposes dedicated CCD design, response-entry, full-quadratic model, contour, stationary-point, diagnostic, and bounded Response Optimizer controls; both RSM and optimizer remain outside the generic analysis-run API
+  - `regression.predict` and `regression.response_optimizer` expose top-level source catalogs and ID-only deep links while reusing the embedded prediction/optimizer components; both remain outside the generic analysis-run API
+  - `doe.response_surface` exposes dedicated CCD design, response-entry, full-quadratic model, contour, stationary-point, diagnostic, and embedded bounded Response Optimizer controls
   - `doe.bayesian_optimization` exposes dedicated bounded study, manual observation, immutable history, and GP/EI recommendation controls; it remains outside the generic analysis-run API
 - Analysis run API guard that directs dedicated methods to their typed APIs and rejects disabled methods without returning fake results
 - `eda.descriptive` is the first executable method and computes real descriptive statistics from confirmed dataset versions
@@ -148,7 +150,7 @@ Already implemented:
 - `quality.gage_run_chart` is the second Gate C3 executable method and computes real stdlib measurement-system diagnostic chart payloads from balanced crossed Gage rows with raw part/operator/replicate label redaction
 - `doe.factorial_design` is the Gate D1 2-level full factorial method at version `0.3.0`; analysis envelope/config schema 2 pins immutable response revision schema 1 in SQLite schema 10 while result calculation schema remains 1. Dedicated APIs provide current/history/correction, analysis restore, -1/+1 effects, hierarchy-fixed OLS/ANOVA, diagnostics, charts, and HTML report. Fractional alias analysis and optimization remain out of scope
 - `doe.response_surface` is the Gate D2 CCD/full-quadratic method at version `0.2.0`; analysis envelope/config schema 2 pins immutable response revision schema 1, design payload schema 2 uses generic `central_composite` family plus `alpha_mode`, legacy schema-1 family/SHA restore is preserved, and analyzed revisions remain read-only while corrections create new revisions
-- `regression.response_optimizer` is a disabled generic catalog method with a dedicated RSM-panel API at version `0.3.0`; config/result schema 2 and source-bundle schema 2 pin the source RSM analysis and response revision while preserving typed eligibility, exact advisory acknowledgments, desirability, bounded factor regions, linear constraints, deterministic budgets, limitations, and common provenance
+- `regression.response_optimizer` is an available dedicated catalog method at version `0.3.0`; its top-level workspace selects checksum-validated stored RSM analyses while the existing embedded RSM entry remains available. Config/result schema 2 and source-bundle schema 2 are unchanged
 - `doe.bayesian_optimization` is available through dedicated APIs/UI at version `0.2.2`; study/history and recommendation config/result/model schemas remain 1, lifecycle-event schema 1 and SQLite schema 14 add immutable close metadata and successor lineage, backend/UI enforce initial-design and 200/201 boundaries, stranded-study abandonment protection, all-trial duplicate exclusion, latest/current reconciliation, explicit trial budgets, terminal confirmations, typed time-budget errors, and read-only closed restore while preserving legacy `0.1.0` studies and valid `0.2.0`/`0.2.1` recommendations
 - scikit-learn 1.7.2 is production-pinned after the isolated CPython 3.10 wheel-only, current NumPy/SciPy, offline, CPU/thread, and deterministic fixed-kernel GP checks; joblib 1.5.2/threadpoolctl 3.6.0 and the full Windows backend environment are protected by a 45-wheel SHA-256 lock. Windows 11 client validation remains a release gate
 - NumPy 2.2.6/SciPy 1.15.3 are production-pinned after the native Windows Python 3.10.11 dependency spike, and a SciPy-backed normality reference fixture was generated and validated
@@ -8716,3 +8718,37 @@ Next allowed work:
 4. Implement dataset-root and then DOE-root retention through separate reviewed
    ownership graphs with explicit inbound blockers and quarantine recovery.
 5. Continue advanced quality/statistics only through approved contracts.
+
+## Progress Update 186 - Dedicated Predict And Response Optimizer Entrypoints
+
+Completed:
+
+- Marked all 30 stable catalog IDs available while preserving 25 generic
+  analysis-run handlers and five explicit dedicated workflows.
+- Added paged, metadata-only regression-model and stored-RSM-analysis catalogs
+  with redacted responses and full selected-source revalidation.
+- Added top-level Predict and Response Optimizer routes with ID-only reload
+  state. Embedded Linear Model/RSM entries remain and share
+  `RegressionPredictionPanel`/`ResponseOptimizerPanel` rather than duplicating
+  calculations or API contracts.
+- Generic analysis-run requests for any dedicated method return
+  `analysis_method_uses_dedicated_api` without storing a fake result.
+- Kept prediction `0.2.0` and optimizer `0.3.0` plus all persisted schemas
+  unchanged. Corrected paste delimiter scoring so Tab is a tie-break only.
+- Full local development validation passed with backend 773, frontend 133, and
+  OpenAPI/frontend contracts 155. Chromium E2E passed in 76.9 seconds through
+  both top-level execution/reload paths and all retained critical paths.
+- Main is 511.60 kB / 121.24 kB gzip and still emits the measured 500 kB
+  warning. Validation used Windows 10 build 19045, Python 3.10.11, Node
+  24.17.0, and uncommitted worktree base
+  `6fb115093a97909bf3c379732d16e7153c9931d0`; it is not release evidence.
+  Remote Actions remain unverified because `gh` is unavailable.
+
+Next allowed work:
+
+1. Run the clean Windows 11/Python 3.10/Node 22 release gate.
+2. Verify remote Actions and required Windows/E2E checks.
+3. Measure and optimize the main bundle.
+4. Improve Bayesian catalog/successor UX.
+5. Add dataset-root and DOE-root retention through reviewed ownership graphs.
+6. Continue advanced quality/statistics only through approved contracts.

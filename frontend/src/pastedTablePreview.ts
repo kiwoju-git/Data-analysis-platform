@@ -283,14 +283,17 @@ export function detectPastedTableDelimiter(text: string): PastePreviewDelimiter 
         score:
           modeWidth <= 1 || usableWidths.length === 0
             ? -1
-            : (modeCount / usableWidths.length) * 1_000 + modeWidth * 10 - priority,
+            : (modeCount / usableWidths.length) * 1_000 + modeWidth * 10,
+        priority,
       };
     })
     .filter((candidate) => candidate.score >= 0)
     .sort((left, right) => {
+      const scoreDifference = right.score - left.score;
+      if (scoreDifference !== 0) return scoreDifference;
       if (left.delimiter === "\t" && right.delimiter !== "\t") return -1;
       if (right.delimiter === "\t" && left.delimiter !== "\t") return 1;
-      return right.score - left.score;
+      return left.priority - right.priority;
     });
   return candidates[0]?.delimiter ?? null;
 }

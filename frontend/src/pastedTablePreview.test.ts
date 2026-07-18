@@ -116,6 +116,8 @@ describe("parsePastedTablePreview", () => {
   });
 
   it("detects conservative supported delimiters and spreadsheet labels", () => {
+    expect(detectPastedTableDelimiter("A,B,C\n1,hello\tworld,3")).toBe(",");
+    expect(detectPastedTableDelimiter("A\tB\tC\n1\t2\t3")).toBe("\t");
     expect(detectPastedTableDelimiter("A;B;C\n1;2;3")).toBe(";");
     expect(detectPastedTableDelimiter("A|B\n1|2")).toBe("|");
     expect(detectPastedTableDelimiter("single value")).toBeNull();

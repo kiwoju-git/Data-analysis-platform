@@ -5,6 +5,11 @@ export interface AnalysisRunErrorDetails {
 }
 
 const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
+  analysis_method_uses_dedicated_api: {
+    title: "전용 워크플로 필요",
+    message: "이 메서드는 generic analysis-run이 아니라 저장 source 자산을 사용하는 전용 화면에서 실행됩니다.",
+    action: "분석 탭에서 해당 Predict 또는 Response Optimizer 카드를 열어 source 자산을 선택하세요.",
+  },
   analysis_run_failed: {
     title: "분석 실행 실패",
     message: "서버가 분석 요청을 처리하지 못했습니다.",

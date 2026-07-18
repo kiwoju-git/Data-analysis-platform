@@ -146,6 +146,13 @@ class RegressionModelRecord:
 
 
 @dataclass(frozen=True)
+class RegressionModelCatalogRecord:
+    model: RegressionModelRecord
+    source_analysis_status: str
+    source_analysis_stale: bool
+
+
+@dataclass(frozen=True)
 class AttributeControlLimitSetRecord:
     limit_set_id: str
     source_analysis_id: str
@@ -305,6 +312,14 @@ class ExperimentDesignAnalysisRecord:
     app_version: str
     response_revision_id: str | None = None
     response_revision_sha256: str | None = None
+
+
+@dataclass(frozen=True)
+class ResponseSurfaceAnalysisCatalogRecord:
+    analysis: ExperimentDesignAnalysisRecord
+    design_id: str
+    design_name: str
+    response_revision_number: int | None
 
 
 @dataclass(frozen=True)
@@ -2499,6 +2514,125 @@ def get_regression_model_record_by_analysis(
             (analysis_id,),
         ).fetchone()
     return None if row is None else _regression_model_from_row(row)
+
+
+def count_regression_model_catalog_records(
+    workspace_root: Path,
+    *,
+    source_dataset_version_id: str | None = None,
+    source_analysis_id: str | None = None,
+) -> int:
+    clauses: list[str] = []
+    parameters: list[str] = []
+    if source_dataset_version_id is not None:
+        clauses.append("model.dataset_version_id = ?")
+        parameters.append(source_dataset_version_id)
+    if source_analysis_id is not None:
+        clauses.append("model.analysis_id = ?")
+        parameters.append(source_analysis_id)
+    where_clause = "" if not clauses else " WHERE " + " AND ".join(clauses)
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM regression_models AS model" + where_clause + ";",
+            tuple(parameters),
+        ).fetchone()
+    return 0 if row is None else int(row[0])
+
+
+def list_regression_model_catalog_records(
+    workspace_root: Path,
+    *,
+    offset: int,
+    limit: int,
+    source_dataset_version_id: str | None = None,
+    source_analysis_id: str | None = None,
+) -> list[RegressionModelCatalogRecord]:
+    clauses: list[str] = []
+    parameters: list[object] = []
+    if source_dataset_version_id is not None:
+        clauses.append("model.dataset_version_id = ?")
+        parameters.append(source_dataset_version_id)
+    if source_analysis_id is not None:
+        clauses.append("model.analysis_id = ?")
+        parameters.append(source_analysis_id)
+    where_clause = "" if not clauses else " WHERE " + " AND ".join(clauses)
+    parameters.extend((limit, offset))
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT model.model_id, model.analysis_id, model.dataset_version_id,
+                   model.method_id, model.method_version, model.manifest_path,
+                   model.manifest_sha256, model.schema_hash, model.created_at,
+                   model.app_version, analysis.status, analysis.stale
+            FROM regression_models AS model
+            JOIN analysis_runs AS analysis ON analysis.analysis_id = model.analysis_id
+            """
+            + where_clause
+            + " ORDER BY model.created_at DESC, model.rowid DESC LIMIT ? OFFSET ?;",
+            tuple(parameters),
+        ).fetchall()
+    return [
+        RegressionModelCatalogRecord(
+            model=_regression_model_from_row(row[:10]),
+            source_analysis_status=str(row[10]),
+            source_analysis_stale=_row_bool(row[11]),
+        )
+        for row in rows
+    ]
+
+
+def count_response_surface_analysis_catalog_records(workspace_root: Path) -> int:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM experiment_design_analyses
+            WHERE method_id = 'doe.response_surface';
+            """
+        ).fetchone()
+    return 0 if row is None else int(row[0])
+
+
+def list_response_surface_analysis_catalog_records(
+    workspace_root: Path,
+    *,
+    offset: int,
+    limit: int,
+) -> list[ResponseSurfaceAnalysisCatalogRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT analysis.analysis_id, analysis.design_version_id,
+                   analysis.response_name, analysis.method_id,
+                   analysis.method_version, analysis.config_json,
+                   analysis.result_json, analysis.result_sha256,
+                   analysis.response_sha256, analysis.created_at,
+                   analysis.app_version, dependency.response_revision_id,
+                   dependency.response_revision_sha256, design.design_id,
+                   design.name, revision.revision_number
+            FROM experiment_design_analyses AS analysis
+            JOIN experiment_design_versions AS version
+                ON version.design_version_id = analysis.design_version_id
+            JOIN experiment_designs AS design ON design.design_id = version.design_id
+            LEFT JOIN experiment_design_analysis_response_revisions AS dependency
+                ON dependency.analysis_id = analysis.analysis_id
+            LEFT JOIN experiment_response_revisions AS revision
+                ON revision.response_revision_id = dependency.response_revision_id
+            WHERE analysis.method_id = 'doe.response_surface'
+            ORDER BY analysis.created_at DESC, analysis.rowid DESC
+            LIMIT ? OFFSET ?;
+            """,
+            (limit, offset),
+        ).fetchall()
+    return [
+        ResponseSurfaceAnalysisCatalogRecord(
+            analysis=_experiment_design_analysis_from_row(row[:13]),
+            design_id=str(row[13]),
+            design_name=str(row[14]),
+            response_revision_number=None if row[15] is None else _row_int(row[15]),
+        )
+        for row in rows
+    ]
 
 
 def count_regression_prediction_records_by_source(

@@ -6,13 +6,12 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-17 paste staging/canonical preview regression run passed in 70.8
-seconds on stable local ports `8030`/`5230` with:
+The 2026-07-18 dedicated Predict/Response Optimizer regression run passed in
+76.9 seconds with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -BackendPort 8030 -FrontendPort 5230 `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-dedicated-workflows
 ```
 
 The run first dispatches a real `text/plain` spreadsheet paste while providing
@@ -96,6 +95,11 @@ The current smoke test is `tests/e2e/critical_path.py`.
   table, and four rendered interval lines.
 - Generates a full stored prediction CSV and verifies the browser starts a
   `.csv` download through the checksum-validated analysis export route.
+- Opens the top-level `regression.predict` route, verifies the available
+  dedicated badge, selects the stored model and target through their catalogs,
+  runs preflight/prediction/CSV creation, and reloads the ID-only deep link to
+  verify source selection restore. The extra prediction is removed through the
+  reviewed analysis-run deletion contract before model-retention assertions.
 - Loads regression-model deletion impact after the prediction exists, verifies
   the dependent-prediction count, and verifies confirmed deletion is disabled.
   It deletes the prediction through exact analysis-run preflight, deletes the
@@ -123,6 +127,9 @@ The current smoke test is `tests/e2e/critical_path.py`.
   the recommended factor settings, point prediction, individual/composite
   desirability, constraint status, search termination, confirmation-run
   warning, and explicit absence of a global-optimum guarantee.
+- Opens the top-level `regression.response_optimizer` route, selects the stored
+  RSM analysis, runs the shared optimizer panel, and reloads the ID-only deep
+  link to verify source restoration and current eligibility.
 - Creates RSM response revision 2 through the explicit correction flow after
   analysis and verifies that newest-first revision history retains revision 1.
 - Creates a one-factor Bayesian study with an actual-unit upper-bound linear

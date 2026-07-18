@@ -6,6 +6,7 @@ import {
   fetchRegressionModelManifest,
   type RegressionModelDeleteResponse,
   type RegressionModelDeletionPreflightResponse,
+  type RegressionModelManifestResponse,
 } from "./api";
 import { createLatestRequestGuard } from "./latestRequest";
 
@@ -30,6 +31,7 @@ export interface RegressionModelRetentionState {
   isDeleting: boolean;
   isCheckingAvailability: boolean;
   isLoadingPreflight: boolean;
+  manifest: RegressionModelManifestResponse | null;
   preflight: RegressionModelDeletionPreflightResponse | null;
   onClear: () => void;
   onDelete: (preflight: RegressionModelDeletionPreflightResponse) => void;
@@ -50,6 +52,7 @@ export function useRegressionModelRetentionState(
     useState<RegressionModelAvailability | null>(null);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+  const [manifest, setManifest] = useState<RegressionModelManifestResponse | null>(null);
   const availabilityRequest = useRef(createLatestRequestGuard()).current;
   const preflightRequest = useRef(createLatestRequestGuard()).current;
   const deletionRequest = useRef(createLatestRequestGuard()).current;
@@ -59,10 +62,14 @@ export function useRegressionModelRetentionState(
     const request = availabilityRequest.begin();
     setAvailability(null);
     setAvailabilityError(null);
+    setManifest(null);
     setIsCheckingAvailability(true);
     void fetchRegressionModelManifest(modelId)
-      .then(() => {
-        if (availabilityRequest.isCurrent(request)) setAvailability("available");
+      .then((response) => {
+        if (availabilityRequest.isCurrent(request)) {
+          setManifest(response);
+          setAvailability("available");
+        }
       })
       .catch((fetchError) => {
         if (!availabilityRequest.isCurrent(request)) return;
@@ -71,6 +78,7 @@ export function useRegressionModelRetentionState(
             ? fetchError.message
             : "regression_model_availability_failed";
         setAvailabilityError(code);
+        setManifest(null);
         if (code === "regression_model_not_found") {
           setAvailability("unavailable_or_deleted");
         } else if (integrityErrorCodes.has(code)) {
@@ -93,6 +101,7 @@ export function useRegressionModelRetentionState(
     setIsDeleting(false);
     setAvailability(null);
     setAvailabilityError(null);
+    setManifest(null);
     setIsCheckingAvailability(false);
     if (modelId === null) return;
     checkAvailability();
@@ -117,6 +126,7 @@ export function useRegressionModelRetentionState(
     isDeleting,
     isCheckingAvailability,
     isLoadingPreflight,
+    manifest,
     preflight,
     onClear: clear,
     onLoadPreflight: () => {
@@ -162,6 +172,7 @@ export function useRegressionModelRetentionState(
             setPreflight(null);
             setAvailability("unavailable_or_deleted");
             setAvailabilityError("regression_model_not_found");
+            setManifest(null);
           }
         })
         .catch((deleteError) => {

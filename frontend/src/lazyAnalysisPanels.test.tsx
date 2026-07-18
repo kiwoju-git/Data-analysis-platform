@@ -43,6 +43,7 @@ describe("lazy analysis panels", () => {
     expect(Object.keys(regression).sort()).toEqual([
       "LinearModelPanel",
       "PearsonCorrelationPanel",
+      "RegressionPredictionWorkspace",
       "XyCorrelationPanel",
     ]);
     expect(Object.keys(quality).sort()).toEqual([
@@ -57,8 +58,9 @@ describe("lazy analysis panels", () => {
     expect(Object.keys(doe).sort()).toEqual([
       "BayesianOptimizationPanel",
       "FactorialDesignPanel",
+      "ResponseOptimizerWorkspace",
       "ResponseSurfacePanel",
     ]);
-    expect(Object.keys(lazyPanels)).toHaveLength(13);
+    expect(Object.keys(lazyPanels)).toHaveLength(15);
   });
 });

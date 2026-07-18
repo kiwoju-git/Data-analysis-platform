@@ -18,6 +18,7 @@ import app.services.analysis_runners_regression as analysis_runners_regression
 import app.services.regression_models as regression_models
 from app.analyses.registry import METHOD_VERSIONS, METHODS, MODULES, analysis_method_catalog
 from app.api.v1.schemas.analyses import (
+    AnalysisExecutionMode,
     AnalysisProvenance,
     AnalysisResultCsvExportResponse,
     AnalysisResultEnvelope,
@@ -101,6 +102,7 @@ from app.storage.metadata import (
     insert_analysis_run_record,
     insert_job_record,
     list_analysis_artifact_records,
+    metadata_db_path,
 )
 
 
@@ -186,6 +188,8 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "regression.pearson",
         "regression.xy_correlation",
         "regression.linear_model",
+        "regression.predict",
+        "regression.response_optimizer",
         "quality.attribute_control_chart",
         "quality.individuals_chart",
         "quality.subgroup_chart",
@@ -236,16 +240,11 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         "quality.gage_rr": "gage_rr",
         "quality.gage_run_chart": "gage_run_chart",
     }
-    generic_analysis_run_exceptions = {
-        "doe.factorial_design",
-        "doe.response_surface",
-        "doe.bayesian_optimization",
-    }
     assert set(_METHOD_EXECUTION_HANDLERS) == {
         method.method_id
         for method in METHODS
         if method.availability == MethodAvailability.AVAILABLE
-        and method.method_id not in generic_analysis_run_exceptions
+        and method.execution_mode != AnalysisExecutionMode.DEDICATED
     }
 
     methods_by_id = {method.method_id: method for method in METHODS}
@@ -409,10 +408,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
 
     assert len(catalog.modules) == 6
     assert len(catalog.methods) == 30
-    assert {method.availability.value for method in catalog.methods} == {
-        "available",
-        "disabled",
-    }
+    assert {method.availability.value for method in catalog.methods} == {"available"}
     assert catalog.methods[0].method_id == "eda.descriptive"
     assert catalog.methods[0].availability == MethodAvailability.AVAILABLE
     assert [method.method_id for method in catalog.methods[:4]] == [
@@ -502,19 +498,19 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     prediction = next(
         method for method in catalog.methods if method.method_id == "regression.predict"
     )
-    assert prediction.availability == MethodAvailability.DISABLED
-    assert prediction.disabled_reason is not None
-    assert "회귀모형 적합 화면에서 지원됩니다" in prediction.disabled_reason
-    assert "독립 Predict method 화면은 아직 제공하지 않습니다" in prediction.disabled_reason
+    assert prediction.availability == MethodAvailability.AVAILABLE
+    assert prediction.execution_mode == AnalysisExecutionMode.DEDICATED
+    assert prediction.requires_dataset is False
+    assert prediction.source_prerequisite.value == "regression_model"
+    assert prediction.disabled_reason is None
     response_optimizer = next(
         method for method in catalog.methods if method.method_id == "regression.response_optimizer"
     )
-    assert response_optimizer.availability == MethodAvailability.DISABLED
-    assert response_optimizer.disabled_reason is not None
-    assert "반응표면법 화면에서 지원됩니다" in response_optimizer.disabled_reason
-    assert "독립 Response Optimizer 화면은 아직 제공하지 않습니다" in (
-        response_optimizer.disabled_reason
-    )
+    assert response_optimizer.availability == MethodAvailability.AVAILABLE
+    assert response_optimizer.execution_mode == AnalysisExecutionMode.DEDICATED
+    assert response_optimizer.requires_dataset is False
+    assert response_optimizer.source_prerequisite.value == "response_surface_analysis"
+    assert response_optimizer.disabled_reason is None
     individuals_chart = next(
         method for method in catalog.methods if method.method_id == "quality.individuals_chart"
     )
@@ -571,7 +567,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     assert [method.module_id.value for method in catalog.methods[-3:]] == ["doe", "doe", "doe"]
 
 
-def test_analysis_methods_api_exposes_only_real_methods_as_available_without_mock_results(
+def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_results(
     tmp_path,
 ) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
@@ -581,10 +577,7 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
     payload = response.json()
     assert len(payload["modules"]) == 6
     assert len(payload["methods"]) == 30
-    assert {method["availability"] for method in payload["methods"]} == {
-        "available",
-        "disabled",
-    }
+    assert {method["availability"] for method in payload["methods"]} == {"available"}
     available = [
         method["method_id"]
         for method in payload["methods"]
@@ -609,6 +602,8 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
         "regression.pearson",
         "regression.xy_correlation",
         "regression.linear_model",
+        "regression.predict",
+        "regression.response_optimizer",
         "quality.attribute_control_chart",
         "quality.individuals_chart",
         "quality.subgroup_chart",
@@ -625,11 +620,23 @@ def test_analysis_methods_api_exposes_only_real_methods_as_available_without_moc
     )
     assert normality["availability"] == "available"
     assert normality["disabled_reason"] is None
+    dedicated = {
+        method["method_id"]: method
+        for method in payload["methods"]
+        if method["execution_mode"] == "dedicated"
+    }
+    assert set(dedicated) == {
+        "regression.predict",
+        "regression.response_optimizer",
+        "doe.factorial_design",
+        "doe.response_surface",
+        "doe.bayesian_optimization",
+    }
     assert "p_value" not in response.text
     assert "statistic" not in response.text
 
 
-def test_analysis_run_rejects_remaining_planned_or_disabled_method_without_fake_result(
+def test_analysis_run_routes_predict_to_dedicated_api_without_fake_result(
     tmp_path,
 ) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
@@ -645,7 +652,8 @@ def test_analysis_run_rejects_remaining_planned_or_disabled_method_without_fake_
         )
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "analysis_method_not_available"
+    assert response.json()["error"]["code"] == "analysis_method_uses_dedicated_api"
+    assert response.json()["error"]["developer_detail"] == "/api/v1/regression-models"
     assert "p_value" not in response.text
     assert "statistic" not in response.text
     assert "result" not in response.text
@@ -668,7 +676,11 @@ def test_analysis_run_rejects_response_optimizer_generic_page_without_fake_resul
         )
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "analysis_method_not_available"
+    assert response.json()["error"]["code"] == "analysis_method_uses_dedicated_api"
+    assert (
+        response.json()["error"]["developer_detail"]
+        == "/api/v1/doe-designs/response-surface-analyses"
+    )
     assert "p_value" not in response.text
     assert "statistic" not in response.text
     assert "result" not in response.text
@@ -7524,6 +7536,77 @@ def _create_regression_prediction_fixture(
         "source_analysis_id": source_analysis_id,
         "version": version,
     }
+
+
+def test_regression_model_catalog_is_paged_redacted_and_reports_stale_source(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        fixture = _create_regression_prediction_fixture(client)
+        model_id = str(fixture["model_id"])
+        source_analysis_id = str(fixture["source_analysis_id"])
+        version = fixture["version"]
+        assert isinstance(version, dict)
+        response = client.get("/api/v1/regression-models?offset=0&limit=1")
+        filtered = client.get(
+            "/api/v1/regression-models",
+            params={"source_analysis_id": source_analysis_id},
+        )
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            connection.execute(
+                "UPDATE analysis_runs SET stale = 1 WHERE analysis_id = ?",
+                (source_analysis_id,),
+            )
+            connection.commit()
+        stale_response = client.get("/api/v1/regression-models?offset=0&limit=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["returned"] == 1
+    assert payload["has_previous"] is False
+    assert payload["has_next"] is False
+    item = payload["models"][0]
+    assert item["model_id"] == model_id
+    assert item["source_analysis_id"] == source_analysis_id
+    assert item["source_dataset_version_id"] == version["version_id"]
+    assert item["method_id"] == "regression.linear_model"
+    assert item["response"]["display_name"] == "y"
+    assert item["predictor_count"] == 2
+    assert item["availability"] == "available"
+    assert item["availability_code"] is None
+    assert filtered.status_code == 200
+    assert filtered.json()["models"][0]["model_id"] == model_id
+    assert "manifest_path" not in response.text
+    assert "coefficients" not in response.text
+    assert '"predictors"' not in response.text
+    stale_item = stale_response.json()["models"][0]
+    assert stale_item["availability"] == "source_stale"
+    assert stale_item["availability_code"] == "regression_prediction_source_model_stale"
+
+
+def test_regression_model_catalog_marks_manifest_integrity_error_without_path(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        fixture = _create_regression_prediction_fixture(client)
+        model_id = str(fixture["model_id"])
+        record = get_regression_model_record(settings.workspace_root, model_id)
+        assert record is not None
+        (settings.workspace_root / record.manifest_path).write_bytes(b'{"tampered":true}\n')
+        catalog_response = client.get("/api/v1/regression-models")
+        selected_response = client.get(f"/api/v1/regression-models/{model_id}")
+
+    assert catalog_response.status_code == 200
+    item = catalog_response.json()["models"][0]
+    assert item["availability"] == "integrity_error"
+    assert item["availability_code"] == "regression_model_integrity_error"
+    assert item["response"] is None
+    assert item["predictor_count"] is None
+    assert selected_response.status_code == 409
+    assert (
+        selected_response.json()["error"]["code"] == "regression_model_manifest_checksum_mismatch"
+    )
+    assert record.manifest_path not in catalog_response.text
+    assert str(tmp_path) not in catalog_response.text
 
 
 def test_regression_prediction_preflight_accepts_same_dataset_version(tmp_path) -> None:

@@ -6,6 +6,7 @@ import type {
   DoeFactorialAnalysisCreateRequest,
   DoeFactorialAnalysisResponse,
   DoeResponseSurfaceAnalysisCreateRequest,
+  DoeResponseSurfaceAnalysisCatalogResponse,
   DoeResponseSurfaceAnalysisResponse,
   DoeResponseRevisionCreateRequest,
   DoeResponseRevisionHistoryResponse,
@@ -17,6 +18,20 @@ import type {
   ResponseOptimizerCreateRequest,
   ResponseOptimizerResponse,
 } from "./types";
+
+export async function fetchResponseSurfaceAnalysisCatalog(
+  offset = 0,
+  limit = 20,
+): Promise<DoeResponseSurfaceAnalysisCatalogResponse> {
+  const response = await fetchApi(
+    apiRoutes.doeResponseSurfaceAnalysisCatalog(offset, limit),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_rsm_analysis_catalog_failed"));
+  }
+  return (await response.json()) as DoeResponseSurfaceAnalysisCatalogResponse;
+}
 
 export async function createFactorialDesign(
   request: FactorialDesignCreateRequest,

@@ -1,40 +1,38 @@
 # CI Status
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Local Validation
 
-- Clean pushed-main baseline: local `main` and `origin/main` both resolved to
-  `702e20f0ed1a377d411cb8d7d3a6faa2c4fcbd6f` with an empty working tree.
-  `scripts/bootstrap.ps1` passed, `scripts/check.ps1` passed in 806.7 seconds
-  with backend pytest 763 and frontend Vitest 114, and Chromium E2E passed in
-  68.4 seconds with diagnostics at
-  `.tmp/e2e-diagnostics-paste-grid-baseline`.
-- Current paste-grid worktree: based on that pushed SHA, but not committed or
-  pushed. `scripts/check.ps1` passed in 769.0 seconds with Ruff/format over 158
-  Python files, mypy over 101 source files, backend pytest 763, frontend lint,
-  typecheck, Vitest 131, and production build. The OpenAPI/frontend contract
-  count remains 148 and is recorded separately from the frontend count.
-- The latest recorded backend pytest count is 763.
-- The latest recorded frontend Vitest count is 131.
-- The latest OpenAPI/frontend contract count is 148. These counts belong to
-  the current uncommitted worktree validation, not remote Actions.
-- Current production assets are 508.32 kB / 120.48 kB gzip for main,
-  46.75 kB / 9.69 kB for Regression, 64.25 kB / 11.97 kB for Quality, and
-  90.79 kB / 20.77 kB for DOE. The main asset crosses the configured 500 kB
-  threshold and emits the Vite chunk-size warning; the other JavaScript assets
-  remain below it. The paste grid is first-screen functionality, so code
-  splitting it requires a separate measured loading/error-boundary review.
-- The final expanded Chromium critical path passed in 70.8 seconds on ports
-  `8030`/`5230` with diagnostics at `.tmp/e2e-diagnostics`. It dispatches `text/plain` paste,
-  ignores clipboard HTML, verifies exact CRLF-preserving request content,
-  failure retention, reload non-restoration, keyboard selection, successful
-  clear, canonical page size/inspector, and every prior critical path.
+- Clean pushed-main baseline: local `main` and `origin/main` resolved to
+  `6fb115093a97909bf3c379732d16e7153c9931d0` with an empty working tree.
+  Bootstrap passed after stopping only the stale repository-owned Vite process;
+  baseline check passed with backend 763, frontend 131, and OpenAPI/frontend
+  contracts 148. Baseline Chromium E2E passed in 73.0 seconds with diagnostics
+  at `.tmp/e2e-diagnostics-dedicated-baseline`.
+- Current dedicated-workflow worktree: based on the SHA above and not committed
+  or pushed. `scripts/check.ps1` passed after the repository formatter was
+  applied to two touched Python files. Ruff/format, mypy over 101 source files,
+  backend pytest 773, frontend lint/typecheck, Vitest 133, and build passed.
+  The separately counted OpenAPI/frontend contract suite contains 155 tests.
+- The latest recorded backend pytest count is 773.
+- The latest recorded frontend Vitest count is 133.
+- The latest OpenAPI/frontend contract count is 155. These are local
+  development-worktree results, not remote Actions or release evidence.
+- Production assets: main 511.60 kB / 121.24 kB gzip, Regression 53.72 kB /
+  11.59 kB, Quality 64.25 kB / 11.97 kB, and DOE 97.45 kB / 22.67 kB. The
+  dedicated workspaces remain in the existing Regression/DOE lazy chunks. Main
+  still emits the 500 kB warning; measured bundle optimization remains backlog.
+- Chromium E2E passed in 76.9 seconds with diagnostics at
+  `.tmp/e2e-diagnostics-dedicated-workflows`. It covers the top-level Predict
+  and Response Optimizer source catalogs, execution, ID-only deep-link reload,
+  plus all existing paste, prediction/export, quality, DOE, Bayesian, and
+  retention paths.
 - The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
   24.17.0. These are development results, not Windows 11/Python 3.10/Node 22
   release evidence. The Windows 11/Node 22 clean release gate remains open.
-- `gh auth status --hostname github.com` and the requested `gh run list` failed
-  because `gh` is not installed.
+- `gh auth status --hostname github.com` and the requested `gh run list` could
+  not run because `gh` is not installed.
   No latest run ID/head SHA, hosted Windows/E2E job result/order, artifact
   contents, or workflow-dispatch UI was independently verified.
 

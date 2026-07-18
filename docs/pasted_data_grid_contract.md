@@ -50,6 +50,10 @@ tab/comma/semicolon/pipe detection, interior and trailing empty cells, quoted
 fields, escaped double quotes, and quoted embedded delimiters/newlines. An
 unbalanced quote switches the display to raw mode with a warning. Server
 parsing can legitimately differ and is always revalidated at confirmation.
+Delimiter candidates are compared by structural score first; Tab wins only an
+exact score tie. This prevents incidental tab text inside a coherent comma,
+semicolon, or pipe table from overriding the stronger table structure. The
+preview never serializes parsed cells back into the submitted source string.
 
 ## Canonical Preview
 

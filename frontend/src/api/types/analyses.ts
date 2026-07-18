@@ -44,7 +44,11 @@ export type AnalysisModuleId =
 
 export type MethodAvailability = "available" | "planned" | "disabled";
 
-export type AnalysisExecutionMode = "inline" | "job";
+export type AnalysisExecutionMode = "inline" | "job" | "dedicated";
+
+export type AnalysisSourcePrerequisite =
+  | "regression_model"
+  | "response_surface_analysis";
 
 export interface AnalysisModuleDescriptor {
   module_id: AnalysisModuleId;
@@ -62,6 +66,7 @@ export interface AnalysisMethodDescriptor {
   availability: MethodAvailability;
   execution_mode: AnalysisExecutionMode;
   requires_dataset: boolean;
+  source_prerequisite?: AnalysisSourcePrerequisite | null;
   order: number;
   disabled_reason: string | null;
 }

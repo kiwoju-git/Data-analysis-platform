@@ -19,6 +19,9 @@ from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
     AnalysisRunState,
     AnalysisWarning,
+    RegressionModelCatalogItem,
+    RegressionModelCatalogResponse,
+    RegressionModelCatalogResponseColumn,
     RegressionModelManifestResponse,
     RegressionPredictionCategoricalCheck,
     RegressionPredictionColumnMapping,
@@ -50,10 +53,12 @@ from app.storage.metadata import (
     AnalysisArtifactRecord,
     AnalysisRunRecord,
     DatasetColumnRecord,
+    count_regression_model_catalog_records,
     get_analysis_run_record,
     get_regression_model_record,
     insert_analysis_run_record_with_artifacts,
     list_analysis_artifact_records,
+    list_regression_model_catalog_records,
 )
 
 APP_VERSION = "0.1.0"
@@ -160,6 +165,102 @@ class _PredictionRowsHeader(BaseModel):
     model_manifest_sha256: str
     target_schema_hash: str
     row_count_predicted: int = Field(ge=0)
+
+
+def list_regression_models(
+    settings: Settings,
+    *,
+    offset: int,
+    limit: int,
+    source_dataset_version_id: UUID | None = None,
+    source_analysis_id: UUID | None = None,
+) -> RegressionModelCatalogResponse:
+    dataset_filter = None if source_dataset_version_id is None else str(source_dataset_version_id)
+    analysis_filter = None if source_analysis_id is None else str(source_analysis_id)
+    total = count_regression_model_catalog_records(
+        settings.workspace_root,
+        source_dataset_version_id=dataset_filter,
+        source_analysis_id=analysis_filter,
+    )
+    records = list_regression_model_catalog_records(
+        settings.workspace_root,
+        offset=offset,
+        limit=limit,
+        source_dataset_version_id=dataset_filter,
+        source_analysis_id=analysis_filter,
+    )
+    items: list[RegressionModelCatalogItem] = []
+    for catalog_record in records:
+        record = catalog_record.model
+        availability: Literal["available", "source_stale", "integrity_error"] = "available"
+        availability_code: str | None = None
+        response_column: RegressionModelCatalogResponseColumn | None = None
+        predictor_count: int | None = None
+        if (
+            record.method_id != "regression.linear_model"
+            or catalog_record.source_analysis_status != AnalysisRunState.SUCCEEDED.value
+        ):
+            availability = "integrity_error"
+            availability_code = "regression_model_source_analysis_invalid"
+        else:
+            try:
+                manifest_response = get_regression_model_manifest(
+                    settings,
+                    UUID(record.model_id),
+                )
+                response_column, predictor_count = _regression_model_catalog_metadata(
+                    manifest_response.manifest,
+                )
+            except (ApiError, ValueError):
+                availability = "integrity_error"
+                availability_code = "regression_model_integrity_error"
+        if availability == "available" and catalog_record.source_analysis_stale:
+            availability = "source_stale"
+            availability_code = "regression_prediction_source_model_stale"
+        items.append(
+            RegressionModelCatalogItem(
+                model_id=UUID(record.model_id),
+                source_analysis_id=UUID(record.analysis_id),
+                source_dataset_version_id=UUID(record.dataset_version_id),
+                method_id="regression.linear_model",
+                method_version=record.method_version,
+                schema_hash=record.schema_hash,
+                response=response_column,
+                predictor_count=predictor_count,
+                created_at=record.created_at,
+                availability=availability,
+                availability_code=availability_code,
+            )
+        )
+    return RegressionModelCatalogResponse(
+        models=items,
+        total=total,
+        returned=len(items),
+        limit=limit,
+        offset=offset,
+        has_previous=offset > 0,
+        has_next=offset + len(items) < total,
+    )
+
+
+def _regression_model_catalog_metadata(
+    manifest: dict[str, Any],
+) -> tuple[RegressionModelCatalogResponseColumn, int]:
+    response = manifest.get("response")
+    predictors = manifest.get("predictors")
+    if not isinstance(response, dict) or not isinstance(predictors, list) or not predictors:
+        raise ValueError("regression_model_catalog_metadata_invalid")
+    try:
+        response_column = RegressionModelCatalogResponseColumn(
+            column_id=UUID(str(response["column_id"])),
+            display_name=str(response["display_name"]),
+            data_type=str(response["data_type"]),
+            measurement_level=str(response["measurement_level"]),
+            unit=None if response.get("unit") is None else str(response["unit"]),
+        )
+    except (KeyError, TypeError, ValidationError, ValueError) as exc:
+        raise ValueError("regression_model_catalog_metadata_invalid") from exc
+    return response_column, len(predictors)
 
 
 def get_regression_model_manifest(

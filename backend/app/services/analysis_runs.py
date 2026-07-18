@@ -117,25 +117,24 @@ def create_analysis_run(
             developer_detail=method.availability.value,
         )
 
+    dedicated_routes = {
+        "regression.predict": "/api/v1/regression-models",
+        "regression.response_optimizer": "/api/v1/doe-designs/response-surface-analyses",
+        "doe.factorial_design": "/api/v1/doe-designs/factorial",
+        "doe.response_surface": "/api/v1/doe-designs/response-surface",
+        "doe.bayesian_optimization": "/api/v1/bayesian-studies",
+    }
+    if method.execution_mode.value == "dedicated":
+        raise ApiError(
+            code="analysis_method_uses_dedicated_api",
+            message="이 메서드는 전용 워크플로 API를 통해 실행해야 합니다.",
+            status_code=status.HTTP_409_CONFLICT,
+            developer_detail=dedicated_routes.get(request.method_id),
+        )
+
     handler = _METHOD_EXECUTION_HANDLERS.get(request.method_id)
     if handler is not None:
         return handler.run(settings, request)
-
-    if request.method_id in {
-        "doe.factorial_design",
-        "doe.response_surface",
-        "doe.bayesian_optimization",
-    }:
-        raise ApiError(
-            code="analysis_method_uses_dedicated_api",
-            message="이 메서드는 DOE 설계 자산 API를 통해 실행해야 합니다.",
-            status_code=status.HTTP_409_CONFLICT,
-            developer_detail={
-                "doe.factorial_design": "/api/v1/doe-designs/factorial",
-                "doe.response_surface": "/api/v1/doe-designs/response-surface",
-                "doe.bayesian_optimization": "/api/v1/bayesian-studies",
-            }[request.method_id],
-        )
 
     raise ApiError(
         code="analysis_method_not_available",

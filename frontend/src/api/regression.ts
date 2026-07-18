@@ -5,6 +5,7 @@ import type {
   RegressionModelDeleteResponse,
   RegressionModelDeletionPreflightResponse,
   RegressionModelManifestResponse,
+  RegressionModelCatalogResponse,
   RegressionPredictionPreflightRequest,
   RegressionPredictionPreflightResponse,
   RegressionPredictionRequest,
@@ -12,6 +13,19 @@ import type {
   RegressionPredictionRowsPageResponse,
   RegressionPredictionCsvExportResponse,
 } from "./types";
+
+export async function fetchRegressionModels(
+  offset = 0,
+  limit = 20,
+): Promise<RegressionModelCatalogResponse> {
+  const response = await fetchApi(apiRoutes.regressionModels(offset, limit), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_model_catalog_failed"));
+  }
+  return (await response.json()) as RegressionModelCatalogResponse;
+}
 
 export async function fetchRegressionModelManifest(
   modelId: string,

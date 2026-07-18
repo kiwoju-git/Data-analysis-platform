@@ -32,6 +32,13 @@ stored results remain comparable:
 Frontend-only changes do not require a method-version bump unless they alter the
 request sent to the backend or reinterpret a stored result field.
 
+Changing `regression.predict` and `regression.response_optimizer` catalog
+availability from disabled to available/dedicated, adding metadata-only source
+catalogs, and adding top-level ID-restorable UI entrypoints do not change either
+calculation request or persisted result meaning. Their versions therefore stay
+`0.2.0` and `0.3.0`; prediction schemas remain result/config/rows `2`/`3`/`2`,
+and optimizer config/result/source-bundle schemas remain `2`/`2`/`2`.
+
 The Workbench saved-result hooks (`history`, `export`, `comparison`, and
 `restore`) use latest-request guards and pass their state through grouped props.
 Ignoring an obsolete response, keeping loading state owned by the latest

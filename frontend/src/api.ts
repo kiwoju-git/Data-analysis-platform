@@ -53,6 +53,7 @@ export {
 export { createResponseSurfaceAnalysis } from "./api/doe";
 export { createResponseSurfaceDesign } from "./api/doe";
 export { fetchResponseSurfaceAnalysis } from "./api/doe";
+export { fetchResponseSurfaceAnalysisCatalog } from "./api/doe";
 export { fetchResponseSurfaceDesign } from "./api/doe";
 export { saveResponseSurfaceResponses } from "./api/doe";
 export { createResponseOptimizer } from "./api/doe";
@@ -71,6 +72,7 @@ export {
   deleteRegressionModel,
   fetchRegressionModelDeletionPreflight,
   fetchRegressionModelManifest,
+  fetchRegressionModels,
 } from "./api/regression";
 export { fetchRegressionPredictionPreflight } from "./api/regression";
 export { createRegressionPredictionCsvExport } from "./api/regression";

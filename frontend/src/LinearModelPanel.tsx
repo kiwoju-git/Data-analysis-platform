@@ -3,24 +3,21 @@ import { useState, type ReactNode } from "react";
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
-  DatasetVersionCatalogItem,
   DatasetVersionResponse,
   LinearModelResult,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
-  RegressionPredictionRowsPageResponse,
 } from "./api";
 import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
 import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
 import { formatBytes } from "./analysisWorkbenchUtils";
+import {
+  RegressionPredictionPanel,
+  type RegressionPredictionRowsState,
+} from "./RegressionPredictionPanel";
 
-export interface LinearModelPredictionRowsState {
-  error: string | null;
-  isLoading: boolean;
-  page: RegressionPredictionRowsPageResponse | null;
-  onPageChange: (offset: number) => void;
-}
+export type LinearModelPredictionRowsState = RegressionPredictionRowsState;
 
 interface LinearModelPanelProps {
   alpha: number;
@@ -136,34 +133,6 @@ export function LinearModelPanel({
     (column) => predictorColumnIds.includes(column.column_id) && isNumericLinearModelPredictor(column),
   );
   const interactionOptions = linearModelInteractionOptions(selectedNumericPredictors);
-  const canRunPredictionPreflight =
-    version !== null &&
-    result?.model_manifest !== undefined &&
-    predictionTargetState.selectedTargetVersionId !== null &&
-    !isRunningPredictionPreflight &&
-    modelAvailable;
-  const canRunPrediction =
-    version !== null &&
-    result?.model_manifest !== undefined &&
-    predictionPreflight !== null &&
-    predictionPreflight.prediction_ready &&
-    predictionPreflight.model_id === result.model_manifest.model_id &&
-    predictionPreflight.target_dataset_version_id ===
-      predictionTargetState.selectedTargetVersionId &&
-    !isRunningPrediction &&
-    !isRunningPredictionPreflight &&
-    modelAvailable;
-  const preflightErrorCount =
-    predictionPreflight?.issues.filter((issue) => issue.severity === "error").length ?? 0;
-  const preflightWarningCount =
-    predictionPreflight?.issues.filter((issue) => issue.severity === "warning").length ?? 0;
-  const activePredictionRowsPage =
-    prediction !== null && predictionRowsState.page?.prediction_id === prediction.prediction_id
-      ? predictionRowsState.page
-      : null;
-  const predictionRowsPreview =
-    activePredictionRowsPage?.rows ?? prediction?.rows.slice(0, 25) ?? [];
-
   return (
     <section className="analysis-run-panel" aria-labelledby="linear-model-title">
       <div className="panel-heading">
@@ -470,458 +439,23 @@ export function LinearModelPanel({
                   ) : null}
                 </section>
               ) : null}
-              <section
-                className="result-section"
-                aria-labelledby="linear-model-prediction-preflight-title"
-              >
-                <div className="panel-heading">
-                  <div>
-                    <h4 id="linear-model-prediction-preflight-title">
-                      예측 사전점검
-                    </h4>
-                    <p>선택한 데이터셋 버전을 저장된 모델 manifest와 대조합니다.</p>
-                  </div>
-                  <div className="button-row">
-                    <button
-                      className="secondary-button"
-                      disabled={!canRunPredictionPreflight}
-                      onClick={() => {
-                        onRunPredictionPreflight();
-                      }}
-                      type="button"
-                    >
-                      {isRunningPredictionPreflight ? "점검 중" : "사전점검 실행"}
-                    </button>
-                    <button
-                      className="primary-button"
-                      disabled={!canRunPrediction}
-                      onClick={() => {
-                        onRunPrediction();
-                      }}
-                      type="button"
-                    >
-                      {isRunningPrediction ? "예측 중" : "예측 실행"}
-                    </button>
-                  </div>
-                </div>
-                {result.model_manifest === undefined ? (
-                  <div className="notice-box">저장된 model manifest가 없는 결과입니다.</div>
-                ) : null}
-                <div className="option-grid option-grid-wide">
-                  <label>
-                    <span>예측 대상 데이터셋 버전</span>
-                    <select
-                      aria-label="예측 대상 데이터셋 버전"
-                      disabled={
-                        predictionTargetState.selectedTargetVersionId === null ||
-                        !modelAvailable ||
-                        isRunningPredictionPreflight ||
-                        isRunningPrediction ||
-                        predictionExportState.isCreating ||
-                        predictionExportState.isDownloading
-                      }
-                      value={predictionTargetState.selectedTargetVersionId ?? ""}
-                      onChange={(event) => {
-                        predictionTargetState.onSelect(event.target.value);
-                      }}
-                    >
-                      {version !== null ? (
-                        <option value={version.version_id}>
-                          현재 데이터셋 · v{version.version_number} · {version.row_count.toLocaleString()}
-                          행 × {version.column_count.toLocaleString()}열
-                        </option>
-                      ) : null}
-                      {predictionTargetState.selectedTarget !== null &&
-                      predictionTargetState.selectedTarget.version_id !== version?.version_id &&
-                      !predictionTargetState.catalog?.versions.some(
-                        (candidate) =>
-                          candidate.version_id ===
-                          predictionTargetState.selectedTarget?.version_id,
-                      ) ? (
-                        <option value={predictionTargetState.selectedTarget.version_id}>
-                          {predictionTargetLabel(predictionTargetState.selectedTarget)}
-                        </option>
-                      ) : null}
-                      {predictionTargetState.catalog?.versions
-                        .filter((candidate) => candidate.version_id !== version?.version_id)
-                        .map((candidate) => (
-                          <option key={candidate.version_id} value={candidate.version_id}>
-                            {predictionTargetLabel(candidate)}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                </div>
-                {predictionTargetState.error !== null ? (
-                  <div className="error-box" role="alert">
-                    데이터셋 버전 목록 조회 실패: {predictionTargetState.error}
-                  </div>
-                ) : null}
-                {predictionTargetState.catalog !== null &&
-                predictionTargetState.catalog.total > predictionTargetState.catalog.limit ? (
-                  <div className="result-pagination" aria-label="예측 대상 데이터셋 목록 페이지 이동">
-                    <button
-                      type="button"
-                      disabled={
-                        predictionTargetState.isLoading ||
-                        !predictionTargetState.catalog.has_previous
-                      }
-                      onClick={() => {
-                        predictionTargetState.onPageChange(
-                          Math.max(
-                            0,
-                            predictionTargetState.catalog!.offset -
-                              predictionTargetState.catalog!.limit,
-                          ),
-                        );
-                      }}
-                    >
-                      이전
-                    </button>
-                    <span>
-                      {predictionTargetState.catalog.offset + 1}-
-                      {predictionTargetState.catalog.offset +
-                        predictionTargetState.catalog.returned} / {predictionTargetState.catalog.total}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={
-                        predictionTargetState.isLoading || !predictionTargetState.catalog.has_next
-                      }
-                      onClick={() => {
-                        predictionTargetState.onPageChange(
-                          predictionTargetState.catalog!.offset +
-                            predictionTargetState.catalog!.limit,
-                        );
-                      }}
-                    >
-                      다음
-                    </button>
-                  </div>
-                ) : null}
-                <div className="notice-box">
-                  예측은 저장된 OLS 모델이 선택한 데이터셋 버전에 적용한 추정값입니다.
-                  원인·효과나 확정값으로 해석하지 말고, 학습 범위 밖 값과 OLS 가정을 함께
-                  확인해야 합니다. source dataset schema가 바뀌어 모델이 stale이면 현재
-                  schema로 회귀모형을 다시 적합해야 합니다.
-                </div>
-                {predictionPreflightError !== null ? (
-                  <div className="error-box" role="alert">
-                    오류 코드: {predictionPreflightError}
-                  </div>
-                ) : null}
-                {predictionError !== null ? (
-                  <div className="error-box" role="alert">
-                    오류 코드: {predictionError}
-                  </div>
-                ) : null}
-                {predictionPreflight !== null ? (
-                  <>
-                    <div className="metadata-grid" aria-label="예측 사전점검 요약">
-                      <span>상태</span>
-                      <strong>
-                        {predictionPreflight.prediction_ready ? "예측 준비 가능" : "확인 필요"}
-                      </strong>
-                      <span>대상 행</span>
-                      <strong>
-                        {predictionPreflight.row_count_usable.toLocaleString()} /{" "}
-                        {predictionPreflight.row_count_total.toLocaleString()}
-                      </strong>
-                      <span>Schema hash</span>
-                      <strong>
-                        {predictionPreflight.schema_hash_match ? "일치" : "다름"}
-                      </strong>
-                      <span>Source model</span>
-                      <strong>
-                        {predictionPreflight.source_analysis_stale === true
-                          ? "stale · 재적합 필요"
-                          : predictionPreflight.source_analysis_stale === false
-                            ? "fresh"
-                            : "검증 불가"}
-                      </strong>
-                      <span>Source schema</span>
-                      <strong>
-                        {predictionPreflight.source_schema_hash_current === null
-                          ? "검증 불가"
-                          : predictionPreflight.source_schema_hash_current ===
-                              predictionPreflight.source_schema_hash
-                            ? "적합 시점과 일치"
-                            : "변경됨 · 재적합 필요"}
-                      </strong>
-                      <span>문제</span>
-                      <strong>
-                        오류 {preflightErrorCount.toLocaleString()}개 · 경고{" "}
-                        {preflightWarningCount.toLocaleString()}개
-                      </strong>
-                    </div>
-                    {predictionPreflight.issues.length > 0 ? (
-                      <ul className="warning-list" aria-label="예측 사전점검 문제">
-                        {predictionPreflight.issues.map((issue, index) => (
-                          <li key={`${issue.code}-${index}`}>
-                            [{issue.severity}] {issue.message}
-                            <span className="cell-subtle">
-                              {issue.display_name ?? issue.code}
-                              {issue.count !== null
-                                ? ` · ${issue.count.toLocaleString()}건`
-                                : ""}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <div className="table-wrap">
-                      <table className="result-table">
-                        <thead>
-                          <tr>
-                            <th>컬럼</th>
-                            <th>종류</th>
-                            <th>매핑</th>
-                            <th>상태</th>
-                            <th>대상 컬럼</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {predictionPreflight.required_columns.map((mapping) => (
-                            <tr key={mapping.source_column_id}>
-                              <td>{mapping.display_name}</td>
-                              <td>{predictionPredictorKindLabel(mapping.predictor_kind)}</td>
-                              <td>{predictionMatchTypeLabel(mapping.match_type)}</td>
-                              <td>{predictionStatusLabel(mapping.status)}</td>
-                              <td>{shortIdentifier(mapping.target_column_id ?? "missing")}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {predictionPreflight.numeric_checks.length > 0 ? (
-                      <div className="table-wrap">
-                        <table className="result-table">
-                          <thead>
-                            <tr>
-                              <th>숫자형 컬럼</th>
-                              <th>유효</th>
-                              <th>결측</th>
-                              <th>비숫자</th>
-                              <th>학습범위 아래</th>
-                              <th>학습범위 위</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {predictionPreflight.numeric_checks.map((check) => (
-                              <tr key={check.source_column_id}>
-                                <td>{check.display_name}</td>
-                                <td>{check.n_valid.toLocaleString()}</td>
-                                <td>{check.n_missing.toLocaleString()}</td>
-                                <td>{check.n_non_numeric.toLocaleString()}</td>
-                                <td>{check.n_below_training_range.toLocaleString()}</td>
-                                <td>{check.n_above_training_range.toLocaleString()}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : null}
-                    {predictionPreflight.categorical_checks.length > 0 ? (
-                      <div className="table-wrap">
-                        <table className="result-table">
-                          <thead>
-                            <tr>
-                              <th>범주형 컬럼</th>
-                              <th>학습 level</th>
-                              <th>유효</th>
-                              <th>결측</th>
-                              <th>새 level</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {predictionPreflight.categorical_checks.map((check) => (
-                              <tr key={check.source_column_id}>
-                                <td>{check.display_name}</td>
-                                <td>{check.training_level_count.toLocaleString()}</td>
-                                <td>{check.n_valid.toLocaleString()}</td>
-                                <td>{check.n_missing.toLocaleString()}</td>
-                                <td>{check.n_unseen_level.toLocaleString()}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : null}
-                  </>
-                ) : null}
-                {prediction !== null ? (
-                  <>
-                    <div className="metadata-grid" aria-label="예측 결과 요약">
-                      <span>Prediction ID</span>
-                      <strong title={prediction.prediction_id}>
-                        {shortIdentifier(prediction.prediction_id)}
-                      </strong>
-                      <span>예측 행</span>
-                      <strong>
-                        {prediction.row_count_predicted.toLocaleString()} /{" "}
-                        {prediction.row_count_total.toLocaleString()}
-                      </strong>
-                      <span>제외 행</span>
-                      <strong>{prediction.row_count_excluded.toLocaleString()}개</strong>
-                      <span>응답 생략</span>
-                      <strong>{prediction.row_count_omitted.toLocaleString()}개</strong>
-                      <span>신뢰수준</span>
-                      <strong>{formatPercent(prediction.confidence_level)}</strong>
-                      <span>Inline rows</span>
-                      <strong>
-                        {prediction.rows.length.toLocaleString()} /{" "}
-                        {prediction.row_limit.toLocaleString()}
-                      </strong>
-                    </div>
-                    <div className="button-row" aria-label="전체 예측 CSV export">
-                      <button
-                        className="secondary-button"
-                        disabled={
-                          !modelAvailable ||
-                          predictionExportState.isCreating ||
-                          predictionExportState.isDownloading
-                        }
-                        onClick={predictionExportState.onCreate}
-                        type="button"
-                      >
-                        {predictionExportState.isCreating
-                          ? "전체 예측 CSV 생성 중"
-                          : "전체 예측 CSV 생성"}
-                      </button>
-                      {predictionExportState.csvExport !== null ? (
-                        <>
-                          <span className="cell-subtle">
-                            {predictionExportState.csvExport.row_count.toLocaleString()}행 · sha256:
-                            {shortIdentifier(predictionExportState.csvExport.sha256)}
-                          </span>
-                          <button
-                            className="secondary-button"
-                            disabled={
-                              !modelAvailable || predictionExportState.isDownloading
-                            }
-                            onClick={predictionExportState.onDownload}
-                            type="button"
-                          >
-                            {predictionExportState.isDownloading
-                              ? "CSV 다운로드 중"
-                              : "전체 예측 CSV 다운로드"}
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                    {predictionExportState.error !== null ? (
-                      <div className="error-box" role="alert">
-                        예측 CSV export 실패: {predictionExportState.error}
-                      </div>
-                    ) : null}
-                    {prediction.warnings.length > 0 ? (
-                      <ul className="warning-list" aria-label="예측 경고">
-                        {prediction.warnings.map((warning, index) => (
-                          <li key={`${warning.code}-${index}`}>
-                            [{warning.severity}] {warning.message}
-                            <span className="cell-subtle">
-                              {warning.count !== null
-                                ? `${warning.code} · ${warning.count.toLocaleString()}건`
-                                : warning.code}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <div className="result-section" aria-label="예측 구간 차트 결과">
-                      <div className="panel-heading">
-                        <div>
-                          <h4>예측 구간 차트</h4>
-                          <p>Predicted mean · mean CI · prediction interval</p>
-                        </div>
-                      </div>
-                      <div className="chart-grid chart-grid-single">
-                        <ChartPanel title="예측 평균과 구간">
-                          {renderPredictionIntervalChart(predictionRowsPreview)}
-                        </ChartPanel>
-                      </div>
-                    </div>
-                    <div className="table-wrap">
-                      <table className="result-table">
-                        <thead>
-                          <tr>
-                            <th>행 index</th>
-                            <th>예측 평균</th>
-                            <th>Mean CI</th>
-                            <th>Prediction interval</th>
-                            <th>경고</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {predictionRowsPreview.map((row) => (
-                            <tr key={row.row_index}>
-                              <td>{row.row_index.toLocaleString()}</td>
-                              <td>{formatModelNumber(row.predicted_mean)}</td>
-                              <td>{formatPredictionInterval(row.mean_confidence_interval)}</td>
-                              <td>{formatPredictionInterval(row.prediction_interval)}</td>
-                              <td>{row.warnings.length > 0 ? row.warnings.join(", ") : "없음"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {predictionRowsState.error !== null ? (
-                      <div className="error-box" role="alert">
-                        예측 행 조회 실패: {predictionRowsState.error}
-                      </div>
-                    ) : null}
-                    {activePredictionRowsPage !== null ? (
-                      <div className="result-pagination" aria-label="예측 행 페이지 이동">
-                        <button
-                          type="button"
-                          disabled={
-                            predictionRowsState.isLoading ||
-                            !activePredictionRowsPage.has_previous
-                          }
-                          onClick={() => {
-                            predictionRowsState.onPageChange(
-                              Math.max(
-                                0,
-                                activePredictionRowsPage.offset - activePredictionRowsPage.limit,
-                              ),
-                            );
-                          }}
-                        >
-                          이전
-                        </button>
-                        <span>
-                          {activePredictionRowsPage.total === 0
-                            ? "0 / 0"
-                            : `${(
-                                activePredictionRowsPage.offset + 1
-                              ).toLocaleString()}-${(
-                                activePredictionRowsPage.offset +
-                                activePredictionRowsPage.returned
-                              ).toLocaleString()} / ${activePredictionRowsPage.total.toLocaleString()}`}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={
-                            predictionRowsState.isLoading || !activePredictionRowsPage.has_next
-                          }
-                          onClick={() => {
-                            predictionRowsState.onPageChange(
-                              activePredictionRowsPage.offset + activePredictionRowsPage.limit,
-                            );
-                          }}
-                        >
-                          다음
-                        </button>
-                      </div>
-                    ) : prediction.rows.length > predictionRowsPreview.length ? (
-                      <p className="cell-subtle">
-                        화면에는 처음 {predictionRowsPreview.length.toLocaleString()}개 예측 행만
-                        표시합니다.
-                      </p>
-                    ) : null}
-                  </>
-                ) : null}
-              </section>
+              <RegressionPredictionPanel
+                currentVersion={version}
+                expectedModelId={result.model_manifest?.model_id ?? null}
+                isRunningPrediction={isRunningPrediction}
+                isRunningPreflight={isRunningPredictionPreflight}
+                modelAvailable={modelAvailable}
+                modelManifestAvailable={result.model_manifest !== undefined}
+                prediction={prediction}
+                predictionError={predictionError}
+                predictionExportState={predictionExportState}
+                predictionPreflight={predictionPreflight}
+                predictionPreflightError={predictionPreflightError}
+                predictionRowsState={predictionRowsState}
+                predictionTargetState={predictionTargetState}
+                onRunPrediction={onRunPrediction}
+                onRunPreflight={onRunPredictionPreflight}
+              />
               <div className="table-wrap">
                 <table className="result-table">
                   <thead>
@@ -1170,75 +704,6 @@ function renderInfluenceChart(result: LinearModelResult) {
   );
 }
 
-function renderPredictionIntervalChart(rows: RegressionPredictionResponse["rows"]) {
-  const rowsWithIntervals = rows.filter(
-    (row) =>
-      Number.isFinite(row.predicted_mean) &&
-      row.mean_confidence_interval !== null &&
-      row.prediction_interval !== null,
-  );
-  if (rowsWithIntervals.length === 0) {
-    return <EmptyChart label="예측 구간 없음" />;
-  }
-
-  const yRange = paddedRange(
-    rowsWithIntervals.flatMap((row) => [
-      row.predicted_mean,
-      row.mean_confidence_interval?.lower ?? row.predicted_mean,
-      row.mean_confidence_interval?.upper ?? row.predicted_mean,
-      row.prediction_interval?.lower ?? row.predicted_mean,
-      row.prediction_interval?.upper ?? row.predicted_mean,
-    ]),
-  );
-  return (
-    <svg
-      aria-label="regression prediction interval chart"
-      className="chart-svg chart-svg-wide"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      {chartAxes()}
-      {rowsWithIntervals.map((row, index) => {
-        const x = scale(index, 0, Math.max(1, rowsWithIntervals.length - 1), plot.left, plot.left + plotWidth);
-        const predictionInterval = row.prediction_interval;
-        const meanInterval = row.mean_confidence_interval;
-        return (
-          <g key={row.row_index}>
-            {predictionInterval !== null ? (
-              <line
-                className="prediction-interval-line"
-                x1={x}
-                x2={x}
-                y1={scale(predictionInterval.lower, yRange.min, yRange.max, plot.top + plotHeight, plot.top)}
-                y2={scale(predictionInterval.upper, yRange.min, yRange.max, plot.top + plotHeight, plot.top)}
-              />
-            ) : null}
-            {meanInterval !== null ? (
-              <line
-                className="prediction-ci-line"
-                x1={x}
-                x2={x}
-                y1={scale(meanInterval.lower, yRange.min, yRange.max, plot.top + plotHeight, plot.top)}
-                y2={scale(meanInterval.upper, yRange.min, yRange.max, plot.top + plotHeight, plot.top)}
-              />
-            ) : null}
-            <circle
-              className="prediction-mean-point"
-              cx={x}
-              cy={scale(row.predicted_mean, yRange.min, yRange.max, plot.top + plotHeight, plot.top)}
-              r="3"
-            />
-          </g>
-        );
-      })}
-      {chartTickLabels("1", rowsWithIntervals.length.toLocaleString())}
-      <text className="chart-axis-label" x={plot.left - 10} y={plot.top + 8}>
-        {formatModelNumber(yRange.max)}
-      </text>
-    </svg>
-  );
-}
-
 function EmptyChart({ label }: { label: string }) {
   return (
     <svg
@@ -1338,55 +803,11 @@ function formatModelNumber(value: number | null): string {
   });
 }
 
-function formatPredictionInterval(
-  interval: RegressionPredictionResponse["rows"][number]["prediction_interval"],
-): string {
-  if (interval === null) {
-    return "NA";
-  }
-  return `${formatPercent(interval.level)} ${formatModelNumber(interval.lower)} - ${formatModelNumber(
-    interval.upper,
-  )}`;
-}
-
-function predictionTargetLabel(target: DatasetVersionCatalogItem): string {
-  return `${target.original_filename} · v${target.version_number} · ${target.row_count.toLocaleString()}행 × ${target.column_count.toLocaleString()}열 · ${shortIdentifier(target.version_id)}`;
-}
-
 function shortIdentifier(value: string): string {
   if (value.length <= 16) {
     return value;
   }
   return `${value.slice(0, 12)}...`;
-}
-
-function predictionPredictorKindLabel(kind: "numeric" | "categorical"): string {
-  return kind === "numeric" ? "숫자형" : "범주형";
-}
-
-function predictionMatchTypeLabel(
-  matchType: "column_id" | "display_name" | "missing" | "ambiguous",
-): string {
-  if (matchType === "column_id") {
-    return "컬럼 ID";
-  }
-  if (matchType === "display_name") {
-    return "표시명";
-  }
-  if (matchType === "ambiguous") {
-    return "표시명 중복";
-  }
-  return "없음";
-}
-
-function predictionStatusLabel(status: "ok" | "warning" | "error"): string {
-  if (status === "ok") {
-    return "정상";
-  }
-  if (status === "warning") {
-    return "경고";
-  }
-  return "오류";
 }
 
 function linearModelPredictorKind(column: DatasetColumnResponse): string {

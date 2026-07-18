@@ -2,7 +2,7 @@ import type { AnalysisMethodDescriptor } from "./api";
 
 export function availabilityLabel(method: AnalysisMethodDescriptor): string {
   if (method.availability === "available") {
-    return "사용 가능";
+    return method.execution_mode === "dedicated" ? "사용 가능 · 전용 워크플로" : "사용 가능";
   }
   if (method.availability === "disabled") {
     return "비활성";

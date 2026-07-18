@@ -16,26 +16,30 @@ export interface RegressionPredictionTargetState {
   selectedTarget: DatasetVersionCatalogItem | null;
   selectedTargetVersionId: string | null;
   onPageChange: (offset: number) => void;
+  onRefresh?: () => void;
   onSelect: (versionId: string) => void;
 }
 
 interface UseRegressionPredictionTargetStateOptions {
   activeModelId: string | null;
   currentVersionId: string | null;
+  initialTargetVersionId?: string | null;
 }
 
 export function useRegressionPredictionTargetState({
   activeModelId,
   currentVersionId,
+  initialTargetVersionId = null,
 }: UseRegressionPredictionTargetStateOptions): RegressionPredictionTargetState {
   const [catalog, setCatalog] = useState<DatasetVersionCatalogResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [offset, setOffset] = useState(0);
   const [selectedTargetVersionId, setSelectedTargetVersionId] = useState<string | null>(
-    currentVersionId,
+    initialTargetVersionId ?? currentVersionId,
   );
   const [selectedTarget, setSelectedTarget] = useState<DatasetVersionCatalogItem | null>(null);
+  const [refreshRevision, setRefreshRevision] = useState(0);
   const catalogRequest = useRef(createLatestRequestGuard()).current;
 
   useEffect(() => {
@@ -44,9 +48,9 @@ export function useRegressionPredictionTargetState({
     setError(null);
     setIsLoading(false);
     setOffset(0);
-    setSelectedTargetVersionId(currentVersionId);
+    setSelectedTargetVersionId(initialTargetVersionId ?? currentVersionId);
     setSelectedTarget(null);
-  }, [activeModelId, catalogRequest, currentVersionId]);
+  }, [activeModelId, catalogRequest, currentVersionId, initialTargetVersionId]);
 
   useEffect(() => {
     if (activeModelId === null || currentVersionId === null) {
@@ -75,7 +79,7 @@ export function useRegressionPredictionTargetState({
           setIsLoading(false);
         }
       });
-  }, [activeModelId, catalogRequest, currentVersionId, offset]);
+  }, [activeModelId, catalogRequest, currentVersionId, offset, refreshRevision]);
 
   function handleSelect(versionId: string) {
     setSelectedTargetVersionId(versionId);
@@ -95,6 +99,7 @@ export function useRegressionPredictionTargetState({
     onPageChange: (nextOffset) => {
       setOffset(Math.max(0, nextOffset));
     },
+    onRefresh: () => setRefreshRevision((value) => value + 1),
     onSelect: handleSelect,
   };
 }

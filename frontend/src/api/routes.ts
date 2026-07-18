@@ -304,6 +304,13 @@ export const apiRoutes = {
     return apiUrl(`/doe-designs/response-surface/${pathId(designId)}/analyses`);
   },
 
+  doeResponseSurfaceAnalysisCatalog(offset: number, limit: number): string {
+    return urlWithQuery(
+      "/doe-designs/response-surface-analyses",
+      new URLSearchParams({ offset: String(offset), limit: String(limit) }),
+    );
+  },
+
   doeResponseSurfaceAnalysis(designId: string, analysisId: string): string {
     return apiUrl(
       `/doe-designs/response-surface/${pathId(designId)}/analyses/${pathId(analysisId)}`,
@@ -374,6 +381,13 @@ export const apiRoutes = {
 
   regressionModel(modelId: string): string {
     return apiUrl(`/regression-models/${pathId(modelId)}`);
+  },
+
+  regressionModels(offset: number, limit: number): string {
+    return urlWithQuery(
+      "/regression-models",
+      new URLSearchParams({ offset: String(offset), limit: String(limit) }),
+    );
   },
 
   regressionModelDeletionPreflight(modelId: string): string {

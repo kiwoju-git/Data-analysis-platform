@@ -657,6 +657,43 @@ class DoeResponseSurfaceAnalysisResponse(BaseModel):
     result: DoeResponseSurfaceAnalysisResult
 
 
+class DoeResponseSurfaceAnalysisCatalogItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_id: UUID
+    design_id: UUID
+    design_name: str
+    response_name: str
+    response_revision_id: UUID | None
+    response_revision_number: int | None = Field(ge=1)
+    method_id: Literal["doe.response_surface"]
+    method_version: str
+    created_at: str
+    eligibility_status: Literal[
+        "eligible",
+        "acknowledgment_required",
+        "ineligible",
+        "integrity_error",
+        "incompatible_method_version",
+    ]
+    blocking_issue_count: int = Field(ge=0)
+    advisory_issue_count: int = Field(ge=0)
+    informational_issue_count: int = Field(ge=0)
+    availability_code: str | None
+
+
+class DoeResponseSurfaceAnalysisCatalogResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    analyses: list[DoeResponseSurfaceAnalysisCatalogItem]
+    total: int = Field(ge=0)
+    returned: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    offset: int = Field(ge=0)
+    has_previous: bool
+    has_next: bool
+
+
 class ResponseOptimizerObjectiveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

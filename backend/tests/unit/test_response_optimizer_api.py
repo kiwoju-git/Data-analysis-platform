@@ -109,6 +109,54 @@ def _optimizer_request(source_analysis_id: str) -> dict:
     }
 
 
+def test_response_surface_analysis_catalog_is_paged_redacted_and_validated(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        design, analysis = _create_source_analysis(client)
+        response = client.get("/api/v1/doe-designs/response-surface-analyses?offset=0&limit=1")
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            connection.execute(
+                "UPDATE experiment_design_analyses SET result_json = result_json || ' ' "
+                "WHERE analysis_id = ?",
+                (analysis["analysis_id"],),
+            )
+            connection.commit()
+        tampered_response = client.get(
+            "/api/v1/doe-designs/response-surface-analyses?offset=0&limit=1"
+        )
+        selected_response = client.get(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses/"
+            f"{analysis['analysis_id']}"
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["returned"] == 1
+    assert payload["has_previous"] is False
+    assert payload["has_next"] is False
+    item = payload["analyses"][0]
+    assert item["analysis_id"] == analysis["analysis_id"]
+    assert item["design_id"] == design["design_id"]
+    assert item["design_name"] == "optimizer source"
+    assert item["response_name"] == "Yield"
+    assert item["response_revision_id"] == analysis["response_revision_id"]
+    assert item["response_revision_number"] == 1
+    assert item["method_id"] == "doe.response_surface"
+    assert item["eligibility_status"] in {"eligible", "acknowledgment_required"}
+    assert item["blocking_issue_count"] == 0
+    assert "result" not in response.text
+    assert "response_value" not in response.text
+    assert str(tmp_path) not in response.text
+
+    tampered_item = tampered_response.json()["analyses"][0]
+    assert tampered_item["eligibility_status"] == "integrity_error"
+    assert tampered_item["availability_code"] == "doe_rsm_analysis_integrity_error"
+    assert selected_response.status_code == 409
+    assert selected_response.json()["error"]["code"] == "doe_rsm_analysis_checksum_mismatch"
+    assert str(tmp_path) not in tampered_response.text
+
+
 def _replace_source_result(workspace_root, analysis_id: str, mutate) -> None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         (result_json,) = connection.execute(

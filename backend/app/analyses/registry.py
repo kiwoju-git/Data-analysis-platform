@@ -4,6 +4,7 @@ from app.api.v1.schemas.analyses import (
     AnalysisMethodListResponse,
     AnalysisModuleDescriptor,
     AnalysisModuleId,
+    AnalysisSourcePrerequisite,
     MethodAvailability,
 )
 
@@ -129,6 +130,8 @@ def _available(
     label_en: str,
     order: int,
     requires_dataset: bool = True,
+    execution_mode: AnalysisExecutionMode = AnalysisExecutionMode.INLINE,
+    source_prerequisite: AnalysisSourcePrerequisite | None = None,
 ) -> AnalysisMethodDescriptor:
     return AnalysisMethodDescriptor(
         method_id=method_id,
@@ -137,8 +140,9 @@ def _available(
         label_ko=label_ko,
         label_en=label_en,
         availability=MethodAvailability.AVAILABLE,
-        execution_mode=AnalysisExecutionMode.INLINE,
+        execution_mode=execution_mode,
         requires_dataset=requires_dataset,
+        source_prerequisite=source_prerequisite,
         order=order,
         disabled_reason=None,
     )
@@ -295,27 +299,25 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_en="Fit Regression Model",
         order=30,
     ),
-    _disabled(
+    _available(
         method_id="regression.predict",
         module_id=AnalysisModuleId.REGRESSION,
         label_ko="예측",
         label_en="Predict",
         order=40,
-        disabled_reason=(
-            "저장된 회귀 모델을 이용한 예측은 회귀모형 적합 화면에서 지원됩니다. "
-            "독립 Predict method 화면은 아직 제공하지 않습니다."
-        ),
+        requires_dataset=False,
+        execution_mode=AnalysisExecutionMode.DEDICATED,
+        source_prerequisite=AnalysisSourcePrerequisite.REGRESSION_MODEL,
     ),
-    _disabled(
+    _available(
         method_id="regression.response_optimizer",
         module_id=AnalysisModuleId.REGRESSION,
         label_ko="반응 최적화",
         label_en="Response Optimizer",
         order=50,
-        disabled_reason=(
-            "저장된 반응표면 모델을 이용한 최적화는 반응표면법 화면에서 지원됩니다. "
-            "독립 Response Optimizer 화면은 아직 제공하지 않습니다."
-        ),
+        requires_dataset=False,
+        execution_mode=AnalysisExecutionMode.DEDICATED,
+        source_prerequisite=AnalysisSourcePrerequisite.RESPONSE_SURFACE_ANALYSIS,
     ),
     _available(
         method_id="quality.attribute_control_chart",
@@ -373,6 +375,7 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_en="Design of Experiments",
         order=10,
         requires_dataset=False,
+        execution_mode=AnalysisExecutionMode.DEDICATED,
     ),
     _available(
         method_id="doe.response_surface",
@@ -381,6 +384,7 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_en="Response Surface Method",
         order=20,
         requires_dataset=False,
+        execution_mode=AnalysisExecutionMode.DEDICATED,
     ),
     _available(
         method_id="doe.bayesian_optimization",
@@ -389,6 +393,7 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_en="Bayesian Optimization",
         order=30,
         requires_dataset=False,
+        execution_mode=AnalysisExecutionMode.DEDICATED,
     ),
 )
 

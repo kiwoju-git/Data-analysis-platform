@@ -713,6 +713,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     ) as model_response_info:
         page.get_by_role("button", name="회귀모형 적합 실행").click()
     model_response = model_response_info.value
+    model_id = model_response.json()["result"]["model_manifest"]["model_id"]
     model_summary = page.get_by_label("회귀모형 요약")
     expect(model_summary).to_be_visible(timeout=20_000)
     expect(model_summary).to_contain_text("12 / 12")
@@ -772,6 +773,93 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
             )
     except PlaywrightTimeoutError as exc:
         raise AssertionError("Prediction CSV export download did not start") from exc
+
+    frontend_base_url = page.url.split("/analysis", 1)[0]
+    dedicated_page = page.context.new_page()
+    dedicated_prediction_id: str | None = None
+    try:
+        dedicated_page.goto(
+            f"{frontend_base_url}/analysis/regression/regression.predict",
+            wait_until="networkidle",
+        )
+        expect(
+            dedicated_page.get_by_role("heading", name="저장된 회귀모형으로 예측")
+        ).to_be_visible(timeout=20_000)
+        expect(dedicated_page.get_by_text("사용 가능 · 전용", exact=True)).to_be_visible()
+        dedicated_model_selector = dedicated_page.get_by_label("Source 회귀모형")
+        expect(dedicated_model_selector.locator(f'option[value="{model_id}"]')).to_have_count(
+            1,
+            timeout=20_000,
+        )
+        dedicated_model_selector.select_option(model_id)
+        dedicated_target_selector = dedicated_page.get_by_label(
+            "예측 대상 데이터셋 버전"
+        )
+        expect(dedicated_target_selector).to_be_enabled(timeout=20_000)
+        dedicated_target_selector.select_option(target_version_id)
+        dedicated_page.get_by_role("button", name="예측 사전점검").click()
+        expect(
+            dedicated_page.get_by_role("heading", name="예측 사전점검 결과")
+        ).to_be_visible(timeout=20_000)
+        with dedicated_page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/predictions")
+        ) as dedicated_prediction_response_info:
+            dedicated_page.get_by_role("button", name="예측 실행").click()
+        dedicated_prediction_response = dedicated_prediction_response_info.value
+        dedicated_prediction_id = dedicated_prediction_response.json()["prediction_id"]
+        expect(dedicated_page.get_by_role("heading", name="예측 결과")).to_be_visible(
+            timeout=20_000
+        )
+        dedicated_table = dedicated_page.locator(".result-table").filter(
+            has_text="Prediction interval"
+        )
+        expect(dedicated_table.locator("tbody tr")).to_have_count(4)
+        dedicated_page.get_by_role("button", name="전체 예측 CSV 생성").click()
+        expect(
+            dedicated_page.get_by_role("button", name="전체 예측 CSV 다운로드")
+        ).to_be_visible(timeout=15_000)
+        expect(dedicated_page).to_have_url(re.compile(f"model_id={model_id}"))
+        expect(dedicated_page).to_have_url(
+            re.compile(f"target_version_id={target_version_id}")
+        )
+
+        dedicated_page.reload(wait_until="networkidle")
+        expect(dedicated_page.get_by_label("Source 회귀모형")).to_have_value(
+            model_id,
+            timeout=20_000,
+        )
+        expect(dedicated_page.get_by_label("예측 대상 데이터셋 버전")).to_have_value(
+            target_version_id,
+            timeout=20_000,
+        )
+        expect(dedicated_page.get_by_label("선택한 회귀모형 metadata")).to_be_visible()
+    finally:
+        if dedicated_prediction_id is not None:
+            api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
+            dedicated_delete_preflight = dedicated_page.request.get(
+                f"{api_v1}/analysis-runs/{dedicated_prediction_id}/deletion-preflight"
+            )
+            if not dedicated_delete_preflight.ok:
+                raise AssertionError(
+                    "dedicated prediction deletion preflight failed: "
+                    + dedicated_delete_preflight.text()
+                )
+            dedicated_delete_manifest = dedicated_delete_preflight.json()
+            dedicated_delete = dedicated_page.request.delete(
+                f"{api_v1}/analysis-runs/{dedicated_prediction_id}/deletion",
+                data={
+                    "confirmation_analysis_id": dedicated_prediction_id,
+                    "expected_deletion_manifest_sha256": dedicated_delete_manifest[
+                        "deletion_manifest_sha256"
+                    ],
+                },
+            )
+            if not dedicated_delete.ok:
+                raise AssertionError(
+                    f"dedicated prediction deletion failed: {dedicated_delete.text()}"
+                )
+        dedicated_page.close()
 
     model_retention = page.get_by_role("region", name="저장 모델 관리")
     model_retention.get_by_role("button", name="삭제 영향 확인").click()
@@ -1107,7 +1195,16 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
     page.get_by_role("button", name="반응 저장").click()
     analysis_button = page.get_by_role("button", name="Quadratic model 적합")
     expect(analysis_button).to_be_enabled(timeout=20_000)
-    analysis_button.click()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and "/api/v1/doe-designs/response-surface/" in response.url
+        and response.url.endswith("/analyses")
+    ) as rsm_analysis_response_info:
+        analysis_button.click()
+    rsm_analysis_response = rsm_analysis_response_info.value
+    rsm_analysis_payload = rsm_analysis_response.json()
+    rsm_design_id = rsm_analysis_payload["design_id"]
+    rsm_analysis_id = rsm_analysis_payload["analysis_id"]
 
     expect(
         page.get_by_role("heading", name="Quadratic response surface")
@@ -1141,6 +1238,50 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
     expect(
         page.get_by_text("response_optimizer_confirmation_run_required", exact=True)
     ).to_be_visible()
+
+    frontend_base_url = page.url.split("/analysis", 1)[0]
+    dedicated_page = page.context.new_page()
+    try:
+        dedicated_page.goto(
+            f"{frontend_base_url}/analysis/regression/regression.response_optimizer",
+            wait_until="networkidle",
+        )
+        expect(
+            dedicated_page.get_by_role(
+                "heading", name="저장된 RSM 분석으로 반응 최적화"
+            )
+        ).to_be_visible(timeout=20_000)
+        expect(dedicated_page.get_by_text("사용 가능 · 전용", exact=True)).to_be_visible()
+        source_selector = dedicated_page.get_by_label("Source 반응표면 분석")
+        source_value = f"{rsm_design_id}:{rsm_analysis_id}"
+        expect(source_selector.locator(f'option[value="{source_value}"]')).to_have_count(
+            1,
+            timeout=20_000,
+        )
+        source_selector.select_option(source_value)
+        expect(dedicated_page.get_by_label("선택한 RSM source metadata")).to_be_visible(
+            timeout=20_000
+        )
+        dedicated_optimizer_button = dedicated_page.get_by_role(
+            "button", name="Response Optimizer 실행"
+        )
+        expect(dedicated_optimizer_button).to_be_enabled(timeout=20_000)
+        dedicated_optimizer_button.click()
+        expect(dedicated_page.get_by_role("heading", name="권장 운전 조건")).to_be_visible(
+            timeout=20_000
+        )
+        expect(dedicated_page).to_have_url(re.compile(f"design_id={rsm_design_id}"))
+        expect(dedicated_page).to_have_url(re.compile(f"analysis_id={rsm_analysis_id}"))
+        dedicated_page.reload(wait_until="networkidle")
+        expect(dedicated_page.get_by_label("Source 반응표면 분석")).to_have_value(
+            source_value,
+            timeout=20_000,
+        )
+        expect(dedicated_page.get_by_role("button", name="Response Optimizer 실행")).to_be_enabled(
+            timeout=20_000
+        )
+    finally:
+        dedicated_page.close()
 
     page.get_by_role("button", name="새 revision으로 수정").click()
     expect(page.get_by_label("반응 이름")).to_be_disabled()

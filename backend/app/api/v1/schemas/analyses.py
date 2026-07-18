@@ -24,6 +24,12 @@ class MethodAvailability(str, Enum):
 class AnalysisExecutionMode(str, Enum):
     INLINE = "inline"
     JOB = "job"
+    DEDICATED = "dedicated"
+
+
+class AnalysisSourcePrerequisite(str, Enum):
+    REGRESSION_MODEL = "regression_model"
+    RESPONSE_SURFACE_ANALYSIS = "response_surface_analysis"
 
 
 class AnalysisRunState(str, Enum):
@@ -55,6 +61,7 @@ class AnalysisMethodDescriptor(BaseModel):
     availability: MethodAvailability
     execution_mode: AnalysisExecutionMode
     requires_dataset: bool
+    source_prerequisite: AnalysisSourcePrerequisite | None = None
     order: int
     disabled_reason: str | None = None
 
@@ -1423,6 +1430,44 @@ class RegressionModelManifestResponse(BaseModel):
     created_at: str
     app_version: str
     manifest: dict[str, Any]
+
+
+class RegressionModelCatalogResponseColumn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_id: UUID
+    display_name: str
+    data_type: str
+    measurement_level: str
+    unit: str | None
+
+
+class RegressionModelCatalogItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: UUID
+    source_analysis_id: UUID
+    source_dataset_version_id: UUID
+    method_id: Literal["regression.linear_model"]
+    method_version: str
+    schema_hash: str
+    response: RegressionModelCatalogResponseColumn | None
+    predictor_count: int | None = Field(ge=1)
+    created_at: str
+    availability: Literal["available", "source_stale", "integrity_error"]
+    availability_code: str | None
+
+
+class RegressionModelCatalogResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    models: list[RegressionModelCatalogItem]
+    total: int = Field(ge=0)
+    returned: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    offset: int = Field(ge=0)
+    has_previous: bool
+    has_next: bool
 
 
 class RegressionModelDeletionCounts(BaseModel):

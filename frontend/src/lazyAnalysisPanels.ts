@@ -18,6 +18,12 @@ export const LinearModelPanel = lazy(() =>
   })),
 );
 
+export const RegressionPredictionWorkspace = lazy(() =>
+  import("./RegressionAnalysisPanels").then((module) => ({
+    default: module.RegressionPredictionWorkspace,
+  })),
+);
+
 export const AttributeControlChartPanel = lazy(() =>
   import("./QualityAnalysisPanels").then((module) => ({
     default: module.AttributeControlChartPanel,
@@ -69,6 +75,12 @@ export const FactorialDesignPanel = lazy(() =>
 export const ResponseSurfacePanel = lazy(() =>
   import("./DoeAnalysisPanels").then((module) => ({
     default: module.ResponseSurfacePanel,
+  })),
+);
+
+export const ResponseOptimizerWorkspace = lazy(() =>
+  import("./DoeAnalysisPanels").then((module) => ({
+    default: module.ResponseOptimizerWorkspace,
   })),
 );
 

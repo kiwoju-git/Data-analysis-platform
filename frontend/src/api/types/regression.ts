@@ -104,6 +104,38 @@ export interface RegressionModelManifestResponse {
   manifest: Record<string, unknown>;
 }
 
+export interface RegressionModelCatalogResponseColumn {
+  column_id: string;
+  display_name: string;
+  data_type: string;
+  measurement_level: string;
+  unit: string | null;
+}
+
+export interface RegressionModelCatalogItem {
+  model_id: string;
+  source_analysis_id: string;
+  source_dataset_version_id: string;
+  method_id: "regression.linear_model";
+  method_version: string;
+  schema_hash: string;
+  response: RegressionModelCatalogResponseColumn | null;
+  predictor_count: number | null;
+  created_at: string;
+  availability: "available" | "source_stale" | "integrity_error";
+  availability_code: string | null;
+}
+
+export interface RegressionModelCatalogResponse {
+  models: RegressionModelCatalogItem[];
+  total: number;
+  returned: number;
+  limit: number;
+  offset: number;
+  has_previous: boolean;
+  has_next: boolean;
+}
+
 export interface RegressionModelDeletionCounts {
   regression_model_count: 1;
   manifest_artifact_count: 1;

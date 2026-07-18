@@ -285,6 +285,14 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="doeResponseSurfaceAnalysisCatalog",
+        method="get",
+        path="/api/v1/doe-designs/response-surface-analyses",
+        success_status="200",
+        response_schema="DoeResponseSurfaceAnalysisCatalogResponse",
+        parameters=frozenset({("offset", "query"), ("limit", "query")}),
+    ),
+    OperationContract(
         route_name="doeResponseSurfaceAnalysis",
         method="get",
         path=("/api/v1/doe-designs/response-surface/{design_id}/analyses/{analysis_id}"),
@@ -528,6 +536,21 @@ FRONTEND_ROUTE_CONTRACTS = [
         response_schema="RegressionModelDeleteResponse",
         parameters=frozenset({("model_id", "path")}),
         request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="regressionModels",
+        method="get",
+        path="/api/v1/regression-models",
+        success_status="200",
+        response_schema="RegressionModelCatalogResponse",
+        parameters=frozenset(
+            {
+                ("offset", "query"),
+                ("limit", "query"),
+                ("source_dataset_version_id", "query"),
+                ("source_analysis_id", "query"),
+            }
+        ),
     ),
     OperationContract(
         route_name="regressionModelDeletionPreflight",
@@ -1515,6 +1538,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "availability",
                 "execution_mode",
                 "requires_dataset",
+                "source_prerequisite",
                 "order",
                 "disabled_reason",
             }
@@ -1537,6 +1561,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("availability", "MethodAvailability"),
             ("execution_mode", "AnalysisExecutionMode"),
         ),
+        property_any_of_refs=(("source_prerequisite", frozenset({"AnalysisSourcePrerequisite"})),),
     ),
     SchemaComponentContract(
         name="AnalysisMethodListResponse",
@@ -1877,6 +1902,72 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         property_consts=(("method_id", "doe.response_surface"),),
     ),
     SchemaComponentContract(
+        name="DoeResponseSurfaceAnalysisCatalogItem",
+        properties=frozenset(
+            {
+                "analysis_id",
+                "design_id",
+                "design_name",
+                "response_name",
+                "response_revision_id",
+                "response_revision_number",
+                "method_id",
+                "method_version",
+                "created_at",
+                "eligibility_status",
+                "blocking_issue_count",
+                "advisory_issue_count",
+                "informational_issue_count",
+                "availability_code",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "analysis_id",
+                "design_id",
+                "design_name",
+                "response_name",
+                "response_revision_id",
+                "response_revision_number",
+                "method_id",
+                "method_version",
+                "created_at",
+                "eligibility_status",
+                "blocking_issue_count",
+                "advisory_issue_count",
+                "informational_issue_count",
+                "availability_code",
+            }
+        ),
+        property_consts=(("method_id", "doe.response_surface"),),
+    ),
+    SchemaComponentContract(
+        name="DoeResponseSurfaceAnalysisCatalogResponse",
+        properties=frozenset(
+            {
+                "analyses",
+                "total",
+                "returned",
+                "limit",
+                "offset",
+                "has_previous",
+                "has_next",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "analyses",
+                "total",
+                "returned",
+                "limit",
+                "offset",
+                "has_previous",
+                "has_next",
+            }
+        ),
+        array_item_refs=(("analyses", "DoeResponseSurfaceAnalysisCatalogItem"),),
+    ),
+    SchemaComponentContract(
         name="DoeResponseSurfaceAnalysisResult",
         properties=frozenset(
             {
@@ -2112,6 +2203,60 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "source_warning_code",
             }
         ),
+    ),
+    SchemaComponentContract(
+        name="RegressionModelCatalogResponseColumn",
+        properties=frozenset(
+            {"column_id", "display_name", "data_type", "measurement_level", "unit"}
+        ),
+        required_fields=frozenset(
+            {"column_id", "display_name", "data_type", "measurement_level", "unit"}
+        ),
+    ),
+    SchemaComponentContract(
+        name="RegressionModelCatalogItem",
+        properties=frozenset(
+            {
+                "model_id",
+                "source_analysis_id",
+                "source_dataset_version_id",
+                "method_id",
+                "method_version",
+                "schema_hash",
+                "response",
+                "predictor_count",
+                "created_at",
+                "availability",
+                "availability_code",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "model_id",
+                "source_analysis_id",
+                "source_dataset_version_id",
+                "method_id",
+                "method_version",
+                "schema_hash",
+                "response",
+                "predictor_count",
+                "created_at",
+                "availability",
+                "availability_code",
+            }
+        ),
+        property_any_of_refs=(("response", frozenset({"RegressionModelCatalogResponseColumn"})),),
+        property_consts=(("method_id", "regression.linear_model"),),
+    ),
+    SchemaComponentContract(
+        name="RegressionModelCatalogResponse",
+        properties=frozenset(
+            {"models", "total", "returned", "limit", "offset", "has_previous", "has_next"}
+        ),
+        required_fields=frozenset(
+            {"models", "total", "returned", "limit", "offset", "has_previous", "has_next"}
+        ),
+        array_item_refs=(("models", "RegressionModelCatalogItem"),),
     ),
     SchemaComponentContract(
         name="RegressionPredictionProvenance",
@@ -2759,9 +2904,9 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ):
         assert phrase in workflow_section
 
-    assert "latest recorded backend pytest count is 763" in local_validation_section
-    assert "latest recorded frontend Vitest count is 131" in local_validation_section
-    assert "latest OpenAPI/frontend contract count is 148" in local_validation_section
+    assert "latest recorded backend pytest count is 773" in local_validation_section
+    assert "latest recorded frontend Vitest count is 133" in local_validation_section
+    assert "latest OpenAPI/frontend contract count is 155" in local_validation_section
     assert "The latest run passed backend ruff check" not in local_validation_section
     assert "That 2026-07-09 run passed backend ruff check" in historical_validation_section
     assert "That 2026-07-07 run passed backend ruff check" in historical_validation_section

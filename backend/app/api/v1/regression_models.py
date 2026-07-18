@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, status
 
 from app.api.v1.schemas.analyses import (
+    RegressionModelCatalogResponse,
     RegressionModelDeleteRequest,
     RegressionModelDeleteResponse,
     RegressionModelDeletionPreflightResponse,
@@ -20,6 +21,7 @@ from app.services.regression_models import (
     get_regression_model_manifest,
     get_regression_prediction_preflight,
     get_regression_prediction_rows,
+    list_regression_models,
 )
 from app.services.workspace_asset_retention import (
     delete_stored_regression_model,
@@ -27,6 +29,23 @@ from app.services.workspace_asset_retention import (
 )
 
 router = APIRouter(prefix="/regression-models", tags=["regression-models"])
+
+
+@router.get("", response_model=RegressionModelCatalogResponse)
+def list_regression_models_route(
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+    source_dataset_version_id: UUID | None = None,
+    source_analysis_id: UUID | None = None,
+) -> RegressionModelCatalogResponse:
+    return list_regression_models(
+        settings=request.app.state.settings,
+        offset=offset,
+        limit=limit,
+        source_dataset_version_id=source_dataset_version_id,
+        source_analysis_id=source_analysis_id,
+    )
 
 
 @router.post(

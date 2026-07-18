@@ -10,6 +10,7 @@ from app.api.v1.schemas.doe import (
     DoeResponseRevisionCreateRequest,
     DoeResponseRevisionHistoryResponse,
     DoeResponseRevisionResponse,
+    DoeResponseSurfaceAnalysisCatalogResponse,
     DoeResponseSurfaceAnalysisCreateRequest,
     DoeResponseSurfaceAnalysisResponse,
     FactorialDesignCreateRequest,
@@ -37,7 +38,11 @@ from app.services.doe_response_surface_analysis import (
     create_response_surface_analysis,
     get_response_surface_analysis,
 )
-from app.services.response_optimizer import create_response_optimizer, get_response_optimizer
+from app.services.response_optimizer import (
+    create_response_optimizer,
+    get_response_optimizer,
+    list_response_surface_analysis_catalog,
+)
 from app.services.response_surface_designs import (
     create_response_surface_design,
     get_response_surface_design,
@@ -46,6 +51,22 @@ from app.services.response_surface_designs import (
 )
 
 router = APIRouter(prefix="/doe-designs", tags=["doe-designs"])
+
+
+@router.get(
+    "/response-surface-analyses",
+    response_model=DoeResponseSurfaceAnalysisCatalogResponse,
+)
+def list_response_surface_analysis_catalog_route(
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> DoeResponseSurfaceAnalysisCatalogResponse:
+    return list_response_surface_analysis_catalog(
+        settings=request.app.state.settings,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @router.post(

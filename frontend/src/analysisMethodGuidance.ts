@@ -269,7 +269,7 @@ export const analysisMethodGuidance = {
     preflightChecks: ["모델 manifest", "스키마 drift", "범주 수준", "외삽 위험"],
     resultFocus: ["예측값", "예측/신뢰 구간", "스키마 경고"],
     plainLanguage:
-      "저장된 회귀 모델을 이용한 예측은 회귀모형 적합 화면에서 지원됩니다. 독립 Predict method 화면은 아직 제공하지 않습니다. source model freshness와 checksum, source/target schema preflight를 통과한 경우에만 예측 결과를 저장합니다.",
+      "분석 탭의 Predict 전용 워크플로에서 저장된 회귀 모델과 대상 데이터셋을 선택합니다. 회귀모형 적합 화면에서도 같은 dedicated API를 사용할 수 있으며, source model freshness와 checksum, source/target schema preflight를 통과한 경우에만 예측 결과를 저장합니다.",
     commonErrors: [
       "source dataset schema 변경 뒤 stale 회귀모형을 다시 적합하지 않은 경우",
       "대상 데이터셋의 필수 predictor가 없거나 범주 수준이 모델과 다른 경우",
@@ -282,7 +282,7 @@ export const analysisMethodGuidance = {
     preflightChecks: ["source checksum", "동일 factor 공간", "설계영역", "제약 feasible 여부"],
     resultFocus: ["권장 조건", "예측 반응", "개별/종합 desirability", "제약과 종료 이유"],
     plainLanguage:
-      "저장된 반응표면 모델의 최적화는 반응표면법 화면에서 지원됩니다. 독립 Response Optimizer 화면은 아직 제공하지 않습니다. 추천은 선언한 설계영역과 제약 안의 bounded multi-start 결과이며 전역 최적을 보장하지 않으므로 확인 실험이 필요합니다.",
+      "분석 탭의 Response Optimizer 전용 워크플로에서 저장된 RSM 분석을 선택합니다. 반응표면법 화면에서도 같은 dedicated API를 사용할 수 있습니다. 추천은 선언한 설계영역과 제약 안의 bounded multi-start 결과이며 전역 최적을 보장하지 않으므로 확인 실험이 필요합니다.",
   },
   "quality.attribute_control_chart": {
     methodId: "quality.attribute_control_chart",

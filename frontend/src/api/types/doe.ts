@@ -458,6 +458,38 @@ export interface DoeResponseSurfaceAnalysisResponse {
   result: DoeResponseSurfaceAnalysisResult;
 }
 
+export interface DoeResponseSurfaceAnalysisCatalogItem {
+  analysis_id: string;
+  design_id: string;
+  design_name: string;
+  response_name: string;
+  response_revision_id: string | null;
+  response_revision_number: number | null;
+  method_id: "doe.response_surface";
+  method_version: string;
+  created_at: string;
+  eligibility_status:
+    | "eligible"
+    | "acknowledgment_required"
+    | "ineligible"
+    | "integrity_error"
+    | "incompatible_method_version";
+  blocking_issue_count: number;
+  advisory_issue_count: number;
+  informational_issue_count: number;
+  availability_code: string | null;
+}
+
+export interface DoeResponseSurfaceAnalysisCatalogResponse {
+  analyses: DoeResponseSurfaceAnalysisCatalogItem[];
+  total: number;
+  returned: number;
+  limit: number;
+  offset: number;
+  has_previous: boolean;
+  has_next: boolean;
+}
+
 export type ResponseOptimizerGoal = "maximize" | "minimize" | "target" | "range";
 
 export interface ResponseOptimizerObjectiveRequest {

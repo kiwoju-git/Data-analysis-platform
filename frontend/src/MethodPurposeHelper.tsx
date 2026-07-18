@@ -53,8 +53,8 @@ const purposeGuideItems = [
   },
   {
     question: "저장된 회귀모형으로 새 데이터를 예측하고 싶다",
-    methods: ["regression.linear_model"],
-    reason: "회귀모형 적합 화면에서 저장 모델의 source freshness와 target schema를 확인한 뒤 예측합니다.",
+    methods: ["regression.predict"],
+    reason: "저장 모델을 선택하고 source freshness와 target schema를 확인한 뒤 예측합니다.",
     roles: "Response, Predictor, 예측 대상 데이터셋",
     caution: "source schema가 바뀌어 모델이 stale이면 현재 schema로 회귀모형을 다시 적합해야 합니다.",
   },
@@ -93,10 +93,17 @@ const purposeGuideItems = [
   },
   {
     question: "곡률이 있는 공정 반응을 모델링하고 싶다",
-    methods: ["doe.response_surface", "regression.response_optimizer"],
-    reason: "Central Composite Design과 full quadratic OLS로 반응표면을 보고, 저장 모형의 bounded desirability 최적화를 실행합니다.",
+    methods: ["doe.response_surface"],
+    reason: "Central Composite Design과 full quadratic OLS로 반응표면을 모델링합니다.",
     roles: "Continuous factor bounds, run order, response",
     caution: "정상점과 optimizer 권장점은 모형 기반 후보이며 전역 최적이 아니므로 설계영역 안에서 확인 실험이 필요합니다.",
+  },
+  {
+    question: "저장된 반응표면 모형으로 반응을 최적화하고 싶다",
+    methods: ["regression.response_optimizer"],
+    reason: "저장된 RSM 분석을 선택하고 eligibility를 확인한 뒤 bounded desirability 최적화를 실행합니다.",
+    roles: "RSM source analysis, factor bounds, response goal",
+    caution: "권장점은 전역 최적을 보장하지 않으며 별도의 확인 실험이 필요합니다.",
   },
   {
     question: "비용이 큰 실험을 순차적으로 탐색하고 싶다",

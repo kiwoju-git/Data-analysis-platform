@@ -66,7 +66,7 @@ export function useAnalysisSelection(catalog: AnalysisMethodListResponse | null)
     setSelectedModuleId(resolved.moduleId);
     setSelectedMethodId(resolved.methodId);
     if (resolved.methodId !== null && isCurrentAnalysisLocation()) {
-      replaceAnalysisRoute(resolved.moduleId, resolved.methodId);
+      replaceAnalysisRoute(resolved.moduleId, resolved.methodId, true);
     }
   }, [catalog, selectedMethodId, selectedModuleId]);
 
@@ -137,11 +137,16 @@ function initialAnalysisSelectionFromLocation(): NullableAnalysisSelection {
   };
 }
 
-function replaceAnalysisRoute(moduleId: AnalysisModuleId, methodId: string) {
+function replaceAnalysisRoute(
+  moduleId: AnalysisModuleId,
+  methodId: string,
+  preserveSearch = false,
+) {
   if (typeof window === "undefined") {
     return;
   }
-  window.history.replaceState(null, "", buildAnalysisPath(moduleId, methodId));
+  const search = preserveSearch ? window.location.search : "";
+  window.history.replaceState(null, "", `${buildAnalysisPath(moduleId, methodId)}${search}`);
 }
 
 function isCurrentAnalysisLocation(): boolean {

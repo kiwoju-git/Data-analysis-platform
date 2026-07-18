@@ -1,6 +1,6 @@
 # Gate B Progress
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Summary
 
@@ -8,9 +8,13 @@ Gate B has completed the upload/version, paste-as-dataset intake, canonical JSON
 
 Gate D1 now includes the dedicated DOE design, immutable response revision/history, and 2-level full factorial analysis slices. `doe.factorial_design` v0.3.0 uses response revision schema 1 and analysis envelope/config schema 2 through current/history/correction routes plus `POST /api/v1/doe-designs/{design_id}/analyses`, `GET /api/v1/doe-designs/{design_id}/analyses/{analysis_id}`, and the HTML report route. SQLite schema 10 stores immutable ordered response values, current heads, and the exact analysis-revision relationship; legacy current responses are deterministically backfilled without rewriting stored analysis artifacts. The calculation uses -1/+1 coding, enforced hierarchy through selected interaction order, center curvature, block fixed effects, OLS effects/inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, and capped plot payloads. `FactorialDesignPanel` distinguishes current/history revisions, requires explicit correction, and restores analyzed revisions read-only. Fractional alias analysis, optimization, and chart image export remain out of scope.
 
-Gate D2 now includes the dedicated response-surface and bounded response-optimizer slices. `doe.response_surface` v0.2.0 uses response revision schema 1 and analysis envelope/config schema 2; new design schema-2 assets use family `central_composite`, `alpha_mode` distinguishes rotatable and face-centered CCD, and legacy schema-1 family/mode/SHA restore remains verbatim. It fits a hierarchy-fixed full quadratic OLS model with inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, a Hessian-classified stationary point, design-region checks, and a 21x21 contour grid. `regression.response_optimizer` v0.3.0 keeps config/result schema 2 and uses source-bundle schema 2 to pin the exact source RSM analysis and response revision; a newer current correction does not change old optimizer restore. Invalid rank, saturated/unusable residual inference, significant lack of fit, and dependency failures block, while advisory diagnostics require exact persisted acknowledgment codes. `ResponseSurfacePanel` distinguishes current/history revisions and explicit correction; the backend contract accepts up to eight compatible objectives. Automatic term selection, uncertainty-aware desirability, Box-Behnken, orthogonal blocking, nonlinear/integer constraints, report/image export, and a global-optimum claim remain out of scope.
+Gate D2 now includes the dedicated response-surface and bounded response-optimizer slices. `doe.response_surface` v0.2.0 uses response revision schema 1 and analysis envelope/config schema 2; new design schema-2 assets use family `central_composite`, `alpha_mode` distinguishes rotatable and face-centered CCD, and legacy schema-1 family/mode/SHA restore remains verbatim. It fits a hierarchy-fixed full quadratic OLS model with inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, a Hessian-classified stationary point, design-region checks, and a 21x21 contour grid. `regression.response_optimizer` v0.3.0 keeps config/result schema 2 and uses source-bundle schema 2 to pin the exact source RSM analysis and response revision; a newer current correction does not change old optimizer restore. It is available both from the embedded RSM panel and a top-level dedicated Workbench that selects paged metadata-only stored RSM sources and revalidates the full source bundle before execution. Invalid rank, saturated/unusable residual inference, significant lack of fit, and dependency failures block, while advisory diagnostics require exact persisted acknowledgment codes. Automatic term selection, uncertainty-aware desirability, Box-Behnken, orthogonal blocking, nonlinear/integer constraints, report/image export, and a global-optimum claim remain out of scope.
 
 Current stabilization update:
+
+- Current catalog count: 30 stable catalog IDs, 30 available IDs, and 25
+  generic `MethodExecutionHandler` entries. The remaining five are dedicated
+  workflows and are rejected by generic analysis-run.
 
 - `regression.predict` preflight now rejects missing, wrong-method,
   method-version-mismatched, stale, or source-schema-drifted model analyses and
@@ -25,8 +29,15 @@ Current stabilization update:
   result schema 2, config schema 3, rows schema 2, and unchanged CSV schema 1.
 - Actual Workbench and regression prediction hooks are exercised with delayed
   response inversion/reset races; obsolete responses cannot overwrite current
-  data or loading state. Registry/UI copy points users to the Linear Model
-  panel and states only the independent Predict page is absent.
+  data or loading state. `regression.predict` is now catalog-available with a
+  top-level dedicated Workbench. Its paged metadata-only model catalog is
+  followed by the existing checksum/freshness validation, and the top-level and
+  Linear Model entries share `RegressionPredictionPanel`. ID-only query fields
+  restore the selected model and target after reload.
+- `regression.response_optimizer` is also catalog-available and dedicated. Its
+  metadata-only RSM catalog reports eligibility counts without run values; a
+  selected source is fully restored and checksum-validated before the shared
+  `ResponseOptimizerPanel` renders. The embedded RSM entry remains available.
 - High-risk statistical QA coverage was strengthened without adding new executable methods. New tests pin one-way ANOVA significant-only posthoc behavior, non-significant posthoc skip, negative omega-squared handling, group-size imbalance warnings, TOST one-sided decision logic, non-significance-not-equivalence behavior, two-proportion zero-cell/all-event handling, sparse chi-square diagnostics, and capability stability-warning visibility.
 - Method versions now have a shared `METHOD_VERSIONS` map covering all 30 stable method IDs. The catalog descriptors and generic `MethodExecutionHandler` specs read from the same source, and API contract tests assert catalog/handler version alignment.
 - `hypothesis.equivalence_tost` now validates its runner-boundary options through typed `EquivalenceTostOptions`, rejecting invalid numeric types, missing required bounds, and unknown option fields with `invalid_equivalence_tost_options` before row snapshot or result artifacts are written.
@@ -58,7 +69,7 @@ Current stabilization update:
 - Schema PATCH now treats unchanged display name, measurement level, role, and unit payloads as no-ops. No-op PATCH keeps the same `schema_hash` and does not mark existing analysis runs stale; real schema changes still mark existing runs stale.
 - Generic analysis-run result envelopes now carry runtime/build provenance fields for Python version, platform, `Settings.git_commit` with `DATALAB_GIT_COMMIT` fallback, and NumPy/SciPy package versions without exposing raw paths or raw cell values.
 - Common analysis-run execution helpers for row snapshot artifacts, filter row freezing, provenance construction, canonical result/config JSON, result paths, successful result persistence, and compensating file cleanup now live in `services/analysis_run_execution.py` so method-family runner modules can be split without circular imports.
-- `analysis_runs.py` now dispatches the four EDA methods, all eight hypothesis methods, all three categorical methods, the three generic regression analysis-run methods, and all six current quality analysis-run methods through a shared `MethodExecutionHandler` registry. Handler metadata and missing-runner validation live in `services/analysis_method_handlers.py`; the four EDA runner functions and EDA-specific selection/warning helpers live in `services/analysis_runners_eda.py`; the eight hypothesis runner functions and hypothesis selection/warning helpers live in `services/analysis_runners_hypothesis.py`; the three categorical runner functions and categorical selection/warning helpers live in `services/analysis_runners_categorical.py`; the three generic regression runner functions, regression selection/warning helpers, and `regression.linear_model` safe JSON model-manifest persistence live in `services/analysis_runners_regression.py`; the six current quality runner functions plus quality-specific selection/warning helpers live in `services/analysis_runners_quality.py`; `regression.predict` remains on the dedicated stored-model API path, while `doe.factorial_design` remains on dedicated DOE design routes instead of the generic analysis-run endpoint.
+- `analysis_runs.py` dispatches 25 generic methods through the shared `MethodExecutionHandler` registry. The five `execution_mode=dedicated` methods (`regression.predict`, `regression.response_optimizer`, Factorial, RSM, and Bayesian) remain on typed source/design APIs; sending any of them to the generic endpoint returns `analysis_method_uses_dedicated_api` without creating a run or fake result.
 - `docs/statistical_method_audit_matrix.md` records the current registry, execution path, method-level tests, effect/provenance coverage, and known limitations for all 30 stable method IDs.
 - `docs/ci_status.md` records the Windows workflow trigger configuration and the current limitation that authenticated remote GitHub Actions run listing was not available from this environment.
 - Latest local Windows validation after the beginner role guidance and purpose-helper slice: `scripts/check.ps1` passed with backend pytest 387 tests, frontend Vitest 54 tests, frontend lint/typecheck, and frontend build.
@@ -85,8 +96,8 @@ Current stabilization update:
 | Profile summary artifact | Done for delimited text | profile scans persist raw-value-free `profile_summary` JSON artifacts, include schema/canonical hashes, and reuse matching artifacts without churn |
 | Date/time preflight | Done for delimited text | column-level parse counts, min/max, format candidates, timezone-aware/naive counts, mixed-format and mixed-timezone warnings without coercion |
 | Dataset UI | Done for B0/profile/paste staging slices | upload, text/plain paste staging grid/raw mode, parsing confirmation with header/no-header comparison, Context Bar, schema controls, Bayesian sample role preset, 10/25/50/100-row canonical paging/jump/inspector, profile/preflight table, rendered through `AppChrome`, `useDatasetWorkflow`, `usePastedDatasetDraft`, and split dataset-preparation components |
-| Analysis method registry | Done for current methods | `GET /api/v1/analysis-methods`, 6 modules, 30 stable method IDs, 28 available and two disabled. Factorial, RSM, and Bayesian Optimization use dedicated APIs; no fake result is returned from the generic route. |
-| Analysis run request guard | Done for current methods | `POST /api/v1/analysis-runs` executes the 25 generic methods. `doe.factorial_design`, `doe.response_surface`, and `doe.bayesian_optimization` return `analysis_method_uses_dedicated_api` with their dedicated route. Disabled generic pages still reject without a result body. |
+| Analysis method registry | Done for current methods | `GET /api/v1/analysis-methods`, 6 modules, 30 stable available method IDs: 25 generic and five dedicated. Dedicated cards show `사용 가능 · 전용 워크플로`; no fake result is returned from the generic route. |
+| Analysis run request guard | Done for current methods | `POST /api/v1/analysis-runs` executes the 25 generic methods. Predict, Response Optimizer, Factorial, RSM, and Bayesian return `analysis_method_uses_dedicated_api` with their typed route. |
 | Analysis run status/cancel API | Done for B0 storage/run slice | `GET/DELETE /api/v1/analysis-runs/{analysis_id}` skeleton |
 | Analysis result retrieval API | Done for available inline methods | `GET /api/v1/analysis-runs/{analysis_id}/result` validates stored result path and SHA-256 before returning the envelope |
 | Filter snapshot row freezing | Done for available inline methods | creates `analysis_row_snapshot` artifacts with filter hash, canonical artifact hash, included row counts, and row ranges for supported filters |
@@ -131,7 +142,17 @@ Current stabilization update:
 
 ## Latest Validation
 
-Last validated on 2026-07-06:
+Current development validation on 2026-07-18:
+
+- Worktree based on clean pushed SHA
+  `6fb115093a97909bf3c379732d16e7153c9931d0`: full `scripts/check.ps1`
+  passed with backend 773, frontend 133, direct OpenAPI/frontend contract 155,
+  and all lint/type/build gates. Chromium E2E passed in 76.9 seconds through
+  both new dedicated source-selection/reload paths and all retained critical
+  paths. This Windows 10/Node 24 host result is development evidence, not the
+  Windows 11/Node 22 release gate; the worktree is not yet pushed.
+
+Historical validation begins below. Last validated on 2026-07-06:
 
 - Current beginner role guidance and purpose-helper slice: the Workbench now
   renders always-visible statistical role guidance, purpose-based method helper
@@ -3810,3 +3831,23 @@ Next development order:
 4. Implement dataset-root and then DOE-root retention through separately
    reviewed dependency graphs with explicit blockers and quarantine recovery.
 5. Continue advanced quality/statistics only through approved contracts.
+
+## Progress Update 186 - Dedicated Predict And Optimizer Workflows
+
+- All 30 stable IDs are catalog-available: 25 generic handlers and five
+  dedicated workflows. Dedicated requests sent to generic analysis-run return
+  `analysis_method_uses_dedicated_api` without creating a result.
+- Predict now has a metadata-only regression-model catalog and top-level route;
+  Optimizer has a metadata-only RSM analysis catalog and top-level route.
+  Selection uses ID-only query state and then full checksum/dependency GETs.
+- Linear Model/top-level Predict share `RegressionPredictionPanel`; RSM and
+  top-level Optimizer share `ResponseOptimizerPanel`. Calculation and stored
+  schemas are unchanged, so versions remain Predict `0.2.0` and Optimizer
+  `0.3.0`.
+- Full local development validation passed with backend 773, frontend 133,
+  OpenAPI/frontend contracts 155, and Chromium E2E 76.9 seconds. Main measured
+  511.60 kB / 121.24 kB gzip and retains the 500 kB warning.
+- The worktree is based on clean pushed SHA
+  `6fb115093a97909bf3c379732d16e7153c9931d0`, but this final worktree is not
+  committed or pushed. Windows 10/Python 3.10/Node 24 is development evidence;
+  Windows 11/Node 22 and remote Actions remain unverified (`gh` unavailable).

@@ -17,6 +17,8 @@ import {
 } from "./BayesianOptimizationPanel";
 import { FactorialDesignPreview } from "./FactorialDesignPanel";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
+import { RegressionPredictionWorkspace } from "./RegressionPredictionWorkspace";
+import { ResponseOptimizerWorkspace } from "./ResponseOptimizerWorkspace";
 import {
   ResponseSurfacePanel,
   ResponseSurfaceResponseEntry,
@@ -257,10 +259,10 @@ describe("App", () => {
       "full quadratic OLS",
     );
     expect(getAnalysisMethodGuidance("regression.predict").plainLanguage).toContain(
-      "회귀모형 적합 화면에서 지원됩니다",
+      "Predict 전용 워크플로",
     );
     expect(getAnalysisMethodGuidance("regression.predict").plainLanguage).toContain(
-      "독립 Predict method 화면은 아직 제공하지 않습니다",
+      "회귀모형 적합 화면에서도 같은 dedicated API",
     );
     expect(getAnalysisMethodGuidance("doe.bayesian_optimization").plainLanguage).toContain(
       "pending/completed/abandoned trial",
@@ -465,6 +467,84 @@ describe("App", () => {
     );
     expect(bayesianHtml).toContain("순차 Bayesian Optimization 핵심 역할");
     expect(bayesianHtml).toContain("Matérn-5/2 GP와 Expected Improvement");
+  });
+
+  it("renders available dedicated workflow cards without common dataset preflight", () => {
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "regression",
+          label_ko: "상관관계 및 회귀",
+          label_en: "Regression",
+          order: 4,
+        },
+      ],
+      methods: [
+        {
+          method_id: "regression.predict",
+          method_version: "0.2.0",
+          module_id: "regression",
+          label_ko: "예측",
+          label_en: "Predict",
+          availability: "available",
+          execution_mode: "dedicated",
+          requires_dataset: false,
+          source_prerequisite: "regression_model",
+          order: 40,
+          disabled_reason: null,
+        },
+        {
+          method_id: "regression.response_optimizer",
+          method_version: "0.3.0",
+          module_id: "regression",
+          label_ko: "반응 최적화",
+          label_en: "Response Optimizer",
+          availability: "available",
+          execution_mode: "dedicated",
+          requires_dataset: false,
+          source_prerequisite: "response_surface_analysis",
+          order: 50,
+          disabled_reason: null,
+        },
+      ],
+    };
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="regression"
+        version={datasetVersionTestResponse()}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>공통 데이터 필터</div>}
+        renderExecutableMethod={() => <div>Predict 전용 패널</div>}
+      />,
+    );
+
+    expect(html).toContain("사용 가능 · 전용 워크플로");
+    expect(html).toContain("저장 회귀모형 선택");
+    expect(html).toContain("generic analysis-run으로 실행되지 않습니다");
+    expect(html).toContain("Predict 전용 패널");
+    expect(html).not.toContain("공통 데이터 필터");
+    expect(html).not.toContain("비활성");
+  });
+
+  it("renders source-driven Predict and Response Optimizer workspace entry states", () => {
+    const predictionHtml = renderToString(
+      <RegressionPredictionWorkspace onNavigateToLinearModel={() => undefined} />,
+    );
+    const optimizerHtml = renderToString(
+      <ResponseOptimizerWorkspace onNavigateToResponseSurface={() => undefined} />,
+    );
+
+    expect(predictionHtml).toContain("저장된 회귀모형으로 예측");
+    expect(predictionHtml).toContain("Source 회귀모형");
+    expect(predictionHtml).toContain("사용 가능 · 전용");
+    expect(optimizerHtml).toContain("저장된 RSM 분석으로 반응 최적화");
+    expect(optimizerHtml).toContain("Source 반응표면 분석");
+    expect(optimizerHtml).toContain("사용 가능 · 전용");
   });
 
   it("renders the dedicated Bayesian study, observation, and recommendation controls", () => {

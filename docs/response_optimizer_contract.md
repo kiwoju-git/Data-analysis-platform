@@ -1,14 +1,14 @@
 # Response Optimizer Contract
 
-Last updated: 2026-07-15
+Last updated: 2026-07-18
 
 ## Scope
 
 `regression.response_optimizer` v0.3.0 optimizes one or more checksum-validated
 `doe.response_surface` full-quadratic models over their shared declared factor
-region. It is implemented through dedicated response-surface APIs and the RSM
-panel; it does not execute through generic `POST /api/v1/analysis-runs` and no
-independent Response Optimizer page is provided.
+region. It is catalog-available with `execution_mode=dedicated` through both
+the RSM panel and `/analysis/regression/regression.response_optimizer`. It does
+not execute through generic `POST /api/v1/analysis-runs`.
 
 Implemented:
 
@@ -26,7 +26,9 @@ Implemented:
   informational issues;
 - exact acknowledgment-code persistence in request, config, result, and result
   envelope when an advisory model diagnostic is accepted;
-- a single-current-response objective UI in `ResponseSurfacePanel`.
+- a single-current-response objective UI shared by `ResponseSurfacePanel` and
+  the top-level dedicated workspace;
+- a paged metadata-only stored RSM analysis catalog with eligibility summaries.
 
 Not implemented:
 
@@ -34,7 +36,7 @@ Not implemented:
 - arbitrary nonlinear, equality, integer, or categorical-factor constraints;
 - prediction intervals or uncertainty-aware desirability;
 - automatic model/term selection or silent fallback to another algorithm;
-- an independent model catalog or multi-response objective builder in the UI;
+- a multi-response objective builder in the UI;
 - confirmation experiments, ridge analysis, Bayesian Optimization, or process
   control after applying a recommendation.
 
@@ -63,9 +65,17 @@ analysis IDs and a source bundle SHA.
 
 - `POST /api/v1/doe-designs/response-surface/{design_id}/optimizations`
 - `GET /api/v1/doe-designs/response-surface/{design_id}/optimizations/{optimization_id}`
+- `GET /api/v1/doe-designs/response-surface-analyses?limit=20&offset=0`
 
-The generic method remains disabled with guidance that optimization is
-available after fitting a model in the Response Surface Method screen.
+The catalog method is available/dedicated. Generic analysis-run requests return
+`analysis_method_uses_dedicated_api` and cannot create a fake run. Catalog rows
+exclude response/run values and paths; selecting one uses the existing full
+design/analysis GETs before rendering `ResponseOptimizerPanel`. ID-only
+`design_id` and `analysis_id` query fields restore source selection.
+
+This entrypoint/catalog-only change keeps method `0.3.0`, config/result schema
+`2`, and source-bundle schema `2`; optimizer calculation and stored semantics
+are unchanged.
 
 ## Source Validation
 

@@ -303,7 +303,13 @@ export function AnalysisWorkbench({
             <div className="method-meta">
               <span>{method.method_id}</span>
               <span>v{method.method_version}</span>
-              <span>{method.requires_dataset ? "데이터셋 필요" : "데이터셋 없이 가능"}</span>
+              <span>
+                {method.execution_mode === "dedicated"
+                  ? "Source 자산 선택"
+                  : method.requires_dataset
+                    ? "데이터셋 필요"
+                    : "데이터셋 없이 가능"}
+              </span>
             </div>
             {method.disabled_reason !== null ? (
               <p className="method-reason">{method.disabled_reason}</p>
@@ -333,7 +339,13 @@ export function AnalysisWorkbench({
             <div>
               <span>데이터셋</span>
               <strong>
-                {version === null
+                {selectedMethod.execution_mode === "dedicated"
+                  ? selectedMethod.source_prerequisite === "regression_model"
+                    ? "저장 회귀모형 선택"
+                    : selectedMethod.source_prerequisite === "response_surface_analysis"
+                      ? "저장 RSM 분석 선택"
+                      : "전용 워크플로 입력"
+                  : version === null
                   ? selectedMethod.requires_dataset
                     ? "필요"
                     : "선택 사항"
@@ -343,7 +355,9 @@ export function AnalysisWorkbench({
             <div>
               <span>사전점검</span>
               <strong>
-                {profile === null
+                {selectedMethod.execution_mode === "dedicated"
+                  ? "Source 선택 후 전용 점검"
+                  : profile === null
                   ? "대기"
                   : `${profile.columns.length.toLocaleString()}컬럼 점검됨`}
               </strong>
@@ -353,13 +367,23 @@ export function AnalysisWorkbench({
               <strong>{selectedMethod.execution_mode}</strong>
             </div>
           </div>
-          <PreflightExplanationPanel
-            guidance={selectedGuidance}
-            method={selectedMethod}
-            profile={profile}
-            version={version}
-          />
-          {renderAnalysisFilters !== undefined ? renderAnalysisFilters(selectedMethod) : null}
+          {selectedMethod.execution_mode === "dedicated" ? (
+            <div className="notice-box">
+              이 메서드는 저장된 source 자산을 선택한 뒤 전용 API에서 dependency와 checksum을
+              다시 검증합니다. generic analysis-run으로 실행되지 않습니다.
+            </div>
+          ) : (
+            <PreflightExplanationPanel
+              guidance={selectedGuidance}
+              method={selectedMethod}
+              profile={profile}
+              version={version}
+            />
+          )}
+          {selectedMethod.execution_mode !== "dedicated" &&
+          renderAnalysisFilters !== undefined
+            ? renderAnalysisFilters(selectedMethod)
+            : null}
           {selectedGuidance !== null ? (
             <>
               {selectedGuidance.plainLanguage !== undefined ||

@@ -1,14 +1,14 @@
 # Regression Prediction Contract
 
-Last updated: 2026-07-14
+Last updated: 2026-07-18
 
 ## Scope
 
 `regression.predict` predicts confirmed local dataset versions from safe JSON
-OLS manifests created by `regression.linear_model`. It is available through
-dedicated regression-model APIs and the Linear Model panel. The generic method
-catalog entry remains disabled because an independent Predict method page is
-not implemented.
+OLS manifests created by `regression.linear_model`. It is catalog-available
+with `execution_mode=dedicated` through both the Linear Model panel and
+`/analysis/regression/regression.predict`. The generic analysis-run endpoint
+rejects it without creating a run or result.
 
 Implemented scope:
 
@@ -32,6 +32,7 @@ out of scope.
 ```text
 POST /api/v1/regression-models/{model_id}/prediction-preflight
 POST /api/v1/regression-models/{model_id}/predictions
+GET  /api/v1/regression-models?limit=20&offset=0
 GET  /api/v1/regression-models/predictions/{prediction_id}/rows?limit=25&offset=0
 GET  /api/v1/dataset-versions?limit=20&offset=0
 POST /api/v1/regression-models/predictions/{prediction_id}/exports/csv
@@ -225,12 +226,18 @@ download, and absence of raw predictor values.
 
 ## Current UI Policy
 
-Prediction is presented inside the `regression.linear_model` panel. The
-registry and guidance text state that saved-model prediction is supported there
-and that only an independent Predict method page is absent. Target selection
-defaults to the active version and can choose another confirmed local version.
-Model or target changes invalidate preflight, prediction, page, and export
-state.
+Prediction uses one shared `RegressionPredictionPanel` inside both the
+`regression.linear_model` panel and the top-level dedicated Predict route. The
+top-level route selects from a paged metadata-only model catalog, then calls the
+existing checksum-validated full model endpoint. Catalog output excludes
+coefficients, raw predictor values/levels, original filenames, and storage
+paths. Model or target changes invalidate preflight, prediction, page, and
+export state. ID-only `model_id` and `target_version_id` query fields restore
+source selection after reload.
+
+This entrypoint/catalog-only change keeps method `0.2.0`, result schema `2`,
+config schema `3`, and rows schema `2`; calculation, predictor coding,
+intervals, and persisted result meaning are unchanged.
 
 ## Page Performance Baseline
 
