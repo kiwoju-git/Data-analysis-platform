@@ -6,12 +6,12 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-18 dedicated Predict/Response Optimizer regression run passed in
-76.9 seconds with:
+The 2026-07-19 tutorial/result-restore regression run passed in 74.6 seconds
+with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics-dedicated-workflows
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics
 ```
 
 The run first dispatches a real `text/plain` spreadsheet paste while providing
@@ -97,8 +97,9 @@ The current smoke test is `tests/e2e/critical_path.py`.
   `.csv` download through the checksum-validated analysis export route.
 - Opens the top-level `regression.predict` route, verifies the available
   dedicated badge, selects the stored model and target through their catalogs,
-  runs preflight/prediction/CSV creation, and reloads the ID-only deep link to
-  verify source selection restore. The extra prediction is removed through the
+  runs preflight/prediction/CSV creation, records `prediction_id`, and reloads
+  the ID-only deep link to verify source selection, stored result rows, and CSV
+  restore without recalculation. The extra prediction is removed through the
   reviewed analysis-run deletion contract before model-retention assertions.
 - Loads regression-model deletion impact after the prediction exists, verifies
   the dependent-prediction count, and verifies confirmed deletion is disabled.
@@ -128,8 +129,10 @@ The current smoke test is `tests/e2e/critical_path.py`.
   desirability, constraint status, search termination, confirmation-run
   warning, and explicit absence of a global-optimum guarantee.
 - Opens the top-level `regression.response_optimizer` route, selects the stored
-  RSM analysis, runs the shared optimizer panel, and reloads the ID-only deep
-  link to verify source restoration and current eligibility.
+  RSM analysis, runs the shared optimizer panel, records `optimization_id`, and
+  reloads the ID-only deep link to verify source, eligibility, and stored
+  recommendation/desirability restore. Both dedicated routes assert that
+  unrelated generic analysis history/export headings are absent.
 - Creates RSM response revision 2 through the explicit correction flow after
   analysis and verifies that newest-first revision history retains revision 1.
 - Creates a one-factor Bayesian study with an actual-unit upper-bound linear
@@ -163,6 +166,22 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - Edits parser options for header row and missing tokens.
 - Edits delimiter selection for a semicolon-delimited file.
 - Selects a named XLSX worksheet after first verifying missing-sheet recovery.
+
+## Tutorial API Smoke
+
+`scripts/tutorial_smoke.ps1` uses a temporary local workspace and the real
+FastAPI application to upload and confirm the committed synthetic training,
+prediction, and Gage files. It runs 18 normalized result sections spanning
+EDA, inference, categorical analysis, regression/Predict, quality, Factorial,
+RSM/Optimizer, and Bayesian GP/EI. It then compares current Studio responses to
+`examples/tutorial/tutorial_expected_results.json` with explicit absolute and
+relative tolerances. Dynamic IDs, timestamps, paths, and raw source rows are
+not stored in that expected-results file.
+
+Generator tests run the data generator twice, verify identical manifests and
+file SHAs, dimensions, schema compatibility, and the intentionally invalid
+prediction target. This API smoke supplements rather than replaces the
+browser critical path.
 - Selects CP949 encoding after first verifying UTF-8 decoding failure recovery.
 
 ## Current Step Markers

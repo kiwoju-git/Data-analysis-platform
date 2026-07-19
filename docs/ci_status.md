@@ -1,33 +1,37 @@
 # CI Status
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Local Validation
 
 - Clean pushed-main baseline: local `main` and `origin/main` resolved to
-  `6fb115093a97909bf3c379732d16e7153c9931d0` with an empty working tree.
-  Bootstrap passed after stopping only the stale repository-owned Vite process;
-  baseline check passed with backend 763, frontend 131, and OpenAPI/frontend
-  contracts 148. Baseline Chromium E2E passed in 73.0 seconds with diagnostics
-  at `.tmp/e2e-diagnostics-dedicated-baseline`.
-- Current dedicated-workflow worktree: based on the SHA above and not committed
-  or pushed. `scripts/check.ps1` passed after the repository formatter was
-  applied to two touched Python files. Ruff/format, mypy over 101 source files,
-  backend pytest 773, frontend lint/typecheck, Vitest 133, and build passed.
-  The separately counted OpenAPI/frontend contract suite contains 155 tests.
-- The latest recorded backend pytest count is 773.
-- The latest recorded frontend Vitest count is 133.
-- The latest OpenAPI/frontend contract count is 155. These are local
-  development-worktree results, not remote Actions or release evidence.
-- Production assets: main 511.60 kB / 121.24 kB gzip, Regression 53.72 kB /
-  11.59 kB, Quality 64.25 kB / 11.97 kB, and DOE 97.45 kB / 22.67 kB. The
-  dedicated workspaces remain in the existing Regression/DOE lazy chunks. Main
-  still emits the 500 kB warning; measured bundle optimization remains backlog.
-- Chromium E2E passed in 76.9 seconds with diagnostics at
-  `.tmp/e2e-diagnostics-dedicated-workflows`. It covers the top-level Predict
-  and Response Optimizer source catalogs, execution, ID-only deep-link reload,
-  plus all existing paste, prediction/export, quality, DOE, Bayesian, and
-  retention paths.
+  `b12c3b26235089fa28e5b48b1faa2cf627e3bec0` with an empty working tree on
+  2026-07-19. Bootstrap passed in 30.2 seconds, full check passed in 852.4
+  seconds with backend 773, frontend 133, and OpenAPI/frontend contracts 155,
+  and Chromium E2E passed in 78.6 seconds.
+- Current tutorial/result-restore worktree is based on that pushed SHA and is
+  not yet committed or pushed. Final `scripts/check.ps1` passed in 825.1
+  seconds with Ruff/format, mypy over 101 source files, backend 777, frontend
+  lint/typecheck and Vitest 137, OpenAPI/frontend contracts 155, and production
+  build. Tutorial pack contracts contain 3 tests and all 18 real API tutorial
+  smoke sections passed in 18.6 seconds.
+- The latest recorded backend pytest count is 777.
+- The latest recorded frontend Vitest count is 137.
+- The latest OpenAPI/frontend contract count is 155.
+  These counts describe the current local development worktree.
+- The pushed baseline and current worktree are local development evidence, not
+  remote Actions or Windows 11/Node 22 release evidence.
+- Production assets: main 512.33 kB / 121.39 kB gzip, Regression 55.11 kB /
+  11.99 kB, Quality 64.25 kB / 11.97 kB, DOE 98.18 kB / 22.90 kB, and the
+  shared dedicated-result restore helper 0.71 kB / 0.32 kB. Main still emits
+  the 500 kB warning; measured bundle optimization remains backlog.
+- Final Chromium E2E passed in 74.6 seconds with diagnostics at
+  `.tmp/e2e-diagnostics`. It covers Predict `prediction_id` and Optimizer
+  `optimization_id` stored-result reload, dedicated generic-history/export
+  scoping, plus all existing paste, prediction/export, quality, DOE, Bayesian,
+  and retention paths. Three preceding attempts exposed and then fixed an
+  incorrect prediction source-ID assertion and two test-placement/state-scope
+  assertions; only the final run is the passing application evidence.
 - The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
   24.17.0. These are development results, not Windows 11/Python 3.10/Node 22
   release evidence. The Windows 11/Node 22 clean release gate remains open.

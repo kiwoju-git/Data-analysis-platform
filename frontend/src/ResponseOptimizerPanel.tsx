@@ -24,9 +24,16 @@ interface ThresholdDraft {
 interface ResponseOptimizerPanelProps {
   design: ResponseSurfaceDesignResponse;
   analysis: DoeResponseSurfaceAnalysisResponse;
+  initialOptimization?: ResponseOptimizerResponse | null;
+  onOptimizationCreated?: (optimization: ResponseOptimizerResponse) => void;
 }
 
-export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPanelProps) {
+export function ResponseOptimizerPanel({
+  design,
+  analysis,
+  initialOptimization = null,
+  onOptimizationCreated,
+}: ResponseOptimizerPanelProps) {
   const responseRange = useMemo(() => {
     const values = analysis.result.contour.points.map((point) => point.predicted);
     return { minimum: Math.min(...values), maximum: Math.max(...values) };
@@ -78,14 +85,27 @@ export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPa
     setLinearCoefficients(
       Object.fromEntries(design.factors.map((factor) => [factor.name, "0"])),
     );
-    setOptimization(null);
+    setOptimization(
+      initialOptimization !== null &&
+        initialOptimization.design_id === design.design_id &&
+        initialOptimization.source_analysis_ids.length === 1 &&
+        initialOptimization.source_analysis_ids[0] === analysis.analysis_id
+        ? initialOptimization
+        : null,
+    );
     setIsOptimizing(false);
     setError(null);
     setSourceWarningsAcknowledged(false);
     return () => {
       requestRevision.current += 1;
     };
-  }, [analysis.analysis_id, design, responseRange.maximum, responseRange.minimum]);
+  }, [
+    analysis.analysis_id,
+    design,
+    initialOptimization,
+    responseRange.maximum,
+    responseRange.minimum,
+  ]);
 
   const changeGoal = (nextGoal: ResponseOptimizerGoal) => {
     setGoal(nextGoal);
@@ -129,6 +149,7 @@ export function ResponseOptimizerPanel({ design, analysis }: ResponseOptimizerPa
       const created = await createResponseOptimizer(design.design_id, request);
       if (requestRevision.current !== revision) return;
       setOptimization(created);
+      onOptimizationCreated?.(created);
     } catch (caught) {
       if (requestRevision.current === revision) setError(errorCode(caught));
     } finally {

@@ -145,6 +145,21 @@ Fixture acceptance rules:
 - Do not introduce a production dependency or method-version bump in the
   fixture PR.
 
+### Deterministic Tutorial Evidence
+
+`examples/tutorial/tutorial_expected_results.json` is generated only through
+the real local Studio API smoke and covers 18 catalog methods/workflows using
+the deterministic seed-20260718 synthetic pack. It records method IDs and
+versions, input file SHAs, normalized numeric results, warnings, and explicit
+tolerances while omitting dynamic IDs, timestamps, paths, and raw rows. This is
+end-to-end regression/tutorial evidence; it supplements and does not replace
+the independent hand, NIST, statsmodels, Minitab, and algebra references in the
+matrix.
+
+Predict/Optimizer deep-link restore is an access-contract test: stored result
+relationships and checksums are revalidated without recalculation. It does not
+change the calculation/reference status of either method.
+
 | method_id | first fixture file to add | expected output source | tolerance | fields to verify | license/source check before implementation |
 | --- | --- | --- | --- | --- | --- |
 | `quality.capability` | Added: `backend/tests/reference/fixtures/quality_capability_normal_reference.json`. Remaining: a compact public/raw-data industrial-software fixture if a compatible sigma convention is found. | Official NIST/SEMATECH section 6.1.6 summary example: LSL 8, USL 20, mean 16, sample SD 2, Cp 1.0, Cpk/Cpu 0.6667, and Cpl 1.3333. Synthetic rows reproduce the published summary; they are not copied source data. | Exact N/exclusion/warning checks, `1e-12` for synthetic summary and moving-range hand checks, and `1e-4` for NIST values published to four decimals. | Verified now: `n_total`, `n_used`, exclusions, sample SD, moving-range within sigma, LSL/USL metadata, Cp/Cpk/Cpl/Cpu mapped to application Pp/Ppk-style overall fields, and warning codes. Existing API tests retain method ID/version and row snapshot provenance coverage. Remaining independent coverage: raw-data expected nonconformance/ppm and industrial within-sigma convention. | Confirmed official United States government technical source; only formulas and a small published numerical summary are recorded. No proprietary table, screenshot, or raw dataset is copied. The fixture records the sample-SD versus MRbar/d2 convention difference and does not claim process stability or adequate capability-study sample size. |

@@ -20,6 +20,10 @@ import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 import { RegressionPredictionWorkspace } from "./RegressionPredictionWorkspace";
 import { ResponseOptimizerWorkspace } from "./ResponseOptimizerWorkspace";
 import {
+  restoredOptimizationMatchesSelection,
+  restoredPredictionForSelection,
+} from "./dedicatedResultRestore";
+import {
   ResponseSurfacePanel,
   ResponseSurfaceResponseEntry,
 } from "./ResponseSurfacePanel";
@@ -72,6 +76,7 @@ import type {
   RegressionPredictionCsvExportResponse,
   RegressionPredictionResponse,
   RegressionPredictionRowsPageResponse,
+  ResponseOptimizerResponse,
   ResponseSurfaceDesignResponse,
   RunChartResult,
   SubgroupChartResult,
@@ -528,6 +533,8 @@ describe("App", () => {
     expect(html).toContain("generic analysis-run으로 실행되지 않습니다");
     expect(html).toContain("Predict 전용 패널");
     expect(html).not.toContain("공통 데이터 필터");
+    expect(html).not.toContain("분석 이력");
+    expect(html).not.toContain("결과 내보내기");
     expect(html).not.toContain("비활성");
   });
 
@@ -545,6 +552,108 @@ describe("App", () => {
     expect(optimizerHtml).toContain("저장된 RSM 분석으로 반응 최적화");
     expect(optimizerHtml).toContain("Source 반응표면 분석");
     expect(optimizerHtml).toContain("사용 가능 · 전용");
+  });
+
+  it("accepts only a stored prediction matching the deep-link source selection", () => {
+    const prediction = {
+      prediction_id: "11111111-1111-4111-8111-111111111111",
+      analysis_id: "66666666-6666-4666-8666-666666666666",
+      source_analysis_id: "66666666-6666-4666-8666-666666666666",
+      model_id: "22222222-2222-4222-8222-222222222222",
+      source_dataset_version_id: "33333333-3333-4333-8333-333333333333",
+      target_dataset_version_id: "44444444-4444-4444-8444-444444444444",
+      rows: [],
+    } as unknown as RegressionPredictionResponse;
+    const envelope = {
+      analysis_id: prediction.prediction_id,
+      method_id: "regression.predict",
+      result: prediction,
+    } as unknown as AnalysisResultEnvelope;
+
+    expect(
+      restoredPredictionForSelection(
+        envelope,
+        prediction.prediction_id,
+        prediction.model_id,
+        prediction.target_dataset_version_id,
+      ),
+    ).toBe(prediction);
+    expect(
+      restoredPredictionForSelection(
+        envelope,
+        prediction.prediction_id,
+        prediction.model_id,
+        "55555555-5555-4555-8555-555555555555",
+      ),
+    ).toBeNull();
+    expect(
+      restoredPredictionForSelection(
+        { ...envelope, method_id: "regression.linear_model" },
+        prediction.prediction_id,
+        prediction.model_id,
+        prediction.target_dataset_version_id,
+      ),
+    ).toBeNull();
+  });
+
+  it("accepts only a stored optimization matching the selected RSM dependency", () => {
+    const design = {
+      design_id: "11111111-1111-4111-8111-111111111111",
+      design_version_id: "22222222-2222-4222-8222-222222222222",
+    } as ResponseSurfaceDesignResponse;
+    const analysis = {
+      analysis_id: "33333333-3333-4333-8333-333333333333",
+    } as DoeResponseSurfaceAnalysisResponse;
+    const optimization = {
+      optimization_id: "44444444-4444-4444-8444-444444444444",
+      design_id: design.design_id,
+      design_version_id: design.design_version_id,
+      source_analysis_ids: [analysis.analysis_id],
+    } as ResponseOptimizerResponse;
+
+    expect(
+      restoredOptimizationMatchesSelection(
+        optimization,
+        optimization.optimization_id,
+        design,
+        analysis,
+      ),
+    ).toBe(true);
+    expect(
+      restoredOptimizationMatchesSelection(
+        { ...optimization, source_analysis_ids: ["55555555-5555-4555-8555-555555555555"] },
+        optimization.optimization_id,
+        design,
+        analysis,
+      ),
+    ).toBe(false);
+    expect(restoredOptimizationMatchesSelection(optimization, null, design, analysis)).toBe(
+      false,
+    );
+  });
+
+  it("describes Bayesian recommendations as executable but not observed or globally optimal", () => {
+    const catalog = analysisTestCatalog();
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={[catalog.methods[0]]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => null}
+        renderExecutableMethod={() => null}
+      />,
+    );
+
+    expect(html).toContain(
+      "관측 이력에 Gaussian Process와 Expected Improvement를 적용해 다음 확인 실험 후보를 추천합니다.",
+    );
+    expect(html).toContain("추천값은 실제 관측이 아니며 전역 최적을 보장");
+    expect(html).not.toContain("현재는 계약 단계로 실행되지 않으며");
   });
 
   it("renders the dedicated Bayesian study, observation, and recommendation controls", () => {

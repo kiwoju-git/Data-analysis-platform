@@ -1,6 +1,12 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { RegressionModelCatalogItem } from "./api";
+import {
+  fetchAnalysisRunResult,
+  type RegressionModelCatalogItem,
+  type RegressionPredictionResponse,
+} from "./api";
+import { restoredPredictionForSelection } from "./dedicatedResultRestore";
+import { createLatestRequestGuard } from "./latestRequest";
 import { RegressionPredictionPanel } from "./RegressionPredictionPanel";
 import { useRegressionModelCatalogState } from "./useRegressionModelCatalogState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
@@ -20,9 +26,20 @@ export function RegressionPredictionWorkspace({
   );
   const initialModelId = validId(initialQuery.get("model_id"));
   const initialTargetVersionId = validId(initialQuery.get("target_version_id"));
+  const initialPredictionId = validId(initialQuery.get("prediction_id"));
+  const [requestedPredictionId, setRequestedPredictionId] = useState(initialPredictionId);
+  const [restoredPrediction, setRestoredPrediction] =
+    useState<RegressionPredictionResponse | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [isRestoringPrediction, setIsRestoringPrediction] = useState(false);
+  const restoreGuard = useRef(createLatestRequestGuard()).current;
   const modelCatalog = useRegressionModelCatalogState(initialModelId);
   const retention = useRegressionModelRetentionState(modelCatalog.selectedModelId);
-  const sourceVersionId = retention.manifest?.dataset_version_id ?? null;
+  const sourceVersionId =
+    retention.manifest?.dataset_version_id ??
+    modelCatalog.selectedModel?.source_dataset_version_id ??
+    restoredPrediction?.source_dataset_version_id ??
+    null;
   const targetState = useRegressionPredictionTargetState({
     activeModelId: modelCatalog.selectedModelId,
     currentVersionId: sourceVersionId,
@@ -31,7 +48,11 @@ export function RegressionPredictionWorkspace({
   const predictionState = useRegressionPredictionState({
     confidenceLevel: 0.95,
     currentDatasetVersionId: sourceVersionId,
+    initialPrediction: restoredPrediction,
     modelId: modelCatalog.selectedModelId,
+    onPredictionCreated: (prediction) => {
+      replaceWorkflowQuery({ prediction_id: prediction.prediction_id });
+    },
     targetDatasetVersionId: targetState.selectedTargetVersionId,
   });
   const rowsState = useRegressionPredictionRowsState(
@@ -45,15 +66,70 @@ export function RegressionPredictionWorkspace({
     selectedCatalogModel?.availability === "source_stale" ||
     selectedCatalogModel?.availability === "integrity_error";
   const modelReady = retention.availability === "available" && !catalogBlocksModel;
+
+  useEffect(() => {
+    restoreGuard.cancel();
+    setRestoredPrediction(null);
+    setRestoreError(null);
+    setIsRestoringPrediction(false);
+    if (
+      requestedPredictionId === null ||
+      modelCatalog.selectedModelId === null ||
+      targetState.selectedTargetVersionId === null
+    ) {
+      return;
+    }
+    const request = restoreGuard.begin();
+    setIsRestoringPrediction(true);
+    void fetchAnalysisRunResult(requestedPredictionId)
+      .then((envelope) => {
+        if (!restoreGuard.isCurrent(request)) return;
+        const prediction = restoredPredictionForSelection(
+          envelope,
+          requestedPredictionId,
+          modelCatalog.selectedModelId,
+          targetState.selectedTargetVersionId,
+        );
+        if (prediction === null) {
+          setRestoreError("regression_prediction_result_selection_mismatch");
+          return;
+        }
+        setRestoredPrediction(prediction);
+      })
+      .catch((error) => {
+        if (restoreGuard.isCurrent(request)) {
+          setRestoreError(
+            error instanceof Error ? error.message : "regression_prediction_restore_failed",
+          );
+        }
+      })
+      .finally(() => {
+        if (restoreGuard.isCurrent(request)) setIsRestoringPrediction(false);
+      });
+    return () => restoreGuard.cancel();
+  }, [
+    modelCatalog.selectedModelId,
+    requestedPredictionId,
+    restoreGuard,
+    targetState.selectedTargetVersionId,
+  ]);
+
   function selectModel(modelId: string | null) {
     modelCatalog.onSelect(modelId);
-    replaceWorkflowQuery({ model_id: modelId, target_version_id: null });
+    setRequestedPredictionId(null);
+    replaceWorkflowQuery({
+      model_id: modelId,
+      prediction_id: null,
+      target_version_id: null,
+    });
   }
 
   function selectTarget(versionId: string) {
     targetState.onSelect(versionId);
+    setRequestedPredictionId(null);
     replaceWorkflowQuery({
       model_id: modelCatalog.selectedModelId,
+      prediction_id: null,
       target_version_id: versionId,
     });
   }
@@ -170,7 +246,18 @@ export function RegressionPredictionWorkspace({
           <span>Source schema</span><strong>{shortId(retention.manifest.schema_hash)}</strong>
         </div>
       ) : null}
+      {isRestoringPrediction ? (
+        <div className="notice-box" role="status">
+          저장된 예측 결과와 행 artifact checksum을 확인하고 있습니다.
+        </div>
+      ) : null}
+      {restoreError !== null ? (
+        <div className="error-box" role="alert">
+          저장된 예측 결과를 복원하지 못했습니다. 오류 코드: {restoreError}
+        </div>
+      ) : null}
       <RegressionPredictionPanel
+        allowExportWithoutModel={restoredPrediction !== null}
         currentVersion={null}
         expectedModelId={modelCatalog.selectedModelId}
         isRunningPrediction={predictionState.isRunningPrediction}
@@ -186,7 +273,11 @@ export function RegressionPredictionWorkspace({
         predictionTargetState={{ ...targetState, onSelect: selectTarget }}
         preflightButtonLabel="예측 사전점검"
         onRunPrediction={predictionState.onRunPrediction}
-        onRunPreflight={predictionState.onRunPreflight}
+        onRunPreflight={() => {
+          setRequestedPredictionId(null);
+          replaceWorkflowQuery({ prediction_id: null });
+          predictionState.onRunPreflight();
+        }}
       />
     </section>
   );

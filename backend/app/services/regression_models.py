@@ -117,7 +117,7 @@ class RegressionPredictionConsistencyContext:
     stored_result: StoredAnalysisRunResult
     config: "_PredictionStoredConfig"
     prediction: RegressionPredictionResponse
-    model_response: RegressionModelManifestResponse
+    model_response: RegressionModelManifestResponse | None
     rows: _PredictionRowsContext
 
 
@@ -539,10 +539,15 @@ def validate_regression_prediction_consistency(
     try:
         model_response = get_regression_model_manifest(settings, config.model_id)
     except ApiError as exc:
-        raise _prediction_consistency_error(
-            "regression_prediction_model_mismatch",
-            "회귀 예측 model dependency를 검증할 수 없습니다.",
-        ) from exc
+        if exc.code != "regression_model_not_found":
+            raise _prediction_consistency_error(
+                "regression_prediction_model_mismatch",
+                "회귀 예측 model dependency를 검증할 수 없습니다.",
+            ) from exc
+        # A prediction is an immutable stored result. A deliberately removed model
+        # disables new predictions, but does not erase the independently checksummed
+        # result/config/rows relationships needed to restore the historical result.
+        model_response = None
     try:
         source_context = get_dataset_rows_context(settings, config.source_dataset_version_id)
         target_context = get_dataset_rows_context(settings, config.target_dataset_version_id)
@@ -590,9 +595,15 @@ def validate_regression_prediction_consistency(
         prediction.analysis_id == config.source_analysis_id
         and prediction.source_analysis_id == config.source_analysis_id
         and provenance.source_analysis_id == config.source_analysis_id
-        and model_response.analysis_id == config.source_analysis_id
         and source_analysis.analysis_id == str(config.source_analysis_id)
         and source_analysis.method_id == "regression.linear_model"
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_model_mismatch",
+            "회귀 예측 source analysis와 model metadata가 일치하지 않습니다.",
+        )
+    if model_response is not None and not (
+        model_response.analysis_id == config.source_analysis_id
         and source_analysis.method_version == model_response.method_version
         and model_response.method_id == "regression.linear_model"
         and model_response.manifest.get("method_id") == "regression.linear_model"
@@ -612,7 +623,13 @@ def validate_regression_prediction_consistency(
         and provenance.target_dataset_version_id == config.target_dataset_version_id
         and prediction.source_dataset_version_id == config.source_dataset_version_id
         and provenance.source_dataset_version_id == config.source_dataset_version_id
-        and model_response.dataset_version_id == config.source_dataset_version_id
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 source/target dataset metadata가 일치하지 않습니다.",
+        )
+    if model_response is not None and not (
+        model_response.dataset_version_id == config.source_dataset_version_id
         and model_response.manifest.get("dataset_version_id")
         == str(config.source_dataset_version_id)
     ):
@@ -623,9 +640,15 @@ def validate_regression_prediction_consistency(
     if not (
         prediction.model_id == config.model_id
         and provenance.model_id == config.model_id
-        and model_response.model_id == config.model_id
         and prediction.model_manifest_sha256 == config.model_manifest_sha256
         and provenance.model_manifest_sha256 == config.model_manifest_sha256
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_model_mismatch",
+            "회귀 예측 model manifest metadata가 일치하지 않습니다.",
+        )
+    if model_response is not None and not (
+        model_response.model_id == config.model_id
         and model_response.manifest_sha256 == config.model_manifest_sha256
     ):
         raise _prediction_consistency_error(
@@ -637,15 +660,22 @@ def validate_regression_prediction_consistency(
         and provenance.target_schema_hash == config.target_schema_hash
         and provenance.source_schema_hash_at_fit == config.source_schema_hash_at_fit
         and provenance.source_schema_hash_current == config.source_schema_hash_current
-        and model_response.schema_hash == config.source_schema_hash_at_fit
-        and model_response.manifest.get("source_schema_hash") == config.source_schema_hash_at_fit
         and config.source_schema_hash_at_fit == config.source_schema_hash_current
         and provenance.source_analysis_stale_at_prediction is False
         and provenance.source_canonical_artifact_sha256
-        == model_response.manifest.get("source_canonical_artifact_sha256")
         == source_context.canonical_rows_artifact.sha256
         and provenance.target_canonical_artifact_sha256
         == target_context.canonical_rows_artifact.sha256
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 schema/freshness metadata가 일치하지 않습니다.",
+        )
+    if model_response is not None and not (
+        model_response.schema_hash == config.source_schema_hash_at_fit
+        and model_response.manifest.get("source_schema_hash") == config.source_schema_hash_at_fit
+        and provenance.source_canonical_artifact_sha256
+        == model_response.manifest.get("source_canonical_artifact_sha256")
     ):
         raise _prediction_consistency_error(
             "regression_prediction_result_config_mismatch",
@@ -673,8 +703,6 @@ def validate_regression_prediction_consistency(
         == config.prediction_schema_version
         == REGRESSION_PREDICTION_SCHEMA_VERSION
         and config.config_schema_version == REGRESSION_PREDICTION_CONFIG_SCHEMA_VERSION
-        and provenance.model_manifest_schema_version
-        == model_response.manifest.get("manifest_schema_version")
         and config.rows_artifact_schema_version == REGRESSION_PREDICTION_ROWS_SCHEMA_VERSION
         and prediction.confidence_level == config.confidence_level
         and provenance.confidence_level == config.confidence_level
@@ -684,6 +712,14 @@ def validate_regression_prediction_consistency(
         and provenance.app_version == record.app_version
         and stored.envelope.provenance.model_dump(mode="json")
         == prediction.provenance.model_dump(mode="json")
+    ):
+        raise _prediction_consistency_error(
+            "regression_prediction_result_config_mismatch",
+            "회귀 예측 result provenance와 config가 일치하지 않습니다.",
+        )
+    if model_response is not None and (
+        provenance.model_manifest_schema_version
+        != model_response.manifest.get("manifest_schema_version")
     ):
         raise _prediction_consistency_error(
             "regression_prediction_result_config_mismatch",

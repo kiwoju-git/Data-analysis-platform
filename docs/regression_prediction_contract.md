@@ -232,12 +232,28 @@ top-level route selects from a paged metadata-only model catalog, then calls the
 existing checksum-validated full model endpoint. Catalog output excludes
 coefficients, raw predictor values/levels, original filenames, and storage
 paths. Model or target changes invalidate preflight, prediction, page, and
-export state. ID-only `model_id` and `target_version_id` query fields restore
-source selection after reload.
+export state. ID-only `model_id`, `target_version_id`, and `prediction_id`
+query fields restore source selection and the existing prediction after reload.
+Restore calls the stored analysis-result consistency path; it does not
+recompute. Method, prediction ID, model ID, target version, config/result/rows
+relations, and checksums must all match. A missing/deleted model blocks new
+preflight and prediction but does not make its already verified immutable
+prediction result disappear; manifest or relationship integrity failures still
+block restore.
+
+Dedicated Predict does not render generic dataset-scoped analysis history or
+generic export UI. Its own paged rows and prediction CSV creation/download are
+the relevant result controls.
 
 This entrypoint/catalog-only change keeps method `0.2.0`, result schema `2`,
 config schema `3`, and rows schema `2`; calculation, predictor coding,
 intervals, and persisted result meaning are unchanged.
+
+The model catalog remains paged at 20 items and verifies each summary against
+its app-owned manifest. This favors correctness but can be costly with hundreds
+of models. Future work may add a lightweight verified summary/index, search,
+filters, exact-ID lookup, and a large-catalog benchmark. Selecting a source
+must always repeat full checksum and freshness validation.
 
 ## Page Performance Baseline
 

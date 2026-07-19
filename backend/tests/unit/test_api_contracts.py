@@ -8180,6 +8180,37 @@ def test_regression_prediction_version_and_dependency_provenance_are_aligned(tmp
     assert "10,1,3" not in public_payload
 
 
+def test_stored_prediction_restore_survives_unavailable_model_asset(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        fixture = _create_regression_prediction_fixture(client)
+        prediction_id = str(fixture["prediction_id"])
+        model_id = str(fixture["model_id"])
+        with sqlite3.connect(settings.workspace_root / METADATA_DB_RELATIVE_PATH) as connection:
+            connection.execute("DELETE FROM regression_models WHERE model_id = ?", (model_id,))
+
+        selected_model = client.get(f"/api/v1/regression-models/{model_id}")
+        stored_result = client.get(f"/api/v1/analysis-runs/{prediction_id}/result")
+        stored_rows = client.get(
+            f"/api/v1/regression-models/predictions/{prediction_id}/rows",
+            params={"offset": 0, "limit": 25},
+        )
+        stored_export = client.post(
+            f"/api/v1/regression-models/predictions/{prediction_id}/exports/csv",
+        )
+
+    assert selected_model.status_code == 404
+    assert selected_model.json()["error"]["code"] == "regression_model_not_found"
+    assert stored_result.status_code == 200, stored_result.text
+    assert stored_result.json()["result"]["prediction_id"] == prediction_id
+    assert stored_rows.status_code == 200, stored_rows.text
+    assert stored_rows.json()["prediction_id"] == prediction_id
+    assert stored_export.status_code == 201, stored_export.text
+    assert stored_export.json()["prediction_id"] == prediction_id
+    for response in (selected_model, stored_result, stored_rows, stored_export):
+        assert str(tmp_path) not in response.text
+
+
 @pytest.mark.parametrize(
     ("mutation", "expected_code"),
     [

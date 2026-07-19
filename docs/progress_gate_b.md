@@ -3847,7 +3847,55 @@ Next development order:
 - Full local development validation passed with backend 773, frontend 133,
   OpenAPI/frontend contracts 155, and Chromium E2E 76.9 seconds. Main measured
   511.60 kB / 121.24 kB gzip and retains the 500 kB warning.
-- The worktree is based on clean pushed SHA
-  `6fb115093a97909bf3c379732d16e7153c9931d0`, but this final worktree is not
-  committed or pushed. Windows 10/Python 3.10/Node 24 is development evidence;
-  Windows 11/Node 22 and remote Actions remain unverified (`gh` unavailable).
+- The completed entrypoint slice is pushed at
+  `b12c3b26235089fa28e5b48b1faa2cf627e3bec0`. A clean checkout of that SHA
+  passed bootstrap, full check (backend 773, frontend 133, OpenAPI/frontend
+  155), and Chromium E2E in 78.6 seconds. Windows 10/Python 3.10/Node 24 is
+  development evidence; Windows 11/Node 22 and remote Actions remain
+  unverified (`gh` unavailable).
+
+## Progress Update 187 - Tutorial Data And Dedicated Result Restore
+
+Current bounded worktree:
+
+- Predict writes `prediction_id` to its ID-only query after execution and
+  reloads the checksum-validated stored result and first row page, then keeps
+  CSV creation/download available without recalculation. A deleted model still blocks new prediction
+  but no longer erases access to its immutable stored prediction.
+- Response Optimizer writes `optimization_id` to its query and restores the
+  existing verified optimization only when design version and exact source RSM
+  analysis match. Both parent-embedded workflows still use the same reusable
+  panels.
+- Dedicated routes no longer render dataset-scoped generic analysis history or
+  generic result export. Prediction paging/CSV and stored optimizer restore
+  remain inside the relevant dedicated workflow.
+- The Bayesian purpose helper now describes the executable Matérn-5/2 GP and
+  Expected Improvement recommendation while stating that it is neither an
+  observation nor a global-optimum guarantee.
+- `examples/tutorial/` contains eight deterministic synthetic data files,
+  manifest, expected API results, generator, and usage README. Seed 20260718
+  produces 240 training rows, 48 valid prediction-target rows, and separate
+  paste, invalid-target, Gage, factorial, RSM, and Bayesian inputs.
+- `scripts/tutorial_smoke.ps1` runs 18 actual Studio API result sections and
+  compares only normalized, ID-free results with explicit tolerances. The
+  Korean end-to-end guide is `docs/studio_end_to_end_tutorial_ko.md`.
+- Prediction remains method `0.2.0` with result/config/rows schemas 2/3/2;
+  optimizer remains method `0.3.0` with config/result/source-bundle schemas
+  2/2/2. No statistical formula, method version, SQLite schema, or stored
+  artifact meaning changes.
+- Final local development validation passed: `scripts/check.ps1` completed in
+  825.1 seconds with backend 777, frontend 137, OpenAPI/frontend 155, and a
+  production build. Chromium E2E passed in 74.6 seconds, and the 18-section
+  tutorial smoke passed in 18.6 seconds. Main is 512.33 kB / 121.39 kB gzip and
+  retains the explicit 500 kB warning.
+- The host is Windows 10 Home build 19045, Python 3.10.11, and Node 24.17.0.
+  This is development evidence, not the Windows 11/Python 3.10/Node 22 release
+  gate. Remote Actions remain unverified because `gh` is unavailable.
+
+Next development order:
+
+1. Clean Windows 11/Python 3.10/Node 22 release gate.
+2. Remote Actions, required checks, and repository protection review.
+3. Measured main-bundle optimization.
+4. Regression/RSM source catalog search and large-catalog benchmark.
+5. Bayesian catalog/successor UX, then dataset/DOE root retention.

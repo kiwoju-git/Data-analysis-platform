@@ -108,9 +108,9 @@ const purposeGuideItems = [
   {
     question: "비용이 큰 실험을 순차적으로 탐색하고 싶다",
     methods: ["doe.bayesian_optimization"],
-    reason: "관측 이력의 Gaussian Process surrogate와 Expected Improvement로 다음 실험 후보를 정하는 계획입니다.",
+    reason: "관측 이력에 Gaussian Process와 Expected Improvement를 적용해 다음 확인 실험 후보를 추천합니다.",
     roles: "Continuous factor bounds, objective, sequential trial history",
-    caution: "현재는 계약 단계로 실행되지 않으며, 향후 추천도 전역 최적을 보장하거나 실험을 대신 수행하지 않습니다.",
+    caution: "추천값은 실제 관측이 아니며 전역 최적을 보장하거나 실험을 대신 수행하지 않습니다.",
   },
 ] as const;
 

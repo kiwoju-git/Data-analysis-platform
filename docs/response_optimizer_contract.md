@@ -165,6 +165,25 @@ Every result warns that point predictions omit uncertainty, source model
 adequacy must be reviewed, a confirmation experiment is required, and global
 optimality is not guaranteed.
 
+## Dedicated Restore And Catalog Policy
+
+The shared `ResponseOptimizerPanel` is used by both the RSM parent and the
+top-level dedicated optimizer. After execution the top-level route stores only
+`design_id`, `analysis_id`, and `optimization_id` in the URL. Reload uses the
+existing checksum-validated optimization GET and accepts the result only when
+its design/version and single source analysis match the selected RSM source.
+It never reruns the optimizer. Dedicated optimizer routes omit unrelated
+dataset-scoped generic history/export controls.
+
+The RSM catalog uses pages of 20 and currently restores/verifies each item to
+derive eligibility. This is intentionally conservative. A future measured
+slice may add a lightweight verified summary/index, search/filter, exact-ID
+lookup, and hundreds-item benchmarks, but full dependency/checksum validation
+remains mandatory when a source is selected.
+
+These restore and navigation changes retain method `0.3.0`, config/result
+schemas 2/2, and source-bundle schema 2.
+
 ## Stable Errors
 
 - `response_optimizer_source_analysis_missing`

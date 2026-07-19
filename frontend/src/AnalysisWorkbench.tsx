@@ -452,7 +452,7 @@ export function AnalysisWorkbench({
               {executablePanel}
             </AnalysisPanelBoundary>
           ) : null}
-          <AnalysisHistoryPanel
+          {selectedMethod.execution_mode !== "dedicated" ? <AnalysisHistoryPanel
             catalog={catalog}
             history={effectiveHistoryState.analysisHistory}
             methodIdFilter={effectiveHistoryState.analysisHistoryMethodId}
@@ -491,8 +491,8 @@ export function AnalysisWorkbench({
               effectiveHistoryState.onLoadAnalysisRunDeletionPreflight
             }
             onSelectComparisonRun={effectiveComparisonState.onSelectAnalysisComparisonRun}
-          />
-          <AnalysisResultExportPanel
+          /> : null}
+          {selectedMethod.execution_mode !== "dedicated" ? <AnalysisResultExportPanel
             analysisResult={analysisResultForExport}
             csvExportError={effectiveExportState.analysisResultCsvExportError}
             csvExportResult={effectiveExportState.analysisResultCsvExport}
@@ -524,7 +524,7 @@ export function AnalysisWorkbench({
             }
             onDeleteExport={effectiveExportState.onDeleteAnalysisResultExport}
             onClearDeletion={effectiveExportState.onClearAnalysisResultExportDeletion}
-          />
+          /> : null}
           {analysisRunError !== null ? (
             <AnalysisRunErrorNotice errorCode={analysisRunError} />
           ) : null}

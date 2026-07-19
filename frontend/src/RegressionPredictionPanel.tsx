@@ -16,6 +16,7 @@ export interface RegressionPredictionRowsState {
 }
 
 interface RegressionPredictionPanelProps {
+  allowExportWithoutModel?: boolean;
   currentVersion: DatasetVersionResponse | null;
   expectedModelId: string | null;
   isRunningPrediction: boolean;
@@ -35,6 +36,7 @@ interface RegressionPredictionPanelProps {
 }
 
 export function RegressionPredictionPanel({
+  allowExportWithoutModel = false,
   currentVersion,
   expectedModelId,
   isRunningPrediction,
@@ -275,14 +277,18 @@ export function RegressionPredictionPanel({
           <div className="button-row" aria-label="전체 예측 CSV export">
             <button
               className="secondary-button"
-              disabled={!modelAvailable || predictionExportState.isCreating || predictionExportState.isDownloading}
+              disabled={
+                (!modelAvailable && !allowExportWithoutModel) ||
+                predictionExportState.isCreating ||
+                predictionExportState.isDownloading
+              }
               onClick={predictionExportState.onCreate}
               type="button"
             >{predictionExportState.isCreating ? "전체 예측 CSV 생성 중" : "전체 예측 CSV 생성"}</button>
             {predictionExportState.csvExport !== null ? (
               <>
                 <span className="cell-subtle">{predictionExportState.csvExport.row_count.toLocaleString()}행 · sha256: {shortId(predictionExportState.csvExport.sha256)}</span>
-                <button className="secondary-button" disabled={!modelAvailable || predictionExportState.isDownloading} onClick={predictionExportState.onDownload} type="button">
+                <button className="secondary-button" disabled={predictionExportState.isDownloading} onClick={predictionExportState.onDownload} type="button">
                   {predictionExportState.isDownloading ? "CSV 다운로드 중" : "전체 예측 CSV 다운로드"}
                 </button>
               </>

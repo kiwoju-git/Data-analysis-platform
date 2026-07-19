@@ -3,10 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchResponseSurfaceAnalysis,
   fetchResponseSurfaceDesign,
+  fetchResponseOptimizer,
   type DoeResponseSurfaceAnalysisCatalogItem,
   type DoeResponseSurfaceAnalysisResponse,
+  type ResponseOptimizerResponse,
   type ResponseSurfaceDesignResponse,
 } from "./api";
+import { restoredOptimizationMatchesSelection } from "./dedicatedResultRestore";
 import { createLatestRequestGuard } from "./latestRequest";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 import { useResponseSurfaceAnalysisCatalogState } from "./useResponseSurfaceAnalysisCatalogState";
@@ -22,6 +25,7 @@ export function ResponseOptimizerWorkspace({
   );
   const initialDesignId = validId(initialQuery.get("design_id"));
   const initialAnalysisId = validId(initialQuery.get("analysis_id"));
+  const initialOptimizationId = validId(initialQuery.get("optimization_id"));
   const catalogState = useResponseSurfaceAnalysisCatalogState(
     initialDesignId,
     initialAnalysisId,
@@ -31,12 +35,17 @@ export function ResponseOptimizerWorkspace({
     useState<DoeResponseSurfaceAnalysisResponse | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [requestedOptimizationId, setRequestedOptimizationId] =
+    useState(initialOptimizationId);
+  const [restoredOptimization, setRestoredOptimization] =
+    useState<ResponseOptimizerResponse | null>(null);
   const restoreGuard = useRef(createLatestRequestGuard()).current;
 
   useEffect(() => {
     restoreGuard.cancel();
     setDesign(null);
     setAnalysis(null);
+    setRestoredOptimization(null);
     setRestoreError(null);
     setIsRestoring(false);
     if (
@@ -53,8 +62,14 @@ export function ResponseOptimizerWorkspace({
         catalogState.selectedDesignId,
         catalogState.selectedAnalysisId,
       ),
+      requestedOptimizationId === null
+        ? Promise.resolve(null)
+        : fetchResponseOptimizer(
+            catalogState.selectedDesignId,
+            requestedOptimizationId,
+          ),
     ])
-      .then(([designResponse, analysisResponse]) => {
+      .then(([designResponse, analysisResponse, optimizationResponse]) => {
         if (!restoreGuard.isCurrent(request)) return;
         if (
           designResponse.design_id !== analysisResponse.design_id ||
@@ -63,8 +78,21 @@ export function ResponseOptimizerWorkspace({
           setRestoreError("doe_rsm_analysis_dependency_mismatch");
           return;
         }
+        if (
+          optimizationResponse !== null &&
+          !restoredOptimizationMatchesSelection(
+            optimizationResponse,
+            requestedOptimizationId,
+            designResponse,
+            analysisResponse,
+          )
+        ) {
+          setRestoreError("response_optimizer_source_selection_mismatch");
+          return;
+        }
         setDesign(designResponse);
         setAnalysis(analysisResponse);
+        setRestoredOptimization(optimizationResponse);
       })
       .catch((error) => {
         if (restoreGuard.isCurrent(request)) {
@@ -80,6 +108,7 @@ export function ResponseOptimizerWorkspace({
   }, [
     catalogState.selectedAnalysisId,
     catalogState.selectedDesignId,
+    requestedOptimizationId,
     restoreGuard,
   ]);
 
@@ -88,7 +117,8 @@ export function ResponseOptimizerWorkspace({
     const nextDesignId = validId(designId ?? null);
     const nextAnalysisId = validId(analysisId ?? null);
     catalogState.onSelect(nextDesignId, nextAnalysisId);
-    replaceWorkflowQuery(nextDesignId, nextAnalysisId);
+    setRequestedOptimizationId(null);
+    replaceWorkflowQuery(nextDesignId, nextAnalysisId, null);
   }
 
   const selectedValue =
@@ -165,7 +195,18 @@ export function ResponseOptimizerWorkspace({
         </div>
       ) : null}
       {design !== null && analysis !== null ? (
-        <ResponseOptimizerPanel design={design} analysis={analysis} />
+        <ResponseOptimizerPanel
+          design={design}
+          analysis={analysis}
+          initialOptimization={restoredOptimization}
+          onOptimizationCreated={(optimization) => {
+            replaceWorkflowQuery(
+              design.design_id,
+              analysis.analysis_id,
+              optimization.optimization_id,
+            );
+          }}
+        />
       ) : null}
       {catalogState.catalog !== null && catalogState.catalog.total > catalogState.catalog.limit ? (
         <div className="result-pagination" aria-label="RSM source 목록 페이지 이동">
@@ -238,14 +279,21 @@ function validId(value: string | null): string | null {
   return value !== null && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(value) ? value : null;
 }
 
-function replaceWorkflowQuery(designId: string | null, analysisId: string | null) {
+function replaceWorkflowQuery(
+  designId: string | null,
+  analysisId: string | null,
+  optimizationId: string | null,
+) {
   const url = new URL(window.location.href);
   if (designId === null || analysisId === null) {
     url.searchParams.delete("design_id");
     url.searchParams.delete("analysis_id");
+    url.searchParams.delete("optimization_id");
   } else {
     url.searchParams.set("design_id", designId);
     url.searchParams.set("analysis_id", analysisId);
+    if (optimizationId === null) url.searchParams.delete("optimization_id");
+    else url.searchParams.set("optimization_id", optimizationId);
   }
   window.history.replaceState({}, "", `${url.pathname}${url.search}`);
 }

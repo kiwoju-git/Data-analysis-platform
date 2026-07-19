@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## 1. Required Reading And Priority
 
@@ -21,16 +21,19 @@ Current source-of-truth note:
 
 Current and next development order:
 
-The current bounded work makes Predict and Response Optimizer first-class
-dedicated Workbench entrypoints without moving either calculation into the
-generic analysis-run API. The completed paste-grid P0 contract remains intact.
-After this slice:
+Predict and Response Optimizer are complete first-class dedicated Workbench
+entrypoints on pushed main `b12c3b26235089fa28e5b48b1faa2cf627e3bec0`.
+The current approved slice adds ID-only stored-result restore, scopes generic
+history/export away from dedicated routes, and publishes the deterministic
+synthetic tutorial pack without changing any statistical calculation. After
+this slice:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the resulting main push in remote GitHub Actions and review required
    Windows/E2E checks and repository protection outside this code PR.
 3. Measure and reduce the main bundle without changing workflow behavior.
-4. Improve Bayesian catalog and successor UX without changing GP/EI behavior.
+4. Add search and measured large-catalog performance for regression/RSM
+   sources, then improve Bayesian catalog and successor UX.
 5. Add dataset-root and then DOE-root retention only through separate reviewed
    ownership graphs with explicit inbound-reference blockers.
 6. Continue the advanced quality/statistics backlog through a separately
@@ -8739,9 +8742,10 @@ Completed:
   OpenAPI/frontend contracts 155. Chromium E2E passed in 76.9 seconds through
   both top-level execution/reload paths and all retained critical paths.
 - Main is 511.60 kB / 121.24 kB gzip and still emits the measured 500 kB
-  warning. Validation used Windows 10 build 19045, Python 3.10.11, Node
-  24.17.0, and uncommitted worktree base
-  `6fb115093a97909bf3c379732d16e7153c9931d0`; it is not release evidence.
+  warning. The completed slice is pushed at
+  `b12c3b26235089fa28e5b48b1faa2cf627e3bec0`; a clean local checkout passed
+  bootstrap, full check, and Chromium E2E. Validation used Windows 10 build
+  19045, Python 3.10.11, and Node 24.17.0, so it is not release evidence.
   Remote Actions remain unverified because `gh` is unavailable.
 
 Next allowed work:
@@ -8752,3 +8756,32 @@ Next allowed work:
 4. Improve Bayesian catalog/successor UX.
 5. Add dataset-root and DOE-root retention through reviewed ownership graphs.
 6. Continue advanced quality/statistics only through approved contracts.
+
+## Progress Update 187 - Tutorial Pack And Dedicated Result Restore
+
+Current approved worktree:
+
+- Add `prediction_id` and `optimization_id` to ID-only workflow URLs and restore
+  verified persisted results without recalculation.
+- Keep immutable prediction results viewable after source-model deletion while
+  continuing to block new prediction; preserve all other integrity failures.
+- Hide unrelated generic history/export panels on dedicated workflows and keep
+  the workflow-owned prediction paging/CSV and optimizer result restore.
+- Correct Bayesian purpose-helper copy to describe current executable GP/EI
+  behavior and its confirmation/global-optimum limitations.
+- Publish deterministic seed-20260718 synthetic files, SHA manifest, API-derived
+  expected results, Korean end-to-end tutorial, and 18-section tutorial smoke.
+- Keep every statistical method version, calculation, persisted result schema,
+  and SQLite schema unchanged.
+- Final local development validation passed with backend 777, frontend 137,
+  OpenAPI/frontend 155, and Chromium E2E 74.6 seconds. The host is Windows 10
+  build 19045/Python 3.10.11/Node 24.17.0, not release-target evidence; remote
+  Actions remain unverified because `gh` is not installed.
+
+Next allowed work after completion:
+
+1. Clean Windows 11/Python 3.10/Node 22 release gate.
+2. Remote Actions, required checks, and repository protection review.
+3. Measured main-bundle optimization.
+4. Regression/RSM source catalog search and large-catalog performance.
+5. Bayesian catalog/successor UX, dataset/DOE retention, then advanced backlog.

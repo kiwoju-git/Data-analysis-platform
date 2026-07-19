@@ -5,6 +5,11 @@ not add new methods or change calculations. Use it to verify that the role
 guide, purpose helper, preflight explanation, and result panels keep users from
 overclaiming.
 
+For a complete Korean task sequence with deterministic synthetic files and
+API-verified expected values, use
+`docs/studio_end_to_end_tutorial_ko.md`. This checklist remains the UX QA
+acceptance companion rather than the user tutorial itself.
+
 ## Spreadsheet Paste Review
 
 User task: copy a rectangular range from Excel or another spreadsheet, review

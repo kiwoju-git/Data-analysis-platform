@@ -823,6 +823,11 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
         expect(dedicated_page).to_have_url(
             re.compile(f"target_version_id={target_version_id}")
         )
+        expect(dedicated_page).to_have_url(
+            re.compile(f"prediction_id={dedicated_prediction_id}")
+        )
+        expect(dedicated_page.get_by_role("heading", name="분석 이력")).to_have_count(0)
+        expect(dedicated_page.get_by_role("heading", name="결과 내보내기")).to_have_count(0)
 
         dedicated_page.reload(wait_until="networkidle")
         expect(dedicated_page.get_by_label("Source 회귀모형")).to_have_value(
@@ -834,6 +839,17 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
             timeout=20_000,
         )
         expect(dedicated_page.get_by_label("선택한 회귀모형 metadata")).to_be_visible()
+        expect(dedicated_page.get_by_role("heading", name="예측 결과")).to_be_visible(
+            timeout=20_000
+        )
+        restored_table = dedicated_page.locator(".result-table").filter(
+            has_text="Prediction interval"
+        )
+        expect(restored_table.locator("tbody tr")).to_have_count(4)
+        restored_export_button = dedicated_page.get_by_role(
+            "button", name="전체 예측 CSV 생성"
+        )
+        expect(restored_export_button).to_be_enabled(timeout=15_000)
     finally:
         if dedicated_prediction_id is not None:
             api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
@@ -1266,12 +1282,24 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
             "button", name="Response Optimizer 실행"
         )
         expect(dedicated_optimizer_button).to_be_enabled(timeout=20_000)
-        dedicated_optimizer_button.click()
+        with dedicated_page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith(f"/{rsm_design_id}/optimizations")
+        ) as dedicated_optimization_response_info:
+            dedicated_optimizer_button.click()
+        dedicated_optimization_id = dedicated_optimization_response_info.value.json()[
+            "optimization_id"
+        ]
         expect(dedicated_page.get_by_role("heading", name="권장 운전 조건")).to_be_visible(
             timeout=20_000
         )
         expect(dedicated_page).to_have_url(re.compile(f"design_id={rsm_design_id}"))
         expect(dedicated_page).to_have_url(re.compile(f"analysis_id={rsm_analysis_id}"))
+        expect(dedicated_page).to_have_url(
+            re.compile(f"optimization_id={dedicated_optimization_id}")
+        )
+        expect(dedicated_page.get_by_role("heading", name="분석 이력")).to_have_count(0)
+        expect(dedicated_page.get_by_role("heading", name="결과 내보내기")).to_have_count(0)
         dedicated_page.reload(wait_until="networkidle")
         expect(dedicated_page.get_by_label("Source 반응표면 분석")).to_have_value(
             source_value,
@@ -1279,6 +1307,12 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
         )
         expect(dedicated_page.get_by_role("button", name="Response Optimizer 실행")).to_be_enabled(
             timeout=20_000
+        )
+        expect(dedicated_page.get_by_role("heading", name="권장 운전 조건")).to_be_visible(
+            timeout=20_000
+        )
+        expect(dedicated_page.get_by_label("Response Optimizer 결과 요약")).to_contain_text(
+            "Composite desirability"
         )
     finally:
         dedicated_page.close()

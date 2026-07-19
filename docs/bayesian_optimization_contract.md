@@ -16,6 +16,13 @@ returns `analysis_method_uses_dedicated_api` with
 study lifecycle. A recommendation is not an observation and is not a claim of
 a guaranteed global optimum.
 
+User guidance describes the current executable behavior directly: completed
+manual observations are used to fit the Matérn-5/2 Gaussian Process and
+Expected Improvement proposes the next confirmation experiment. It must not
+refer to this method as planning-only, and it must always say that the proposal
+is not an observed value, does not run the experiment, and does not guarantee a
+global optimum.
+
 Current routes are:
 
 - `POST/GET /api/v1/bayesian-studies`;

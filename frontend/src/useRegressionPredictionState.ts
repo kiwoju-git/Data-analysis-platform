@@ -11,7 +11,9 @@ import { createLatestRequestGuard } from "./latestRequest";
 interface UseRegressionPredictionStateOptions {
   confidenceLevel: number;
   currentDatasetVersionId: string | null;
+  initialPrediction?: RegressionPredictionResponse | null;
   modelId: string | null;
+  onPredictionCreated?: (prediction: RegressionPredictionResponse) => void;
   targetDatasetVersionId: string | null;
 }
 
@@ -29,7 +31,9 @@ export interface RegressionPredictionState {
 export function useRegressionPredictionState({
   confidenceLevel,
   currentDatasetVersionId,
+  initialPrediction = null,
   modelId,
+  onPredictionCreated,
   targetDatasetVersionId,
 }: UseRegressionPredictionStateOptions): RegressionPredictionState {
   const [preflight, setPreflight] = useState<RegressionPredictionPreflightResponse | null>(null);
@@ -54,8 +58,21 @@ export function useRegressionPredictionState({
 
   useEffect(() => {
     reset();
+    if (
+      initialPrediction !== null &&
+      initialPrediction.model_id === modelId &&
+      initialPrediction.target_dataset_version_id === targetDatasetVersionId
+    ) {
+      setPrediction(initialPrediction);
+    }
     return reset;
-  }, [currentDatasetVersionId, modelId, reset, targetDatasetVersionId]);
+  }, [
+    currentDatasetVersionId,
+    initialPrediction,
+    modelId,
+    reset,
+    targetDatasetVersionId,
+  ]);
 
   async function runPreflight() {
     if (
@@ -128,6 +145,7 @@ export function useRegressionPredictionState({
       });
       if (predictionRequest.isCurrent(request)) {
         setPrediction(response);
+        onPredictionCreated?.(response);
       }
     } catch (error) {
       if (predictionRequest.isCurrent(request)) {

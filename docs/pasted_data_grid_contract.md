@@ -116,3 +116,10 @@ must dispatch a real `text/plain` paste event, inspect cells before
 registration, exercise keyboard selection, prove failure retains the current
 draft, prove reload does not restore it, confirm parsing, inspect canonical
 rows, change page size, and retain all existing upload/analysis flows.
+
+The deterministic P0 walkthrough input is
+`examples/tutorial/studio_process_paste_60.tsv`. Its SHA, LF line-ending
+policy, dimensions, and synthetic status are recorded in
+`examples/tutorial/tutorial_data_manifest.json`. The browser preview remains
+advisory and never serializes parsed cells back into the paste request; server
+parsing confirmation remains authoritative.

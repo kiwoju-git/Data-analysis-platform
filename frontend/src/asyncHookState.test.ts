@@ -900,6 +900,32 @@ describe("async workbench hooks", () => {
     runner.unmount();
   });
 
+  it("hydrates a checksum-validated stored prediction for matching model and target", () => {
+    const stored = {
+      prediction_id: "prediction-stored",
+      model_id: "model-a",
+      source_dataset_version_id: "source-a",
+      target_dataset_version_id: "target-a",
+    } as RegressionPredictionResponse;
+    const props = {
+      confidenceLevel: 0.95,
+      currentDatasetVersionId: "source-a",
+      initialPrediction: stored,
+      modelId: "model-a",
+      targetDatasetVersionId: "target-a",
+    };
+    const runner = new HookRunner<
+      Parameters<typeof useRegressionPredictionState>[0],
+      ReturnType<typeof useRegressionPredictionState>
+    >(useRegressionPredictionState, props);
+
+    expect(runner.output.prediction).toBe(stored);
+    runner.update({ ...props, targetDatasetVersionId: "target-b" });
+    expect(runner.output.prediction).toBeNull();
+    expect(runner.output.isRunningPrediction).toBe(false);
+    runner.unmount();
+  });
+
   it("keeps prediction state reset when its target changes during execution", async () => {
     const prediction = deferred<RegressionPredictionResponse>();
     apiMocks.fetchRegressionPredictionPreflight.mockResolvedValueOnce(

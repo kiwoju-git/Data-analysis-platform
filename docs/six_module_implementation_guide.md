@@ -1835,6 +1835,21 @@ Codex는 메서드를 한꺼번에 빈 골격으로 추가하지 말고 다음 v
 
 ---
 
+## 21.1 현재 전용 워크플로와 튜토리얼 상태
+
+- Registry의 30개 stable ID는 모두 available이다. 25개는 generic
+  analysis-run이고 Predict, Response Optimizer, Factorial DOE, RSM,
+  Bayesian 5개는 typed dedicated workflow다.
+- Predict와 Response Optimizer는 parent panel 및 top-level route에서 동일한
+  계산 component/API를 재사용한다. `prediction_id`/`optimization_id` deep
+  link는 checksum-validated stored result를 복원하며 재계산하지 않는다.
+- Dedicated route에는 관계없는 dataset-scoped generic history/export를
+  표시하지 않는다. 각 workflow의 실제 paging/export/restore만 제공한다.
+- 실제 사용자 walkthrough와 deterministic synthetic inputs는
+  `docs/studio_end_to_end_tutorial_ko.md` 및 `examples/tutorial/`에 있다.
+  Expected values는 formula에서 추정한 값이 아니라 현재 Studio API smoke
+  결과이며 별도 reference fixture를 대체하지 않는다.
+
 ## 22. 6개 모듈 Definition of Done
 
 메서드는 다음을 모두 충족해야 완료다.

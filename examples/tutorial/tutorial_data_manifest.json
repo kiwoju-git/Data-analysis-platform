@@ -1,0 +1,120 @@
+{
+  "columns": {
+    "predictors_x": [
+      "temperature_c",
+      "pressure_bar",
+      "cycle_time_s",
+      "catalyst_pct",
+      "feed_rate_kg_h",
+      "material_grade"
+    ],
+    "responses_y": [
+      "yield_pct",
+      "tensile_strength_mpa"
+    ],
+    "supporting": [
+      "run_id",
+      "timestamp",
+      "production_line",
+      "supplier",
+      "pass_flag",
+      "inspected_count",
+      "defectives_count"
+    ]
+  },
+  "files": [
+    {
+      "column_count": 15,
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "intended_tutorial_use": "upload, schema, EDA, inference, regression, and quality tutorials",
+      "line_ending": "LF",
+      "relative_path": "studio_process_training.csv",
+      "row_count": 240,
+      "sha256": "a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280"
+    },
+    {
+      "column_count": 15,
+      "delimiter": "tab",
+      "encoding": "utf-8",
+      "intended_tutorial_use": "exact-text paste staging and parsing confirmation tutorial",
+      "line_ending": "LF",
+      "relative_path": "studio_process_paste_60.tsv",
+      "row_count": 60,
+      "sha256": "68111a452c0ed92ccbb78eb6874590fc711810860ca197914b061c7329bea4b0"
+    },
+    {
+      "column_count": 8,
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "intended_tutorial_use": "compatible prediction target and Phase II monitoring tutorial",
+      "line_ending": "LF",
+      "relative_path": "studio_process_prediction.csv",
+      "row_count": 48,
+      "sha256": "33f515b75c35c37b92a5c2461cff36d6f1cea547ecbe268c84235ba681d5b8d2"
+    },
+    {
+      "column_count": 7,
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "intended_tutorial_use": "prediction preflight troubleshooting only",
+      "line_ending": "LF",
+      "relative_path": "studio_process_prediction_invalid.csv",
+      "row_count": 3,
+      "sha256": "95f9f194dece2fdea2f5487a94b88f51ad3d8978dbfe2e1a34b2d4d0552bea4d"
+    },
+    {
+      "column_count": 4,
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "intended_tutorial_use": "balanced crossed Gage R&R tutorial",
+      "line_ending": "LF",
+      "relative_path": "studio_gage_rr.csv",
+      "row_count": 60,
+      "sha256": "1a08df9c58bbc67027c522e215ed8a47f2addc7a41284af6258b7f9d7dd10b64"
+    },
+    {
+      "column_count": 6,
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "intended_tutorial_use": "three-factor replicated full-factorial response-entry tutorial",
+      "line_ending": "LF",
+      "relative_path": "studio_factorial_responses.csv",
+      "row_count": 16,
+      "sha256": "ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73"
+    },
+    {
+      "column_count": 4,
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "intended_tutorial_use": "two-factor face-centered CCD and Response Optimizer tutorial",
+      "line_ending": "LF",
+      "relative_path": "studio_rsm_responses.csv",
+      "row_count": 13,
+      "sha256": "49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2"
+    },
+    {
+      "column_count": 4,
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "intended_tutorial_use": "manual Bayesian initial observations and recommendation tutorial",
+      "line_ending": "LF",
+      "relative_path": "studio_bayesian_observations.csv",
+      "row_count": 5,
+      "sha256": "a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91"
+    }
+  ],
+  "formula_descriptions": {
+    "bayesian_objective": "Deterministic bounded two-factor quadratic objective used only as manually entered synthetic observations.",
+    "factorial_response": "Replicated coded response with temperature and pressure main effects and a temperature-by-pressure interaction.",
+    "rsm_response": "Noisy full-quadratic response with an interior stationary point in a two-factor face-centered CCD.",
+    "tensile_strength_mpa": "Seeded noisy response with pressure, cycle time, feed rate, material grade, and a small temperature effect.",
+    "yield_pct": "Seeded noisy response with temperature, pressure, catalyst, cycle/feed, temperature/pressure quadratic terms, temperature-by-pressure interaction, line, and supplier effects."
+  },
+  "generation_marker": "deterministic-seed-20260718",
+  "generator_file_sha256": "bc81e615e31154b8da280385ece68868fad367a42854fe5717836d20496435b3",
+  "generator_version": "1.0.0",
+  "manifest_schema_version": 1,
+  "seed": 20260718,
+  "synthetic_data_statement": "All records are deterministic synthetic examples and contain no real person, company, product, equipment, or production data."
+}
