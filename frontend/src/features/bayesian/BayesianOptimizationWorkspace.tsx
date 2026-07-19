@@ -29,7 +29,6 @@ export function BayesianOptimizationWorkspace() {
   const draft = useBayesianStudyDraftState();
   const lifecycle = useBayesianStudyLifecycleState(catalog.selectedStudyId);
   const selectRecommendation = useCallback((recommendationId: string | null) => {
-    setRequestedRecommendationId(recommendationId);
     replaceBayesianQuery({ recommendation_id: recommendationId });
   }, []);
   const recommendation = useBayesianRecommendationState({
@@ -37,12 +36,20 @@ export function BayesianOptimizationWorkspace() {
     requestedRecommendationId,
     onRecommendationSelected: selectRecommendation,
   });
-  const retention = useBayesianRetentionState(lifecycle.study);
-  const study = lifecycle.study;
+  const study =
+    lifecycle.study?.study_id === catalog.selectedStudyId ? lifecycle.study : null;
+  const selectedRecommendation =
+    recommendation.recommendation?.study_id === catalog.selectedStudyId
+      ? recommendation.recommendation
+      : null;
+  const retention = useBayesianRetentionState(study);
   const requestInFlight =
+    catalog.isLoading ||
+    lifecycle.isRestoring ||
     lifecycle.isCreating ||
     lifecycle.isSavingTrial ||
     lifecycle.isClosing ||
+    recommendation.isRestoring ||
     recommendation.isRecommending ||
     retention.isChecking ||
     retention.isDeleting;
@@ -171,7 +178,7 @@ export function BayesianOptimizationWorkspace() {
           />
           <BayesianRecommendationPanel
             study={study}
-            recommendation={recommendation.recommendation}
+            recommendation={selectedRecommendation}
             totalTrialBudget={recommendation.totalTrialBudget}
             isRecommending={recommendation.isRecommending}
             actionsDisabled={studyActionDisabled}
@@ -180,7 +187,7 @@ export function BayesianOptimizationWorkspace() {
           />
           <BayesianStudyClosePanel
             study={study}
-            recommendation={recommendation.recommendation}
+            recommendation={selectedRecommendation}
             target={lifecycle.closeTarget}
             reason={lifecycle.closeReason}
             note={lifecycle.closeNote}

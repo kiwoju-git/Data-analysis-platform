@@ -598,6 +598,7 @@ def create_exports(page: Page) -> None:
 def verify_help_and_report_center(page: Page) -> None:
     page.get_by_role("button", name="리포트", exact=True).click()
     expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible()
+    expect_lazy_workspace_page(page, "ReportCenterPage")
     report_rows = page.locator(".report-run-row")
     expect(report_rows).to_have_count(2, timeout=20_000)
     report_rows.first.click()
@@ -624,6 +625,7 @@ def verify_help_and_report_center(page: Page) -> None:
 
     page.get_by_role("button", name="도움말", exact=True).click()
     expect(page.get_by_role("heading", name="도움말", exact=True)).to_be_visible()
+    expect_lazy_workspace_page(page, "HelpCenterPage")
     expect(page.get_by_text("무엇을 알고 싶나요?")).to_be_visible()
     expect(page.get_by_role("heading", name="변수 역할 사전")).to_be_visible()
     page.reload(wait_until="networkidle")
@@ -1174,6 +1176,19 @@ def expect_lazy_analysis_module(page: Page, module_name: str) -> None:
         timeout=10_000,
     )
     expect(page.get_by_label("분석 패널 로딩")).to_have_count(0)
+
+
+def expect_lazy_workspace_page(page: Page, page_name: str) -> None:
+    page.wait_for_function(
+        """
+        (expectedPage) => performance.getEntriesByType("resource").some(
+          (entry) => entry.name.includes(expectedPage)
+        )
+        """,
+        arg=page_name,
+        timeout=10_000,
+    )
+    expect(page.get_by_label("페이지 로딩")).to_have_count(0)
 
 
 def verify_lazy_panel_direct_routes(page: Page, frontend_base_url: str) -> None:

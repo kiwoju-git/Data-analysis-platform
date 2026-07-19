@@ -13,7 +13,10 @@ import type {
   AttributeControlLimitSetListResponse,
   AttributeControlLimitSetDeletionPreflightResponse,
   AttributeControlLimitSetResponse,
+  BayesianRecommendationResponse,
+  BayesianStudyDeletionPreflightResponse,
   BayesianStudyListResponse,
+  BayesianStudyResponse,
   DatasetVersionCatalogResponse,
   RegressionPredictionCsvExportResponse,
   RegressionPredictionPreflightResponse,
@@ -34,14 +37,22 @@ import { useRegressionModelRetentionState } from "./useRegressionModelRetentionS
 import { useRestoredAnalysisResultState } from "./useRestoredAnalysisResultState";
 import { useBayesianStudyCatalogState } from "./features/bayesian/hooks/useBayesianStudyCatalogState";
 import { useBayesianStudyDraftState } from "./features/bayesian/hooks/useBayesianStudyDraftState";
+import { useBayesianStudyLifecycleState } from "./features/bayesian/hooks/useBayesianStudyLifecycleState";
+import { useBayesianRecommendationState } from "./features/bayesian/hooks/useBayesianRecommendationState";
+import { useBayesianRetentionState } from "./features/bayesian/hooks/useBayesianRetentionState";
 
 const apiMocks = vi.hoisted(() => ({
+  abandonBayesianTrial: vi.fn(),
+  closeBayesianStudy: vi.fn(),
+  createBayesianRecommendation: vi.fn(),
+  createBayesianStudy: vi.fn(),
   createAnalysisResultCsvExport: vi.fn(),
   createAnalysisResultHtmlReport: vi.fn(),
   createAnalysisResultJsonExport: vi.fn(),
   createRegressionPredictionCsvExport: vi.fn(),
   deleteAnalysisResultExport: vi.fn(),
   deleteAttributeControlLimitSet: vi.fn(),
+  deleteBayesianStudy: vi.fn(),
   deleteRegressionModel: vi.fn(),
   deleteStoredAnalysisRun: vi.fn(),
   downloadAnalysisResultExport: vi.fn(),
@@ -54,13 +65,18 @@ const apiMocks = vi.hoisted(() => ({
   fetchAttributeControlLimitSets: vi.fn(),
   fetchAttributeControlLimitSetDeletionPreflight: vi.fn(),
   fetchAttributeControlMonitoringPreflight: vi.fn(),
+  fetchBayesianRecommendation: vi.fn(),
+  fetchBayesianStudy: vi.fn(),
+  fetchBayesianStudyDeletionPreflight: vi.fn(),
   fetchBayesianStudies: vi.fn(),
+  fetchLatestBayesianRecommendation: vi.fn(),
   fetchDatasetVersions: vi.fn(),
   fetchRegressionPredictionPreflight: vi.fn(),
   fetchRegressionPredictions: vi.fn(),
   fetchRegressionPredictionRows: vi.fn(),
   fetchRegressionModelDeletionPreflight: vi.fn(),
   fetchRegressionModelManifest: vi.fn(),
+  recordBayesianObservation: vi.fn(),
 }));
 
 vi.mock("./api", () => apiMocks);
@@ -364,6 +380,127 @@ function readyPreflight(
     target_dataset_version_id: targetDatasetVersionId,
     prediction_ready: true,
   } as RegressionPredictionPreflightResponse;
+}
+
+function bayesianStudy(
+  studyId: string,
+  status: "active" | "completed" | "abandoned" = "active",
+): BayesianStudyResponse {
+  return {
+    study_id: studyId,
+    study_version_id: `${studyId}-version`,
+    version_number: 1,
+    study_schema_version: 1,
+    method_id: "doe.bayesian_optimization",
+    method_version: "0.2.2",
+    name: `Study ${studyId}`,
+    status,
+    predecessor_study_id: null,
+    created_at: "2026-07-19T00:00:00Z",
+    updated_at: "2026-07-19T00:00:00Z",
+    app_version: "0.1.0",
+    definition_sha256: "a".repeat(64),
+    factors: [
+      {
+        factor_id: "x",
+        name: "X",
+        low: 0,
+        high: 1,
+        unit: null,
+        order: 1,
+        scaling_rule: "linear_0_1",
+      },
+    ],
+    objective: {
+      name: "Y",
+      unit: null,
+      direction: "maximize",
+      observation_policy: "manual_single_observation",
+    },
+    constraints: [],
+    initial_design: {
+      policy: "sha256_counter_uniform_feasible_v1",
+      seed: 20260719,
+      requested_size: 2,
+      generated_size: 2,
+      attempt_limit: 2000,
+      attempts_consumed: 2,
+    },
+    trial_count: 2,
+    pending_trial_count: status === "active" ? 2 : 0,
+    completed_trial_count: 0,
+    abandoned_trial_count: status === "active" ? 0 : 2,
+    observation_history: {
+      history_revision_id: `${studyId}-history`,
+      study_version_id: `${studyId}-version`,
+      revision_number: 1,
+      schema_version: 1,
+      completed_trial_ids: [],
+      completed_trial_count: 0,
+      observation_history_sha256: "b".repeat(64),
+      previous_history_sha256: null,
+      created_at: "2026-07-19T00:00:00Z",
+    },
+    trials: [1, 2].map((trialNumber) => ({
+      trial_id: `${studyId}-trial-${trialNumber}`,
+      study_version_id: `${studyId}-version`,
+      trial_number: trialNumber,
+      origin: "initial_design" as const,
+      state: status === "active" ? ("pending" as const) : ("abandoned" as const),
+      actual_coordinates: { x: trialNumber / 3 },
+      normalized_coordinates: { x: trialNumber / 3 },
+      coordinates_sha256: `${trialNumber}`.repeat(64),
+      objective_value: null,
+      created_at: "2026-07-19T00:00:00Z",
+      closed_at: status === "active" ? null : "2026-07-19T00:01:00Z",
+    })),
+    surrogate_available: false,
+    recommendation_available: false,
+    recommendation_minimum_completed_observations: 2,
+    recommendation_hard_trial_limit: 200,
+    recommendation_blockers: ["bayesian_optimization_history_incomplete"],
+    lifecycle_event: null,
+  };
+}
+
+function bayesianRecommendation(
+  studyId: string,
+  recommendationId: string,
+  budget = 50,
+): BayesianRecommendationResponse {
+  return {
+    recommendation_id: recommendationId,
+    study_id: studyId,
+    requested_total_trial_budget: budget,
+  } as BayesianRecommendationResponse;
+}
+
+function bayesianDeletionPreflight(
+  studyId: string,
+  blockers: BayesianStudyDeletionPreflightResponse["blockers"] = [],
+): BayesianStudyDeletionPreflightResponse {
+  return {
+    preflight_schema_version: 1,
+    study_id: studyId,
+    study_version_id: `${studyId}-version`,
+    status: "abandoned",
+    eligible: blockers.length === 0,
+    blockers,
+    successor_study_count: blockers.includes("bayesian_study_deletion_referenced") ? 1 : 0,
+    counts: {
+      study_count: 1,
+      study_version_count: 1,
+      trial_count: 2,
+      history_revision_count: 1,
+      history_head_count: 1,
+      recommendation_count: 0,
+      lifecycle_event_count: 1,
+      metadata_record_count: 7,
+      file_count: 0,
+      file_bytes: 0,
+    },
+    deletion_manifest_sha256: "d".repeat(64),
+  };
 }
 
 beforeEach(() => {
@@ -1060,6 +1197,265 @@ describe("async workbench hooks", () => {
       ),
     );
     expect(runner.output.constraints[0]?.coefficients[1]).toBe("1.5");
+    runner.unmount();
+  });
+
+  it("keeps the newest Bayesian Study restore and resets lifecycle loading on selection", async () => {
+    const studyA = deferred<BayesianStudyResponse>();
+    const studyB = deferred<BayesianStudyResponse>();
+    apiMocks.fetchBayesianStudy
+      .mockReturnValueOnce(studyA.promise)
+      .mockReturnValueOnce(studyB.promise);
+    const runner = new HookRunner<
+      string | null,
+      ReturnType<typeof useBayesianStudyLifecycleState>
+    >(useBayesianStudyLifecycleState, "study-a");
+
+    runner.update("study-b");
+    expect(runner.output.study).toBeNull();
+    expect(runner.output.isRestoring).toBe(true);
+    studyB.resolve(bayesianStudy("study-b"));
+    await runner.flush();
+    studyA.resolve(bayesianStudy("study-a"));
+    await runner.flush();
+
+    expect(runner.output.study?.study_id).toBe("study-b");
+    expect(runner.output.isRestoring).toBe(false);
+    expect(runner.output.isSavingTrial).toBe(false);
+    expect(runner.output.isClosing).toBe(false);
+    runner.update(null);
+    expect(runner.output.study).toBeNull();
+    expect(runner.output.isRestoring).toBe(false);
+    runner.unmount();
+  });
+
+  it("does not apply a Bayesian Study restore after unmount", async () => {
+    const pending = deferred<BayesianStudyResponse>();
+    apiMocks.fetchBayesianStudy.mockReturnValueOnce(pending.promise);
+    const runner = new HookRunner<
+      string | null,
+      ReturnType<typeof useBayesianStudyLifecycleState>
+    >(useBayesianStudyLifecycleState, "study-a");
+
+    runner.unmount();
+    pending.resolve(bayesianStudy("study-a"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(runner.output.study).toBeNull();
+  });
+
+  it("ignores observation and close responses after the selected Study changes", async () => {
+    const observation = deferred<unknown>();
+    const close = deferred<{ study: BayesianStudyResponse }>();
+    const studyB = deferred<BayesianStudyResponse>();
+    const studyC = deferred<BayesianStudyResponse>();
+    apiMocks.fetchBayesianStudy
+      .mockResolvedValueOnce(bayesianStudy("study-a"))
+      .mockReturnValueOnce(studyB.promise)
+      .mockReturnValueOnce(studyC.promise);
+    apiMocks.recordBayesianObservation.mockReturnValueOnce(observation.promise);
+    apiMocks.closeBayesianStudy.mockReturnValueOnce(close.promise);
+    const runner = new HookRunner<
+      string | null,
+      ReturnType<typeof useBayesianStudyLifecycleState>
+    >(useBayesianStudyLifecycleState, "study-a");
+    await runner.flush();
+
+    await runner.act(() => runner.output.setObservation("study-a-trial-1", "1.25"));
+    await runner.act(() =>
+      runner.output.requestTrialTransition("study-a-trial-1", "complete"),
+    );
+    await runner.act(() => {
+      void runner.output.confirmTrialTransition();
+    });
+    expect(runner.output.isSavingTrial).toBe(true);
+    runner.update("study-b");
+    expect(runner.output.isSavingTrial).toBe(false);
+    observation.resolve({});
+    studyB.resolve(bayesianStudy("study-b"));
+    await runner.flush();
+    expect(runner.output.study?.study_id).toBe("study-b");
+
+    await runner.act(() => {
+      runner.output.setPendingStudyClose(true);
+      void runner.output.confirmStudyClose();
+    });
+    expect(runner.output.isClosing).toBe(true);
+    runner.update("study-c");
+    expect(runner.output.isClosing).toBe(false);
+    close.resolve({ study: bayesianStudy("study-b", "completed") });
+    studyC.resolve(bayesianStudy("study-c"));
+    await runner.flush();
+
+    expect(runner.output.study?.study_id).toBe("study-c");
+    expect(apiMocks.fetchBayesianStudy).toHaveBeenCalledTimes(3);
+    runner.unmount();
+  });
+
+  it("restores only the current Study recommendation and preserves its request budget", async () => {
+    const latestA = deferred<{ item: BayesianRecommendationResponse | null }>();
+    const exactB = deferred<BayesianRecommendationResponse>();
+    const selected = vi.fn();
+    apiMocks.fetchLatestBayesianRecommendation.mockReturnValueOnce(latestA.promise);
+    apiMocks.fetchBayesianRecommendation.mockReturnValueOnce(exactB.promise);
+    const runner = new HookRunner<
+      Parameters<typeof useBayesianRecommendationState>[0],
+      ReturnType<typeof useBayesianRecommendationState>
+    >(useBayesianRecommendationState, {
+      selectedStudyId: "study-a",
+      requestedRecommendationId: null,
+      onRecommendationSelected: selected,
+    });
+
+    runner.update({
+      selectedStudyId: "study-b",
+      requestedRecommendationId: "recommendation-b",
+      onRecommendationSelected: selected,
+    });
+    exactB.resolve(bayesianRecommendation("study-b", "recommendation-b", 75));
+    await runner.flush();
+    latestA.resolve({ item: bayesianRecommendation("study-a", "recommendation-a") });
+    await runner.flush();
+
+    expect(runner.output.recommendation?.recommendation_id).toBe("recommendation-b");
+    expect(runner.output.totalTrialBudget).toBe("75");
+    expect(runner.output.isRestoring).toBe(false);
+    expect(selected).not.toHaveBeenCalledWith("recommendation-a");
+    runner.unmount();
+  });
+
+  it("reports a recommendation/Study mismatch and does not duplicate latest with an exact fetch", async () => {
+    const selected = vi.fn();
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValueOnce({
+      study_id: "study-a",
+      study_version_id: "study-a-version",
+      item: bayesianRecommendation("study-a", "recommendation-a"),
+    });
+    const latestRunner = new HookRunner<
+      Parameters<typeof useBayesianRecommendationState>[0],
+      ReturnType<typeof useBayesianRecommendationState>
+    >(useBayesianRecommendationState, {
+      selectedStudyId: "study-a",
+      requestedRecommendationId: null,
+      onRecommendationSelected: selected,
+    });
+    await latestRunner.flush();
+
+    expect(selected).toHaveBeenCalledWith("recommendation-a");
+    expect(apiMocks.fetchBayesianRecommendation).not.toHaveBeenCalled();
+    latestRunner.unmount();
+
+    apiMocks.fetchBayesianRecommendation.mockResolvedValueOnce(
+      bayesianRecommendation("study-b", "recommendation-a"),
+    );
+    const mismatchRunner = new HookRunner<
+      Parameters<typeof useBayesianRecommendationState>[0],
+      ReturnType<typeof useBayesianRecommendationState>
+    >(useBayesianRecommendationState, {
+      selectedStudyId: "study-a",
+      requestedRecommendationId: "recommendation-a",
+      onRecommendationSelected: vi.fn(),
+    });
+    await mismatchRunner.flush();
+
+    expect(mismatchRunner.output.recommendation).toBeNull();
+    expect(mismatchRunner.output.error).toBe("bayesian_recommendation_study_mismatch");
+    mismatchRunner.unmount();
+  });
+
+  it("ignores recommendation creation after a Study change and clears loading", async () => {
+    const created = deferred<BayesianRecommendationResponse>();
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({
+      study_id: "study-a",
+      study_version_id: "study-a-version",
+      item: null,
+    });
+    apiMocks.createBayesianRecommendation.mockReturnValueOnce(created.promise);
+    const selected = vi.fn();
+    const runner = new HookRunner<
+      Parameters<typeof useBayesianRecommendationState>[0],
+      ReturnType<typeof useBayesianRecommendationState>
+    >(useBayesianRecommendationState, {
+      selectedStudyId: "study-a",
+      requestedRecommendationId: null,
+      onRecommendationSelected: selected,
+    });
+    await runner.flush();
+
+    await runner.act(() => {
+      void runner.output.onRecommend({
+        ...bayesianStudy("study-a"),
+        trial_count: 2,
+        recommendation_hard_trial_limit: 200,
+      });
+    });
+    expect(runner.output.isRecommending).toBe(true);
+    runner.update({
+      selectedStudyId: "study-b",
+      requestedRecommendationId: null,
+      onRecommendationSelected: selected,
+    });
+    expect(runner.output.isRecommending).toBe(false);
+    created.resolve(bayesianRecommendation("study-a", "recommendation-a"));
+    await runner.flush();
+
+    expect(runner.output.recommendation).toBeNull();
+    expect(selected).not.toHaveBeenCalledWith("recommendation-a");
+    runner.unmount();
+  });
+
+  it("keeps deletion preflight and delete responses scoped to the current Study", async () => {
+    const preflightA = deferred<BayesianStudyDeletionPreflightResponse>();
+    apiMocks.fetchBayesianStudyDeletionPreflight.mockReturnValueOnce(preflightA.promise);
+    const runner = new HookRunner<
+      BayesianStudyResponse | null,
+      ReturnType<typeof useBayesianRetentionState>
+    >(useBayesianRetentionState, bayesianStudy("study-a", "abandoned"));
+
+    await runner.act(() => {
+      void runner.output.onCheck();
+    });
+    expect(runner.output.isChecking).toBe(true);
+    runner.update(bayesianStudy("study-b", "abandoned"));
+    preflightA.resolve(bayesianDeletionPreflight("study-a"));
+    await runner.flush();
+    expect(runner.output.preflight).toBeNull();
+    expect(runner.output.isChecking).toBe(false);
+
+    apiMocks.fetchBayesianStudyDeletionPreflight.mockResolvedValueOnce(
+      bayesianDeletionPreflight("study-b", ["bayesian_study_deletion_referenced"]),
+    );
+    await runner.act(() => {
+      void runner.output.onCheck();
+    });
+    expect(runner.output.preflight?.eligible).toBe(false);
+    expect(runner.output.preflight?.successor_study_count).toBe(1);
+
+    runner.update(bayesianStudy("study-c", "abandoned"));
+    apiMocks.fetchBayesianStudyDeletionPreflight.mockResolvedValueOnce(
+      bayesianDeletionPreflight("study-c"),
+    );
+    await runner.act(() => {
+      void runner.output.onCheck();
+    });
+    const deletion = deferred<unknown>();
+    apiMocks.deleteBayesianStudy.mockReturnValueOnce(deletion.promise);
+    await runner.act(() => {
+      void runner.output.onDelete();
+    });
+    expect(runner.output.isDeleting).toBe(true);
+    runner.update(bayesianStudy("study-d", "abandoned"));
+    deletion.resolve({});
+    await runner.flush();
+    expect(runner.output.preflight).toBeNull();
+    expect(runner.output.isDeleting).toBe(false);
+
+    runner.update(bayesianStudy("study-active"));
+    await runner.act(() => {
+      void runner.output.onCheck();
+    });
+    expect(apiMocks.fetchBayesianStudyDeletionPreflight).toHaveBeenCalledTimes(3);
     runner.unmount();
   });
 });

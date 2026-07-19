@@ -19,6 +19,11 @@ unchanged.
 No dependency was added. `React.lazy`, `Suspense`, and the existing React 18
 runtime provide the loading boundary.
 
+Help Center and Report Center are also route-level lazy pages. They use a
+separate sanitized page boundary so a failed page chunk does not change dataset or analysis
+state. Direct `/help` and `/reports` reload remains supported; the visible loading state uses
+`role=status`, and a rejected import exposes only a local reload action.
+
 ## Transition And Failure Policy
 
 - Module and method selection runs in `startTransition`, so a synchronous
@@ -90,6 +95,15 @@ the eager main chunk. Main still emits the 500 kB warning, so measured bundle
 optimization remains a separate backlog item. This is not Windows 11/Node 22
 release evidence.
 
+The 2026-07-19 P0 closure split Help Center and Report Center from the eager
+route bundle without changing either page contract. On the same Windows 10/Node 24 development
+host, the main asset decreased from `532.53 kB / 127.56 kB gzip` to
+`496.98 kB / 118.70 kB gzip`. New assets are Help `18.01 kB / 6.29 kB`, Report
+`12.04 kB / 3.42 kB`, and a shared latest-request chunk `7.36 kB / 1.81 kB`.
+Regression is `55.14 kB / 12.01 kB`, Quality `64.25 kB / 11.97 kB`, and DOE
+`111.16 kB / 26.23 kB`. The main asset is below Vite's 500 kB warning threshold.
+This delivery measurement is not Windows 11/Node 22 release evidence.
+
 ## Validation
 
 - Unit tests verify accessible loading/error output, sanitized error content,
@@ -99,6 +113,8 @@ release evidence.
 - Browser E2E observes each module resource request during the existing
   Regression, Quality, and DOE workflows.
 - Browser E2E opens all three method routes directly.
+- Browser E2E opens and reloads `/help` and `/reports` and verifies their separate resource
+  requests; unit tests cover accessible page loading and sanitized chunk failure.
 - A separate browser page aborts the Regression module request and verifies the
   sanitized error boundary, then switches to DOE to verify reset and recovery
   without changing the primary test page or data.

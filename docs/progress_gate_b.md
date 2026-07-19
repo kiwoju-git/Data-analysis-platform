@@ -2,7 +2,27 @@
 
 Last updated: 2026-07-19
 
-## Current Bayesian Frontend And Repository Onboarding Slice
+## Current Bayesian P0 Release Closure Slice
+
+- The supported scope is the bounded continuous, single-objective, sequential P0 recorded in
+  `docs/bayesian_p0_release_checklist.md`; advanced Bayesian variants remain explicit non-goals.
+- Catalog, Study restore, and recommendation restore now participate in one action lock. Study
+  and recommendation output render only when their `study_id` matches the selected catalog ID,
+  and direct lifecycle/recommendation/retention hook tests prove stale responses cannot revive
+  prior actions.
+- Help Center and Report Center now load through independent route chunks with accessible loading
+  and sanitized failure boundaries. Main JavaScript decreased from 532.53 kB to 496.98 kB on
+  the recorded Windows 10/Node 24 development host.
+- Full graph validation remains enabled for every catalog item. The 20/100/500-Study benchmark,
+  including one real 100-trial Study, is recorded in
+  `docs/bayesian_catalog_performance.md`; lightweight summary/index work remains separate.
+- Bayesian calculations, request/result/storage schemas, SQLite schema 14, and method `0.2.2`
+  are unchanged. Windows 11/Node 22 and hosted Actions evidence remain release gates.
+- Local development validation passed with backend 784, frontend 152,
+  OpenAPI/frontend 155, 18 tutorial smoke sections, and Chromium E2E. The host is Windows 10
+  build 19045/Python 3.10.11/Node 24.17.0, so this is not release-target evidence.
+
+## Completed Bayesian Frontend And Repository Onboarding Slice
 
 - The 1,400-line Bayesian panel is now a thin compatibility export over
   `features/bayesian/BayesianOptimizationWorkspace`. Study builder, factor and
@@ -190,13 +210,13 @@ Current stabilization update:
 Current development validation on 2026-07-19:
 
 - Worktree based on clean pushed SHA
-  `ee9806a4e491f0d700fba6701ed5cc218d228c62`: full `scripts/check.ps1`
-  passed in 836.0 seconds with backend 782, frontend 139, direct
+  `695caf2fcfb6a8336ddd29afc77d4ed22911dc63`: full `scripts/check.ps1`
+  passed in 841.8 seconds with backend 784, frontend 152, direct
   OpenAPI/frontend contract 155, tutorial Markdown 18-block verification, and
   all lint/type/build gates. The 18-section real-API tutorial smoke passed in
-  19.7 seconds and Chromium E2E passed in 77.3 seconds through Help/Report plus
-  all retained critical paths. Main measured 532.53 kB / 127.56 kB gzip and
-  retains the 500 kB warning. This Windows 10/Node 24 host result is development
+  19.0 seconds and Chromium E2E passed in 78.0 seconds through lazy Help/Report
+  plus all retained critical paths. Main measured 496.98 kB / 118.70 kB gzip
+  without the 500 kB warning. This Windows 10/Node 24 host result is development
   evidence, not the Windows 11/Node 22 release gate. This evidence was captured
   before the slice's commit/push, and remote Actions were not checked because
   `gh` is unavailable.
@@ -3976,3 +3996,32 @@ Next development order:
 3. Separately contracted Predict/RSM/Bayesian dedicated HTML reports.
 4. Measured main-bundle optimization.
 5. Source catalog performance, then dataset/DOE retention and advanced backlog.
+
+## Progress Update 189 - Bayesian P0 Release Closure And Route Loading
+
+- Published the bounded-continuous, single-objective, sequential P0 audit in
+  `docs/bayesian_p0_release_checklist.md`; advanced Bayesian variants and objective automation
+  remain explicit non-goals.
+- Study/recommendation rendering now requires the current catalog Study ID, and catalog/restore
+  loading participates in the common action lock. Direct hook tests cover stale restore,
+  observation, close, recommendation, deletion-preflight, deletion, reset, and unmount paths.
+- Help and Report Center now load through independent route chunks with accessible loading and
+  sanitized failure states. Main decreased from 532.53 kB to 496.98 kB on the development host.
+- The new production-transition benchmark builds 20/100/500 Study catalogs plus real medium and
+  100-trial large graphs. It keeps full validation and records the measured follow-up boundary in
+  `docs/bayesian_catalog_performance.md`.
+- Full local development validation passed in 841.8 seconds with backend 784, frontend 152,
+  OpenAPI/frontend 155, and 18 tutorial Markdown blocks. Tutorial smoke passed 18 sections in
+  19.0 seconds and Chromium E2E passed in 78.0 seconds.
+- The host is Windows 10 build 19045, Python 3.10.11, and Node 24.17.0. This is not the clean
+  Windows 11/Node 22 release gate. Hosted Actions remain unverified because `gh` is unavailable.
+- Bayesian method `0.2.2`, GP/Matérn/EI behavior, budgets, API/storage schemas, and SQLite schema
+  14 are unchanged.
+
+Next development order:
+
+1. Clean Windows 11/Python 3.10/Node 22 release gate.
+2. Remote Actions and required-check/branch-protection review with separate approval.
+3. Separately contracted dedicated HTML reports.
+4. Verified catalog summary/index and search with exact-selection full validation.
+5. Dataset/DOE retention roots, then advanced quality/statistics.

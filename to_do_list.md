@@ -21,28 +21,24 @@ Current source-of-truth note:
 
 Current and next development order:
 
-Predict/Response Optimizer entrypoints, tutorial truth sync, Help Center, and
-Report Center are complete on pushed main
-`0b41ecffdfaca875a3e09f407f099d88b3ef7908`. The current approved slice splits
-the Bayesian frontend into lifecycle-scoped components/hooks, pages its study
-catalog at 20 items, restores exact `study_id`/`recommendation_id` deep links,
-and warns before a successor reuses its predecessor seed. It also adds the
-GitHub root onboarding README and replaces the stale backend README. Bayesian
-math, request/result/storage schemas, and method `0.2.2` are unchanged. After
-this slice:
+Predict/Response Optimizer entrypoints, tutorial truth sync, Help/Report Center,
+Bayesian frontend modularization, catalog paging/deep-link restore, successor seed guidance, and
+repository onboarding README are complete on pushed main through
+`695caf2fcfb6a8336ddd29afc77d4ed22911dc63`. The current approved closure slice
+adds Study-selection action isolation and direct lifecycle/recommendation/retention race tests,
+route-level Help/Report loading, a bounded P0 release checklist, and measured 20/100/500-Study
+catalog evidence. Bayesian math, request/result/storage schemas, SQLite schema 14, and method
+`0.2.2` remain unchanged. After this slice:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
-2. Verify the resulting main push in remote GitHub Actions and review required
-   Windows/E2E checks and repository protection outside this code PR.
-3. Add separately contracted Predict/RSM/Bayesian dedicated HTML reports.
-4. Measure and reduce the main bundle without changing workflow behavior.
-5. Add search and measured large-catalog performance for regression, RSM, and
-   Bayesian sources. Pagination and exact-ID Bayesian restore are complete;
-   lightweight verified summary/index work remains separately scoped.
-6. Add dataset-root and then DOE-root retention only through separate reviewed
-   ownership graphs with explicit inbound-reference blockers.
-7. Continue the advanced quality/statistics backlog through a separately
-   approved contract.
+2. Verify the resulting main push in remote GitHub Actions and review required Windows/E2E checks
+   and repository protection outside this code PR.
+3. Add separately contracted Predict/RSM/Optimizer/Bayesian dedicated HTML reports.
+4. Specify a lightweight immutable catalog summary/index and search contract while retaining
+   exact selected-Study full validation and a measured latency threshold.
+5. Add dataset-root and then DOE-root retention only through separate reviewed ownership graphs
+   with explicit inbound-reference blockers.
+6. Continue the advanced quality/statistics backlog through a separately approved contract.
 
 The current Phase II slice retains explicit target compatibility, P/NP/C/U
 frozen formulas, dependency provenance, restore/export consistency, typed UI

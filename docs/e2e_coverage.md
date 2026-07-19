@@ -6,12 +6,12 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-19 Bayesian modularization worktree run passed in 79.3 seconds
+The 2026-07-19 Bayesian P0 closure worktree run passed in 78.0 seconds
 with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics-bayesian-modularization-final
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-bayesian-p0-targeted
 ```
 
 The run first dispatches a real `text/plain` spreadsheet paste while providing
@@ -44,8 +44,9 @@ Phase I/II attribute charts, prediction/export, Factorial, RSM/Optimizer,
 parser-recovery, and lazy-panel paths. The current run additionally opens and
 reloads the Help and Report Center routes, creates and downloads an HTML report
 through the existing generic export API, verifies unsupported dedicated report
-formats, and opens/closes selected-method context help. The final run above was
-a single application run on the E2E script's isolated default ports.
+formats, confirms both pages were fetched as separate lazy resources, and
+opens/closes selected-method context help. The final run above was a single
+application run on the E2E script's isolated default ports.
 
 ## Covered Flows
 

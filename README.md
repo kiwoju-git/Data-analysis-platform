@@ -23,6 +23,11 @@ release gate와 최신 remote GitHub Actions 상태는 아직 별도 확인 대�
 - Excel 범위용 view-only paste staging grid와 paged canonical preview
 - 한국어 Help Center, method context help, end-to-end 튜토리얼
 
+Bayesian 지원 범위는 bounded continuous, single-objective, sequential P0입니다. 실제
+목적함수를 자동 실행하지 않으며 추천은 확인 실험 후보입니다. multiobjective/batch,
+categorical/integer factor, nonlinear constraint와 전역 최적 보장은 현재 범위가 아닙니다.
+상세 상태는 [Bayesian P0 release checklist](docs/bayesian_p0_release_checklist.md)에 있습니다.
+
 ## 지원 환경
 
 - Windows 11 target
@@ -141,6 +146,8 @@ tests/e2e/            Chromium critical path
 - [Frontend module loading](docs/frontend_module_loading.md)
 - [Bayesian Optimization 계약](docs/bayesian_optimization_contract.md)
 - [Bayesian lifecycle 계약](docs/bayesian_study_lifecycle_contract.md)
+- [Bayesian P0 release checklist](docs/bayesian_p0_release_checklist.md)
+- [Bayesian catalog 성능](docs/bayesian_catalog_performance.md)
 - [Report Center 계약](docs/report_center_contract.md)
 - [한국어 튜토리얼](docs/studio_end_to_end_tutorial_ko.md)
 
@@ -152,6 +159,8 @@ tests/e2e/            Chromium critical path
 - Clean Windows 11/Python 3.10/Node 22 release evidence와 remote required checks는
   [CI 상태](docs/ci_status.md)에 따라 별도 gate로 남아 있습니다.
 - WECO/Nelson, Laney, non-normal capability 등 advanced quality 기능은 backlog입니다.
+- Bayesian multiobjective, batch recommendation, categorical/integer factor, nonlinear
+  constraint와 objective 자동 실행은 현재 P0 범위가 아닙니다.
 
 ## 라이선스
 

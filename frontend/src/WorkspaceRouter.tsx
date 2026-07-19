@@ -6,8 +6,8 @@ import {
   DatasetPreparationPage,
   type DatasetPreparationPageProps,
 } from "./DatasetPreparationPage";
-import { HelpCenterPage } from "./HelpCenterPage";
-import { ReportCenterPage } from "./ReportCenterPage";
+import { HelpCenterPage, ReportCenterPage } from "./lazyWorkspacePages";
+import { WorkspacePageBoundary } from "./WorkspacePageBoundary";
 
 export interface WorkspaceRouterProps {
   analysisPageProps: AnalysisShellProps;
@@ -34,8 +34,19 @@ export function WorkspaceRouter({
     >
       {routePage === "analysis" ? <AnalysisPage {...analysisPageProps} /> : null}
       {routePage === "dataset" ? <DatasetPreparationPage {...datasetPageProps} /> : null}
-      {routePage === "reports" ? <ReportCenterPage catalog={analysisCatalog} currentDatasetVersionId={currentDatasetVersionId} /> : null}
-      {routePage === "help" ? <HelpCenterPage catalog={analysisCatalog} onOpenAnalysis={onOpenAnalysisMethod} /> : null}
+      {routePage === "reports" ? (
+        <WorkspacePageBoundary pageKey="reports">
+          <ReportCenterPage
+            catalog={analysisCatalog}
+            currentDatasetVersionId={currentDatasetVersionId}
+          />
+        </WorkspacePageBoundary>
+      ) : null}
+      {routePage === "help" ? (
+        <WorkspacePageBoundary pageKey="help">
+          <HelpCenterPage catalog={analysisCatalog} onOpenAnalysis={onOpenAnalysisMethod} />
+        </WorkspacePageBoundary>
+      ) : null}
     </section>
   );
 }

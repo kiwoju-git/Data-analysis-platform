@@ -90,6 +90,13 @@ The implemented action route is
 
 ## UI Acceptance Criteria
 
+- Treat a Study selection change as an immediate action boundary: old Study actions and
+  recommendation output are hidden before the new restore finishes.
+- Render a Study/recommendation only when its `study_id` matches the current catalog selection.
+- Include catalog, lifecycle restore, recommendation restore, and terminal transition states in
+  the common action lock, including new-Study submission.
+- Ignore late lifecycle/recommendation/retention responses and reset loading after selection,
+  reset, or unmount.
 - Show `active`, `completed`, and `abandoned` with text, not color alone.
 - Require an accessible inline confirmation showing the study ID/name, final
   counts, target status, and irreversible effect.

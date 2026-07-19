@@ -65,6 +65,12 @@ seed only visibly: the UI warns that reuse may regenerate the same initial
 conditions and offers an explicit new-seed action. It never silently changes a
 seed or copies observations, history, or recommendations.
 
+Study selection is also an action boundary. Catalog, Study, and recommendation
+restore are included in the action lock. A Study or recommendation is rendered only when its
+`study_id` equals the current catalog selection, and selection changes immediately clear or hide
+prior actions. Independent lifecycle, recommendation, and retention guards reject late responses
+and reset their loading flags when selection changes.
+
 ## Lifecycle And Inputs
 
 1. Create one immutable study with one to six continuous factors, finite actual
@@ -366,6 +372,11 @@ pure acquisition-only timer. `Round-trip overhead` includes Windows process
 bootstrap and IPC before/after the timed calculation. These observations are
 descriptive, not a CI threshold, and actual Windows 11 release measurements
 remain pending. Peak memory was not measured in this slice.
+
+Catalog graph-validation latency is measured separately for 20, 100, and 500 Study catalogs,
+including a real 100-trial/101-history/36-recommendation graph. See
+[Bayesian catalog performance](bayesian_catalog_performance.md). The catalog continues to fully
+validate every item; a lightweight verified summary/index remains separately scoped.
 
 Primary method references are Jones, Schonlau, and Welch's
 [EGO paper](https://openturns.github.io/openturns/papers/jones1998.pdf) and

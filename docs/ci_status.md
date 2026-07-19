@@ -5,42 +5,47 @@ Last updated: 2026-07-19
 ## Local Validation
 
 - Clean pushed-main baseline: local `main` and `origin/main` resolved to
-  `0b41ecffdfaca875a3e09f407f099d88b3ef7908` with an empty working tree on
-  2026-07-19. After stopping only this repository's stale Vite process, a
-  second `scripts/bootstrap.ps1` run passed. `scripts/check.ps1` then passed in
-  852.4 seconds with the 18-block Markdown truth check, Ruff/format over 159
-  Python files, mypy over 101 source files, backend 782, frontend
-  lint/typecheck and Vitest 139, OpenAPI/frontend contracts 155, and production
-  build.
-- The Bayesian modularization worktree based on that pushed SHA passed frontend
-  lint/typecheck/build and 142 Vitest tests. Chromium E2E passed in 79.3 seconds
-  and now verifies automatic `study_id`/`recommendation_id` reload plus the
-  successor same-seed warning. After documentation synchronization,
-  `scripts/check.ps1` passed again in 840.3 seconds with backend 782, frontend
-  142, OpenAPI/frontend contracts 155, and all build/static checks.
-- The latest recorded backend pytest count is 782.
-- The latest recorded frontend Vitest count is 142.
+  `695caf2fcfb6a8336ddd29afc77d4ed22911dc63` with an empty working tree on
+  2026-07-19. The first `scripts/bootstrap.ps1` attempt completed Python setup
+  but an existing repository Vite process held the Rolldown native DLL and
+  caused `npm ci` `EPERM`. After stopping only those two repository Node
+  processes, the second bootstrap passed. Baseline `scripts/check.ps1` passed
+  in 854.2 seconds with backend 782, frontend 142, OpenAPI/frontend 155, and 18
+  tutorial Markdown blocks. Baseline tutorial smoke passed 18 sections in
+  18.8 seconds and Chromium E2E passed in 79.5 seconds.
+- The P0 closure worktree based on that pushed SHA passed `scripts/check.ps1`
+  in 841.8 seconds: Ruff/format over 160 Python files, mypy over 101 source
+  files, backend pytest 784, frontend lint/typecheck and Vitest 152,
+  OpenAPI/frontend contracts 155, 18 tutorial Markdown blocks, and production
+  build. The separate real-API tutorial smoke passed all 18 sections in 19.0
+  seconds.
+- The latest recorded backend pytest count is 784.
+- The latest recorded frontend Vitest count is 152.
 - The latest OpenAPI/frontend contract count is 155.
   These counts describe the current local development worktree.
 - The pushed baseline and current worktree are local development evidence, not
   remote Actions or Windows 11/Node 22 release evidence.
-- Production assets: main 532.53 kB / 127.56 kB gzip, Regression 55.11 kB /
-  11.99 kB, Quality 64.25 kB / 11.97 kB, DOE 110.90 kB / 26.20 kB, and the
-  shared dedicated-result restore helper 0.71 kB / 0.32 kB. Main still emits
-  the 500 kB warning; measured bundle optimization remains backlog.
-- The separate 18-section real-API tutorial smoke passed in 17.9 seconds.
-- Current Chromium E2E passed in 79.3 seconds with diagnostics at
-  `.tmp/e2e-diagnostics-bayesian-modularization-final`. It covers Predict `prediction_id` and Optimizer
+- Route splitting reduced main from 532.53 kB / 127.56 kB gzip to 496.98 kB /
+  118.70 kB. Current assets are Help 18.01/6.29 kB, Report 12.04/3.42 kB,
+  shared latest-request 7.36/1.81 kB, Regression 55.14/12.01 kB, Quality
+  64.25/11.97 kB, DOE 111.16/26.23 kB, and dedicated-result restore
+  0.71/0.32 kB. The main asset no longer emits the 500 kB warning.
+- Current Chromium E2E passed in 78.0 seconds with diagnostics at
+  `.tmp/e2e-diagnostics-bayesian-p0-targeted`. It covers Predict `prediction_id` and Optimizer
   `optimization_id` stored-result reload, dedicated generic-history/export
   scoping, Report Center HTML generation/download, Help Center route/reload,
-  selected-method context help, plus all existing paste, prediction/export,
-  quality, DOE, Bayesian, and retention paths. The Bayesian path records and
-  reloads exact study/recommendation IDs without manual reselection.
+  separate Help/Report resource loading, selected-method context help, plus all
+  existing paste, prediction/export, quality, DOE, Bayesian, and retention
+  paths. The Bayesian path records and reloads exact study/recommendation IDs.
+- The catalog benchmark used full graph validation and page size 20. Three-run
+  medians for 20/100/500 Study catalogs are recorded in
+  `docs/bayesian_catalog_performance.md`; this is descriptive development
+  evidence, not a cache or release threshold.
 - The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
   24.17.0. These are development results, not Windows 11/Python 3.10/Node 22
   release evidence. The Windows 11/Node 22 clean release gate remains open.
 - `gh auth status --hostname github.com` and the requested `gh run list` could
-  not run because `gh` is not installed.
+  not run because `gh` is not installed. No installation was attempted.
   No latest run ID/head SHA, hosted Windows/E2E job result/order, artifact
   contents, or workflow-dispatch UI was independently verified.
 

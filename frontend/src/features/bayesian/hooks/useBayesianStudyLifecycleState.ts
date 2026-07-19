@@ -45,6 +45,9 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     setObservations({});
     setPendingTransition(null);
     setPendingStudyClose(false);
+    setIsCreating(false);
+    setIsSavingTrial(false);
+    setIsClosing(false);
     setError(null);
     setStudy(null);
     if (selectedStudyId === null) {
@@ -148,6 +151,7 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
             : undefined,
         );
       }
+      if (!transitionGuard.isCurrent(request)) return false;
       const restored = await fetchBayesianStudy(activeStudy.study_id);
       if (!transitionGuard.isCurrent(request)) return false;
       setStudy(restored);
@@ -201,10 +205,17 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
 
   function clearStudy() {
     restoreGuard.cancel();
+    createGuard.cancel();
+    transitionGuard.cancel();
+    closeGuard.cancel();
     setStudy(null);
     setObservations({});
     setPendingTransition(null);
     setPendingStudyClose(false);
+    setIsRestoring(false);
+    setIsCreating(false);
+    setIsSavingTrial(false);
+    setIsClosing(false);
     setError(null);
   }
 
