@@ -1,6 +1,6 @@
 # Statistical Method Audit Matrix
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 This matrix records the current implementation and QA state for the 30 stable method IDs in the six-module registry. It is an audit artifact, not permission to make planned/disabled methods executable.
 
@@ -76,6 +76,14 @@ Legend: Y = covered or present, N = not present, Partial = intentionally limited
 
 ## Current Audit Notes
 
+- Help Center/selected-method drawer and Report Center change only discovery,
+  explanation, and access to existing stored/exported results. They do not
+  change any statistical request, calculation, method version, or reference
+  parity status. Unsupported dedicated HTML reports remain explicitly absent.
+- Tutorial numeric text is generated from the real-API expected JSON through
+  stable marker blocks and checked independently of the API-vs-expected smoke;
+  this prevents documentation drift without treating tutorial data as a new
+  statistical reference fixture.
 - The catalog contains 30 stable, available method IDs. Twenty-five execute
   through the generic `MethodExecutionHandler`; Predict, Response Optimizer,
   Factorial, RSM, and Bayesian are `execution_mode=dedicated` and use their

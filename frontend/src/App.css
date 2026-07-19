@@ -2171,6 +2171,221 @@ td select {
   line-height: 1.35;
 }
 
+.analysis-help-links,
+.workbench-heading-actions,
+.method-help-drawer-heading,
+.page-heading-band,
+.help-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analysis-help-links {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.text-button,
+.text-link {
+  border: 0;
+  background: transparent;
+  color: #1f5f8f;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.method-help-drawer {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  width: min(520px, 100vw);
+  height: 100vh;
+  overflow-y: auto;
+  border-left: 1px solid #b9c5d2;
+  background: #ffffff;
+  box-shadow: -12px 0 28px rgb(23 32 51 / 16%);
+  padding: 22px;
+}
+
+.method-help-drawer-heading {
+  position: sticky;
+  z-index: 1;
+  top: -22px;
+  margin: -22px -22px 18px;
+  border-bottom: 1px solid #d8dde5;
+  background: #ffffff;
+  padding: 18px 22px;
+}
+
+.method-help-drawer-heading h3,
+.method-help-section h4,
+.page-heading-band h2,
+.help-reference-band h2,
+.help-reference-band h3 {
+  margin: 0;
+}
+
+.method-help-content,
+.help-center-page,
+.report-center-page,
+.report-browser,
+.report-selected-result,
+.report-capability-section,
+.help-method-browser,
+.help-reference-band {
+  display: grid;
+  gap: 14px;
+}
+
+.method-help-section {
+  border-top: 1px solid #e2e6ed;
+  padding-top: 12px;
+}
+
+.method-help-section p,
+.method-help-section ul {
+  margin: 7px 0 0;
+  color: #384457;
+  line-height: 1.55;
+}
+
+.page-heading-band {
+  border-bottom: 1px solid #d8dde5;
+  padding-bottom: 14px;
+}
+
+.page-heading-band h2,
+.help-section-heading h2 {
+  color: #172033;
+  font-size: 1.35rem;
+}
+
+.page-heading-band p,
+.help-section-heading p {
+  margin: 5px 0 0;
+  color: #576174;
+}
+
+.help-quick-start,
+.help-method-detail,
+.report-browser,
+.report-selected-result,
+.report-capability-section {
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.help-quick-start h3,
+.help-quick-start ol {
+  margin: 0;
+}
+
+.help-quick-start ol {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.help-search-field,
+.report-filter-grid label {
+  display: grid;
+  gap: 6px;
+  color: #384457;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.help-search-field input,
+.report-filter-grid select {
+  min-height: 38px;
+  border: 1px solid #c7ced8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172033;
+  padding: 7px 9px;
+}
+
+.help-method-list,
+.report-run-list {
+  display: grid;
+  gap: 7px;
+}
+
+.help-method-row,
+.report-run-row {
+  display: grid;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d8dde5;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #172033;
+  cursor: pointer;
+  padding: 9px 11px;
+  text-align: left;
+}
+
+.help-method-row {
+  grid-template-columns: minmax(140px, 1fr) minmax(150px, 1fr) minmax(190px, 1fr);
+}
+
+.help-method-row.is-selected,
+.report-run-row:hover,
+.report-run-row:focus-visible {
+  border-color: #1d7f5f;
+  background: #edf8f2;
+}
+
+.report-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.7fr) minmax(150px, 0.7fr);
+  align-items: end;
+  gap: 10px;
+}
+
+.report-dataset-filter {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 38px;
+}
+
+.report-run-row {
+  grid-template-columns: minmax(220px, 1.4fr) minmax(170px, 1fr) minmax(150px, 0.8fr) auto minmax(135px, auto) auto;
+}
+
+.report-run-row:disabled {
+  background: #eef1f5;
+  color: #667185;
+  cursor: not-allowed;
+}
+
+.report-run-row span:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.unsupported-format-label {
+  width: fit-content;
+  border: 1px solid #c7ced8;
+  border-radius: 4px;
+  background: #eef1f5;
+  color: #576174;
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 @media (max-width: 760px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -2222,8 +2437,21 @@ td select {
   }
 
   .analysis-heading,
-  .panel-heading {
+  .panel-heading,
+  .page-heading-band,
+  .method-help-drawer-heading {
     flex-direction: column;
+  }
+
+  .workbench-heading-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .help-method-row,
+  .report-run-row,
+  .report-filter-grid {
+    grid-template-columns: 1fr;
   }
 
   .method-grid {

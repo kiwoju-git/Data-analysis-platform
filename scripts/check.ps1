@@ -20,6 +20,7 @@ function Invoke-CheckedCommand {
 
 Push-Location $RepoRoot
 try {
+    Invoke-CheckedCommand "tutorial Markdown sync" { & $Python .\scripts\render_tutorial_results.py --check }
     Invoke-CheckedCommand "backend ruff check" { & $Python -m ruff check .\backend }
     Invoke-CheckedCommand "backend ruff format check" { & $Python -m ruff format --check .\backend }
     Invoke-CheckedCommand "backend mypy" { & $Python -m mypy .\backend\app }

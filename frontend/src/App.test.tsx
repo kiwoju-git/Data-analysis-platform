@@ -84,6 +84,14 @@ import type {
 } from "./api";
 import { apiRoutes } from "./api/routes";
 import { AppChrome } from "./AppChrome";
+import { HelpCenterPage } from "./HelpCenterPage";
+import { MethodHelpDrawer } from "./MethodHelpDrawer";
+import { RoleDictionary } from "./RoleDictionary";
+import { ReportCenterPage } from "./ReportCenterPage";
+import {
+  reportCreationCapabilities,
+  reportWorkflowCapabilities,
+} from "./reportCenterCapabilities";
 import {
   bayesianRecommendationBudgetBlocker,
   bayesianRecommendationStatus,
@@ -203,6 +211,8 @@ describe("App", () => {
         methodId: "regression.fit_model",
       },
     });
+    expect(parseAppRoute("/reports/", "")).toEqual({ page: "reports" });
+    expect(parseAppRoute("/help", "")).toEqual({ page: "help" });
   });
 
   it("rejects unknown analysis module routes", () => {
@@ -354,13 +364,16 @@ describe("App", () => {
 
     expect(html).toContain("두 표본 t 검정");
     expect(html).toContain("공통 분석 필터");
-    expect(html).toContain("Welch 기본");
+    expect(html).toContain("? 이 분석 도움말");
     expect(html).toContain("계산 코드, 기준 데이터, 수치 검증 테스트");
   });
 
-  it("renders beginner role guidance, purpose helper cards, and readable preflight copy", () => {
+  it("moves global beginner guidance to Help Center and keeps readable preflight copy", () => {
     const catalog = analysisTestCatalog();
     const selectedMethod = catalog.methods[0];
+    const helpHtml = renderToString(
+      <HelpCenterPage catalog={catalog} onOpenAnalysis={() => undefined} />,
+    );
 
     const html = renderToString(
       <AnalysisWorkbench
@@ -377,22 +390,55 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("무엇을 알고 싶나요?");
-    expect(html).toContain("한 컬럼의 분포와 이상치를 보고 싶다");
-    expect(html).toContain("eda.graphical_summary");
-    expect(html).toContain("두 그룹의 평균을 비교하고 싶다");
-    expect(html).toContain("두 표본 t 검정");
-    expect(html).toContain("<code>hypothesis.two_sample_t</code>");
-    expect(html).toContain("<small>계획됨</small>");
-    expect(html).toContain("catalog 없음");
-    expect(html).toContain("선택해도 분석은 자동 실행되지 않습니다.");
-    expect(html).toContain("역할 설명");
-    expect(html).toContain("Response / 반응값 / Y");
-    expect(html).toContain("전후 측정인데 group으로 넣으면 독립 2표본 검정");
-    expect(html).toContain("LSL/USL/Target");
+    expect(html).not.toContain("무엇을 알고 싶나요?");
+    expect(html).not.toContain("역할 설명");
+    expect(html).toContain("분석 선택이 어렵나요? 도움말에서 질문으로 찾기");
+    expect(html).toContain("? 이 분석 도움말");
+    expect(helpHtml).toContain("무엇을 알고 싶나요?");
+    expect(helpHtml).toContain("한 컬럼의 분포와 이상치를 보고 싶다");
+    expect(helpHtml).toContain("eda.graphical_summary");
+    expect(helpHtml).toContain("변수 역할 사전");
+    expect(helpHtml).toContain("Response / 반응값 / Y");
     expect(html).toContain("사전점검 해설");
     expect(html).toContain("독립성은 데이터만으로 자동 검증할 수 없습니다.");
     expect(html).toContain("p-value는 차이가 있는지의 근거");
+  });
+
+  it("renders accessible selected-method context help without hiding required caveats", () => {
+    const method = analysisTestCatalog().methods[0];
+    const html = renderToString(
+      <MethodHelpDrawer method={method} open trigger={null} onClose={() => undefined} />,
+    );
+
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('id="method-help-drawer"');
+    expect(html).toContain("쉽게 말하면");
+    expect(html).toContain("필수 역할");
+    expect(html).toContain("사용하면 안 되는 경우");
+    expect(html).toContain("결과에서 먼저 볼 값");
+    expect(html).toContain("인과관계나 실무적 중요성을 단정하지 마세요");
+  });
+
+  it("keeps Report Center capabilities explicit for generic and dedicated workflows", () => {
+    expect(reportCreationCapabilities("eda.descriptive")).toEqual({
+      json: true,
+      csv: true,
+      html: true,
+    });
+    expect(reportCreationCapabilities("regression.predict")).toEqual({
+      json: false,
+      csv: false,
+      html: false,
+    });
+    expect(reportWorkflowCapabilities.find((item) => item.methodId === "regression.predict"))
+      .toMatchObject({ csv: "전용 화면에서 full prediction CSV 지원", html: "현재 지원되지 않음" });
+    const html = renderToString(
+      <ReportCenterPage catalog={analysisTestCatalog()} currentDatasetVersionId={null} />,
+    );
+    expect(html).toContain("리포트 센터");
+    expect(html).toContain("P0 capability matrix");
+    expect(html).toContain("현재 지원되지 않음");
+    expect(html).not.toContain("PDF");
   });
 
   it("highlights role guidance for the selected statistical method", () => {
@@ -412,20 +458,7 @@ describe("App", () => {
         module_id: moduleId,
       };
 
-      return renderToString(
-        <AnalysisWorkbench
-          analysisRunError={null}
-          catalog={catalog}
-          profile={null}
-          selectedMethod={selectedMethod}
-          selectedMethods={[selectedMethod]}
-          selectedModuleId={moduleId}
-          version={datasetVersionTestResponse()}
-          onSelectMethod={() => undefined}
-          renderAnalysisFilters={() => <div>분석 필터</div>}
-          renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-        />,
-      );
+      return renderToString(<RoleDictionary selectedMethod={selectedMethod} />);
     };
 
     const twoSampleHtml = renderSelectedMethod(
@@ -527,7 +560,6 @@ describe("App", () => {
         renderExecutableMethod={() => <div>Predict 전용 패널</div>}
       />,
     );
-
     expect(html).toContain("사용 가능 · 전용 워크플로");
     expect(html).toContain("저장 회귀모형 선택");
     expect(html).toContain("generic analysis-run으로 실행되지 않습니다");
@@ -635,18 +667,7 @@ describe("App", () => {
   it("describes Bayesian recommendations as executable but not observed or globally optimal", () => {
     const catalog = analysisTestCatalog();
     const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        profile={null}
-        selectedMethod={catalog.methods[0]}
-        selectedMethods={[catalog.methods[0]]}
-        selectedModuleId="exploration"
-        version={datasetVersionTestResponse()}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => null}
-        renderExecutableMethod={() => null}
-      />,
+      <HelpCenterPage catalog={catalog} onOpenAnalysis={() => undefined} />,
     );
 
     expect(html).toContain(
@@ -2148,7 +2169,7 @@ describe("App", () => {
     expect(html).toContain("Pearson 상관 실행");
     expect(html).toContain("X 변수");
     expect(html).toContain("Y 변수");
-    expect(html).toContain("상관을 인과관계로 해석");
+    expect(html).toContain("? 이 분석 도움말");
     expect(html).toContain("산점도");
     expect(html).toContain("A C scatter plot");
     expect(html).toContain("0.926872");
@@ -2222,7 +2243,7 @@ describe("App", () => {
     expect(html).toContain("X-Y 상관행렬 실행");
     expect(html).toContain("X 변수 집합");
     expect(html).toContain("Y 변수 집합");
-    expect(html).toContain("교차 상관행렬");
+    expect(html).toContain("선택된 역할");
     expect(html).toContain("상관 Heatmap");
     expect(html).toContain("0.8");
   });
@@ -3164,7 +3185,7 @@ describe("App", () => {
     );
 
     expect(html).toContain("공정능력 분석 실행");
-    expect(html).toContain("Normal capability");
+    expect(html).toContain("normal capability");
     expect(html).toContain("MRbar/d2 within");
     expect(html).toContain("Cp / Pp");
     expect(html).toContain("Cpk / Ppk");
@@ -4772,8 +4793,11 @@ describe("App", () => {
     const datasetHtml = renderToString(
       <WorkspaceRouter
         analysisPageProps={analysisPageTestProps()}
+        analysisCatalog={analysisCatalog}
+        currentDatasetVersionId={null}
         datasetPageProps={datasetPageTestProps()}
-        isAnalysisPage={false}
+        routePage="dataset"
+        onOpenAnalysisMethod={() => undefined}
       />,
     );
     const analysisHtml = renderToString(
@@ -4786,7 +4810,10 @@ describe("App", () => {
           ...datasetPageTestProps(),
           flowError: "two_sample_t_requires_exactly_two_groups",
         }}
-        isAnalysisPage
+        analysisCatalog={analysisCatalog}
+        currentDatasetVersionId="dataset-version-id"
+        routePage="analysis"
+        onOpenAnalysisMethod={() => undefined}
       />,
     );
 
@@ -4806,13 +4833,15 @@ describe("App", () => {
   it("renders the AppChrome navigation and dataset context", () => {
     const html = renderToString(
       <AppChrome
+        activePage="dataset"
         canOpenAnalysis={false}
         healthClassName="status-pill status-ready"
         healthLabel="API ok"
-        isAnalysisPage={false}
         version={datasetVersionTestResponse()}
         onOpenAnalysisPage={() => undefined}
         onOpenDatasetPage={() => undefined}
+        onOpenHelpPage={() => undefined}
+        onOpenReportsPage={() => undefined}
       >
         <div>Workspace child</div>
       </AppChrome>,
@@ -4829,6 +4858,8 @@ describe("App", () => {
     expect(html).toMatch(/schema (?:<!-- -->)?schema-hash/);
     expect(html).toMatch(/source (?:<!-- -->)?source-hash/);
     expect(html).toContain("Workspace child");
+    expect(html).toContain("리포트");
+    expect(html).toContain("도움말");
   });
 
   it("maps parsing suggestions into explicit confirmation options", () => {

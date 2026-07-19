@@ -1,5 +1,21 @@
 # Beginner Usability Walkthrough
 
+## Current Help And Report Placement
+
+The analysis page now starts with module and method selection. The large
+question-based helper and full role dictionary moved to the left `도움말`
+route so repeated analysis work does not require scrolling past them. Each
+selected method retains a closed-by-default `? 이 분석 도움말` drawer with the
+plain-language purpose, required roles, invalid-use cases, options, preflight,
+result focus, overinterpretation warning, and tutorial link. Required warnings
+remain visible in the execution/preflight UI even when the drawer is closed.
+
+The left `리포트` route opens Report Center. A beginner can filter successful
+stored analysis runs, restore a checksum-validated result, and create/download
+the existing JSON/CSV/HTML formats. A text capability matrix directs dedicated
+workflows to their owning screen and says `현재 지원되지 않음` for missing HTML
+formats rather than presenting disabled-but-apparently-supported actions.
+
 This checklist is for UX QA with users who do not know statistics well. It does
 not add new methods or change calculations. Use it to verify that the role
 guide, purpose helper, preflight explanation, and result panels keep users from

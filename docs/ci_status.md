@@ -5,33 +5,34 @@ Last updated: 2026-07-19
 ## Local Validation
 
 - Clean pushed-main baseline: local `main` and `origin/main` resolved to
-  `b12c3b26235089fa28e5b48b1faa2cf627e3bec0` with an empty working tree on
-  2026-07-19. Bootstrap passed in 30.2 seconds, full check passed in 852.4
-  seconds with backend 773, frontend 133, and OpenAPI/frontend contracts 155,
-  and Chromium E2E passed in 78.6 seconds.
-- Current tutorial/result-restore worktree is based on that pushed SHA and is
-  not yet committed or pushed. Final `scripts/check.ps1` passed in 825.1
-  seconds with Ruff/format, mypy over 101 source files, backend 777, frontend
-  lint/typecheck and Vitest 137, OpenAPI/frontend contracts 155, and production
-  build. Tutorial pack contracts contain 3 tests and all 18 real API tutorial
-  smoke sections passed in 18.6 seconds.
-- The latest recorded backend pytest count is 777.
-- The latest recorded frontend Vitest count is 137.
+  `ee9806a4e491f0d700fba6701ed5cc218d228c62` with an empty working tree on
+  2026-07-19. Bootstrap passed, full check passed with backend 777, frontend
+  137, and OpenAPI/frontend contracts 155, tutorial smoke passed all 18 result
+  sections, and Chromium E2E passed in 79.3 seconds.
+- Final tutorial-truth/Help/Report validation was performed before this slice's
+  commit/push in a worktree based on that pushed SHA. `scripts/check.ps1` passed in 836.0
+  seconds with the 18-block Markdown truth check, Ruff/format over 159 Python
+  files, mypy over 101 source files, backend 782, frontend lint/typecheck and
+  Vitest 139, OpenAPI/frontend contracts 155, and production build. An initial
+  run passed 781 backend tests and correctly stopped at the E2E step-marker
+  documentation guard before that coverage document was synchronized.
+- The latest recorded backend pytest count is 782.
+- The latest recorded frontend Vitest count is 139.
 - The latest OpenAPI/frontend contract count is 155.
   These counts describe the current local development worktree.
 - The pushed baseline and current worktree are local development evidence, not
   remote Actions or Windows 11/Node 22 release evidence.
-- Production assets: main 512.33 kB / 121.39 kB gzip, Regression 55.11 kB /
+- Production assets: main 532.53 kB / 127.56 kB gzip, Regression 55.11 kB /
   11.99 kB, Quality 64.25 kB / 11.97 kB, DOE 98.18 kB / 22.90 kB, and the
   shared dedicated-result restore helper 0.71 kB / 0.32 kB. Main still emits
   the 500 kB warning; measured bundle optimization remains backlog.
-- Final Chromium E2E passed in 74.6 seconds with diagnostics at
+- The separate 18-section real-API tutorial smoke passed in 19.7 seconds.
+- Final Chromium E2E passed in 77.3 seconds with diagnostics at
   `.tmp/e2e-diagnostics`. It covers Predict `prediction_id` and Optimizer
   `optimization_id` stored-result reload, dedicated generic-history/export
-  scoping, plus all existing paste, prediction/export, quality, DOE, Bayesian,
-  and retention paths. Three preceding attempts exposed and then fixed an
-  incorrect prediction source-ID assertion and two test-placement/state-scope
-  assertions; only the final run is the passing application evidence.
+  scoping, Report Center HTML generation/download, Help Center route/reload,
+  selected-method context help, plus all existing paste, prediction/export,
+  quality, DOE, Bayesian, and retention paths.
 - The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
   24.17.0. These are development results, not Windows 11/Python 3.10/Node 22
   release evidence. The Windows 11/Node 22 clean release gate remains open.
@@ -681,7 +682,7 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Remote GitHub Actions Verification
 
-- On 2026-07-17, invoking `gh auth status --hostname github.com` and the
+- On 2026-07-19, invoking `gh auth status --hostname github.com` and the
   requested `gh run list` command returned
   PowerShell command-not-found error, confirming that GitHub CLI is not
   installed. The requested `gh run list`, `gh run view`, and artifact download
@@ -691,7 +692,7 @@ This satisfies the current repository-side requirement that main pushes should s
   attempted after the CLI prerequisite failed.
 - Remote GitHub Actions execution has not been directly verified from this
   environment for the working tree validated from local base `main` commit
-  `d9e20fb8f588429e2b48003327b489e39b9deaa9`. A successful Git push confirms
+  `ee9806a4e491f0d700fba6701ed5cc218d228c62`. A successful Git push confirms
   only remote ref transfer; it does not verify the resulting Actions jobs.
 - GitHub app checks against that commit returned no PR-filtered workflow runs
   and no legacy commit statuses on 2026-07-10. The available connector endpoint

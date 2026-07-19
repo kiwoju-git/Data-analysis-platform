@@ -21,22 +21,24 @@ Current source-of-truth note:
 
 Current and next development order:
 
-Predict and Response Optimizer are complete first-class dedicated Workbench
-entrypoints on pushed main `b12c3b26235089fa28e5b48b1faa2cf627e3bec0`.
-The current approved slice adds ID-only stored-result restore, scopes generic
-history/export away from dedicated routes, and publishes the deterministic
-synthetic tutorial pack without changing any statistical calculation. After
-this slice:
+Predict and Response Optimizer entrypoints, ID-only stored-result restore, and
+the deterministic tutorial pack are complete on pushed main
+`ee9806a4e491f0d700fba6701ed5cc218d228c62`. This completed slice makes
+the API-derived expected JSON the tutorial numeric source of truth, moves
+global beginner guidance to `/help`, adds selected-method context help, and
+activates `/reports` over the existing checksum-validated export APIs. It does
+not change statistical calculations or method versions. After this slice:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the resulting main push in remote GitHub Actions and review required
    Windows/E2E checks and repository protection outside this code PR.
-3. Measure and reduce the main bundle without changing workflow behavior.
-4. Add search and measured large-catalog performance for regression/RSM
+3. Add separately contracted Predict/RSM/Bayesian dedicated HTML reports.
+4. Measure and reduce the main bundle without changing workflow behavior.
+5. Add search and measured large-catalog performance for regression/RSM
    sources, then improve Bayesian catalog and successor UX.
-5. Add dataset-root and then DOE-root retention only through separate reviewed
+6. Add dataset-root and then DOE-root retention only through separate reviewed
    ownership graphs with explicit inbound-reference blockers.
-6. Continue the advanced quality/statistics backlog through a separately
+7. Continue the advanced quality/statistics backlog through a separately
    approved contract.
 
 The current Phase II slice retains explicit target compatibility, P/NP/C/U
@@ -101,6 +103,12 @@ Already implemented:
 - Minimal React UI for profile/preflight warnings, canonical/profile artifact summary, preflight summary, and column-level aggregate/numeric/date-time profile table
 - Minimal React schema UI includes a guarded 34-column headerless Bayesian sample role preset: `column_1` as ID, `column_2`-`column_25` as X/features, and `column_26`-`column_34` as Y/responses
 - App chrome rendering is split into `frontend/src/AppChrome.tsx`, while `App.tsx` keeps API bootstrap and analysis state ownership
+- App routes include reload-safe dataset, analysis, Report Center (`/reports`),
+  and Help Center (`/help`) pages. The analysis page starts with module/method
+  selection and keeps global purpose/role guidance in Help Center; selected
+  method guidance opens in an accessible context drawer.
+- Report Center pages existing generic analysis-run JSON/CSV/HTML exports and
+  explicitly marks unsupported dedicated HTML formats as unavailable.
 - Dataset workflow state and handlers are split into `frontend/src/useDatasetWorkflow.ts`
 - Dataset preparation rendering is split into `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, `frontend/src/DatasetProfileSection.tsx`, and `frontend/src/DatasetPreviewSection.tsx`, while `WorkspaceRouter` chooses the active dataset/analysis page
 - Dataset formatting, labels, and profile summary helpers are centralized in `frontend/src/datasetDisplay.ts`
@@ -8785,3 +8793,31 @@ Next allowed work after completion:
 3. Measured main-bundle optimization.
 4. Regression/RSM source catalog search and large-catalog performance.
 5. Bayesian catalog/successor UX, dataset/DOE retention, then advanced backlog.
+
+## Progress Update 188 - Tutorial Truth, Help Center, And Report Center P0
+
+Implemented and validated before commit/push in a worktree based on pushed main
+`ee9806a4e491f0d700fba6701ed5cc218d228c62`:
+
+- Generated 18 tutorial numeric blocks from the checked expected-result JSON;
+  `scripts/check.ps1` now rejects Markdown drift with method/field diagnostics.
+- Moved purpose guidance and the role dictionary to `/help`, kept the analysis
+  flow method-first, and added accessible selected-method context help.
+- Activated `/reports` with paged generic analysis-run filters, verified result
+  restore, and existing JSON/CSV/HTML export creation/list/download/deletion.
+- Kept dedicated report capabilities explicit: unsupported Predict, Optimizer,
+  RSM, and Bayesian HTML reports are not presented as available.
+- Exposed only safe generated `Content-Disposition` and `ETag` download headers
+  to the local frontend; no raw filename, value, or path is introduced.
+- Final local development validation passed: backend 782, frontend 139,
+  OpenAPI/frontend 155, 18 tutorial smoke sections, and Chromium E2E. The host
+  remains Windows 10/Python 3.10/Node 24, so this is not release evidence;
+  remote Actions remain unverified because `gh` is unavailable.
+
+Next allowed work after completion:
+
+1. Clean Windows 11/Python 3.10/Node 22 release gate.
+2. Remote Actions, required checks, and repository protection review.
+3. Predict/RSM/Bayesian dedicated HTML report contracts and implementations.
+4. Measured main-bundle optimization.
+5. Source catalog scale, retention roots, then advanced statistics backlog.

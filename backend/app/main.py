@@ -62,6 +62,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=False,
         allow_methods=["DELETE", "GET", "PATCH", "POST", "PUT"],
         allow_headers=["Accept", "Content-Type", "X-Correlation-ID"],
+        expose_headers=["Content-Disposition", "ETag"],
     )
 
     register_exception_handlers(app)

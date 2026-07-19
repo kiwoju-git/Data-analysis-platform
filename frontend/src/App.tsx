@@ -10,6 +10,7 @@ import {
   fetchHealth,
   saveFactorialDesignResponses,
   type AnalysisResultEnvelope,
+  type AnalysisMethodDescriptor,
   type AnalysisMethodListResponse,
   type AnalysisModuleId,
   type AttributeControlChartResult,
@@ -3393,6 +3394,21 @@ export default function App() {
     });
   }
 
+  function handleOpenReportsPage() {
+    if (typeof window !== "undefined") window.history.pushState(null, "", "/reports");
+    setAppRoute({ page: "reports" });
+  }
+
+  function handleOpenHelpPage(section?: "purpose" | "roles") {
+    const search = section === undefined ? "" : `?section=${section}`;
+    if (typeof window !== "undefined") window.history.pushState(null, "", `/help${search}`);
+    setAppRoute({ page: "help" });
+  }
+
+  function handleOpenAnalysisMethod(method: AnalysisMethodDescriptor) {
+    handleSelectAnalysisMethod(method.module_id, method.method_id);
+  }
+
   function handleSelectAnalysisMethod(moduleId: AnalysisModuleId, methodId: string | null) {
     analysisExportState.clearAnalysisExportErrors();
     selectAnalysisMethod(moduleId, methodId);
@@ -3415,7 +3431,6 @@ export default function App() {
     handleSelectAnalysisMethod(method.module_id, method.method_id);
   }
 
-  const isAnalysisPage = appRoute.page === "analysis";
   const analysisPageProps = {
     analysisCatalog,
     analysisCatalogError,
@@ -3763,6 +3778,7 @@ export default function App() {
       void handleRunTwoProportionAnalysis();
     },
     onSelectMethod: handleSelectAnalysisMethod,
+    onOpenHelp: handleOpenHelpPage,
     onChiSquareAssociationAlphaChange: handleChiSquareAssociationAlphaChange,
     onChiSquareAssociationColumnColumnChange: handleChiSquareAssociationColumnColumnChange,
     onChiSquareAssociationRowColumnChange: handleChiSquareAssociationRowColumnChange,
@@ -3853,18 +3869,23 @@ export default function App() {
   } satisfies AnalysisShellProps;
   return (
     <AppChrome
+      activePage={appRoute.page}
       canOpenAnalysis={selectedMethod !== null || analysisCatalog !== null}
       healthClassName={statusClassName(health)}
       healthLabel={statusLabel(health)}
-      isAnalysisPage={isAnalysisPage}
       version={version}
       onOpenAnalysisPage={handleOpenAnalysisPage}
       onOpenDatasetPage={handleOpenDatasetPage}
+      onOpenHelpPage={() => handleOpenHelpPage()}
+      onOpenReportsPage={handleOpenReportsPage}
     >
       <WorkspaceRouter
         analysisPageProps={analysisPageProps}
+        analysisCatalog={analysisCatalog}
+        currentDatasetVersionId={version?.version_id ?? null}
         datasetPageProps={datasetPageProps}
-        isAnalysisPage={isAnalysisPage}
+        routePage={appRoute.page}
+        onOpenAnalysisMethod={handleOpenAnalysisMethod}
       />
     </AppChrome>
   );

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { DatasetVersionResponse } from "./api";
+import type { AppRoute } from "./appRoute";
 import { shortHash } from "./datasetDisplay";
 
 export interface AppChromeProps {
@@ -8,10 +9,12 @@ export interface AppChromeProps {
   children: ReactNode;
   healthClassName: string;
   healthLabel: string;
-  isAnalysisPage: boolean;
+  activePage: AppRoute["page"];
   version: DatasetVersionResponse | null;
   onOpenAnalysisPage: () => void;
   onOpenDatasetPage: () => void;
+  onOpenHelpPage: () => void;
+  onOpenReportsPage: () => void;
 }
 
 export function AppChrome({
@@ -19,10 +22,12 @@ export function AppChrome({
   children,
   healthClassName,
   healthLabel,
-  isAnalysisPage,
+  activePage,
   version,
   onOpenAnalysisPage,
   onOpenDatasetPage,
+  onOpenHelpPage,
+  onOpenReportsPage,
 }: AppChromeProps) {
   return (
     <div className="app-shell">
@@ -33,9 +38,9 @@ export function AppChrome({
         </div>
         <ol className="nav-list">
           <li className="nav-item">프로젝트</li>
-          <li className={isAnalysisPage ? "nav-item" : "nav-item nav-item-active"}>
+          <li className={activePage === "dataset" ? "nav-item nav-item-active" : "nav-item"}>
             <button
-              aria-current={isAnalysisPage ? undefined : "page"}
+              aria-current={activePage === "dataset" ? "page" : undefined}
               className="nav-button"
               onClick={onOpenDatasetPage}
               type="button"
@@ -43,9 +48,9 @@ export function AppChrome({
               데이터셋
             </button>
           </li>
-          <li className={isAnalysisPage ? "nav-item nav-item-active" : "nav-item"}>
+          <li className={activePage === "analysis" ? "nav-item nav-item-active" : "nav-item"}>
             <button
-              aria-current={isAnalysisPage ? "page" : undefined}
+              aria-current={activePage === "analysis" ? "page" : undefined}
               className="nav-button"
               disabled={!canOpenAnalysis}
               onClick={onOpenAnalysisPage}
@@ -54,7 +59,26 @@ export function AppChrome({
               분석
             </button>
           </li>
-          <li className="nav-item">리포트</li>
+          <li className={activePage === "reports" ? "nav-item nav-item-active" : "nav-item"}>
+            <button
+              aria-current={activePage === "reports" ? "page" : undefined}
+              className="nav-button"
+              onClick={onOpenReportsPage}
+              type="button"
+            >
+              리포트
+            </button>
+          </li>
+          <li className={activePage === "help" ? "nav-item nav-item-active" : "nav-item"}>
+            <button
+              aria-current={activePage === "help" ? "page" : undefined}
+              className="nav-button"
+              onClick={onOpenHelpPage}
+              type="button"
+            >
+              도움말
+            </button>
+          </li>
         </ol>
       </aside>
       <main className="main">

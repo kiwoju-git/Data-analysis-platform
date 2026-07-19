@@ -6,7 +6,7 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-19 tutorial/result-restore regression run passed in 74.6 seconds
+The 2026-07-19 tutorial-truth/Help/Report worktree run passed in 77.3 seconds
 with:
 
 ```powershell
@@ -41,10 +41,11 @@ latest recommendation restore, completed close, read-only state, lifecycle
 restore after reload, deletion impact counts, separate irreversible
 confirmation, and catalog removal. It also retains the existing
 Phase I/II attribute charts, prediction/export, Factorial, RSM/Optimizer,
-parser-recovery, and lazy-panel paths. The first default-port attempt did not
-reach the app because an existing port-8000 listener returned an invalid health
-response; a separate 5242 bind attempt was denied by Windows. Neither is
-reported as an application test failure, and the stable-port run above passed.
+parser-recovery, and lazy-panel paths. The current run additionally opens and
+reloads the Help and Report Center routes, creates and downloads an HTML report
+through the existing generic export API, verifies unsupported dedicated report
+formats, and opens/closes selected-method context help. The final run above was
+a single application run on the E2E script's isolated default ports.
 
 ## Covered Flows
 
@@ -69,12 +70,17 @@ The current smoke test is `tests/e2e/critical_path.py`.
 - Runs `eda.descriptive` and waits for the result table.
 - Switches to `hypothesis.two_sample_t`, runs it, and waits for the Hedges g
   result row.
-- Creates JSON, CSV, and HTML stored-result exports.
+- Creates JSON and CSV stored-result exports in the analysis Workbench.
 - Downloads the JSON export and verifies the suggested filename is `.json`.
 - Reviews the exact one-file/one-metadata-row deletion impact for the newest
   export, uses the separate irreversible confirmation, verifies the export
-  list shrinks from three to two, and confirms the stored analysis result stays
+  list shrinks from two to one, and confirms the stored analysis result stays
   rendered.
+- Opens `/reports`, selects the checksum-validated stored result, creates and
+  downloads its HTML report, verifies unsupported dedicated HTML formats remain
+  explicitly unsupported, and reloads the route. It then opens and reloads
+  `/help`, verifies the purpose helper and role dictionary, returns to analysis,
+  and opens/closes the selected-method context help dialog.
 - Opens saved analysis history, restores a stored result, selects left/right
   saved runs, and renders comparison output.
 - Restores the dependency-free run, reviews its exact two-file/two-metadata-row
@@ -195,6 +201,7 @@ browser critical path.
 - `run descriptive statistics`
 - `run two-sample t test`
 - `create, download, and delete one export`
+- `verify Help Center and Report Center routes`
 - `restore and compare saved results`
 - `delete one stored analysis run`
 - `verify schema stale behavior`

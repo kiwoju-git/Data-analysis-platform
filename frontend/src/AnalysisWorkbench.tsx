@@ -1,11 +1,10 @@
-import { startTransition, type ReactNode } from "react";
+import { startTransition, useRef, useState, type ReactNode } from "react";
 
 import { AnalysisHistoryPanel } from "./AnalysisHistoryPanel";
 import { AnalysisPanelBoundary } from "./AnalysisPanelBoundary";
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
-import { MethodPurposeHelper } from "./MethodPurposeHelper";
+import { MethodHelpDrawer } from "./MethodHelpDrawer";
 import { PreflightExplanationPanel } from "./PreflightExplanationPanel";
-import { StatisticalRoleGuide } from "./StatisticalRoleGuide";
 import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
@@ -125,6 +124,7 @@ interface AnalysisWorkbenchProps {
   version: DatasetVersionResponse | null;
   profile: DatasetProfileResponse | null;
   onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
+  onOpenHelp?: (section: "purpose" | "roles") => void;
   renderAnalysisFilters?: (method: AnalysisMethodDescriptor) => ReactNode;
   renderExecutableMethod: (method: AnalysisMethodDescriptor) => ReactNode;
 }
@@ -152,9 +152,12 @@ export function AnalysisWorkbench({
   version,
   profile,
   onSelectMethod,
+  onOpenHelp = () => undefined,
   renderAnalysisFilters,
   renderExecutableMethod,
 }: AnalysisWorkbenchProps) {
+  const [isMethodHelpOpen, setIsMethodHelpOpen] = useState(false);
+  const methodHelpTriggerRef = useRef<HTMLButtonElement>(null);
   const selectedGuidance =
     selectedMethod === null ? null : getAnalysisMethodGuidance(selectedMethod.method_id);
   const executablePanel =
@@ -245,6 +248,7 @@ export function AnalysisWorkbench({
   const analysisResultForExport =
     effectiveRestoredState.restoredAnalysisResult ?? selectedAnalysisResult;
   const selectMethod = (moduleId: AnalysisModuleId, methodId: string | null) => {
+    setIsMethodHelpOpen(false);
     startTransition(() => {
       onSelectMethod(moduleId, methodId);
     });
@@ -252,8 +256,6 @@ export function AnalysisWorkbench({
 
   return (
     <>
-      <MethodPurposeHelper catalog={catalog} onSelectMethod={selectMethod} />
-      <StatisticalRoleGuide selectedMethod={selectedMethod} />
       <nav className="module-nav" aria-label="분석 모듈">
         {catalog.modules.map((module) => (
           <button
@@ -276,6 +278,14 @@ export function AnalysisWorkbench({
           </button>
         ))}
       </nav>
+      <div className="analysis-help-links" aria-label="분석 선택 도움말">
+        <button className="text-button" onClick={() => onOpenHelp("purpose")} type="button">
+          분석 선택이 어렵나요? 도움말에서 질문으로 찾기
+        </button>
+        <button className="text-button" onClick={() => onOpenHelp("roles")} type="button">
+          역할이 헷갈리나요? 역할 사전 열기
+        </button>
+      </div>
       <div className="method-grid" aria-label="분석 메서드">
         {selectedMethods.map((method) => (
           <button
@@ -326,10 +336,28 @@ export function AnalysisWorkbench({
                 {selectedMethod.label_en} · {selectedMethod.method_id}
               </p>
             </div>
-            <span className={`availability-badge availability-${selectedMethod.availability}`}>
-              {availabilityLabel(selectedMethod)}
-            </span>
+            <div className="workbench-heading-actions">
+              <button
+                aria-controls="method-help-drawer"
+                aria-expanded={isMethodHelpOpen}
+                className="secondary-button compact-button"
+                onClick={() => setIsMethodHelpOpen((open) => !open)}
+                ref={methodHelpTriggerRef}
+                type="button"
+              >
+                ? 이 분석 도움말
+              </button>
+              <span className={`availability-badge availability-${selectedMethod.availability}`}>
+                {availabilityLabel(selectedMethod)}
+              </span>
+            </div>
           </div>
+          <MethodHelpDrawer
+            method={selectedMethod}
+            open={isMethodHelpOpen}
+            trigger={methodHelpTriggerRef.current}
+            onClose={() => setIsMethodHelpOpen(false)}
+          />
           <ol className="workbench-steps" aria-label="분석 실행 단계">
             {workbenchSteps.map((step) => (
               <li key={step}>{step}</li>
@@ -384,69 +412,6 @@ export function AnalysisWorkbench({
           renderAnalysisFilters !== undefined
             ? renderAnalysisFilters(selectedMethod)
             : null}
-          {selectedGuidance !== null ? (
-            <>
-              {selectedGuidance.plainLanguage !== undefined ||
-              selectedGuidance.commonErrors !== undefined ? (
-                <section className="method-help-box" aria-label="메서드 쉬운 설명">
-                  {selectedGuidance.plainLanguage !== undefined ? (
-                    <>
-                      <h4>쉽게 말하면</h4>
-                      <p>{selectedGuidance.plainLanguage}</p>
-                    </>
-                  ) : null}
-                  {selectedGuidance.commonErrors !== undefined ? (
-                    <>
-                      <h4>오류가 자주 나는 이유</h4>
-                      <ul className="compact-list">
-                        {selectedGuidance.commonErrors.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : null}
-                </section>
-              ) : null}
-              <div className="guidance-grid" aria-label="메서드 입력 계약">
-                <section>
-                  <h4>필요 역할</h4>
-                  <ul className="guidance-list">
-                    {selectedGuidance.roleRequirements.map((role) => (
-                      <li key={`${role.label}-${role.detail}`}>
-                        <strong>{role.label}</strong>
-                        <span>{role.required ? "필수" : "선택"}</span>
-                        <p>{role.detail}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h4>옵션</h4>
-                  <ul className="compact-list">
-                    {selectedGuidance.optionChecklist.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h4>사전점검</h4>
-                  <ul className="compact-list">
-                    {selectedGuidance.preflightChecks.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h4>결과 초점</h4>
-                  <ul className="compact-list">
-                    {selectedGuidance.resultFocus.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </section>
-              </div>
-            </>
-          ) : null}
           {executablePanel !== null && executablePanel !== undefined ? (
             <AnalysisPanelBoundary panelKey={selectedMethod.method_id}>
               {executablePanel}

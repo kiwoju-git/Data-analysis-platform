@@ -7,10 +7,19 @@ export type AppRoute =
   | {
       page: "analysis";
       selection: AnalysisSelection;
-    };
+    }
+  | { page: "reports" }
+  | { page: "help" };
 
 export function parseAppRoute(pathname: string, hash: string): AppRoute {
-  const analysisSelection = parseAnalysisLocation(pathname, hash);
+  const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (normalizedPath === "/reports") {
+    return { page: "reports" };
+  }
+  if (normalizedPath === "/help") {
+    return { page: "help" };
+  }
+  const analysisSelection = parseAnalysisLocation(normalizedPath, hash);
   if (analysisSelection !== null) {
     return {
       page: "analysis",

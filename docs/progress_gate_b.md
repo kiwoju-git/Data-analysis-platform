@@ -1,6 +1,29 @@
 # Gate B Progress
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
+
+## Current Help, Report, And Tutorial Truth Slice
+
+- `examples/tutorial/tutorial_expected_results.json` is the numeric source of
+  truth for 18 API-derived tutorial sections. Marked numeric blocks in the
+  Korean tutorial are rendered by `scripts/render_tutorial_results.py`; its
+  `--check` mode is part of `scripts/check.ps1` and reports method/field paths
+  on drift. The API-vs-JSON tutorial smoke remains a separate gate.
+- App routing now includes `/help` and `/reports`. Global question-based method
+  guidance and the role dictionary live in Help Center, while the analysis
+  page begins with module/method selection and keeps required preflight/warning
+  content visible. A closed-by-default selected-method drawer supports ESC,
+  focus return, ARIA state, and a tutorial link.
+- Report Center reuses paged analysis-run history, checksum-validated stored
+  result restore, and existing JSON/CSV/HTML export list/create/download/delete
+  APIs. It exposes method/status/stale/result/dataset filters and never renders
+  arbitrary result bodies.
+- Dedicated capability is explicit: Predict full CSV and Factorial design HTML
+  stay in their owning workflows; Predict, Optimizer, RSM, and Bayesian HTML
+  reports are not supported in P0. No generic fallback or fake report is used.
+- This is a frontend/documentation/test contract change. The 30 method IDs,
+  statistical calculations, request/result schemas, and method versions are
+  unchanged.
 
 ## Summary
 
@@ -142,15 +165,19 @@ Current stabilization update:
 
 ## Latest Validation
 
-Current development validation on 2026-07-18:
+Current development validation on 2026-07-19:
 
 - Worktree based on clean pushed SHA
-  `6fb115093a97909bf3c379732d16e7153c9931d0`: full `scripts/check.ps1`
-  passed with backend 773, frontend 133, direct OpenAPI/frontend contract 155,
-  and all lint/type/build gates. Chromium E2E passed in 76.9 seconds through
-  both new dedicated source-selection/reload paths and all retained critical
-  paths. This Windows 10/Node 24 host result is development evidence, not the
-  Windows 11/Node 22 release gate; the worktree is not yet pushed.
+  `ee9806a4e491f0d700fba6701ed5cc218d228c62`: full `scripts/check.ps1`
+  passed in 836.0 seconds with backend 782, frontend 139, direct
+  OpenAPI/frontend contract 155, tutorial Markdown 18-block verification, and
+  all lint/type/build gates. The 18-section real-API tutorial smoke passed in
+  19.7 seconds and Chromium E2E passed in 77.3 seconds through Help/Report plus
+  all retained critical paths. Main measured 532.53 kB / 127.56 kB gzip and
+  retains the 500 kB warning. This Windows 10/Node 24 host result is development
+  evidence, not the Windows 11/Node 22 release gate. This evidence was captured
+  before the slice's commit/push, and remote Actions were not checked because
+  `gh` is unavailable.
 
 Historical validation begins below. Last validated on 2026-07-06:
 
@@ -3899,3 +3926,31 @@ Next development order:
 3. Measured main-bundle optimization.
 4. Regression/RSM source catalog search and large-catalog benchmark.
 5. Bayesian catalog/successor UX, then dataset/DOE root retention.
+
+## Progress Update 188 - Tutorial Truth, Help Center, And Report Center P0
+
+- `tutorial_expected_results.json` remains the numeric source of truth. The
+  Korean tutorial now contains 18 generated marker blocks and
+  `scripts/render_tutorial_results.py --check` is part of the full check.
+- Analysis starts with module/method selection. Global purpose and role guidance
+  moved to reload-safe `/help`; selected-method help is closed by default and
+  supports keyboard open/close, ESC, focus return, and ARIA state.
+- Reload-safe `/reports` pages checksum-validated generic analysis results and
+  reuses existing JSON/CSV/HTML create/list/download/delete APIs. Dedicated
+  capability rows explicitly state unsupported HTML formats instead of using a
+  generic fallback.
+- Local development validation on the Windows 10/Python 3.10/Node 24 host:
+  full check 836.0 seconds (backend 782, frontend 139, OpenAPI/frontend 155),
+  tutorial smoke 18 sections in 19.7 seconds, and Chromium E2E in 77.3 seconds.
+  Main is 532.53 kB / 127.56 kB gzip and retains the measured warning.
+- Statistical calculations, method versions, persisted result schemas, and
+  SQLite schema are unchanged. Remote Actions remain unverified because `gh`
+  is unavailable; this is not Windows 11/Node 22 release evidence.
+
+Next development order:
+
+1. Clean Windows 11/Python 3.10/Node 22 release gate.
+2. Remote Actions, required checks, and repository protection review.
+3. Separately contracted Predict/RSM/Bayesian dedicated HTML reports.
+4. Measured main-bundle optimization.
+5. Source catalog performance, then dataset/DOE retention and advanced backlog.

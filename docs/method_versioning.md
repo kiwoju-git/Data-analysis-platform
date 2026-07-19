@@ -32,6 +32,13 @@ stored results remain comparable:
 Frontend-only changes do not require a method-version bump unless they alter the
 request sent to the backend or reinterpret a stored result field.
 
+Moving global guidance to Help Center, adding a selected-method help drawer,
+adding Report Center over existing export endpoints, and generating tutorial
+numeric Markdown blocks from already API-derived expected JSON are frontend,
+documentation, and verification changes. They do not alter analysis requests,
+calculations, persisted result meaning, or export schemas, so no method version
+or result schema is bumped.
+
 Changing `regression.predict` and `regression.response_optimizer` catalog
 availability from disabled to available/dedicated, adding metadata-only source
 catalogs, and adding top-level ID-restorable UI entrypoints do not change either

@@ -38,3 +38,19 @@ def test_local_frontend_cors_allows_doe_response_put(tmp_path, origin: str) -> N
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == origin
     assert "PUT" in response.headers["access-control-allow-methods"]
+
+
+def test_local_frontend_cors_exposes_safe_download_headers(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path / "workspace")
+    origin = "http://127.0.0.1:5173"
+
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/api/v1/health", headers={"Origin": origin})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    exposed = {
+        item.strip().lower()
+        for item in response.headers["access-control-expose-headers"].split(",")
+    }
+    assert exposed == {"content-disposition", "etag"}

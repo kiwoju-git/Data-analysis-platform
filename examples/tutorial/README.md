@@ -28,6 +28,7 @@ From the repository root:
 ```powershell
 .\.venv\Scripts\python.exe .\examples\tutorial\generate_studio_tutorial_data.py
 powershell -ExecutionPolicy Bypass -File .\scripts\tutorial_smoke.ps1
+.\.venv\Scripts\python.exe .\scripts\render_tutorial_results.py --check
 ```
 
 The generator uses seed `20260718`, UTF-8, LF line endings, explicit float rounding, and atomic
@@ -40,6 +41,14 @@ timestamps, and workspace paths are excluded. Updating expected values is an exp
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\tutorial_smoke.py --write-expected
+```
+
+The smoke test compares the real API with `tutorial_expected_results.json`. The separate Markdown
+check compares that JSON with the generated numeric blocks in the Korean tutorial. To refresh only
+those marked blocks after an approved expected-results change, run:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\render_tutorial_results.py --write
 ```
 
 Run that command only after an intentional method/data contract change and review the numeric diff.

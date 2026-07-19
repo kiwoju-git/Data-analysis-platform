@@ -124,7 +124,7 @@ export function MethodPurposeHelper({
   const methodsById = new Map(catalog.methods.map((method) => [method.method_id, method]));
 
   return (
-    <section className="method-purpose-helper" aria-labelledby="method-purpose-helper-title">
+    <section className="method-purpose-helper" id="purpose" aria-labelledby="method-purpose-helper-title">
       <div className="panel-heading">
         <div>
           <h3 id="method-purpose-helper-title">무엇을 알고 싶나요?</h3>

@@ -44,6 +44,7 @@ export function AnalysisResultExportPanel({
   onLoadDeletionPreflight,
   onDeleteExport,
   onClearDeletion,
+  creationCapabilities = { json: true, csv: true, html: true },
 }: {
   analysisResult: AnalysisResultEnvelope | null;
   csvExportError: string | null;
@@ -72,6 +73,7 @@ export function AnalysisResultExportPanel({
   onLoadDeletionPreflight: (analysisId: string, exportId: string) => void;
   onDeleteExport: (preflight: AnalysisResultExportDeletionPreflightResponse) => void;
   onClearDeletion: () => void;
+  creationCapabilities?: { json: boolean; csv: boolean; html: boolean };
 }) {
   const [pendingDeletionExportId, setPendingDeletionExportId] = useState<string | null>(null);
   if (analysisResult === null || analysisResult.status !== "succeeded") {
@@ -109,6 +111,7 @@ export function AnalysisResultExportPanel({
           disabled={isExportingJson}
           format="JSON"
           isBusy={isExportingJson}
+          unsupportedReason={creationCapabilities.json ? null : "현재 지원되지 않음"}
           onCreate={() => {
             onCreateExport(analysisResult.analysis_id);
           }}
@@ -118,6 +121,7 @@ export function AnalysisResultExportPanel({
           disabled={isExportingCsv}
           format="CSV"
           isBusy={isExportingCsv}
+          unsupportedReason={creationCapabilities.csv ? null : "현재 지원되지 않음"}
           onCreate={() => {
             onCreateCsvExport(analysisResult.analysis_id);
           }}
@@ -127,6 +131,7 @@ export function AnalysisResultExportPanel({
           disabled={isExportingHtml}
           format="HTML"
           isBusy={isExportingHtml}
+          unsupportedReason={creationCapabilities.html ? null : "현재 지원되지 않음"}
           onCreate={() => {
             onCreateHtmlReport(analysisResult.analysis_id);
           }}
@@ -349,20 +354,24 @@ function ExportFormatAction({
   format,
   isBusy,
   onCreate,
+  unsupportedReason,
 }: {
   description: string;
   disabled: boolean;
   format: "JSON" | "CSV" | "HTML";
   isBusy: boolean;
   onCreate: () => void;
+  unsupportedReason: string | null;
 }) {
   return (
     <div className="export-format-card">
       <strong>{format}</strong>
       <p>{description}</p>
-      <button className="secondary-button compact-button" disabled={disabled} onClick={onCreate} type="button">
-        {isBusy ? `${format} 생성 중` : `${format} 생성`}
-      </button>
+      {unsupportedReason === null ? (
+        <button className="secondary-button compact-button" disabled={disabled} onClick={onCreate} type="button">
+          {isBusy ? `${format} 생성 중` : `${format} 생성`}
+        </button>
+      ) : <span className="unsupported-format-label">{unsupportedReason}</span>}
     </div>
   );
 }

@@ -404,6 +404,7 @@ export interface AnalysisShellProps {
   onRunTwoProportionAnalysis: () => void;
   onRunXyCorrelationAnalysis?: () => void;
   onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
+  onOpenHelp?: (section: "purpose" | "roles") => void;
   onChiSquareAssociationAlphaChange: (alpha: number) => void;
   onChiSquareAssociationColumnColumnChange: (columnId: string) => void;
   onChiSquareAssociationRowColumnChange: (columnId: string) => void;
@@ -787,6 +788,7 @@ export function AnalysisShell({
   onRunTwoProportionAnalysis,
   onRunXyCorrelationAnalysis = () => undefined,
   onSelectMethod,
+  onOpenHelp = () => undefined,
   onChiSquareAssociationAlphaChange,
   onChiSquareAssociationColumnColumnChange,
   onChiSquareAssociationRowColumnChange,
@@ -938,6 +940,7 @@ export function AnalysisShell({
           selectedModuleId={selectedModuleId}
           version={version}
           onSelectMethod={onSelectMethod}
+          onOpenHelp={onOpenHelp}
           renderAnalysisFilters={(method) =>
             method.requires_dataset && version !== null ? (
               <>
