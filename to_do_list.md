@@ -21,21 +21,24 @@ Current source-of-truth note:
 
 Current and next development order:
 
-Predict and Response Optimizer entrypoints, ID-only stored-result restore, and
-the deterministic tutorial pack are complete on pushed main
-`ee9806a4e491f0d700fba6701ed5cc218d228c62`. This completed slice makes
-the API-derived expected JSON the tutorial numeric source of truth, moves
-global beginner guidance to `/help`, adds selected-method context help, and
-activates `/reports` over the existing checksum-validated export APIs. It does
-not change statistical calculations or method versions. After this slice:
+Predict/Response Optimizer entrypoints, tutorial truth sync, Help Center, and
+Report Center are complete on pushed main
+`0b41ecffdfaca875a3e09f407f099d88b3ef7908`. The current approved slice splits
+the Bayesian frontend into lifecycle-scoped components/hooks, pages its study
+catalog at 20 items, restores exact `study_id`/`recommendation_id` deep links,
+and warns before a successor reuses its predecessor seed. It also adds the
+GitHub root onboarding README and replaces the stale backend README. Bayesian
+math, request/result/storage schemas, and method `0.2.2` are unchanged. After
+this slice:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the resulting main push in remote GitHub Actions and review required
    Windows/E2E checks and repository protection outside this code PR.
 3. Add separately contracted Predict/RSM/Bayesian dedicated HTML reports.
 4. Measure and reduce the main bundle without changing workflow behavior.
-5. Add search and measured large-catalog performance for regression/RSM
-   sources, then improve Bayesian catalog and successor UX.
+5. Add search and measured large-catalog performance for regression, RSM, and
+   Bayesian sources. Pagination and exact-ID Bayesian restore are complete;
+   lightweight verified summary/index work remains separately scoped.
 6. Add dataset-root and then DOE-root retention only through separate reviewed
    ownership graphs with explicit inbound-reference blockers.
 7. Continue the advanced quality/statistics backlog through a separately
@@ -128,7 +131,8 @@ Already implemented:
   - workspace route boundary is split into `frontend/src/WorkspaceRouter.tsx`
   - analysis page boundary is split into `frontend/src/AnalysisPage.tsx`
   - common shell rendering is split into `frontend/src/AnalysisWorkbench.tsx`
-  - analysis area rendering is further split into method panels, including dedicated `RegressionPredictionWorkspace`, `ResponseOptimizerWorkspace`, `FactorialDesignPanel`, `ResponseSurfacePanel`, `ResponseOptimizerPanel`, and `BayesianOptimizationPanel` workflows
+  - analysis area rendering is further split into method panels, including dedicated `RegressionPredictionWorkspace`, `ResponseOptimizerWorkspace`, `FactorialDesignPanel`, `ResponseSurfacePanel`, and `ResponseOptimizerPanel`; the legacy `BayesianOptimizationPanel` export is a thin wrapper over `features/bayesian/BayesianOptimizationWorkspace`
+  - Bayesian study builder/catalog/summary/trials/recommendation/close/deletion UI and draft/catalog/lifecycle/recommendation/retention state are separated under `frontend/src/features/bayesian`; each async concern has an independent latest-request guard
   - root/dataset routes render the dataset preparation page and `/analysis/{module_id}/{method_id}` routes render the analysis page
   - Regression, Quality, and DOE execution panels load through three module-level dynamic imports with accessible loading/error boundaries and transition-safe method selection
   - supported filter controls render through a common Workbench slot for dataset-backed methods

@@ -1431,6 +1431,8 @@ def verify_bayesian_optimization(page: Page) -> None:
     recommendation_button.click()
 
     expect(page.get_by_role("heading", name="추천 결과")).to_be_visible(timeout=45_000)
+    expect(page).to_have_url(re.compile(r"study_id=[0-9a-f-]+"))
+    expect(page).to_have_url(re.compile(r"recommendation_id=[0-9a-f-]+"))
     result_section = page.locator(
         'section[aria-labelledby="bayesian-recommendation-result-title"]'
     )
@@ -1498,10 +1500,7 @@ def verify_bayesian_optimization(page: Page) -> None:
         timeout=20_000
     )
     restored_selector = page.get_by_label("저장된 Bayesian study")
-    expect(restored_selector.locator(f'option[value="{study_id}"]')).to_have_count(
-        1, timeout=20_000
-    )
-    restored_selector.select_option(study_id)
+    expect(restored_selector).to_have_value(study_id, timeout=20_000)
     expect(page.get_by_label("Trial 5 관측값")).to_be_visible(timeout=20_000)
     expect(page.get_by_text("전체 trial 예산 5개에 도달", exact=False)).to_be_visible()
     expect(
@@ -1537,14 +1536,19 @@ def verify_bayesian_optimization(page: Page) -> None:
 
     page.reload(wait_until="networkidle")
     restored_selector = page.get_by_label("저장된 Bayesian study")
-    expect(restored_selector.locator(f'option[value="{study_id}"]')).to_have_count(
-        1, timeout=20_000
-    )
-    restored_selector.select_option(study_id)
+    expect(restored_selector).to_have_value(study_id, timeout=20_000)
     expect(page.get_by_label("Bayesian study 종료 기록")).to_be_visible(timeout=20_000)
     expect(
         page.get_by_role("button", name="이 정의로 successor study 준비")
     ).to_be_visible()
+    page.get_by_role("button", name="이 정의로 successor study 준비").click()
+    expect(
+        page.get_by_text(
+            "동일한 seed를 사용하면 동일한 초기 조건이 다시 생성될 수 있습니다"
+        )
+    ).to_be_visible()
+    expect(page.get_by_role("button", name="새 random seed 생성")).to_be_visible()
+    page.get_by_role("button", name="Successor 생성 취소").click()
     page.get_by_label("Bayesian 최적화").get_by_role(
         "button", name="삭제 영향 확인"
     ).click()

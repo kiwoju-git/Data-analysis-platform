@@ -2,6 +2,28 @@
 
 Last updated: 2026-07-19
 
+## Current Bayesian Frontend And Repository Onboarding Slice
+
+- The 1,400-line Bayesian panel is now a thin compatibility export over
+  `features/bayesian/BayesianOptimizationWorkspace`. Study builder, factor and
+  constraint tables, catalog, summary, trial table, recommendation, close,
+  deletion, and confirmation views are lifecycle-scoped components.
+- Draft, catalog, lifecycle, recommendation, and retention state use separate
+  hooks and separate latest-request guards. The catalog pages 20 metadata-only
+  summaries at a time, retains an exact off-page selection, and no longer
+  relies on a fixed `fetchBayesianStudies(0, 50)` call.
+- The Bayesian route stores only validated UUID `study_id` and
+  `recommendation_id` query fields. Reload restores both through existing
+  checksum/dependency-validating GET routes; mismatched or missing assets are
+  explicit errors. A new Study clears the old recommendation query.
+- Successor preparation keeps the predecessor seed only by explicit user
+  choice, always warns that it can reproduce the same initial conditions, and
+  offers an explicit random-seed command. Observation/history/recommendation
+  data is still not copied.
+- Root `README.md` now provides GitHub onboarding, while `backend/README.md` is
+  a current schema-14 backend developer guide. No Bayesian calculation,
+  persisted schema, API meaning, method ID, or method version changed.
+
 ## Current Help, Report, And Tutorial Truth Slice
 
 - `examples/tutorial/tutorial_expected_results.json` is the numeric source of

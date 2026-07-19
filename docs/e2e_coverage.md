@@ -6,12 +6,12 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-19 tutorial-truth/Help/Report worktree run passed in 77.3 seconds
+The 2026-07-19 Bayesian modularization worktree run passed in 79.3 seconds
 with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-bayesian-modularization-final
 ```
 
 The run first dispatches a real `text/plain` spreadsheet paste while providing
@@ -151,9 +151,13 @@ The current smoke test is `tests/e2e/critical_path.py`.
   third candidate does not repeat the abandoned coordinates, verifies the
   budget-reached blocker, reloads the page, and restores the actual latest
   pending recommendation and its request budget. It then records the final
-  confirmation observation, closes the study as completed through the inline
+  recommendation IDs are written to the URL and reload restores the exact
+  off-page-capable selection without manual catalog reselection. It then records
+  the final confirmation observation, closes the study as completed through the inline
   immutable-action confirmation, verifies recommendation/budget controls are
   read-only, reloads, and restores the lifecycle reason plus successor command.
+  Successor preparation shows the same-seed repeated-initial-design warning and
+  explicit new-seed action without copying observations/history/recommendations.
   It then loads the deletion preflight, verifies zero owned files and three
   recommendation records, uses the separate irreversible confirmation, and
   verifies the study disappears from the refreshed catalog. Confirmation-run

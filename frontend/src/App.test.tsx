@@ -13,6 +13,7 @@ import {
   BayesianOptimizationPanel,
   BayesianStudyCloseConfirmation,
   BayesianStudyDeletionConfirmation,
+  BayesianSuccessorSeedNotice,
   BayesianTrialTransitionConfirmation,
 } from "./BayesianOptimizationPanel";
 import { FactorialDesignPreview } from "./FactorialDesignPanel";
@@ -879,6 +880,16 @@ describe("App", () => {
         true,
       ),
     ).toBe("bayesian_study_closed");
+  });
+
+  it("warns before reusing a predecessor seed for a successor study", () => {
+    const html = renderToString(
+      <BayesianSuccessorSeedNotice sameSeed onGenerateSeed={() => undefined} />,
+    );
+
+    expect(html).toContain("동일한 seed를 사용하면 동일한 초기 조건이 다시 생성될 수 있습니다");
+    expect(html).toContain("기존 관측, history, recommendation은 복사하지 않습니다");
+    expect(html).toContain("새 random seed 생성");
   });
 
   it("shows exact Bayesian deletion impact before enabling irreversible deletion", () => {

@@ -1,6 +1,6 @@
 # Frontend Module Loading
 
-Last updated: 2026-07-16
+Last updated: 2026-07-19
 
 ## Current Contract
 
@@ -80,6 +80,15 @@ Regression at 41.53 kB / 8.36 kB, Quality at 62.14 kB / 11.48 kB, and DOE at
 restore, lifecycle reason display, and successor-draft UI. No dependency or
 eager import was added, and every asset remains below the 500 kB warning
 threshold. This Windows 10/Node 24 measurement is not Node 22 release evidence.
+
+The Bayesian frontend modularization keeps the same `DoeAnalysisPanels` lazy
+boundary. On the 2026-07-19 Windows 10/Node 24 development host, the build
+measured main at 532.53 kB / 127.56 kB gzip, Regression at 55.11 kB / 11.99 kB,
+Quality at 64.25 kB / 11.97 kB, and DOE at 110.90 kB / 26.20 kB. The DOE chunk
+contains the lifecycle-scoped Bayesian components/hooks; none is imported into
+the eager main chunk. Main still emits the 500 kB warning, so measured bundle
+optimization remains a separate backlog item. This is not Windows 11/Node 22
+release evidence.
 
 ## Validation
 

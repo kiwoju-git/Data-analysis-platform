@@ -1,6 +1,6 @@
 # Bayesian Optimization Contract
 
-Last updated: 2026-07-16
+Last updated: 2026-07-19
 
 ## Current Status
 
@@ -36,14 +36,34 @@ Current routes are:
 - `GET .../{study_id}/recommendations/latest`;
 - `GET .../{study_id}/recommendations/{recommendation_id}`.
 
-The frontend route uses the DOE module's dynamically loaded
-`BayesianOptimizationPanel`. It creates/restores studies, distinguishes initial
+The frontend route uses the DOE module's dynamically loaded thin
+`BayesianOptimizationPanel` compatibility export over
+`features/bayesian/BayesianOptimizationWorkspace`. Builder, catalog, trial,
+recommendation, close, retention, and confirmation UI are separate components;
+draft, catalog, lifecycle, recommendation, and retention state use separate
+hooks and independent latest-request guards. It creates/restores studies, distinguishes initial
 and recommendation trials, records or abandons pending trials through an
 explicit irreversible-action confirmation, and renders the actual latest
 candidate's immutable prediction snapshot separately from its current trial
 state and any completed observation. It also restores closed studies read-only
 and can prepare a new study definition with an explicit
 `predecessor_study_id`; close is not deletion or reopen.
+
+The metadata-only study catalog uses pages of 20 rather than a fixed first-50
+fetch. An exact Study outside the current page remains selectable through
+`GET /api/v1/bayesian-studies/{study_id}`. The route stores only validated UUID
+query values:
+
+```text
+/analysis/doe/doe.bayesian_optimization?study_id={uuid}&recommendation_id={uuid}
+```
+
+Reload uses the existing exact Study/recommendation GET routes and rejects a
+Study/recommendation relationship mismatch. Selecting a different Study clears
+the prior recommendation ID. Successor preparation preserves the predecessor
+seed only visibly: the UI warns that reuse may regenerate the same initial
+conditions and offers an explicit new-seed action. It never silently changes a
+seed or copies observations, history, or recommendations.
 
 ## Lifecycle And Inputs
 

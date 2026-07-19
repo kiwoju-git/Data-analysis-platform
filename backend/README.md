@@ -1,48 +1,60 @@
 # DataLab Studio Backend
 
-FastAPI backend package for the local-first DataLab Studio application.
+DataLab Studio의 local-first FastAPI package입니다. 제품 설치, 실행, 사용자 튜토리얼은
+[루트 README](../README.md)를 먼저 참조하십시오.
 
-The public API is versioned under `/api/v1`.
+## 개발 진입점
 
-Current Gate B0 surface:
+- 애플리케이션: `backend/app/main.py`
+- versioned API: `/api/v1`
+- router: `backend/app/api/v1/`
+- typed schema: `backend/app/api/v1/schemas/`
+- service orchestration: `backend/app/services/`
+- FastAPI와 독립된 계산: `backend/app/statistics/`
+- SQLite/workspace storage: `backend/app/storage/`
+- OpenAPI: 실행 중인 local backend의 `/docs` 또는 `/openapi.json`
 
-- `GET /api/v1/health`
-- `POST /api/v1/datasets`
-- `POST /api/v1/datasets/paste`
-- `POST /api/v1/datasets/{dataset_id}/confirm-parsing`
-- `GET /api/v1/datasets/{dataset_id}/versions`
-- `GET /api/v1/dataset-versions/{version_id}`
-- `GET /api/v1/dataset-versions/{version_id}/schema`
-- `PATCH /api/v1/dataset-versions/{version_id}/schema`
-- `GET /api/v1/dataset-versions/{version_id}/rows`
-- `GET /api/v1/dataset-versions/{version_id}/profile`
-- `GET /api/v1/analysis-methods`
-- `POST /api/v1/analysis-runs`
-- `GET /api/v1/analysis-runs/{analysis_id}`
-- `GET /api/v1/analysis-runs/{analysis_id}/result`
-- `DELETE /api/v1/analysis-runs/{analysis_id}`
-- `GET /api/v1/jobs/{job_id}`
-- `DELETE /api/v1/jobs/{job_id}`
+API route 전체 목록은 이 문서에 복제하지 않습니다. OpenAPI와 router source가
+authoritative source입니다.
 
-The Gate B0 slice creates immutable dataset-version metadata for delimited text files, materializes canonical JSONL rows plus a manifest, allows column metadata confirmation, and exposes bounded row preview plus an aggregate profile/preflight scan.
-Delimited-text parsing confirmation supports both header rows and headerless tabular data after a leading preamble through explicit `has_header` and `data_start_row` options.
-It also exposes the 6-module analysis method catalog.
-`eda.descriptive` is the first executable inline method and computes real descriptive statistics from validated canonical rows for an immutable dataset version.
-`eda.graphical_summary` is the second executable inline method and computes real histogram, boxplot, Q-Q, and ECDF chart-data payloads from the same canonical row source.
-`eda.normality` is the third executable inline method and computes SciPy-backed Shapiro-Wilk, Anderson-Darling, and Q-Q point payloads from the same canonical row source.
-`eda.equal_variances` is the fourth executable inline method and computes SciPy-backed Brown-Forsythe and Levene(mean) results from the same canonical row source.
-`hypothesis.one_sample_t` is the first single-sample Gate B2 executable inline method and computes SciPy-backed one-sample t-test results from the same canonical row source.
-`hypothesis.paired_t` is the first paired-design Gate B2 executable inline method and computes SciPy-backed paired t-test results from wide before/after measurement columns on the same canonical row source.
-`hypothesis.one_sample_wilcoxon` is the first single-sample rank-based Gate B2 executable inline method and computes SciPy-backed signed-rank results from the same canonical row source.
-`hypothesis.two_sample_t` is the first two-group Gate B2 executable inline method and computes SciPy-backed Welch-default or explicit pooled independent two-sample t-test results from the same canonical row source.
-`hypothesis.mann_whitney` is the first rank-based Gate B2 executable inline method and computes SciPy-backed Mann-Whitney U results from the same canonical row source.
-`hypothesis.kruskal_wallis` is the first 3-or-more-group rank-based Gate B2 executable inline method and computes SciPy-backed Kruskal-Wallis plus Dunn/Holm post-hoc results from the same canonical row source.
-`hypothesis.one_way_anova` is the first ANOVA Gate B2 executable inline method and computes SciPy-backed standard one-way ANOVA plus Tukey-Kramer post-hoc results from the same canonical row source.
-`hypothesis.equivalence_tost` is the first equivalence Gate B2 executable inline method and computes SciPy-backed one-sample mean TOST results from the same canonical row source.
-`categorical.one_proportion` is the first categorical Gate B2 executable inline method and computes a SciPy-backed exact binomial 1-proportion test for one binary response column plus an explicit event level from the same canonical row source.
-`categorical.two_proportion` is the second categorical Gate B2 executable inline method and computes a SciPy-backed Fisher exact 2-proportion test for one binary response column, exactly two usable groups, and an explicit event level from the same canonical row source.
-`categorical.chi_square_association` is the third categorical Gate B2 executable inline method and computes a SciPy-backed Pearson chi-square test of independence with Cramer's V and expected-count diagnostics from the same canonical row source.
-Other methods remain `planned` or `disabled` and return structured unavailable-method errors.
-Schema version `5` includes dataset artifact metadata plus analysis run, artifact, and job metadata tables with status/cancel API skeletons.
-The profile endpoint reads validated canonical rows, persists a raw-value-free `profile_summary` JSON artifact with SHA-256 metadata, and returns aggregate counts, canonical/profile artifact metadata, duplicate-row count, memory estimate, date/time format and timezone preflight, and warnings only, not raw value samples.
-It does not create mock results.
+## 검사
+
+저장소 root에서 공통 검사를 실행합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
+```
+
+Backend만 좁게 확인할 때:
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check .\backend
+.\.venv\Scripts\python.exe -m ruff format --check .\backend
+.\.venv\Scripts\python.exe -m mypy .\backend\app
+.\.venv\Scripts\python.exe -m pytest .\backend\tests
+```
+
+Direct dependency와 Python 3.10 Windows wheel hash lock은
+`backend/pyproject.toml`과 `backend/requirements-py310-win.lock`에서 관리합니다.
+
+## Storage와 migration
+
+현재 SQLite schema version은 `14`입니다. Dataset version, analysis result, DOE response
+revision, Bayesian history/recommendation/lifecycle, control-limit set 등 persisted relation은
+migration과 backward-compatibility test를 통해 변경합니다. 기존 stored record를 새
+method/result 의미로 조용히 재해석하지 않습니다.
+
+Workspace write는 app-owned 경로와 checksum metadata를 사용하며 가능한 곳에서 atomic
+replacement와 quarantine recovery를 적용합니다. Raw user workspace나 생성 artifact를 Git에
+commit하지 않습니다.
+
+## 보안 경계
+
+- 기본 bind는 `127.0.0.1`이며 core API는 local single-user용입니다.
+- raw row, request body, filename, internal path, traceback을 client error/log에 노출하지 않습니다.
+- 외부 pickle/joblib, arbitrary Python/shell/`eval`을 허용하지 않습니다.
+- CPU-bound statistics와 scikit-learn 작업은 async event loop에서 직접 실행하지 않습니다.
+- API 오류는 stable code와 `correlation_id`를 사용합니다.
+
+통계, 개인정보, Windows 호환성 규칙은 [AGENTS.md](../AGENTS.md)와
+[PRD addendum](../data_prd_addendum.md)가 우선합니다.

@@ -5,34 +5,37 @@ Last updated: 2026-07-19
 ## Local Validation
 
 - Clean pushed-main baseline: local `main` and `origin/main` resolved to
-  `ee9806a4e491f0d700fba6701ed5cc218d228c62` with an empty working tree on
-  2026-07-19. Bootstrap passed, full check passed with backend 777, frontend
-  137, and OpenAPI/frontend contracts 155, tutorial smoke passed all 18 result
-  sections, and Chromium E2E passed in 79.3 seconds.
-- Final tutorial-truth/Help/Report validation was performed before this slice's
-  commit/push in a worktree based on that pushed SHA. `scripts/check.ps1` passed in 836.0
-  seconds with the 18-block Markdown truth check, Ruff/format over 159 Python
-  files, mypy over 101 source files, backend 782, frontend lint/typecheck and
-  Vitest 139, OpenAPI/frontend contracts 155, and production build. An initial
-  run passed 781 backend tests and correctly stopped at the E2E step-marker
-  documentation guard before that coverage document was synchronized.
+  `0b41ecffdfaca875a3e09f407f099d88b3ef7908` with an empty working tree on
+  2026-07-19. After stopping only this repository's stale Vite process, a
+  second `scripts/bootstrap.ps1` run passed. `scripts/check.ps1` then passed in
+  852.4 seconds with the 18-block Markdown truth check, Ruff/format over 159
+  Python files, mypy over 101 source files, backend 782, frontend
+  lint/typecheck and Vitest 139, OpenAPI/frontend contracts 155, and production
+  build.
+- The Bayesian modularization worktree based on that pushed SHA passed frontend
+  lint/typecheck/build and 142 Vitest tests. Chromium E2E passed in 79.3 seconds
+  and now verifies automatic `study_id`/`recommendation_id` reload plus the
+  successor same-seed warning. After documentation synchronization,
+  `scripts/check.ps1` passed again in 840.3 seconds with backend 782, frontend
+  142, OpenAPI/frontend contracts 155, and all build/static checks.
 - The latest recorded backend pytest count is 782.
-- The latest recorded frontend Vitest count is 139.
+- The latest recorded frontend Vitest count is 142.
 - The latest OpenAPI/frontend contract count is 155.
   These counts describe the current local development worktree.
 - The pushed baseline and current worktree are local development evidence, not
   remote Actions or Windows 11/Node 22 release evidence.
 - Production assets: main 532.53 kB / 127.56 kB gzip, Regression 55.11 kB /
-  11.99 kB, Quality 64.25 kB / 11.97 kB, DOE 98.18 kB / 22.90 kB, and the
+  11.99 kB, Quality 64.25 kB / 11.97 kB, DOE 110.90 kB / 26.20 kB, and the
   shared dedicated-result restore helper 0.71 kB / 0.32 kB. Main still emits
   the 500 kB warning; measured bundle optimization remains backlog.
-- The separate 18-section real-API tutorial smoke passed in 19.7 seconds.
-- Final Chromium E2E passed in 77.3 seconds with diagnostics at
-  `.tmp/e2e-diagnostics`. It covers Predict `prediction_id` and Optimizer
+- The separate 18-section real-API tutorial smoke passed in 17.9 seconds.
+- Current Chromium E2E passed in 79.3 seconds with diagnostics at
+  `.tmp/e2e-diagnostics-bayesian-modularization-final`. It covers Predict `prediction_id` and Optimizer
   `optimization_id` stored-result reload, dedicated generic-history/export
   scoping, Report Center HTML generation/download, Help Center route/reload,
   selected-method context help, plus all existing paste, prediction/export,
-  quality, DOE, Bayesian, and retention paths.
+  quality, DOE, Bayesian, and retention paths. The Bayesian path records and
+  reloads exact study/recommendation IDs without manual reselection.
 - The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
   24.17.0. These are development results, not Windows 11/Python 3.10/Node 22
   release evidence. The Windows 11/Node 22 clean release gate remains open.

@@ -26,6 +26,14 @@ API-verified expected values, use
 `docs/studio_end_to_end_tutorial_ko.md`. This checklist remains the UX QA
 acceptance companion rather than the user tutorial itself.
 
+The Bayesian screen begins with a paged saved-Study catalog and a clear new
+Study action. Existing Study selection shows its definition and trials before
+recommendation, close, and deletion areas. Reload-safe links contain only
+Study/recommendation IDs. When a closed Study is used to prepare a successor,
+the screen warns that reusing the same seed may regenerate the same initial
+conditions and states that observations, history, and recommendations are not
+copied.
+
 ## Spreadsheet Paste Review
 
 User task: copy a rectangular range from Excel or another spreadsheet, review

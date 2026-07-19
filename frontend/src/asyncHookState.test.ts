@@ -13,6 +13,7 @@ import type {
   AttributeControlLimitSetListResponse,
   AttributeControlLimitSetDeletionPreflightResponse,
   AttributeControlLimitSetResponse,
+  BayesianStudyListResponse,
   DatasetVersionCatalogResponse,
   RegressionPredictionCsvExportResponse,
   RegressionPredictionPreflightResponse,
@@ -31,6 +32,8 @@ import { useRegressionPredictionState } from "./useRegressionPredictionState";
 import { useRegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
 import { useRestoredAnalysisResultState } from "./useRestoredAnalysisResultState";
+import { useBayesianStudyCatalogState } from "./features/bayesian/hooks/useBayesianStudyCatalogState";
+import { useBayesianStudyDraftState } from "./features/bayesian/hooks/useBayesianStudyDraftState";
 
 const apiMocks = vi.hoisted(() => ({
   createAnalysisResultCsvExport: vi.fn(),
@@ -51,6 +54,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchAttributeControlLimitSets: vi.fn(),
   fetchAttributeControlLimitSetDeletionPreflight: vi.fn(),
   fetchAttributeControlMonitoringPreflight: vi.fn(),
+  fetchBayesianStudies: vi.fn(),
   fetchDatasetVersions: vi.fn(),
   fetchRegressionPredictionPreflight: vi.fn(),
   fetchRegressionPredictions: vi.fn(),
@@ -985,6 +989,77 @@ describe("async workbench hooks", () => {
     runner.update(null);
     expect(runner.output.page).toBeNull();
     expect(runner.output.isLoading).toBe(false);
+    runner.unmount();
+  });
+
+  it("reaches the 51st Bayesian study and ignores an older catalog response", async () => {
+    const first = deferred<BayesianStudyListResponse>();
+    const second = deferred<BayesianStudyListResponse>();
+    apiMocks.fetchBayesianStudies
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const selectedId = "00000000-0000-4000-8000-000000000099";
+    const runner = new HookRunner<
+      string | null,
+      ReturnType<typeof useBayesianStudyCatalogState>
+    >(useBayesianStudyCatalogState, selectedId);
+
+    await runner.act(() => runner.output.onPageChange(40));
+    second.resolve({
+      total: 51,
+      offset: 40,
+      limit: 20,
+      items: [
+        {
+          study_id: "00000000-0000-4000-8000-000000000051",
+          study_version_id: "00000000-0000-4000-8000-000000000151",
+          method_id: "doe.bayesian_optimization",
+          method_version: "0.2.2",
+          name: "Study 51",
+          status: "active",
+          predecessor_study_id: null,
+          updated_at: "2026-07-19T00:00:00Z",
+          definition_sha256: "a".repeat(64),
+          pending_trial_count: 2,
+          completed_trial_count: 0,
+          abandoned_trial_count: 0,
+          observation_history_sha256: "b".repeat(64),
+        },
+      ],
+    });
+    await runner.flush();
+    first.resolve({ total: 51, offset: 0, limit: 20, items: [] });
+    await runner.flush();
+
+    expect(apiMocks.fetchBayesianStudies).toHaveBeenNthCalledWith(1, 0, 20);
+    expect(apiMocks.fetchBayesianStudies).toHaveBeenNthCalledWith(2, 40, 20);
+    expect(runner.output.catalog?.offset).toBe(40);
+    expect(runner.output.catalog?.items[0]?.name).toBe("Study 51");
+    expect(runner.output.selectedStudyId).toBe(selectedId);
+    expect(runner.output.selectedSummary).toBeNull();
+    expect(runner.output.isLoading).toBe(false);
+    runner.unmount();
+  });
+
+  it("keeps Bayesian draft factor and constraint state independent from catalog state", async () => {
+    const runner = new HookRunner<void, ReturnType<typeof useBayesianStudyDraftState>>(
+      useBayesianStudyDraftState,
+      undefined,
+    );
+
+    await runner.act(() => runner.output.addFactor());
+    expect(runner.output.factors).toHaveLength(2);
+    expect(runner.output.minimumInitialDesignSize).toBe(3);
+    expect(runner.output.initialDesignSize).toBe("3");
+    await runner.act(() => runner.output.addConstraint());
+    await runner.act(() =>
+      runner.output.updateConstraintCoefficient(
+        runner.output.constraints[0].key,
+        runner.output.factors[0].key,
+        "1.5",
+      ),
+    );
+    expect(runner.output.constraints[0]?.coefficients[1]).toBe("1.5");
     runner.unmount();
   });
 });
