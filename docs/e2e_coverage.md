@@ -6,12 +6,13 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-19 Bayesian P0 closure worktree run passed in 78.0 seconds
+The 2026-07-20 clean pushed-main run at
+`7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1` passed in 78.1 seconds
 with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics-bayesian-p0-targeted
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-bayesian-p0-final-sha
 ```
 
 The run first dispatches a real `text/plain` spreadsheet paste while providing

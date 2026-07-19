@@ -207,19 +207,18 @@ Current stabilization update:
 
 ## Latest Validation
 
-Current development validation on 2026-07-19:
+Current development validation on 2026-07-20:
 
-- Worktree based on clean pushed SHA
-  `695caf2fcfb6a8336ddd29afc77d4ed22911dc63`: full `scripts/check.ps1`
-  passed in 841.8 seconds with backend 784, frontend 152, direct
+- Clean pushed commit `7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1`: full
+  `scripts/check.ps1` passed in 834.6 seconds with backend 784, frontend 152, direct
   OpenAPI/frontend contract 155, tutorial Markdown 18-block verification, and
   all lint/type/build gates. The 18-section real-API tutorial smoke passed in
-  19.0 seconds and Chromium E2E passed in 78.0 seconds through lazy Help/Report
+  18.7 seconds and Chromium E2E passed in 78.1 seconds through lazy Help/Report
   plus all retained critical paths. Main measured 496.98 kB / 118.70 kB gzip
   without the 500 kB warning. This Windows 10/Node 24 host result is development
-  evidence, not the Windows 11/Node 22 release gate. This evidence was captured
-  before the slice's commit/push, and remote Actions were not checked because
-  `gh` is unavailable.
+  evidence, not the Windows 11/Node 22 release gate. The local and remote main
+  refs matched after push; hosted Actions were not checked because `gh` is
+  unavailable.
 
 Historical validation begins below. Last validated on 2026-07-06:
 

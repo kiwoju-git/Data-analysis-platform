@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## 1. Required Reading And Priority
 
@@ -23,12 +23,12 @@ Current and next development order:
 
 Predict/Response Optimizer entrypoints, tutorial truth sync, Help/Report Center,
 Bayesian frontend modularization, catalog paging/deep-link restore, successor seed guidance, and
-repository onboarding README are complete on pushed main through
-`695caf2fcfb6a8336ddd29afc77d4ed22911dc63`. The current approved closure slice
-adds Study-selection action isolation and direct lifecycle/recommendation/retention race tests,
+repository onboarding README are complete on pushed main. Bayesian P0 release closure is
+validated on pushed commit `7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1`; it includes
+Study-selection action isolation, direct lifecycle/recommendation/retention race tests,
 route-level Help/Report loading, a bounded P0 release checklist, and measured 20/100/500-Study
 catalog evidence. Bayesian math, request/result/storage schemas, SQLite schema 14, and method
-`0.2.2` remain unchanged. After this slice:
+`0.2.2` remain unchanged. Next:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the resulting main push in remote GitHub Actions and review required Windows/E2E checks

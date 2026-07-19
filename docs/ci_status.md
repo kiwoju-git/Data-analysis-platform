@@ -1,37 +1,32 @@
 # CI Status
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Local Validation
 
-- Clean pushed-main baseline: local `main` and `origin/main` resolved to
-  `695caf2fcfb6a8336ddd29afc77d4ed22911dc63` with an empty working tree on
-  2026-07-19. The first `scripts/bootstrap.ps1` attempt completed Python setup
-  but an existing repository Vite process held the Rolldown native DLL and
-  caused `npm ci` `EPERM`. After stopping only those two repository Node
-  processes, the second bootstrap passed. Baseline `scripts/check.ps1` passed
-  in 854.2 seconds with backend 782, frontend 142, OpenAPI/frontend 155, and 18
-  tutorial Markdown blocks. Baseline tutorial smoke passed 18 sections in
-  18.8 seconds and Chromium E2E passed in 79.5 seconds.
-- The P0 closure worktree based on that pushed SHA passed `scripts/check.ps1`
-  in 841.8 seconds: Ruff/format over 160 Python files, mypy over 101 source
-  files, backend pytest 784, frontend lint/typecheck and Vitest 152,
-  OpenAPI/frontend contracts 155, 18 tutorial Markdown blocks, and production
-  build. The separate real-API tutorial smoke passed all 18 sections in 19.0
-  seconds.
+- Clean pushed-main closure: local `main`, `origin/main`, and the remote main
+  ref resolved to `7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1` with an empty
+  working tree on 2026-07-20. `scripts/bootstrap.ps1` passed in 26.1 seconds;
+  the locked Python environment was consistent and `npm ci` reported zero
+  vulnerabilities.
+- On that clean pushed commit, `scripts/check.ps1` passed in 834.6 seconds:
+  Ruff/format over 160 Python files, mypy over 101 source files, backend pytest
+  784, frontend lint/typecheck and Vitest 152, OpenAPI/frontend contracts 155,
+  18 tutorial Markdown blocks, and production build. The separate real-API
+  tutorial smoke passed all 18 sections in 18.7 seconds.
 - The latest recorded backend pytest count is 784.
 - The latest recorded frontend Vitest count is 152.
 - The latest OpenAPI/frontend contract count is 155.
-  These counts describe the current local development worktree.
-- The pushed baseline and current worktree are local development evidence, not
+  These counts describe the clean pushed commit above.
+- The clean pushed commit results are local development evidence, not
   remote Actions or Windows 11/Node 22 release evidence.
 - Route splitting reduced main from 532.53 kB / 127.56 kB gzip to 496.98 kB /
   118.70 kB. Current assets are Help 18.01/6.29 kB, Report 12.04/3.42 kB,
   shared latest-request 7.36/1.81 kB, Regression 55.14/12.01 kB, Quality
   64.25/11.97 kB, DOE 111.16/26.23 kB, and dedicated-result restore
   0.71/0.32 kB. The main asset no longer emits the 500 kB warning.
-- Current Chromium E2E passed in 78.0 seconds with diagnostics at
-  `.tmp/e2e-diagnostics-bayesian-p0-targeted`. It covers Predict `prediction_id` and Optimizer
+- Current Chromium E2E passed in 78.1 seconds with diagnostics at
+  `.tmp/e2e-diagnostics-bayesian-p0-final-sha`. It covers Predict `prediction_id` and Optimizer
   `optimization_id` stored-result reload, dedicated generic-history/export
   scoping, Report Center HTML generation/download, Help Center route/reload,
   separate Help/Report resource loading, selected-method context help, plus all
