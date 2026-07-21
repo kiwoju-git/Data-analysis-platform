@@ -1,1 +1,3 @@
 examples/tutorial/generate_studio_tutorial_data.py text eol=lf
+examples/tutorial/*.csv text eol=lf
+examples/tutorial/*.tsv text eol=lf

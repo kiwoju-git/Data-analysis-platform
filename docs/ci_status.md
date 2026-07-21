@@ -725,6 +725,14 @@ This satisfies the current repository-side requirement that main pushes should s
   spelling. The current revision pins that generator to LF in `.gitattributes`
   and updates the guard to require the same runner-temp `logs/screenshots/html`
   scope. `e2e` was correctly skipped because `needs: windows` did not succeed.
+- Run `29837897049` for `9112c4e5f9ae988d6117df289d73b8b5a9b24d75`
+  passed 783/784 backend tests, including the generator SHA and corrected
+  artifact guard. The remaining failure showed that the eight manifest-listed
+  tutorial CSV/TSV files also require their declared LF policy during hosted
+  Windows checkout. The current `.gitattributes` revision pins those generated
+  data files to LF as well; no sample data bytes, formulas, expected results, or
+  manifest hashes were changed. `e2e` was again correctly skipped after the
+  failed Windows dependency.
 - On 2026-07-19, invoking `gh auth status --hostname github.com` and the
   requested `gh run list` command returned
   PowerShell command-not-found error, confirming that GitHub CLI is not
