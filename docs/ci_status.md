@@ -717,6 +717,14 @@ This satisfies the current repository-side requirement that main pushes should s
   fields while retaining runner-temp browser, workspace, and diagnostics
   paths. A subsequent main push is required to provide real hosted Windows and
   E2E evidence; local validation is not substituted for that run.
+- Follow-up run `29834322001` for `c1e393525e106225de4b194d3cc93fccf29c27d3`
+  created the expected `windows` and dependent `e2e` jobs, proving the workflow
+  parse fix. `windows` then failed after 782/784 backend tests passed: hosted
+  checkout converted the tutorial generator to CRLF and changed its manifest
+  SHA, and the E2E artifact guard still expected the previous env-based path
+  spelling. The current revision pins that generator to LF in `.gitattributes`
+  and updates the guard to require the same runner-temp `logs/screenshots/html`
+  scope. `e2e` was correctly skipped because `needs: windows` did not succeed.
 - On 2026-07-19, invoking `gh auth status --hostname github.com` and the
   requested `gh run list` command returned
   PowerShell command-not-found error, confirming that GitHub CLI is not

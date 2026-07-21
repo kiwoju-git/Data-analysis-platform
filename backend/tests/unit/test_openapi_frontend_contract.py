@@ -2845,11 +2845,10 @@ def test_ci_e2e_diagnostics_contract_preserves_safe_artifact_scope() -> None:
     assert "name: e2e-logs" in workflow_text
 
     artifact_upload_block = workflow_text.split("name: e2e-logs", 1)[1]
-    assert "${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}\\**\\logs\\*.log" in artifact_upload_block
-    assert (
-        "${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}\\**\\screenshots\\*.png" in artifact_upload_block
-    )
-    assert "${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}\\**\\html\\*.html" in artifact_upload_block
+    diagnostics_root = "${{ runner.temp }}\\datalab-e2e-diagnostics"
+    assert f"{diagnostics_root}\\**\\logs\\*.log" in artifact_upload_block
+    assert f"{diagnostics_root}\\**\\screenshots\\*.png" in artifact_upload_block
+    assert f"{diagnostics_root}\\**\\html\\*.html" in artifact_upload_block
     assert "if-no-files-found: ignore" in artifact_upload_block
     assert "env.DATALAB_E2E_ROOT" not in artifact_upload_block
 
