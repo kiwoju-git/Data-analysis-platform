@@ -37,7 +37,7 @@ Last updated: 2026-07-21
   18 tutorial Markdown blocks, and production build. The separate real-API
   tutorial smoke passed all 18 sections in 18.7 seconds.
 - The latest recorded backend pytest count is 784.
-- The latest recorded frontend Vitest count is 152.
+- The latest recorded frontend Vitest count is 158.
 - The latest OpenAPI/frontend contract count is 155.
   These counts describe the clean pushed commit above.
 - The clean pushed commit results are local development evidence, not
@@ -707,18 +707,24 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Remote GitHub Actions Verification
 
+- Public GitHub Actions REST/UI inspection on 2026-07-21 verified push run
+  `29834082053` for head SHA
+  `413dba3e641522ac3238c3d23d54952791aee580`. It failed before creating any
+  jobs or artifacts because the workflow used the `runner` context in
+  job-level `env` at lines 36-38, where that context is unavailable. This was
+  a workflow parse failure, not a Windows check or E2E test result.
+- The current workflow revision moves those values to step-level `env`/`with`
+  fields while retaining runner-temp browser, workspace, and diagnostics
+  paths. A subsequent main push is required to provide real hosted Windows and
+  E2E evidence; local validation is not substituted for that run.
 - On 2026-07-19, invoking `gh auth status --hostname github.com` and the
   requested `gh run list` command returned
   PowerShell command-not-found error, confirming that GitHub CLI is not
   installed. The requested `gh run list`, `gh run view`, and artifact download
   checks therefore remain unavailable.
-- Therefore no current run ID/head SHA, Windows/e2e job result/order, or
-  `e2e-logs` artifact contents were verified. No artifact download was
-  attempted after the CLI prerequisite failed.
-- Remote GitHub Actions execution has not been directly verified from this
-  environment for the working tree validated from local base `main` commit
-  `ee9806a4e491f0d700fba6701ed5cc218d228c62`. A successful Git push confirms
-  only remote ref transfer; it does not verify the resulting Actions jobs.
+- The failed run provides a current run ID/head SHA but no Windows/e2e job
+  result/order and no `e2e-logs` artifact. Artifact inspection therefore
+  remains pending a workflow run that reaches its jobs.
 - GitHub app checks against that commit returned no PR-filtered workflow runs
   and no legacy commit statuses on 2026-07-10. The available connector endpoint
   is PR-run oriented, so that result is not sufficient to confirm push-triggered

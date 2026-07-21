@@ -32,10 +32,6 @@ jobs:
     runs-on: windows-latest
     needs: windows
     timeout-minutes: 20
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}\ms-playwright
-      DATALAB_E2E_ROOT: ${{ runner.temp }}\datalab-e2e
-      DATALAB_E2E_DIAGNOSTICS_ROOT: ${{ runner.temp }}\datalab-e2e-diagnostics
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,16 +45,22 @@ jobs:
       - name: Cache Playwright Chromium
         uses: actions/cache@v4
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          path: ${{ runner.temp }}\ms-playwright
           key: playwright-chromium-windows-${{ hashFiles('backend/pyproject.toml') }}
       - name: Bootstrap
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
       - name: Install Playwright Chromium
         shell: pwsh
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}\ms-playwright
         run: .\.venv\Scripts\python.exe -m playwright install chromium
       - name: Browser E2E Smoke
         shell: pwsh
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}\ms-playwright
+          DATALAB_E2E_ROOT: ${{ runner.temp }}\datalab-e2e
+          DATALAB_E2E_DIAGNOSTICS_ROOT: ${{ runner.temp }}\datalab-e2e-diagnostics
         run: powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -WorkspaceRoot "${{ env.DATALAB_E2E_ROOT }}" -DiagnosticsRoot "${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}" -KeepWorkspace
       - name: Upload E2E diagnostics
         if: always()
@@ -66,7 +68,7 @@ jobs:
         with:
           name: e2e-logs
           path: |
-            ${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}\**\logs\*.log
-            ${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}\**\screenshots\*.png
-            ${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}\**\html\*.html
+            ${{ runner.temp }}\datalab-e2e-diagnostics\**\logs\*.log
+            ${{ runner.temp }}\datalab-e2e-diagnostics\**\screenshots\*.png
+            ${{ runner.temp }}\datalab-e2e-diagnostics\**\html\*.html
           if-no-files-found: ignore
