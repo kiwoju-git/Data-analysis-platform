@@ -1,5 +1,5 @@
 import * as React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   AnalysisResultEnvelope,
@@ -17,7 +17,11 @@ import type {
   BayesianStudyDeletionPreflightResponse,
   BayesianStudyListResponse,
   BayesianStudyResponse,
+  DatasetVersionCatalogItem,
   DatasetVersionCatalogResponse,
+  DatasetVersionResponse,
+  DatasetRowsPreviewResponse,
+  DatasetProfileResponse,
   RegressionPredictionCsvExportResponse,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
@@ -40,6 +44,9 @@ import { useBayesianStudyDraftState } from "./features/bayesian/hooks/useBayesia
 import { useBayesianStudyLifecycleState } from "./features/bayesian/hooks/useBayesianStudyLifecycleState";
 import { useBayesianRecommendationState } from "./features/bayesian/hooks/useBayesianRecommendationState";
 import { useBayesianRetentionState } from "./features/bayesian/hooks/useBayesianRetentionState";
+import { useDatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
+import { useChartPointInteraction } from "./charts/useChartPointInteraction";
+import { useDatasetWorkflow } from "./useDatasetWorkflow";
 
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
@@ -70,7 +77,10 @@ const apiMocks = vi.hoisted(() => ({
   fetchBayesianStudyDeletionPreflight: vi.fn(),
   fetchBayesianStudies: vi.fn(),
   fetchLatestBayesianRecommendation: vi.fn(),
+  fetchDatasetProfile: vi.fn(),
+  fetchDatasetVersion: vi.fn(),
   fetchDatasetVersions: vi.fn(),
+  fetchRowsPreview: vi.fn(),
   fetchRegressionPredictionPreflight: vi.fn(),
   fetchRegressionPredictions: vi.fn(),
   fetchRegressionPredictionRows: vi.fn(),
@@ -503,14 +513,225 @@ function bayesianDeletionPreflight(
   };
 }
 
+function datasetCatalogItem(index: number): DatasetVersionCatalogItem {
+  return {
+    version_id: `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
+    dataset_id: `10000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
+    original_filename: `synthetic-${index}.csv`,
+    version_number: 1,
+    row_count: index,
+    column_count: 8,
+    created_at: "2026-07-21T00:00:00Z",
+  };
+}
+
 beforeEach(() => {
   for (const mock of Object.values(apiMocks)) {
     mock.mockReset();
   }
   apiMocks.fetchRegressionModelManifest.mockResolvedValue({});
+  apiMocks.fetchDatasetVersions.mockResolvedValue({
+    total: 0,
+    offset: 0,
+    limit: 20,
+    returned: 0,
+    has_previous: false,
+    has_next: false,
+    versions: [],
+  });
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(globalThis, "window");
 });
 
 describe("async workbench hooks", () => {
+  it("supports focus selection and Escape clearing for interactive chart points", async () => {
+    const runner = new HookRunner<void, ReturnType<typeof useChartPointInteraction>>(
+      useChartPointInteraction,
+      undefined,
+    );
+    await runner.act(() => runner.output.activate("point-1", 20, 30, "focus"));
+    expect(runner.output.activePoint).toEqual({
+      id: "point-1",
+      left: 20,
+      top: 30,
+      source: "focus",
+    });
+    const preventDefault = vi.fn();
+    await runner.act(() =>
+      runner.output.handleKeyDown({
+        key: "Escape",
+        preventDefault,
+      } as unknown as React.KeyboardEvent<Element>),
+    );
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(runner.output.activePoint).toBeNull();
+    runner.unmount();
+  });
+
+  it("keeps the latest active-dataset catalog page when an older response arrives late", async () => {
+    const first = deferred<DatasetVersionCatalogResponse>();
+    const second = deferred<DatasetVersionCatalogResponse>();
+    apiMocks.fetchDatasetVersions.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const runner = new HookRunner<
+      string | null,
+      ReturnType<typeof useDatasetVersionCatalogState>
+    >(useDatasetVersionCatalogState, null);
+
+    await runner.act(() => runner.output.onPageChange(20));
+    second.resolve({
+      total: 21,
+      offset: 20,
+      limit: 20,
+      returned: 1,
+      has_previous: true,
+      has_next: false,
+      versions: [datasetCatalogItem(21)],
+    });
+    await runner.flush();
+    first.resolve({
+      total: 21,
+      offset: 0,
+      limit: 20,
+      returned: 0,
+      has_previous: false,
+      has_next: true,
+      versions: [],
+    });
+    await runner.flush();
+
+    expect(apiMocks.fetchDatasetVersions).toHaveBeenNthCalledWith(1, 20, 0);
+    expect(apiMocks.fetchDatasetVersions).toHaveBeenNthCalledWith(2, 20, 20);
+    expect(runner.output.catalog?.offset).toBe(20);
+    expect(runner.output.catalog?.versions[0]?.row_count).toBe(21);
+    expect(runner.output.isLoading).toBe(false);
+    runner.unmount();
+  });
+
+  it("resolves an active dataset version outside the current catalog page by exact ID", async () => {
+    const activeItem = datasetCatalogItem(21);
+    apiMocks.fetchDatasetVersions
+      .mockResolvedValueOnce({
+        total: 21,
+        offset: 0,
+        limit: 20,
+        returned: 20,
+        has_previous: false,
+        has_next: true,
+        versions: Array.from({ length: 20 }, (_, index) => datasetCatalogItem(index + 1)),
+      })
+      .mockResolvedValueOnce({
+        total: 21,
+        offset: 20,
+        limit: 20,
+        returned: 1,
+        has_previous: true,
+        has_next: false,
+        versions: [activeItem],
+      });
+    const runner = new HookRunner<
+      string | null,
+      ReturnType<typeof useDatasetVersionCatalogState>
+    >(useDatasetVersionCatalogState, activeItem.version_id);
+    await runner.flush();
+
+    expect(apiMocks.fetchDatasetVersions).toHaveBeenNthCalledWith(1, 20, 0);
+    expect(apiMocks.fetchDatasetVersions).toHaveBeenNthCalledWith(2, 20, 20);
+    expect(runner.output.catalog?.offset).toBe(0);
+    expect(runner.output.activeItem).toEqual(activeItem);
+    expect(runner.output.isResolvingActiveItem).toBe(false);
+    runner.unmount();
+  });
+
+  it("publishes only the latest selected dataset version, preview, and profile", async () => {
+    const versionA = deferred<DatasetVersionResponse>();
+    const versionB = deferred<DatasetVersionResponse>();
+    const previewA = deferred<DatasetRowsPreviewResponse>();
+    const previewB = deferred<DatasetRowsPreviewResponse>();
+    const profileA = deferred<DatasetProfileResponse>();
+    const profileB = deferred<DatasetProfileResponse>();
+    apiMocks.fetchDatasetVersion.mockReturnValueOnce(versionA.promise).mockReturnValueOnce(versionB.promise);
+    apiMocks.fetchRowsPreview.mockReturnValueOnce(previewA.promise).mockReturnValueOnce(previewB.promise);
+    apiMocks.fetchDatasetProfile.mockReturnValueOnce(profileA.promise).mockReturnValueOnce(profileB.promise);
+
+    let currentHref = "http://127.0.0.1/analysis/regression/regression.linear_model";
+    const storage = new Map<string, string>();
+    const windowStub = {
+      get location() {
+        const url = new URL(currentHref);
+        return { href: currentHref, search: url.search };
+      },
+      history: {
+        replaceState: (_state: unknown, _title: string, nextUrl: string) => {
+          currentHref = new URL(nextUrl, currentHref).href;
+        },
+      },
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        removeItem: (key: string) => storage.delete(key),
+        setItem: (key: string, value: string) => storage.set(key, value),
+      },
+    } as unknown as Window & typeof globalThis;
+    Object.defineProperty(globalThis, "window", { configurable: true, value: windowStub });
+
+    const callbacks = {
+      onDatasetColumnsChanged: vi.fn(),
+      onDatasetReset: vi.fn(),
+      onSchemaChanged: vi.fn(),
+    };
+    const runner = new HookRunner<
+      Parameters<typeof useDatasetWorkflow>[0],
+      ReturnType<typeof useDatasetWorkflow>
+    >(useDatasetWorkflow, callbacks);
+    const idA = "00000000-0000-4000-8000-000000000001";
+    const idB = "00000000-0000-4000-8000-000000000002";
+    await runner.act(() => runner.output.activeDatasetSelectorProps.onSelect(idA));
+    await runner.act(() => runner.output.activeDatasetSelectorProps.onSelect(idB));
+
+    const columnsB = [{ column_id: "column-b" }] as DatasetVersionResponse["columns"];
+    versionB.resolve({
+      version_id: idB,
+      dataset_id: "10000000-0000-4000-8000-000000000002",
+      version_number: 1,
+      row_count: 48,
+      column_count: 1,
+      schema_hash: "schema-b",
+      source_sha256: "b".repeat(64),
+      parsing: { has_header: true },
+      columns: columnsB,
+      created_at: "2026-07-21T00:00:00Z",
+    } as DatasetVersionResponse);
+    previewB.resolve({ version_id: idB, rows: [] } as unknown as DatasetRowsPreviewResponse);
+    profileB.resolve({ version_id: idB } as unknown as DatasetProfileResponse);
+    await runner.flush();
+
+    versionA.resolve({
+      version_id: idA,
+      dataset_id: "10000000-0000-4000-8000-000000000001",
+      version_number: 1,
+      row_count: 240,
+      column_count: 1,
+      schema_hash: "schema-a",
+      source_sha256: "a".repeat(64),
+      parsing: { has_header: true },
+      columns: [{ column_id: "column-a" }],
+      created_at: "2026-07-21T00:00:00Z",
+    } as DatasetVersionResponse);
+    previewA.resolve({ version_id: idA, rows: [] } as unknown as DatasetRowsPreviewResponse);
+    profileA.resolve({ version_id: idA } as unknown as DatasetProfileResponse);
+    await runner.flush();
+
+    expect(runner.output.version?.version_id).toBe(idB);
+    expect(runner.output.datasetPageProps.preview?.version_id).toBe(idB);
+    expect(runner.output.profile?.version_id).toBe(idB);
+    expect(storage.get("datalab.current_dataset_version_id")).toBe(idB);
+    expect(new URL(currentHref).searchParams.get("dataset_version_id")).toBe(idB);
+    expect(callbacks.onDatasetColumnsChanged).toHaveBeenLastCalledWith(columnsB);
+    expect(callbacks.onDatasetReset).toHaveBeenCalledTimes(2);
+    runner.unmount();
+  });
+
   it("keeps the latest Phase II limit-set catalog when the target changes", async () => {
     const first = deferred<AttributeControlLimitSetListResponse>();
     const second = deferred<AttributeControlLimitSetListResponse>();

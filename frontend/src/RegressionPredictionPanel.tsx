@@ -5,6 +5,10 @@ import type {
   RegressionPredictionResponse,
   RegressionPredictionRowsPageResponse,
 } from "./api";
+import {
+  groupPredictionPreflightIssues,
+  predictionRangeRows,
+} from "./predictionPreflightPresentation";
 import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
 import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
 
@@ -71,6 +75,8 @@ export function RegressionPredictionPanel({
     predictionPreflight?.issues.filter((issue) => issue.severity === "error").length ?? 0;
   const warningCount =
     predictionPreflight?.issues.filter((issue) => issue.severity === "warning").length ?? 0;
+  const groupedIssues = groupPredictionPreflightIssues(predictionPreflight?.issues ?? []);
+  const extrapolationChecks = predictionRangeRows(predictionPreflight?.numeric_checks ?? []);
   const activePage =
     prediction !== null && predictionRowsState.page?.prediction_id === prediction.prediction_id
       ? predictionRowsState.page
@@ -223,25 +229,70 @@ export function RegressionPredictionPanel({
             </strong>
             <span>문제</span><strong>오류 {errorCount}개 · 경고 {warningCount}개</strong>
           </div>
-          {predictionPreflight.issues.length > 0 ? (
+          {predictionPreflight.prediction_ready ? (
+            <div className="success-box" role="status">
+              {warningCount > 0 ? "경고는 있지만 실행 가능" : "예측 실행 가능"} · usable {predictionPreflight.row_count_usable.toLocaleString()} / {predictionPreflight.row_count_total.toLocaleString()}행
+            </div>
+          ) : (
+            <div className="error-box" role="alert">
+              예측 실행 차단 · source model과 target predictor 오류를 해결한 뒤 다시 점검하세요.
+            </div>
+          )}
+          {groupedIssues.sourceBlockers.length > 0 ? (
+            <div className="error-box prediction-source-blocker" role="alert">
+              <strong>Source 회귀모형 재적합 필요</strong>
+              <ul>
+                {groupedIssues.sourceBlockers.map((issue, index) => (
+                  <li key={`${issue.code}-${index}`}>{issue.message}<span className="cell-subtle">{issue.code}</span></li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {!predictionPreflight.schema_hash_match ? (
+            <div className="notice-box prediction-target-warning">
+              <strong>Target schema가 source와 다릅니다.</strong>
+              <span>별도 target dataset에서는 정상일 수 있습니다. 아래 predictor mapping과 type을 확인하세요.</span>
+            </div>
+          ) : null}
+          {groupedIssues.mappingIssues.length > 0 ? (
+            <details className="notice-box prediction-mapping-summary">
+              <summary>
+                Predictor ID가 달라 표시명으로 안전하게 매핑한 컬럼 {groupedIssues.mappingIssues.length.toLocaleString()}개
+              </summary>
+              <p>표시명이 target에서 하나뿐인 경우에만 매핑합니다. 중복되거나 누락되면 실행할 수 없습니다.</p>
+              <PredictionMappingTable preflight={predictionPreflight} />
+            </details>
+          ) : (
+            <PredictionMappingTable preflight={predictionPreflight} />
+          )}
+          {extrapolationChecks.length > 0 ? (
+            <div className="notice-box prediction-range-warning">
+              <strong>학습 범위 밖 target 값</strong>
+              <span>예측은 실행할 수 있지만 외삽 결과의 불확실성과 적용 가능성을 별도로 검토하세요.</span>
+              <div className="table-wrap">
+                <table aria-label="학습 범위 밖 대상값 요약" className="result-table">
+                  <thead><tr><th>Predictor</th><th>학습 min</th><th>학습 max</th><th>범위 아래</th><th>범위 위</th><th>합계</th></tr></thead>
+                  <tbody>{extrapolationChecks.map((check) => (
+                    <tr key={check.source_column_id}>
+                      <td>{check.display_name}</td>
+                      <td>{numberOrDash(check.training_min)}</td>
+                      <td>{numberOrDash(check.training_max)}</td>
+                      <td>{check.n_below_training_range.toLocaleString()}</td>
+                      <td>{check.n_above_training_range.toLocaleString()}</td>
+                      <td>{(check.n_below_training_range + check.n_above_training_range).toLocaleString()}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+          {groupedIssues.otherIssues.length > 0 ? (
             <ul className="warning-list" aria-label="예측 사전점검 문제">
-              {predictionPreflight.issues.map((issue, index) => (
+              {groupedIssues.otherIssues.map((issue, index) => (
                 <li key={`${issue.code}-${index}`}>[{issue.severity}] {issue.message}<span className="cell-subtle">{issue.display_name ?? issue.code}{issue.count !== null ? ` · ${issue.count.toLocaleString()}건` : ""}</span></li>
               ))}
             </ul>
           ) : null}
-          <div className="table-wrap">
-            <table className="result-table">
-              <thead><tr><th>컬럼</th><th>종류</th><th>매핑</th><th>상태</th><th>대상 컬럼</th></tr></thead>
-              <tbody>{predictionPreflight.required_columns.map((mapping) => (
-                <tr key={mapping.source_column_id}>
-                  <td>{mapping.display_name}</td><td>{predictorKind(mapping.predictor_kind)}</td>
-                  <td>{matchType(mapping.match_type)}</td><td>{mapping.status}</td>
-                  <td>{shortId(mapping.target_column_id ?? "missing")}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
           {predictionPreflight.numeric_checks.length > 0 ? (
             <div className="table-wrap">
               <table className="result-table">
@@ -322,6 +373,28 @@ export function RegressionPredictionPanel({
   );
 }
 
+function PredictionMappingTable({
+  preflight,
+}: {
+  preflight: RegressionPredictionPreflightResponse;
+}) {
+  return (
+    <div className="table-wrap">
+      <table aria-label="Predictor source target mapping" className="result-table">
+        <thead><tr><th>Predictor</th><th>종류</th><th>매핑</th><th>상태</th><th>Source ID</th><th>Target ID</th></tr></thead>
+        <tbody>{preflight.required_columns.map((mapping) => (
+          <tr key={mapping.source_column_id}>
+            <td>{mapping.display_name}</td><td>{predictorKind(mapping.predictor_kind)}</td>
+            <td>{matchType(mapping.match_type)}</td><td>{mapping.status}</td>
+            <td>{shortId(mapping.source_column_id)}</td>
+            <td>{shortId(mapping.target_column_id ?? "missing")}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
+}
+
 function PredictionIntervalChart({ rows }: { rows: RegressionPredictionResponse["rows"] }) {
   const usable = rows.filter((row) => row.prediction_interval !== null);
   if (usable.length === 0) return <div className="empty-state">표시할 예측 구간이 없습니다.</div>;
@@ -373,6 +446,10 @@ function shortId(value: string) {
 
 function number(value: number) {
   return Number.isFinite(value) ? value.toPrecision(6) : "-";
+}
+
+function numberOrDash(value: number | null) {
+  return value === null || !Number.isFinite(value) ? "-" : number(value);
 }
 
 function interval(value: { level: number; lower: number; upper: number } | null) {

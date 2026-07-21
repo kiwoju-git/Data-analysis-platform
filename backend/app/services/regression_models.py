@@ -2204,6 +2204,8 @@ def _numeric_check_payload(check: _PredictionColumnCheck) -> RegressionPredictio
         source_column_id=check.source_column_id,
         target_column_id=check.target_column.column_id,
         display_name=check.display_name,
+        training_min=check.training_min,
+        training_max=check.training_max,
         n_valid=check.n_valid,
         n_missing=check.n_missing,
         n_non_numeric=check.n_non_numeric,

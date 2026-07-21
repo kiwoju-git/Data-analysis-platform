@@ -1,9 +1,31 @@
 # CI Status
 
-Last updated: 2026-07-20
+Last updated: 2026-07-21
 
 ## Local Validation
 
+- The active-dataset and interactive-regression worktree based on pushed main
+  `baf3372975c115cfb2c64566e727b31c58623b4d` passed
+  `scripts/check.ps1` in 878.7 seconds on 2026-07-21: Ruff/format over 160
+  Python files, mypy over 101 source files, backend pytest 784, frontend
+  lint/typecheck and Vitest 158, OpenAPI/frontend contracts 155, 18 tutorial
+  Markdown blocks, and production build. The real-API tutorial smoke separately
+  passed all 18 sections in 17.8 seconds. This is pre-commit development
+  evidence for the current revision, not a clean pushed-SHA claim.
+- The production build measured main at 503.55 kB / 120.70 kB gzip and
+  Regression at 64.59 kB / 14.84 kB gzip. Quality is 64.25/11.97 kB, DOE is
+  111.16/26.23 kB, Help is 18.01/6.29 kB, and Report is 12.04/3.42 kB. The
+  global dataset selector and regression interaction foundation caused main to
+  cross Vite's 500 kB warning threshold again; measured module extraction is a
+  follow-up, not a reason to remove the workflow.
+- A final isolated Chromium critical path passed in 79.8 seconds with
+  diagnostics under `.tmp/e2e-diagnostics`. It covers ID-only active dataset
+  switching/reload, grouped Predict mapping and training-range warnings,
+  Observed vs Fitted, pointer/keyboard diagnostic details, and all retained
+  Help/Report/Paste/quality/DOE/Bayesian/retention paths.
+- The measured host remains Windows 10 Home build 19045, CPython 3.10.11, and
+  Node 24.17.0. These results are development evidence, not Windows 11/Python
+  3.10/Node 22 release evidence.
 - Clean pushed-main closure: local `main`, `origin/main`, and the remote main
   ref resolved to `7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1` with an empty
   working tree on 2026-07-20. `scripts/bootstrap.ps1` passed in 26.1 seconds;

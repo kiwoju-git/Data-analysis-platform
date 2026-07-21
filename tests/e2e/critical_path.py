@@ -54,7 +54,7 @@ REGRESSION_TARGET_DATA = """y\tx\tgroup
 0\t1\tA
 0\t3.5\tB
 0\t5.5\tC
-0\t6\tA
+0\t8\tA
 """
 
 ATTRIBUTE_CONTROL_CHART_DATA = """defectives\tsample_size
@@ -723,15 +723,29 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     paste_plain_text(page, REGRESSION_TARGET_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
-    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/confirm-parsing")
+    ) as target_confirm_info:
+        page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    target_active_version_id = target_confirm_info.value.json()["version_id"]
     expect_dataset_context_counts(page, row_label="4행", column_label="3컬럼")
+    active_dataset_selector = page.locator("#active-dataset-version")
+    expect(active_dataset_selector).to_be_enabled(timeout=15_000)
+    expect(active_dataset_selector).to_have_value(target_active_version_id)
 
     paste_plain_text(page, REGRESSION_SAMPLE_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
 
-    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/confirm-parsing")
+    ) as training_confirm_info:
+        page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    training_active_version_id = training_confirm_info.value.json()["version_id"]
     expect_dataset_context_counts(page, row_label="12행", column_label="3컬럼")
+    expect(active_dataset_selector).to_have_value(training_active_version_id)
     page.get_by_role("button", name="분석", exact=True).click()
     page.get_by_role(
         "button",
@@ -767,6 +781,17 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(model_summary).to_contain_text("12 / 12")
     expect(model_summary).to_contain_text("Model ID")
     expect(model_summary).to_contain_text("Manifest")
+    observed_chart = page.locator(".chart-panel").filter(has_text="Observed vs Fitted")
+    expect(observed_chart).to_be_visible()
+    expect(observed_chart).to_contain_text("Multiple R")
+    expect(observed_chart.locator(".identity-line")).to_have_count(1)
+    observed_point = observed_chart.locator(".diagnostic-point").first
+    observed_point.hover()
+    expect(observed_chart.locator(".chart-selected-detail")).to_contain_text("실제값")
+    observed_point.focus()
+    expect(observed_point).to_have_attribute("data-selected", "true")
+    expect(page.locator(".chart-panel").filter(has_text="Residuals vs Fitted")).to_be_visible()
+    expect(page.locator(".chart-panel").filter(has_text="Leverage vs Cook's D")).to_be_visible()
     expect(page.get_by_role("heading", name="예측 사전점검")).to_be_visible()
 
     target_selector = page.get_by_label("예측 대상 데이터셋 버전")
@@ -786,6 +811,13 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(preflight_summary).to_contain_text("예측 준비 가능")
     expect(preflight_summary).to_contain_text("4 / 4")
     expect(preflight_summary).to_contain_text("다름")
+    expect(
+        page.get_by_text(re.compile(r"표시명으로 안전하게 매핑한 컬럼 2개"))
+    ).to_be_visible()
+    extrapolation_table = page.get_by_label("학습 범위 밖 대상값 요약")
+    expect(extrapolation_table).to_be_visible()
+    expect(extrapolation_table).to_contain_text("x")
+    expect(extrapolation_table).to_contain_text("1")
 
     with page.expect_response(
         lambda response: response.request.method == "POST"
@@ -982,7 +1014,19 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(model_summary).to_be_visible()
     expect(page.get_by_role("button", name="사전점검 실행")).to_be_disabled()
     expect(page.get_by_role("button", name="예측 실행")).to_be_disabled()
-    expect(page.get_by_role("button", name="전체 예측 CSV 생성")).to_be_disabled()
+
+    active_dataset_selector.select_option(target_active_version_id)
+    expect_dataset_context_counts(page, row_label="4행", column_label="3컬럼")
+    expect(page).to_have_url(re.compile(f"dataset_version_id={target_active_version_id}"))
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#active-dataset-version")).to_have_value(
+        target_active_version_id,
+        timeout=20_000,
+    )
+    expect_dataset_context_counts(page, row_label="4행", column_label="3컬럼")
+    page.locator("#active-dataset-version").select_option(training_active_version_id)
+    expect_dataset_context_counts(page, row_label="12행", column_label="3컬럼")
+    expect(page.get_by_role("button", name="전체 예측 CSV 생성")).to_have_count(0)
 
     page.reload(wait_until="networkidle")
     expect(page.get_by_role("heading", name="회귀모형 적합 실행")).to_be_visible(

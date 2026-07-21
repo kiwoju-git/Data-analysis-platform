@@ -8772,6 +8772,8 @@ def test_regression_prediction_preflight_reports_target_dataset_risks(tmp_path) 
     assert numeric_check["n_missing"] == 1
     assert numeric_check["n_non_numeric"] == 1
     assert numeric_check["n_above_training_range"] == 1
+    assert numeric_check["training_min"] == pytest.approx(1.0)
+    assert numeric_check["training_max"] == pytest.approx(6.0)
     categorical_check = payload["categorical_checks"][0]
     assert categorical_check["display_name"] == "group"
     assert categorical_check["training_level_count"] == 3

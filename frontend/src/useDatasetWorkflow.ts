@@ -16,8 +16,10 @@ import {
   type DatasetVersionResponse,
 } from "./api";
 import type { DatasetPreparationPageProps } from "./DatasetPreparationPage";
+import type { ActiveDatasetVersionSelectorProps } from "./ActiveDatasetVersionSelector";
 import type { SchemaDraftPatch } from "./datasetPreparationTypes";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
+import { useDatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 
 const defaultPreviewLimit = 10;
 const defaultMissingTokens = ["", "NA", "N/A", "null", "N/T"];
@@ -30,6 +32,20 @@ function readStoredDatasetVersionId(): string | null {
   } catch {
     return null;
   }
+}
+
+function readDatasetVersionIdFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const value = new URLSearchParams(window.location.search).get("dataset_version_id");
+  return value !== null && uuidPattern.test(value) ? value : null;
+}
+
+function updateActiveDatasetVersionQuery(versionId: string | null): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (versionId === null) url.searchParams.delete("dataset_version_id");
+  else url.searchParams.set("dataset_version_id", versionId);
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function storeDatasetVersionId(versionId: string | null): void {
@@ -52,6 +68,7 @@ export interface DatasetWorkflowCallbacks {
 }
 
 export interface DatasetWorkflow {
+  activeDatasetSelectorProps: ActiveDatasetVersionSelectorProps;
   datasetPageProps: DatasetPreparationPageProps;
   flowError: string | null;
   profile: DatasetProfileResponse | null;
@@ -80,17 +97,23 @@ export function useDatasetWorkflow({
   const [isSavingSchema, setIsSavingSchema] = useState(false);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
+  const [pendingVersionId, setPendingVersionId] = useState<string | null>(null);
   const [flowError, setFlowError] = useState<string | null>(null);
   const restoreRequestRef = useRef(0);
-  const callbacksRef = useRef({ onDatasetColumnsChanged });
-  callbacksRef.current = { onDatasetColumnsChanged };
+  const previewRequestRef = useRef(0);
+  const profileRequestRef = useRef(0);
+  const callbacksRef = useRef({ onDatasetColumnsChanged, onDatasetReset });
+  callbacksRef.current = { onDatasetColumnsChanged, onDatasetReset };
 
   useEffect(() => {
-    const versionId = readStoredDatasetVersionId();
+    const versionId = readDatasetVersionIdFromUrl() ?? readStoredDatasetVersionId();
     if (versionId === null) return;
 
     const request = restoreRequestRef.current + 1;
     restoreRequestRef.current = request;
+    setPendingVersionId(versionId);
+    setIsSwitchingVersion(true);
     setIsLoadingPreview(true);
     setIsLoadingProfile(true);
     void Promise.all([
@@ -105,11 +128,15 @@ export function useDatasetWorkflow({
         setPreview(restoredPreview);
         setPreviewOffset(0);
         setProfile(restoredProfile);
+        setPendingVersionId(null);
+        storeDatasetVersionId(restoredVersion.version_id);
+        updateActiveDatasetVersionQuery(restoredVersion.version_id);
         callbacksRef.current.onDatasetColumnsChanged(restoredVersion.columns);
       })
       .catch((error) => {
         if (restoreRequestRef.current !== request) return;
         storeDatasetVersionId(null);
+        updateActiveDatasetVersionQuery(null);
         setFlowError(
           error instanceof Error ? error.message : "dataset_version_restore_failed",
         );
@@ -118,12 +145,17 @@ export function useDatasetWorkflow({
         if (restoreRequestRef.current !== request) return;
         setIsLoadingPreview(false);
         setIsLoadingProfile(false);
+        setIsSwitchingVersion(false);
       });
 
     return () => {
       if (restoreRequestRef.current === request) restoreRequestRef.current += 1;
     };
   }, []);
+
+  const datasetVersionCatalogState = useDatasetVersionCatalogState(
+    pendingVersionId ?? version?.version_id ?? null,
+  );
 
   const delimiterOptions = useMemo(() => {
     const candidates =
@@ -147,8 +179,13 @@ export function useDatasetWorkflow({
 
   function resetDatasetDerivedState() {
     restoreRequestRef.current += 1;
+    previewRequestRef.current += 1;
+    profileRequestRef.current += 1;
     storeDatasetVersionId(null);
+    updateActiveDatasetVersionQuery(null);
     setVersion(null);
+    setPendingVersionId(null);
+    setIsSwitchingVersion(false);
     setSchemaDrafts([]);
     setPreview(null);
     setProfile(null);
@@ -237,6 +274,8 @@ export function useDatasetWorkflow({
       });
       setVersion(response);
       storeDatasetVersionId(response.version_id);
+      updateActiveDatasetVersionQuery(response.version_id);
+      setPendingVersionId(null);
       setSchemaDrafts(schemaDraftsFromColumns(response.columns));
       onDatasetColumnsChanged(response.columns);
       setPreviewOffset(0);
@@ -244,6 +283,7 @@ export function useDatasetWorkflow({
         loadRowsPreview(response.version_id, 0),
         loadDatasetProfile(response.version_id),
       ]);
+      datasetVersionCatalogState.onRefresh();
     } catch (error) {
       setFlowError(error instanceof Error ? error.message : "parsing_confirmation_failed");
     } finally {
@@ -292,28 +332,85 @@ export function useDatasetWorkflow({
     offset: number,
     limit = previewLimit,
   ) {
+    const request = previewRequestRef.current + 1;
+    previewRequestRef.current = request;
     setIsLoadingPreview(true);
     try {
       const response = await fetchRowsPreview(versionId, offset, limit);
+      if (previewRequestRef.current !== request) return;
       setPreview(response);
       setPreviewOffset(offset);
     } catch (error) {
+      if (previewRequestRef.current !== request) return;
       setFlowError(error instanceof Error ? error.message : "rows_preview_failed");
     } finally {
-      setIsLoadingPreview(false);
+      if (previewRequestRef.current === request) setIsLoadingPreview(false);
     }
   }
 
   async function loadDatasetProfile(versionId: string) {
+    const request = profileRequestRef.current + 1;
+    profileRequestRef.current = request;
     setIsLoadingProfile(true);
     try {
       const response = await fetchDatasetProfile(versionId);
+      if (profileRequestRef.current !== request) return;
       setProfile(response);
     } catch (error) {
+      if (profileRequestRef.current !== request) return;
       setProfile(null);
       setFlowError(error instanceof Error ? error.message : "dataset_profile_failed");
     } finally {
-      setIsLoadingProfile(false);
+      if (profileRequestRef.current === request) setIsLoadingProfile(false);
+    }
+  }
+
+  async function activateDatasetVersion(versionId: string) {
+    if (versionId === "" || (version?.version_id === versionId && pendingVersionId === null)) {
+      return;
+    }
+    const request = restoreRequestRef.current + 1;
+    restoreRequestRef.current = request;
+    previewRequestRef.current += 1;
+    profileRequestRef.current += 1;
+    setPendingVersionId(versionId);
+    setIsSwitchingVersion(true);
+    setIsLoadingPreview(true);
+    setIsLoadingProfile(true);
+    setFlowError(null);
+    setVersion(null);
+    setSchemaDrafts([]);
+    setPreview(null);
+    setProfile(null);
+    setPreviewOffset(0);
+    callbacksRef.current.onDatasetReset();
+    try {
+      const [nextVersion, nextPreview, nextProfile] = await Promise.all([
+        fetchDatasetVersion(versionId),
+        fetchRowsPreview(versionId, 0, defaultPreviewLimit),
+        fetchDatasetProfile(versionId),
+      ]);
+      if (restoreRequestRef.current !== request) return;
+      setVersion(nextVersion);
+      setSchemaDrafts(schemaDraftsFromColumns(nextVersion.columns));
+      setPreview(nextPreview);
+      setProfile(nextProfile);
+      setPreviewLimit(defaultPreviewLimit);
+      setPendingVersionId(null);
+      storeDatasetVersionId(nextVersion.version_id);
+      updateActiveDatasetVersionQuery(nextVersion.version_id);
+      callbacksRef.current.onDatasetColumnsChanged(nextVersion.columns);
+    } catch (error) {
+      if (restoreRequestRef.current !== request) return;
+      storeDatasetVersionId(null);
+      updateActiveDatasetVersionQuery(null);
+      setFlowError(error instanceof Error ? error.message : "dataset_version_restore_failed");
+    } finally {
+      if (restoreRequestRef.current === request) {
+        setIsLoadingPreview(false);
+        setIsLoadingProfile(false);
+        setIsSwitchingVersion(false);
+      }
     }
   }
 
@@ -382,7 +479,21 @@ export function useDatasetWorkflow({
     },
   } satisfies DatasetPreparationPageProps;
 
+  const activeDatasetSelectorProps = {
+    catalogState: datasetVersionCatalogState,
+    isSwitching: isSwitchingVersion,
+    pendingVersionId,
+    version,
+    onRetrySwitch: () => {
+      if (pendingVersionId !== null) void activateDatasetVersion(pendingVersionId);
+    },
+    onSelect: (versionId: string) => {
+      void activateDatasetVersion(versionId);
+    },
+  } satisfies ActiveDatasetVersionSelectorProps;
+
   return {
+    activeDatasetSelectorProps,
     datasetPageProps,
     flowError,
     profile,
@@ -390,6 +501,9 @@ export function useDatasetWorkflow({
     version,
   };
 }
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function canConfirmParsingOptions(options: ConfirmedParsingOptions): boolean {
   if (!(options.has_header || options.data_start_row !== null)) {

@@ -307,6 +307,7 @@ export default function App() {
   const factorialAnalysisRequestIdRef = useRef(0);
   const [appRoute, setAppRoute] = useState(currentAppRoute);
   const {
+    activeDatasetSelectorProps,
     datasetPageProps,
     flowError,
     profile,
@@ -3387,7 +3388,7 @@ export default function App() {
 
   function handleOpenDatasetPage() {
     if (typeof window !== "undefined") {
-      window.history.pushState(null, "", "/");
+      window.history.pushState(null, "", pathWithActiveDatasetQuery("/"));
     }
     setAppRoute({
       page: "dataset",
@@ -3395,13 +3396,20 @@ export default function App() {
   }
 
   function handleOpenReportsPage() {
-    if (typeof window !== "undefined") window.history.pushState(null, "", "/reports");
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", pathWithActiveDatasetQuery("/reports"));
+    }
     setAppRoute({ page: "reports" });
   }
 
   function handleOpenHelpPage(section?: "purpose" | "roles") {
-    const search = section === undefined ? "" : `?section=${section}`;
-    if (typeof window !== "undefined") window.history.pushState(null, "", `/help${search}`);
+    if (typeof window !== "undefined") {
+      const url = new URL("/help", window.location.origin);
+      const activeVersionId = activeDatasetIdFromCurrentLocation();
+      if (activeVersionId !== null) url.searchParams.set("dataset_version_id", activeVersionId);
+      if (section !== undefined) url.searchParams.set("section", section);
+      window.history.pushState(null, "", `${url.pathname}${url.search}`);
+    }
     setAppRoute({ page: "help" });
   }
 
@@ -3869,11 +3877,11 @@ export default function App() {
   } satisfies AnalysisShellProps;
   return (
     <AppChrome
+      activeDatasetSelectorProps={activeDatasetSelectorProps}
       activePage={appRoute.page}
       canOpenAnalysis={selectedMethod !== null || analysisCatalog !== null}
       healthClassName={statusClassName(health)}
       healthLabel={statusLabel(health)}
-      version={version}
       onOpenAnalysisPage={handleOpenAnalysisPage}
       onOpenDatasetPage={handleOpenDatasetPage}
       onOpenHelpPage={() => handleOpenHelpPage()}
@@ -4287,6 +4295,22 @@ function selectableAttributeControlChartColumns(
       numericDataTypes.has(column.data_type),
   );
 }
+
+function pathWithActiveDatasetQuery(pathname: string): string {
+  if (typeof window === "undefined") return pathname;
+  const activeVersionId = activeDatasetIdFromCurrentLocation();
+  if (activeVersionId === null) return pathname;
+  return `${pathname}?${new URLSearchParams({ dataset_version_id: activeVersionId }).toString()}`;
+}
+
+function activeDatasetIdFromCurrentLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  const value = new URLSearchParams(window.location.search).get("dataset_version_id");
+  return value !== null && datasetVersionIdPattern.test(value) ? value : null;
+}
+
+const datasetVersionIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function selectableIndividualsChartValueColumns(
   columns: DatasetColumnResponse[],

@@ -6,13 +6,13 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-20 clean pushed-main run at
-`7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1` passed in 78.1 seconds
+The 2026-07-21 active-dataset and interactive-regression worktree based on
+pushed main `baf3372975c115cfb2c64566e727b31c58623b4d` passed in 79.8 seconds
 with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics-bayesian-p0-final-sha
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics
 ```
 
 The run first dispatches a real `text/plain` spreadsheet paste while providing
@@ -46,12 +46,25 @@ parser-recovery, and lazy-panel paths. The current run additionally opens and
 reloads the Help and Report Center routes, creates and downloads an HTML report
 through the existing generic export API, verifies unsupported dedicated report
 formats, confirms both pages were fetched as separate lazy resources, and
-opens/closes selected-method context help. The final run above was a single
-application run on the E2E script's isolated default ports.
+opens/closes selected-method context help. It also switches between separately
+confirmed target/training versions, reloads the selected UUID, verifies grouped
+Predict compatibility warnings, and exercises keyboard/pointer regression
+diagnostics. The final run above was a single application run on the E2E
+script's isolated default ports. It is development worktree evidence, not a
+clean pushed-SHA or Windows 11/Node 22 release claim.
 
 ## Covered Flows
 
 The current smoke test is `tests/e2e/critical_path.py`.
+
+- Fits a linear model, verifies Observed vs Fitted with its identity line and
+  keyboard/pointer point detail, and confirms the existing residual and
+  leverage/Cook charts remain present.
+- Uses a separate prediction target with different schema/column IDs, verifies
+  grouped display-name mapping and explicit range-warning presentation, and
+  retains prediction paging/full CSV behavior.
+- Switches the global active dataset from training to target and back, reloads
+  an ID-only selected target, and verifies the restored row/column context.
 
 - Starts the FastAPI backend on `127.0.0.1` and the Vite frontend on
   `127.0.0.1`.

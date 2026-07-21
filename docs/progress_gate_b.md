@@ -1,6 +1,33 @@
 # Gate B Progress
 
-Last updated: 2026-07-19
+Last updated: 2026-07-21
+
+## Active Dataset And Interactive Regression Slice
+
+- The context bar now pages saved dataset versions 20 at a time and resolves
+  the active UUID outside the visible page. Switching atomically restores
+  metadata, schema, a bounded canonical preview, and profile; stale responses
+  cannot publish an older selection.
+- Only the active version UUID is mirrored in the URL and session storage.
+  Switching resets unsaved general-analysis state but preserves all immutable
+  versions and stored analyses/models/predictions/exports.
+- Predict now groups unique display-name mappings, distinguishes a separate
+  target schema warning from a stale source blocker, and shows training
+  min/max with below/above-range counts. Calculation and persisted contracts
+  remain unchanged.
+- Linear Model adds Observed vs Fitted from persisted fitted plus residual,
+  with equal axes and identity line. All three regression diagnostic scatter
+  charts share pointer/keyboard details and non-color selection/threshold
+  cues. The staged expansion contract is
+  `docs/interactive_chart_contract.md`.
+- This work does not change regression or prediction formulas, method
+  versions, or persisted result/config schemas. Validation evidence is tracked
+  separately in `docs/ci_status.md`.
+- Development validation on the Windows 10/Python 3.10/Node 24 host passed
+  backend 784, frontend 158, OpenAPI/frontend 155, all 18 tutorial smoke
+  sections, and the 79.8-second Chromium critical path. Main is 503.55 kB and
+  Regression is 64.59 kB; the main 500 kB warning is recorded for measured
+  follow-up rather than hidden. This is not the Windows 11/Node 22 release gate.
 
 ## Current Bayesian P0 Release Closure Slice
 

@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 
-import type { DatasetVersionResponse } from "./api";
+import {
+  ActiveDatasetVersionSelector,
+  type ActiveDatasetVersionSelectorProps,
+} from "./ActiveDatasetVersionSelector";
 import type { AppRoute } from "./appRoute";
-import { shortHash } from "./datasetDisplay";
 
 export interface AppChromeProps {
   canOpenAnalysis: boolean;
@@ -10,7 +12,7 @@ export interface AppChromeProps {
   healthClassName: string;
   healthLabel: string;
   activePage: AppRoute["page"];
-  version: DatasetVersionResponse | null;
+  activeDatasetSelectorProps: ActiveDatasetVersionSelectorProps;
   onOpenAnalysisPage: () => void;
   onOpenDatasetPage: () => void;
   onOpenHelpPage: () => void;
@@ -23,7 +25,7 @@ export function AppChrome({
   healthClassName,
   healthLabel,
   activePage,
-  version,
+  activeDatasetSelectorProps,
   onOpenAnalysisPage,
   onOpenDatasetPage,
   onOpenHelpPage,
@@ -88,21 +90,9 @@ export function AppChrome({
             {healthLabel}
           </span>
         </header>
-        {version !== null ? <DatasetContextBar version={version} /> : null}
+        <ActiveDatasetVersionSelector {...activeDatasetSelectorProps} />
         {children}
       </main>
-    </div>
-  );
-}
-
-function DatasetContextBar({ version }: { version: DatasetVersionResponse }) {
-  return (
-    <div className="context-bar" aria-label="데이터셋 컨텍스트">
-      <span>Dataset v{version.version_number}</span>
-      <span>{version.row_count.toLocaleString()}행</span>
-      <span>{version.column_count.toLocaleString()}컬럼</span>
-      <span className="hash-text">schema {shortHash(version.schema_hash)}</span>
-      <span className="hash-text">source {shortHash(version.source_sha256)}</span>
     </div>
   );
 }

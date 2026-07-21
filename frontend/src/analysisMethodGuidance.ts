@@ -269,10 +269,11 @@ export const analysisMethodGuidance = {
     preflightChecks: ["모델 manifest", "스키마 drift", "범주 수준", "외삽 위험"],
     resultFocus: ["예측값", "예측/신뢰 구간", "스키마 경고"],
     plainLanguage:
-      "분석 탭의 Predict 전용 워크플로에서 저장된 회귀 모델과 대상 데이터셋을 선택합니다. 회귀모형 적합 화면에서도 같은 dedicated API를 사용할 수 있으며, source model freshness와 checksum, source/target schema preflight를 통과한 경우에만 예측 결과를 저장합니다.",
+      "분석 탭의 Predict 전용 워크플로에서 저장된 회귀 모델과 대상 데이터셋을 선택합니다. 회귀모형 적합 화면에서도 같은 dedicated API를 사용합니다. 별도 target은 schema hash와 predictor ID가 다른 것이 정상일 수 있으므로 고유한 표시 이름·type 매핑과 학습 범위 경고를 확인합니다. 경고가 있어도 ready이고 usable row가 남으면 실행할 수 있지만, stale source model이나 누락·모호·비호환 predictor는 먼저 해결해야 합니다.",
     commonErrors: [
       "source dataset schema 변경 뒤 stale 회귀모형을 다시 적합하지 않은 경우",
-      "대상 데이터셋의 필수 predictor가 없거나 범주 수준이 모델과 다른 경우",
+      "대상 데이터셋의 필수 predictor가 없거나 이름이 모호하거나 type이 호환되지 않는 경우",
+      "새 범주 수준 또는 결측·비숫자 값 때문에 일부 행이 제외되거나 usable row가 0인 경우",
     ],
   },
   "regression.response_optimizer": {

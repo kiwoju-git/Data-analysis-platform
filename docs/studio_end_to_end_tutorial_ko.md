@@ -287,6 +287,16 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 - **클릭 순서:** model > target > `예측 사전점검` > `예측 실행` > page/CSV.
 - **실행 전 확인:** source fresh, manifest checksum, target schema mapping, unseen levels,
   training range warnings를 확인한다.
+
+별도 target dataset은 source와 다른 immutable version이므로 schema hash와 내부 predictor ID가
+다를 수 있다. Studio가 6개 predictor를 고유한 display name과 호환 type으로 연결했다면 이는
+확인 후 진행할 수 있는 warning이다. 이 sample의 의도된 학습 범위 밖 값은 0-based row index
+3의 `temperature_c=94.0`, 14의 `pressure_bar=16.5`, 27의 `catalyst_pct=0.25`, 41의
+`feed_rate_kg_h=148.0`이다. `ready=true`와 `48/48 usable`을 함께 확인한 뒤 실행한다.
+
+반면 source model stale, fit 이후 source schema 변경, 필수 predictor 누락·모호·type 불일치,
+usable row가 0인 상태는 차단 오류다. unseen category나 결측·비숫자 predictor가 있는 행은
+제외되므로 제외 후 usable row와 issue를 확인하고, usable row가 0이면 실행할 수 없다.
 <!-- TUTORIAL_RESULT:regression.predict:start -->
 - **검증 source:** `regression.predict` v0.2.0 · input SHA-256 `33f515b75c35c37b92a5c2461cff36d6f1cea547ecbe268c84235ba681d5b8d2`
 - **예상 실제 결과 (표시 반올림):**
@@ -309,6 +319,11 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 
 URL에는 `model_id`, `target_version_id`, `prediction_id`만 남는다. Reload는 계산을 반복하지
 않고 checksum-validated stored result와 rows를 복원한다.
+
+Prediction target을 등록하면 그 version이 일반 분석의 현재 데이터셋이 된다. 240행 training
+data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` selector에서
+`studio_process_training.csv · 240행`을 다시 선택한다. 전환 시 아직 실행하지 않은 일반 분석
+입력과 화면 결과는 초기화되지만 저장된 분석·모델·예측 결과는 삭제되지 않는다.
 
 ## 18. Run Chart와 Individuals Chart
 

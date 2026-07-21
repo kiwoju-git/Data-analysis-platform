@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-20
+Last updated: 2026-07-21
 
 ## 1. Required Reading And Priority
 
@@ -23,7 +23,10 @@ Current and next development order:
 
 Predict/Response Optimizer entrypoints, tutorial truth sync, Help/Report Center,
 Bayesian frontend modularization, catalog paging/deep-link restore, successor seed guidance, and
-repository onboarding README are complete on pushed main. Bayesian P0 release closure is
+repository onboarding README are complete on pushed main. Active dataset version switching,
+grouped Predict target warnings, and interactive regression diagnostics are complete in the
+current revision; they preserve all regression/prediction calculations and persisted schemas.
+Bayesian P0 release closure is
 validated on pushed commit `7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1`; it includes
 Study-selection action isolation, direct lifecycle/recommendation/retention race tests,
 route-level Help/Report loading, a bounded P0 release checklist, and measured 20/100/500-Study
@@ -33,12 +36,15 @@ catalog evidence. Bayesian math, request/result/storage schemas, SQLite schema 1
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the resulting main push in remote GitHub Actions and review required Windows/E2E checks
    and repository protection outside this code PR.
-3. Add separately contracted Predict/RSM/Optimizer/Bayesian dedicated HTML reports.
-4. Specify a lightweight immutable catalog summary/index and search contract while retaining
+3. Reduce the 503.55 kB main bundle through measured module boundaries without weakening the
+   active dataset selector, loading/error handling, or direct-route behavior.
+4. Add separately contracted Predict/RSM/Optimizer/Bayesian dedicated HTML reports.
+5. Specify a lightweight immutable catalog summary/index and search contract while retaining
    exact selected-Study full validation and a measured latency threshold.
-5. Add dataset-root and then DOE-root retention only through separate reviewed ownership graphs
+6. Add dataset-root and then DOE-root retention only through separate reviewed ownership graphs
    with explicit inbound-reference blockers.
-6. Continue the advanced quality/statistics backlog through a separately approved contract.
+7. Migrate additional charts only by the staged `docs/interactive_chart_contract.md` contract.
+8. Continue the advanced quality/statistics backlog through a separately approved contract.
 
 The current Phase II slice retains explicit target compatibility, P/NP/C/U
 frozen formulas, dependency provenance, restore/export consistency, typed UI

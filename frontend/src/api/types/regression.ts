@@ -25,6 +25,8 @@ export interface RegressionPredictionNumericCheck {
   source_column_id: string;
   target_column_id: string;
   display_name: string;
+  training_min: number | null;
+  training_max: number | null;
   n_valid: number;
   n_missing: number;
   n_non_numeric: number;

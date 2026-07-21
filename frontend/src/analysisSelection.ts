@@ -145,9 +145,21 @@ function replaceAnalysisRoute(
   if (typeof window === "undefined") {
     return;
   }
-  const search = preserveSearch ? window.location.search : "";
+  const search = preserveSearch
+    ? window.location.search
+    : activeDatasetSearchFromCurrentLocation();
   window.history.replaceState(null, "", `${buildAnalysisPath(moduleId, methodId)}${search}`);
 }
+
+function activeDatasetSearchFromCurrentLocation(): string {
+  const activeId = new URLSearchParams(window.location.search).get("dataset_version_id");
+  if (activeId === null || !datasetVersionIdPattern.test(activeId)) return "";
+  const search = new URLSearchParams({ dataset_version_id: activeId });
+  return `?${search.toString()}`;
+}
+
+const datasetVersionIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isCurrentAnalysisLocation(): boolean {
   if (typeof window === "undefined") {

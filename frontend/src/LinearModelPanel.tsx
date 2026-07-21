@@ -16,6 +16,12 @@ import {
   RegressionPredictionPanel,
   type RegressionPredictionRowsState,
 } from "./RegressionPredictionPanel";
+import {
+  InteractiveScatterChart,
+  type InteractiveScatterPoint,
+} from "./charts/InteractiveScatterChart";
+import { paddedNumericRange } from "./charts/chartScale";
+import { observedDiagnosticPoints } from "./linearModelDiagnosticPoints";
 
 export type LinearModelPredictionRowsState = RegressionPredictionRowsState;
 
@@ -53,17 +59,6 @@ interface LinearModelPanelProps {
   onTogglePredictorColumn: (columnId: string, checked: boolean) => void;
   onToggleQuadraticColumn: (columnId: string, checked: boolean) => void;
 }
-
-const chartWidth = 440;
-const chartHeight = 250;
-const plot = {
-  left: 48,
-  right: 18,
-  top: 18,
-  bottom: 42,
-};
-const plotWidth = chartWidth - plot.left - plot.right;
-const plotHeight = chartHeight - plot.top - plot.bottom;
 
 export function LinearModelPanel({
   alpha,
@@ -532,6 +527,9 @@ export function LinearModelPanel({
                   </div>
                 </div>
                 <div className="chart-grid">
+                  <ChartPanel title="Observed vs Fitted">
+                    {renderObservedFittedChart(result)}
+                  </ChartPanel>
                   <ChartPanel title="Residuals vs Fitted">
                     {renderResidualFittedChart(result)}
                   </ChartPanel>
@@ -583,210 +581,176 @@ function ChartPanel({ title, children }: { title: string; children: ReactNode })
   );
 }
 
+function renderObservedFittedChart(result: LinearModelResult) {
+  const sourcePoints = observedDiagnosticPoints(result);
+  const range = paddedNumericRange(
+    sourcePoints.flatMap((point) => [point.fitted, point.observed]),
+  );
+  const points: InteractiveScatterPoint[] = sourcePoints.map((point) => ({
+    ariaLabel: `행 ${point.rowIndex}, 실제값 ${formatModelNumber(point.observed)}, 예측값 ${formatModelNumber(point.fitted)}, 잔차 ${formatModelNumber(point.residual)}`,
+    className: "diagnostic-point",
+    details: [
+      { label: "행 index", value: point.rowIndex.toLocaleString() },
+      { label: "실제값", value: formatModelNumber(point.observed) },
+      { label: "예측값", value: formatModelNumber(point.fitted) },
+      { label: "잔차", value: formatModelNumber(point.residual) },
+      { label: "표준화 잔차", value: formatModelNumber(point.standardizedResidual) },
+    ],
+    id: `observed-${point.rowIndex}`,
+    title: `행 ${point.rowIndex}`,
+    x: point.fitted,
+    y: point.observed,
+  }));
+  const included = result.diagnostics.diagnostic_points.points_included;
+  const total = result.sample.n_used;
+  return (
+    <InteractiveScatterChart
+      annotations={[
+        `Multiple R ${formatModelNumber(Math.sqrt(Math.max(0, result.fit.r_squared)))}`,
+        `Adjusted R² ${formatModelNumber(result.fit.adjusted_r_squared)}`,
+        `Residual SE ${formatModelNumber(result.fit.residual_standard_error)}`,
+        `표시 ${included.toLocaleString()} / 전체 ${total.toLocaleString()}${result.diagnostics.diagnostic_points.truncated ? " · R과 적합 요약은 전체 표본 기준" : ""}`,
+      ]}
+      chartId="linear-model-observed-fitted"
+      description="실제 관측값과 회귀모형 예측값을 같은 척도로 비교합니다. 점선은 실제값과 예측값이 같은 identity 기준선입니다."
+      emptyLabel="진단 point 없음"
+      formatValue={formatModelNumber}
+      points={points}
+      referenceLines={[
+        {
+          className: "identity-line",
+          label: "실제값과 예측값이 같은 y=x 기준선",
+          x1: range.min,
+          x2: range.max,
+          y1: range.min,
+          y2: range.max,
+        },
+      ]}
+      square
+      title="Observed vs Fitted"
+      xLabel="Fitted / 예측값"
+      xRange={range}
+      yLabel="Observed / 실제값"
+      yRange={range}
+    />
+  );
+}
+
 function renderResidualFittedChart(result: LinearModelResult) {
-  const points = result.diagnostics.diagnostic_points.points.filter(
+  const sourcePoints = result.diagnostics.diagnostic_points.points.filter(
     (point) => Number.isFinite(point.fitted) && Number.isFinite(point.residual),
   );
-  if (points.length === 0) {
-    return <EmptyChart label="진단 point 없음" />;
-  }
-
-  const xRange = paddedRange(points.map((point) => point.fitted));
-  const yRange = paddedRange([...points.map((point) => point.residual), 0]);
-  const zeroY = scale(0, yRange.min, yRange.max, plot.top + plotHeight, plot.top);
+  const xRange = paddedNumericRange(sourcePoints.map((point) => point.fitted));
+  const yRange = paddedNumericRange([...sourcePoints.map((point) => point.residual), 0]);
+  const points: InteractiveScatterPoint[] = sourcePoints.map((point) => ({
+    ariaLabel: `행 ${point.row_index}, 예측값 ${formatModelNumber(point.fitted)}, 잔차 ${formatModelNumber(point.residual)}`,
+    className: "diagnostic-point",
+    details: [
+      { label: "행 index", value: point.row_index.toLocaleString() },
+      { label: "예측값", value: formatModelNumber(point.fitted) },
+      { label: "잔차", value: formatModelNumber(point.residual) },
+      { label: "표준화 잔차", value: formatModelNumber(point.standardized_residual) },
+    ],
+    id: `residual-${point.row_index}`,
+    title: `행 ${point.row_index}`,
+    warning:
+      point.standardized_residual !== null &&
+      Math.abs(point.standardized_residual) >=
+        result.diagnostics.residual_summary.large_standardized_threshold,
+    x: point.fitted,
+    y: point.residual,
+  }));
   return (
-    <svg
-      aria-label="linear model residuals versus fitted chart"
-      className="chart-svg chart-svg-wide"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      {chartAxes()}
-      <line
-        className="reference-line residual-zero-line"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={zeroY}
-        y2={zeroY}
-      />
-      {points.map((point) => (
-        <circle
-          key={point.row_index}
-          className="diagnostic-point"
-          cx={scale(point.fitted, xRange.min, xRange.max, plot.left, plot.left + plotWidth)}
-          cy={scale(point.residual, yRange.min, yRange.max, plot.top + plotHeight, plot.top)}
-          r="3"
-        />
-      ))}
-      {chartTickLabels(formatModelNumber(xRange.min), formatModelNumber(xRange.max))}
-      <text className="chart-axis-label" x={plot.left - 10} y={plot.top + 8}>
-        {formatModelNumber(yRange.max)}
-      </text>
-    </svg>
+    <InteractiveScatterChart
+      annotations={[
+        `큰 표준화 잔차 기준 ±${formatModelNumber(result.diagnostics.residual_summary.large_standardized_threshold)}`,
+      ]}
+      chartId="linear-model-residual-fitted"
+      description="예측값에 따른 잔차 분포를 보여줍니다. 점선은 잔차 0 기준선이며 경고 원은 큰 표준화 잔차 후보입니다."
+      emptyLabel="진단 point 없음"
+      formatValue={formatModelNumber}
+      points={points}
+      referenceLines={[
+        { label: "잔차 0 기준선", x1: xRange.min, x2: xRange.max, y1: 0, y2: 0 },
+      ]}
+      title="Residuals vs Fitted"
+      xLabel="Fitted / 예측값"
+      xRange={xRange}
+      yLabel="Residual / 잔차"
+      yRange={yRange}
+    />
   );
 }
 
 function renderInfluenceChart(result: LinearModelResult) {
-  const points = result.diagnostics.diagnostic_points.points.filter(
+  const sourcePoints = result.diagnostics.diagnostic_points.points.filter(
     (point) =>
       Number.isFinite(point.leverage) &&
       point.cooks_distance !== null &&
       Number.isFinite(point.cooks_distance),
   );
-  if (points.length === 0) {
-    return <EmptyChart label="영향점 point 없음" />;
-  }
-
-  const xRange = paddedRange([
-    ...points.map((point) => point.leverage),
+  const xRange = paddedNumericRange([
+    ...sourcePoints.map((point) => point.leverage),
     result.diagnostics.leverage.threshold,
   ]);
-  const yRange = paddedRange([
-    ...points.map((point) => point.cooks_distance ?? 0),
+  const yRange = paddedNumericRange([
+    ...sourcePoints.map((point) => point.cooks_distance ?? 0),
     result.diagnostics.influence.cooks_distance_threshold,
   ]);
-  const leverageThresholdX = scale(
-    result.diagnostics.leverage.threshold,
-    xRange.min,
-    xRange.max,
-    plot.left,
-    plot.left + plotWidth,
-  );
-  const cooksThresholdY = scale(
-    result.diagnostics.influence.cooks_distance_threshold,
-    yRange.min,
-    yRange.max,
-    plot.top + plotHeight,
-    plot.top,
-  );
+  const points: InteractiveScatterPoint[] = sourcePoints.map((point) => {
+    const cooksDistance = point.cooks_distance ?? 0;
+    const highLeverage = point.leverage > result.diagnostics.leverage.threshold;
+    const highCook = cooksDistance > result.diagnostics.influence.cooks_distance_threshold;
+    return {
+      ariaLabel: `행 ${point.row_index}, leverage ${formatModelNumber(point.leverage)}, Cook's D ${formatModelNumber(cooksDistance)}, ${highLeverage || highCook ? "기준 초과" : "기준 이내"}`,
+      className: "influence-point",
+      details: [
+        { label: "행 index", value: point.row_index.toLocaleString() },
+        { label: "Leverage", value: formatModelNumber(point.leverage) },
+        { label: "Cook's D", value: formatModelNumber(cooksDistance) },
+        { label: "기준 상태", value: highLeverage || highCook ? "기준 초과" : "기준 이내" },
+      ],
+      id: `influence-${point.row_index}`,
+      title: `행 ${point.row_index}`,
+      warning: highLeverage || highCook,
+      x: point.leverage,
+      y: cooksDistance,
+    };
+  });
   return (
-    <svg
-      aria-label="linear model leverage versus Cook's D chart"
-      className="chart-svg chart-svg-wide"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      {chartAxes()}
-      <line
-        className="reference-line"
-        x1={leverageThresholdX}
-        x2={leverageThresholdX}
-        y1={plot.top}
-        y2={plot.top + plotHeight}
-      />
-      <line
-        className="reference-line"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={cooksThresholdY}
-        y2={cooksThresholdY}
-      />
-      {points.map((point) => (
-        <circle
-          key={point.row_index}
-          className="influence-point"
-          cx={scale(point.leverage, xRange.min, xRange.max, plot.left, plot.left + plotWidth)}
-          cy={scale(
-            point.cooks_distance ?? 0,
-            yRange.min,
-            yRange.max,
-            plot.top + plotHeight,
-            plot.top,
-          )}
-          r="3"
-        />
-      ))}
-      {chartTickLabels(formatModelNumber(xRange.min), formatModelNumber(xRange.max))}
-      <text className="chart-axis-label" x={plot.left - 10} y={plot.top + 8}>
-        {formatModelNumber(yRange.max)}
-      </text>
-    </svg>
+    <InteractiveScatterChart
+      annotations={[
+        `Leverage 기준 ${formatModelNumber(result.diagnostics.leverage.threshold)}`,
+        `Cook's D 기준 ${formatModelNumber(result.diagnostics.influence.cooks_distance_threshold)}`,
+      ]}
+      chartId="linear-model-leverage-cook"
+      description="각 진단점의 leverage와 Cook's D를 보여줍니다. 점선은 각 영향점 후보 기준이며 경고 원은 하나 이상의 기준을 초과한 점입니다."
+      emptyLabel="영향점 point 없음"
+      formatValue={formatModelNumber}
+      points={points}
+      referenceLines={[
+        {
+          label: "Leverage 기준",
+          x1: result.diagnostics.leverage.threshold,
+          x2: result.diagnostics.leverage.threshold,
+          y1: yRange.min,
+          y2: yRange.max,
+        },
+        {
+          label: "Cook's D 기준",
+          x1: xRange.min,
+          x2: xRange.max,
+          y1: result.diagnostics.influence.cooks_distance_threshold,
+          y2: result.diagnostics.influence.cooks_distance_threshold,
+        },
+      ]}
+      title="Leverage vs Cook's D"
+      xLabel="Leverage"
+      xRange={xRange}
+      yLabel="Cook's D"
+      yRange={yRange}
+    />
   );
-}
-
-function EmptyChart({ label }: { label: string }) {
-  return (
-    <svg
-      aria-label={label}
-      className="chart-svg chart-svg-empty"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      <rect className="empty-chart-bg" height={plotHeight} width={plotWidth} x={plot.left} y={plot.top} />
-      <text className="empty-chart-text" x={chartWidth / 2} y={chartHeight / 2}>
-        {label}
-      </text>
-    </svg>
-  );
-}
-
-function chartAxes() {
-  return (
-    <>
-      <line
-        className="chart-axis"
-        x1={plot.left}
-        x2={plot.left}
-        y1={plot.top}
-        y2={plot.top + plotHeight}
-      />
-      <line
-        className="chart-axis"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top + plotHeight}
-        y2={plot.top + plotHeight}
-      />
-      <line
-        className="chart-grid-line"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top}
-        y2={plot.top}
-      />
-    </>
-  );
-}
-
-function chartTickLabels(leftLabel: string, rightLabel: string) {
-  return (
-    <>
-      <text className="chart-axis-label" x={plot.left} y={chartHeight - 12}>
-        {leftLabel}
-      </text>
-      <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={chartHeight - 12}>
-        {rightLabel}
-      </text>
-    </>
-  );
-}
-
-function paddedRange(values: number[]): { min: number; max: number } {
-  const finiteValues = values.filter((value) => Number.isFinite(value));
-  if (finiteValues.length === 0) {
-    return { min: 0, max: 1 };
-  }
-  const min = Math.min(...finiteValues);
-  const max = Math.max(...finiteValues);
-  if (min === max) {
-    const padding = Math.max(1, Math.abs(min) * 0.1);
-    return { min: min - padding, max: max + padding };
-  }
-  const padding = (max - min) * 0.04;
-  return { min: min - padding, max: max + padding };
-}
-
-function scale(
-  value: number,
-  domainMin: number,
-  domainMax: number,
-  rangeMin: number,
-  rangeMax: number,
-): number {
-  if (domainMin === domainMax) {
-    return (rangeMin + rangeMax) / 2;
-  }
-  return rangeMin + ((value - domainMin) / (domainMax - domainMin)) * (rangeMax - rangeMin);
 }
 
 function formatPercent(value: number): string {

@@ -126,6 +126,11 @@ import {
 import { WorkspaceRouter } from "./WorkspaceRouter";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
 import { parsePastedTablePreview } from "./pastedTablePreview";
+import {
+  groupPredictionPreflightIssues,
+  predictionRangeRows,
+} from "./predictionPreflightPresentation";
+import { paddedNumericRange, scaleChartValue } from "./charts/chartScale";
 
 vi.mock("./lazyAnalysisPanels", async () => {
   const [regression, quality, doe] = await Promise.all([
@@ -286,6 +291,56 @@ describe("App", () => {
     expect(getAnalysisMethodGuidance("doe.bayesian_optimization").plainLanguage).toContain(
       "추천은 관측값이나 전역 최적 보장이 아닙니다",
     );
+  });
+
+  it("groups repeated prediction mappings and keeps extrapolation ranges explicit", () => {
+    const mappingIssues = Array.from({ length: 6 }, (_, index) => ({
+      code: "prediction_column_matched_by_display_name",
+      severity: "warning" as const,
+      message: `predictor ${index + 1}`,
+      source_column_id: `source-${index + 1}`,
+      target_column_id: `target-${index + 1}`,
+      display_name: `X${index + 1}`,
+      count: null,
+    }));
+    const grouped = groupPredictionPreflightIssues([
+      ...mappingIssues,
+      {
+        code: "prediction_schema_hash_mismatch",
+        severity: "warning",
+        message: "different target",
+        source_column_id: null,
+        target_column_id: null,
+        display_name: null,
+        count: null,
+      },
+    ]);
+    const ranges = predictionRangeRows([
+      {
+        source_column_id: "source-1",
+        target_column_id: "target-1",
+        display_name: "temperature_c",
+        n_valid: 48,
+        n_missing: 0,
+        n_non_numeric: 0,
+        n_below_training_range: 0,
+        n_above_training_range: 1,
+        training_min: 60,
+        training_max: 90,
+      },
+    ]);
+
+    expect(grouped.mappingIssues).toHaveLength(6);
+    expect(grouped.otherIssues).toHaveLength(0);
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]).toMatchObject({ training_min: 60, training_max: 90 });
+  });
+
+  it("uses finite padded chart domains and stable scale coordinates", () => {
+    const range = paddedNumericRange([10, 10, Number.NaN]);
+    expect(range.min).toBeLessThan(10);
+    expect(range.max).toBeGreaterThan(10);
+    expect(scaleChartValue(10, range, 0, 100)).toBeCloseTo(50);
   });
 
   it("renders the DOE factorial design creation panel and run order preview", () => {
@@ -2480,6 +2535,8 @@ describe("App", () => {
           n_non_numeric: 0,
           n_below_training_range: 0,
           n_above_training_range: 1,
+          training_min: 0,
+          training_max: 10,
         },
       ],
       categorical_checks: [],
@@ -2672,6 +2729,12 @@ describe("App", () => {
     expect(html).toContain("최대 Cook");
     expect(html).toContain("Std residual");
     expect(html).toContain("회귀 진단 차트");
+    expect(html).toContain("Observed vs Fitted");
+    expect(html).toContain("실제값과 예측값이 같은 y=x 기준선");
+    expect(html).toContain("Multiple R");
+    expect(html).toContain("Residual SE");
+    expect(html).toContain("실제값 10.1");
+    expect(html).toContain('tabindex="0"');
     expect(html).toContain("Residuals vs Fitted");
     expect(html).toContain("Leverage vs Cook");
     expect(html).toContain("Model ID");
@@ -4842,13 +4905,55 @@ describe("App", () => {
   });
 
   it("renders the AppChrome navigation and dataset context", () => {
+    const version = datasetVersionTestResponse();
     const html = renderToString(
       <AppChrome
         activePage="dataset"
+        activeDatasetSelectorProps={{
+          catalogState: {
+            activeItem: {
+              version_id: version.version_id,
+              dataset_id: version.dataset_id,
+              original_filename: "sample.txt",
+              version_number: version.version_number,
+              row_count: version.row_count,
+              column_count: version.column_count,
+              created_at: version.created_at,
+            },
+            catalog: {
+              offset: 0,
+              limit: 20,
+              total: 1,
+              returned: 1,
+              has_previous: false,
+              has_next: false,
+              versions: [
+                {
+                  version_id: version.version_id,
+                  dataset_id: version.dataset_id,
+                  original_filename: "sample.txt",
+                  version_number: version.version_number,
+                  row_count: version.row_count,
+                  column_count: version.column_count,
+                  created_at: version.created_at,
+                },
+              ],
+            },
+            error: null,
+            isLoading: false,
+            isResolvingActiveItem: false,
+            onPageChange: () => undefined,
+            onRefresh: () => undefined,
+          },
+          isSwitching: false,
+          onRetrySwitch: () => undefined,
+          onSelect: () => undefined,
+          pendingVersionId: null,
+          version,
+        }}
         canOpenAnalysis={false}
         healthClassName="status-pill status-ready"
         healthLabel="API ok"
-        version={datasetVersionTestResponse()}
         onOpenAnalysisPage={() => undefined}
         onOpenDatasetPage={() => undefined}
         onOpenHelpPage={() => undefined}
@@ -4862,12 +4967,12 @@ describe("App", () => {
     expect(html).toContain("로컬 분석 작업대");
     expect(html).toContain("Gate A 기반 구성");
     expect(html).toContain("API ok");
-    expect(html).toContain("Dataset v");
+    expect(html).toContain("현재 분석 데이터셋");
+    expect(html).toContain("sample.txt");
     expect(html).toMatch(/1<\/span>/);
     expect(html).toMatch(/3(?:<!-- -->)?행/);
     expect(html).toMatch(/2(?:<!-- -->)?컬럼/);
     expect(html).toMatch(/schema (?:<!-- -->)?schema-hash/);
-    expect(html).toMatch(/source (?:<!-- -->)?source-hash/);
     expect(html).toContain("Workspace child");
     expect(html).toContain("리포트");
     expect(html).toContain("도움말");

@@ -1,6 +1,6 @@
 # Linear Model Method Contract
 
-Last updated: 2026-07-14
+Last updated: 2026-07-21
 
 ## Scope
 
@@ -44,6 +44,23 @@ Current out of scope:
 - The result reports N, exclusions, model terms, categorical reference levels, coefficient estimates, standard errors, t statistics, p-values, confidence intervals, R², adjusted R², residual standard error, F test, VIF, condition number, residual summary, leverage summary, Cook's distance summary, capped diagnostic points, warning codes, package versions, and provenance.
 - The result always warns that regression coefficients from observational data are not causal effects and that OLS relies on linearity, independence, homoscedasticity, residual-normality, and outlier/influence assumptions.
 - Diagnostic points include row index, fitted value, residual, standardized residual, leverage, and Cook's distance only. They do not include raw input cell values and are capped for UI payload size while summary diagnostics use all complete-case rows.
+
+## Diagnostic Chart Presentation
+
+The frontend renders three interactive SVG diagnostics from the unchanged
+stored payload: Observed vs Fitted, Residuals vs Fitted, and Leverage vs
+Cook's D. Observed is computed exactly as `fitted + residual`; it is not a new
+backend result field or a refit. Observed vs Fitted uses one numeric domain on
+both axes and a labeled `y=x` identity line. Its Multiple R is the non-negative
+square root of stored R-squared, while adjusted R-squared and residual standard
+error remain the stored full-fit summaries.
+
+All three charts expose the same bounded diagnostic points through pointer
+hover and keyboard focus, with text detail below the SVG and visible threshold
+rings. A capped point payload explicitly distinguishes displayed N from full
+fit N. The shared accessibility, point-cap, and follow-up rules are in
+`docs/interactive_chart_contract.md`. No calculation, method version, or
+persisted result schema changed for this presentation update.
 
 ## API Contract
 

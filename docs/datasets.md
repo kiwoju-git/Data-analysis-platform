@@ -2,8 +2,26 @@
 
 Gate B currently covers upload, parsing confirmation, canonical JSONL materialization, schema metadata update, paginated row preview, and a profile/preflight scan with persisted profile artifacts for delimited text and basic XLSX datasets.
 
-The current React data-preparation surface is rendered through `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/PasteDatasetPanel.tsx`, `frontend/src/PastePreviewGrid.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, profile/schema/preview section components, and shared formatting and label helpers. `usePastedDatasetDraft` owns only the transient raw-ref/limited-preview staging state, while `useDatasetWorkflow` owns upload registration, parsing, schema, canonical preview, and profile API state. `App.tsx` still owns API bootstrap, route state, and analysis orchestration, so this split does not change backend dataset behavior.
+The current React data-preparation surface is rendered through `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/PasteDatasetPanel.tsx`, `frontend/src/PastePreviewGrid.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, profile/schema/preview section components, and shared formatting and label helpers. `usePastedDatasetDraft` owns only the transient raw-ref/limited-preview staging state, while `useDatasetWorkflow` owns upload registration, parsing, schema, canonical preview, profile, and active-version switching. `App.tsx` still owns API bootstrap, route state, and analysis orchestration, so this split does not change backend dataset behavior.
 `frontend/src/WorkspaceRouter.tsx` chooses between this data-preparation surface on root/dataset routes and the analysis page on `/analysis/{module_id}/{method_id}` routes against the same in-memory dataset state.
+
+## Active Analysis Dataset
+
+The top context bar pages `GET /api/v1/dataset-versions` in groups of 20 and
+lets the user reactivate any stored immutable version. An exact active ID is
+resolved even when it is outside the visible page. Selection fetches the
+version metadata, a bounded 10-row canonical preview, and aggregate profile as
+one latest-request generation; an older response cannot publish a mixed
+version/preview/profile state.
+
+Switching resets unsaved general-analysis inputs and current screen results but
+does not delete stored analyses, models, predictions, exports, or dataset
+versions. The URL and `sessionStorage` contain only
+`dataset_version_id`; filenames and row values are not stored there. Confirming
+a newly uploaded or pasted dataset still makes that version active. The user
+can immediately switch back to a training version after registering a separate
+prediction target. The browser continues to hold only bounded preview rows,
+never the complete canonical artifact.
 
 ## Current API
 

@@ -34,6 +34,30 @@ the screen warns that reusing the same seed may regenerate the same initial
 conditions and states that observations, history, and recommendations are not
 copied.
 
+## Active Dataset And Regression Diagnostics
+
+The top `현재 분석 데이터셋` selector is the source of the general analysis
+context. A beginner can register a 48-row prediction target, run Predict, and
+then return to a saved 240-row training version without uploading it again.
+The screen states that switching resets unsaved general-analysis input and
+current screen output; it does not imply that saved analyses or models are
+deleted. QA should switch versions rapidly and confirm that version metadata,
+schema, preview, profile, and analysis columns always belong to one version.
+
+Predict distinguishes reviewable target warnings from source blockers. A
+separate target can have a different schema hash and internal IDs while six
+predictors map safely by unique display name and compatible type. The grouped
+mapping details and numeric training-range table must remain available without
+implying that extrapolation is safe. A stale source model, source schema drift,
+missing/ambiguous/incompatible predictor, or zero usable rows remains blocking.
+
+Linear-model results now begin diagnostics with Observed vs Fitted and retain
+Residuals vs Fitted and Leverage vs Cook's D. QA should reach each point by
+mouse and Tab, read the same values in the tooltip/text detail, press Escape to
+clear it, and confirm threshold candidates have an outline in addition to
+color. The identity line is not a regression/calibration line, and Multiple R
+does not by itself establish validity or causality.
+
 ## Spreadsheet Paste Review
 
 User task: copy a rectangular range from Excel or another spreadsheet, review

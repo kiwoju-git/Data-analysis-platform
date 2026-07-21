@@ -1549,6 +1549,8 @@ class RegressionPredictionNumericCheck(BaseModel):
     source_column_id: str
     target_column_id: str
     display_name: str
+    training_min: float | None
+    training_max: float | None
     n_valid: int = Field(ge=0)
     n_missing: int = Field(ge=0)
     n_non_numeric: int = Field(ge=0)

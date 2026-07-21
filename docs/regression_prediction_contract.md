@@ -1,6 +1,6 @@
 # Regression Prediction Contract
 
-Last updated: 2026-07-18
+Last updated: 2026-07-21
 
 ## Scope
 
@@ -97,6 +97,23 @@ schema/column incompatibility. A source schema no-op PATCH does not mark the
 analysis stale and does not block prediction.
 
 ## Target Validation
+
+For a separately confirmed target dataset, a different schema hash and
+different internal predictor IDs are not automatically blocking. The frontend
+groups repeated `prediction_column_matched_by_display_name` warnings and lets
+the user inspect each source/target ID, display name, predictor kind, and match
+status. It also explains that a schema-hash difference can be normal for a
+separate immutable target when names are unique and types are compatible.
+
+Numeric preflight presentation includes the manifest training minimum and
+maximum beside below/above-range counts. These bounds were already used by the
+preflight calculation; exposing them in the typed preflight response does not
+change prediction formulas or persisted result/config schemas. If
+`prediction_ready=true` and usable rows remain, warnings are shown as an
+executable-with-review state. Source stale/schema errors remain visibly
+blocking. Missing, ambiguous, or incompatible predictors block; unseen,
+missing, or nonnumeric row values remain explicit row exclusions, and zero
+usable rows block execution.
 
 After source validation, preflight requires:
 
