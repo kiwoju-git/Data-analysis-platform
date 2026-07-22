@@ -56,7 +56,9 @@ function isRuntimeInfoResponse(value: unknown): value is RuntimeInfoResponse {
 
 export async function fetchRuntimeInfo(signal?: AbortSignal): Promise<RuntimeInfoResponse> {
   const response = await fetchApi(apiRoutes.runtimeInfo(), {
-    headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+    // The response is already marked no-store by the backend. A Cache-Control
+    // request header would turn this cross-origin GET into a CORS preflight.
+    headers: { Accept: "application/json" },
     signal,
   });
   if (!response.ok) {

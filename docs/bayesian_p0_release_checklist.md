@@ -44,6 +44,12 @@ single-objective, sequential Bayesian Optimization P0**다. 앱이 실제 목적
 | multiobjective, batch, categorical/integer factors, nonlinear constraints | out of scope | none | requires separate method/contract review |
 | automatic objective execution or guaranteed global optimum | out of scope | intentionally absent | would violate current local manual-observation safety contract |
 
+The application runtime handshake also requires the current backend to report
+`bayesian_optimization=true`. Until API contract 2 and that capability pass,
+the frontend blocks the workspace instead of rendering an older catalog that
+labels Bayesian P0 as planned. This gate changes no Bayesian calculation,
+schema, budget, or method version.
+
 ## Release Interpretation
 
 P0 functional closure does not waive the clean Windows 11/Python 3.10/Node 22 release gate.

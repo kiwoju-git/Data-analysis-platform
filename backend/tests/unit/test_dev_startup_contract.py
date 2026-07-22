@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="PowerShell dev entrypoint is Windows-only")
 
 

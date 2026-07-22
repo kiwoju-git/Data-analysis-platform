@@ -61,8 +61,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
 
 브라우저 주소는 Vite와 backend가 출력하는 localhost 주소를 사용합니다. 이미 사용 중인
-포트가 있으면 실행 로그를 확인해 충돌을 해소하십시오. LAN 공개용 bind 주소로 바꾸는
-것은 지원되는 shortcut이 아닙니다.
+포트가 있으면 `dev.ps1`은 PID와 process 정보를 표시하고 종료합니다. 기존 process를
+자동 종료하거나 Vite를 다른 포트로 조용히 이동하지 않습니다. LAN 공개용 bind 주소로
+바꾸는 것은 지원되는 shortcut이 아닙니다.
 
 ## 첫 사용 흐름
 
@@ -159,6 +160,7 @@ tests/e2e/            Chromium critical path
 - [Bayesian lifecycle 계약](docs/bayesian_study_lifecycle_contract.md)
 - [Bayesian P0 release checklist](docs/bayesian_p0_release_checklist.md)
 - [Bayesian catalog 성능](docs/bayesian_catalog_performance.md)
+- [Runtime compatibility 계약](docs/runtime_compatibility_contract.md)
 - [Report Center 계약](docs/report_center_contract.md)
 - [한국어 튜토리얼](docs/studio_end_to_end_tutorial_ko.md)
 
@@ -172,6 +174,26 @@ tests/e2e/            Chromium critical path
 - WECO/Nelson, Laney, non-normal capability 등 advanced quality 기능은 backlog입니다.
 - Bayesian multiobjective, batch recommendation, categorical/integer factor, nonlinear
   constraint와 objective 자동 실행은 현재 P0 범위가 아닙니다.
+
+## 실행 버전 불일치 해결
+
+`관리`의 이름 저장/삭제가 404로 실패하면서 Predict/Response Optimizer가 비활성이고
+Bayesian Optimization이 `계획됨`으로 보이면, 이전 backend가 포트 8000을 점유하거나
+이전 Vite/browser tab을 보고 있을 가능성이 큽니다. 먼저 listener와 runtime contract를
+확인합니다.
+
+```powershell
+Get-NetTCPConnection -State Listen |
+  Where-Object { $_.LocalPort -in 8000,5173,5174 }
+
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/runtime-info
+```
+
+이전 DataLab PowerShell 창을 종료한 뒤 최신 폴더에서 `bootstrap.ps1`, `dev.ps1` 순서로
+실행하고, 로그에 새로 출력된 URL을 여십시오. 이전 browser tab은 닫거나 `Ctrl+F5`로
+새로고침합니다. 앱의 버전 불일치 화면은 backend contract/capability가 맞기 전에는
+관리 작업과 오래된 method catalog를 노출하지 않습니다. 삭제 영향 확인에서 참조 수가
+표시되어 차단되는 경우는 404가 아니라 자동 연쇄 삭제를 막는 정상 보호 동작입니다.
 
 ## 라이선스
 

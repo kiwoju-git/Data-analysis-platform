@@ -1,8 +1,32 @@
 # CI Status
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## Local Validation
+
+- The runtime-compatibility and compact-history worktree based on pushed main
+  `6cc097a6f3d2983feab1fd7e4ccc2c5ab16f765d` passed `scripts/check.ps1` on
+  2026-07-23 in 900.2 seconds: tutorial Markdown blocks 18, Ruff/format over
+  166 Python files, mypy over 103 source files, backend pytest 818, frontend
+  lint/typecheck and Vitest 175, direct OpenAPI/frontend contracts 167, and
+  production build. The real-API tutorial smoke passed all 18 sections in
+  19.2 seconds. Chromium critical-path E2E passed in 84.9 seconds after the
+  runtime request was kept CORS-safelisted and obsolete full-history test
+  selectors were moved to the compact/Report Center flow.
+- The build measured main at 498.08 kB / 122.23 kB gzip, Report at 35.60/7.87
+  kB, Regression at 59.66/13.35 kB, Manage at 15.61/4.30 kB, Quality at
+  64.25/11.97 kB, DOE at 111.16/26.24 kB, and Help at 18.01/6.28 kB. Main is
+  below Vite's 500 kB warning threshold.
+- The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0. This is development worktree evidence, not Windows 11/Python
+  3.10/Node 22 release evidence. `bootstrap.ps1` was not rerun because the
+  reproduced user-owned old Vite process still uses this checkout's
+  `node_modules`; reinstalling under that live process would violate the
+  no-interference boundary. Locked dependencies were exercised by every
+  passing check above.
+- `gh` is not installed, so no installation was attempted and the new main
+  push's remote run cannot be recorded until after push. Hosted status is not
+  inferred from local validation.
 
 - The normality/interactivity/asset-management revision based on pushed main
   `7d30ad0899ba11c14dbd0c4053041ddc7dcf2a15` contains `eda.normality`
@@ -57,9 +81,9 @@ Last updated: 2026-07-22
   784, frontend lint/typecheck and Vitest 152, OpenAPI/frontend contracts 155,
   18 tutorial Markdown blocks, and production build. The separate real-API
   tutorial smoke passed all 18 sections in 18.7 seconds.
-- The latest recorded backend pytest count is 810.
-- The latest recorded frontend Vitest count is 163.
-- The latest OpenAPI/frontend contract count is 164.
+- The latest recorded backend pytest count is 818.
+- The latest recorded frontend Vitest count is 175.
+- The latest OpenAPI/frontend contract count is 167.
   These counts describe the current fully collected validation suites; the
   final command result and commit SHA are stated in the first entry above.
 - The clean pushed commit results are local development evidence, not

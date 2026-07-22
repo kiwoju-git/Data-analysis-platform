@@ -1,6 +1,6 @@
 # Report Center P0 Contract
 
-Last updated: 2026-07-19
+Last updated: 2026-07-23
 
 ## Purpose
 
@@ -8,6 +8,17 @@ Last updated: 2026-07-19
 the existing checksum-validated analysis-run result and export APIs. It does not introduce a new
 result renderer, reinterpret stored artifacts, or imply that every dedicated workflow has an HTML
 report.
+
+The analysis Workbench shows a closed-by-default `저장된 분석 이력` summary.
+Opening it fetches only the selected dataset/method's three most recent runs;
+the collapsed state does not issue the full-history request. `전체 이력 관리`
+opens `/reports?tab=history&dataset_version_id=...&method_id=...` with IDs only.
+
+The Report Center `분석 이력` tab reuses the full existing history component,
+including filters, paging, checksum-validated restore, same-method comparison,
+deletion preflight, and irreversible deletion. The `보고서` tab retains report
+discovery and export creation/download. No history or export capability was
+removed from dedicated owning workflows.
 
 ## Generic analysis-run support
 

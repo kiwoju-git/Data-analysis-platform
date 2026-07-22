@@ -1,6 +1,6 @@
 # Data And Regression Model Management Contract
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## Current Scope
 
@@ -10,6 +10,11 @@ already stored locally; the page does not add a misleading save operation.
 Users can page and refresh each catalog, assign an optional name and note, pin
 an item, activate a dataset version, open a model in Predict, and run the
 existing deletion impact workflows.
+
+The page is mounted only after the API contract-2 runtime handshake succeeds.
+A generic HTTP 404 from a missing route is reported as a frontend/backend
+version mismatch, while stable dataset/model not-found, optimistic metadata
+conflict, dependency blocker, and integrity failure remain separate states.
 
 ## Operational Metadata
 
@@ -49,6 +54,10 @@ UUID in the URL.
 
 No raw value, filename, note, or label is logged or written to browser storage.
 Only the active dataset version ID continues to use session storage.
+
+Successful metadata updates show an explicit saved state and refresh the
+catalog metadata timestamp. A dependency-blocked deletion is an intended
+protection state with counts, not a failed or missing API route.
 
 ## Version Decision
 

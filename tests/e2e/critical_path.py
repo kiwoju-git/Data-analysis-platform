@@ -665,7 +665,7 @@ def restore_and_compare_saved_results(page: Page) -> None:
     expect(page.locator(".analysis-history-item")).to_have_count(0)
     compact_history.get_by_role("button", name="최근 이력 열기").click()
     expect(page.locator(".compact-history-list article")).to_have_count(
-        2, timeout=20_000
+        1, timeout=20_000
     )
     compact_history.get_by_role("link", name="전체 이력 관리").click()
     expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible(
@@ -674,11 +674,26 @@ def restore_and_compare_saved_results(page: Page) -> None:
     expect(page.get_by_role("heading", name="전체 분석 이력")).to_be_visible(
         timeout=15_000
     )
+    page.locator(".analysis-history-controls").get_by_label("method").select_option("")
     history_items = page.locator(".analysis-history-item")
     expect(history_items).to_have_count(2, timeout=20_000)
 
     history_items.nth(0).get_by_role("button", name="결과 불러오기").click()
-    expect(page.get_by_text("불러온 결과")).to_be_visible(timeout=15_000)
+    expect(page.get_by_role("region", name="2-표본 t-검정 실행")).to_be_visible(
+        timeout=15_000
+    )
+
+    page.get_by_role("button", name="리포트", exact=True).click()
+    expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible(
+        timeout=15_000
+    )
+    page.get_by_role("tab", name="분석 이력").click()
+    expect(page.get_by_role("heading", name="전체 분석 이력")).to_be_visible(
+        timeout=15_000
+    )
+    page.locator(".analysis-history-controls").get_by_label("method").select_option("")
+    history_items = page.locator(".analysis-history-item")
+    expect(history_items).to_have_count(2, timeout=20_000)
 
     history_items.nth(0).get_by_role("button", name="왼쪽").click()
     history_items.nth(1).get_by_role("button", name="오른쪽").click()
@@ -693,8 +708,6 @@ def restore_and_compare_saved_results(page: Page) -> None:
 def delete_one_saved_analysis_run(page: Page) -> None:
     history_items = page.locator(".analysis-history-item")
     expect(history_items).to_have_count(2, timeout=15_000)
-    history_items.nth(1).get_by_role("button", name="결과 불러오기").click()
-    expect(page.get_by_text("불러온 결과")).to_be_visible(timeout=15_000)
 
     history_items.nth(1).get_by_role("button", name="삭제 영향 확인").click()
     deletion_impact = page.get_by_label("analysis run 삭제 영향")
@@ -709,7 +722,7 @@ def delete_one_saved_analysis_run(page: Page) -> None:
         timeout=15_000
     )
     expect(history_items).to_have_count(1, timeout=15_000)
-    expect(page.get_by_text("불러온 결과")).to_have_count(0)
+    expect(page.get_by_text("불러온 결과")).to_have_count(1)
     expect(page.get_by_text("비교 결과")).to_have_count(0)
 
 
@@ -1060,14 +1073,13 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(page.get_by_role("heading", name="회귀모형 적합 실행")).to_be_visible(
         timeout=20_000
     )
-    history_panel = page.locator(".analysis-history-panel")
-    history_panel.get_by_role("button", name="새로고침").click()
-    saved_linear_model = history_panel.locator(".analysis-history-item").filter(
+    compact_history = page.locator(".compact-analysis-history")
+    compact_history.get_by_role("button", name="최근 이력 열기").click()
+    saved_linear_model = compact_history.locator(".compact-history-list article").filter(
         has_text="regression.linear_model"
     )
     expect(saved_linear_model).to_have_count(1, timeout=15_000)
     saved_linear_model.get_by_role("button", name="결과 불러오기").click()
-    expect(page.get_by_text("불러온 결과")).to_be_visible(timeout=15_000)
     expect(page.get_by_label("회귀모형 요약")).to_be_visible(timeout=15_000)
     restored_retention = page.get_by_role("region", name="저장 모델 관리")
     expect(
@@ -1164,14 +1176,13 @@ def verify_attribute_control_chart(page: Page) -> None:
                 f"Phase II {export_kind} export failed: {export_response.text()}"
             )
 
-    history_panel = page.locator(".analysis-history-panel")
-    history_panel.get_by_role("button", name="새로고침").click()
-    stored_phase_2 = history_panel.locator(".analysis-history-item").filter(
+    compact_history = page.locator(".compact-analysis-history")
+    compact_history.get_by_role("button", name="최근 이력 열기").click()
+    stored_phase_2 = compact_history.locator(".compact-history-list article").filter(
         has_text="quality.attribute_control_chart"
     )
     expect(stored_phase_2).to_have_count(1, timeout=15_000)
     stored_phase_2.get_by_role("button", name="결과 불러오기").click()
-    expect(page.get_by_text("불러온 결과")).to_be_visible(timeout=15_000)
     expect(summary).to_contain_text("1 / 1")
     expect(summary).to_contain_text("사용 불가 · 관측점 부족")
 

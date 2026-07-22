@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## 1. Required Reading And Priority
 
@@ -20,6 +20,25 @@ Current source-of-truth note:
 - `to_do_list.md` tracks the current implementation state and the next allowed PR slice.
 
 Current and next development order:
+
+Runtime compatibility stabilization is the current closure slice. API contract
+2, runtime capability gating, strict dev-port/startup checks, typed management
+error distinctions, and compact selected-method history with full Report
+Center ownership are implemented without changing statistical calculations,
+method versions, metadata schema 15, deletion blockers, or Bayesian GP/EI.
+The mixed old-backend/new-frontend failure and operating procedure are recorded
+in `docs/runtime_compatibility_contract.md`. After validation and push:
+
+1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
+2. Verify the new main push's hosted Windows/E2E jobs and authenticated
+   `e2e-logs` contents; review required-check/branch protection separately.
+3. Continue measured main-bundle boundaries without weakening runtime gates.
+4. Add separately contracted Predict/RSM/Optimizer/Bayesian HTML reports.
+5. Add catalog search/lightweight verified summaries with exact asset
+   validation retained on selection.
+6. Keep dataset-root/DOE-root retention as separate reviewed ownership graphs.
+
+Historical order before this closure:
 
 Predict/Response Optimizer entrypoints, tutorial truth sync, Help/Report Center,
 Bayesian frontend modularization, active dataset switching, and interactive

@@ -1,6 +1,5 @@
 from typing import Final
 
-
 API_CONTRACT_VERSION: Final = 2
 
 RUNTIME_CAPABILITIES: Final[dict[str, bool]] = {

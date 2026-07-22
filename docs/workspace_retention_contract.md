@@ -1,6 +1,11 @@
 # Workspace Retention And Deletion Contract
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
+
+Runtime note: destructive asset operations are exposed by the frontend only
+after API contract 2 and the relevant deletion capability pass. A generic
+route 404 is treated as a mixed-version runtime, while stable dependency
+blockers and integrity errors preserve their existing retention meanings.
 
 ## Scope And Current Slice
 

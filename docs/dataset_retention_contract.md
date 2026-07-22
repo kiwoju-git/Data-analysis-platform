@@ -1,6 +1,6 @@
 # Dataset Version Retention Contract
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## Scope
 
@@ -82,6 +82,11 @@ version must be changed first. Successful deletion refreshes both the manager
 and active selector catalogs. The confirmation shows only the user label or
 catalog filename, row count, and short version ID; it never shows a workspace
 path.
+
+The UI distinguishes a generic route 404 (runtime contract mismatch) from
+`dataset_version_not_found`, dependency blockers, optimistic metadata conflict,
+and artifact-integrity failures. The runtime gate must pass before preflight or
+DELETE can be initiated from the management page.
 
 ## Non-goals
 

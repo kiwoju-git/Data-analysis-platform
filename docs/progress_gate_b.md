@@ -1,6 +1,36 @@
 # Gate B Progress
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
+
+## Runtime Compatibility And Analysis History Stabilization
+
+- A mixed-version runtime was reproduced: an older ready backend owned port
+  8000, current backend startup failed with WinSock 10048, and the old dev
+  script still allowed Vite to move from occupied 5173 to 5174. Dataset/model
+  management routes returned generic 404 and the old catalog reported Predict,
+  Response Optimizer, and Bayesian with obsolete availability states.
+- API contract 2 adds a raw-data-free `/api/v1/runtime-info` handshake with the
+  actual metadata schema 15, build commit, and required management/dedicated
+  capabilities. The frontend blocks the workspace before catalog or management
+  UI when the contract is missing, old, malformed, or incomplete.
+- `dev.ps1` now rejects occupied ports without killing their owners, checks the
+  backend job and runtime contract before Vite, uses explicit API/build values
+  and `--strictPort`, and cleans up only the backend job it created. A separate
+  read-only diagnostic script reports listener, OpenAPI, and catalog evidence.
+- Management errors retain HTTP/code/correlation context. Route 404, missing
+  asset, optimistic conflict, dependency blocker, and integrity failure are
+  distinct user states; existing no-cascade deletion blockers are unchanged.
+- Generic analysis pages now show a closed compact history surface and load
+  only three selected-method runs when opened. Full filters, paging, restore,
+  comparison, deletion preflight, and delete remain in Report Center's
+  `분석 이력` tab through an ID-only deep link.
+- No statistical calculation, method version, stored-result schema, Bayesian
+  GP/EI behavior, or metadata schema meaning changed in this stabilization.
+- Final development validation passed backend 818, frontend 175, direct
+  OpenAPI/frontend contracts 167, tutorial Markdown 18, real-API tutorial
+  smoke 18/18, and the 84.9-second Chromium critical path. Main measured
+  498.08 kB. The Windows 10/Python 3.10/Node 24 host does not close the
+  Windows 11/Node 22 release gate.
 
 ## Normality, Interactive EDA, And Asset Management Slice
 

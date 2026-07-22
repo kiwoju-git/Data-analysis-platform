@@ -4,7 +4,31 @@ This document describes what the current Playwright smoke covers, how to run it,
 and how to inspect failures. It is an operations and coverage note, not a
 statistical-method expansion plan.
 
+## Runtime Compatibility And Compact History Coverage
+
+The current revision adds component/contract coverage that blocks missing or
+old runtime-info responses before management or method-catalog UI. Startup
+tests cover occupied backend/frontend ports, early backend exit behavior,
+strict-port source guards, and ownership-safe cleanup without killing an
+external process.
+
+The browser critical path now verifies that the selected analysis initially
+shows a closed compact history surface with no full rows. It opens the recent
+three-run view, follows the ID-only `전체 이력 관리` link to Report Center's
+`분석 이력` tab, and performs the existing restore, comparison, deletion, and
+stale-result checks there. Report export, Help, Manage, Predict, Optimizer,
+Bayesian, quality, DOE, paste, and retention paths remain in the same smoke.
+
 ## Latest Local Run
+
+The 2026-07-23 runtime-compatibility/compact-history worktree based on pushed
+main `6cc097a6f3d2983feab1fd7e4ccc2c5ab16f765d` passed the complete Chromium
+critical path in 84.9 seconds. It verifies the runtime handshake before the
+workspace, management route availability, current dedicated method states,
+closed compact selected-method history, Report Center full restore/compare/
+delete, and all retained prediction, quality, DOE, Bayesian, upload, parser,
+and lazy-route paths. Diagnostics were written below
+`.tmp/e2e-diagnostics-runtime-compat` and are intentionally not committed.
 
 The 2026-07-22 normality/interactivity/asset-management worktree based on
 pushed main `7d30ad0899ba11c14dbd0c4053041ddc7dcf2a15` passed in 77.7 seconds
