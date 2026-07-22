@@ -81,6 +81,36 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "/api/v1/analysis-methods" in diagnostics_text
 
 
+def test_dev_runtime_helper_returns_the_repository_commit() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    expected = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout.strip()
+    command = (
+        f". '{repo_root / 'scripts/dev_runtime_helpers.ps1'}'; "
+        f"Get-DevRepositoryCommit -RepoRoot '{repo_root}'"
+    )
+
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", command],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == expected
+
+
 def _run_dev(repo_root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [

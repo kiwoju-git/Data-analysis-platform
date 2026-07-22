@@ -74,8 +74,10 @@ function Test-DevRuntimeCompatibility {
 
 function Get-DevRepositoryCommit {
     param([Parameter(Mandatory = $true)][string] $RepoRoot)
-    $commit = (& git -C $RepoRoot rev-parse HEAD 2>$null | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
+    $commitOutput = & git -C $RepoRoot rev-parse HEAD 2>$null
+    $gitExitCode = $LASTEXITCODE
+    $commit = $commitOutput | Select-Object -First 1
+    if ($gitExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
         return "unknown"
     }
     return $commit.Trim()
