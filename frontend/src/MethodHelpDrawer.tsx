@@ -1,9 +1,21 @@
 import { useEffect, useRef } from "react";
 
-import type { AnalysisMethodDescriptor } from "./api";
+import type {
+  AnalysisMethodDescriptor,
+  DatasetProfileResponse,
+  DatasetVersionResponse,
+} from "./api";
 import { getAnalysisMethodGuidance } from "./analysisMethodGuidance";
 
-export function MethodHelpContent({ method }: { method: AnalysisMethodDescriptor }) {
+export function MethodHelpContent({
+  method,
+  profile = null,
+  version = null,
+}: {
+  method: AnalysisMethodDescriptor;
+  profile?: DatasetProfileResponse | null;
+  version?: DatasetVersionResponse | null;
+}) {
   const guidance = getAnalysisMethodGuidance(method.method_id);
   const requiredRoles = guidance.roleRequirements.filter((role) => role.required);
 
@@ -32,10 +44,27 @@ export function MethodHelpContent({ method }: { method: AnalysisMethodDescriptor
       <HelpSection title="옵션 설명">
         <ul>{guidance.optionChecklist.map((item) => <li key={item}>{item}</li>)}</ul>
       </HelpSection>
-      <HelpSection title="사전점검">
+      <HelpSection title="사전점검과 결과 해석">
+        <div className="preflight-help-context">
+          <strong>현재 데이터 상태 (구조 수준)</strong>
+          <span>
+            {version === null
+              ? "선택된 데이터셋 버전 없음"
+              : `v${version.version_number} · ${version.row_count.toLocaleString()}행 · ${version.column_count.toLocaleString()}열`}
+          </span>
+          <span>{profile === null ? "profile 확인 전" : "profile 구조 확인 완료"}</span>
+          <span>{method.method_id} · v{method.method_version}</span>
+        </div>
         <ul>{guidance.preflightChecks.map((item) => <li key={item}>{item}</li>)}</ul>
-      </HelpSection>
-      <HelpSection title="결과에서 먼저 볼 값">
+        <p>
+          실제 usable row와 제외 행은 method 사전점검 또는 실행 결과에서 확정됩니다.
+          complete-case 처리, 선택 역할, filter와 결측 정책을 실행 결과에서 다시 확인하세요.
+        </p>
+        <p>
+          독립성은 데이터만으로 증명할 수 없습니다. p-value만으로 차이의 크기, 실무 중요성,
+          인과관계 또는 공정 안정성을 결론내리지 마세요.
+        </p>
+        <strong>결과에서 먼저 볼 값</strong>
         <ul>{guidance.resultFocus.map((item) => <li key={item}>{item}</li>)}</ul>
       </HelpSection>
       <div className="notice-box">
@@ -51,11 +80,15 @@ export function MethodHelpDrawer({
   method,
   open,
   trigger,
+  profile,
+  version,
   onClose,
 }: {
   method: AnalysisMethodDescriptor;
   open: boolean;
+  profile?: DatasetProfileResponse | null;
   trigger: HTMLButtonElement | null;
+  version?: DatasetVersionResponse | null;
   onClose: () => void;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -101,7 +134,7 @@ export function MethodHelpDrawer({
           닫기
         </button>
       </div>
-      <MethodHelpContent method={method} />
+      <MethodHelpContent method={method} profile={profile} version={version} />
     </aside>
   );
 }

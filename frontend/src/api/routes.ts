@@ -86,6 +86,14 @@ export const apiRoutes = {
     return apiUrl(`/dataset-versions/${pathId(versionId)}/metadata`);
   },
 
+  datasetVersionDeletionPreflight(versionId: string): string {
+    return apiUrl(`/dataset-versions/${pathId(versionId)}/deletion-preflight`);
+  },
+
+  datasetVersionDeletion(versionId: string): string {
+    return apiUrl(`/dataset-versions/${pathId(versionId)}/deletion`);
+  },
+
   attributeControlLimitSets({
     sourceDatasetVersionId,
     chartType,

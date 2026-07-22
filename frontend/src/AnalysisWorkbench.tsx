@@ -4,7 +4,6 @@ import { AnalysisHistoryPanel } from "./AnalysisHistoryPanel";
 import { AnalysisPanelBoundary } from "./AnalysisPanelBoundary";
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
 import { MethodHelpDrawer } from "./MethodHelpDrawer";
-import { PreflightExplanationPanel } from "./PreflightExplanationPanel";
 import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
@@ -24,7 +23,6 @@ import type {
   DatasetProfileResponse,
   DatasetVersionResponse,
 } from "./api";
-import { getAnalysisMethodGuidance } from "./analysisMethodGuidance";
 import { getAnalysisRunErrorDetails } from "./analysisRunErrors";
 import type {
   AnalysisHistoryResultAvailabilityFilter,
@@ -158,8 +156,6 @@ export function AnalysisWorkbench({
 }: AnalysisWorkbenchProps) {
   const [isMethodHelpOpen, setIsMethodHelpOpen] = useState(false);
   const methodHelpTriggerRef = useRef<HTMLButtonElement>(null);
-  const selectedGuidance =
-    selectedMethod === null ? null : getAnalysisMethodGuidance(selectedMethod.method_id);
   const executablePanel =
     selectedMethod !== null &&
     (selectedMethod.availability === "available" || selectedMethod.method_id === "quality.gage_rr")
@@ -345,7 +341,7 @@ export function AnalysisWorkbench({
                 ref={methodHelpTriggerRef}
                 type="button"
               >
-                ? 이 분석 도움말
+                분석 도움말
               </button>
               <span className={`availability-badge availability-${selectedMethod.availability}`}>
                 {availabilityLabel(selectedMethod)}
@@ -355,7 +351,9 @@ export function AnalysisWorkbench({
           <MethodHelpDrawer
             method={selectedMethod}
             open={isMethodHelpOpen}
+            profile={profile}
             trigger={methodHelpTriggerRef.current}
+            version={version}
             onClose={() => setIsMethodHelpOpen(false)}
           />
           <ol className="workbench-steps" aria-label="분석 실행 단계">
@@ -400,14 +398,7 @@ export function AnalysisWorkbench({
               이 메서드는 저장된 source 자산을 선택한 뒤 전용 API에서 dependency와 checksum을
               다시 검증합니다. generic analysis-run으로 실행되지 않습니다.
             </div>
-          ) : (
-            <PreflightExplanationPanel
-              guidance={selectedGuidance}
-              method={selectedMethod}
-              profile={profile}
-              version={version}
-            />
-          )}
+          ) : null}
           {selectedMethod.execution_mode !== "dedicated" &&
           renderAnalysisFilters !== undefined
             ? renderAnalysisFilters(selectedMethod)

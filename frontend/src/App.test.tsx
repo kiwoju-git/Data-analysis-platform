@@ -423,7 +423,7 @@ describe("App", () => {
 
     expect(html).toContain("두 표본 t 검정");
     expect(html).toContain("공통 분석 필터");
-    expect(html).toContain("? 이 분석 도움말");
+    expect(html).toContain("분석 도움말");
     expect(html).toContain("계산 코드, 기준 데이터, 수치 검증 테스트");
   });
 
@@ -452,21 +452,28 @@ describe("App", () => {
     expect(html).not.toContain("무엇을 알고 싶나요?");
     expect(html).not.toContain("역할 설명");
     expect(html).toContain("분석 선택이 어렵나요? 도움말에서 질문으로 찾기");
-    expect(html).toContain("? 이 분석 도움말");
+    expect(html).toContain("분석 도움말");
     expect(helpHtml).toContain("무엇을 알고 싶나요?");
     expect(helpHtml).toContain("한 컬럼의 분포와 이상치를 보고 싶다");
     expect(helpHtml).toContain("eda.graphical_summary");
     expect(helpHtml).toContain("변수 역할 사전");
     expect(helpHtml).toContain("Response / 반응값 / Y");
-    expect(html).toContain("사전점검 해설");
-    expect(html).toContain("독립성은 데이터만으로 자동 검증할 수 없습니다.");
-    expect(html).toContain("p-value는 차이가 있는지의 근거");
+    expect(html).not.toContain("사전점검 해설");
+    expect(html).not.toContain("독립성은 데이터만으로 자동 검증할 수 없습니다.");
+    expect(html).not.toContain("p-value는 차이가 있는지의 근거");
   });
 
   it("renders accessible selected-method context help without hiding required caveats", () => {
     const method = analysisTestCatalog().methods[0];
     const html = renderToString(
-      <MethodHelpDrawer method={method} open trigger={null} onClose={() => undefined} />,
+      <MethodHelpDrawer
+        method={method}
+        open
+        profile={null}
+        trigger={null}
+        version={datasetVersionTestResponse()}
+        onClose={() => undefined}
+      />,
     );
 
     expect(html).toContain('role="dialog"');
@@ -474,6 +481,9 @@ describe("App", () => {
     expect(html).toContain("쉽게 말하면");
     expect(html).toContain("필수 역할");
     expect(html).toContain("사용하면 안 되는 경우");
+    expect(html).toContain("사전점검과 결과 해석");
+    expect(html).toContain("현재 데이터 상태 (구조 수준)");
+    expect(html).toContain("실제 usable row와 제외 행");
     expect(html).toContain("결과에서 먼저 볼 값");
     expect(html).toContain("인과관계나 실무적 중요성을 단정하지 마세요");
   });
@@ -2238,7 +2248,7 @@ describe("App", () => {
     expect(html).toContain("Pearson 상관 실행");
     expect(html).toContain("X 변수");
     expect(html).toContain("Y 변수");
-    expect(html).toContain("? 이 분석 도움말");
+    expect(html).toContain("분석 도움말");
     expect(html).toContain("산점도");
     expect(html).toContain("A C scatter plot");
     expect(html).toContain("0.926872");
@@ -2312,7 +2322,7 @@ describe("App", () => {
     expect(html).toContain("X-Y 상관행렬 실행");
     expect(html).toContain("X 변수 집합");
     expect(html).toContain("Y 변수 집합");
-    expect(html).toContain("선택된 역할");
+    expect(html).not.toContain("사전점검 해설");
     expect(html).toContain("상관 Heatmap");
     expect(html).toContain("0.8");
   });

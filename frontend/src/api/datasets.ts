@@ -8,6 +8,8 @@ import type {
   DatasetSchemaUpdateRequest,
   DatasetUploadResponse,
   DatasetVersionCatalogResponse,
+  DatasetVersionDeleteResponse,
+  DatasetVersionDeletionPreflightResponse,
   DatasetVersionMetadataResponse,
   DatasetVersionMetadataUpdateRequest,
   DatasetVersionResponse,
@@ -169,4 +171,33 @@ export async function updateDatasetVersionMetadata(
     throw new Error(await apiErrorCode(response, "dataset_version_metadata_update_failed"));
   }
   return (await response.json()) as DatasetVersionMetadataResponse;
+}
+
+export async function fetchDatasetVersionDeletionPreflight(
+  versionId: string,
+): Promise<DatasetVersionDeletionPreflightResponse> {
+  const response = await fetchApi(apiRoutes.datasetVersionDeletionPreflight(versionId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "dataset_version_deletion_preflight_failed"));
+  }
+  return (await response.json()) as DatasetVersionDeletionPreflightResponse;
+}
+
+export async function deleteDatasetVersion(
+  preflight: DatasetVersionDeletionPreflightResponse,
+): Promise<DatasetVersionDeleteResponse> {
+  const response = await fetchApi(apiRoutes.datasetVersionDeletion(preflight.version_id), {
+    method: "DELETE",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      confirmation_version_id: preflight.version_id,
+      expected_deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "dataset_version_deletion_failed"));
+  }
+  return (await response.json()) as DatasetVersionDeleteResponse;
 }

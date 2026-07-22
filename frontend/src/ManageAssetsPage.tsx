@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   DatasetVersionCatalogItem,
   RegressionModelCatalogItem,
 } from "./api";
 import { useAssetManagementState } from "./useAssetManagementState";
+import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
 
 export interface ManageAssetsPageProps {
@@ -98,6 +99,10 @@ function DatasetManagementPanel({
             saving={state.savingId === item.version_id}
             onActivate={() => onActivateDataset(item.version_id)}
             onMetadataChanged={onDatasetMetadataChanged}
+            onDeleted={() => {
+              state.onRefreshDatasets();
+              onDatasetMetadataChanged();
+            }}
             onSave={state.onSaveDatasetMetadata}
           />
         ))}
@@ -116,6 +121,7 @@ function DatasetAssetEditor({
   item,
   onActivate,
   onMetadataChanged,
+  onDeleted,
   onSave,
   saving,
 }: {
@@ -123,12 +129,15 @@ function DatasetAssetEditor({
   item: DatasetVersionCatalogItem;
   onActivate: () => void;
   onMetadataChanged: () => void;
+  onDeleted: () => void;
   onSave: ReturnType<typeof useAssetManagementState>["onSaveDatasetMetadata"];
   saving: boolean;
 }) {
   const [label, setLabel] = useState(item.user_label ?? "");
   const [note, setNote] = useState(item.note ?? "");
   const [pinned, setPinned] = useState(item.pinned);
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const retention = useDatasetVersionRetentionState(item.version_id, onDeleted);
   return (
     <article className="asset-management-item">
       <div className="asset-management-summary">
@@ -173,7 +182,31 @@ function DatasetAssetEditor({
         >
           {saving ? "저장 중" : "이름 저장"}
         </button>
+        <button
+          className="secondary-button"
+          disabled={active || retention.isLoadingPreflight || retention.isDeleting}
+          onClick={retention.onLoadPreflight}
+          type="button"
+        >
+          {retention.isLoadingPreflight ? "확인 중" : "삭제 영향 확인"}
+        </button>
       </div>
+      {active ? (
+        <p className="field-note">현재 분석 데이터셋은 삭제할 수 없습니다. 다른 버전을 먼저 선택하세요.</p>
+      ) : null}
+      {retention.preflight !== null ? (
+        <DatasetDeletionImpact
+          confirmed={deleteConfirmed}
+          item={item}
+          preflight={retention.preflight}
+          deleting={retention.isDeleting}
+          onConfirmedChange={setDeleteConfirmed}
+          onDelete={() => retention.onDelete(retention.preflight!)}
+        />
+      ) : null}
+      {retention.error !== null ? (
+        <div className="error-box" role="alert">{retention.error}</div>
+      ) : null}
     </article>
   );
 }
@@ -233,8 +266,15 @@ function ModelAssetEditor({
   const [pinned, setPinned] = useState(item.pinned);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const retention = useRegressionModelRetentionState(item.model_id);
+  const deletionNotificationRef = useRef<string | null>(null);
   useEffect(() => {
-    if (retention.deletion !== null) onDeleted();
+    if (
+      retention.deletion !== null &&
+      deletionNotificationRef.current !== retention.deletion.model_id
+    ) {
+      deletionNotificationRef.current = retention.deletion.model_id;
+      onDeleted();
+    }
   }, [onDeleted, retention.deletion]);
   const fallback = `${item.response?.display_name ?? "반응 metadata 확인 필요"} · predictor ${item.predictor_count ?? "?"}개`;
   return (
@@ -317,6 +357,73 @@ function ModelAssetEditor({
       ) : null}
       {retention.error !== null ? <div className="error-box" role="alert">{retention.error}</div> : null}
     </article>
+  );
+}
+
+function DatasetDeletionImpact({
+  confirmed,
+  deleting,
+  item,
+  onConfirmedChange,
+  onDelete,
+  preflight,
+}: {
+  confirmed: boolean;
+  deleting: boolean;
+  item: DatasetVersionCatalogItem;
+  onConfirmedChange: (confirmed: boolean) => void;
+  onDelete: () => void;
+  preflight: import("./api").DatasetVersionDeletionPreflightResponse;
+}) {
+  const counts = preflight.counts;
+  const dependencyTotal =
+    counts.analysis_run_count +
+    counts.regression_model_count +
+    counts.prediction_source_count +
+    counts.prediction_target_count +
+    counts.attribute_control_limit_set_count +
+    counts.job_count;
+  return (
+    <div className="notice-box dataset-deletion-impact">
+      <strong>삭제 영향</strong>
+      <div className="metadata-grid">
+        <span>분석 {counts.analysis_run_count.toLocaleString()}건</span>
+        <span>모델 {counts.regression_model_count.toLocaleString()}건</span>
+        <span>예측 {counts.prediction_source_count + counts.prediction_target_count}건</span>
+        <span>관리한계 {counts.attribute_control_limit_set_count.toLocaleString()}건</span>
+        <span>job {counts.job_count.toLocaleString()}건</span>
+        <span>다른 버전 {counts.sibling_version_count.toLocaleString()}개</span>
+      </div>
+      {preflight.deletion_ready ? (
+        <>
+          <p>
+            {preflight.deletion_scope === "dataset_root"
+              ? "마지막 버전이므로 검증된 원본 업로드와 dataset root도 함께 삭제됩니다."
+              : "이 버전의 검증된 canonical/profile 파일만 삭제되고 shared 원본은 유지됩니다."}
+          </p>
+          <label className="checkbox-field">
+            <input
+              checked={confirmed}
+              type="checkbox"
+              onChange={(event) => onConfirmedChange(event.currentTarget.checked)}
+            />
+            <span>
+              {item.user_label ?? item.original_filename} · {item.row_count.toLocaleString()}행 · ID {shortId(item.version_id)} 삭제가 되돌릴 수 없음을 확인했습니다.
+            </span>
+          </label>
+          <button
+            className="secondary-button danger-button"
+            disabled={!confirmed || deleting}
+            onClick={onDelete}
+            type="button"
+          >
+            {deleting ? "삭제 중" : "데이터셋 버전 삭제"}
+          </button>
+        </>
+      ) : (
+        <p>종속 자산 {dependencyTotal.toLocaleString()}건을 먼저 명시적으로 삭제해야 합니다. 자동 연쇄 삭제는 하지 않습니다.</p>
+      )}
+    </div>
   );
 }
 

@@ -105,6 +105,23 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="datasetVersionDeletionPreflight",
+        method="get",
+        path="/api/v1/dataset-versions/{version_id}/deletion-preflight",
+        success_status="200",
+        response_schema="DatasetVersionDeletionPreflightResponse",
+        parameters=frozenset({("version_id", "path")}),
+    ),
+    OperationContract(
+        route_name="datasetVersionDeletion",
+        method="delete",
+        path="/api/v1/dataset-versions/{version_id}/deletion",
+        success_status="200",
+        response_schema="DatasetVersionDeleteResponse",
+        parameters=frozenset({("version_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="datasetVersionRows",
         method="get",
         path="/api/v1/dataset-versions/{version_id}/rows",
@@ -2290,6 +2307,116 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         required_fields=frozenset(
             {"version_id", "user_label", "note", "pinned", "metadata_updated_at"}
         ),
+    ),
+    SchemaComponentContract(
+        name="DatasetVersionDeletionCounts",
+        properties=frozenset(
+            {
+                "dataset_version_count",
+                "dataset_root_count",
+                "dataset_column_count",
+                "dataset_artifact_count",
+                "artifact_file_count",
+                "artifact_file_bytes",
+                "raw_upload_file_count",
+                "raw_upload_file_bytes",
+                "sibling_version_count",
+                "analysis_run_count",
+                "regression_model_count",
+                "prediction_source_count",
+                "prediction_target_count",
+                "analysis_export_count",
+                "job_count",
+                "attribute_control_limit_set_count",
+                "phase_2_analysis_count",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "dataset_version_count",
+                "dataset_root_count",
+                "dataset_column_count",
+                "dataset_artifact_count",
+                "artifact_file_count",
+                "artifact_file_bytes",
+                "raw_upload_file_count",
+                "raw_upload_file_bytes",
+                "sibling_version_count",
+                "analysis_run_count",
+                "regression_model_count",
+                "prediction_source_count",
+                "prediction_target_count",
+                "analysis_export_count",
+                "job_count",
+                "attribute_control_limit_set_count",
+                "phase_2_analysis_count",
+            }
+        ),
+        property_consts=(("dataset_version_count", 1),),
+    ),
+    SchemaComponentContract(
+        name="DatasetVersionDeletionPreflightResponse",
+        properties=frozenset(
+            {
+                "preflight_schema_version",
+                "version_id",
+                "dataset_id",
+                "row_count",
+                "column_count",
+                "version_number",
+                "deletion_scope",
+                "deletion_ready",
+                "blockers",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "preflight_schema_version",
+                "version_id",
+                "dataset_id",
+                "row_count",
+                "column_count",
+                "version_number",
+                "deletion_scope",
+                "deletion_ready",
+                "blockers",
+                "counts",
+                "deletion_manifest_sha256",
+            }
+        ),
+        property_refs=(("counts", "DatasetVersionDeletionCounts"),),
+        property_consts=(("preflight_schema_version", 1),),
+    ),
+    SchemaComponentContract(
+        name="DatasetVersionDeleteResponse",
+        properties=frozenset(
+            {
+                "deletion_schema_version",
+                "version_id",
+                "dataset_id",
+                "deletion_scope",
+                "deletion_manifest_sha256",
+                "deleted_at",
+                "deleted_counts",
+                "cleanup_status",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "deletion_schema_version",
+                "version_id",
+                "dataset_id",
+                "deletion_scope",
+                "deletion_manifest_sha256",
+                "deleted_at",
+                "deleted_counts",
+                "cleanup_status",
+            }
+        ),
+        property_refs=(("deleted_counts", "DatasetVersionDeletionCounts"),),
+        property_consts=(("deletion_schema_version", 1),),
     ),
     SchemaComponentContract(
         name="RegressionModelMetadataResponse",

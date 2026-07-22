@@ -35,6 +35,8 @@ export { createDatasetFromPastedText } from "./api/datasets";
 export { fetchDatasetProfile } from "./api/datasets";
 export { fetchDatasetVersion } from "./api/datasets";
 export { fetchDatasetVersions } from "./api/datasets";
+export { deleteDatasetVersion } from "./api/datasets";
+export { fetchDatasetVersionDeletionPreflight } from "./api/datasets";
 export { fetchRowsPreview } from "./api/datasets";
 export { updateDatasetSchema } from "./api/datasets";
 export { updateDatasetVersionMetadata } from "./api/datasets";

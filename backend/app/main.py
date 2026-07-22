@@ -20,6 +20,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.services.analysis_run_exports import recover_analysis_export_quarantine_files
 from app.services.analysis_run_retention import recover_analysis_run_quarantine_files
+from app.services.dataset_version_retention import recover_dataset_version_quarantine_files
 from app.services.workspace_asset_retention import recover_workspace_asset_quarantine_files
 from app.storage.metadata import initialize_metadata_store
 
@@ -35,6 +36,9 @@ def create_lifespan(settings: Settings) -> Callable[[FastAPI], AbstractAsyncCont
             settings.workspace_root
         )
         app.state.workspace_asset_quarantine_recovery = recover_workspace_asset_quarantine_files(
+            settings.workspace_root
+        )
+        app.state.dataset_version_quarantine_recovery = recover_dataset_version_quarantine_files(
             settings.workspace_root
         )
         yield

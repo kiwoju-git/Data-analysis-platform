@@ -233,6 +233,64 @@ class DatasetVersionMetadataResponse(BaseModel):
     metadata_updated_at: str
 
 
+class DatasetVersionDeletionCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version_count: Literal[1]
+    dataset_root_count: int = Field(ge=0, le=1)
+    dataset_column_count: int = Field(ge=0)
+    dataset_artifact_count: int = Field(ge=0)
+    artifact_file_count: int = Field(ge=0)
+    artifact_file_bytes: int = Field(ge=0)
+    raw_upload_file_count: int = Field(ge=0, le=1)
+    raw_upload_file_bytes: int = Field(ge=0)
+    sibling_version_count: int = Field(ge=0)
+    analysis_run_count: int = Field(ge=0)
+    regression_model_count: int = Field(ge=0)
+    prediction_source_count: int = Field(ge=0)
+    prediction_target_count: int = Field(ge=0)
+    analysis_export_count: int = Field(ge=0)
+    job_count: int = Field(ge=0)
+    attribute_control_limit_set_count: int = Field(ge=0)
+    phase_2_analysis_count: int = Field(ge=0)
+
+
+class DatasetVersionDeletionPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preflight_schema_version: Literal[1]
+    version_id: UUID
+    dataset_id: UUID
+    row_count: int = Field(ge=0)
+    column_count: int = Field(ge=1)
+    version_number: int = Field(ge=1)
+    deletion_scope: Literal["version_only", "dataset_root"]
+    deletion_ready: bool
+    blockers: list[str]
+    counts: DatasetVersionDeletionCounts
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class DatasetVersionDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_version_id: UUID
+    expected_deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class DatasetVersionDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deletion_schema_version: Literal[1]
+    version_id: UUID
+    dataset_id: UUID
+    deletion_scope: Literal["version_only", "dataset_root"]
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    deleted_at: str
+    deleted_counts: DatasetVersionDeletionCounts
+    cleanup_status: Literal["deleted", "quarantined_pending_cleanup"]
+
+
 class DatasetVersionCatalogResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

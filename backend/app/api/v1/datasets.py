@@ -11,6 +11,9 @@ from app.api.v1.schemas.datasets import (
     DatasetSchemaUpdateRequest,
     DatasetUploadResponse,
     DatasetVersionCatalogResponse,
+    DatasetVersionDeleteRequest,
+    DatasetVersionDeleteResponse,
+    DatasetVersionDeletionPreflightResponse,
     DatasetVersionListResponse,
     DatasetVersionMetadataResponse,
     DatasetVersionMetadataUpdateRequest,
@@ -19,6 +22,10 @@ from app.api.v1.schemas.datasets import (
 )
 from app.services.dataset_profiles import get_dataset_profile
 from app.services.dataset_upload import create_dataset_from_pasted_text, create_dataset_from_upload
+from app.services.dataset_version_retention import (
+    delete_stored_dataset_version,
+    get_dataset_version_deletion_preflight,
+)
 from app.services.dataset_versions import (
     confirm_dataset_parsing,
     get_dataset_rows_preview,
@@ -132,6 +139,36 @@ def update_dataset_version_metadata_route(
     body: DatasetVersionMetadataUpdateRequest,
 ) -> DatasetVersionMetadataResponse:
     return update_dataset_version_metadata(
+        settings=request.app.state.settings,
+        version_id=version_id,
+        body=body,
+    )
+
+
+@version_router.get(
+    "/{version_id}/deletion-preflight",
+    response_model=DatasetVersionDeletionPreflightResponse,
+)
+def get_dataset_version_deletion_preflight_route(
+    request: Request,
+    version_id: UUID,
+) -> DatasetVersionDeletionPreflightResponse:
+    return get_dataset_version_deletion_preflight(
+        settings=request.app.state.settings,
+        version_id=version_id,
+    )
+
+
+@version_router.delete(
+    "/{version_id}/deletion",
+    response_model=DatasetVersionDeleteResponse,
+)
+def delete_dataset_version_route(
+    request: Request,
+    version_id: UUID,
+    body: DatasetVersionDeleteRequest,
+) -> DatasetVersionDeleteResponse:
+    return delete_stored_dataset_version(
         settings=request.app.state.settings,
         version_id=version_id,
         body=body,

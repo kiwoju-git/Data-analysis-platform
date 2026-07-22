@@ -152,6 +152,51 @@ export interface DatasetVersionMetadataResponse {
   metadata_updated_at: string;
 }
 
+export interface DatasetVersionDeletionCounts {
+  dataset_version_count: 1;
+  dataset_root_count: number;
+  dataset_column_count: number;
+  dataset_artifact_count: number;
+  artifact_file_count: number;
+  artifact_file_bytes: number;
+  raw_upload_file_count: number;
+  raw_upload_file_bytes: number;
+  sibling_version_count: number;
+  analysis_run_count: number;
+  regression_model_count: number;
+  prediction_source_count: number;
+  prediction_target_count: number;
+  analysis_export_count: number;
+  job_count: number;
+  attribute_control_limit_set_count: number;
+  phase_2_analysis_count: number;
+}
+
+export interface DatasetVersionDeletionPreflightResponse {
+  preflight_schema_version: 1;
+  version_id: string;
+  dataset_id: string;
+  row_count: number;
+  column_count: number;
+  version_number: number;
+  deletion_scope: "version_only" | "dataset_root";
+  deletion_ready: boolean;
+  blockers: string[];
+  counts: DatasetVersionDeletionCounts;
+  deletion_manifest_sha256: string;
+}
+
+export interface DatasetVersionDeleteResponse {
+  deletion_schema_version: 1;
+  version_id: string;
+  dataset_id: string;
+  deletion_scope: "version_only" | "dataset_root";
+  deletion_manifest_sha256: string;
+  deleted_at: string;
+  deleted_counts: DatasetVersionDeletionCounts;
+  cleanup_status: "deleted" | "quarantined_pending_cleanup";
+}
+
 export interface DatasetVersionCatalogResponse {
   offset: number;
   limit: number;

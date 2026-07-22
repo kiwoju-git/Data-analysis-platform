@@ -41,6 +41,12 @@ class WorkspaceAssetStorageConflict(RuntimeError):
         self.code = code
 
 
+class DatasetVersionStorageConflict(RuntimeError):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
 @dataclass(frozen=True)
 class DatasetRecord:
     dataset_id: str
@@ -105,6 +111,29 @@ class DatasetArtifactRecord:
     media_type: str
     size_bytes: int
     created_at: str
+
+
+@dataclass(frozen=True)
+class DatasetVersionDependencyCounts:
+    analysis_run_count: int
+    regression_model_count: int
+    prediction_source_count: int
+    prediction_target_count: int
+    analysis_export_count: int
+    job_count: int
+    attribute_control_limit_set_count: int
+    phase_2_analysis_count: int
+
+
+@dataclass(frozen=True)
+class DatasetVersionDeletionSnapshot:
+    version: DatasetVersionRecord
+    dataset: DatasetRecord
+    columns: tuple[DatasetColumnRecord, ...]
+    artifacts: tuple[DatasetArtifactRecord, ...]
+    user_metadata: "AssetUserMetadataRecord | None"
+    sibling_version_count: int
+    dependencies: DatasetVersionDependencyCounts
 
 
 @dataclass(frozen=True)
@@ -1294,6 +1323,36 @@ def get_dataset_record(workspace_root: Path, dataset_id: str) -> DatasetRecord |
     )
 
 
+def list_dataset_records_by_id_prefix(
+    workspace_root: Path,
+    compact_id_prefix: str,
+) -> list[DatasetRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT dataset_id, original_filename, safe_filename, media_type,
+                   detected_format, stored_path, sha256, size_bytes, created_at
+            FROM datasets
+            WHERE lower(replace(dataset_id, '-', '')) LIKE ?;
+            """,
+            (f"{compact_id_prefix.lower()}%",),
+        ).fetchall()
+    return [
+        DatasetRecord(
+            dataset_id=str(row[0]),
+            original_filename=str(row[1]),
+            safe_filename=str(row[2]),
+            media_type=None if row[3] is None else str(row[3]),
+            detected_format=str(row[4]),
+            stored_path=str(row[5]),
+            sha256=str(row[6]),
+            size_bytes=_row_int(row[7]),
+            created_at=str(row[8]),
+        )
+        for row in rows
+    ]
+
+
 def insert_dataset_version_record(
     workspace_root: Path,
     version: DatasetVersionRecord,
@@ -1586,6 +1645,86 @@ def get_dataset_artifact_record(
         return None
 
     return _dataset_artifact_from_row(row)
+
+
+def get_dataset_artifact_record_by_id(
+    workspace_root: Path,
+    artifact_id: str,
+) -> DatasetArtifactRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT artifact_id, version_id, kind, path, sha256, media_type,
+                   size_bytes, created_at
+            FROM dataset_artifacts
+            WHERE artifact_id = ?;
+            """,
+            (artifact_id,),
+        ).fetchone()
+    return None if row is None else _dataset_artifact_from_row(row)
+
+
+def list_dataset_artifact_records_by_id_prefix(
+    workspace_root: Path,
+    compact_id_prefix: str,
+) -> list[DatasetArtifactRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT artifact_id, version_id, kind, path, sha256, media_type,
+                   size_bytes, created_at
+            FROM dataset_artifacts
+            WHERE lower(replace(artifact_id, '-', '')) LIKE ?;
+            """,
+            (f"{compact_id_prefix.lower()}%",),
+        ).fetchall()
+    return [_dataset_artifact_from_row(row) for row in rows]
+
+
+def get_dataset_version_deletion_snapshot(
+    workspace_root: Path,
+    version_id: str,
+) -> DatasetVersionDeletionSnapshot | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        return _connection_dataset_version_deletion_snapshot(connection, version_id)
+
+
+def delete_dataset_version_records(
+    workspace_root: Path,
+    *,
+    expected_snapshot: DatasetVersionDeletionSnapshot,
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        current = _connection_dataset_version_deletion_snapshot(
+            connection, expected_snapshot.version.version_id
+        )
+        if current is None or current != expected_snapshot:
+            raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+        if _dataset_version_has_dependencies(current.dependencies):
+            raise DatasetVersionStorageConflict("dataset_version_deletion_blocked")
+        deleted = connection.execute(
+            "DELETE FROM dataset_versions WHERE version_id = ?;",
+            (current.version.version_id,),
+        )
+        if deleted.rowcount != 1:
+            raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+        if current.sibling_version_count == 0:
+            root_deleted = connection.execute(
+                "DELETE FROM datasets WHERE dataset_id = ?;",
+                (current.dataset.dataset_id,),
+            )
+            if root_deleted.rowcount != 1:
+                raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def upsert_dataset_artifact_record(workspace_root: Path, record: DatasetArtifactRecord) -> None:
@@ -3931,9 +4070,10 @@ def _job_from_row(row: tuple[object, ...]) -> JobRecord:
 def _connection_count(
     connection: sqlite3.Connection,
     query: str,
-    value: str,
+    value: str | tuple[str, ...],
 ) -> int:
-    row = connection.execute(query, (value,)).fetchone()
+    parameters = (value,) if isinstance(value, str) else value
+    row = connection.execute(query, parameters).fetchone()
     return 0 if row is None else _row_int(row[0])
 
 
@@ -3983,6 +4123,198 @@ def _attribute_control_phase_2_config_references(
         return False
     options = payload.get("options")
     return isinstance(options, dict) and options.get("limit_set_id") == limit_set_id
+
+
+def _connection_dataset_version_deletion_snapshot(
+    connection: sqlite3.Connection,
+    version_id: str,
+) -> DatasetVersionDeletionSnapshot | None:
+    version_row = connection.execute(
+        """
+        SELECT version_id, dataset_id, version_number, source_sha256,
+               parsing_options_json, row_count, column_count, schema_hash, created_at
+        FROM dataset_versions
+        WHERE version_id = ?;
+        """,
+        (version_id,),
+    ).fetchone()
+    if version_row is None:
+        return None
+    version = _dataset_version_from_row(version_row)
+    dataset_row = connection.execute(
+        """
+        SELECT dataset_id, original_filename, safe_filename, media_type, detected_format,
+               stored_path, sha256, size_bytes, created_at
+        FROM datasets
+        WHERE dataset_id = ?;
+        """,
+        (version.dataset_id,),
+    ).fetchone()
+    if dataset_row is None:
+        raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+    dataset = DatasetRecord(
+        dataset_id=str(dataset_row[0]),
+        original_filename=str(dataset_row[1]),
+        safe_filename=str(dataset_row[2]),
+        media_type=None if dataset_row[3] is None else str(dataset_row[3]),
+        detected_format=str(dataset_row[4]),
+        stored_path=str(dataset_row[5]),
+        sha256=str(dataset_row[6]),
+        size_bytes=_row_int(dataset_row[7]),
+        created_at=str(dataset_row[8]),
+    )
+    column_rows = connection.execute(
+        """
+        SELECT column_id, version_id, column_index, original_name, display_name,
+               data_type, measurement_level, role, unit
+        FROM dataset_columns
+        WHERE version_id = ?
+        ORDER BY column_index;
+        """,
+        (version_id,),
+    ).fetchall()
+    artifact_rows = connection.execute(
+        """
+        SELECT artifact_id, version_id, kind, path, sha256, media_type,
+               size_bytes, created_at
+        FROM dataset_artifacts
+        WHERE version_id = ?
+        ORDER BY kind;
+        """,
+        (version_id,),
+    ).fetchall()
+    metadata_row = connection.execute(
+        """
+        SELECT version_id, user_label, note, pinned, updated_at
+        FROM dataset_version_user_metadata
+        WHERE version_id = ?;
+        """,
+        (version_id,),
+    ).fetchone()
+    run_rows = connection.execute(
+        """
+        SELECT analysis_id, method_id, dataset_version_id, config_json
+        FROM analysis_runs;
+        """
+    ).fetchall()
+    direct_run_ids: set[str] = set()
+    source_prediction_ids: set[str] = set()
+    analysis_count = prediction_target_count = prediction_source_count = 0
+    phase_2_count = 0
+    for row in run_rows:
+        analysis_id = str(row[0])
+        method_id = str(row[1])
+        direct = row[2] is not None and str(row[2]) == version_id
+        config_json = str(row[3])
+        if direct:
+            direct_run_ids.add(analysis_id)
+            if method_id == "regression.predict":
+                prediction_target_count += 1
+            else:
+                analysis_count += 1
+            if method_id == "quality.attribute_control_chart" and _phase_2_config(config_json):
+                phase_2_count += 1
+        if method_id == "regression.predict" and _prediction_config_references_dataset(
+            config_json, version_id, key="source_dataset_version_id"
+        ):
+            source_prediction_ids.add(analysis_id)
+            prediction_source_count += 1
+    dependent_run_ids = direct_run_ids | source_prediction_ids
+    export_count = job_count = 0
+    if dependent_run_ids:
+        placeholders = ",".join("?" for _ in dependent_run_ids)
+        parameters = tuple(sorted(dependent_run_ids))
+        export_row = connection.execute(
+            f"SELECT COUNT(*) FROM analysis_artifacts "
+            f"WHERE analysis_id IN ({placeholders}) AND kind LIKE '%_export';",
+            parameters,
+        ).fetchone()
+        export_count = 0 if export_row is None else _row_int(export_row[0])
+        job_row = connection.execute(
+            f"SELECT COUNT(*) FROM jobs WHERE analysis_id IN ({placeholders});",
+            parameters,
+        ).fetchone()
+        job_count = 0 if job_row is None else _row_int(job_row[0])
+    model_count = _connection_count(
+        connection,
+        "SELECT COUNT(*) FROM regression_models WHERE dataset_version_id = ?;",
+        version_id,
+    )
+    limit_set_count = _connection_count(
+        connection,
+        "SELECT COUNT(*) FROM attribute_control_limit_sets " "WHERE source_dataset_version_id = ?;",
+        version_id,
+    )
+    sibling_count = _connection_count(
+        connection,
+        "SELECT COUNT(*) FROM dataset_versions " "WHERE dataset_id = ? AND version_id != ?;",
+        (version.dataset_id, version_id),
+    )
+    return DatasetVersionDeletionSnapshot(
+        version=version,
+        dataset=dataset,
+        columns=tuple(_dataset_column_from_row(row) for row in column_rows),
+        artifacts=tuple(_dataset_artifact_from_row(row) for row in artifact_rows),
+        user_metadata=None
+        if metadata_row is None
+        else AssetUserMetadataRecord(
+            owner_id=str(metadata_row[0]),
+            user_label=None if metadata_row[1] is None else str(metadata_row[1]),
+            note=None if metadata_row[2] is None else str(metadata_row[2]),
+            pinned=_row_bool(metadata_row[3]),
+            updated_at=str(metadata_row[4]),
+        ),
+        sibling_version_count=sibling_count,
+        dependencies=DatasetVersionDependencyCounts(
+            analysis_run_count=analysis_count,
+            regression_model_count=model_count,
+            prediction_source_count=prediction_source_count,
+            prediction_target_count=prediction_target_count,
+            analysis_export_count=export_count,
+            job_count=job_count,
+            attribute_control_limit_set_count=limit_set_count,
+            phase_2_analysis_count=phase_2_count,
+        ),
+    )
+
+
+def _dataset_version_has_dependencies(counts: DatasetVersionDependencyCounts) -> bool:
+    return any(
+        (
+            counts.analysis_run_count,
+            counts.regression_model_count,
+            counts.prediction_source_count,
+            counts.prediction_target_count,
+            counts.analysis_export_count,
+            counts.job_count,
+            counts.attribute_control_limit_set_count,
+            counts.phase_2_analysis_count,
+        )
+    )
+
+
+def _prediction_config_references_dataset(
+    config_json: str,
+    version_id: str,
+    *,
+    key: str,
+) -> bool:
+    try:
+        payload = json.loads(config_json)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(payload, dict) and payload.get(key) == version_id
+
+
+def _phase_2_config(config_json: str) -> bool:
+    try:
+        payload = json.loads(config_json)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    options = payload.get("options")
+    return isinstance(options, dict) and options.get("phase") == "phase_2"
 
 
 def _row_int(value: object) -> int:

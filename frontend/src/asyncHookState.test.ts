@@ -19,6 +19,8 @@ import type {
   BayesianStudyResponse,
   DatasetVersionCatalogItem,
   DatasetVersionCatalogResponse,
+  DatasetVersionDeleteResponse,
+  DatasetVersionDeletionPreflightResponse,
   DatasetVersionResponse,
   DatasetRowsPreviewResponse,
   DatasetProfileResponse,
@@ -47,6 +49,7 @@ import { useBayesianRetentionState } from "./features/bayesian/hooks/useBayesian
 import { useDatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 import { useChartPointInteraction } from "./charts/useChartPointInteraction";
 import { useDatasetWorkflow } from "./useDatasetWorkflow";
+import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
@@ -60,6 +63,7 @@ const apiMocks = vi.hoisted(() => ({
   deleteAnalysisResultExport: vi.fn(),
   deleteAttributeControlLimitSet: vi.fn(),
   deleteBayesianStudy: vi.fn(),
+  deleteDatasetVersion: vi.fn(),
   deleteRegressionModel: vi.fn(),
   deleteStoredAnalysisRun: vi.fn(),
   downloadAnalysisResultExport: vi.fn(),
@@ -79,6 +83,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchLatestBayesianRecommendation: vi.fn(),
   fetchDatasetProfile: vi.fn(),
   fetchDatasetVersion: vi.fn(),
+  fetchDatasetVersionDeletionPreflight: vi.fn(),
   fetchDatasetVersions: vi.fn(),
   fetchRowsPreview: vi.fn(),
   fetchRegressionPredictionPreflight: vi.fn(),
@@ -550,6 +555,67 @@ afterEach(() => {
 });
 
 describe("async workbench hooks", () => {
+  it("ignores an old dataset deletion preflight after the managed version changes", async () => {
+    const first = deferred<DatasetVersionDeletionPreflightResponse>();
+    const second = deferred<DatasetVersionDeletionPreflightResponse>();
+    apiMocks.fetchDatasetVersionDeletionPreflight
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const onDeleted = vi.fn();
+    const useTestDatasetRetention = (props: {
+      versionId: string;
+      onDeleted: typeof onDeleted;
+    }) =>
+      useDatasetVersionRetentionState(props.versionId, props.onDeleted);
+    const runner = new HookRunner(useTestDatasetRetention, {
+      versionId: "version-a",
+      onDeleted,
+    });
+    await runner.act(() => runner.output.onLoadPreflight());
+    runner.update({ versionId: "version-b", onDeleted });
+    await runner.act(() => runner.output.onLoadPreflight());
+    second.resolve({
+      version_id: "version-b",
+      deletion_ready: true,
+    } as DatasetVersionDeletionPreflightResponse);
+    await runner.flush();
+    first.resolve({
+      version_id: "version-a",
+      deletion_ready: true,
+    } as DatasetVersionDeletionPreflightResponse);
+    await runner.flush();
+
+    expect(runner.output.preflight?.version_id).toBe("version-b");
+    expect(runner.output.isLoadingPreflight).toBe(false);
+    runner.unmount();
+  });
+
+  it("deletes only a matching ready dataset version and reports completion", async () => {
+    const preflight = {
+      version_id: "version-a",
+      deletion_ready: true,
+      deletion_manifest_sha256: "a".repeat(64),
+    } as DatasetVersionDeletionPreflightResponse;
+    const response = {
+      version_id: "version-a",
+      cleanup_status: "deleted",
+    } as DatasetVersionDeleteResponse;
+    apiMocks.fetchDatasetVersionDeletionPreflight.mockResolvedValue(preflight);
+    apiMocks.deleteDatasetVersion.mockResolvedValue(response);
+    const onDeleted = vi.fn();
+    const runner = new HookRunner(
+      (versionId: string) => useDatasetVersionRetentionState(versionId, onDeleted),
+      "version-a",
+    );
+    await runner.act(() => runner.output.onLoadPreflight());
+    await runner.act(() => runner.output.onDelete(runner.output.preflight!));
+
+    expect(apiMocks.deleteDatasetVersion).toHaveBeenCalledWith(preflight);
+    expect(runner.output.deletion).toEqual(response);
+    expect(onDeleted).toHaveBeenCalledWith(response);
+    runner.unmount();
+  });
+
   it("supports focus selection and Escape clearing for interactive chart points", async () => {
     const runner = new HookRunner<string[], ReturnType<typeof useChartPointInteraction>>(
       useChartPointInteraction,
