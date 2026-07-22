@@ -26,7 +26,7 @@ export function ManageAssetsPage({
     <section className="asset-management-page" aria-labelledby="asset-management-title">
       <div className="panel-heading">
         <div>
-          <h2 id="asset-management-title">데이터·모델 관리</h2>
+          <h2 id="asset-management-title">데이터모델 관리</h2>
           <p>로컬에 저장된 데이터셋 버전과 회귀모델의 이름, 메모, 고정 상태를 관리합니다.</p>
         </div>
         <span className="status-pill status-ready">로컬 저장됨</span>
@@ -381,7 +381,9 @@ function DatasetDeletionImpact({
     counts.regression_model_count +
     counts.prediction_source_count +
     counts.prediction_target_count +
+    counts.analysis_export_count +
     counts.attribute_control_limit_set_count +
+    counts.phase_2_analysis_count +
     counts.job_count;
   return (
     <div className="notice-box dataset-deletion-impact">
@@ -390,7 +392,9 @@ function DatasetDeletionImpact({
         <span>분석 {counts.analysis_run_count.toLocaleString()}건</span>
         <span>모델 {counts.regression_model_count.toLocaleString()}건</span>
         <span>예측 {counts.prediction_source_count + counts.prediction_target_count}건</span>
+        <span>내보내기 {counts.analysis_export_count.toLocaleString()}건</span>
         <span>관리한계 {counts.attribute_control_limit_set_count.toLocaleString()}건</span>
+        <span>Phase II {counts.phase_2_analysis_count.toLocaleString()}건</span>
         <span>job {counts.job_count.toLocaleString()}건</span>
         <span>다른 버전 {counts.sibling_version_count.toLocaleString()}개</span>
       </div>

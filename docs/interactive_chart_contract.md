@@ -10,15 +10,21 @@ invent points, change result schemas, or load uncapped raw rows. A chart may
 render only values already present in a validated result payload. Tooltips and
 selection details are never logged or persisted in browser storage.
 
-The shared Phase 1 foundation is:
+The shared foundation is:
 
 - `charts/InteractiveScatterChart.tsx` for axes, reference lines, points,
   annotations, accessible descriptions, tooltip, and persistent text detail;
 - `charts/useChartPointInteraction.ts` for pointer/focus/keyboard selection;
+- `charts/useChartItemInteraction.ts` for roving tabindex and aggregate chart
+  item interaction;
+- shared `InteractiveQqChart`, `InteractiveHistogramChart`, and
+  `InteractiveBoxplotChart` components for EDA results;
 - `charts/chartScale.ts` for finite padded domains and coordinate scaling;
 - `charts/ChartTooltip.tsx` for bounded text-only tooltip content.
 
-Every interactive point must expose a keyboard focus target, an `aria-label`,
+Each chart has one `tabIndex=0` item. Arrow keys move to adjacent items,
+Home/End move to the first/last item, Enter/Space pins selection, and Escape
+clears it while preserving normal Tab exit. Every interactive item exposes an `aria-label`,
 an SVG `title` fallback, a non-color selected outline, and the same values in a
 text detail region below the chart. Pointer hover and keyboard focus expose the
 same fields. `Escape` clears selection. Touch pointer events are supported.
@@ -45,12 +51,24 @@ Current diagnostic point cap remains 500. Non-finite coordinates are excluded
 from rendering rather than converted to a fake coordinate. Empty point sets
 show an explicit empty state.
 
-## Phase 2 Backlog
+## Phase 2: Normality And Graphical Summary
+
+Implemented:
+
+| Chart | Tooltip/detail fields | Bounds and redaction |
+| --- | --- | --- |
+| Normality and graphical Q-Q | point number, theoretical quantile, observed quantile, reference deviation, column, N basis | only bounded persisted Q-Q points; no invented row index |
+| Histogram | bin number, lower/upper bound and inclusion, count, count/N | persisted aggregate bins only |
+| Boxplot | lower/upper whisker, Q1, median, Q3, lower/upper fence, outlier count, IQR | aggregate elements only; individual outlier values are unavailable and never fabricated |
+| ECDF | point number, X, cumulative probability, approximate rank, N basis | only bounded persisted ECDF points |
+
+Pointer, touch, focus, roving keys, selection outline, SVG title, and the text
+detail region use the same values. Existing result point/bin caps and truncated
+copy remain visible.
+
+## Later Phase 2 Backlog
 
 - Pearson scatter: row index or safe point index, X, Y, fitted/reference value.
-- Q-Q: ordered index, theoretical quantile, observed quantile, reference-line
-  distance.
-- ECDF: value, cumulative proportion, N basis.
 - Run/Individuals/Subgroup and P/NP/C/U charts: point order, statistic,
   center/LCL/UCL, signal code, frozen-limit identity where applicable.
 - Gage Run Chart: part/operator/replicate-safe identifiers and measurement
@@ -61,8 +79,6 @@ define whether row indices or safe design identifiers are exposed.
 
 ## Phase 3 Backlog
 
-- histogram bin bounds/counts;
-- boxplot quartile/whisker/outlier elements;
 - DOE main and interaction effect coordinates;
 - RSM contour grid coordinates and response values.
 

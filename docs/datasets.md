@@ -1,6 +1,6 @@
 # Dataset Notes
 
-Gate B currently covers upload, parsing confirmation, canonical JSONL materialization, schema metadata update, paginated row preview, and a profile/preflight scan with persisted profile artifacts for delimited text and basic XLSX datasets.
+Gate B currently covers upload, parsing confirmation, canonical JSONL materialization, schema metadata update, paginated row preview, a profile/preflight scan with persisted profile artifacts, saved-version reactivation, optional user metadata, and dependency-blocked physical deletion for delimited text and basic XLSX datasets.
 
 The current React data-preparation surface is rendered through `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/PasteDatasetPanel.tsx`, `frontend/src/PastePreviewGrid.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, profile/schema/preview section components, and shared formatting and label helpers. `usePastedDatasetDraft` owns only the transient raw-ref/limited-preview staging state, while `useDatasetWorkflow` owns upload registration, parsing, schema, canonical preview, profile, and active-version switching. `App.tsx` still owns API bootstrap, route state, and analysis orchestration, so this split does not change backend dataset behavior.
 `frontend/src/WorkspaceRouter.tsx` chooses between this data-preparation surface on root/dataset routes and the analysis page on `/analysis/{module_id}/{method_id}` routes against the same in-memory dataset state.
@@ -22,6 +22,15 @@ a newly uploaded or pasted dataset still makes that version active. The user
 can immediately switch back to a training version after registering a separate
 prediction target. The browser continues to hold only bounded preview rows,
 never the complete canonical artifact.
+
+The route-lazy `/manage` page provides the durable catalog workflow. A dataset
+version can have an optional 120-character user label, 500-character note, and
+pinned flag without changing its source filename, schema hash, or dependent
+analysis freshness. The same page can run deletion preflight. Physical deletion
+is enabled only for a fully verified, unreferenced version and never cascades
+into analyses, models, predictions, limit sets, Phase II results, exports, or
+jobs. See `docs/asset_management_contract.md` and
+`docs/dataset_retention_contract.md`.
 
 ## Current API
 

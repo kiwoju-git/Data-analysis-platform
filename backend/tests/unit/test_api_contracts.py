@@ -1850,9 +1850,7 @@ def test_analysis_run_executes_normality_from_dataset_version(tmp_path) -> None:
     assert column["anderson_darling"]["p_value"] == pytest.approx(
         0.9923761563661366,
     )
-    assert column["anderson_darling"]["p_value_method"] == (
-        "stephens_normal_unknown_mean_variance"
-    )
+    assert column["anderson_darling"]["p_value_method"] == ("stephens_normal_unknown_mean_variance")
     assert column["anderson_darling"]["p_value_is_approximate"] is True
     assert column["anderson_darling"]["decision_at_alpha"] == {
         "alpha": 0.05,

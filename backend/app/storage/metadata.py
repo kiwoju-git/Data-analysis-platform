@@ -4226,7 +4226,9 @@ def _connection_dataset_version_deletion_snapshot(
         parameters = tuple(sorted(dependent_run_ids))
         export_row = connection.execute(
             f"SELECT COUNT(*) FROM analysis_artifacts "
-            f"WHERE analysis_id IN ({placeholders}) AND kind LIKE '%_export';",
+            f"WHERE analysis_id IN ({placeholders}) AND kind IN ("
+            "'analysis_result_json_export', 'analysis_result_csv_export', "
+            "'analysis_result_html_report', 'regression_prediction_csv_export');",
             parameters,
         ).fetchone()
         export_count = 0 if export_row is None else _row_int(export_row[0])

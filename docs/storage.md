@@ -12,7 +12,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 
 ## Migration Skeleton
 
-- Current schema version: `14`.
+- Current schema version: `15`.
 - Migration history is recorded in `schema_migrations`.
 - `PRAGMA user_version` is set to the current schema version after migrations run.
 - Startup initializes the metadata store during FastAPI lifespan startup.
@@ -29,6 +29,9 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - Version `12` adds persisted Bayesian GP/EI recommendations.
 - Version `13` adds immutable attribute-control limit-set assets.
 - Version `14` adds Bayesian lifecycle events and successor lineage.
+- Version `15` adds optional user labels, notes, and pinned state for dataset
+  versions and app-created regression models. These operational fields do not
+  alter dataset schema hashes, analysis freshness, or model manifest hashes.
 - `dataset_versions.parsing_options_json` stores confirmed parsing options as canonical JSON.
 - `dataset_columns` preserves the original header text separately from the unique display name.
 - `analysis_runs.config_json` stores request/config snapshots and must include `schema_version`.
@@ -40,7 +43,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - `experiment_designs`, `experiment_design_versions`, and `experiment_runs` store DOE design assets, generated run order, factor settings, and design checksum metadata.
 - `experiment_run_responses` stores numeric DOE response values by design version and run ID; response saving updates the design status in the same SQLite transaction without mutating run metadata.
 - `jobs` stores job state, progress, cancellation request state, and sanitized error codes.
-- Upgrade from schema versions `1` through `13` to `14` is covered by unit tests.
+- Upgrade from schema versions `1` through `14` to `15` is covered by unit tests.
 - Closed Bayesian study deletion uses the existing schema-14 ownership keys. It
   checksum-validates the graph, blocks successor references, requires an exact
   deletion-manifest SHA, and removes only metadata in one SQLite transaction.
@@ -59,6 +62,14 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
   row/source snapshot under `BEGIN IMMEDIATE`, and removes only its own
   metadata. Startup recovery restores metadata-owned quarantines and removes
   committed orphans. Source analyses and datasets are preserved.
+- Dataset-version deletion uses the schema-15 ownership graph without a silent
+  cascade. Preflight blocks inbound analysis, model, prediction, limit-set,
+  Phase II, export, and job references, validates every owned file, and binds
+  confirmation to the exact manifest SHA. A non-last version keeps the shared
+  raw upload and dataset root; the last version may remove them only after the
+  same dependency and artifact checks. Quarantine, transaction revalidation,
+  compensating restore, and startup recovery follow
+  `docs/dataset_retention_contract.md`.
 
 ## Canonical Parsed Artifact Decision
 

@@ -1,0 +1,90 @@
+# Dataset Version Retention Contract
+
+Last updated: 2026-07-22
+
+## Scope
+
+This P0 operation deletes exactly one immutable dataset version after a full
+dependency and file-integrity preflight. It never edits a version in place and
+never cascades into analyses, models, predictions, exports, jobs, or control
+limit sets.
+
+APIs:
+
+- `GET /api/v1/dataset-versions/{version_id}/deletion-preflight`
+- `DELETE /api/v1/dataset-versions/{version_id}/deletion`
+
+Both operational schemas start at 1. Delete requires the exact version ID and
+the current `deletion_manifest_sha256` returned by preflight.
+
+## Dependency Graph
+
+Preflight separately counts direct analysis runs, regression models,
+predictions using the version as source or target, exports belonging to those
+runs, jobs, attribute-control limit sets, and Phase II target analyses. Any
+inbound reference blocks deletion with a stable blocker. The operation does not
+offer an automatic dependent-root cascade.
+
+Stable blocker codes include:
+
+- `dataset_version_deletion_analysis_dependency`
+- `dataset_version_deletion_regression_model_dependency`
+- `dataset_version_deletion_prediction_dependency`
+- `dataset_version_deletion_limit_set_dependency`
+- `dataset_version_deletion_job_dependency`
+- `dataset_version_deletion_blocked`
+
+## File Ownership
+
+Every `dataset_artifacts` row for the target version is required to resolve
+under `workspaces/datasets/{dataset_id}/versions/{version_id}`. Canonical rows
+and canonical manifest are mandatory; a profile artifact is included when it
+exists. Preflight rejects absolute or escaping paths, symlinks, duplicate
+paths, missing/non-file entries, size mismatch, and SHA-256 mismatch.
+
+If another version belongs to the same dataset root, deletion scope is
+`version_only`: only the target version, columns, user metadata, artifact rows,
+and verified version-owned files are removed. The shared raw upload and dataset
+root remain. If this is the last version, scope is `dataset_root` and the exact
+recorded `raw/source.<type>` file is also verified and removed with the root
+metadata. API responses expose counts and hashes, not internal paths or raw
+filenames.
+
+## Transaction And Recovery
+
+1. Preflight builds a canonical manifest from immutable records, operational
+   metadata, dependency counts, and file identities.
+2. Delete re-runs preflight and requires its exact manifest SHA.
+3. Owned files are moved to short same-directory quarantine names. Short owner
+   tokens avoid Windows path-length failures; token collisions remain pending
+   instead of restoring an ambiguous file.
+4. `BEGIN IMMEDIATE` reloads the full snapshot. A changed row, metadata update,
+   sibling count, artifact, or dependency rolls back.
+5. The version row is deleted only after all references are zero. The dataset
+   root row is deleted only for the last version.
+6. A DB failure restores moved files in reverse order. Restore failure is a
+   typed error.
+7. A final unlink failure returns `quarantined_pending_cleanup`. Startup
+   recovery restores only checksum-matching metadata-owned files and removes
+   committed orphans. A tampered or ambiguous quarantine remains pending.
+
+Stable integrity/transition errors include
+`dataset_version_deletion_confirmation_mismatch`,
+`dataset_version_deletion_conflict`, `dataset_version_quarantine_failed`,
+`dataset_version_restore_failed`, `dataset_version_artifact_mismatch`,
+`dataset_version_file_missing`, and `dataset_version_path_invalid`.
+
+## UI Contract
+
+The management page shows dependency counts before the irreversible checkbox.
+Referenced versions show blockers and no enabled delete action. The active
+version must be changed first. Successful deletion refreshes both the manager
+and active selector catalogs. The confirmation shows only the user label or
+catalog filename, row count, and short version ID; it never shows a workspace
+path.
+
+## Non-goals
+
+Bulk deletion, dataset-root cascade into dependent assets, age-based cleanup,
+automatic retention, DOE root deletion, and in-place dataset mutation remain
+out of scope.

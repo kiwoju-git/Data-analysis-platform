@@ -389,6 +389,10 @@ def test_dataset_version_catalog_pages_confirmed_versions_without_storage_metada
         "row_count": 3,
         "column_count": 2,
         "created_at": first_page["versions"][0]["created_at"],
+        "user_label": None,
+        "note": None,
+        "pinned": False,
+        "metadata_updated_at": None,
     }
     assert not {
         "stored_path",

@@ -400,14 +400,14 @@ def _recover_quarantine(
     artifact_match = _ARTIFACT_QUARANTINE.fullmatch(quarantine.name)
     raw_match = _RAW_QUARANTINE.fullmatch(quarantine.name)
     if artifact_match is not None:
-        records = list_dataset_artifact_records_by_id_prefix(
+        artifact_records = list_dataset_artifact_records_by_id_prefix(
             workspace_root, artifact_match.group(1)
         )
-        if not records:
+        if not artifact_records:
             return _unlink_recovery_file(quarantine)
-        if len(records) != 1:
+        if len(artifact_records) != 1:
             return "pending"
-        record = records[0]
+        record = artifact_records[0]
         original = workspace_root / Path(record.path)
         if original.parent != quarantine.parent or original.exists():
             return "pending"
@@ -419,12 +419,12 @@ def _recover_quarantine(
         except OSError:
             return "pending"
     if raw_match is not None:
-        records = list_dataset_records_by_id_prefix(workspace_root, raw_match.group(1))
-        if not records:
+        dataset_records = list_dataset_records_by_id_prefix(workspace_root, raw_match.group(1))
+        if not dataset_records:
             return _unlink_recovery_file(quarantine)
-        if len(records) != 1:
+        if len(dataset_records) != 1:
             return "pending"
-        dataset_record = records[0]
+        dataset_record = dataset_records[0]
         original = workspace_root / Path(dataset_record.stored_path)
         if original.parent != quarantine.parent or original.exists():
             return "pending"

@@ -1,8 +1,28 @@
 # CI Status
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## Local Validation
+
+- The normality/interactivity/asset-management revision based on pushed main
+  `7d30ad0899ba11c14dbd0c4053041ddc7dcf2a15` contains `eda.normality`
+  `0.2.0`/schema 2, interactive EDA charts, SQLite schema 15 user metadata,
+  route-lazy `/manage`, dependency-safe dataset-version deletion, and compact
+  method-help placement. `scripts/check.ps1` passed in 849.1 seconds on
+  2026-07-22: Ruff/format over 164 Python files, mypy over 102 source files,
+  backend pytest 810, frontend lint/typecheck and Vitest 163, direct
+  OpenAPI/frontend contracts 164, 18 tutorial Markdown blocks, and production
+  build. The separate real-API tutorial smoke passed all 18 sections in 17.5
+  seconds, and Chromium E2E passed in 77.7 seconds after one test-selector
+  correction. This is development worktree evidence until committed and pushed.
+- The production build measured main at 513.58 kB / 124.25 kB gzip,
+  Regression at 59.66/13.35 kB, Manage at 15.14/4.15 kB, Quality at
+  64.25/11.97 kB, DOE at 111.15/26.22 kB, Help at 18.01/6.28 kB, and Report at
+  12.03/3.42 kB. Exploration remains in main rather than a separate route
+  chunk. Vite's main-chunk warning is open; no dependency or unsafe split was
+  introduced to conceal it.
+- The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0. This is not Windows 11/Python 3.10/Node 22 release evidence.
 
 - The active-dataset and interactive-regression worktree based on pushed main
   `baf3372975c115cfb2c64566e727b31c58623b4d` passed
@@ -36,10 +56,11 @@ Last updated: 2026-07-21
   784, frontend lint/typecheck and Vitest 152, OpenAPI/frontend contracts 155,
   18 tutorial Markdown blocks, and production build. The separate real-API
   tutorial smoke passed all 18 sections in 18.7 seconds.
-- The latest recorded backend pytest count is 784.
-- The latest recorded frontend Vitest count is 158.
-- The latest OpenAPI/frontend contract count is 155.
-  These counts describe the clean pushed commit above.
+- The latest recorded backend pytest count is 810.
+- The latest recorded frontend Vitest count is 163.
+- The latest OpenAPI/frontend contract count is 164.
+  These counts describe the current fully collected validation suites; the
+  final command result and commit SHA are stated in the first entry above.
 - The clean pushed commit results are local development evidence, not
   remote Actions or Windows 11/Node 22 release evidence.
 - Route splitting reduced main from 532.53 kB / 127.56 kB gzip to 496.98 kB /

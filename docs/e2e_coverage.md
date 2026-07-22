@@ -6,16 +6,19 @@ statistical-method expansion plan.
 
 ## Latest Local Run
 
-The 2026-07-21 active-dataset and interactive-regression worktree based on
-pushed main `baf3372975c115cfb2c64566e727b31c58623b4d` passed in 79.8 seconds
+The 2026-07-22 normality/interactivity/asset-management worktree based on
+pushed main `7d30ad0899ba11c14dbd0c4053041ddc7dcf2a15` passed in 77.7 seconds
 with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
-  -DiagnosticsRoot .\.tmp\e2e-diagnostics
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-after
 ```
 
-The run first dispatches a real `text/plain` spreadsheet paste while providing
+The run opens and reloads route-lazy Help, Report, and Manage pages, verifies
+the compact `분석 도움말` drawer and its structural preflight/result section,
+then retains the existing critical path. It first dispatches a real
+`text/plain` spreadsheet paste while providing
 ignored clipboard HTML. It reviews empty/ragged cells, uses keyboard cell
 navigation and the inspector, captures exact CRLF-preserving API content on an
 intentional failure, verifies the failed draft remains in the current page,
@@ -220,7 +223,7 @@ browser critical path.
 - `run descriptive statistics`
 - `run two-sample t test`
 - `create, download, and delete one export`
-- `verify Help Center and Report Center routes`
+- `verify Help Report and Manage routes`
 - `restore and compare saved results`
 - `delete one stored analysis run`
 - `verify schema stale behavior`

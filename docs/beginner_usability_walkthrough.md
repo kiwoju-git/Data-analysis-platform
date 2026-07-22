@@ -5,7 +5,7 @@
 The analysis page now starts with module and method selection. The large
 question-based helper and full role dictionary moved to the left `도움말`
 route so repeated analysis work does not require scrolling past them. Each
-selected method retains a closed-by-default `? 이 분석 도움말` drawer with the
+selected method retains a closed-by-default `분석 도움말` drawer with the
 plain-language purpose, required roles, invalid-use cases, options, preflight,
 result focus, overinterpretation warning, and tutorial link. Required warnings
 remain visible in the execution/preflight UI even when the drawer is closed.
@@ -142,7 +142,7 @@ the preflight statement that independence is a design assumption, the Welch
 default, and the warning that diagnostics do not automatically switch methods.
 
 UI element to inspect: `MethodPurposeHelper`, `StatisticalRoleGuide`,
-`PreflightExplanationPanel`, `TwoSampleTPanel`, result warnings, and
+`MethodHelpDrawer`, `TwoSampleTPanel`, result warnings, and
 `AnalysisHistoryPanel` after saving/restoring.
 
 Recovery from wrong role: the user should be able to return to the role guide,
@@ -193,7 +193,7 @@ specification-limit distinction, and the limitation that charts do not prove roo
 cause.
 
 UI element to inspect: `MethodPurposeHelper`, `StatisticalRoleGuide`,
-`PreflightExplanationPanel`, `IndividualsChartPanel`, `RunChartPanel`, and
+`MethodHelpDrawer`, `IndividualsChartPanel`, `RunChartPanel`, and
 signal/warning rows in the result panel.
 
 Recovery from wrong role: the user should be able to change the measurement or
@@ -249,7 +249,7 @@ limitation, target warning copy, and the statement that stability should be
 checked separately.
 
 UI element to inspect: `MethodPurposeHelper`, `StatisticalRoleGuide`,
-`PreflightExplanationPanel`, `CapabilityPanel`, histogram/spec-line result
+`MethodHelpDrawer`, `CapabilityPanel`, histogram/spec-line result
 context, warnings, and export panel after a saved result.
 
 Recovery from wrong role: the user should be able to reselect the measurement,
@@ -300,7 +300,7 @@ Measurement / Part / Operator / Replicate role labels, preflight issue copy, and
 the limitation that nested/unbalanced Gage R&R is out of scope.
 
 UI element to inspect: `MethodPurposeHelper`, `StatisticalRoleGuide`,
-`PreflightExplanationPanel`, `GageRrPreflightPanel`, `GageRrPanel` result table,
+`MethodHelpDrawer`, `GageRrPreflightPanel`, `GageRrPanel` result table,
 and warnings.
 
 Recovery from wrong role: the user should be able to return to role selection,
@@ -358,7 +358,7 @@ entry status, -1/+1 coding, hierarchy, effect/ANOVA/diagnostic labels, and the
 separate-RSM/optimization boundary.
 
 UI element to inspect: `MethodPurposeHelper`, `StatisticalRoleGuide`,
-`PreflightExplanationPanel`, `FactorialDesignPanel`, run table preview, response
+`MethodHelpDrawer`, `FactorialDesignPanel`, run table preview, response
 entry section, effect/main-effect charts, ANOVA table, diagnostics, and design
 report/export affordances.
 

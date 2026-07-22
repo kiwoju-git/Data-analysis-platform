@@ -5040,7 +5040,7 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("데이터·모델 관리");
+    expect(html).toContain("데이터모델 관리");
     expect(html).toContain("데이터셋");
     expect(html).toContain("회귀모델");
     expect(html).toContain("목록 새로고침");

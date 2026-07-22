@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## 1. Required Reading And Priority
 
@@ -22,28 +22,32 @@ Current source-of-truth note:
 Current and next development order:
 
 Predict/Response Optimizer entrypoints, tutorial truth sync, Help/Report Center,
-Bayesian frontend modularization, catalog paging/deep-link restore, successor seed guidance, and
-repository onboarding README are complete on pushed main. Active dataset version switching,
-grouped Predict target warnings, and interactive regression diagnostics are complete in the
-current revision; they preserve all regression/prediction calculations and persisted schemas.
+Bayesian frontend modularization, active dataset switching, and interactive
+regression diagnostics are complete on pushed main. The current revision adds
+the Stephens approximate Anderson-Darling p-value, interactive Normality and
+Graphical Summary charts, route-lazy dataset/model management, schema-15 user
+metadata, dependency-safe dataset-version deletion, and compact method-help
+placement. Only `eda.normality` changes statistical version/result schema, from
+`0.1.0`/`1` to `0.2.0`/`2`; no other calculation or stored result changes.
 Bayesian P0 release closure is
 validated on pushed commit `7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1`; it includes
 Study-selection action isolation, direct lifecycle/recommendation/retention race tests,
 route-level Help/Report loading, a bounded P0 release checklist, and measured 20/100/500-Study
-catalog evidence. Bayesian math, request/result/storage schemas, SQLite schema 14, and method
-`0.2.2` remain unchanged. Next:
+catalog evidence. Bayesian math, request/result/storage contracts, and method
+`0.2.2` remain unchanged; SQLite is now schema 15 only because the independent
+asset-user-metadata tables were added. Next:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the resulting main push in remote GitHub Actions and review required Windows/E2E checks
    and repository protection outside this code PR.
-3. Reduce the 503.55 kB main bundle through measured module boundaries without weakening the
-   active dataset selector, loading/error handling, or direct-route behavior.
+3. Reduce the measured main bundle through reviewed module boundaries without weakening active
+   dataset/management selectors, loading/error handling, or direct-route behavior.
 4. Add separately contracted Predict/RSM/Optimizer/Bayesian dedicated HTML reports.
 5. Specify a lightweight immutable catalog summary/index and search contract while retaining
    exact selected-Study full validation and a measured latency threshold.
-6. Add dataset-root and then DOE-root retention only through separate reviewed ownership graphs
-   with explicit inbound-reference blockers.
-7. Migrate additional charts only by the staged `docs/interactive_chart_contract.md` contract.
+6. Keep dataset-root bulk deletion separate from the implemented one-version ownership graph;
+   add DOE-root retention only through a reviewed graph with explicit inbound-reference blockers.
+7. Migrate remaining quality/DOE charts only by the staged `docs/interactive_chart_contract.md` contract.
 8. Continue the advanced quality/statistics backlog through a separately approved contract.
 
 The current Phase II slice retains explicit target compatibility, P/NP/C/U
@@ -65,7 +69,7 @@ Already implemented:
 - Local-only default host `127.0.0.1` and narrow CORS
 - React 18 + Vite + TypeScript shell with API health display
 - PowerShell workflow scripts: `bootstrap.ps1`, `dev.ps1`, `test.ps1`, `check.ps1`
-- SQLite migration skeleton through schema version `14`
+- SQLite migration skeleton through schema version `15`
 - `datasets` metadata table for raw upload provenance
 - `dataset_versions` metadata table for immutable parsing-confirmed versions
 - `dataset_columns` metadata table preserving original names and unique display names
@@ -80,6 +84,9 @@ Already implemented:
 - `PATCH /api/v1/dataset-versions/{version_id}/schema`
 - `GET /api/v1/dataset-versions/{version_id}/rows`
 - `GET /api/v1/dataset-versions/{version_id}/profile`
+- `PATCH /api/v1/dataset-versions/{version_id}/metadata`
+- `GET /api/v1/dataset-versions/{version_id}/deletion-preflight`
+- `DELETE /api/v1/dataset-versions/{version_id}/deletion`
 - `GET /api/v1/analysis-methods`
 - `POST /api/v1/analysis-runs` unavailable-method guard
 - `GET /api/v1/analysis-runs/{analysis_id}`

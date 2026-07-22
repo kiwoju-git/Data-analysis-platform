@@ -1,6 +1,6 @@
 # Linear Model Method Contract
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## Scope
 
@@ -23,6 +23,17 @@ Current supported input:
 - backend stored-model prediction from app-created OLS manifests through `regression.predict`
 - frontend same/cross-dataset prediction execution, paged raw-value-free result
   display, and full prediction CSV export
+- automatic storage of the app-created model plus optional operational user
+  label, note, and pinned metadata managed without rewriting the manifest
+- interactive Observed-vs-Fitted, Residuals-vs-Fitted, and
+  Leverage-vs-Cook's-D diagnostics. On desktop the observed/fitted chart spans
+  the first row and the other two share the second row; all three keep the same
+  stored diagnostic points and support pointer, touch, and keyboard detail.
+
+Model user metadata is not part of the statistical model. Editing it does not
+change the manifest SHA, source schema hash, analysis freshness, coefficients,
+or prediction behavior. The `/manage` catalog and Linear Model result surface
+make the automatic-save status explicit and link the selected model to Predict.
 
 Current out of scope:
 

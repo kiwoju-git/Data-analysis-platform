@@ -1,10 +1,10 @@
 # Workspace Retention And Deletion Contract
 
-Last updated: 2026-07-17
+Last updated: 2026-07-22
 
 ## Scope And Current Slice
 
-This contract separates lifecycle close from physical deletion. Five bounded
+This contract separates lifecycle close from physical deletion. Six bounded
 slices are implemented:
 
 1. deletion of one closed Bayesian Optimization study's metadata ownership
@@ -16,12 +16,15 @@ slices are implemented:
 4. deletion of one app-created regression-model manifest plus its model and
    `analysis_artifacts` metadata rows; and
 5. deletion of one immutable attribute-control limit-set asset plus its
-   metadata row.
+   metadata row; and
+6. deletion of one dependency-free, checksum-validated dataset version,
+   including its owned artifacts and, only for the last version, its shared raw
+   upload and dataset-root record.
 
 Individual export deletion preserves the stored analysis result and every
 other artifact. Analysis-run deletion is intentionally narrower than cascade
 deletion: a run that owns a regression model, is the source of an attribute
-control limit set, or is referenced by a job is blocked. Dataset, DOE-design,
+control limit set, or is referenced by a job is blocked. DOE-design,
 response-revision, bulk, and automatic deletion remain unavailable.
 
 Deleting a regression-model asset never deletes or rewrites its source linear-
@@ -82,6 +85,10 @@ of this graph, not a claim that the whole application is metadata-only.
 14. Both asset deletes use exact-ID and exact-manifest confirmation,
     same-directory quarantine, `BEGIN IMMEDIATE` revalidation, compensating
     restore, and startup recovery without cascading into source results.
+15. Dataset-version deletion uses the full inbound-reference and file-ownership
+    graph in `docs/dataset_retention_contract.md`. It preserves a shared raw
+    upload while sibling versions remain, and never cascades into a dependent
+    analysis, model, prediction, export, limit set, Phase II result, or job.
 
 ## Implemented API
 
@@ -95,6 +102,8 @@ of this graph, not a claim that the whole application is metadata-only.
 - `DELETE /api/v1/regression-models/{model_id}`
 - `GET /api/v1/quality/attribute-control-limit-sets/{limit_set_id}/deletion-preflight`
 - `DELETE /api/v1/quality/attribute-control-limit-sets/{limit_set_id}`
+- `GET /api/v1/dataset-versions/{version_id}/deletion-preflight`
+- `DELETE /api/v1/dataset-versions/{version_id}/deletion`
 
 Stable blocker/error codes are:
 
@@ -154,6 +163,11 @@ Limit-set deletion uses stable blockers and errors including:
 - `attribute_control_limit_set_deletion_conflict`
 - `attribute_control_limit_set_artifact_mismatch`
 
+Dataset-version deletion uses the stable blockers and operational errors
+defined in `docs/dataset_retention_contract.md`, including dependency-specific
+analysis/model/prediction/limit-set/job codes, confirmation conflict, path and
+artifact mismatch, quarantine, restore, and missing-file codes.
+
 Preflight schema 1 and deletion-response schema 1 report study-version, trial,
 history-revision, history-head, recommendation, lifecycle-event, and total
 metadata counts. They also report successor count and the canonical manifest.
@@ -190,9 +204,9 @@ internal path, filename, predictor value, or raw observation.
 
 ## Filesystem Ownership Contract For Later Slices
 
-Dataset and DOE deletion is not
-safe until an ownership graph includes both SQLite rows and relative workspace
-files. A later implementation must:
+Dataset-version deletion now implements the SQLite-row and relative-workspace
+file controls below. DOE root deletion remains a later slice and must reuse
+these invariants rather than infer ownership from a directory name:
 
 1. Resolve every path from trusted metadata under the configured workspace and
    reject absolute, escaping, missing, duplicate, or unexpected paths.
@@ -214,9 +228,10 @@ files. A later implementation must:
 
 ## Future Acceptance Criteria
 
-- Dataset preflight counts raw upload, canonical rows/manifest, profile, all
-  versions, dependent analyses, models, predictions, reports, and exports.
-- Dataset and DOE root deletion must preserve model, prediction, limit-set,
+- Dataset-root bulk deletion remains unavailable; the current API removes only
+  one verified version and removes its root/raw upload only when it is the last
+  version.
+- DOE root deletion must preserve model, prediction, limit-set,
   response-revision, analysis, and optimizer references without silent cascade.
 - DOE design deletion preserves immutable response-revision and analysis links;
   old revisions are never overwritten as a shortcut.
@@ -237,23 +252,30 @@ The Bayesian metadata-deletion slice does not change GP/EI calculations,
 study/history/recommendation/lifecycle artifact meaning, or any existing
 checksum payload. `doe.bayesian_optimization` remains `0.2.2`; study, history,
 recommendation config/result/model, and lifecycle-event schemas remain 1.
-SQLite remains schema 14 because the required ownership relations and cascade
-keys already exist. Deletion preflight and response schemas start at 1.
+That slice required no migration because the ownership relations and cascade
+keys already existed at schema 14. The current database is schema 15 solely for
+asset user metadata. Deletion preflight and response schemas start at 1.
 
 Individual export deletion likewise changes no statistical calculation,
 persisted result/export interpretation, or SQLite relation. Method versions,
-existing export schemas, and SQLite schema 14 remain unchanged. Its operational
+existing export schemas, and the then-current database relations remained unchanged. Its operational
 preflight/delete schemas start at 1; startup quarantine recovery is an internal
 crash-consistency mechanism, not a stored statistical artifact schema.
 
 Analysis-run deletion also changes no calculation, result interpretation,
 artifact checksum payload, or database relation. Method versions, result/config
-schemas, and SQLite schema 14 remain unchanged. Its operational preflight and
+schemas, and the then-current database relations remained unchanged. Its operational preflight and
 delete schemas start at 1. Quarantine filenames are recovery state, not a
 public or statistical artifact schema.
 
 Regression-model and limit-set deletion likewise do not change calculations,
 immutable manifest/asset meaning, source results, or SQLite relations. Method
 versions, result/config schemas, model manifest schema 2, limit-set asset schema
-1, and SQLite schema 14 remain unchanged. Their operational preflight and
+1, and the then-current database relations remained unchanged. Their operational preflight and
 deletion-response schemas start at 1.
+
+The current dataset-version/user-metadata slice advances SQLite to schema 15
+for `dataset_version_user_metadata` and `regression_model_user_metadata` only.
+Dataset deletion uses existing ownership keys plus operational preflight/delete
+schema 1. No statistical method, result/config schema, dataset schema hash, or
+model manifest schema is changed by this migration.

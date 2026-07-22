@@ -3,9 +3,9 @@
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
 `doe.factorial_design` and `regression.response_optimizer` are `0.3.0`, and
-`doe.response_surface` is `0.2.0`. `doe.bayesian_optimization` is `0.2.2`, and
-`quality.attribute_control_chart` is `0.3.0`; the other stable IDs remain on
-`0.1.0`.
+`doe.response_surface` is `0.2.0`. `doe.bayesian_optimization` is `0.2.2`,
+`quality.attribute_control_chart` is `0.3.0`, and `eda.normality` is `0.2.0`;
+the other stable IDs remain on `0.1.0`.
 
 ## Source Of Truth
 
@@ -31,6 +31,20 @@ stored results remain comparable:
 
 Frontend-only changes do not require a method-version bump unless they alter the
 request sent to the backend or reinterpret a stored result field.
+
+`eda.normality` moved from `0.1.0`/result schema `1` to `0.2.0`/result schema
+`2` because the persisted Anderson-Darling result gained the separately
+calculated Stephens adjusted statistic and approximate p-value. The existing
+SciPy statistic, critical-value table, and table-based decision keep their
+original meaning. Schema-1 results remain readable and the frontend labels
+their unavailable AD p-value as a legacy-result limitation; stored results are
+not rewritten.
+
+Adding operational user label/note/pinned metadata, management routes, and
+dependency-safe dataset-version deletion does not change a statistical request,
+calculation, result envelope, dataset schema hash, or model manifest. SQLite
+schema `15` is therefore a storage migration only and does not trigger any
+statistical method-version bump.
 
 Moving global guidance to Help Center, adding a selected-method help drawer,
 adding Report Center over existing export endpoints, and generating tutorial

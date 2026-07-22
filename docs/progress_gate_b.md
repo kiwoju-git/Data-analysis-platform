@@ -1,6 +1,39 @@
 # Gate B Progress
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
+
+## Normality, Interactive EDA, And Asset Management Slice
+
+- `eda.normality` is now method `0.2.0`/result schema `2`. It adds a separately
+  calculated Stephens unknown-mean/variance adjusted statistic and approximate
+  AD p-value while retaining the SciPy A statistic, critical table, and
+  table-based decision. Stored schema-1 results are not rewritten.
+- Normality Q-Q and Graphical Summary histogram, aggregate boxplot, Q-Q, and
+  ECDF use the dependency-free SVG interaction foundation. Roving arrow keys,
+  Home/End, Enter/Space, Escape, pointer, touch, visible focus, and text details
+  are supported. No individual boxplot outlier value is fabricated.
+- Linear Model diagnostics use the requested desktop layout: Observed vs
+  Fitted spans the first row, then Residuals vs Fitted and Leverage vs Cook's D
+  share the second row. The stored points and calculations are unchanged.
+- Route-lazy `/manage` provides dataset and regression-model catalogs. SQLite
+  schema `15` stores optional user label, note, and pinned state without
+  changing dataset schema hashes, analysis freshness, or model manifest hashes.
+- Dataset-version deletion requires a complete dependency/file preflight, an
+  exact manifest confirmation, same-directory quarantine, transaction-time
+  revalidation, compensating restore, and startup recovery. Any inbound
+  analysis/model/prediction/export/limit-set/Phase-II/job reference blocks the
+  operation; no silent cascade is available.
+- The repeated structural `PreflightExplanationPanel` was removed from the
+  default analysis flow. Its static guidance and current structural context are
+  in the closed-by-default `분석 도움말`; method-specific executable
+  preflights and blocking warnings remain beside their actions.
+- Final validation evidence for this slice is recorded separately in
+  `docs/ci_status.md`; Windows 10/Node 24 results are development evidence only.
+- The final worktree check passed backend 810, frontend 163, direct
+  OpenAPI/frontend contracts 164, 18 tutorial Markdown blocks, real-API tutorial
+  smoke 18/18, and Chromium E2E in 77.7 seconds. Main is 513.58 kB, Regression
+  59.66 kB, and Manage 15.14 kB. These Windows 10/Python 3.10/Node 24 results
+  do not close the Windows 11/Node 22 release gate.
 
 ## Active Dataset And Interactive Regression Slice
 
@@ -43,8 +76,9 @@ Last updated: 2026-07-21
 - Full graph validation remains enabled for every catalog item. The 20/100/500-Study benchmark,
   including one real 100-trial Study, is recorded in
   `docs/bayesian_catalog_performance.md`; lightweight summary/index work remains separate.
-- Bayesian calculations, request/result/storage schemas, SQLite schema 14, and method `0.2.2`
-  are unchanged. Windows 11/Node 22 and hosted Actions evidence remain release gates.
+- Bayesian calculations, request/result/storage schemas, and method `0.2.2`
+  are unchanged. SQLite later advanced to schema 15 only for independent asset
+  user metadata. Windows 11/Node 22 and hosted Actions evidence remain release gates.
 - Local development validation passed with backend 784, frontend 152,
   OpenAPI/frontend 155, 18 tutorial smoke sections, and Chromium E2E. The host is Windows 10
   build 19045/Python 3.10.11/Node 24.17.0, so this is not release-target evidence.
@@ -200,8 +234,8 @@ Current stabilization update:
 | Six-module Workbench shell | Done for current slice | selected method details, `/analysis/{module_id}/{method_id}` restore with legacy hash fallback, route-selected analysis page rendering through `appRoute` and `WorkspaceRouter`, split `AnalysisPage`/`AnalysisShell`/`AnalysisWorkbench`/`DescriptiveAnalysisPanel` components, `useAnalysisSelection` route state, common data/role/option/preflight/run/result step rail, method-specific role/option/preflight/result guidance for all 30 methods, no analysis-run execution controls for planned/disabled methods; `quality.gage_rr` has balanced crossed preflight plus executable ANOVA result UI and `quality.gage_run_chart` has executable diagnostic chart UI |
 | Common analysis schemas | Started | request, filter snapshot, warning, provenance, result envelope, run status, and job status schemas exist |
 | `eda.descriptive` | Done for first B1 slice | pure calculation module, dataset-version streaming reader, inline API execution, result JSON persistence, minimal UI result table |
-| `eda.graphical_summary` | Done for current B1 slice plus frontend chart renderer | pure stdlib calculation module for histogram, boxplot, Q-Q, and ECDF chart-data payloads; dataset-version streaming reader; inline API execution; result JSON persistence; inline SVG histogram, box plot, Q-Q plot, ECDF, and summary table UI |
-| `eda.normality` | Done for first B1 slice plus frontend Q-Q renderer | SciPy-backed Shapiro-Wilk, Anderson-Darling, and deterministic Q-Q point payloads; canonical row reader; persisted result JSON; row snapshot provenance; inline SVG Q-Q plot UI plus result table; grouped normality remains unsupported with stable error |
+| `eda.graphical_summary` | Done for current B1 slice plus interactive frontend charts | pure stdlib calculation module for histogram, boxplot, Q-Q, and ECDF chart-data payloads; dataset-version streaming reader; inline API execution; result JSON persistence; dependency-free pointer/touch/roving-keyboard SVG charts and summary table UI |
+| `eda.normality` | Done at v0.2.0/schema 2 plus interactive Q-Q renderer | SciPy-backed Shapiro-Wilk and Anderson-Darling critical-table decision, separately calculated Stephens approximate AD p-value, deterministic Q-Q payload, canonical row reader, persisted result/row provenance, pointer/touch/roving-keyboard SVG Q-Q; grouped normality remains unsupported with stable error |
 | `eda.equal_variances` | Done for current B1 slice | SciPy-backed Brown-Forsythe and Levene(mean) tests; grouped response design; canonical row reader; persisted result JSON; row snapshot provenance; reference fixture; minimal UI result tables; no automatic downstream method switching |
 | `hypothesis.one_sample_t` | Done for current B2 slice | SciPy-backed one-sample t-test; explicit reference mean; CI, p-value, df, Cohen dz, Hedges-corrected effect; canonical row reader; persisted result JSON; row snapshot provenance; reference fixture; minimal UI result table; no automatic method switching from diagnostics |
 | `hypothesis.paired_t` | Done for current B2 slice | SciPy-backed paired t-test for wide before/after numeric measurement columns; complete-pair exclusion counts; mean difference, CI, p-value, df, Cohen dz, Hedges-corrected effect; canonical row reader; persisted result JSON; row snapshot provenance; reference fixture; minimal UI result table; long format remains out of scope |
@@ -334,7 +368,7 @@ Historical validation begins below. Last validated on 2026-07-06:
 - Current `hypothesis.one_sample_wilcoxon` slice: one-sample signed-rank testing is available for one numeric response and an explicit reference location. The method computes N/exclusions, zero/tie counts, signed-rank W statistic, p-value, exact/asymptotic method records, signed-rank sums, rank-biserial effect size, symmetry/interpretation warnings, and provenance from validated canonical rows. Targeted backend pytest for `test_one_sample_wilcoxon.py` and `test_api_contracts.py` passed with 30 tests. Frontend typecheck and Vitest passed with 22 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/check.ps1` passed with backend pytest 109 tests, frontend Vitest 22 tests, and frontend build.
 - Current `hypothesis.mann_whitney` slice: exact/asymptotic Mann-Whitney U is available for independent exactly two-group response designs. The method computes N/exclusions, group rank summaries, U statistic, p-value, rank-biserial, common-language probability, tie/exact warnings, and provenance from validated canonical rows. Targeted backend pytest for `test_mann_whitney.py` and `test_api_contracts.py` passed with 29 tests. Frontend typecheck and Vitest passed with 21 tests. Full `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/check.ps1` passed with backend pytest 104 tests, frontend Vitest 21 tests, and frontend build.
 - Current Windows statistical dependency spike: native Windows `.venv` smoke passed with Python 3.10.11, NumPy 2.2.6, and SciPy 1.15.3. `scripts/install-stat-deps-spike.ps1` installed wheel-only candidate packages, `scripts/check-stat-deps.ps1` produced `logs/stat-dependency-smoke.json`, `scripts/validate_stat_dependency_smoke.py` passed, `scripts/render_stat_dependency_record.py` rendered the record, `scripts/generate_normality_reference.py` created `backend/tests/reference/fixtures/normality_scipy_reference.json`, and `scripts/validate_normality_reference.py` passed. A first smoke-only check before install failed with `stat_dependency_missing` for `numpy`, as expected. Full `scripts/check.ps1` passed with backend pytest 78 tests and frontend Vitest 16 tests. NumPy/SciPy are now production-pinned for the current SciPy-backed EDA methods.
-- Current `eda.normality` slice: NumPy 2.2.6 and SciPy 1.15.3 are production-pinned in `backend/pyproject.toml`; `eda.normality` is available and computes real Shapiro-Wilk, Anderson-Darling, and deterministic Q-Q point payloads from validated canonical rows. Grouped normality rejects with `normality_grouping_not_supported`; normality output includes a persistent warning that it must not be used as an automatic downstream method switch. Full `scripts/check.ps1` passed with backend pytest 84 tests and frontend Vitest 17 tests.
+- Current `eda.normality` contract: NumPy 2.2.6 and SciPy 1.15.3 remain production-pinned. Method `0.2.0`/schema `2` computes Shapiro-Wilk, the unchanged SciPy Anderson-Darling statistic/critical-table decision, a separately implemented and statsmodels-reference-checked Stephens approximate p-value, and deterministic Q-Q points. Grouped normality rejects with `normality_grouping_not_supported`; output warns against automatic downstream method switching. The older 84/17 test count is historical; current validation is recorded in `docs/ci_status.md`.
 - Current `eda.graphical_summary` slice: histogram, boxplot, Q-Q, and ECDF chart-data payloads are computed from canonical rows and rendered in the frontend as inline SVG charts with a summary table. `npm --prefix ./frontend run typecheck`, `npm --prefix ./frontend run lint`, `npm --prefix ./frontend run test -- --run` with 33 Vitest tests, `npm --prefix ./frontend run build`, and full `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'D:\codex\data'; .\scripts\check.ps1"` passed with backend pytest 173 tests, frontend Vitest 33 tests, and frontend build.
 - Historical normality dependency-gate slice: before production pinning, WSL `python3` had no SciPy installed and `eda.normality` remained `planned`; no p-values, test statistics, or fake result payloads were added in that gate-hardening slice.
 - Current statistical dependency smoke slice: added opt-in Windows PowerShell install/smoke/result-record/validation/reference-generation flow for NumPy/SciPy import and Shapiro-Wilk, Anderson-Darling, Levene, and Brown-Forsythe calculations. It is not part of base `scripts/check.ps1` yet. `git diff --check`, `python3 -m compileall -q scripts/stat_dependency_smoke.py scripts/validate_stat_dependency_smoke.py scripts/render_stat_dependency_record.py scripts/generate_normality_reference.py scripts/validate_normality_reference.py backend/tests/unit/test_stat_dependency_smoke_tools.py backend/tests/unit/test_normality_reference_fixture.py backend/tests/unit/test_normality_reference_validator.py`, and touched-script line-length scan passed under WSL. The normality input fixture load smoke passed with 3 cases. Direct WSL `python3 scripts/stat_dependency_smoke.py` and `python3 scripts/generate_normality_reference.py` returned the expected `python_version_unsupported` JSON because WSL Python is 3.12.3, while this project requires Python 3.10.

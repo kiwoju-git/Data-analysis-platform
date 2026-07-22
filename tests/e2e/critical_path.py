@@ -470,8 +470,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
 
             diagnostics.step("create, download, and delete one export")
             create_exports(page)
-            diagnostics.step("verify Help Center and Report Center routes")
-            verify_help_and_report_center(page)
+            diagnostics.step("verify Help Report and Manage routes")
+            verify_help_report_and_manage_routes(page)
             diagnostics.step("restore and compare saved results")
             restore_and_compare_saved_results(page)
             diagnostics.step("delete one stored analysis run")
@@ -595,7 +595,7 @@ def create_exports(page: Page) -> None:
     expect(page.locator(".result-table").filter(has_text="Hedges g")).to_be_visible()
 
 
-def verify_help_and_report_center(page: Page) -> None:
+def verify_help_report_and_manage_routes(page: Page) -> None:
     page.get_by_role("button", name="리포트", exact=True).click()
     expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible()
     expect_lazy_workspace_page(page, "ReportCenterPage")
@@ -633,15 +633,27 @@ def verify_help_and_report_center(page: Page) -> None:
         timeout=15_000
     )
 
+    page.get_by_role("button", name="관리", exact=True).click()
+    expect(page.get_by_role("heading", name="데이터모델 관리")).to_be_visible(
+        timeout=15_000
+    )
+    expect_lazy_workspace_page(page, "ManageAssetsPage")
+    expect(page.get_by_role("heading", name="저장 데이터셋 버전")).to_be_visible()
+    page.reload(wait_until="networkidle")
+    expect(page.get_by_role("heading", name="데이터모델 관리")).to_be_visible(
+        timeout=15_000
+    )
+
     page.get_by_role("button", name="분석", exact=True).click()
-    help_trigger = page.get_by_role("button", name="? 이 분석 도움말")
+    help_trigger = page.get_by_role("button", name="분석 도움말")
     expect(help_trigger).to_be_visible()
     help_trigger.click()
     help_drawer = page.locator("#method-help-drawer")
     expect(help_drawer).to_be_visible()
     expect(
-        help_drawer.get_by_role("heading", name="결과에서 먼저 볼 값")
+        help_drawer.get_by_role("heading", name="사전점검과 결과 해석")
     ).to_be_visible()
+    expect(help_drawer.get_by_text("결과에서 먼저 볼 값", exact=True)).to_be_visible()
     page.keyboard.press("Escape")
     expect(help_drawer).to_have_count(0)
     expect(help_trigger).to_be_focused()

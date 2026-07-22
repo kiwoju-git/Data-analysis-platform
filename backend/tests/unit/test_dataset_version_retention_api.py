@@ -10,15 +10,19 @@ from app.core.config import Settings
 from app.main import create_app
 from app.services.dataset_version_retention import recover_dataset_version_quarantine_files
 from app.storage.metadata import (
+    AnalysisArtifactRecord,
     AnalysisRunRecord,
     DatasetArtifactRecord,
     DatasetColumnRecord,
     DatasetVersionRecord,
+    JobRecord,
     get_dataset_artifact_record,
     get_dataset_record,
     get_dataset_version_record,
+    insert_analysis_artifact_record,
     insert_analysis_run_record,
     insert_dataset_version_record,
+    insert_job_record,
     list_dataset_artifact_records,
     list_dataset_column_records,
     metadata_db_path,
@@ -116,10 +120,11 @@ def test_dataset_version_deletion_blocks_analysis_and_rejects_stale_confirmation
         assert stale.json()["error"]["code"] == "dataset_version_deletion_confirmation_mismatch"
 
         now = "2026-07-22T00:00:00Z"
+        analysis_id = str(uuid4())
         insert_analysis_run_record(
             settings.workspace_root,
             AnalysisRunRecord(
-                analysis_id=str(uuid4()),
+                analysis_id=analysis_id,
                 method_id="eda.descriptive",
                 method_version="0.1.0",
                 dataset_version_id=version["version_id"],
@@ -134,13 +139,43 @@ def test_dataset_version_deletion_blocks_analysis_and_rejects_stale_confirmation
                 app_version="0.1.0",
             ),
         )
+        insert_analysis_artifact_record(
+            settings.workspace_root,
+            AnalysisArtifactRecord(
+                artifact_id=str(uuid4()),
+                analysis_id=analysis_id,
+                kind="analysis_result_html_report",
+                path=f"workspaces/analyses/{analysis_id}/report.html",
+                sha256="a" * 64,
+                media_type="text/html",
+                created_at=now,
+            ),
+        )
+        insert_job_record(
+            settings.workspace_root,
+            JobRecord(
+                job_id=str(uuid4()),
+                analysis_id=analysis_id,
+                job_type="analysis",
+                state="succeeded",
+                progress=1.0,
+                cancel_requested=False,
+                error_code=None,
+                created_at=now,
+                updated_at=now,
+                completed_at=now,
+            ),
+        )
         blocked = client.get(f"/api/v1/dataset-versions/{version['version_id']}/deletion-preflight")
 
     assert blocked.status_code == 200
     payload = blocked.json()
     assert payload["deletion_ready"] is False
     assert payload["counts"]["analysis_run_count"] == 1
+    assert payload["counts"]["analysis_export_count"] == 1
+    assert payload["counts"]["job_count"] == 1
     assert "dataset_version_deletion_analysis_dependency" in payload["blockers"]
+    assert "dataset_version_deletion_job_dependency" in payload["blockers"]
 
 
 def test_dataset_version_preflight_rejects_tampered_and_escaped_artifact(tmp_path) -> None:

@@ -1,6 +1,6 @@
 # Regression Prediction Contract
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## Scope
 
@@ -22,6 +22,16 @@ Implemented scope:
 - at most 1,000 raw-predictor-free rows in the initial response
 - all valid rows in checksum-recorded NDJSON with 25-row UI paging
 - checksum-recorded full CSV creation/download without raw predictors
+- metadata-only catalog labels: an optional user label is shown first, with a
+  response/predictor-count/creation-time fallback; label edits never rewrite
+  or weaken checksum validation of the selected model
+
+Target schema-hash differences and unique display-name mappings are compatibility
+warnings, not source-model freshness errors. The UI groups repeated mapping
+warnings and retains predictor type/range detail. A stale source model, missing
+or ambiguous predictor, incompatible type, unseen categorical level, or zero
+usable target row remains blocking. Range extrapolation remains non-blocking
+and is summarized per predictor with training bounds and outside-row count.
 
 Manual single-row entry, non-OLS prediction, external models, automatic
 imputation/transformation, response optimization, and chart-image export remain
