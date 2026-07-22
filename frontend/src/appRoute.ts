@@ -9,6 +9,7 @@ export type AppRoute =
       selection: AnalysisSelection;
     }
   | { page: "reports" }
+  | { page: "manage" }
   | { page: "help" };
 
 export function parseAppRoute(pathname: string, hash: string): AppRoute {
@@ -18,6 +19,9 @@ export function parseAppRoute(pathname: string, hash: string): AppRoute {
   }
   if (normalizedPath === "/help") {
     return { page: "help" };
+  }
+  if (normalizedPath === "/manage") {
+    return { page: "manage" };
   }
   const analysisSelection = parseAnalysisLocation(normalizedPath, hash);
   if (analysisSelection !== null) {

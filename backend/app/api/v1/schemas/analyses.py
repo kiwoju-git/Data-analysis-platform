@@ -1456,6 +1456,39 @@ class RegressionModelCatalogItem(BaseModel):
     created_at: str
     availability: Literal["available", "source_stale", "integrity_error"]
     availability_code: str | None
+    user_label: str | None
+    note: str | None
+    pinned: bool
+    metadata_updated_at: str | None
+
+
+class RegressionModelMetadataUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_label: str | None = Field(default=None, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
+    pinned: bool | None = None
+    expected_metadata_updated_at: str | None = None
+
+    @field_validator("user_label", "note", mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        if any(ord(character) < 32 or ord(character) == 127 for character in normalized):
+            raise ValueError("asset_metadata_control_character")
+        return normalized or None
+
+
+class RegressionModelMetadataResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: UUID
+    user_label: str | None
+    note: str | None
+    pinned: bool
+    metadata_updated_at: str
 
 
 class RegressionModelCatalogResponse(BaseModel):

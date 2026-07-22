@@ -131,6 +131,25 @@ export interface DatasetVersionCatalogItem {
   row_count: number;
   column_count: number;
   created_at: string;
+  user_label: string | null;
+  note: string | null;
+  pinned: boolean;
+  metadata_updated_at: string | null;
+}
+
+export interface DatasetVersionMetadataUpdateRequest {
+  user_label?: string | null;
+  note?: string | null;
+  pinned?: boolean | null;
+  expected_metadata_updated_at?: string | null;
+}
+
+export interface DatasetVersionMetadataResponse {
+  version_id: string;
+  user_label: string | null;
+  note: string | null;
+  pinned: boolean;
+  metadata_updated_at: string;
 }
 
 export interface DatasetVersionCatalogResponse {

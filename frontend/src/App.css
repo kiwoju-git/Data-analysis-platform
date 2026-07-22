@@ -1974,6 +1974,67 @@ td {
   min-height: 320px;
 }
 
+.asset-management-page {
+  display: grid;
+  gap: 18px;
+}
+
+.asset-management-list {
+  display: grid;
+  gap: 12px;
+}
+
+.asset-management-item {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.asset-management-summary {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.asset-management-summary > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.asset-management-summary span {
+  overflow-wrap: anywhere;
+}
+
+.asset-metadata-fields {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(240px, 1.3fr) auto;
+}
+
+.asset-metadata-fields label:not(.checkbox-field) {
+  display: grid;
+  gap: 5px;
+}
+
+.asset-metadata-fields textarea {
+  min-height: 68px;
+  resize: vertical;
+}
+
+.asset-metadata-fields .checkbox-field {
+  align-self: center;
+}
+
+.link-button {
+  align-items: center;
+  display: inline-flex;
+  text-decoration: none;
+}
+
 .chart-panel {
   display: grid;
   gap: 8px;
@@ -2683,6 +2744,10 @@ td select {
   .linear-model-diagnostic-primary {
     grid-column: auto;
     width: 100%;
+  }
+
+  .asset-metadata-fields {
+    grid-template-columns: 1fr;
   }
 
   .column-picker {

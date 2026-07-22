@@ -8,6 +8,8 @@ import type {
   DatasetSchemaUpdateRequest,
   DatasetUploadResponse,
   DatasetVersionCatalogResponse,
+  DatasetVersionMetadataResponse,
+  DatasetVersionMetadataUpdateRequest,
   DatasetVersionResponse,
   PastedDatasetRequest,
 } from "./types";
@@ -152,4 +154,19 @@ export async function fetchDatasetVersions(
   }
 
   return (await response.json()) as DatasetVersionCatalogResponse;
+}
+
+export async function updateDatasetVersionMetadata(
+  versionId: string,
+  request: DatasetVersionMetadataUpdateRequest,
+): Promise<DatasetVersionMetadataResponse> {
+  const response = await fetchApi(apiRoutes.datasetVersionMetadata(versionId), {
+    method: "PATCH",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "dataset_version_metadata_update_failed"));
+  }
+  return (await response.json()) as DatasetVersionMetadataResponse;
 }

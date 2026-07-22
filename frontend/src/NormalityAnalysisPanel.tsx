@@ -5,6 +5,7 @@ import type {
   NormalityResult,
 } from "./api";
 import { InteractiveQqChart } from "./charts/InteractiveQqChart";
+import { andersonPValueLabel } from "./normalityDisplay";
 
 interface NormalityAnalysisPanelProps {
   alpha: number;
@@ -233,13 +234,6 @@ function NormalityQqCard({
       ) : null}
     </section>
   );
-}
-
-export function andersonPValueLabel(
-  anderson: NormalityResult["columns"][number]["anderson_darling"],
-): string {
-  if (anderson.p_value === undefined) return "제공되지 않음 (legacy result)";
-  return formatAnalysisNumber(anderson.p_value);
 }
 
 function andersonDecisionLabel(

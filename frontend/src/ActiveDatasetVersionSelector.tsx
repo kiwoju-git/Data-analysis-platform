@@ -116,7 +116,9 @@ export function ActiveDatasetVersionSelector({
 }
 
 function catalogItemLabel(item: NonNullable<DatasetVersionCatalogState["activeItem"]>) {
-  return `${item.original_filename} · ${item.row_count.toLocaleString()}행 · ${item.column_count.toLocaleString()}열 · v${item.version_number} · ${shortId(item.version_id)}`;
+  const label = item.user_label ?? item.original_filename;
+  const original = item.user_label === null ? "" : ` · ${item.original_filename}`;
+  return `${label}${original} · ${item.row_count.toLocaleString()}행 · ${item.column_count.toLocaleString()}열 · v${item.version_number} · ${shortId(item.version_id)}`;
 }
 
 function shortId(value: string) {

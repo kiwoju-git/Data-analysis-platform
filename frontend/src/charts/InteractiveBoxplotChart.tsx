@@ -33,12 +33,18 @@ export function InteractiveBoxplotChart({ boxplot, chartId, columnName }: Intera
     ["upper-whisker", "Upper whisker", boxplot.upper_whisker],
     ["upper-fence", "Upper fence", boxplot.upper_fence],
   ] as const;
-  if (numericEntries.some((entry) => entry[2] === null)) return <div className="empty-state">숫자 데이터 없음</div>;
-
-  const entries = numericEntries.map(([key, label, value]) => ({ id: `${chartId}-${key}`, label, value: value as number }));
+  const computed = !numericEntries.some((entry) => entry[2] === null);
+  const entries = computed
+    ? numericEntries.map(([key, label, value]) => ({
+        id: `${chartId}-${key}`,
+        label,
+        value: value as number,
+      }))
+    : [];
   const outlierEntry = { id: `${chartId}-outliers`, label: "Outlier count", value: boxplot.outlier_count };
-  const ids = [...entries.map((entry) => entry.id), outlierEntry.id];
+  const ids = computed ? [...entries.map((entry) => entry.id), outlierEntry.id] : [];
   const interaction = useChartItemInteraction(ids);
+  if (!computed) return <div className="empty-state">숫자 데이터 없음</div>;
   const active = [...entries, outlierEntry].find((entry) => entry.id === interaction.activeItem?.id) ?? null;
   const range = paddedNumericRange(entries.map((entry) => entry.value));
   const plotWidth = width - plot.left - plot.right;
@@ -68,7 +74,7 @@ export function InteractiveBoxplotChart({ boxplot, chartId, columnName }: Intera
         <line className="boxplot-line" x1={x(upper)} x2={x(upper)} y1={y - 16} y2={y + 16} />
         <rect className="boxplot-box" height={44} width={Math.max(1, x(q3) - x(q1))} x={x(q1)} y={y - 22} />
         <line className="boxplot-median" x1={x(median)} x2={x(median)} y1={y - 22} y2={y + 22} />
-        {[...entries, outlierEntry].map((entry, index) => {
+        {[...entries, outlierEntry].map((entry) => {
           const itemX = entry.id === outlierEntry.id ? plot.left + 36 : x(entry.value);
           const itemY = entry.id === outlierEntry.id ? plot.top + 14 : y;
           const selected = interaction.activeItem?.id === entry.id;

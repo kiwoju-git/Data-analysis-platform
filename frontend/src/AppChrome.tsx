@@ -16,6 +16,7 @@ export interface AppChromeProps {
   onOpenAnalysisPage: () => void;
   onOpenDatasetPage: () => void;
   onOpenHelpPage: () => void;
+  onOpenManagePage: () => void;
   onOpenReportsPage: () => void;
 }
 
@@ -29,6 +30,7 @@ export function AppChrome({
   onOpenAnalysisPage,
   onOpenDatasetPage,
   onOpenHelpPage,
+  onOpenManagePage,
   onOpenReportsPage,
 }: AppChromeProps) {
   return (
@@ -69,6 +71,16 @@ export function AppChrome({
               type="button"
             >
               리포트
+            </button>
+          </li>
+          <li className={activePage === "manage" ? "nav-item nav-item-active" : "nav-item"}>
+            <button
+              aria-current={activePage === "manage" ? "page" : undefined}
+              className="nav-button"
+              onClick={onOpenManagePage}
+              type="button"
+            >
+              관리
             </button>
           </li>
           <li className={activePage === "help" ? "nav-item nav-item-active" : "nav-item"}>

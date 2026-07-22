@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type {
   AnalysisResultEnvelope,
@@ -22,6 +22,7 @@ import {
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
 import { observedDiagnosticPoints } from "./linearModelDiagnosticPoints";
+import { updateRegressionModelMetadata } from "./api/regression";
 
 export type LinearModelPredictionRowsState = RegressionPredictionRowsState;
 
@@ -97,10 +98,18 @@ export function LinearModelPanel({
   const modelId = result?.model_manifest?.model_id ?? null;
   const modelRetentionState = useRegressionModelRetentionState(modelId);
   const [modelDeletionConfirmed, setModelDeletionConfirmed] = useState(false);
+  const [modelName, setModelName] = useState("");
+  const [modelNameError, setModelNameError] = useState<string | null>(null);
+  const [isSavingModelName, setIsSavingModelName] = useState(false);
   const modelAvailable = modelRetentionState.availability === "available";
   const modelUnavailable =
     modelRetentionState.availability === "unavailable_or_deleted";
   const modelIntegrityError = modelRetentionState.availability === "integrity_error";
+
+  useEffect(() => {
+    setModelName("");
+    setModelNameError(null);
+  }, [modelId]);
   const modelAvailabilityTransientError =
     modelRetentionState.availability === null &&
     modelRetentionState.availabilityError !== null &&
@@ -340,6 +349,47 @@ export function LinearModelPanel({
                         : "삭제 영향 확인"}
                     </button>
                   </div>
+                  <div className="notice-box">
+                    <strong>모델은 자동 저장되었습니다.</strong>
+                    <span>이름과 메모는 모델 계산이나 manifest SHA를 변경하지 않습니다.</span>
+                  </div>
+                  <div className="button-row">
+                    <label className="inline-field">
+                      <span>모델 이름</span>
+                      <input
+                        maxLength={120}
+                        value={modelName}
+                        onChange={(event) => setModelName(event.currentTarget.value)}
+                      />
+                    </label>
+                    <button
+                      className="secondary-button"
+                      disabled={isSavingModelName || modelId === null}
+                      onClick={() => {
+                        if (modelId === null) return;
+                        setIsSavingModelName(true);
+                        setModelNameError(null);
+                        void updateRegressionModelMetadata(modelId, {
+                          user_label: modelName,
+                        })
+                          .catch((error) => {
+                            setModelNameError(
+                              error instanceof Error ? error.message : "model_metadata_update_failed",
+                            );
+                          })
+                          .finally(() => setIsSavingModelName(false));
+                      }}
+                      type="button"
+                    >
+                      {isSavingModelName ? "저장 중" : "이름 저장"}
+                    </button>
+                    <a className="secondary-button link-button" href="/manage">
+                      관리 화면 열기
+                    </a>
+                  </div>
+                  {modelNameError !== null ? (
+                    <div className="error-box" role="alert">오류 코드: {modelNameError}</div>
+                  ) : null}
                   {modelRetentionState.preflight ? (
                     <div className="notice-box">
                       <strong>

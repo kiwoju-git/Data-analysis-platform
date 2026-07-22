@@ -6,7 +6,7 @@ import {
   DatasetPreparationPage,
   type DatasetPreparationPageProps,
 } from "./DatasetPreparationPage";
-import { HelpCenterPage, ReportCenterPage } from "./lazyWorkspacePages";
+import { HelpCenterPage, ManageAssetsPage, ReportCenterPage } from "./lazyWorkspacePages";
 import { WorkspacePageBoundary } from "./WorkspacePageBoundary";
 
 export interface WorkspaceRouterProps {
@@ -16,6 +16,8 @@ export interface WorkspaceRouterProps {
   datasetPageProps: DatasetPreparationPageProps;
   routePage: AppRoute["page"];
   onOpenAnalysisMethod: (method: AnalysisMethodDescriptor) => void;
+  onActivateDataset: (versionId: string) => void;
+  onDatasetMetadataChanged: () => void;
 }
 
 export function WorkspaceRouter({
@@ -25,8 +27,10 @@ export function WorkspaceRouter({
   datasetPageProps,
   routePage,
   onOpenAnalysisMethod,
+  onActivateDataset,
+  onDatasetMetadataChanged,
 }: WorkspaceRouterProps) {
-  const labelledBy = routePage === "analysis" ? "analysis-modules-title" : routePage === "reports" ? "report-browser-title" : routePage === "help" ? "help-quick-start-title" : "workspace-title";
+  const labelledBy = routePage === "analysis" ? "analysis-modules-title" : routePage === "reports" ? "report-browser-title" : routePage === "help" ? "help-quick-start-title" : routePage === "manage" ? "asset-management-title" : "workspace-title";
   return (
     <section
       className="workspace"
@@ -45,6 +49,15 @@ export function WorkspaceRouter({
       {routePage === "help" ? (
         <WorkspacePageBoundary pageKey="help">
           <HelpCenterPage catalog={analysisCatalog} onOpenAnalysis={onOpenAnalysisMethod} />
+        </WorkspacePageBoundary>
+      ) : null}
+      {routePage === "manage" ? (
+        <WorkspacePageBoundary pageKey="manage">
+          <ManageAssetsPage
+            activeDatasetVersionId={currentDatasetVersionId}
+            onActivateDataset={onActivateDataset}
+            onDatasetMetadataChanged={onDatasetMetadataChanged}
+          />
         </WorkspacePageBoundary>
       ) : null}
     </section>

@@ -8,6 +8,8 @@ from app.api.v1.schemas.analyses import (
     RegressionModelDeleteResponse,
     RegressionModelDeletionPreflightResponse,
     RegressionModelManifestResponse,
+    RegressionModelMetadataResponse,
+    RegressionModelMetadataUpdateRequest,
     RegressionPredictionCsvExportResponse,
     RegressionPredictionPreflightRequest,
     RegressionPredictionPreflightResponse,
@@ -22,6 +24,7 @@ from app.services.regression_models import (
     get_regression_prediction_preflight,
     get_regression_prediction_rows,
     list_regression_models,
+    update_regression_model_metadata,
 )
 from app.services.workspace_asset_retention import (
     delete_stored_regression_model,
@@ -89,6 +92,19 @@ def get_regression_model_route(
     return get_regression_model_manifest(
         settings=request.app.state.settings,
         model_id=model_id,
+    )
+
+
+@router.patch("/{model_id}/metadata", response_model=RegressionModelMetadataResponse)
+def update_regression_model_metadata_route(
+    request: Request,
+    model_id: UUID,
+    body: RegressionModelMetadataUpdateRequest,
+) -> RegressionModelMetadataResponse:
+    return update_regression_model_metadata(
+        settings=request.app.state.settings,
+        model_id=model_id,
+        body=body,
     )
 
 

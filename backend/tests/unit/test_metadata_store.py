@@ -85,6 +85,7 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
         (14, "create_bayesian_study_lifecycle_events"),
+        (15, "create_asset_user_metadata"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -154,6 +155,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
         (14, "create_bayesian_study_lifecycle_events"),
+        (15, "create_asset_user_metadata"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -235,6 +237,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
         (14, "create_bayesian_study_lifecycle_events"),
+        (15, "create_asset_user_metadata"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -348,6 +351,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
         (14, "create_bayesian_study_lifecycle_events"),
+        (15, "create_asset_user_metadata"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -515,6 +519,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
         (14, "create_bayesian_study_lifecycle_events"),
+        (15, "create_asset_user_metadata"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -569,6 +574,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
         (14, "create_bayesian_study_lifecycle_events"),
+        (15, "create_asset_user_metadata"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -631,6 +637,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
         (14, "create_bayesian_study_lifecycle_events"),
+        (15, "create_asset_user_metadata"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -689,6 +696,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (12, "create_bayesian_recommendations"),
         (13, "create_attribute_control_limit_sets"),
         (14, "create_bayesian_study_lifecycle_events"),
+        (15, "create_asset_user_metadata"),
     ]
     assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION

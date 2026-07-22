@@ -3402,6 +3402,13 @@ export default function App() {
     setAppRoute({ page: "reports" });
   }
 
+  function handleOpenManagePage() {
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", pathWithActiveDatasetQuery("/manage"));
+    }
+    setAppRoute({ page: "manage" });
+  }
+
   function handleOpenHelpPage(section?: "purpose" | "roles") {
     if (typeof window !== "undefined") {
       const url = new URL("/help", window.location.origin);
@@ -3885,6 +3892,7 @@ export default function App() {
       onOpenAnalysisPage={handleOpenAnalysisPage}
       onOpenDatasetPage={handleOpenDatasetPage}
       onOpenHelpPage={() => handleOpenHelpPage()}
+      onOpenManagePage={handleOpenManagePage}
       onOpenReportsPage={handleOpenReportsPage}
     >
       <WorkspaceRouter
@@ -3894,6 +3902,8 @@ export default function App() {
         datasetPageProps={datasetPageProps}
         routePage={appRoute.page}
         onOpenAnalysisMethod={handleOpenAnalysisMethod}
+        onActivateDataset={activeDatasetSelectorProps.onSelect}
+        onDatasetMetadataChanged={activeDatasetSelectorProps.catalogState.onRefresh}
       />
     </AppChrome>
   );

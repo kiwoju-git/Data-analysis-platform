@@ -126,6 +126,25 @@ export interface RegressionModelCatalogItem {
   created_at: string;
   availability: "available" | "source_stale" | "integrity_error";
   availability_code: string | null;
+  user_label: string | null;
+  note: string | null;
+  pinned: boolean;
+  metadata_updated_at: string | null;
+}
+
+export interface RegressionModelMetadataUpdateRequest {
+  user_label?: string | null;
+  note?: string | null;
+  pinned?: boolean | null;
+  expected_metadata_updated_at?: string | null;
+}
+
+export interface RegressionModelMetadataResponse {
+  model_id: string;
+  user_label: string | null;
+  note: string | null;
+  pinned: boolean;
+  metadata_updated_at: string;
 }
 
 export interface RegressionModelCatalogResponse {

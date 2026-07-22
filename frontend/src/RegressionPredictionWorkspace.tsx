@@ -291,7 +291,15 @@ function modelLabel(model: RegressionModelCatalogItem): string {
       : model.availability === "source_stale"
         ? "stale"
         : "무결성 오류";
-  return `${response} · predictor ${model.predictor_count ?? "?"}개 · ${state} · ${shortId(model.model_id)}`;
+  const label =
+    model.user_label ??
+    `${response} · predictor ${model.predictor_count ?? "?"}개 · ${formatCreatedAt(model.created_at)}`;
+  return `${label} · ${state} · ${shortId(model.model_id)}`;
+}
+
+function formatCreatedAt(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
 }
 
 function CatalogError({ code, onRetry }: { code: string; onRetry: () => void }) {

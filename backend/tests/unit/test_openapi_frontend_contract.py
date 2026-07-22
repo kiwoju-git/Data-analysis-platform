@@ -96,6 +96,15 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="datasetVersionMetadata",
+        method="patch",
+        path="/api/v1/dataset-versions/{version_id}/metadata",
+        success_status="200",
+        response_schema="DatasetVersionMetadataResponse",
+        parameters=frozenset({("version_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="datasetVersionRows",
         method="get",
         path="/api/v1/dataset-versions/{version_id}/rows",
@@ -551,6 +560,15 @@ FRONTEND_ROUTE_CONTRACTS = [
                 ("source_analysis_id", "query"),
             }
         ),
+    ),
+    OperationContract(
+        route_name="regressionModelMetadata",
+        method="patch",
+        path="/api/v1/regression-models/{model_id}/metadata",
+        success_status="200",
+        response_schema="RegressionModelMetadataResponse",
+        parameters=frozenset({("model_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
         route_name="regressionModelDeletionPreflight",
@@ -2228,6 +2246,10 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "created_at",
                 "availability",
                 "availability_code",
+                "user_label",
+                "note",
+                "pinned",
+                "metadata_updated_at",
             }
         ),
         required_fields=frozenset(
@@ -2243,6 +2265,10 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "created_at",
                 "availability",
                 "availability_code",
+                "user_label",
+                "note",
+                "pinned",
+                "metadata_updated_at",
             }
         ),
         property_any_of_refs=(("response", frozenset({"RegressionModelCatalogResponseColumn"})),),
@@ -2257,6 +2283,20 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             {"models", "total", "returned", "limit", "offset", "has_previous", "has_next"}
         ),
         array_item_refs=(("models", "RegressionModelCatalogItem"),),
+    ),
+    SchemaComponentContract(
+        name="DatasetVersionMetadataResponse",
+        properties=frozenset({"version_id", "user_label", "note", "pinned", "metadata_updated_at"}),
+        required_fields=frozenset(
+            {"version_id", "user_label", "note", "pinned", "metadata_updated_at"}
+        ),
+    ),
+    SchemaComponentContract(
+        name="RegressionModelMetadataResponse",
+        properties=frozenset({"model_id", "user_label", "note", "pinned", "metadata_updated_at"}),
+        required_fields=frozenset(
+            {"model_id", "user_label", "note", "pinned", "metadata_updated_at"}
+        ),
     ),
     SchemaComponentContract(
         name="RegressionPredictionProvenance",

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Final
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 14
+SCHEMA_VERSION: Final = 15
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -76,6 +76,10 @@ class DatasetVersionCatalogRecord:
     row_count: int
     column_count: int
     created_at: str
+    user_label: str | None
+    note: str | None
+    pinned: bool
+    metadata_updated_at: str | None
 
 
 @dataclass(frozen=True)
@@ -150,6 +154,19 @@ class RegressionModelCatalogRecord:
     model: RegressionModelRecord
     source_analysis_status: str
     source_analysis_stale: bool
+    user_label: str | None
+    note: str | None
+    pinned: bool
+    metadata_updated_at: str | None
+
+
+@dataclass(frozen=True)
+class AssetUserMetadataRecord:
+    owner_id: str
+    user_label: str | None
+    note: str | None
+    pinned: bool
+    updated_at: str
 
 
 @dataclass(frozen=True)
@@ -982,6 +999,35 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         ON bayesian_study_lifecycle_events(study_version_id, closed_at);
         """,
     ),
+    Migration(
+        version=15,
+        name="create_asset_user_metadata",
+        sql="""
+        CREATE TABLE dataset_version_user_metadata (
+            version_id TEXT PRIMARY KEY
+                REFERENCES dataset_versions(version_id) ON DELETE CASCADE,
+            user_label TEXT CHECK (user_label IS NULL OR length(user_label) <= 120),
+            note TEXT CHECK (note IS NULL OR length(note) <= 500),
+            pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_dataset_version_user_metadata_order
+        ON dataset_version_user_metadata(pinned DESC, updated_at DESC, version_id);
+
+        CREATE TABLE regression_model_user_metadata (
+            model_id TEXT PRIMARY KEY
+                REFERENCES regression_models(model_id) ON DELETE CASCADE,
+            user_label TEXT CHECK (user_label IS NULL OR length(user_label) <= 120),
+            note TEXT CHECK (note IS NULL OR length(note) <= 500),
+            pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_regression_model_user_metadata_order
+        ON regression_model_user_metadata(pinned DESC, updated_at DESC, model_id);
+        """,
+    ),
 )
 
 
@@ -1394,11 +1440,20 @@ def list_dataset_version_catalog_records(
                 version.version_number,
                 version.row_count,
                 version.column_count,
-                version.created_at
+                version.created_at,
+                metadata.user_label,
+                metadata.note,
+                COALESCE(metadata.pinned, 0),
+                metadata.updated_at
             FROM dataset_versions AS version
             INNER JOIN datasets AS dataset
                 ON dataset.dataset_id = version.dataset_id
-            ORDER BY version.created_at DESC, version.rowid DESC
+            LEFT JOIN dataset_version_user_metadata AS metadata
+                ON metadata.version_id = version.version_id
+            ORDER BY COALESCE(metadata.pinned, 0) DESC,
+                     COALESCE(metadata.updated_at, version.created_at) DESC,
+                     version.created_at DESC,
+                     version.version_id
             LIMIT ? OFFSET ?;
             """,
             (limit, offset),
@@ -1413,6 +1468,10 @@ def list_dataset_version_catalog_records(
             row_count=_row_int(row[4]),
             column_count=_row_int(row[5]),
             created_at=str(row[6]),
+            user_label=None if row[7] is None else str(row[7]),
+            note=None if row[8] is None else str(row[8]),
+            pinned=_row_bool(row[9]),
+            metadata_updated_at=None if row[10] is None else str(row[10]),
         )
         for row in rows
     ]
@@ -2563,12 +2622,18 @@ def list_regression_model_catalog_records(
             SELECT model.model_id, model.analysis_id, model.dataset_version_id,
                    model.method_id, model.method_version, model.manifest_path,
                    model.manifest_sha256, model.schema_hash, model.created_at,
-                   model.app_version, analysis.status, analysis.stale
+                   model.app_version, analysis.status, analysis.stale,
+                   metadata.user_label, metadata.note,
+                   COALESCE(metadata.pinned, 0), metadata.updated_at
             FROM regression_models AS model
             JOIN analysis_runs AS analysis ON analysis.analysis_id = model.analysis_id
+            LEFT JOIN regression_model_user_metadata AS metadata
+                ON metadata.model_id = model.model_id
             """
             + where_clause
-            + " ORDER BY model.created_at DESC, model.rowid DESC LIMIT ? OFFSET ?;",
+            + " ORDER BY COALESCE(metadata.pinned, 0) DESC, "
+            + "COALESCE(metadata.updated_at, model.created_at) DESC, "
+            + "model.created_at DESC, model.model_id LIMIT ? OFFSET ?;",
             tuple(parameters),
         ).fetchall()
     return [
@@ -2576,9 +2641,164 @@ def list_regression_model_catalog_records(
             model=_regression_model_from_row(row[:10]),
             source_analysis_status=str(row[10]),
             source_analysis_stale=_row_bool(row[11]),
+            user_label=None if row[12] is None else str(row[12]),
+            note=None if row[13] is None else str(row[13]),
+            pinned=_row_bool(row[14]),
+            metadata_updated_at=None if row[15] is None else str(row[15]),
         )
         for row in rows
     ]
+
+
+def upsert_dataset_version_user_metadata(
+    workspace_root: Path,
+    *,
+    version_id: str,
+    user_label: str | None,
+    note: str | None,
+    pinned: bool,
+    updated_at: str,
+    expected_updated_at: str | None,
+) -> AssetUserMetadataRecord:
+    return _upsert_asset_user_metadata(
+        workspace_root,
+        table="dataset_version_user_metadata",
+        owner_column="version_id",
+        owner_id=version_id,
+        user_label=user_label,
+        note=note,
+        pinned=pinned,
+        updated_at=updated_at,
+        expected_updated_at=expected_updated_at,
+    )
+
+
+def get_dataset_version_user_metadata(
+    workspace_root: Path,
+    version_id: str,
+) -> AssetUserMetadataRecord | None:
+    return _get_asset_user_metadata(
+        workspace_root,
+        table="dataset_version_user_metadata",
+        owner_column="version_id",
+        owner_id=version_id,
+    )
+
+
+def upsert_regression_model_user_metadata(
+    workspace_root: Path,
+    *,
+    model_id: str,
+    user_label: str | None,
+    note: str | None,
+    pinned: bool,
+    updated_at: str,
+    expected_updated_at: str | None,
+) -> AssetUserMetadataRecord:
+    return _upsert_asset_user_metadata(
+        workspace_root,
+        table="regression_model_user_metadata",
+        owner_column="model_id",
+        owner_id=model_id,
+        user_label=user_label,
+        note=note,
+        pinned=pinned,
+        updated_at=updated_at,
+        expected_updated_at=expected_updated_at,
+    )
+
+
+def get_regression_model_user_metadata(
+    workspace_root: Path,
+    model_id: str,
+) -> AssetUserMetadataRecord | None:
+    return _get_asset_user_metadata(
+        workspace_root,
+        table="regression_model_user_metadata",
+        owner_column="model_id",
+        owner_id=model_id,
+    )
+
+
+def _get_asset_user_metadata(
+    workspace_root: Path,
+    *,
+    table: str,
+    owner_column: str,
+    owner_id: str,
+) -> AssetUserMetadataRecord | None:
+    allowed = {
+        ("dataset_version_user_metadata", "version_id"),
+        ("regression_model_user_metadata", "model_id"),
+    }
+    if (table, owner_column) not in allowed:
+        raise ValueError("unsupported_asset_user_metadata_table")
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            f"SELECT user_label, note, pinned, updated_at FROM {table} "
+            f"WHERE {owner_column} = ?;",
+            (owner_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return AssetUserMetadataRecord(
+        owner_id=owner_id,
+        user_label=None if row[0] is None else str(row[0]),
+        note=None if row[1] is None else str(row[1]),
+        pinned=_row_bool(row[2]),
+        updated_at=str(row[3]),
+    )
+
+
+def _upsert_asset_user_metadata(
+    workspace_root: Path,
+    *,
+    table: str,
+    owner_column: str,
+    owner_id: str,
+    user_label: str | None,
+    note: str | None,
+    pinned: bool,
+    updated_at: str,
+    expected_updated_at: str | None,
+) -> AssetUserMetadataRecord:
+    allowed = {
+        ("dataset_version_user_metadata", "version_id"),
+        ("regression_model_user_metadata", "model_id"),
+    }
+    if (table, owner_column) not in allowed:
+        raise ValueError("unsupported_asset_user_metadata_table")
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        current = connection.execute(
+            f"SELECT updated_at FROM {table} WHERE {owner_column} = ?;",
+            (owner_id,),
+        ).fetchone()
+        current_updated_at = None if current is None else str(current[0])
+        if expected_updated_at is not None and expected_updated_at != current_updated_at:
+            raise WorkspaceAssetStorageConflict("asset_user_metadata_conflict")
+        connection.execute(
+            f"""
+            INSERT INTO {table} (
+                {owner_column}, user_label, note, pinned, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT({owner_column}) DO UPDATE SET
+                user_label = excluded.user_label,
+                note = excluded.note,
+                pinned = excluded.pinned,
+                updated_at = excluded.updated_at;
+            """,
+            (owner_id, user_label, note, int(pinned), updated_at),
+        )
+        connection.commit()
+    return AssetUserMetadataRecord(
+        owner_id=owner_id,
+        user_label=user_label,
+        note=note,
+        pinned=pinned,
+        updated_at=updated_at,
+    )
 
 
 def count_response_surface_analysis_catalog_records(workspace_root: Path) -> int:

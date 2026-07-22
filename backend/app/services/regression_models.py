@@ -23,6 +23,8 @@ from app.api.v1.schemas.analyses import (
     RegressionModelCatalogResponse,
     RegressionModelCatalogResponseColumn,
     RegressionModelManifestResponse,
+    RegressionModelMetadataResponse,
+    RegressionModelMetadataUpdateRequest,
     RegressionPredictionCategoricalCheck,
     RegressionPredictionColumnMapping,
     RegressionPredictionInterval,
@@ -53,12 +55,15 @@ from app.storage.metadata import (
     AnalysisArtifactRecord,
     AnalysisRunRecord,
     DatasetColumnRecord,
+    WorkspaceAssetStorageConflict,
     count_regression_model_catalog_records,
     get_analysis_run_record,
     get_regression_model_record,
+    get_regression_model_user_metadata,
     insert_analysis_run_record_with_artifacts,
     list_analysis_artifact_records,
     list_regression_model_catalog_records,
+    upsert_regression_model_user_metadata,
 )
 
 APP_VERSION = "0.1.0"
@@ -230,6 +235,10 @@ def list_regression_models(
                 created_at=record.created_at,
                 availability=availability,
                 availability_code=availability_code,
+                user_label=catalog_record.user_label,
+                note=catalog_record.note,
+                pinned=catalog_record.pinned,
+                metadata_updated_at=catalog_record.metadata_updated_at,
             )
         )
     return RegressionModelCatalogResponse(
@@ -240,6 +249,51 @@ def list_regression_models(
         offset=offset,
         has_previous=offset > 0,
         has_next=offset + len(items) < total,
+    )
+
+
+def update_regression_model_metadata(
+    settings: Settings,
+    *,
+    model_id: UUID,
+    body: RegressionModelMetadataUpdateRequest,
+) -> RegressionModelMetadataResponse:
+    if get_regression_model_record(settings.workspace_root, str(model_id)) is None:
+        raise ApiError(
+            code="regression_model_not_found",
+            message="요청한 회귀모델을 찾을 수 없습니다.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    updated_at = datetime.now(timezone.utc).isoformat()
+    current = get_regression_model_user_metadata(settings.workspace_root, str(model_id))
+    fields = body.model_fields_set
+    user_label = (
+        body.user_label if "user_label" in fields else current.user_label if current else None
+    )
+    note = body.note if "note" in fields else current.note if current else None
+    pinned = body.pinned if "pinned" in fields else current.pinned if current else False
+    try:
+        metadata = upsert_regression_model_user_metadata(
+            settings.workspace_root,
+            model_id=str(model_id),
+            user_label=user_label,
+            note=note,
+            pinned=bool(pinned),
+            updated_at=updated_at,
+            expected_updated_at=body.expected_metadata_updated_at,
+        )
+    except WorkspaceAssetStorageConflict as exc:
+        raise ApiError(
+            code=exc.code,
+            message="자산 메타데이터가 다른 화면에서 변경되었습니다. 목록을 새로고침하세요.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+    return RegressionModelMetadataResponse(
+        model_id=model_id,
+        user_label=metadata.user_label,
+        note=metadata.note,
+        pinned=metadata.pinned,
+        metadata_updated_at=metadata.updated_at,
     )
 
 

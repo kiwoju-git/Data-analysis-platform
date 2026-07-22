@@ -522,6 +522,10 @@ function datasetCatalogItem(index: number): DatasetVersionCatalogItem {
     row_count: index,
     column_count: 8,
     created_at: "2026-07-21T00:00:00Z",
+    user_label: null,
+    note: null,
+    pinned: false,
+    metadata_updated_at: null,
   };
 }
 

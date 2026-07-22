@@ -38,7 +38,7 @@ import {
   fetchAnalysisRunResult,
   fetchAnalysisRuns,
 } from "./api";
-import { andersonPValueLabel } from "./NormalityAnalysisPanel";
+import { andersonPValueLabel } from "./normalityDisplay";
 import type {
   AnalysisMethodListResponse,
   AnalysisRunComparisonResponse,
@@ -88,6 +88,7 @@ import { apiRoutes } from "./api/routes";
 import { AppChrome } from "./AppChrome";
 import { HelpCenterPage } from "./HelpCenterPage";
 import { MethodHelpDrawer } from "./MethodHelpDrawer";
+import { ManageAssetsPage } from "./ManageAssetsPage";
 import { RoleDictionary } from "./RoleDictionary";
 import { ReportCenterPage } from "./ReportCenterPage";
 import {
@@ -220,6 +221,7 @@ describe("App", () => {
     });
     expect(parseAppRoute("/reports/", "")).toEqual({ page: "reports" });
     expect(parseAppRoute("/help", "")).toEqual({ page: "help" });
+    expect(parseAppRoute("/manage", "")).toEqual({ page: "manage" });
   });
 
   it("rejects unknown analysis module routes", () => {
@@ -2665,6 +2667,10 @@ describe("App", () => {
           row_count: version.row_count,
           column_count: version.column_count,
           created_at: version.created_at,
+          user_label: null,
+          note: null,
+          pinned: false,
+          metadata_updated_at: null,
         },
         {
           version_id: targetVersionId,
@@ -2674,6 +2680,10 @@ describe("App", () => {
           row_count: 8,
           column_count: 3,
           created_at: "2026-07-13T01:00:00Z",
+          user_label: null,
+          note: null,
+          pinned: false,
+          metadata_updated_at: null,
         },
       ],
     };
@@ -4890,6 +4900,8 @@ describe("App", () => {
         currentDatasetVersionId={null}
         datasetPageProps={datasetPageTestProps()}
         routePage="dataset"
+        onActivateDataset={() => undefined}
+        onDatasetMetadataChanged={() => undefined}
         onOpenAnalysisMethod={() => undefined}
       />,
     );
@@ -4906,6 +4918,8 @@ describe("App", () => {
         analysisCatalog={analysisCatalog}
         currentDatasetVersionId="dataset-version-id"
         routePage="analysis"
+        onActivateDataset={() => undefined}
+        onDatasetMetadataChanged={() => undefined}
         onOpenAnalysisMethod={() => undefined}
       />,
     );
@@ -4938,6 +4952,10 @@ describe("App", () => {
               row_count: version.row_count,
               column_count: version.column_count,
               created_at: version.created_at,
+              user_label: null,
+              note: null,
+              pinned: false,
+              metadata_updated_at: null,
             },
             catalog: {
               offset: 0,
@@ -4955,6 +4973,10 @@ describe("App", () => {
                   row_count: version.row_count,
                   column_count: version.column_count,
                   created_at: version.created_at,
+                  user_label: null,
+                  note: null,
+                  pinned: false,
+                  metadata_updated_at: null,
                 },
               ],
             },
@@ -4976,6 +4998,7 @@ describe("App", () => {
         onOpenAnalysisPage={() => undefined}
         onOpenDatasetPage={() => undefined}
         onOpenHelpPage={() => undefined}
+        onOpenManagePage={() => undefined}
         onOpenReportsPage={() => undefined}
       >
         <div>Workspace child</div>
@@ -4994,7 +5017,24 @@ describe("App", () => {
     expect(html).toMatch(/schema (?:<!-- -->)?schema-hash/);
     expect(html).toContain("Workspace child");
     expect(html).toContain("리포트");
+    expect(html).toContain("관리");
     expect(html).toContain("도움말");
+  });
+
+  it("renders the data and regression model management entry surface", () => {
+    const html = renderToString(
+      <ManageAssetsPage
+        activeDatasetVersionId={null}
+        onActivateDataset={() => undefined}
+        onDatasetMetadataChanged={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("데이터·모델 관리");
+    expect(html).toContain("데이터셋");
+    expect(html).toContain("회귀모델");
+    expect(html).toContain("목록 새로고침");
+    expect(html).toContain("로컬 저장됨");
   });
 
   it("maps parsing suggestions into explicit confirmation options", () => {

@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DatasetFormat(str, Enum):
@@ -198,6 +198,39 @@ class DatasetVersionCatalogItem(BaseModel):
     row_count: int = Field(ge=0)
     column_count: int = Field(ge=1)
     created_at: str
+    user_label: str | None
+    note: str | None
+    pinned: bool
+    metadata_updated_at: str | None
+
+
+class DatasetVersionMetadataUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_label: str | None = Field(default=None, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
+    pinned: bool | None = None
+    expected_metadata_updated_at: str | None = None
+
+    @field_validator("user_label", "note", mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        if any(ord(character) < 32 or ord(character) == 127 for character in normalized):
+            raise ValueError("asset_metadata_control_character")
+        return normalized or None
+
+
+class DatasetVersionMetadataResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version_id: UUID
+    user_label: str | None
+    note: str | None
+    pinned: bool
+    metadata_updated_at: str
 
 
 class DatasetVersionCatalogResponse(BaseModel):

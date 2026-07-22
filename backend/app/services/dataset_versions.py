@@ -28,6 +28,8 @@ from app.api.v1.schemas.datasets import (
     DatasetVersionCatalogItem,
     DatasetVersionCatalogResponse,
     DatasetVersionListResponse,
+    DatasetVersionMetadataResponse,
+    DatasetVersionMetadataUpdateRequest,
     DatasetVersionResponse,
     DatasetVersionSummary,
 )
@@ -49,15 +51,18 @@ from app.storage.metadata import (
     DatasetColumnRecord,
     DatasetRecord,
     DatasetVersionRecord,
+    WorkspaceAssetStorageConflict,
     count_dataset_version_catalog_records,
     get_dataset_artifact_record,
     get_dataset_record,
     get_dataset_version_record,
+    get_dataset_version_user_metadata,
     insert_dataset_version_record,
     list_dataset_column_records,
     list_dataset_version_catalog_records,
     list_dataset_version_records,
     update_dataset_schema_records,
+    upsert_dataset_version_user_metadata,
 )
 
 ALLOWED_TEXT_ENCODINGS: Final = {"utf-8", "utf-8-sig", "cp949"}
@@ -197,6 +202,10 @@ def list_dataset_version_catalog(
             row_count=record.row_count,
             column_count=record.column_count,
             created_at=record.created_at,
+            user_label=record.user_label,
+            note=record.note,
+            pinned=record.pinned,
+            metadata_updated_at=record.metadata_updated_at,
         )
         for record in records
     ]
@@ -208,6 +217,46 @@ def list_dataset_version_catalog(
         has_previous=offset > 0,
         has_next=offset + len(versions) < total,
         versions=versions,
+    )
+
+
+def update_dataset_version_metadata(
+    settings: Settings,
+    *,
+    version_id: UUID,
+    body: DatasetVersionMetadataUpdateRequest,
+) -> DatasetVersionMetadataResponse:
+    _get_existing_version(settings, version_id)
+    current = get_dataset_version_user_metadata(settings.workspace_root, str(version_id))
+    fields = body.model_fields_set
+    user_label = (
+        body.user_label if "user_label" in fields else current.user_label if current else None
+    )
+    note = body.note if "note" in fields else current.note if current else None
+    pinned = body.pinned if "pinned" in fields else current.pinned if current else False
+    updated_at = datetime.now(timezone.utc).isoformat()
+    try:
+        metadata = upsert_dataset_version_user_metadata(
+            settings.workspace_root,
+            version_id=str(version_id),
+            user_label=user_label,
+            note=note,
+            pinned=bool(pinned),
+            updated_at=updated_at,
+            expected_updated_at=body.expected_metadata_updated_at,
+        )
+    except WorkspaceAssetStorageConflict as exc:
+        raise ApiError(
+            code=exc.code,
+            message="자산 메타데이터가 다른 화면에서 변경되었습니다. 목록을 새로고침하세요.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+    return DatasetVersionMetadataResponse(
+        version_id=version_id,
+        user_label=metadata.user_label,
+        note=metadata.note,
+        pinned=metadata.pinned,
+        metadata_updated_at=metadata.updated_at,
     )
 
 

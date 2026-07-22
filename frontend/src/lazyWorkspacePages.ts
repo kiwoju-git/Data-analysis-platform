@@ -7,3 +7,7 @@ export const HelpCenterPage = lazy(() =>
 export const ReportCenterPage = lazy(() =>
   import("./ReportCenterPage").then((module) => ({ default: module.ReportCenterPage })),
 );
+
+export const ManageAssetsPage = lazy(() =>
+  import("./ManageAssetsPage").then((module) => ({ default: module.ManageAssetsPage })),
+);

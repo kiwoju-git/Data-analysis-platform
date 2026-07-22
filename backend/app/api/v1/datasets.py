@@ -12,6 +12,8 @@ from app.api.v1.schemas.datasets import (
     DatasetUploadResponse,
     DatasetVersionCatalogResponse,
     DatasetVersionListResponse,
+    DatasetVersionMetadataResponse,
+    DatasetVersionMetadataUpdateRequest,
     DatasetVersionResponse,
     PastedDatasetRequest,
 )
@@ -25,6 +27,7 @@ from app.services.dataset_versions import (
     list_dataset_version_catalog,
     list_dataset_versions,
     update_dataset_schema,
+    update_dataset_version_metadata,
 )
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -116,6 +119,22 @@ def get_dataset_version_route(
     return get_dataset_version(
         settings=request.app.state.settings,
         version_id=version_id,
+    )
+
+
+@version_router.patch(
+    "/{version_id}/metadata",
+    response_model=DatasetVersionMetadataResponse,
+)
+def update_dataset_version_metadata_route(
+    request: Request,
+    version_id: UUID,
+    body: DatasetVersionMetadataUpdateRequest,
+) -> DatasetVersionMetadataResponse:
+    return update_dataset_version_metadata(
+        settings=request.app.state.settings,
+        version_id=version_id,
+        body=body,
     )
 
 

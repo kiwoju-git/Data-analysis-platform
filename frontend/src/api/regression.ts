@@ -6,6 +6,8 @@ import type {
   RegressionModelDeletionPreflightResponse,
   RegressionModelManifestResponse,
   RegressionModelCatalogResponse,
+  RegressionModelMetadataResponse,
+  RegressionModelMetadataUpdateRequest,
   RegressionPredictionPreflightRequest,
   RegressionPredictionPreflightResponse,
   RegressionPredictionRequest,
@@ -37,6 +39,21 @@ export async function fetchRegressionModelManifest(
     throw new Error(await apiErrorCode(response, "regression_model_availability_failed"));
   }
   return (await response.json()) as RegressionModelManifestResponse;
+}
+
+export async function updateRegressionModelMetadata(
+  modelId: string,
+  request: RegressionModelMetadataUpdateRequest,
+): Promise<RegressionModelMetadataResponse> {
+  const response = await fetchApi(apiRoutes.regressionModelMetadata(modelId), {
+    method: "PATCH",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "regression_model_metadata_update_failed"));
+  }
+  return (await response.json()) as RegressionModelMetadataResponse;
 }
 
 export async function fetchRegressionModelDeletionPreflight(

@@ -37,6 +37,7 @@ export { fetchDatasetVersion } from "./api/datasets";
 export { fetchDatasetVersions } from "./api/datasets";
 export { fetchRowsPreview } from "./api/datasets";
 export { updateDatasetSchema } from "./api/datasets";
+export { updateDatasetVersionMetadata } from "./api/datasets";
 export { uploadDataset } from "./api/datasets";
 export { createFactorialDesign } from "./api/doe";
 export { createFactorialAnalysis } from "./api/doe";
@@ -73,6 +74,7 @@ export {
   fetchRegressionModelDeletionPreflight,
   fetchRegressionModelManifest,
   fetchRegressionModels,
+  updateRegressionModelMetadata,
 } from "./api/regression";
 export { fetchRegressionPredictionPreflight } from "./api/regression";
 export { createRegressionPredictionCsvExport } from "./api/regression";

@@ -82,6 +82,10 @@ export const apiRoutes = {
     return apiUrl("/analysis-methods");
   },
 
+  datasetVersionMetadata(versionId: string): string {
+    return apiUrl(`/dataset-versions/${pathId(versionId)}/metadata`);
+  },
+
   attributeControlLimitSets({
     sourceDatasetVersionId,
     chartType,
@@ -381,6 +385,10 @@ export const apiRoutes = {
 
   regressionModel(modelId: string): string {
     return apiUrl(`/regression-models/${pathId(modelId)}`);
+  },
+
+  regressionModelMetadata(modelId: string): string {
+    return apiUrl(`/regression-models/${pathId(modelId)}/metadata`);
   },
 
   regressionModels(offset: number, limit: number): string {
