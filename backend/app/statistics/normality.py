@@ -5,7 +5,7 @@ import warnings
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
-from math import fsum, isfinite, sqrt
+from math import exp, fsum, isfinite, sqrt
 from statistics import NormalDist
 
 from scipy import stats  # type: ignore[import-untyped]
@@ -67,7 +67,7 @@ def calculate_normality(
             accumulator.values.append(number)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "normality_test",
         "missing_policy": "available_case_by_column",
         "alpha": alpha,
@@ -193,6 +193,10 @@ def _anderson_darling(sorted_values: Sequence[float], *, alpha: float) -> dict[s
     payload: dict[str, object] = {
         "computed": computed,
         "statistic": None,
+        "adjusted_statistic": None,
+        "p_value": None,
+        "p_value_method": "stephens_normal_unknown_mean_variance",
+        "p_value_is_approximate": True,
         "critical_values": [],
         "decision_at_alpha": None,
     }
@@ -201,6 +205,8 @@ def _anderson_darling(sorted_values: Sequence[float], *, alpha: float) -> dict[s
 
     result = stats.anderson(sorted_values, dist="norm")
     statistic = float(result.statistic)
+    adjusted_statistic = _anderson_adjusted_statistic(sorted_values)
+    p_value = _anderson_pvalue_from_adjusted_statistic(adjusted_statistic)
     critical_values: list[dict[str, object]] = [
         {
             "significance_level": float(level) / 100.0,
@@ -210,9 +216,61 @@ def _anderson_darling(sorted_values: Sequence[float], *, alpha: float) -> dict[s
         for critical, level in zip(result.critical_values, result.significance_level, strict=True)
     ]
     payload["statistic"] = statistic
+    payload["adjusted_statistic"] = adjusted_statistic
+    payload["p_value"] = p_value
     payload["critical_values"] = critical_values
     payload["decision_at_alpha"] = _anderson_decision(critical_values, alpha=alpha)
     return payload
+
+
+def _anderson_adjusted_statistic(sorted_values: Sequence[float]) -> float:
+    n = len(sorted_values)
+    mean = fsum(sorted_values) / n
+    std = _sample_std(sorted_values)
+    if std is None or std <= 0 or not isfinite(std):
+        raise ValueError("Anderson-Darling requires finite non-constant values.")
+
+    standardized = [(value - mean) / std for value in sorted_values]
+    terms = []
+    for index, value in enumerate(standardized, start=1):
+        reverse_value = standardized[n - index]
+        log_cdf = float(stats.norm.logcdf(value))
+        log_sf = float(stats.norm.logsf(reverse_value))
+        if not isfinite(log_cdf) or not isfinite(log_sf):
+            raise ValueError("Anderson-Darling tail probability is not finite.")
+        terms.append((2 * index - 1) * (log_cdf + log_sf))
+
+    statistic = -n - fsum(terms) / n
+    adjusted = statistic * (1 + 0.75 / n + 2.25 / (n * n))
+    if not isfinite(adjusted) or adjusted < 0:
+        raise ValueError("Adjusted Anderson-Darling statistic is not finite.")
+    return adjusted
+
+
+def _anderson_pvalue_from_adjusted_statistic(adjusted_statistic: float) -> float:
+    if not isfinite(adjusted_statistic) or adjusted_statistic < 0:
+        raise ValueError("Adjusted Anderson-Darling statistic must be finite and non-negative.")
+    if adjusted_statistic < 0.2:
+        p_value = 1 - exp(
+            -13.436 + 101.14 * adjusted_statistic - 223.73 * adjusted_statistic**2,
+        )
+    elif adjusted_statistic < 0.34:
+        p_value = 1 - exp(
+            -8.318 + 42.796 * adjusted_statistic - 59.938 * adjusted_statistic**2,
+        )
+    elif adjusted_statistic < 0.6:
+        p_value = exp(
+            0.9177 - 4.279 * adjusted_statistic - 1.38 * adjusted_statistic**2,
+        )
+    elif adjusted_statistic <= 13:
+        p_value = exp(
+            1.2937 - 5.709 * adjusted_statistic + 0.0186 * adjusted_statistic**2,
+        )
+    else:
+        p_value = 0.0
+    if not isfinite(p_value):
+        raise ValueError("Approximate Anderson-Darling p-value is not finite.")
+    return min(1.0, max(0.0, p_value))
 
 
 def _anderson_decision(

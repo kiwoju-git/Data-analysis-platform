@@ -25,6 +25,8 @@ export interface ScatterReferenceLine {
 interface InteractiveScatterChartProps {
   annotations: string[];
   chartId: string;
+  compact?: boolean;
+  connectPoints?: "line" | "step";
   description: string;
   emptyLabel: string;
   formatValue: (value: number) => string;
@@ -43,6 +45,8 @@ const margins = { left: 54, right: 18, top: 22, bottom: 50 };
 export function InteractiveScatterChart({
   annotations,
   chartId,
+  compact = false,
+  connectPoints,
   description,
   emptyLabel,
   formatValue,
@@ -55,9 +59,9 @@ export function InteractiveScatterChart({
   yLabel,
   yRange,
 }: InteractiveScatterChartProps) {
-  const interaction = useChartPointInteraction();
-  const width = square ? 360 : 440;
-  const height = square ? 360 : 280;
+  const interaction = useChartPointInteraction(points.map((point) => point.id));
+  const width = square || compact ? 360 : 440;
+  const height = square ? 360 : compact ? 210 : 280;
   const plotWidth = width - margins.left - margins.right;
   const plotHeight = height - margins.top - margins.bottom;
   const active = points.find((point) => point.id === interaction.activePoint?.id) ?? null;
@@ -67,6 +71,7 @@ export function InteractiveScatterChart({
     scaleChartValue(value, yRange, margins.top + plotHeight, margins.top);
   const titleId = `${chartId}-title`;
   const descriptionId = `${chartId}-description`;
+  const connectedPath = connectPoints === undefined ? null : pointPath(points, x, y, connectPoints);
 
   if (points.length === 0) {
     return <div className="empty-state">{emptyLabel}</div>;
@@ -99,6 +104,7 @@ export function InteractiveScatterChart({
             <title>{line.label}</title>
           </g>
         ))}
+        {connectedPath === null ? null : <path className="interactive-data-line" d={connectedPath} />}
         {points.map((point) => {
           const cx = x(point.x);
           const cy = y(point.y);
@@ -123,7 +129,8 @@ export function InteractiveScatterChart({
                 onPointerMove={(event) => interaction.move(point.id, event)}
                 r="3.5"
                 role="img"
-                tabIndex={0}
+                tabIndex={interaction.tabIndexFor(point.id)}
+                ref={(element) => interaction.itemRef(point.id, element)}
               >
                 <title>{point.ariaLabel}</title>
               </circle>
@@ -156,4 +163,24 @@ export function InteractiveScatterChart({
       </div>
     </div>
   );
+}
+
+function pointPath(
+  points: InteractiveScatterPoint[],
+  x: (value: number) => number,
+  y: (value: number) => number,
+  mode: "line" | "step",
+): string {
+  if (points.length === 0) return "";
+  const first = points[0];
+  const parts = [`M ${x(first.x)} ${y(first.y)}`];
+  let previousY = y(first.y);
+  for (const point of points.slice(1)) {
+    const nextX = x(point.x);
+    const nextY = y(point.y);
+    if (mode === "step") parts.push(`L ${nextX} ${previousY}`);
+    parts.push(`L ${nextX} ${nextY}`);
+    previousY = nextY;
+  }
+  return parts.join(" ");
 }

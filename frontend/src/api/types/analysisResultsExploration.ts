@@ -127,7 +127,11 @@ export interface NormalityAndersonDecision {
 }
 
 export interface NormalityAndersonDarlingResult {
+  adjusted_statistic?: number | null;
   computed: boolean;
+  p_value?: number | null;
+  p_value_is_approximate?: boolean;
+  p_value_method?: string;
   statistic: number | null;
   critical_values: NormalityAndersonCriticalValue[];
   decision_at_alpha: NormalityAndersonDecision | null;

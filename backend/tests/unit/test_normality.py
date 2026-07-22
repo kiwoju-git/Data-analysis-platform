@@ -4,7 +4,11 @@ from pathlib import Path
 import pytest
 from scripts.generate_normality_reference import _case_values, _load_fixture
 
-from app.statistics.normality import NormalityColumn, calculate_normality
+from app.statistics.normality import (
+    NormalityColumn,
+    _anderson_pvalue_from_adjusted_statistic,
+    calculate_normality,
+)
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/normality_input.json")
 REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/normality_scipy_reference.json")
@@ -17,6 +21,7 @@ def test_normality_is_hand_checkable_for_symmetric_small_sample() -> None:
         qq_point_limit=10,
     )
 
+    assert result["schema_version"] == 2
     assert result["summary_type"] == "normality_test"
     assert result["missing_policy"] == "available_case_by_column"
     assert result["alpha"] == 0.05
@@ -30,6 +35,10 @@ def test_normality_is_hand_checkable_for_symmetric_small_sample() -> None:
     assert column["shapiro_wilk"]["computed"] is True
     assert 0.0 <= column["shapiro_wilk"]["p_value"] <= 1.0
     assert column["anderson_darling"]["computed"] is True
+    assert column["anderson_darling"]["adjusted_statistic"] is not None
+    assert 0.0 <= column["anderson_darling"]["p_value"] <= 1.0
+    assert column["anderson_darling"]["p_value_is_approximate"] is True
+    assert column["anderson_darling"]["p_value_method"] == "stephens_normal_unknown_mean_variance"
     assert column["anderson_darling"]["decision_at_alpha"]["alpha"] == 0.05
     assert column["qq_plot"]["point_count"] == 3
     assert column["warnings"] == []
@@ -82,6 +91,8 @@ def test_normality_reports_missing_non_numeric_insufficient_and_constant() -> No
     assert column["n_non_numeric"] == 1
     assert column["shapiro_wilk"]["computed"] is False
     assert column["anderson_darling"]["computed"] is False
+    assert column["anderson_darling"]["adjusted_statistic"] is None
+    assert column["anderson_darling"]["p_value"] is None
     assert column["warnings"] == [
         "non_numeric_values_excluded",
         "normality_insufficient_observations",
@@ -107,6 +118,17 @@ def test_normality_truncates_qq_points_deterministically() -> None:
     assert column["qq_plot"]["points"][0]["sample"] == 0.0
     assert column["qq_plot"]["points"][-1]["sample"] == 29.0
     assert "normality_qq_points_truncated" in column["warnings"]
+
+
+@pytest.mark.parametrize(
+    "adjusted_statistic",
+    [0.0, 0.199999999, 0.2, 0.339999999, 0.34, 0.599999999, 0.6, 13.0, 13.000001],
+)
+def test_anderson_darling_pvalue_piecewise_boundaries_are_bounded(
+    adjusted_statistic: float,
+) -> None:
+    p_value = _anderson_pvalue_from_adjusted_statistic(adjusted_statistic)
+    assert 0.0 <= p_value <= 1.0
 
 
 class _MinimalNp:

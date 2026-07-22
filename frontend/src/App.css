@@ -1958,6 +1958,22 @@ td {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.linear-model-diagnostic-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.linear-model-diagnostic-primary {
+  grid-column: 1 / -1;
+  width: min(100%, 820px);
+  justify-self: center;
+}
+
+.linear-model-diagnostic-primary .interactive-chart-svg {
+  min-height: 320px;
+}
+
 .chart-panel {
   display: grid;
   gap: 8px;
@@ -2007,6 +2023,41 @@ td {
 .histogram-bar {
   fill: #2f6f9f;
   opacity: 0.82;
+}
+
+.interactive-data-line {
+  fill: none;
+  stroke: #24736b;
+  stroke-width: 1.5;
+}
+
+.chart-interactive-item,
+.chart-hit-target {
+  cursor: pointer;
+  outline: none;
+}
+
+.chart-item-selected {
+  stroke: #0b1728;
+  stroke-width: 3;
+}
+
+.chart-hit-target {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 2;
+}
+
+.chart-hit-target-selected {
+  fill: rgba(30, 128, 105, 0.08);
+  stroke: #0b1728;
+  stroke-dasharray: 4 2;
+}
+
+.boxplot-fence {
+  stroke: #9a6b17;
+  stroke-dasharray: 4 3;
+  stroke-width: 1.25;
 }
 
 .interactive-chart {
@@ -2623,6 +2674,15 @@ td select {
   .guidance-grid,
   .chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .linear-model-diagnostic-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .linear-model-diagnostic-primary {
+    grid-column: auto;
+    width: 100%;
   }
 
   .column-picker {

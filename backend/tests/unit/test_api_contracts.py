@@ -1484,7 +1484,7 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -1796,7 +1796,7 @@ def test_analysis_run_executes_normality_from_dataset_version(tmp_path) -> None:
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.normality",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.normality"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -1830,6 +1830,8 @@ def test_analysis_run_executes_normality_from_dataset_version(tmp_path) -> None:
         },
     ]
     result = payload["result"]
+    assert payload["method_version"] == METHOD_VERSIONS["eda.normality"] == "0.2.0"
+    assert result["schema_version"] == 2
     assert result["summary_type"] == "normality_test"
     assert result["alpha"] == 0.05
     assert result["package_versions"] == {"numpy": "2.2.6", "scipy": "1.15.3"}
@@ -1842,6 +1844,16 @@ def test_analysis_run_executes_normality_from_dataset_version(tmp_path) -> None:
     assert column["shapiro_wilk"]["statistic"] == 0.9924829130989719
     assert column["shapiro_wilk"]["p_value"] == 0.9989582346078788
     assert column["anderson_darling"]["computed"] is True
+    assert column["anderson_darling"]["adjusted_statistic"] == pytest.approx(
+        0.11275339301478075,
+    )
+    assert column["anderson_darling"]["p_value"] == pytest.approx(
+        0.9923761563661366,
+    )
+    assert column["anderson_darling"]["p_value_method"] == (
+        "stephens_normal_unknown_mean_variance"
+    )
+    assert column["anderson_darling"]["p_value_is_approximate"] is True
     assert column["anderson_darling"]["decision_at_alpha"] == {
         "alpha": 0.05,
         "critical_value": 0.684,
@@ -8991,7 +9003,7 @@ def test_analysis_run_rejects_normality_grouping_for_first_slice(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.normality",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.normality"],
                 "dataset_version_id": version["version_id"],
                 "roles": {"group": version["columns"][1]["column_id"]},
                 "options": {

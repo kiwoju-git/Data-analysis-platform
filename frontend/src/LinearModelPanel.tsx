@@ -526,10 +526,12 @@ export function LinearModelPanel({
                     </p>
                   </div>
                 </div>
-                <div className="chart-grid">
+                <div className="linear-model-diagnostic-layout">
+                  <div className="linear-model-diagnostic-primary">
                   <ChartPanel title="Observed vs Fitted">
                     {renderObservedFittedChart(result)}
                   </ChartPanel>
+                  </div>
                   <ChartPanel title="Residuals vs Fitted">
                     {renderResidualFittedChart(result)}
                   </ChartPanel>

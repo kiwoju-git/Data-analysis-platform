@@ -6,6 +6,14 @@ import type {
   DatasetVersionResponse,
   GraphicalSummaryResult,
 } from "./api";
+import { InteractiveBoxplotChart } from "./charts/InteractiveBoxplotChart";
+import { InteractiveHistogramChart } from "./charts/InteractiveHistogramChart";
+import { InteractiveQqChart } from "./charts/InteractiveQqChart";
+import {
+  InteractiveScatterChart,
+  type InteractiveScatterPoint,
+} from "./charts/InteractiveScatterChart";
+import { paddedNumericRange } from "./charts/chartScale";
 
 interface GraphicalSummaryPanelProps {
   analysisResult: AnalysisResultEnvelope | null;
@@ -21,16 +29,6 @@ interface GraphicalSummaryPanelProps {
 }
 
 const maxGraphicalColumns = 20;
-const chartWidth = 360;
-const chartHeight = 210;
-const plot = {
-  left: 38,
-  right: 12,
-  top: 16,
-  bottom: 36,
-};
-const plotWidth = chartWidth - plot.left - plot.right;
-const plotHeight = chartHeight - plot.top - plot.bottom;
 
 export function GraphicalSummaryPanel({
   analysisResult,
@@ -216,143 +214,36 @@ function ChartPanel({ title, children }: { title: string; children: ReactNode })
 }
 
 function renderHistogram(column: GraphicalSummaryResult["columns"][number]) {
-  const bins = column.histogram.bins;
-  if (bins.length === 0) {
-    return <EmptyChart label="숫자 데이터 없음" />;
-  }
-  const range = paddedRange([
-    ...bins.map((bin) => bin.lower),
-    ...bins.map((bin) => bin.upper),
-  ]);
-  const maxCount = Math.max(1, ...bins.map((bin) => bin.count));
   return (
-    <svg
-      aria-label={`${column.display_name} histogram`}
-      className="chart-svg"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      {chartAxes()}
-      {bins.map((bin, index) => {
-        const x1 = scale(bin.lower, range.min, range.max, plot.left, plot.left + plotWidth);
-        const x2 = scale(bin.upper, range.min, range.max, plot.left, plot.left + plotWidth);
-        const barWidth = Math.max(1, x2 - x1 - 1);
-        const barHeight = (bin.count / maxCount) * plotHeight;
-        return (
-          <rect
-            key={`${bin.lower}-${bin.upper}-${index}`}
-            className="histogram-bar"
-            height={barHeight}
-            width={barWidth}
-            x={x1}
-            y={plot.top + plotHeight - barHeight}
-          />
-        );
-      })}
-      {chartTickLabels(formatAnalysisNumber(range.min), formatAnalysisNumber(range.max))}
-      <text className="chart-axis-label" x={plot.left - 8} y={plot.top + 8}>
-        {maxCount}
-      </text>
-    </svg>
+    <InteractiveHistogramChart
+      bins={column.histogram.bins}
+      chartId={`graphical-histogram-${column.column_id}`}
+      columnName={column.display_name}
+      nBasis={column.n_used}
+    />
   );
 }
 
 function renderBoxplot(column: GraphicalSummaryResult["columns"][number]) {
-  const boxplot = column.boxplot;
-  const required = [
-    boxplot.lower_whisker,
-    boxplot.q1,
-    boxplot.median,
-    boxplot.q3,
-    boxplot.upper_whisker,
-  ];
-  if (required.some((value) => value === null)) {
-    return <EmptyChart label="숫자 데이터 없음" />;
-  }
-  const lowerWhisker = boxplot.lower_whisker ?? 0;
-  const q1 = boxplot.q1 ?? lowerWhisker;
-  const median = boxplot.median ?? q1;
-  const q3 = boxplot.q3 ?? median;
-  const upperWhisker = boxplot.upper_whisker ?? q3;
-  const range = paddedRange([lowerWhisker, q1, median, q3, upperWhisker]);
-  const y = plot.top + plotHeight / 2;
-  const boxTop = y - 22;
-  const boxHeight = 44;
-  const xLower = scale(lowerWhisker, range.min, range.max, plot.left, plot.left + plotWidth);
-  const xQ1 = scale(q1, range.min, range.max, plot.left, plot.left + plotWidth);
-  const xMedian = scale(median, range.min, range.max, plot.left, plot.left + plotWidth);
-  const xQ3 = scale(q3, range.min, range.max, plot.left, plot.left + plotWidth);
-  const xUpper = scale(upperWhisker, range.min, range.max, plot.left, plot.left + plotWidth);
   return (
-    <svg
-      aria-label={`${column.display_name} boxplot`}
-      className="chart-svg"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      {chartAxes(false)}
-      <line className="boxplot-line" x1={xLower} x2={xUpper} y1={y} y2={y} />
-      <line className="boxplot-line" x1={xLower} x2={xLower} y1={y - 16} y2={y + 16} />
-      <line className="boxplot-line" x1={xUpper} x2={xUpper} y1={y - 16} y2={y + 16} />
-      <rect
-        className="boxplot-box"
-        height={boxHeight}
-        width={Math.max(1, xQ3 - xQ1)}
-        x={xQ1}
-        y={boxTop}
-      />
-      <line className="boxplot-median" x1={xMedian} x2={xMedian} y1={boxTop} y2={boxTop + boxHeight} />
-      {boxplot.outlier_count > 0 ? (
-        <text className="chart-note" x={plot.left} y={plot.top + 20}>
-          outliers {boxplot.outlier_count}
-        </text>
-      ) : null}
-      {chartTickLabels(formatAnalysisNumber(range.min), formatAnalysisNumber(range.max))}
-    </svg>
+    <InteractiveBoxplotChart
+      boxplot={column.boxplot}
+      chartId={`graphical-boxplot-${column.column_id}`}
+      columnName={column.display_name}
+    />
   );
 }
 
 function renderQqPlot(column: GraphicalSummaryResult["columns"][number]) {
-  const points = column.qq_plot.points
-    .filter(
-      (point): point is { theoretical: number; sample: number } =>
-        typeof point.theoretical === "number" && typeof point.sample === "number",
-    )
-    .slice(0, 500);
-  if (points.length === 0) {
-    return <EmptyChart label="Q-Q point 없음" />;
-  }
-  const xRange = paddedRange(points.map((point) => point.theoretical));
-  const yRange = paddedRange(points.map((point) => point.sample));
   return (
-    <svg
-      aria-label={`${column.display_name} Q-Q plot`}
-      className="chart-svg"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      {chartAxes()}
-      <line
-        className="reference-line"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top + plotHeight}
-        y2={plot.top}
-      />
-      {points.map((point, index) => (
-        <circle
-          key={`${point.theoretical}-${point.sample}-${index}`}
-          className="qq-point"
-          cx={scale(point.theoretical, xRange.min, xRange.max, plot.left, plot.left + plotWidth)}
-          cy={scale(point.sample, yRange.min, yRange.max, plot.top + plotHeight, plot.top)}
-          r="2"
-        />
-      ))}
-      {chartTickLabels(formatAnalysisNumber(xRange.min), formatAnalysisNumber(xRange.max))}
-      <text className="chart-axis-label" x={plot.left - 8} y={plot.top + 8}>
-        {formatAnalysisNumber(yRange.max)}
-      </text>
-    </svg>
+    <InteractiveQqChart
+      chartId={`graphical-qq-${column.column_id}`}
+      columnName={column.display_name}
+      nBasis={column.n_used}
+      pointCount={column.qq_plot.point_count}
+      points={column.qq_plot.points}
+      truncated={column.qq_plot.points_truncated}
+    />
   );
 }
 
@@ -365,134 +256,44 @@ function renderEcdf(column: GraphicalSummaryResult["columns"][number]) {
     .slice(0, 500)
     .sort((left, right) => left.x - right.x || left.probability - right.probability);
   if (points.length === 0) {
-    return <EmptyChart label="ECDF point 없음" />;
+    return <div className="empty-state">ECDF point 없음</div>;
   }
-  const xRange = paddedRange(points.map((point) => point.x));
-  const path = ecdfPath(points, xRange);
+  const xRange = paddedNumericRange(points.map((point) => point.x));
+  const interactivePoints: InteractiveScatterPoint[] = points.map((point, index) => ({
+    ariaLabel: `${column.display_name} ECDF ${index + 1}, 값 ${formatAnalysisNumber(point.x)}, 누적확률 ${formatAnalysisNumber(point.probability)}`,
+    className: "ecdf-point interactive-chart-point",
+    details: [
+      { label: "점 순번", value: String(index + 1) },
+      { label: "X 값", value: formatAnalysisNumber(point.x) },
+      { label: "누적확률", value: formatAnalysisNumber(point.probability) },
+      { label: "근사 순위", value: `${Math.max(1, Math.round(point.probability * column.n_used))} / ${column.n_used}` },
+      { label: "N 기준", value: column.n_used.toLocaleString() },
+    ],
+    id: `graphical-ecdf-${column.column_id}-${index}`,
+    title: `ECDF 점 ${index + 1}`,
+    x: point.x,
+    y: point.probability,
+  }));
   return (
-    <svg
-      aria-label={`${column.display_name} ECDF`}
-      className="chart-svg"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      {chartAxes()}
-      <path className="ecdf-line" d={path} />
-      {points.map((point, index) => (
-        <circle
-          key={`${point.x}-${point.probability}-${index}`}
-          className="ecdf-point"
-          cx={scale(point.x, xRange.min, xRange.max, plot.left, plot.left + plotWidth)}
-          cy={scale(point.probability, 0, 1, plot.top + plotHeight, plot.top)}
-          r="1.6"
-        />
-      ))}
-      {chartTickLabels(formatAnalysisNumber(xRange.min), formatAnalysisNumber(xRange.max))}
-      <text className="chart-axis-label" x={plot.left - 8} y={plot.top + 8}>
-        1
-      </text>
-    </svg>
+    <InteractiveScatterChart
+      annotations={[
+        `표시 ${points.length.toLocaleString()} / payload ${column.ecdf.point_count.toLocaleString()}`,
+        column.ecdf.points_truncated ? "ECDF point cap 적용" : "전체 bounded point 표시",
+      ]}
+      chartId={`graphical-ecdf-${column.column_id}`}
+      compact
+      connectPoints="step"
+      description={`${column.display_name}의 bounded ECDF points`}
+      emptyLabel="ECDF point 없음"
+      formatValue={(value) => formatAnalysisNumber(value)}
+      points={interactivePoints}
+      title={`${column.display_name} ECDF`}
+      xLabel="Value"
+      xRange={xRange}
+      yLabel="Cumulative probability"
+      yRange={{ min: 0, max: 1 }}
+    />
   );
-}
-
-function EmptyChart({ label }: { label: string }) {
-  return (
-    <svg
-      aria-label={label}
-      className="chart-svg chart-svg-empty"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      <rect className="empty-chart-bg" height={plotHeight} width={plotWidth} x={plot.left} y={plot.top} />
-      <text className="empty-chart-text" x={chartWidth / 2} y={chartHeight / 2}>
-        {label}
-      </text>
-    </svg>
-  );
-}
-
-function chartAxes(showYAxis = true) {
-  return (
-    <>
-      {showYAxis ? (
-        <line
-          className="chart-axis"
-          x1={plot.left}
-          x2={plot.left}
-          y1={plot.top}
-          y2={plot.top + plotHeight}
-        />
-      ) : null}
-      <line
-        className="chart-axis"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top + plotHeight}
-        y2={plot.top + plotHeight}
-      />
-      <line
-        className="chart-grid-line"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top}
-        y2={plot.top}
-      />
-    </>
-  );
-}
-
-function chartTickLabels(leftLabel: string, rightLabel: string) {
-  return (
-    <>
-      <text className="chart-axis-label" x={plot.left} y={chartHeight - 10}>
-        {leftLabel}
-      </text>
-      <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={chartHeight - 10}>
-        {rightLabel}
-      </text>
-    </>
-  );
-}
-
-function paddedRange(values: number[]): { min: number; max: number } {
-  const finiteValues = values.filter((value) => Number.isFinite(value));
-  if (finiteValues.length === 0) {
-    return { min: 0, max: 1 };
-  }
-  const min = Math.min(...finiteValues);
-  const max = Math.max(...finiteValues);
-  if (min === max) {
-    const padding = Math.max(1, Math.abs(min) * 0.1);
-    return { min: min - padding, max: max + padding };
-  }
-  const padding = (max - min) * 0.04;
-  return { min: min - padding, max: max + padding };
-}
-
-function scale(
-  value: number,
-  domainMin: number,
-  domainMax: number,
-  rangeMin: number,
-  rangeMax: number,
-): number {
-  if (domainMin === domainMax) {
-    return (rangeMin + rangeMax) / 2;
-  }
-  return rangeMin + ((value - domainMin) / (domainMax - domainMin)) * (rangeMax - rangeMin);
-}
-
-function ecdfPath(points: Array<{ x: number; probability: number }>, xRange: { min: number; max: number }) {
-  let previousY = plot.top + plotHeight;
-  const parts = [`M ${plot.left} ${previousY}`];
-  for (const point of points) {
-    const x = scale(point.x, xRange.min, xRange.max, plot.left, plot.left + plotWidth);
-    const y = scale(point.probability, 0, 1, plot.top + plotHeight, plot.top);
-    parts.push(`L ${x} ${previousY}`, `L ${x} ${y}`);
-    previousY = y;
-  }
-  parts.push(`L ${plot.left + plotWidth} ${previousY}`);
-  return parts.join(" ");
 }
 
 function formatAnalysisNumber(value: number | null): string {

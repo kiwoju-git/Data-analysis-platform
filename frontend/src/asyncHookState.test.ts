@@ -547,10 +547,12 @@ afterEach(() => {
 
 describe("async workbench hooks", () => {
   it("supports focus selection and Escape clearing for interactive chart points", async () => {
-    const runner = new HookRunner<void, ReturnType<typeof useChartPointInteraction>>(
+    const runner = new HookRunner<string[], ReturnType<typeof useChartPointInteraction>>(
       useChartPointInteraction,
-      undefined,
+      ["point-1", "point-2", "point-3"],
     );
+    expect(runner.output.tabIndexFor("point-1")).toBe(0);
+    expect(runner.output.tabIndexFor("point-2")).toBe(-1);
     await runner.act(() => runner.output.activate("point-1", 20, 30, "focus"));
     expect(runner.output.activePoint).toEqual({
       id: "point-1",
@@ -567,6 +569,35 @@ describe("async workbench hooks", () => {
     );
     expect(preventDefault).toHaveBeenCalledOnce();
     expect(runner.output.activePoint).toBeNull();
+    runner.unmount();
+  });
+
+  it("uses roving tabindex and arrow/Home/End navigation for chart items", async () => {
+    const runner = new HookRunner<string[], ReturnType<typeof useChartPointInteraction>>(
+      useChartPointInteraction,
+      ["point-1", "point-2", "point-3"],
+    );
+    const focusSecond = vi.fn();
+    const focusThird = vi.fn();
+    await runner.act(() => {
+      runner.output.itemRef("point-2", { focus: focusSecond } as unknown as SVGElement);
+      runner.output.itemRef("point-3", { focus: focusThird } as unknown as SVGElement);
+    });
+    const preventDefault = vi.fn();
+    await runner.act(() => runner.output.handleKeyDown({
+      key: "ArrowRight",
+      preventDefault,
+    } as unknown as React.KeyboardEvent<Element>, "point-1"));
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(focusSecond).toHaveBeenCalledOnce();
+    expect(runner.output.tabIndexFor("point-2")).toBe(0);
+
+    await runner.act(() => runner.output.handleKeyDown({
+      key: "End",
+      preventDefault,
+    } as unknown as React.KeyboardEvent<Element>, "point-2"));
+    expect(focusThird).toHaveBeenCalledOnce();
+    expect(runner.output.tabIndexFor("point-3")).toBe(0);
     runner.unmount();
   });
 

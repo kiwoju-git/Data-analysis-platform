@@ -12,7 +12,7 @@ METHOD_VERSION = "0.1.0"
 METHOD_VERSIONS: dict[str, str] = {
     "eda.descriptive": METHOD_VERSION,
     "eda.graphical_summary": METHOD_VERSION,
-    "eda.normality": METHOD_VERSION,
+    "eda.normality": "0.2.0",
     "eda.equal_variances": METHOD_VERSION,
     "hypothesis.one_sample_t": METHOD_VERSION,
     "hypothesis.paired_t": METHOD_VERSION,

@@ -1,0 +1,78 @@
+{
+  "fixture_schema_version": 1,
+  "reference": "statsmodels.stats.diagnostic.normal_ad",
+  "statsmodels_version": "0.14.6",
+  "python_version": "3.10.11",
+  "p_value_method": "stephens_normal_unknown_mean_variance",
+  "cases": [
+    {
+      "case_id": "symmetric_small",
+      "values": [
+        -1.0,
+        0.0,
+        1.0
+      ],
+      "n": 3,
+      "anderson_statistic": 0.18948805453756634,
+      "adjusted_statistic": 0.2842320818063495,
+      "approximate_p_value": 0.6307449046068341
+    },
+    {
+      "case_id": "normal_like",
+      "values": [
+        -1.9,
+        -1.1,
+        -0.7,
+        -0.2,
+        0.0,
+        0.3,
+        0.8,
+        1.2,
+        1.7,
+        2.0
+      ],
+      "n": 10,
+      "anderson_statistic": 0.1170469028974761,
+      "adjusted_statistic": 0.12845897592998,
+      "approximate_p_value": 0.9840067163455977
+    },
+    {
+      "case_id": "right_skewed",
+      "values": [
+        0.05,
+        0.08,
+        0.12,
+        0.2,
+        0.33,
+        0.55,
+        0.9,
+        1.5,
+        2.8,
+        6.0
+      ],
+      "n": 10,
+      "anderson_statistic": 1.2522163563502904,
+      "adjusted_statistic": 1.3743074510944435,
+      "approximate_p_value": 0.0014779622053664426
+    },
+    {
+      "case_id": "bimodal",
+      "values": [
+        -3.2,
+        -2.9,
+        -2.7,
+        -2.4,
+        -2.1,
+        2.0,
+        2.3,
+        2.6,
+        2.9,
+        3.3
+      ],
+      "n": 10,
+      "anderson_statistic": 0.9655442583175375,
+      "adjusted_statistic": 1.0596848235034975,
+      "approximate_p_value": 0.008781095353667672
+    }
+  ]
+}

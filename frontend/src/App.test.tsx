@@ -38,6 +38,7 @@ import {
   fetchAnalysisRunResult,
   fetchAnalysisRuns,
 } from "./api";
+import { andersonPValueLabel } from "./NormalityAnalysisPanel";
 import type {
   AnalysisMethodListResponse,
   AnalysisRunComparisonResponse,
@@ -2730,6 +2731,8 @@ describe("App", () => {
     expect(html).toContain("Std residual");
     expect(html).toContain("회귀 진단 차트");
     expect(html).toContain("Observed vs Fitted");
+    expect(html).toContain("linear-model-diagnostic-layout");
+    expect(html).toContain("linear-model-diagnostic-primary");
     expect(html).toContain("실제값과 예측값이 같은 y=x 기준선");
     expect(html).toContain("Multiple R");
     expect(html).toContain("Residual SE");
@@ -3686,6 +3689,9 @@ describe("App", () => {
     expect(html).toContain("Q-Q Plot");
     expect(html).toContain("ECDF");
     expect(html).toContain("A");
+    expect(html).toContain("막대 하나에 Tab으로 진입");
+    expect(html).toContain("개별 outlier 값 없이");
+    expect(html).toContain("A ECDF 1");
   });
 
   it("renders the normality execution panel for the third real exploration method", () => {
@@ -3702,7 +3708,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "eda.normality",
-          method_version: "0.1.0",
+          method_version: "0.2.0",
           module_id: "exploration",
           label_ko: "정규성 검정",
           label_en: "Normality Test",
@@ -3813,6 +3819,19 @@ describe("App", () => {
     expect(html).toContain("standard_normal");
     expect(html).toContain("Shapiro p");
     expect(html).toContain("A");
+    expect(html).toContain("AD p (근사)");
+    expect(html).toContain("Stephens 정규성 근사값");
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain('tabindex="-1"');
+  });
+
+  it("labels an older normality result without the approximate AD p-value", () => {
+    const legacyResult = normalityTestResult();
+    delete legacyResult.columns[0].anderson_darling.p_value;
+
+    expect(andersonPValueLabel(legacyResult.columns[0].anderson_darling)).toBe(
+      "제공되지 않음 (legacy result)",
+    );
   });
 
   it("renders the equal variances execution panel for the fourth real exploration method", () => {
@@ -6494,7 +6513,7 @@ function graphicalSummaryTestResult(): GraphicalSummaryResult {
 
 function normalityTestResult(): NormalityResult {
   return {
-    schema_version: 1,
+    schema_version: 2,
     summary_type: "normality_test",
     missing_policy: "complete_case",
     alpha: 0.05,
@@ -6533,6 +6552,10 @@ function normalityTestResult(): NormalityResult {
         anderson_darling: {
           computed: true,
           statistic: 0.143595,
+          adjusted_statistic: 0.172314,
+          p_value: 0.9342,
+          p_value_method: "stephens_normal_unknown_mean_variance",
+          p_value_is_approximate: true,
           critical_values: [
             {
               significance_level: 5,
