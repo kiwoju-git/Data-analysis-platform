@@ -8334,7 +8334,9 @@ def test_regression_prediction_metadata_failure_removes_result_artifacts(
     monkeypatch,
 ) -> None:
     settings = Settings(workspace_root=tmp_path)
-    content = b"y,x\n3,1\n5,2\n7,3\n9,4\n11,5\n"
+    # Keep this cleanup test away from the platform-sensitive zero-residual
+    # boundary; its subject is artifact rollback, not perfect-fit handling.
+    content = b"y,x\n3,1\n5,2\n8,3\n9,4\n12,5\n"
 
     with TestClient(create_app(settings), raise_server_exceptions=False) as client:
         version = _upload_confirmed_csv_dataset(

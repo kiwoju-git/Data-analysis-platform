@@ -3129,9 +3129,9 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ):
         assert phrase in workflow_section
 
-    assert "latest recorded backend pytest count is 810" in local_validation_section
-    assert "latest recorded frontend Vitest count is 163" in local_validation_section
-    assert "latest OpenAPI/frontend contract count is 164" in local_validation_section
+    assert "latest recorded backend pytest count is 818" in local_validation_section
+    assert "latest recorded frontend Vitest count is 175" in local_validation_section
+    assert "latest OpenAPI/frontend contract count is 167" in local_validation_section
     assert "The latest run passed backend ruff check" not in local_validation_section
     assert "That 2026-07-09 run passed backend ruff check" in historical_validation_section
     assert "That 2026-07-07 run passed backend ruff check" in historical_validation_section

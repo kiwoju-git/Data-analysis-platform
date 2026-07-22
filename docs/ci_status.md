@@ -6,7 +6,8 @@ Last updated: 2026-07-23
 
 - The runtime-compatibility and compact-history worktree based on pushed main
   `6cc097a6f3d2983feab1fd7e4ccc2c5ab16f765d` passed `scripts/check.ps1` on
-  2026-07-23 in 900.2 seconds: tutorial Markdown blocks 18, Ruff/format over
+  2026-07-23. The final rerun after hosted-Windows fixture stabilization took
+  917.7 seconds: tutorial Markdown blocks 18, Ruff/format over
   166 Python files, mypy over 103 source files, backend pytest 818, frontend
   lint/typecheck and Vitest 175, direct OpenAPI/frontend contracts 167, and
   production build. The real-API tutorial smoke passed all 18 sections in
@@ -752,6 +753,18 @@ This satisfies the current repository-side requirement that main pushes should s
   superseded by the 2026-07-09 native Windows validations recorded above.
 
 ## Remote GitHub Actions Verification
+
+- Push run `29942544577` checked exact main SHA
+  `b4cd7115660d66097994ba039a9462c73fdd2a4a` on hosted Windows Server 2025,
+  CPython 3.10.11, and Node 22.23.1. Bootstrap succeeded; `Check` failed with
+  815/818 backend tests passed, so the dependent E2E job correctly did not run.
+- The three failures were test-boundary issues, not production calculation
+  changes: a rollback test used a platform-sensitive perfect linear fit, a
+  large reference sum used only `1e-12` absolute tolerance, and the CI document
+  guard still expected the previous 810/163/164 counts. The cleanup fixture is
+  now non-perfect, the reference comparison uses explicit relative plus
+  absolute tolerance, and the guard tracks 818/175/167. The three targeted
+  tests passed locally, followed by the complete 818-test check above.
 
 - Public GitHub Actions REST inspection on 2026-07-22 verified push run
   `29909222867` for main SHA

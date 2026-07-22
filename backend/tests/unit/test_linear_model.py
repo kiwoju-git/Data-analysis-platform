@@ -229,7 +229,7 @@ def test_linear_model_matches_numpy_reference_fixture() -> None:
     fit = result["fit"]
     assert isinstance(fit, dict)
     for key, expected in reference["fit"].items():
-        assert fit[key] == pytest.approx(expected, abs=1e-12)
+        assert fit[key] == pytest.approx(expected, rel=1e-12, abs=1e-12)
 
     coefficients = _coefficients_by_term(result)
     for term, expected in reference["coefficients"].items():
