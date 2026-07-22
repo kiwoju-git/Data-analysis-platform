@@ -30,6 +30,7 @@ import type {
   RegressionPredictionRowsPageResponse,
   RegressionModelDeleteResponse,
   RegressionModelDeletionPreflightResponse,
+  RuntimeInfoResponse,
 } from "./api";
 import { useAnalysisComparisonState } from "./useAnalysisComparisonState";
 import { useAnalysisExportState } from "./useAnalysisExportState";
@@ -50,6 +51,7 @@ import { useDatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 import { useChartPointInteraction } from "./charts/useChartPointInteraction";
 import { useDatasetWorkflow } from "./useDatasetWorkflow";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
+import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
 
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
@@ -86,6 +88,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchDatasetVersionDeletionPreflight: vi.fn(),
   fetchDatasetVersions: vi.fn(),
   fetchRowsPreview: vi.fn(),
+  fetchRuntimeInfo: vi.fn(),
   fetchRegressionPredictionPreflight: vi.fn(),
   fetchRegressionPredictions: vi.fn(),
   fetchRegressionPredictionRows: vi.fn(),
@@ -534,6 +537,29 @@ function datasetCatalogItem(index: number): DatasetVersionCatalogItem {
   };
 }
 
+function runtimeInfo(
+  overrides: Partial<RuntimeInfoResponse> = {},
+): RuntimeInfoResponse {
+  return {
+    service: "datalab-studio-api",
+    app_version: "0.1.0",
+    api_contract_version: 2,
+    metadata_schema_version: 15,
+    build_commit: "unknown",
+    capabilities: {
+      asset_management: true,
+      dataset_version_metadata: true,
+      dataset_version_deletion: true,
+      regression_model_metadata: true,
+      regression_model_deletion: true,
+      dedicated_predict: true,
+      dedicated_response_optimizer: true,
+      bayesian_optimization: true,
+    },
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   for (const mock of Object.values(apiMocks)) {
     mock.mockReset();
@@ -555,6 +581,25 @@ afterEach(() => {
 });
 
 describe("async workbench hooks", () => {
+  it("blocks an old runtime and retries into the compatible contract", async () => {
+    const oldRuntime = runtimeInfo({ api_contract_version: 1 });
+    apiMocks.fetchRuntimeInfo.mockResolvedValueOnce(oldRuntime);
+    const runner = new HookRunner<void, ReturnType<typeof useRuntimeCompatibilityState>>(
+      useRuntimeCompatibilityState,
+      undefined,
+    );
+    await runner.flush();
+
+    expect(runner.output.state.kind).toBe("blocked");
+    expect(runner.output.state.error).toBe("api_contract_version_mismatch");
+
+    apiMocks.fetchRuntimeInfo.mockResolvedValueOnce(runtimeInfo());
+    await runner.act(() => runner.output.retry());
+
+    expect(runner.output.state.kind).toBe("compatible");
+    runner.unmount();
+  });
+
   it("ignores an old dataset deletion preflight after the managed version changes", async () => {
     const first = deferred<DatasetVersionDeletionPreflightResponse>();
     const second = deferred<DatasetVersionDeletionPreflightResponse>();

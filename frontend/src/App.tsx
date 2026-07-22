@@ -73,6 +73,8 @@ import { useRegressionPredictionExportState } from "./useRegressionPredictionExp
 import { useRegressionPredictionRowsState } from "./useRegressionPredictionRowsState";
 import { useRegressionPredictionState } from "./useRegressionPredictionState";
 import { WorkspaceRouter } from "./WorkspaceRouter";
+import { RuntimeCompatibilityGate } from "./RuntimeMismatchPage";
+import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
 
 type HealthState =
   | { kind: "checking" }
@@ -104,6 +106,7 @@ function statusClassName(health: HealthState): string {
 }
 
 export default function App() {
+  const runtimeCompatibility = useRuntimeCompatibilityState();
   const [health, setHealth] = useState<HealthState>({ kind: "checking" });
   const [analysisCatalog, setAnalysisCatalog] = useState<AnalysisMethodListResponse | null>(null);
   const [analysisCatalogError, setAnalysisCatalogError] = useState<string | null>(null);
@@ -587,6 +590,9 @@ export default function App() {
   ]);
 
   useEffect(() => {
+    if (runtimeCompatibility.state.kind !== "compatible") {
+      return;
+    }
     const stopHealthRequest = startRetryingRequest({
       request: fetchHealth,
       onSuccess: (response) => {
@@ -614,7 +620,7 @@ export default function App() {
       stopHealthRequest();
       stopCatalogRequest();
     };
-  }, []);
+  }, [runtimeCompatibility.state.kind]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -3882,6 +3888,14 @@ export default function App() {
     onToggleXyCorrelationXColumn: handleToggleXyCorrelationXColumn,
     onToggleXyCorrelationYColumn: handleToggleXyCorrelationYColumn,
   } satisfies AnalysisShellProps;
+  if (runtimeCompatibility.state.kind !== "compatible") {
+    return (
+      <RuntimeCompatibilityGate
+        onRetry={runtimeCompatibility.retry}
+        state={runtimeCompatibility.state}
+      />
+    );
+  }
   return (
     <AppChrome
       activeDatasetSelectorProps={activeDatasetSelectorProps}

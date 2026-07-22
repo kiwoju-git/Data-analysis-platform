@@ -17,6 +17,73 @@ export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Pr
   }
 }
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly routeNotFound: boolean;
+  readonly correlationId: string | null;
+
+  constructor({
+    status,
+    code,
+    message,
+    routeNotFound,
+    correlationId,
+  }: {
+    status: number;
+    code: string;
+    message: string;
+    routeNotFound: boolean;
+    correlationId: string | null;
+  }) {
+    super(code);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+    this.routeNotFound = routeNotFound;
+    this.correlationId = correlationId;
+    Object.defineProperty(this, "message", { value: message, enumerable: true });
+  }
+}
+
+export async function apiRequestError(
+  response: Response,
+  fallback: string,
+): Promise<ApiRequestError> {
+  let backendCode: string | null = null;
+  let backendMessage: string | null = null;
+  let correlationId: string | null = null;
+  let detail: string | null = null;
+  try {
+    const payload: unknown = await response.json();
+    if (typeof payload === "object" && payload !== null) {
+      const record = payload as Record<string, unknown>;
+      if (typeof record.detail === "string") detail = record.detail;
+      const error = record.error;
+      if (typeof error === "object" && error !== null) {
+        const errorRecord = error as Record<string, unknown>;
+        if (typeof errorRecord.code === "string") backendCode = errorRecord.code;
+        if (typeof errorRecord.message === "string") backendMessage = errorRecord.message;
+        if (typeof errorRecord.correlation_id === "string") {
+          correlationId = errorRecord.correlation_id;
+        }
+      }
+    }
+  } catch {
+    // A non-JSON error body is represented by the typed fallback below.
+  }
+  const routeNotFound =
+    response.status === 404 &&
+    (backendCode === "not_found" || detail?.toLowerCase() === "not found");
+  return new ApiRequestError({
+    status: response.status,
+    code: routeNotFound ? "api_contract_mismatch" : (backendCode ?? fallback),
+    message: backendMessage ?? detail ?? fallback,
+    routeNotFound,
+    correlationId,
+  });
+}
+
 export async function apiErrorCode(response: Response, fallback: string): Promise<string> {
   try {
     const payload: unknown = await response.json();

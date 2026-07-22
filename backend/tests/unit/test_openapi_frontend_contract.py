@@ -54,6 +54,13 @@ FRONTEND_ROUTE_CONTRACTS = [
         response_schema="HealthResponse",
     ),
     OperationContract(
+        route_name="runtimeInfo",
+        method="get",
+        path="/api/v1/runtime-info",
+        success_status="200",
+        response_schema="RuntimeInfoResponse",
+    ),
+    OperationContract(
         route_name="datasets",
         method="post",
         path="/api/v1/datasets",
@@ -1384,6 +1391,58 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         properties=frozenset({"status", "service", "version"}),
         required_fields=frozenset({"status", "service", "version"}),
         property_consts=(("status", "ready"), ("service", "datalab-studio-api")),
+    ),
+    SchemaComponentContract(
+        name="RuntimeCapabilities",
+        properties=frozenset(
+            {
+                "asset_management",
+                "dataset_version_metadata",
+                "dataset_version_deletion",
+                "regression_model_metadata",
+                "regression_model_deletion",
+                "dedicated_predict",
+                "dedicated_response_optimizer",
+                "bayesian_optimization",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "asset_management",
+                "dataset_version_metadata",
+                "dataset_version_deletion",
+                "regression_model_metadata",
+                "regression_model_deletion",
+                "dedicated_predict",
+                "dedicated_response_optimizer",
+                "bayesian_optimization",
+            }
+        ),
+    ),
+    SchemaComponentContract(
+        name="RuntimeInfoResponse",
+        properties=frozenset(
+            {
+                "service",
+                "app_version",
+                "api_contract_version",
+                "metadata_schema_version",
+                "build_commit",
+                "capabilities",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "service",
+                "app_version",
+                "api_contract_version",
+                "metadata_schema_version",
+                "build_commit",
+                "capabilities",
+            }
+        ),
+        property_refs=(("capabilities", "RuntimeCapabilities"),),
+        property_consts=(("service", "datalab-studio-api"),),
     ),
     SchemaComponentContract(
         name="AnalysisRunState",

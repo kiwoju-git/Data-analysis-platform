@@ -152,14 +152,7 @@ describe("App", () => {
     const html = renderToString(<App />);
 
     expect(html).toContain("DataLab Studio");
-    expect(html).toContain("로컬 분석 작업대");
-    expect(html).toContain("업로드");
-    expect(html).toContain("데이터셋");
-    expect(html).toContain("데이터셋 파싱 확정");
-    expect(html).toContain("원본 데이터 파일");
-    expect(html).toContain("복사한 표 붙여넣기");
-    expect(html).toContain("스키마 확인");
-    expect(html).toContain("미리보기");
+    expect(html).toContain("프런트엔드와 백엔드 호환성을 확인하고 있습니다.");
   });
 
   it("assigns the headerless Bayesian sample schema preset", () => {

@@ -1,6 +1,6 @@
-import { fetchApi } from "./client";
+import { apiRequestError, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
-import type { HealthResponse } from "./types";
+import type { HealthResponse, RuntimeInfoResponse } from "./types";
 
 function isHealthResponse(value: unknown): value is HealthResponse {
   if (typeof value !== "object" || value === null) {
@@ -32,5 +32,39 @@ export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse>
     throw new Error("invalid_health_response");
   }
 
+  return payload;
+}
+
+function isRuntimeInfoResponse(value: unknown): value is RuntimeInfoResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  if (
+    candidate.service !== "datalab-studio-api" ||
+    typeof candidate.app_version !== "string" ||
+    typeof candidate.api_contract_version !== "number" ||
+    typeof candidate.metadata_schema_version !== "number" ||
+    typeof candidate.build_commit !== "string" ||
+    typeof candidate.capabilities !== "object" ||
+    candidate.capabilities === null
+  ) {
+    return false;
+  }
+  return Object.values(candidate.capabilities as Record<string, unknown>).every(
+    (capability) => typeof capability === "boolean",
+  );
+}
+
+export async function fetchRuntimeInfo(signal?: AbortSignal): Promise<RuntimeInfoResponse> {
+  const response = await fetchApi(apiRoutes.runtimeInfo(), {
+    headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+    signal,
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "runtime_info_failed");
+  }
+  const payload: unknown = await response.json();
+  if (!isRuntimeInfoResponse(payload)) {
+    throw new Error("runtime_info_invalid");
+  }
   return payload;
 }

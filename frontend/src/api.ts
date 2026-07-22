@@ -61,7 +61,7 @@ export { fetchResponseSurfaceDesign } from "./api/doe";
 export { saveResponseSurfaceResponses } from "./api/doe";
 export { createResponseOptimizer } from "./api/doe";
 export { fetchResponseOptimizer } from "./api/doe";
-export { fetchHealth } from "./api/health";
+export { fetchHealth, fetchRuntimeInfo } from "./api/health";
 export { fetchGageRrPreflight } from "./api/quality";
 export {
   createAttributeControlLimitSet,

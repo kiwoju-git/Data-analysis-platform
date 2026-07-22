@@ -38,6 +38,10 @@ export const apiRoutes = {
     return apiUrl("/health");
   },
 
+  runtimeInfo(): string {
+    return apiUrl("/runtime-info");
+  },
+
   datasets(): string {
     return apiUrl("/datasets");
   },
