@@ -660,9 +660,22 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
 
 
 def restore_and_compare_saved_results(page: Page) -> None:
+    compact_history = page.locator(".compact-analysis-history")
+    expect(compact_history.get_by_text("저장된 분석 이력", exact=True)).to_be_visible()
+    expect(page.locator(".analysis-history-item")).to_have_count(0)
+    compact_history.get_by_role("button", name="최근 이력 열기").click()
+    expect(page.locator(".compact-history-list article")).to_have_count(
+        2, timeout=20_000
+    )
+    compact_history.get_by_role("link", name="전체 이력 관리").click()
+    expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible(
+        timeout=15_000
+    )
+    expect(page.get_by_role("heading", name="전체 분석 이력")).to_be_visible(
+        timeout=15_000
+    )
     history_items = page.locator(".analysis-history-item")
     expect(history_items).to_have_count(2, timeout=20_000)
-    expect(page.get_by_text("현재 데이터셋의 저장된 분석")).to_be_visible()
 
     history_items.nth(0).get_by_role("button", name="결과 불러오기").click()
     expect(page.get_by_text("불러온 결과")).to_be_visible(timeout=15_000)
@@ -710,12 +723,12 @@ def verify_schema_stale_behavior(page: Page) -> None:
     expect(page.get_by_role("button", name="스키마 저장")).to_be_enabled(timeout=15_000)
 
     page.get_by_role("button", name="분석", exact=True).click()
-    expect(page.get_by_text("현재 데이터셋의 저장된 분석")).to_be_visible(
-        timeout=15_000
+    compact_history = page.locator(".compact-analysis-history")
+    compact_history.get_by_role("button", name="최근 이력 열기").click()
+    expect(page.locator(".compact-history-list article")).to_have_count(
+        1, timeout=15_000
     )
-    page.get_by_role("button", name="새로고침").click()
-    expect(page.locator(".analysis-history-item")).to_have_count(1, timeout=15_000)
-    expect(page.locator(".analysis-history-panel .stale-badge")).to_have_count(0)
+    expect(page.locator(".compact-history-list .stale-badge")).to_have_count(0)
 
     page.get_by_role("button", name="데이터셋", exact=True).click()
     value_display_input = page.get_by_label("Value 표시명")
@@ -724,10 +737,13 @@ def verify_schema_stale_behavior(page: Page) -> None:
     expect(value_display_input).to_have_value("Measurement Value", timeout=15_000)
 
     page.get_by_role("button", name="분석", exact=True).click()
-    page.get_by_role("button", name="새로고침").click()
-    expect(page.locator(".analysis-history-item")).to_have_count(1, timeout=15_000)
-    expect(page.locator(".analysis-history-panel .stale-badge")).to_have_count(1)
-    expect(page.get_by_text("stale · 재검토 필요").first).to_be_visible()
+    compact_history = page.locator(".compact-analysis-history")
+    compact_history.get_by_role("button", name="최근 이력 열기").click()
+    expect(page.locator(".compact-history-list article")).to_have_count(
+        1, timeout=15_000
+    )
+    expect(page.locator(".compact-history-list .stale-badge")).to_have_count(1)
+    expect(page.get_by_text("stale", exact=True).first).to_be_visible()
 
 
 def verify_linear_model_fit_and_prediction(page: Page) -> None:

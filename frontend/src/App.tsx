@@ -533,6 +533,7 @@ export default function App() {
   });
   const analysisHistoryState = useAnalysisHistoryState({
     currentDatasetVersionId,
+    enabled: appRoute.page === "reports",
     refreshKey: currentAnalysisId,
     resetKey: datasetStateRevision,
   });
@@ -3912,7 +3913,11 @@ export default function App() {
       <WorkspaceRouter
         analysisPageProps={analysisPageProps}
         analysisCatalog={analysisCatalog}
+        analysisComparisonState={analysisComparisonState}
+        analysisHistoryState={analysisHistoryState}
+        analysisRestoredState={restoredAnalysisResultState}
         currentDatasetVersionId={version?.version_id ?? null}
+        currentDatasetVersion={version}
         datasetPageProps={datasetPageProps}
         routePage={appRoute.page}
         onOpenAnalysisMethod={handleOpenAnalysisMethod}

@@ -1094,6 +1094,32 @@ describe("async workbench hooks", () => {
     runner.unmount();
   });
 
+  it("does not request full analysis history until the Report Center enables it", async () => {
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    const runner = new HookRunner(useAnalysisHistoryState, {
+      currentDatasetVersionId: "dataset-a",
+      enabled: false,
+      refreshKey: null,
+      resetKey: 0,
+    });
+    await runner.flush();
+
+    expect(apiMocks.fetchAnalysisRuns).not.toHaveBeenCalled();
+    expect(runner.output.analysisHistory).toBeNull();
+
+    runner.update({
+      currentDatasetVersionId: "dataset-a",
+      enabled: true,
+      refreshKey: null,
+      resetKey: 0,
+    });
+    await runner.flush();
+
+    expect(apiMocks.fetchAnalysisRuns).toHaveBeenCalledOnce();
+    expect(runner.output.analysisHistory?.dataset_version_id).toBe("dataset-a");
+    runner.unmount();
+  });
+
   it("keeps analysis deletion reset after old preflight and delete responses", async () => {
     apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
     const preflight = deferred<AnalysisRunDeletionPreflightResponse>();

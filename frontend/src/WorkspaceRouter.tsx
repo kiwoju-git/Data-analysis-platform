@@ -1,6 +1,15 @@
 import type { AnalysisShellProps } from "./AnalysisShell";
+import type {
+  AnalysisWorkbenchComparisonState,
+  AnalysisWorkbenchHistoryState,
+  AnalysisWorkbenchRestoredState,
+} from "./AnalysisWorkbench";
 import { AnalysisPage } from "./AnalysisPage";
-import type { AnalysisMethodDescriptor, AnalysisMethodListResponse } from "./api";
+import type {
+  AnalysisMethodDescriptor,
+  AnalysisMethodListResponse,
+  DatasetVersionResponse,
+} from "./api";
 import type { AppRoute } from "./appRoute";
 import {
   DatasetPreparationPage,
@@ -12,6 +21,10 @@ import { WorkspacePageBoundary } from "./WorkspacePageBoundary";
 export interface WorkspaceRouterProps {
   analysisPageProps: AnalysisShellProps;
   analysisCatalog: AnalysisMethodListResponse | null;
+  analysisComparisonState?: AnalysisWorkbenchComparisonState;
+  analysisHistoryState?: AnalysisWorkbenchHistoryState;
+  analysisRestoredState?: AnalysisWorkbenchRestoredState;
+  currentDatasetVersion?: DatasetVersionResponse | null;
   currentDatasetVersionId: string | null;
   datasetPageProps: DatasetPreparationPageProps;
   routePage: AppRoute["page"];
@@ -23,6 +36,10 @@ export interface WorkspaceRouterProps {
 export function WorkspaceRouter({
   analysisPageProps,
   analysisCatalog,
+  analysisComparisonState,
+  analysisHistoryState,
+  analysisRestoredState,
+  currentDatasetVersion,
   currentDatasetVersionId,
   datasetPageProps,
   routePage,
@@ -30,7 +47,7 @@ export function WorkspaceRouter({
   onActivateDataset,
   onDatasetMetadataChanged,
 }: WorkspaceRouterProps) {
-  const labelledBy = routePage === "analysis" ? "analysis-modules-title" : routePage === "reports" ? "report-browser-title" : routePage === "help" ? "help-quick-start-title" : routePage === "manage" ? "asset-management-title" : "workspace-title";
+  const labelledBy = routePage === "analysis" ? "analysis-modules-title" : routePage === "reports" ? "report-center-title" : routePage === "help" ? "help-quick-start-title" : routePage === "manage" ? "asset-management-title" : "workspace-title";
   return (
     <section
       className="workspace"
@@ -42,7 +59,11 @@ export function WorkspaceRouter({
         <WorkspacePageBoundary pageKey="reports">
           <ReportCenterPage
             catalog={analysisCatalog}
+            comparisonState={analysisComparisonState}
             currentDatasetVersionId={currentDatasetVersionId}
+            historyState={analysisHistoryState}
+            restoredState={analysisRestoredState}
+            version={currentDatasetVersion ?? null}
           />
         </WorkspacePageBoundary>
       ) : null}

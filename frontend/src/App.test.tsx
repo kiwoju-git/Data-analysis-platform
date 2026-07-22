@@ -6,6 +6,7 @@ import App from "./App";
 import { AnalysisPage } from "./AnalysisPage";
 import { AnalysisExportDeletionConfirmation } from "./AnalysisResultExportPanel";
 import { AnalysisRunDeletionConfirmation } from "./AnalysisHistoryPanel";
+import { AnalysisHistoryWorkspace } from "./AnalysisHistoryWorkspace";
 import { AnalysisWorkbench } from "./AnalysisWorkbench";
 import { DatasetPreparationPage } from "./DatasetPreparationPage";
 import { PastePreviewGrid } from "./PastePreviewGrid";
@@ -146,6 +147,7 @@ vi.mock("./lazyAnalysisPanels", async () => {
 describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("renders the DataLab Studio shell", () => {
@@ -501,6 +503,32 @@ describe("App", () => {
     expect(html).toContain("P0 capability matrix");
     expect(html).toContain("현재 지원되지 않음");
     expect(html).not.toContain("PDF");
+  });
+
+  it("opens full restore, compare, and delete history from the Report Center query", () => {
+    vi.stubGlobal("window", {
+      location: {
+        href: "http://127.0.0.1:5173/reports?tab=history&dataset_version_id=version-1&method_id=eda.descriptive",
+      },
+      history: { replaceState: vi.fn() },
+    });
+    const catalog = analysisTestCatalog();
+    const result = analysisResultEnvelopeTestResponse();
+    const html = renderToString(
+      <ReportCenterPage
+        catalog={catalog}
+        currentDatasetVersionId="version-1"
+        historyState={{ analysisHistory: analysisRunListTestResponse(result) }}
+        version={datasetVersionTestResponse()}
+      />,
+    );
+
+    expect(html).toContain("전체 분석 이력");
+    expect(html).toContain("결과 불러오기");
+    expect(html).toContain("왼쪽");
+    expect(html).toContain("오른쪽");
+    expect(html).toContain("삭제 영향 확인");
+    expect(html).not.toContain("P0 capability matrix");
   });
 
   it("highlights role guidance for the selected statistical method", () => {
@@ -1305,6 +1333,30 @@ describe("App", () => {
     expect(html).toContain(selectedMethod.method_id);
   });
 
+  it("keeps selected-method history compact and closed by default", () => {
+    const catalog = analysisTestCatalog();
+    const selectedMethod = catalog.methods[0];
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisRunError={null}
+        catalog={catalog}
+        profile={null}
+        selectedMethod={selectedMethod}
+        selectedMethods={[selectedMethod]}
+        selectedModuleId="exploration"
+        version={datasetVersionTestResponse()}
+        onSelectMethod={() => undefined}
+        renderExecutableMethod={() => <section>실행 패널</section>}
+      />,
+    );
+
+    expect(html).toContain("저장된 분석 이력");
+    expect(html).toContain("최근 이력 열기");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("필터 상태");
+    expect(html).not.toContain("저장된 분석 비교");
+  });
+
   it("renders saved analysis history with stale badge, restore summary, and export list", () => {
     const catalog = analysisTestCatalog();
     const selectedMethod = catalog.methods[0];
@@ -1313,24 +1365,21 @@ describe("App", () => {
     const exportList = analysisResultExportListTestResponse(restored);
     const comparison = analysisRunComparisonTestResponse(restored);
 
-    const html = renderToString(
+    const historyHtml = renderFullAnalysisHistory({
+      catalog,
+      comparison,
+      history,
+      methodId: restored.method_id,
+      restored,
+      resultAvailability: "available",
+      stale: "stale",
+      status: "succeeded",
+    });
+    const workbenchHtml = renderToString(
       <AnalysisWorkbench
         analysisRunError={null}
         catalog={catalog}
-        comparisonState={{
-          analysisComparison: comparison,
-          analysisComparisonLeftId: comparison.left.analysis_id,
-          analysisComparisonRightId: comparison.right.analysis_id,
-        }}
         exportState={{ analysisResultExportList: exportList }}
-        historyState={{
-          analysisHistory: history,
-          analysisHistoryMethodId: restored.method_id,
-          analysisHistoryResultAvailabilityFilter: "available",
-          analysisHistoryStaleFilter: "stale",
-          analysisHistoryStatus: "succeeded",
-          onRefreshAnalysisHistory: () => undefined,
-        }}
         profile={null}
         restoredState={{
           restoredAnalysisResult: restored,
@@ -1345,6 +1394,7 @@ describe("App", () => {
         renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
       />,
     );
+    const html = `${historyHtml}${workbenchHtml}`;
 
     const text = html.replace(/<!-- -->/g, "");
 
@@ -1394,26 +1444,11 @@ describe("App", () => {
       })),
     };
 
-    const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        historyState={{
-          analysisHistory: unavailableHistory,
-          analysisHistoryResultAvailabilityFilter: "unavailable",
-          onRefreshAnalysisHistory: () => undefined,
-        }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="exploration"
-        version={datasetVersionTestResponse()}
-        restoredState={{ onRestoreAnalysisRun: () => undefined }}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => <div>분석 필터</div>}
-        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-      />,
-    );
+    const html = renderFullAnalysisHistory({
+      catalog,
+      history: unavailableHistory,
+      resultAvailability: "unavailable",
+    });
 
     const text = html.replace(/<!-- -->/g, "");
 
@@ -1444,30 +1479,11 @@ describe("App", () => {
       },
     };
 
-    const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        comparisonState={{
-          analysisComparison: comparison,
-          analysisComparisonLeftId: comparison.left.analysis_id,
-          analysisComparisonRightId: comparison.right.analysis_id,
-        }}
-        historyState={{
-          analysisHistory: analysisRunListTestResponse(restored),
-          onRefreshAnalysisHistory: () => undefined,
-        }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="exploration"
-        version={datasetVersionTestResponse()}
-        restoredState={{ onRestoreAnalysisRun: () => undefined }}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => <div>분석 필터</div>}
-        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-      />,
-    );
+    const html = renderFullAnalysisHistory({
+      catalog,
+      comparison,
+      history: analysisRunListTestResponse(restored),
+    });
 
     expect(html).toContain("incompatible comparison");
     expect(html).toContain("method version mismatch");
@@ -1477,33 +1493,11 @@ describe("App", () => {
 
   it("renders one-sample t stored result comparison metrics", () => {
     const catalog = analysisTestCatalog();
-    const selectedMethod =
-      catalog.methods.find((method) => method.method_id === "hypothesis.one_sample_t") ??
-      catalog.methods[0];
     const restored = analysisResultEnvelopeTestResponse("hypothesis.one_sample_t");
     const history = analysisRunListTestResponse(restored);
     const comparison = oneSampleTAnalysisRunComparisonTestResponse(restored);
 
-    const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        comparisonState={{
-          analysisComparison: comparison,
-          analysisComparisonLeftId: comparison.left.analysis_id,
-          analysisComparisonRightId: comparison.right.analysis_id,
-        }}
-        historyState={{ analysisHistory: history }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="hypothesis"
-        version={datasetVersionTestResponse()}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => <div>분석 필터</div>}
-        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-      />,
-    );
+    const html = renderFullAnalysisHistory({ catalog, comparison, history });
 
     expect(html).toContain("1-표본 t-검정 비교");
     expect(html).toContain("response-alpha");
@@ -1514,33 +1508,11 @@ describe("App", () => {
 
   it("renders two-sample t stored result comparison metrics", () => {
     const catalog = analysisTestCatalog();
-    const selectedMethod =
-      catalog.methods.find((method) => method.method_id === "hypothesis.two_sample_t") ??
-      catalog.methods[0];
     const restored = analysisResultEnvelopeTestResponse("hypothesis.two_sample_t");
     const history = analysisRunListTestResponse(restored);
     const comparison = twoSampleTAnalysisRunComparisonTestResponse(restored);
 
-    const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        comparisonState={{
-          analysisComparison: comparison,
-          analysisComparisonLeftId: comparison.left.analysis_id,
-          analysisComparisonRightId: comparison.right.analysis_id,
-        }}
-        historyState={{ analysisHistory: history }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="hypothesis"
-        version={datasetVersionTestResponse()}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => <div>분석 필터</div>}
-        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-      />,
-    );
+    const html = renderFullAnalysisHistory({ catalog, comparison, history });
 
     expect(html).toContain("2-표본 t-검정 비교");
     expect(html).toContain("response-alpha");
@@ -1552,33 +1524,11 @@ describe("App", () => {
 
   it("renders paired t stored result comparison metrics", () => {
     const catalog = analysisTestCatalog();
-    const selectedMethod =
-      catalog.methods.find((method) => method.method_id === "hypothesis.paired_t") ??
-      catalog.methods[0];
     const restored = analysisResultEnvelopeTestResponse("hypothesis.paired_t");
     const history = analysisRunListTestResponse(restored);
     const comparison = pairedTAnalysisRunComparisonTestResponse(restored);
 
-    const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        comparisonState={{
-          analysisComparison: comparison,
-          analysisComparisonLeftId: comparison.left.analysis_id,
-          analysisComparisonRightId: comparison.right.analysis_id,
-        }}
-        historyState={{ analysisHistory: history }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="hypothesis"
-        version={datasetVersionTestResponse()}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => <div>분석 필터</div>}
-        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-      />,
-    );
+    const html = renderFullAnalysisHistory({ catalog, comparison, history });
 
     expect(html).toContain("대응표본 t-검정 비교");
     expect(html).toContain("before-alpha");
@@ -1590,33 +1540,11 @@ describe("App", () => {
 
   it("renders equivalence TOST stored result comparison metrics", () => {
     const catalog = analysisTestCatalog();
-    const selectedMethod =
-      catalog.methods.find((method) => method.method_id === "hypothesis.equivalence_tost") ??
-      catalog.methods[0];
     const restored = analysisResultEnvelopeTestResponse("hypothesis.equivalence_tost");
     const history = analysisRunListTestResponse(restored);
     const comparison = equivalenceTostAnalysisRunComparisonTestResponse(restored);
 
-    const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        comparisonState={{
-          analysisComparison: comparison,
-          analysisComparisonLeftId: comparison.left.analysis_id,
-          analysisComparisonRightId: comparison.right.analysis_id,
-        }}
-        historyState={{ analysisHistory: history }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="hypothesis"
-        version={datasetVersionTestResponse()}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => <div>분석 필터</div>}
-        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-      />,
-    );
+    const html = renderFullAnalysisHistory({ catalog, comparison, history });
 
     expect(html).toContain("동등성 TOST 비교");
     expect(html).toContain("response-alpha");
@@ -1628,33 +1556,11 @@ describe("App", () => {
 
   it("renders one-way ANOVA stored result comparison metrics", () => {
     const catalog = analysisTestCatalog();
-    const selectedMethod =
-      catalog.methods.find((method) => method.method_id === "hypothesis.one_way_anova") ??
-      catalog.methods[0];
     const restored = analysisResultEnvelopeTestResponse("hypothesis.one_way_anova");
     const history = analysisRunListTestResponse(restored);
     const comparison = oneWayAnovaAnalysisRunComparisonTestResponse(restored);
 
-    const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        comparisonState={{
-          analysisComparison: comparison,
-          analysisComparisonLeftId: comparison.left.analysis_id,
-          analysisComparisonRightId: comparison.right.analysis_id,
-        }}
-        historyState={{ analysisHistory: history }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="hypothesis"
-        version={datasetVersionTestResponse()}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => <div>분석 필터</div>}
-        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-      />,
-    );
+    const html = renderFullAnalysisHistory({ catalog, comparison, history });
 
     expect(html).toContain("일원분산분석 비교");
     expect(html).toContain("response-alpha");
@@ -1669,33 +1575,11 @@ describe("App", () => {
 
   it("renders Kruskal-Wallis stored result comparison metrics", () => {
     const catalog = analysisTestCatalog();
-    const selectedMethod =
-      catalog.methods.find((method) => method.method_id === "hypothesis.kruskal_wallis") ??
-      catalog.methods[0];
     const restored = analysisResultEnvelopeTestResponse("hypothesis.kruskal_wallis");
     const history = analysisRunListTestResponse(restored);
     const comparison = kruskalWallisAnalysisRunComparisonTestResponse(restored);
 
-    const html = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
-        catalog={catalog}
-        comparisonState={{
-          analysisComparison: comparison,
-          analysisComparisonLeftId: comparison.left.analysis_id,
-          analysisComparisonRightId: comparison.right.analysis_id,
-        }}
-        historyState={{ analysisHistory: history }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="hypothesis"
-        version={datasetVersionTestResponse()}
-        onSelectMethod={() => undefined}
-        renderAnalysisFilters={() => <div>분석 필터</div>}
-        renderExecutableMethod={() => <section className="analysis-run-panel">실행 패널</section>}
-      />,
-    );
+    const html = renderFullAnalysisHistory({ catalog, comparison, history });
 
     expect(html).toContain("Kruskal-Wallis 비교");
     expect(html).toContain("response-alpha");
@@ -2009,8 +1893,7 @@ describe("App", () => {
     const selectedMethod = catalog.methods[0];
     const result = analysisResultEnvelopeTestResponse(selectedMethod.method_id);
     const blockedHtml = renderToString(
-      <AnalysisWorkbench
-        analysisRunError={null}
+      <AnalysisHistoryWorkspace
         catalog={catalog}
         historyState={{
           analysisHistory: analysisRunListTestResponse(result),
@@ -2028,13 +1911,7 @@ describe("App", () => {
             },
           },
         }}
-        profile={null}
-        selectedMethod={selectedMethod}
-        selectedMethods={[selectedMethod]}
-        selectedModuleId="exploration"
         version={datasetVersionTestResponse()}
-        onSelectMethod={() => undefined}
-        renderExecutableMethod={() => <div />}
       />,
     );
     expect(blockedHtml).toContain("참조 중인 자산이 있어");
@@ -5166,6 +5043,54 @@ describe("App", () => {
     expect(() => serializeAnalysisFilterDrafts(drafts, columns)).toThrow("filter_value_required");
   });
 });
+
+function renderFullAnalysisHistory({
+  catalog,
+  comparison = null,
+  history,
+  methodId = "",
+  restored = null,
+  resultAvailability = "all",
+  stale = "all",
+  status = "",
+}: {
+  catalog: AnalysisMethodListResponse;
+  comparison?: AnalysisRunComparisonResponse | null;
+  history: AnalysisRunListResponse;
+  methodId?: string;
+  restored?: AnalysisResultEnvelope | null;
+  resultAvailability?: "all" | "available" | "unavailable";
+  stale?: "all" | "fresh" | "stale";
+  status?: "" | "succeeded" | "failed" | "cancelled" | "running" | "queued" | "cancel_requested";
+}) {
+  return renderToString(
+    <AnalysisHistoryWorkspace
+      catalog={catalog}
+      comparisonState={
+        comparison === null
+          ? undefined
+          : {
+              analysisComparison: comparison,
+              analysisComparisonLeftId: comparison.left.analysis_id,
+              analysisComparisonRightId: comparison.right.analysis_id,
+            }
+      }
+      historyState={{
+        analysisHistory: history,
+        analysisHistoryMethodId: methodId,
+        analysisHistoryResultAvailabilityFilter: resultAvailability,
+        analysisHistoryStaleFilter: stale,
+        analysisHistoryStatus: status,
+        onRefreshAnalysisHistory: () => undefined,
+      }}
+      restoredState={{
+        restoredAnalysisResult: restored,
+        onRestoreAnalysisRun: () => undefined,
+      }}
+      version={datasetVersionTestResponse()}
+    />,
+  );
+}
 
 function filterTestColumns(): DatasetColumnResponse[] {
   return [

@@ -1,8 +1,8 @@
 import { startTransition, useRef, useState, type ReactNode } from "react";
 
-import { AnalysisHistoryPanel } from "./AnalysisHistoryPanel";
 import { AnalysisPanelBoundary } from "./AnalysisPanelBoundary";
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
+import { CompactAnalysisHistoryPanel } from "./CompactAnalysisHistoryPanel";
 import { MethodHelpDrawer } from "./MethodHelpDrawer";
 import type {
   AnalysisMethodDescriptor,
@@ -143,9 +143,7 @@ export function AnalysisWorkbench({
   selectedMethod,
   selectedAnalysisResult = null,
   analysisRunError,
-  comparisonState,
   exportState,
-  historyState,
   restoredState,
   version,
   profile,
@@ -197,43 +195,6 @@ export function AnalysisWorkbench({
       exportState?.onDeleteAnalysisResultExport ?? (() => undefined),
     onClearAnalysisResultExportDeletion:
       exportState?.onClearAnalysisResultExportDeletion ?? (() => undefined),
-  };
-  const effectiveHistoryState = {
-    analysisHistory: historyState?.analysisHistory ?? null,
-    analysisHistoryError: historyState?.analysisHistoryError ?? null,
-    analysisHistoryMethodId: historyState?.analysisHistoryMethodId ?? "",
-    analysisHistoryOffset: historyState?.analysisHistoryOffset ?? 0,
-    analysisHistoryResultAvailabilityFilter:
-      historyState?.analysisHistoryResultAvailabilityFilter ?? "all",
-    analysisHistoryStaleFilter: historyState?.analysisHistoryStaleFilter ?? "all",
-    analysisHistoryStatus: historyState?.analysisHistoryStatus ?? "",
-    analysisRunDeletion: historyState?.analysisRunDeletion ?? null,
-    analysisRunDeletionError: historyState?.analysisRunDeletionError ?? null,
-    analysisRunDeletionPreflight: historyState?.analysisRunDeletionPreflight ?? null,
-    isDeletingAnalysisRun: historyState?.isDeletingAnalysisRun ?? false,
-    isLoadingAnalysisHistory: historyState?.isLoadingAnalysisHistory ?? false,
-    isLoadingAnalysisRunDeletionPreflight:
-      historyState?.isLoadingAnalysisRunDeletionPreflight ?? false,
-    onChangeAnalysisHistoryFilters:
-      historyState?.onChangeAnalysisHistoryFilters ?? (() => undefined),
-    onChangeAnalysisHistoryPage:
-      historyState?.onChangeAnalysisHistoryPage ?? (() => undefined),
-    onRefreshAnalysisHistory: historyState?.onRefreshAnalysisHistory ?? (() => undefined),
-    onClearAnalysisRunDeletion:
-      historyState?.onClearAnalysisRunDeletion ?? (() => undefined),
-    onDeleteAnalysisRun: historyState?.onDeleteAnalysisRun ?? (() => undefined),
-    onLoadAnalysisRunDeletionPreflight:
-      historyState?.onLoadAnalysisRunDeletionPreflight ?? (() => undefined),
-  };
-  const effectiveComparisonState = {
-    analysisComparison: comparisonState?.analysisComparison ?? null,
-    analysisComparisonError: comparisonState?.analysisComparisonError ?? null,
-    analysisComparisonLeftId: comparisonState?.analysisComparisonLeftId ?? null,
-    analysisComparisonRightId: comparisonState?.analysisComparisonRightId ?? null,
-    isComparingAnalysisRuns: comparisonState?.isComparingAnalysisRuns ?? false,
-    onCompareAnalysisRuns: comparisonState?.onCompareAnalysisRuns ?? (() => undefined),
-    onSelectAnalysisComparisonRun:
-      comparisonState?.onSelectAnalysisComparisonRun ?? (() => undefined),
   };
   const effectiveRestoredState = {
     isRestoringAnalysisResult: restoredState?.isRestoringAnalysisResult ?? false,
@@ -408,46 +369,15 @@ export function AnalysisWorkbench({
               {executablePanel}
             </AnalysisPanelBoundary>
           ) : null}
-          {selectedMethod.execution_mode !== "dedicated" ? <AnalysisHistoryPanel
-            catalog={catalog}
-            history={effectiveHistoryState.analysisHistory}
-            methodIdFilter={effectiveHistoryState.analysisHistoryMethodId}
-            offset={effectiveHistoryState.analysisHistoryOffset}
-            resultAvailabilityFilter={
-              effectiveHistoryState.analysisHistoryResultAvailabilityFilter
-            }
-            staleFilter={effectiveHistoryState.analysisHistoryStaleFilter}
-            statusFilter={effectiveHistoryState.analysisHistoryStatus}
-            isLoading={effectiveHistoryState.isLoadingAnalysisHistory}
-            isRestoring={effectiveRestoredState.isRestoringAnalysisResult}
-            restoreError={effectiveRestoredState.restoredAnalysisResultError}
-            fetchError={effectiveHistoryState.analysisHistoryError}
-            comparison={effectiveComparisonState.analysisComparison}
-            comparisonError={effectiveComparisonState.analysisComparisonError}
-            comparisonLeftId={effectiveComparisonState.analysisComparisonLeftId}
-            comparisonRightId={effectiveComparisonState.analysisComparisonRightId}
-            isComparing={effectiveComparisonState.isComparingAnalysisRuns}
-            restoredResult={effectiveRestoredState.restoredAnalysisResult}
-            deletion={effectiveHistoryState.analysisRunDeletion}
-            deletionError={effectiveHistoryState.analysisRunDeletionError}
-            deletionPreflight={effectiveHistoryState.analysisRunDeletionPreflight}
-            isDeleting={effectiveHistoryState.isDeletingAnalysisRun}
-            isLoadingDeletionPreflight={
-              effectiveHistoryState.isLoadingAnalysisRunDeletionPreflight
-            }
-            version={version}
-            onChangeFilters={effectiveHistoryState.onChangeAnalysisHistoryFilters}
-            onCompare={effectiveComparisonState.onCompareAnalysisRuns}
-            onPageChange={effectiveHistoryState.onChangeAnalysisHistoryPage}
-            onRefresh={effectiveHistoryState.onRefreshAnalysisHistory}
-            onRestore={effectiveRestoredState.onRestoreAnalysisRun}
-            onClearDeletion={effectiveHistoryState.onClearAnalysisRunDeletion}
-            onDelete={effectiveHistoryState.onDeleteAnalysisRun}
-            onLoadDeletionPreflight={
-              effectiveHistoryState.onLoadAnalysisRunDeletionPreflight
-            }
-            onSelectComparisonRun={effectiveComparisonState.onSelectAnalysisComparisonRun}
-          /> : null}
+          {selectedMethod.execution_mode !== "dedicated" && version !== null ? (
+            <CompactAnalysisHistoryPanel
+              isRestoring={effectiveRestoredState.isRestoringAnalysisResult}
+              method={selectedMethod}
+              refreshKey={selectedAnalysisResult?.analysis_id ?? null}
+              version={version}
+              onRestore={effectiveRestoredState.onRestoreAnalysisRun}
+            />
+          ) : null}
           {selectedMethod.execution_mode !== "dedicated" ? <AnalysisResultExportPanel
             analysisResult={analysisResultForExport}
             csvExportError={effectiveExportState.analysisResultCsvExportError}

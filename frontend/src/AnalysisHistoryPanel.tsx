@@ -99,11 +99,11 @@ export function AnalysisHistoryPanel({
     <section className="analysis-history-panel" aria-labelledby="analysis-history-title">
       <div className="panel-heading">
         <div>
-          <h4 id="analysis-history-title">현재 데이터셋의 저장된 분석</h4>
+          <h4 id="analysis-history-title">전체 분석 이력</h4>
           <p>
             {version === null
               ? "데이터셋 버전이 확정되면 저장된 분석을 조회할 수 있습니다."
-              : `Dataset v${version.version_number} · ${version.version_id}`}
+              : `현재 데이터셋의 저장된 분석 · Dataset v${version.version_number} · ${version.version_id}`}
           </p>
         </div>
         <button

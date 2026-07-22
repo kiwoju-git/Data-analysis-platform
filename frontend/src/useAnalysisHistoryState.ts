@@ -26,6 +26,7 @@ interface AnalysisHistoryFilters {
 
 interface UseAnalysisHistoryStateOptions {
   currentDatasetVersionId: string | null;
+  enabled?: boolean;
   refreshKey: string | null;
   resetKey: number;
 }
@@ -58,6 +59,7 @@ function historyStatusFilterValue(status: AnalysisRunState | ""): AnalysisRunSta
 
 export function useAnalysisHistoryState({
   currentDatasetVersionId,
+  enabled = true,
   refreshKey,
   resetKey,
 }: UseAnalysisHistoryStateOptions) {
@@ -107,7 +109,7 @@ export function useAnalysisHistoryState({
   }, [historyRequest, resetAnalysisRunDeletionState]);
 
   async function refreshAnalysisHistory() {
-    if (currentDatasetVersionId === null) {
+    if (!enabled || currentDatasetVersionId === null) {
       historyRequest.cancel();
       setAnalysisHistory(null);
       setAnalysisHistoryError(null);
@@ -203,25 +205,23 @@ export function useAnalysisHistoryState({
     }
   }
 
-  function handleChangeAnalysisHistoryFilters({
-    methodId,
-    resultAvailability,
-    stale,
-    status,
-  }: AnalysisHistoryFilters) {
-    setAnalysisHistoryMethodId(methodId);
-    setAnalysisHistoryStatus(status);
-    setAnalysisHistoryStaleFilter(stale);
-    setAnalysisHistoryResultAvailabilityFilter(resultAvailability);
-    setAnalysisHistoryOffset(0);
-  }
+  const handleChangeAnalysisHistoryFilters = useCallback(
+    ({ methodId, resultAvailability, stale, status }: AnalysisHistoryFilters) => {
+      setAnalysisHistoryMethodId(methodId);
+      setAnalysisHistoryStatus(status);
+      setAnalysisHistoryStaleFilter(stale);
+      setAnalysisHistoryResultAvailabilityFilter(resultAvailability);
+      setAnalysisHistoryOffset(0);
+    },
+    [],
+  );
 
   function handleChangeAnalysisHistoryPage(nextOffset: number) {
     setAnalysisHistoryOffset(Math.max(0, nextOffset));
   }
 
   useEffect(() => {
-    if (currentDatasetVersionId === null) {
+    if (!enabled || currentDatasetVersionId === null) {
       resetAnalysisHistoryState();
       return;
     }
@@ -269,6 +269,7 @@ export function useAnalysisHistoryState({
     analysisHistoryStaleFilter,
     analysisHistoryStatus,
     currentDatasetVersionId,
+    enabled,
     historyRequest,
     refreshKey,
     resetAnalysisHistoryState,

@@ -1,4 +1,13 @@
+import { useEffect, useState } from "react";
+
 import type { AnalysisMethodListResponse } from "./api";
+import type { DatasetVersionResponse } from "./api";
+import { AnalysisHistoryWorkspace } from "./AnalysisHistoryWorkspace";
+import type {
+  AnalysisWorkbenchComparisonState,
+  AnalysisWorkbenchHistoryState,
+  AnalysisWorkbenchRestoredState,
+} from "./AnalysisWorkbench";
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
 import { formatDateTime } from "./analysisWorkbenchUtils";
 import {
@@ -9,6 +18,92 @@ import { useAnalysisExportState } from "./useAnalysisExportState";
 import { useReportCenterState } from "./useReportCenterState";
 
 export function ReportCenterPage({
+  catalog,
+  comparisonState,
+  currentDatasetVersionId,
+  historyState,
+  restoredState,
+  version,
+}: {
+  catalog: AnalysisMethodListResponse | null;
+  comparisonState?: AnalysisWorkbenchComparisonState;
+  currentDatasetVersionId: string | null;
+  historyState?: AnalysisWorkbenchHistoryState;
+  restoredState?: AnalysisWorkbenchRestoredState;
+  version?: DatasetVersionResponse | null;
+}) {
+  const [tab, setTab] = useState<"reports" | "history">(initialReportCenterTab);
+  const onChangeHistoryFilters = historyState?.onChangeAnalysisHistoryFilters;
+
+  useEffect(() => {
+    if (tab !== "history" || onChangeHistoryFilters === undefined) {
+      return;
+    }
+    const methodId = queryValue("method_id") ?? "";
+    onChangeHistoryFilters({
+      methodId,
+      resultAvailability: "all",
+      stale: "all",
+      status: "",
+    });
+  }, [onChangeHistoryFilters, tab]);
+
+  const selectTab = (nextTab: "reports" | "history") => {
+    setTab(nextTab);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", nextTab);
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  };
+
+  return (
+    <div className="report-center-page">
+      <header className="page-heading-band">
+        <div>
+          <h2 id="report-center-title">리포트 센터</h2>
+          <p>저장 분석의 전체 이력과 생성된 보고서를 한곳에서 관리합니다.</p>
+        </div>
+      </header>
+      <div className="segmented-control" role="tablist" aria-label="리포트 센터 보기">
+        <button
+          aria-selected={tab === "reports"}
+          className={tab === "reports" ? "segment-active" : ""}
+          onClick={() => selectTab("reports")}
+          role="tab"
+          type="button"
+        >
+          보고서
+        </button>
+        <button
+          aria-selected={tab === "history"}
+          className={tab === "history" ? "segment-active" : ""}
+          onClick={() => selectTab("history")}
+          role="tab"
+          type="button"
+        >
+          분석 이력
+        </button>
+      </div>
+      {tab === "history" && catalog !== null ? (
+        <AnalysisHistoryWorkspace
+          catalog={catalog}
+          comparisonState={comparisonState}
+          historyState={historyState}
+          restoredState={restoredState}
+          version={version ?? null}
+        />
+      ) : null}
+      {tab === "reports" ? (
+        <ReportBrowser
+          catalog={catalog}
+          currentDatasetVersionId={currentDatasetVersionId}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ReportBrowser({
   catalog,
   currentDatasetVersionId,
 }: {
@@ -29,10 +124,7 @@ export function ReportCenterPage({
     : reportCreationCapabilities(state.selectedResult.method_id);
 
   return (
-    <div className="report-center-page">
-      <header className="page-heading-band">
-        <div><h2>리포트 센터</h2><p>저장된 일반 분석 결과의 JSON, CSV, HTML을 찾고 생성하고 다운로드합니다.</p></div>
-      </header>
+    <div className="report-browser-workspace">
       <div className="notice-box">
         Report Center는 기존 checksum 검증 export API를 사용합니다. Predict와 DOE 전용 결과의
         지원 범위는 아래 capability 표와 해당 전용 화면에서 확인하세요.
@@ -138,4 +230,13 @@ export function ReportCenterPage({
       </section>
     </div>
   );
+}
+
+function initialReportCenterTab(): "reports" | "history" {
+  return queryValue("tab") === "history" ? "history" : "reports";
+}
+
+function queryValue(name: string): string | null {
+  if (typeof window === "undefined") return null;
+  return new URL(window.location.href).searchParams.get(name);
 }

@@ -1372,6 +1372,63 @@ textarea {
   gap: 10px;
 }
 
+.compact-analysis-history {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #d8dde5;
+  padding-top: 12px;
+}
+
+.compact-history-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.compact-history-heading h4,
+.compact-history-heading p {
+  margin: 0;
+}
+
+.compact-history-heading p {
+  margin-top: 3px;
+  color: #576174;
+  font-size: 0.84rem;
+}
+
+.compact-history-list {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.compact-history-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d8dde5;
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 8px 10px;
+}
+
+.compact-history-list article > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.compact-history-list small {
+  color: #576174;
+}
+
+.compact-history-link {
+  display: inline-flex;
+  width: fit-content;
+}
+
 .history-filter-summary {
   display: flex;
   flex-wrap: wrap;
@@ -2744,6 +2801,12 @@ td select {
   .linear-model-diagnostic-primary {
     grid-column: auto;
     width: 100%;
+  }
+
+  .compact-history-heading,
+  .compact-history-list article {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .asset-metadata-fields {
