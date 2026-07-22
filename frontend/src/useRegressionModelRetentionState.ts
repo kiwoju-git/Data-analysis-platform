@@ -9,6 +9,10 @@ import {
   type RegressionModelManifestResponse,
 } from "./api";
 import { createLatestRequestGuard } from "./latestRequest";
+import {
+  classifyAssetManagementError,
+  type AssetManagementError,
+} from "./assetManagementErrors";
 
 export type RegressionModelAvailability =
   | "available"
@@ -28,6 +32,7 @@ export interface RegressionModelRetentionState {
   deletedModelId: string | null;
   deletion: RegressionModelDeleteResponse | null;
   error: string | null;
+  errorDetail: AssetManagementError | null;
   isDeleting: boolean;
   isCheckingAvailability: boolean;
   isLoadingPreflight: boolean;
@@ -46,6 +51,7 @@ export function useRegressionModelRetentionState(
     useState<RegressionModelDeletionPreflightResponse | null>(null);
   const [deletion, setDeletion] = useState<RegressionModelDeleteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<AssetManagementError | null>(null);
   const [isLoadingPreflight, setIsLoadingPreflight] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [availability, setAvailability] =
@@ -97,6 +103,7 @@ export function useRegressionModelRetentionState(
     setPreflight(null);
     setDeletion(null);
     setError(null);
+    setErrorDetail(null);
     setIsLoadingPreflight(false);
     setIsDeleting(false);
     setAvailability(null);
@@ -113,6 +120,7 @@ export function useRegressionModelRetentionState(
     setPreflight(null);
     setDeletion(null);
     setError(null);
+    setErrorDetail(null);
     setIsLoadingPreflight(false);
     setIsDeleting(false);
   };
@@ -123,6 +131,7 @@ export function useRegressionModelRetentionState(
     deletedModelId: deletion?.model_id ?? null,
     deletion,
     error,
+    errorDetail,
     isDeleting,
     isCheckingAvailability,
     isLoadingPreflight,
@@ -135,6 +144,7 @@ export function useRegressionModelRetentionState(
       setPreflight(null);
       setDeletion(null);
       setError(null);
+      setErrorDetail(null);
       setIsLoadingPreflight(true);
       void fetchRegressionModelDeletionPreflight(modelId)
         .then((response) => {
@@ -142,11 +152,12 @@ export function useRegressionModelRetentionState(
         })
         .catch((fetchError) => {
           if (preflightRequest.isCurrent(request)) {
-            setError(
-              fetchError instanceof Error
-                ? fetchError.message
-                : "regression_model_deletion_preflight_failed",
+            const detail = classifyAssetManagementError(
+              fetchError,
+              "regression_model_deletion_preflight_failed",
             );
+            setError(detail.code);
+            setErrorDetail(detail);
           }
         })
         .finally(() => {
@@ -159,6 +170,7 @@ export function useRegressionModelRetentionState(
       const request = deletionRequest.begin();
       preflightRequest.cancel();
       setError(null);
+      setErrorDetail(null);
       setIsLoadingPreflight(false);
       setIsDeleting(true);
       void deleteRegressionModel(modelId, {
@@ -177,11 +189,12 @@ export function useRegressionModelRetentionState(
         })
         .catch((deleteError) => {
           if (deletionRequest.isCurrent(request)) {
-            setError(
-              deleteError instanceof Error
-                ? deleteError.message
-                : "regression_model_deletion_failed",
+            const detail = classifyAssetManagementError(
+              deleteError,
+              "regression_model_deletion_failed",
             );
+            setError(detail.code);
+            setErrorDetail(detail);
           }
         })
         .finally(() => {

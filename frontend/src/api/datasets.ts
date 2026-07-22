@@ -1,4 +1,4 @@
-import { apiErrorCode, fetchApi } from "./client";
+import { apiErrorCode, apiRequestError, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type {
   DatasetParsingConfirmationRequest,
@@ -168,7 +168,7 @@ export async function updateDatasetVersionMetadata(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "dataset_version_metadata_update_failed"));
+    throw await apiRequestError(response, "dataset_version_metadata_update_failed");
   }
   return (await response.json()) as DatasetVersionMetadataResponse;
 }
@@ -180,7 +180,7 @@ export async function fetchDatasetVersionDeletionPreflight(
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "dataset_version_deletion_preflight_failed"));
+    throw await apiRequestError(response, "dataset_version_deletion_preflight_failed");
   }
   return (await response.json()) as DatasetVersionDeletionPreflightResponse;
 }
@@ -197,7 +197,7 @@ export async function deleteDatasetVersion(
     }),
   });
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "dataset_version_deletion_failed"));
+    throw await apiRequestError(response, "dataset_version_deletion_failed");
   }
   return (await response.json()) as DatasetVersionDeleteResponse;
 }

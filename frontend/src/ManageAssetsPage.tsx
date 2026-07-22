@@ -4,6 +4,7 @@ import type {
   DatasetVersionCatalogItem,
   RegressionModelCatalogItem,
 } from "./api";
+import type { AssetManagementError } from "./assetManagementErrors";
 import { useAssetManagementState } from "./useAssetManagementState";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
@@ -88,7 +89,9 @@ function DatasetManagementPanel({
         </button>
       </div>
       {state.datasetLoading ? <p role="status">데이터셋 목록 확인 중</p> : null}
-      {state.datasetError !== null ? <div className="error-box" role="alert">{state.datasetError}</div> : null}
+      {state.datasetError !== null ? (
+        <AssetManagementErrorNotice error={state.datasetError} />
+      ) : null}
       {state.datasetCatalog?.versions.length === 0 ? <div className="empty-state">저장 데이터셋이 없습니다.</div> : null}
       <div className="asset-management-list">
         {state.datasetCatalog?.versions.map((item) => (
@@ -96,6 +99,7 @@ function DatasetManagementPanel({
             active={item.version_id === activeDatasetVersionId}
             item={item}
             key={`${item.version_id}-${item.metadata_updated_at ?? "none"}`}
+            saved={state.savedId === item.version_id}
             saving={state.savingId === item.version_id}
             onActivate={() => onActivateDataset(item.version_id)}
             onMetadataChanged={onDatasetMetadataChanged}
@@ -123,6 +127,7 @@ function DatasetAssetEditor({
   onMetadataChanged,
   onDeleted,
   onSave,
+  saved,
   saving,
 }: {
   active: boolean;
@@ -131,6 +136,7 @@ function DatasetAssetEditor({
   onMetadataChanged: () => void;
   onDeleted: () => void;
   onSave: ReturnType<typeof useAssetManagementState>["onSaveDatasetMetadata"];
+  saved: boolean;
   saving: boolean;
 }) {
   const [label, setLabel] = useState(item.user_label ?? "");
@@ -182,6 +188,7 @@ function DatasetAssetEditor({
         >
           {saving ? "저장 중" : "이름 저장"}
         </button>
+        {saved ? <span className="field-note" role="status">이름과 메모를 저장했습니다.</span> : null}
         <button
           className="secondary-button"
           disabled={active || retention.isLoadingPreflight || retention.isDeleting}
@@ -205,7 +212,7 @@ function DatasetAssetEditor({
         />
       ) : null}
       {retention.error !== null ? (
-        <div className="error-box" role="alert">{retention.error}</div>
+        <AssetManagementErrorNotice error={retention.error} />
       ) : null}
     </article>
   );
@@ -228,13 +235,16 @@ function RegressionModelManagementPanel({
         </button>
       </div>
       {state.modelLoading ? <p role="status">회귀모델 목록 확인 중</p> : null}
-      {state.modelError !== null ? <div className="error-box" role="alert">{state.modelError}</div> : null}
+      {state.modelError !== null ? (
+        <AssetManagementErrorNotice error={state.modelError} />
+      ) : null}
       {state.modelCatalog?.models.length === 0 ? <div className="empty-state">저장 회귀모델이 없습니다.</div> : null}
       <div className="asset-management-list">
         {state.modelCatalog?.models.map((item) => (
           <ModelAssetEditor
             item={item}
             key={`${item.model_id}-${item.metadata_updated_at ?? "none"}`}
+            saved={state.savedId === item.model_id}
             saving={state.savingId === item.model_id}
             onSave={state.onSaveModelMetadata}
             onDeleted={state.onRefreshModels}
@@ -254,11 +264,13 @@ function ModelAssetEditor({
   item,
   onSave,
   onDeleted,
+  saved,
   saving,
 }: {
   item: RegressionModelCatalogItem;
   onSave: ReturnType<typeof useAssetManagementState>["onSaveModelMetadata"];
   onDeleted: () => void;
+  saved: boolean;
   saving: boolean;
 }) {
   const [label, setLabel] = useState(item.user_label ?? "");
@@ -317,6 +329,7 @@ function ModelAssetEditor({
         >
           {saving ? "저장 중" : "이름 저장"}
         </button>
+        {saved ? <span className="field-note" role="status">관리용 이름과 메모를 저장했습니다.</span> : null}
         <button
           className="secondary-button"
           disabled={retention.isLoadingPreflight || retention.isDeleting}
@@ -355,7 +368,9 @@ function ModelAssetEditor({
           )}
         </div>
       ) : null}
-      {retention.error !== null ? <div className="error-box" role="alert">{retention.error}</div> : null}
+      {retention.errorDetail !== null ? (
+        <AssetManagementErrorNotice error={retention.errorDetail} />
+      ) : null}
     </article>
   );
 }
@@ -472,4 +487,17 @@ function availabilityLabel(value: RegressionModelCatalogItem["availability"]) {
   if (value === "available") return "사용 가능";
   if (value === "source_stale") return "source stale";
   return "무결성 오류";
+}
+
+function AssetManagementErrorNotice({ error }: { error: AssetManagementError }) {
+  return (
+    <div className="error-box asset-management-error" role="alert">
+      <strong>{error.title}</strong>
+      <p>{error.message}</p>
+      <span className="field-note">오류 코드: {error.code}</span>
+      {error.correlationId !== null ? (
+        <span className="field-note">요청 ID: {error.correlationId}</span>
+      ) : null}
+    </div>
+  );
 }

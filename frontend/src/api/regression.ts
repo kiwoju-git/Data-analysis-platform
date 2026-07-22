@@ -1,4 +1,4 @@
-import { apiErrorCode, fetchApi } from "./client";
+import { apiErrorCode, apiRequestError, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type {
   RegressionModelDeleteRequest,
@@ -51,7 +51,7 @@ export async function updateRegressionModelMetadata(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "regression_model_metadata_update_failed"));
+    throw await apiRequestError(response, "regression_model_metadata_update_failed");
   }
   return (await response.json()) as RegressionModelMetadataResponse;
 }
@@ -63,7 +63,7 @@ export async function fetchRegressionModelDeletionPreflight(
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "regression_model_deletion_preflight_failed"));
+    throw await apiRequestError(response, "regression_model_deletion_preflight_failed");
   }
   return (await response.json()) as RegressionModelDeletionPreflightResponse;
 }
@@ -78,7 +78,7 @@ export async function deleteRegressionModel(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "regression_model_deletion_failed"));
+    throw await apiRequestError(response, "regression_model_deletion_failed");
   }
   return (await response.json()) as RegressionModelDeleteResponse;
 }

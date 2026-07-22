@@ -7,6 +7,7 @@ import {
   type DatasetVersionDeletionPreflightResponse,
 } from "./api";
 import { createLatestRequestGuard } from "./latestRequest";
+import { classifyAssetManagementError, type AssetManagementError } from "./assetManagementErrors";
 
 export function useDatasetVersionRetentionState(
   versionId: string,
@@ -15,7 +16,7 @@ export function useDatasetVersionRetentionState(
   const [preflight, setPreflight] =
     useState<DatasetVersionDeletionPreflightResponse | null>(null);
   const [deletion, setDeletion] = useState<DatasetVersionDeleteResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AssetManagementError | null>(null);
   const [isLoadingPreflight, setIsLoadingPreflight] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const preflightRequest = useRef(createLatestRequestGuard()).current;
@@ -54,9 +55,10 @@ export function useDatasetVersionRetentionState(
         .catch((fetchError) => {
           if (preflightRequest.isCurrent(request)) {
             setError(
-              fetchError instanceof Error
-                ? fetchError.message
-                : "dataset_version_deletion_preflight_failed",
+              classifyAssetManagementError(
+                fetchError,
+                "dataset_version_deletion_preflight_failed",
+              ),
             );
           }
         })
@@ -81,9 +83,7 @@ export function useDatasetVersionRetentionState(
         .catch((deleteError) => {
           if (deletionRequest.isCurrent(request)) {
             setError(
-              deleteError instanceof Error
-                ? deleteError.message
-                : "dataset_version_deletion_failed",
+              classifyAssetManagementError(deleteError, "dataset_version_deletion_failed"),
             );
           }
         })

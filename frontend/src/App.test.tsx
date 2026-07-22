@@ -632,6 +632,46 @@ describe("App", () => {
     expect(html).not.toContain("비활성");
   });
 
+  it("renders Bayesian Optimization as an available dedicated workflow", () => {
+    const method: AnalysisMethodListResponse["methods"][number] = {
+      method_id: "doe.bayesian_optimization",
+      method_version: "0.2.2",
+      module_id: "doe",
+      label_ko: "베이지안 최적화",
+      label_en: "Bayesian Optimization",
+      availability: "available",
+      execution_mode: "dedicated",
+      requires_dataset: false,
+      source_prerequisite: null,
+      order: 50,
+      disabled_reason: null,
+    };
+    const html = renderToString(
+      <AnalysisWorkbench
+        analysisRunError={null}
+        catalog={{
+          modules: [
+            { module_id: "doe", label_ko: "실험계획법", label_en: "DOE", order: 6 },
+          ],
+          methods: [method],
+        }}
+        profile={null}
+        selectedMethod={method}
+        selectedMethods={[method]}
+        selectedModuleId="doe"
+        version={datasetVersionTestResponse()}
+        onSelectMethod={() => undefined}
+        renderAnalysisFilters={() => <div>공통 데이터 필터</div>}
+        renderExecutableMethod={() => <div>Study 만들기</div>}
+      />,
+    );
+
+    expect(html).toContain("사용 가능 · 전용 워크플로");
+    expect(html).toContain("Study 만들기");
+    expect(html).not.toContain("계획됨");
+    expect(html).not.toContain("공통 데이터 필터");
+  });
+
   it("renders source-driven Predict and Response Optimizer workspace entry states", () => {
     const predictionHtml = renderToString(
       <RegressionPredictionWorkspace onNavigateToLinearModel={() => undefined} />,
