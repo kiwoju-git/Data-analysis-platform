@@ -14,7 +14,8 @@ Last updated: 2026-07-22
   OpenAPI/frontend contracts 164, 18 tutorial Markdown blocks, and production
   build. The separate real-API tutorial smoke passed all 18 sections in 17.5
   seconds, and Chromium E2E passed in 77.7 seconds after one test-selector
-  correction. This is development worktree evidence until committed and pushed.
+  correction. This is pre-commit development worktree evidence; clean pushed
+  SHA evidence is the hosted run recorded in the remote section.
 - The production build measured main at 513.58 kB / 124.25 kB gzip,
   Regression at 59.66/13.35 kB, Manage at 15.14/4.15 kB, Quality at
   64.25/11.97 kB, DOE at 111.15/26.22 kB, Help at 18.01/6.28 kB, and Report at
@@ -728,16 +729,37 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Remote GitHub Actions Verification
 
+- Public GitHub Actions REST inspection on 2026-07-22 verified push run
+  `29909222867` for main SHA
+  `fe1b7c36de0354e319d10038ccc939a612f3ed2e`. The run completed with
+  conclusion `success`.
+- The hosted `windows` job ran from `2026-07-22T09:45:22Z` through
+  `10:00:39Z` and completed successfully. The dependent `e2e` job started at
+  `10:00:42Z`, after Windows success, and completed successfully at
+  `10:02:52Z`. This directly verifies the configured `needs: windows` order.
+- Run artifact metadata reports one non-expired `e2e-logs` artifact,
+  ID `8525607052`, size 5,502 bytes. The public metadata endpoint was
+  accessible, but archive download returned `401 Unauthorized`; therefore its
+  internal entry list and raw-workspace absence were not independently
+  inspected in this environment.
+- `gh auth status --hostname github.com` and the requested `gh run list` still
+  could not be performed here because GitHub CLI is not installed. No install
+  was attempted. Public REST metadata was sufficient for run/job/artifact
+  existence, but not authenticated artifact download or the GitHub UI
+  `workflow_dispatch` button.
+- Branch protection and repository settings were not changed in this PR.
+
+### Historical Hosted Runs
+
 - Public GitHub Actions REST/UI inspection on 2026-07-21 verified push run
   `29834082053` for head SHA
   `413dba3e641522ac3238c3d23d54952791aee580`. It failed before creating any
   jobs or artifacts because the workflow used the `runner` context in
   job-level `env` at lines 36-38, where that context is unavailable. This was
   a workflow parse failure, not a Windows check or E2E test result.
-- The current workflow revision moves those values to step-level `env`/`with`
+- The subsequent workflow revision moved those values to step-level `env`/`with`
   fields while retaining runner-temp browser, workspace, and diagnostics
-  paths. A subsequent main push is required to provide real hosted Windows and
-  E2E evidence; local validation is not substituted for that run.
+  paths. The successful run above now supersedes this earlier pending state.
 - Follow-up run `29834322001` for `c1e393525e106225de4b194d3cc93fccf29c27d3`
   created the expected `windows` and dependent `e2e` jobs, proving the workflow
   parse fix. `windows` then failed after 782/784 backend tests passed: hosted
@@ -759,7 +781,7 @@ This satisfies the current repository-side requirement that main pushes should s
   PowerShell command-not-found error, confirming that GitHub CLI is not
   installed. The requested `gh run list`, `gh run view`, and artifact download
   checks therefore remain unavailable.
-- The failed run provides a current run ID/head SHA but no Windows/e2e job
+- That failed run provided a run ID/head SHA but no Windows/e2e job
   result/order and no `e2e-logs` artifact. Artifact inspection therefore
   remains pending a workflow run that reaches its jobs.
 - GitHub app checks against that commit returned no PR-filtered workflow runs
@@ -773,12 +795,10 @@ This satisfies the current repository-side requirement that main pushes should s
 - `gh`/`gh.exe` is not installed in the current environment, and no `GH*` or
   `GITHUB*` token environment variable is present, so authenticated run listing
   could not be performed here.
-- Branch protection and repository settings were not changed in this PR.
-- The remote `windows` job, remote `e2e` job, `needs: windows` execution order,
-  `e2e-logs` artifact upload, and GitHub UI `workflow_dispatch` manual-run
-  control have not been observed remotely yet from this environment. The
-  workflow file contains `workflow_dispatch`; the UI control still needs
-  authenticated GitHub UI or `gh` confirmation.
+- The current remote `windows` job, remote `e2e` job, `needs: windows`
+  execution order, and `e2e-logs` artifact existence have now been observed.
+  Artifact contents and the GitHub UI `workflow_dispatch` manual-run control
+  still need authenticated download/UI confirmation.
 
 Authenticated GitHub CLI verification commands:
 
@@ -791,9 +811,8 @@ gh run download <run-id> --repo kiwoju-git/Data-analysis-platform --name e2e-log
 
 When inspecting the `gh run view <run-id> --json ...` output or the GitHub run
 graph, verify that the `windows` job reached `success`, the `e2e` job exists,
-and the `e2e` job started only after `windows` completed successfully. The
-workflow encodes that ordering through `needs: windows`; hosted Actions still
-needs real-run confirmation.
+and the `e2e` job started only after `windows` completed successfully. Run
+`29909222867` provides that hosted confirmation for this push.
 
 Manual dispatch can be checked from the GitHub Actions UI by opening the `ci`
 workflow and confirming the Run workflow button is available for `main`.

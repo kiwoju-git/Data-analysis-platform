@@ -38,8 +38,8 @@ catalog evidence. Bayesian math, request/result/storage contracts, and method
 asset-user-metadata tables were added. Next:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
-2. Verify the resulting main push in remote GitHub Actions and review required Windows/E2E checks
-   and repository protection outside this code PR.
+2. Review required Windows/E2E checks and repository protection outside this code PR. Push run
+   `29909222867` already verifies the current hosted Windows/E2E workflow order and success.
 3. Reduce the measured main bundle through reviewed module boundaries without weakening active
    dataset/management selectors, loading/error handling, or direct-route behavior.
 4. Add separately contracted Predict/RSM/Optimizer/Bayesian dedicated HTML reports.

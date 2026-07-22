@@ -8,9 +8,10 @@ DataLab Studio is a Windows-targeted, CPU-only, local-first statistical analysis
 ## 현재 상태
 
 현재 저장소는 **internal alpha / release candidate 이전 단계**입니다. 핵심 workflow와
-synthetic critical-path 검증은 구현되어 있지만, clean Windows 11/Python 3.10/Node 22
-release gate와 최신 remote GitHub Actions 상태는 아직 별도 확인 대상입니다. 확인된
-개발 검증과 미확인 release evidence는 [CI 상태](docs/ci_status.md)에 구분해 기록합니다.
+synthetic critical-path 검증은 구현되어 있고 최신 main push의 hosted Windows/E2E Actions는
+성공했습니다. 다만 clean Windows 11/Python 3.10/Node 22 제품-host release gate는 아직 별도
+확인 대상입니다. 확인된 개발/hosted 검증과 미완료 release evidence는
+[CI 상태](docs/ci_status.md)에 구분해 기록합니다.
 
 ## 주요 기능
 

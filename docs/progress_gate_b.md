@@ -34,6 +34,10 @@ Last updated: 2026-07-22
   smoke 18/18, and Chromium E2E in 77.7 seconds. Main is 513.58 kB, Regression
   59.66 kB, and Manage 15.14 kB. These Windows 10/Python 3.10/Node 24 results
   do not close the Windows 11/Node 22 release gate.
+- Remote push run `29909222867` for main SHA `fe1b7c36de0354e319d10038ccc939a612f3ed2e`
+  passed both the hosted `windows` and dependent `e2e` jobs. The `e2e-logs`
+  artifact exists; its contents could not be downloaded without authentication.
+  Hosted success does not substitute for the separate Windows 11 product-host gate.
 
 ## Active Dataset And Interactive Regression Slice
 
