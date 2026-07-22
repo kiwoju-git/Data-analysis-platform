@@ -754,6 +754,16 @@ This satisfies the current repository-side requirement that main pushes should s
 
 ## Remote GitHub Actions Verification
 
+- Push run `29945533976` verified exact main SHA
+  `8002d6dcff43573301b596a1888acf69f3da570b`. Hosted `windows` completed
+  successfully, and the dependent `e2e` job then completed successfully; every
+  bootstrap, check, browser smoke, and upload step reported success.
+- The non-expired `e2e-logs` artifact is ID `8540492802`, 5,136 bytes, with
+  digest `sha256:325f9380482101a94f7aa4c412a4c4c42edee406234c73658974cad6d3edab4f`.
+  Authenticated connector inspection found only `logs/backend.log`,
+  `logs/e2e-diagnostics.log`, and `logs/frontend.log`. No workspace/data file,
+  absolute path, canonical JSONL, prediction-row JSONL, or metadata SQLite
+  marker was present.
 - Push run `29942544577` checked exact main SHA
   `b4cd7115660d66097994ba039a9462c73fdd2a4a` on hosted Windows Server 2025,
   CPython 3.10.11, and Node 22.23.1. Bootstrap succeeded; `Check` failed with

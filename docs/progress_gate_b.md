@@ -31,6 +31,9 @@ Last updated: 2026-07-23
   smoke 18/18, and the 84.9-second Chromium critical path. Main measured
   498.08 kB. The Windows 10/Python 3.10/Node 24 host does not close the
   Windows 11/Node 22 release gate.
+- Hosted run `29945533976` for main SHA `8002d6dcff43573301b596a1888acf69f3da570b`
+  passed both `windows` and dependent `e2e`. Its artifact contained only the
+  three scoped diagnostic logs and no raw workspace/data artifact.
 
 ## Normality, Interactive EDA, And Asset Management Slice
 
