@@ -173,7 +173,7 @@ export interface DatasetVersionDeletionCounts {
 }
 
 export interface DatasetVersionDeletionPreflightResponse {
-  preflight_schema_version: 1;
+  preflight_schema_version: 2;
   version_id: string;
   dataset_id: string;
   row_count: number;
@@ -181,20 +181,35 @@ export interface DatasetVersionDeletionPreflightResponse {
   version_number: number;
   deletion_scope: "version_only" | "dataset_root";
   deletion_ready: boolean;
+  dependency_ready: boolean;
+  integrity_state: "verified" | "legacy_repairable" | "unverified";
+  integrity_issue_codes: string[];
+  verified_delete_ready: boolean;
+  metadata_only_cleanup_ready: boolean;
+  preserved_unverified_file_count: number;
   blockers: string[];
   counts: DatasetVersionDeletionCounts;
   deletion_manifest_sha256: string;
+  verified_deletion_manifest_sha256: string | null;
+  metadata_only_deletion_manifest_sha256: string | null;
 }
 
 export interface DatasetVersionDeleteResponse {
-  deletion_schema_version: 1;
+  deletion_schema_version: 2;
   version_id: string;
   dataset_id: string;
   deletion_scope: "version_only" | "dataset_root";
   deletion_manifest_sha256: string;
   deleted_at: string;
   deleted_counts: DatasetVersionDeletionCounts;
-  cleanup_status: "deleted" | "quarantined_pending_cleanup";
+  deletion_mode:
+    | "verified_files_and_metadata"
+    | "metadata_only_preserve_unverified_files";
+  preserved_unverified_file_count: number;
+  cleanup_status:
+    | "deleted"
+    | "quarantined_pending_cleanup"
+    | "metadata_removed_files_preserved";
 }
 
 export interface DatasetVersionCatalogResponse {

@@ -418,6 +418,17 @@ export const apiRoutes = {
     return apiUrl(`/regression-models/${pathId(modelId)}/predictions`);
   },
 
+  regressionModelDependentPredictions(
+    modelId: string,
+    offset: number,
+    limit: number,
+  ): string {
+    return urlWithQuery(
+      `/regression-models/${pathId(modelId)}/predictions`,
+      new URLSearchParams({ offset: String(offset), limit: String(limit) }),
+    );
+  },
+
   regressionPredictionRows(predictionId: string, limit: number, offset: number): string {
     const query = new URLSearchParams({
       limit: String(limit),

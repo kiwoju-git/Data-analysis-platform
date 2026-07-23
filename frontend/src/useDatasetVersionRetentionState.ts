@@ -66,14 +66,23 @@ export function useDatasetVersionRetentionState(
           if (preflightRequest.isCurrent(request)) setIsLoadingPreflight(false);
         });
     },
-    onDelete: (current: DatasetVersionDeletionPreflightResponse) => {
-      if (current.version_id !== versionId || !current.deletion_ready) return;
+    onDelete: (
+      current: DatasetVersionDeletionPreflightResponse,
+      mode:
+        | "verified_files_and_metadata"
+        | "metadata_only_preserve_unverified_files" = "verified_files_and_metadata",
+    ) => {
+      const modeReady =
+        mode === "verified_files_and_metadata"
+          ? current.verified_delete_ready
+          : current.metadata_only_cleanup_ready;
+      if (current.version_id !== versionId || !modeReady) return;
       const request = deletionRequest.begin();
       preflightRequest.cancel();
       setError(null);
       setIsLoadingPreflight(false);
       setIsDeleting(true);
-      void deleteDatasetVersion(current)
+      void deleteDatasetVersion(current, mode)
         .then((response) => {
           if (!deletionRequest.isCurrent(request) || response.version_id !== versionId) return;
           setDeletion(response);

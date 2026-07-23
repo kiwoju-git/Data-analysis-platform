@@ -1536,6 +1536,42 @@ def list_dataset_version_catalog_records(
     ]
 
 
+def get_dataset_version_catalog_record(
+    workspace_root: Path,
+    version_id: str,
+) -> DatasetVersionCatalogRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT version.version_id, version.dataset_id, dataset.original_filename,
+                   version.version_number, version.row_count, version.column_count,
+                   version.created_at, metadata.user_label, metadata.note,
+                   COALESCE(metadata.pinned, 0), metadata.updated_at
+            FROM dataset_versions AS version
+            INNER JOIN datasets AS dataset ON dataset.dataset_id = version.dataset_id
+            LEFT JOIN dataset_version_user_metadata AS metadata
+                ON metadata.version_id = version.version_id
+            WHERE version.version_id = ?;
+            """,
+            (version_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return DatasetVersionCatalogRecord(
+        version_id=str(row[0]),
+        dataset_id=str(row[1]),
+        original_filename=str(row[2]),
+        version_number=_row_int(row[3]),
+        row_count=_row_int(row[4]),
+        column_count=_row_int(row[5]),
+        created_at=str(row[6]),
+        user_label=None if row[7] is None else str(row[7]),
+        note=None if row[8] is None else str(row[8]),
+        pinned=_row_bool(row[9]),
+        metadata_updated_at=None if row[10] is None else str(row[10]),
+    )
+
+
 def get_dataset_version_record(
     workspace_root: Path,
     version_id: str,
@@ -3013,6 +3049,34 @@ def count_regression_prediction_records_by_source(
     return count
 
 
+def list_regression_prediction_records_by_source(
+    workspace_root: Path,
+    *,
+    source_analysis_id: str,
+    model_id: str | None,
+) -> list[AnalysisRunRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
+                   status, result_path, result_sha256, stale, created_at, updated_at,
+                   completed_at, app_version
+            FROM analysis_runs
+            WHERE method_id = 'regression.predict'
+            ORDER BY created_at DESC, analysis_id;
+            """
+        ).fetchall()
+    return [
+        _analysis_run_from_row(row)
+        for row in rows
+        if _regression_prediction_config_references(
+            str(row[4]),
+            source_analysis_id=source_analysis_id,
+            model_id=model_id,
+        )
+    ]
+
+
 def count_attribute_control_phase_2_records_by_limit_set(
     workspace_root: Path,
     limit_set_id: str,
@@ -3536,6 +3600,130 @@ def delete_regression_model_record(
         artifact_deleted = connection.execute(
             "DELETE FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;",
             (expected_artifact.analysis_id, expected_artifact.artifact_id),
+        )
+        model_deleted = connection.execute(
+            "DELETE FROM regression_models WHERE model_id = ?;",
+            (expected_model.model_id,),
+        )
+        if artifact_deleted.rowcount != 1 or model_deleted.rowcount != 1:
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_regression_model_with_prediction_records(
+    workspace_root: Path,
+    *,
+    expected_model: RegressionModelRecord,
+    expected_source_run: AnalysisRunRecord,
+    expected_model_artifact: AnalysisArtifactRecord,
+    expected_predictions: list[tuple[AnalysisRunRecord, list[AnalysisArtifactRecord]]],
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        model_row = connection.execute(
+            """
+            SELECT model_id, analysis_id, dataset_version_id, method_id, method_version,
+                   manifest_path, manifest_sha256, schema_hash, created_at, app_version
+            FROM regression_models WHERE model_id = ?;
+            """,
+            (expected_model.model_id,),
+        ).fetchone()
+        source_row = connection.execute(
+            """
+            SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
+                   status, result_path, result_sha256, stale, created_at, updated_at,
+                   completed_at, app_version
+            FROM analysis_runs WHERE analysis_id = ?;
+            """,
+            (expected_source_run.analysis_id,),
+        ).fetchone()
+        artifact_row = connection.execute(
+            """
+            SELECT artifact_id, analysis_id, kind, path, sha256, media_type, created_at
+            FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;
+            """,
+            (expected_model_artifact.analysis_id, expected_model_artifact.artifact_id),
+        ).fetchone()
+        if model_row is None or source_row is None or artifact_row is None:
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+        if (
+            _regression_model_from_row(model_row) != expected_model
+            or _analysis_run_from_row(source_row) != expected_source_run
+            or _analysis_artifact_from_row(artifact_row) != expected_model_artifact
+        ):
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+
+        current_prediction_rows = connection.execute(
+            """
+            SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
+                   status, result_path, result_sha256, stale, created_at, updated_at,
+                   completed_at, app_version
+            FROM analysis_runs WHERE method_id = 'regression.predict';
+            """
+        ).fetchall()
+        current_prediction_ids = {
+            str(row[0])
+            for row in current_prediction_rows
+            if _regression_prediction_config_references(
+                str(row[4]),
+                source_analysis_id=expected_model.analysis_id,
+                model_id=expected_model.model_id,
+            )
+        }
+        expected_prediction_ids = {run.analysis_id for run, _ in expected_predictions}
+        if current_prediction_ids != expected_prediction_ids:
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+
+        for expected_run, expected_artifacts in expected_predictions:
+            run_row = connection.execute(
+                """
+                SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
+                       status, result_path, result_sha256, stale, created_at, updated_at,
+                       completed_at, app_version
+                FROM analysis_runs WHERE analysis_id = ?;
+                """,
+                (expected_run.analysis_id,),
+            ).fetchone()
+            artifact_rows = connection.execute(
+                """
+                SELECT artifact_id, analysis_id, kind, path, sha256, media_type, created_at
+                FROM analysis_artifacts WHERE analysis_id = ?
+                ORDER BY created_at DESC, rowid DESC;
+                """,
+                (expected_run.analysis_id,),
+            ).fetchall()
+            current_artifacts = [_analysis_artifact_from_row(row) for row in artifact_rows]
+            if (
+                run_row is None
+                or _analysis_run_from_row(run_row) != expected_run
+                or current_artifacts != expected_artifacts
+                or expected_run.method_id != "regression.predict"
+                or _connection_count(
+                    connection,
+                    "SELECT COUNT(*) FROM jobs WHERE analysis_id = ?;",
+                    expected_run.analysis_id,
+                )
+            ):
+                raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+
+        for expected_run, _ in expected_predictions:
+            deleted = connection.execute(
+                "DELETE FROM analysis_runs WHERE analysis_id = ?;",
+                (expected_run.analysis_id,),
+            )
+            if deleted.rowcount != 1:
+                raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+
+        artifact_deleted = connection.execute(
+            "DELETE FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;",
+            (expected_model_artifact.analysis_id, expected_model_artifact.artifact_id),
         )
         model_deleted = connection.execute(
             "DELETE FROM regression_models WHERE model_id = ?;",

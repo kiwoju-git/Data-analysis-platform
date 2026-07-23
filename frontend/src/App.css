@@ -2066,6 +2066,26 @@ td {
   overflow-wrap: anywhere;
 }
 
+.asset-dependent-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.asset-dependent-item {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.asset-dependent-item > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
 .asset-metadata-fields {
   display: grid;
   gap: 10px;

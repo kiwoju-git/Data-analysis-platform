@@ -57,7 +57,13 @@ Only the active dataset version ID continues to use session storage.
 
 Successful metadata updates show an explicit saved state and refresh the
 catalog metadata timestamp. A dependency-blocked deletion is an intended
-protection state with counts, not a failed or missing API route.
+protection state with counts, not a failed or missing API route. Dataset
+integrity failures can offer metadata-only cleanup only when all dependency
+counts are zero; unverified files remain untouched. Model impact shows bounded
+dependent-prediction descriptors, Report Center links, individual prediction
+deletion through the existing analysis-run contract, and an opt-in atomic
+model-plus-predictions operation guarded by a separate irreversible
+confirmation.
 
 ## Version Decision
 

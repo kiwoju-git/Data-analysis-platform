@@ -9,6 +9,7 @@ from app.analyses.registry import METHOD_VERSIONS
 from app.core.config import Settings
 from app.main import create_app
 from app.storage.metadata import (
+    WorkspaceAssetStorageConflict,
     get_attribute_control_limit_set_record,
     get_regression_model_record,
 )
@@ -70,18 +71,39 @@ def test_regression_model_deletion_preserves_source_analysis_and_blocks_predicti
                 "expected_deletion_manifest_sha256": blocked_preflight["deletion_manifest_sha256"],
             },
         )
+        dependent_page = client.get(
+            f"/api/v1/regression-models/{second['model_id']}/predictions",
+            params={"offset": 0, "limit": 20},
+        )
+        cascaded = client.request(
+            "DELETE",
+            f"/api/v1/regression-models/{second['model_id']}",
+            json={
+                "confirmation_model_id": second["model_id"],
+                "expected_deletion_manifest_sha256": blocked_preflight[
+                    "cascade_deletion_manifest_sha256"
+                ],
+                "mode": "model_and_predictions",
+            },
+        )
+        prediction_after_cascade = client.get(
+            f"/api/v1/analysis-runs/{prediction.json()['prediction_id']}"
+        )
+        source_after_cascade = client.get(f"/api/v1/analysis-runs/{second['analysis_id']}/result")
+        dataset_after_cascade = client.get(
+            f"/api/v1/dataset-versions/{second['dataset_version_id']}"
+        )
 
     assert preflight_response.status_code == 200
     assert preflight["deletion_ready"] is True
     assert preflight["blockers"] == []
-    assert preflight["counts"] == {
-        "regression_model_count": 1,
-        "manifest_artifact_count": 1,
-        "manifest_file_count": 1,
-        "manifest_file_bytes": manifest_size,
-        "metadata_record_count": 2,
-        "dependent_prediction_count": 0,
-    }
+    assert preflight["counts"]["regression_model_count"] == 1
+    assert preflight["counts"]["manifest_artifact_count"] == 1
+    assert preflight["counts"]["manifest_file_count"] == 1
+    assert preflight["counts"]["manifest_file_bytes"] == manifest_size
+    assert preflight["counts"]["metadata_record_count"] == 2
+    assert preflight["counts"]["dependent_prediction_count"] == 0
+    assert preflight["counts"]["dependent_prediction_file_count"] == 0
     assert wrong_confirmation.status_code == 409
     assert wrong_confirmation.json()["error"]["code"] == (
         "regression_model_deletion_confirmation_mismatch"
@@ -103,9 +125,27 @@ def test_regression_model_deletion_preserves_source_analysis_and_blocks_predicti
     assert blocked_preflight["deletion_ready"] is False
     assert blocked_preflight["blockers"] == ["regression_model_deletion_prediction_dependency"]
     assert blocked_preflight["counts"]["dependent_prediction_count"] == 1
+    assert blocked_preflight["cascade_deletion_ready"] is True
+    assert blocked_preflight["cascade_deletion_manifest_sha256"] is not None
+    assert len(blocked_preflight["dependent_predictions"]) == 1
+    assert (
+        blocked_preflight["dependent_predictions"][0]["analysis_id"]
+        == (prediction.json()["prediction_id"])
+    )
     assert blocked.status_code == 409
     assert blocked.json()["error"]["code"] == "regression_model_deletion_blocked"
     assert str(tmp_path) not in json.dumps(blocked.json())
+    assert dependent_page.status_code == 200, dependent_page.text
+    assert dependent_page.json()["total"] == 1
+    assert dependent_page.json()["predictions"][0]["target_dataset_display_name"].startswith(
+        "Dataset v"
+    )
+    assert str(tmp_path) not in dependent_page.text
+    assert cascaded.status_code == 200, cascaded.text
+    assert cascaded.json()["deletion_mode"] == "model_and_predictions"
+    assert prediction_after_cascade.status_code == 404
+    assert source_after_cascade.status_code == 200
+    assert dataset_after_cascade.status_code == 200
 
 
 def test_limit_set_deletion_preserves_phase_one_and_blocks_phase_two(tmp_path: Path) -> None:
@@ -214,6 +254,56 @@ def test_workspace_asset_quarantine_recovery_restores_uncommitted_moves(
     assert not model_quarantine.exists() and not limit_quarantine.exists()
     assert model_restored.status_code == 200
     assert limit_restored.status_code == 200
+
+
+def test_model_prediction_cascade_restores_files_on_database_conflict(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        model = _create_linear_model(client)
+        prediction = client.post(
+            f"/api/v1/regression-models/{model['model_id']}/predictions",
+            json={
+                "dataset_version_id": model["dataset_version_id"],
+                "confidence_level": 0.95,
+                "missing_policy": "complete_case",
+                "include_intervals": True,
+            },
+        ).json()
+        preflight = client.get(
+            f"/api/v1/regression-models/{model['model_id']}/deletion-preflight"
+        ).json()
+        record = get_regression_model_record(tmp_path, model["model_id"])
+        assert record is not None
+        model_path = tmp_path / record.manifest_path
+
+        def conflict(*args, **kwargs):
+            del args, kwargs
+            raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
+
+        monkeypatch.setattr(
+            "app.services.workspace_asset_retention."
+            "delete_regression_model_with_prediction_records",
+            conflict,
+        )
+        response = client.request(
+            "DELETE",
+            f"/api/v1/regression-models/{model['model_id']}",
+            json={
+                "confirmation_model_id": model["model_id"],
+                "expected_deletion_manifest_sha256": preflight["cascade_deletion_manifest_sha256"],
+                "mode": "model_and_predictions",
+            },
+        )
+        prediction_after = client.get(f"/api/v1/analysis-runs/{prediction['prediction_id']}/result")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "regression_model_deletion_conflict"
+    assert model_path.exists()
+    assert get_regression_model_record(tmp_path, model["model_id"]) is not None
+    assert prediction_after.status_code == 200
 
 
 def test_limit_set_can_be_deleted_after_source_schema_marks_analysis_stale(

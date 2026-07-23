@@ -39,7 +39,10 @@ export interface RegressionModelRetentionState {
   manifest: RegressionModelManifestResponse | null;
   preflight: RegressionModelDeletionPreflightResponse | null;
   onClear: () => void;
-  onDelete: (preflight: RegressionModelDeletionPreflightResponse) => void;
+  onDelete: (
+    preflight: RegressionModelDeletionPreflightResponse,
+    mode?: "model_only" | "model_and_predictions",
+  ) => void;
   onLoadPreflight: () => void;
   onRetryAvailability: () => void;
 }
@@ -165,7 +168,7 @@ export function useRegressionModelRetentionState(
         });
     },
     onRetryAvailability: checkAvailability,
-    onDelete: (currentPreflight) => {
+    onDelete: (currentPreflight, mode = "model_only") => {
       if (modelId === null || currentPreflight.model_id !== modelId) return;
       const request = deletionRequest.begin();
       preflightRequest.cancel();
@@ -176,7 +179,10 @@ export function useRegressionModelRetentionState(
       void deleteRegressionModel(modelId, {
         confirmation_model_id: modelId,
         expected_deletion_manifest_sha256:
-          currentPreflight.deletion_manifest_sha256,
+          mode === "model_and_predictions"
+            ? (currentPreflight.cascade_deletion_manifest_sha256 ?? "")
+            : currentPreflight.deletion_manifest_sha256,
+        mode,
       })
         .then((response) => {
           if (deletionRequest.isCurrent(request)) {

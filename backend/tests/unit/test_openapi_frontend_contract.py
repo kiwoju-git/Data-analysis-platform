@@ -621,6 +621,14 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="regressionModelDependentPredictions",
+        method="get",
+        path="/api/v1/regression-models/{model_id}/predictions",
+        success_status="200",
+        response_schema="RegressionModelDependentPredictionPage",
+        parameters=frozenset({("model_id", "path"), ("offset", "query"), ("limit", "query")}),
+    ),
+    OperationContract(
         route_name="regressionPredictionRows",
         method="get",
         path="/api/v1/regression-models/predictions/{prediction_id}/rows",
@@ -719,9 +727,14 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "method_id",
                 "method_version",
                 "deletion_ready",
+                "cascade_deletion_ready",
                 "blockers",
+                "cascade_blockers",
                 "counts",
                 "deletion_manifest_sha256",
+                "cascade_deletion_manifest_sha256",
+                "dependent_predictions",
+                "dependent_predictions_truncated",
             }
         ),
         required_fields=frozenset(
@@ -732,15 +745,26 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "method_id",
                 "method_version",
                 "deletion_ready",
+                "cascade_deletion_ready",
                 "blockers",
+                "cascade_blockers",
                 "counts",
                 "deletion_manifest_sha256",
+                "dependent_predictions",
+                "dependent_predictions_truncated",
             }
         ),
+        property_refs=(("counts", "RegressionModelDeletionCounts"),),
+        array_item_refs=(
+            ("dependent_predictions", "RegressionModelDependentPredictionDescriptor"),
+        ),
+        property_consts=(("preflight_schema_version", 2),),
     ),
     SchemaComponentContract(
         name="RegressionModelDeleteRequest",
-        properties=frozenset({"confirmation_model_id", "expected_deletion_manifest_sha256"}),
+        properties=frozenset(
+            {"confirmation_model_id", "expected_deletion_manifest_sha256", "mode"}
+        ),
         required_fields=frozenset({"confirmation_model_id", "expected_deletion_manifest_sha256"}),
     ),
     SchemaComponentContract(
@@ -2425,9 +2449,17 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "version_number",
                 "deletion_scope",
                 "deletion_ready",
+                "dependency_ready",
+                "integrity_state",
+                "integrity_issue_codes",
+                "verified_delete_ready",
+                "metadata_only_cleanup_ready",
+                "preserved_unverified_file_count",
                 "blockers",
                 "counts",
                 "deletion_manifest_sha256",
+                "verified_deletion_manifest_sha256",
+                "metadata_only_deletion_manifest_sha256",
             }
         ),
         required_fields=frozenset(
@@ -2440,13 +2472,19 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "version_number",
                 "deletion_scope",
                 "deletion_ready",
+                "dependency_ready",
+                "integrity_state",
+                "integrity_issue_codes",
+                "verified_delete_ready",
+                "metadata_only_cleanup_ready",
+                "preserved_unverified_file_count",
                 "blockers",
                 "counts",
                 "deletion_manifest_sha256",
             }
         ),
         property_refs=(("counts", "DatasetVersionDeletionCounts"),),
-        property_consts=(("preflight_schema_version", 1),),
+        property_consts=(("preflight_schema_version", 2),),
     ),
     SchemaComponentContract(
         name="DatasetVersionDeleteResponse",
@@ -2459,6 +2497,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "deletion_manifest_sha256",
                 "deleted_at",
                 "deleted_counts",
+                "deletion_mode",
+                "preserved_unverified_file_count",
                 "cleanup_status",
             }
         ),
@@ -2471,11 +2511,13 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "deletion_manifest_sha256",
                 "deleted_at",
                 "deleted_counts",
+                "deletion_mode",
+                "preserved_unverified_file_count",
                 "cleanup_status",
             }
         ),
         property_refs=(("deleted_counts", "DatasetVersionDeletionCounts"),),
-        property_consts=(("deletion_schema_version", 1),),
+        property_consts=(("deletion_schema_version", 2),),
     ),
     SchemaComponentContract(
         name="RegressionModelMetadataResponse",

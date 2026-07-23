@@ -178,7 +178,9 @@ def test_dataset_version_deletion_blocks_analysis_and_rejects_stale_confirmation
     assert "dataset_version_deletion_job_dependency" in payload["blockers"]
 
 
-def test_dataset_version_preflight_rejects_tampered_and_escaped_artifact(tmp_path) -> None:
+def test_dataset_version_preflight_preserves_tampered_or_escaped_files_for_metadata_cleanup(
+    tmp_path,
+) -> None:
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:
         version = _upload_and_confirm(client)
@@ -191,10 +193,35 @@ def test_dataset_version_preflight_rejects_tampered_and_escaped_artifact(tmp_pat
         tampered = client.get(
             f"/api/v1/dataset-versions/{version['version_id']}/deletion-preflight"
         )
-        assert tampered.status_code == 409
-        assert tampered.json()["error"]["code"] == "dataset_version_artifact_mismatch"
+        assert tampered.status_code == 200
+        tampered_payload = tampered.json()
+        assert tampered_payload["integrity_state"] == "unverified"
+        assert tampered_payload["verified_delete_ready"] is False
+        assert tampered_payload["metadata_only_cleanup_ready"] is True
+        assert tampered_payload["integrity_issue_codes"] == ["dataset_version_artifact_mismatch"]
+        cleaned = client.request(
+            "DELETE",
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion",
+            json={
+                "confirmation_version_id": version["version_id"],
+                "expected_deletion_manifest_sha256": tampered_payload[
+                    "metadata_only_deletion_manifest_sha256"
+                ],
+                "mode": "metadata_only_preserve_unverified_files",
+            },
+        )
+        assert cleaned.status_code == 200
+        assert cleaned.json()["cleanup_status"] == "metadata_removed_files_preserved"
+        assert path.exists()
 
-        path.write_bytes(b"restored")
+        escaped_version = _upload_and_confirm(client)
+        canonical = get_dataset_artifact_record(
+            settings.workspace_root,
+            escaped_version["version_id"],
+            "canonical_rows",
+        )
+        assert canonical is not None
+
         with sqlite3.connect(metadata_db_path(settings.workspace_root)) as connection:
             connection.execute(
                 "UPDATE dataset_artifacts SET path = ?, sha256 = ?, size_bytes = ? "
@@ -206,9 +233,71 @@ def test_dataset_version_preflight_rejects_tampered_and_escaped_artifact(tmp_pat
                     canonical.artifact_id,
                 ),
             )
-        escaped = client.get(f"/api/v1/dataset-versions/{version['version_id']}/deletion-preflight")
-    assert escaped.status_code == 409
-    assert escaped.json()["error"]["code"] == "dataset_version_path_invalid"
+        escaped = client.get(
+            f"/api/v1/dataset-versions/{escaped_version['version_id']}/deletion-preflight"
+        )
+    assert escaped.status_code == 200
+    assert escaped.json()["integrity_state"] == "unverified"
+    assert escaped.json()["integrity_issue_codes"] == ["dataset_version_path_invalid"]
+
+
+def test_dataset_version_preflight_accepts_windows_backslash_metadata(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_and_confirm(client)
+        with sqlite3.connect(metadata_db_path(settings.workspace_root)) as connection:
+            connection.execute(
+                "UPDATE datasets SET stored_path = REPLACE(stored_path, '/', '\\') "
+                "WHERE dataset_id = ?;",
+                (version["dataset_id"],),
+            )
+            connection.execute(
+                "UPDATE dataset_artifacts SET path = REPLACE(path, '/', '\\') "
+                "WHERE version_id = ?;",
+                (version["version_id"],),
+            )
+        preflight = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion-preflight"
+        )
+
+    assert preflight.status_code == 200, preflight.text
+    assert preflight.json()["integrity_state"] == "verified"
+    assert preflight.json()["verified_delete_ready"] is True
+
+
+def test_missing_dataset_file_can_only_remove_metadata_and_preserves_other_files(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_and_confirm(client)
+        artifacts = list_dataset_artifact_records(
+            settings.workspace_root, str(version["version_id"])
+        )
+        missing = artifacts[0]
+        missing_path = settings.workspace_root / missing.path
+        preserved_paths = [settings.workspace_root / artifact.path for artifact in artifacts[1:]]
+        missing_path.unlink()
+        preflight = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion-preflight"
+        ).json()
+        assert preflight["integrity_issue_codes"] == ["dataset_version_file_missing"]
+        response = client.request(
+            "DELETE",
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion",
+            json={
+                "confirmation_version_id": version["version_id"],
+                "expected_deletion_manifest_sha256": preflight[
+                    "metadata_only_deletion_manifest_sha256"
+                ],
+                "mode": "metadata_only_preserve_unverified_files",
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["preserved_unverified_file_count"] >= 1
+    assert all(path.exists() for path in preserved_paths)
+    assert get_dataset_version_record(settings.workspace_root, version["version_id"]) is None
 
 
 def test_dataset_quarantine_recovery_restores_valid_file(tmp_path) -> None:

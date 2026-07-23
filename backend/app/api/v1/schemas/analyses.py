@@ -1510,22 +1510,61 @@ class RegressionModelDeletionCounts(BaseModel):
     manifest_artifact_count: Literal[1]
     manifest_file_count: Literal[1]
     manifest_file_bytes: int = Field(ge=0)
-    metadata_record_count: Literal[2]
+    metadata_record_count: int = Field(ge=2)
     dependent_prediction_count: int = Field(ge=0)
+    dependent_prediction_file_count: int = Field(default=0, ge=0)
+    dependent_prediction_export_count: int = Field(default=0, ge=0)
+    dependent_prediction_file_bytes: int = Field(default=0, ge=0)
+
+
+class RegressionModelDependentPredictionDescriptor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prediction_id: UUID
+    analysis_id: UUID
+    target_dataset_version_id: UUID | None
+    target_dataset_display_name: str
+    created_at: str
+    completed_at: str | None
+    row_count_total: int = Field(ge=0)
+    row_count_predicted: int = Field(ge=0)
+    row_count_excluded: int = Field(ge=0)
+    stale: bool
+    result_available: bool
+    deletion_ready: bool
+    blocker_codes: list[str]
+
+
+class RegressionModelDependentPredictionPage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: UUID
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    total: int = Field(ge=0)
+    returned: int = Field(ge=0)
+    has_previous: bool
+    has_next: bool
+    predictions: list[RegressionModelDependentPredictionDescriptor]
 
 
 class RegressionModelDeletionPreflightResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    preflight_schema_version: Literal[1]
+    preflight_schema_version: Literal[2]
     model_id: UUID
     source_analysis_id: UUID
     method_id: Literal["regression.linear_model"]
     method_version: str
     deletion_ready: bool
+    cascade_deletion_ready: bool
     blockers: list[str]
+    cascade_blockers: list[str]
     counts: RegressionModelDeletionCounts
     deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    cascade_deletion_manifest_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    dependent_predictions: list[RegressionModelDependentPredictionDescriptor]
+    dependent_predictions_truncated: bool
 
 
 class RegressionModelDeleteRequest(BaseModel):
@@ -1533,17 +1572,19 @@ class RegressionModelDeleteRequest(BaseModel):
 
     confirmation_model_id: UUID
     expected_deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    mode: Literal["model_only", "model_and_predictions"] = "model_only"
 
 
 class RegressionModelDeleteResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    deletion_schema_version: Literal[1]
+    deletion_schema_version: Literal[2]
     model_id: UUID
     source_analysis_id: UUID
     deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     deleted_at: str
     deleted_counts: RegressionModelDeletionCounts
+    deletion_mode: Literal["model_only", "model_and_predictions"]
     cleanup_status: Literal["deleted", "quarantined_pending_cleanup"]
 
 

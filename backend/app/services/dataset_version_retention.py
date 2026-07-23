@@ -1,8 +1,9 @@
 import hashlib
 import os
 import re
+import stat
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -26,8 +27,8 @@ from app.storage.metadata import (
     list_dataset_records_by_id_prefix,
 )
 
-DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[1] = 1
-DATASET_VERSION_DELETION_SCHEMA_VERSION: Literal[1] = 1
+DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[2] = 2
+DATASET_VERSION_DELETION_SCHEMA_VERSION: Literal[2] = 2
 _ARTIFACT_QUARANTINE = re.compile(r"^\.delete-d-([0-9a-f]{12})-([0-9a-f]{8})\.q$")
 _RAW_QUARANTINE = re.compile(r"^\.delete-u-([0-9a-f]{12})-([0-9a-f]{8})\.q$")
 
@@ -62,7 +63,11 @@ class _DeletionContext:
     blockers: tuple[str, ...]
     counts: DatasetVersionDeletionCounts
     deletion_scope: Literal["version_only", "dataset_root"]
-    manifest_sha256: str
+    integrity_state: Literal["verified", "legacy_repairable", "unverified"]
+    integrity_issue_codes: tuple[str, ...]
+    verified_manifest_sha256: str | None
+    metadata_only_manifest_sha256: str | None
+    preserved_unverified_file_count: int
 
 
 def get_dataset_version_deletion_preflight(
@@ -81,15 +86,56 @@ def delete_stored_dataset_version(
         raise _confirmation_error()
     context = _deletion_context(settings, version_id)
     preflight = _preflight_response(context)
-    if not preflight.deletion_ready:
+    mode = body.mode
+    mode_ready = (
+        preflight.verified_delete_ready
+        if mode == "verified_files_and_metadata"
+        else preflight.metadata_only_cleanup_ready
+    )
+    expected_manifest = (
+        context.verified_manifest_sha256
+        if mode == "verified_files_and_metadata"
+        else context.metadata_only_manifest_sha256
+    )
+    if not mode_ready:
         raise ApiError(
             code="dataset_version_deletion_blocked",
             message="이 데이터셋 버전을 참조하는 저장 자산이 있어 삭제할 수 없습니다.",
             status_code=status.HTTP_409_CONFLICT,
             developer_detail=",".join(preflight.blockers),
         )
-    if body.expected_deletion_manifest_sha256 != context.manifest_sha256:
+    if expected_manifest is None or body.expected_deletion_manifest_sha256 != expected_manifest:
         raise _confirmation_error()
+
+    if mode == "metadata_only_preserve_unverified_files":
+        try:
+            delete_dataset_version_records(
+                settings.workspace_root,
+                expected_snapshot=context.snapshot,
+            )
+        except DatasetVersionStorageConflict as exc:
+            error_code = (
+                "dataset_version_deletion_blocked"
+                if exc.code == "dataset_version_deletion_blocked"
+                else "dataset_version_deletion_conflict"
+            )
+            raise ApiError(
+                code=error_code,
+                message="삭제 확인 후 데이터셋 참조 또는 메타데이터가 변경되었습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            ) from exc
+        return DatasetVersionDeleteResponse(
+            deletion_schema_version=DATASET_VERSION_DELETION_SCHEMA_VERSION,
+            version_id=version_id,
+            dataset_id=UUID(context.snapshot.dataset.dataset_id),
+            deletion_scope=context.deletion_scope,
+            deletion_manifest_sha256=expected_manifest,
+            deleted_at=utc_now(),
+            deleted_counts=context.counts,
+            deletion_mode=mode,
+            preserved_unverified_file_count=context.preserved_unverified_file_count,
+            cleanup_status="metadata_removed_files_preserved",
+        )
 
     quarantined: list[_QuarantinedFile] = []
     try:
@@ -140,9 +186,11 @@ def delete_stored_dataset_version(
         version_id=version_id,
         dataset_id=UUID(context.snapshot.dataset.dataset_id),
         deletion_scope=context.deletion_scope,
-        deletion_manifest_sha256=context.manifest_sha256,
+        deletion_manifest_sha256=expected_manifest,
         deleted_at=utc_now(),
         deleted_counts=context.counts,
+        deletion_mode=mode,
+        preserved_unverified_file_count=0,
         cleanup_status=cleanup_status,
     )
 
@@ -168,6 +216,98 @@ def recover_dataset_version_quarantine_files(
 
 
 def _deletion_context(settings: Settings, version_id: UUID) -> _DeletionContext:
+    try:
+        return _verified_deletion_context(settings, version_id)
+    except ApiError as exc:
+        integrity_codes = {
+            "dataset_version_artifact_mismatch",
+            "dataset_version_file_missing",
+            "dataset_version_path_invalid",
+        }
+        if exc.code not in integrity_codes:
+            raise
+        snapshot = get_dataset_version_deletion_snapshot(
+            settings.workspace_root,
+            str(version_id),
+        )
+        if snapshot is None:
+            raise ApiError(
+                code="dataset_version_not_found",
+                message="요청한 데이터셋 버전을 찾을 수 없습니다.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            ) from exc
+        blockers, counts, scope = _snapshot_deletion_summary(snapshot)
+        issue_codes = (exc.code,)
+        preserved_file_count = len(snapshot.artifacts) + (
+            1 if snapshot.sibling_version_count == 0 else 0
+        )
+        manifest_payload = {
+            "preflight_schema_version": DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION,
+            "mode": "metadata_only_preserve_unverified_files",
+            "version": snapshot.version.__dict__,
+            "dataset_id": snapshot.dataset.dataset_id,
+            "columns": [column.__dict__ for column in snapshot.columns],
+            "artifacts": [artifact.__dict__ for artifact in snapshot.artifacts],
+            "user_metadata": (
+                None if snapshot.user_metadata is None else snapshot.user_metadata.__dict__
+            ),
+            "deletion_scope": scope,
+            "blockers": blockers,
+            "counts": counts.model_dump(mode="json"),
+            "integrity_issue_codes": issue_codes,
+            "preserved_unverified_file_count": preserved_file_count,
+        }
+        return _DeletionContext(
+            snapshot=snapshot,
+            files=(),
+            blockers=tuple(blockers),
+            counts=counts,
+            deletion_scope=scope,
+            integrity_state="unverified",
+            integrity_issue_codes=issue_codes,
+            verified_manifest_sha256=None,
+            metadata_only_manifest_sha256=hashlib.sha256(
+                canonical_json_bytes(manifest_payload)
+            ).hexdigest(),
+            preserved_unverified_file_count=preserved_file_count,
+        )
+
+
+def _snapshot_deletion_summary(
+    snapshot: DatasetVersionDeletionSnapshot,
+) -> tuple[list[str], DatasetVersionDeletionCounts, Literal["version_only", "dataset_root"]]:
+    dependencies = snapshot.dependencies
+    blockers: list[str] = []
+    if dependencies.analysis_run_count or dependencies.analysis_export_count:
+        blockers.append("dataset_version_deletion_analysis_dependency")
+    if dependencies.regression_model_count:
+        blockers.append("dataset_version_deletion_regression_model_dependency")
+    if dependencies.prediction_source_count or dependencies.prediction_target_count:
+        blockers.append("dataset_version_deletion_prediction_dependency")
+    if dependencies.attribute_control_limit_set_count or dependencies.phase_2_analysis_count:
+        blockers.append("dataset_version_deletion_limit_set_dependency")
+    if dependencies.job_count:
+        blockers.append("dataset_version_deletion_job_dependency")
+    last_version = snapshot.sibling_version_count == 0
+    counts = DatasetVersionDeletionCounts(
+        dataset_version_count=1,
+        dataset_root_count=1 if last_version else 0,
+        dataset_column_count=len(snapshot.columns),
+        dataset_artifact_count=len(snapshot.artifacts),
+        artifact_file_count=len(snapshot.artifacts),
+        artifact_file_bytes=sum(artifact.size_bytes for artifact in snapshot.artifacts),
+        raw_upload_file_count=1 if last_version else 0,
+        raw_upload_file_bytes=snapshot.dataset.size_bytes if last_version else 0,
+        sibling_version_count=snapshot.sibling_version_count,
+        **dependencies.__dict__,
+    )
+    scope: Literal["version_only", "dataset_root"] = (
+        "dataset_root" if last_version else "version_only"
+    )
+    return blockers, counts, scope
+
+
+def _verified_deletion_context(settings: Settings, version_id: UUID) -> _DeletionContext:
     snapshot = get_dataset_version_deletion_snapshot(settings.workspace_root, str(version_id))
     if snapshot is None:
         raise ApiError(
@@ -233,7 +373,8 @@ def _deletion_context(settings: Settings, version_id: UUID) -> _DeletionContext:
             / "raw"
             / f"source{suffix}"
         )
-        if snapshot.dataset.stored_path != expected_raw.as_posix():
+        normalized_raw = _normalized_relative_path(snapshot.dataset.stored_path)
+        if normalized_raw.as_posix().casefold() != expected_raw.as_posix().casefold():
             raise _artifact_error("dataset_version_path_invalid")
         raw_path = _validated_owned_path(
             settings.workspace_root,
@@ -285,6 +426,7 @@ def _deletion_context(settings: Settings, version_id: UUID) -> _DeletionContext:
     )
     manifest_payload = {
         "preflight_schema_version": DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION,
+        "mode": "verified_files_and_metadata",
         "version": snapshot.version.__dict__,
         "dataset": {
             "dataset_id": snapshot.dataset.dataset_id,
@@ -307,12 +449,26 @@ def _deletion_context(settings: Settings, version_id: UUID) -> _DeletionContext:
         blockers=tuple(blockers),
         counts=counts,
         deletion_scope=scope,
-        manifest_sha256=hashlib.sha256(canonical_json_bytes(manifest_payload)).hexdigest(),
+        integrity_state="verified",
+        integrity_issue_codes=(),
+        verified_manifest_sha256=hashlib.sha256(canonical_json_bytes(manifest_payload)).hexdigest(),
+        metadata_only_manifest_sha256=None,
+        preserved_unverified_file_count=0,
     )
 
 
 def _preflight_response(context: _DeletionContext) -> DatasetVersionDeletionPreflightResponse:
     version = context.snapshot.version
+    dependency_ready = not context.blockers
+    verified_ready = dependency_ready and context.integrity_state == "verified"
+    metadata_only_ready = dependency_ready and context.integrity_state != "verified"
+    selected_manifest = (
+        context.verified_manifest_sha256
+        if verified_ready
+        else context.metadata_only_manifest_sha256
+    )
+    if selected_manifest is None:
+        selected_manifest = "0" * 64
     return DatasetVersionDeletionPreflightResponse(
         preflight_schema_version=DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION,
         version_id=UUID(version.version_id),
@@ -321,10 +477,18 @@ def _preflight_response(context: _DeletionContext) -> DatasetVersionDeletionPref
         column_count=version.column_count,
         version_number=version.version_number,
         deletion_scope=context.deletion_scope,
-        deletion_ready=not context.blockers,
+        deletion_ready=verified_ready or metadata_only_ready,
+        dependency_ready=dependency_ready,
+        integrity_state=context.integrity_state,
+        integrity_issue_codes=list(context.integrity_issue_codes),
+        verified_delete_ready=verified_ready,
+        metadata_only_cleanup_ready=metadata_only_ready,
+        preserved_unverified_file_count=context.preserved_unverified_file_count,
         blockers=list(context.blockers),
         counts=context.counts,
-        deletion_manifest_sha256=context.manifest_sha256,
+        deletion_manifest_sha256=selected_manifest,
+        verified_deletion_manifest_sha256=context.verified_manifest_sha256,
+        metadata_only_deletion_manifest_sha256=context.metadata_only_manifest_sha256,
     )
 
 
@@ -336,12 +500,17 @@ def _validated_owned_path(
     sha256: str,
     size_bytes: int,
 ) -> Path:
-    relative = Path(relative_value)
-    if relative.is_absolute() or ".." in relative.parts or relative.parent != expected_parent:
+    relative = _normalized_relative_path(relative_value)
+    if relative.parent.as_posix().casefold() != expected_parent.as_posix().casefold():
         raise _artifact_error("dataset_version_path_invalid")
     root = workspace_root.resolve()
     path = workspace_root / relative
-    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents if parent != root):
+    cursor = root
+    for component in relative.parts:
+        cursor /= component
+        if _is_reparse_point(cursor):
+            raise _artifact_error("dataset_version_path_invalid")
+    if path.is_symlink():
         raise _artifact_error("dataset_version_path_invalid")
     try:
         resolved = path.resolve(strict=True)
@@ -356,6 +525,33 @@ def _validated_owned_path(
     if not _file_matches(resolved, sha256, size_bytes):
         raise _artifact_error("dataset_version_artifact_mismatch")
     return resolved
+
+
+def _normalized_relative_path(relative_value: str) -> Path:
+    normalized = relative_value.replace("\\", "/")
+    if (
+        not normalized
+        or normalized.startswith("/")
+        or normalized.startswith("//")
+        or re.match(r"^[A-Za-z]:", normalized)
+        or "\x00" in normalized
+        or any(component in {"", ".", ".."} for component in normalized.split("/"))
+    ):
+        raise _artifact_error("dataset_version_path_invalid")
+    relative = PurePosixPath(normalized)
+    if relative.is_absolute():
+        raise _artifact_error("dataset_version_path_invalid")
+    return Path(*relative.parts)
+
+
+def _is_reparse_point(path: Path) -> bool:
+    try:
+        stat_result = path.lstat()
+    except FileNotFoundError:
+        return False
+    file_attributes = getattr(stat_result, "st_file_attributes", 0)
+    reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return path.is_symlink() or bool(file_attributes & reparse_attribute)
 
 
 def _file_matches(path: Path, sha256: str, size_bytes: int) -> bool:

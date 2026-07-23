@@ -74,6 +74,7 @@ export {
 export {
   deleteRegressionModel,
   fetchRegressionModelDeletionPreflight,
+  fetchRegressionModelDependentPredictions,
   fetchRegressionModelManifest,
   fetchRegressionModels,
   updateRegressionModelMetadata,

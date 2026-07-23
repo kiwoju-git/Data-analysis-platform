@@ -162,34 +162,71 @@ export interface RegressionModelDeletionCounts {
   manifest_artifact_count: 1;
   manifest_file_count: 1;
   manifest_file_bytes: number;
-  metadata_record_count: 2;
+  metadata_record_count: number;
   dependent_prediction_count: number;
+  dependent_prediction_file_count: number;
+  dependent_prediction_export_count: number;
+  dependent_prediction_file_bytes: number;
+}
+
+export interface RegressionModelDependentPredictionDescriptor {
+  prediction_id: string;
+  analysis_id: string;
+  target_dataset_version_id: string | null;
+  target_dataset_display_name: string;
+  created_at: string;
+  completed_at: string | null;
+  row_count_total: number;
+  row_count_predicted: number;
+  row_count_excluded: number;
+  stale: boolean;
+  result_available: boolean;
+  deletion_ready: boolean;
+  blocker_codes: string[];
+}
+
+export interface RegressionModelDependentPredictionPage {
+  model_id: string;
+  offset: number;
+  limit: number;
+  total: number;
+  returned: number;
+  has_previous: boolean;
+  has_next: boolean;
+  predictions: RegressionModelDependentPredictionDescriptor[];
 }
 
 export interface RegressionModelDeletionPreflightResponse {
-  preflight_schema_version: 1;
+  preflight_schema_version: 2;
   model_id: string;
   source_analysis_id: string;
   method_id: "regression.linear_model";
   method_version: string;
   deletion_ready: boolean;
+  cascade_deletion_ready: boolean;
   blockers: string[];
+  cascade_blockers: string[];
   counts: RegressionModelDeletionCounts;
   deletion_manifest_sha256: string;
+  cascade_deletion_manifest_sha256: string | null;
+  dependent_predictions: RegressionModelDependentPredictionDescriptor[];
+  dependent_predictions_truncated: boolean;
 }
 
 export interface RegressionModelDeleteRequest {
   confirmation_model_id: string;
   expected_deletion_manifest_sha256: string;
+  mode?: "model_only" | "model_and_predictions";
 }
 
 export interface RegressionModelDeleteResponse {
-  deletion_schema_version: 1;
+  deletion_schema_version: 2;
   model_id: string;
   source_analysis_id: string;
   deletion_manifest_sha256: string;
   deleted_at: string;
   deleted_counts: RegressionModelDeletionCounts;
+  deletion_mode: "model_only" | "model_and_predictions";
   cleanup_status: "deleted" | "quarantined_pending_cleanup";
 }
 

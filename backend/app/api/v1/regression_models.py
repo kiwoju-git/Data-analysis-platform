@@ -7,6 +7,7 @@ from app.api.v1.schemas.analyses import (
     RegressionModelDeleteRequest,
     RegressionModelDeleteResponse,
     RegressionModelDeletionPreflightResponse,
+    RegressionModelDependentPredictionPage,
     RegressionModelManifestResponse,
     RegressionModelMetadataResponse,
     RegressionModelMetadataUpdateRequest,
@@ -29,6 +30,7 @@ from app.services.regression_models import (
 from app.services.workspace_asset_retention import (
     delete_stored_regression_model,
     get_regression_model_deletion_preflight,
+    list_regression_model_dependent_predictions,
 )
 
 router = APIRouter(prefix="/regression-models", tags=["regression-models"])
@@ -119,6 +121,24 @@ def get_regression_model_deletion_preflight_route(
     return get_regression_model_deletion_preflight(
         settings=request.app.state.settings,
         model_id=model_id,
+    )
+
+
+@router.get(
+    "/{model_id}/predictions",
+    response_model=RegressionModelDependentPredictionPage,
+)
+def list_regression_model_dependent_predictions_route(
+    request: Request,
+    model_id: UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> RegressionModelDependentPredictionPage:
+    return list_regression_model_dependent_predictions(
+        settings=request.app.state.settings,
+        model_id=model_id,
+        offset=offset,
+        limit=limit,
     )
 
 

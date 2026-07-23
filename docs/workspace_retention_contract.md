@@ -33,7 +33,15 @@ control limit set, or is referenced by a job is blocked. DOE-design,
 response-revision, bulk, and automatic deletion remain unavailable.
 
 Deleting a regression-model asset never deletes or rewrites its source linear-
-model analysis result. The source fit remains restorable, but the UI rechecks
+model analysis result. Dependent predictions block the default model-only
+operation. An explicit `model_and_predictions` mode is available only when
+every dependent prediction passes its existing analysis-run deletion
+preflight. Its manifest binds the exact model manifest, prediction analysis
+IDs, per-run deletion manifests, file/export counts, and bytes. All files move
+to same-directory quarantine before one DB transaction removes only those
+prediction runs/artifacts and the model record/artifact. Failure restores all
+moved files; source fit, source/target datasets, and unrelated predictions are
+preserved. The source fit remains restorable, but the UI rechecks
 the checksum-validated model GET on every displayed current or restored fit.
 A missing model is shown as `unavailable_or_deleted`; manifest/path/checksum
 failures are shown separately as `integrity_error`. Both states disable new
@@ -82,7 +90,9 @@ of this graph, not a claim that the whole application is metadata-only.
     pending. Short names avoid UUID duplication and Windows path-limit issues.
 12. Regression-model deletion validates the model row, source analysis, source
     result model reference, manifest payload, artifact row, exact path,
-    SHA-256, and size. Any dependent prediction blocks deletion.
+    SHA-256, and size. A dependent prediction blocks model-only deletion;
+    explicit cascade additionally validates every prediction result/config/row
+    artifact and analysis-run blocker.
 13. Limit-set deletion validates the immutable asset, metadata row, source
     result/config hashes, exact path, SHA-256, and size. Any referencing Phase
     II analysis blocks deletion. A stale source may still shed a verified asset;
@@ -104,6 +114,7 @@ of this graph, not a claim that the whole application is metadata-only.
 - `GET /api/v1/analysis-runs/{analysis_id}/deletion-preflight`
 - `DELETE /api/v1/analysis-runs/{analysis_id}/deletion`
 - `GET /api/v1/regression-models/{model_id}/deletion-preflight`
+- `GET /api/v1/regression-models/{model_id}/predictions?offset=&limit=`
 - `DELETE /api/v1/regression-models/{model_id}`
 - `GET /api/v1/quality/attribute-control-limit-sets/{limit_set_id}/deletion-preflight`
 - `DELETE /api/v1/quality/attribute-control-limit-sets/{limit_set_id}`
@@ -158,6 +169,7 @@ Regression-model deletion uses stable blockers and errors including:
 - `regression_model_artifact_mismatch`
 - `regression_model_source_analysis_invalid`
 - `regression_model_source_result_mismatch`
+- `regression_model_deletion_prediction_integrity_blocked`
 
 Limit-set deletion uses stable blockers and errors including:
 
@@ -202,10 +214,11 @@ delete removes only the owning `analysis_runs` row and its
 prediction run is eligible only after its result/config/rows/model relations
 validate. A source linear-model run remains blocked by its model record.
 
-Regression-model and limit-set preflight/delete operational schemas are 1.
-They report one owned file, byte and metadata counts, dependent prediction or
-Phase II counts, blockers, and a canonical manifest SHA without returning an
-internal path, filename, predictor value, or raw observation.
+Regression-model preflight/delete operational schemas are 2; limit-set schemas
+remain 1. Model preflight includes a bounded safe prediction preview, a paged
+descriptor route, model-only and cascade readiness, exact file/export counts,
+and separate canonical manifests. It returns no internal path, coefficient,
+predictor value, raw prediction row, or raw observation.
 
 ## Filesystem Ownership Contract For Later Slices
 
@@ -276,11 +289,12 @@ public or statistical artifact schema.
 Regression-model and limit-set deletion likewise do not change calculations,
 immutable manifest/asset meaning, source results, or SQLite relations. Method
 versions, result/config schemas, model manifest schema 2, limit-set asset schema
-1, and the then-current database relations remained unchanged. Their operational preflight and
-deletion-response schemas start at 1.
+1, and the then-current database relations remained unchanged. Limit-set
+operational schemas remain 1; regression-model preflight/delete schemas are 2
+for bounded prediction descriptors and an explicit atomic cascade mode.
 
 The current dataset-version/user-metadata slice advances SQLite to schema 15
 for `dataset_version_user_metadata` and `regression_model_user_metadata` only.
 Dataset deletion uses existing ownership keys plus operational preflight/delete
-schema 1. No statistical method, result/config schema, dataset schema hash, or
+schema 2. No statistical method, result/config schema, dataset schema hash, or
 model manifest schema is changed by this migration.

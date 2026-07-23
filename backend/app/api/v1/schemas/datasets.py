@@ -258,7 +258,7 @@ class DatasetVersionDeletionCounts(BaseModel):
 class DatasetVersionDeletionPreflightResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    preflight_schema_version: Literal[1]
+    preflight_schema_version: Literal[2]
     version_id: UUID
     dataset_id: UUID
     row_count: int = Field(ge=0)
@@ -266,9 +266,19 @@ class DatasetVersionDeletionPreflightResponse(BaseModel):
     version_number: int = Field(ge=1)
     deletion_scope: Literal["version_only", "dataset_root"]
     deletion_ready: bool
+    dependency_ready: bool
+    integrity_state: Literal["verified", "legacy_repairable", "unverified"]
+    integrity_issue_codes: list[str]
+    verified_delete_ready: bool
+    metadata_only_cleanup_ready: bool
+    preserved_unverified_file_count: int = Field(ge=0)
     blockers: list[str]
     counts: DatasetVersionDeletionCounts
     deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    verified_deletion_manifest_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    metadata_only_deletion_manifest_sha256: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
 
 
 class DatasetVersionDeleteRequest(BaseModel):
@@ -276,19 +286,32 @@ class DatasetVersionDeleteRequest(BaseModel):
 
     confirmation_version_id: UUID
     expected_deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    mode: Literal[
+        "verified_files_and_metadata",
+        "metadata_only_preserve_unverified_files",
+    ] = "verified_files_and_metadata"
 
 
 class DatasetVersionDeleteResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    deletion_schema_version: Literal[1]
+    deletion_schema_version: Literal[2]
     version_id: UUID
     dataset_id: UUID
     deletion_scope: Literal["version_only", "dataset_root"]
     deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     deleted_at: str
     deleted_counts: DatasetVersionDeletionCounts
-    cleanup_status: Literal["deleted", "quarantined_pending_cleanup"]
+    deletion_mode: Literal[
+        "verified_files_and_metadata",
+        "metadata_only_preserve_unverified_files",
+    ]
+    preserved_unverified_file_count: int = Field(ge=0)
+    cleanup_status: Literal[
+        "deleted",
+        "quarantined_pending_cleanup",
+        "metadata_removed_files_preserved",
+    ]
 
 
 class DatasetVersionCatalogResponse(BaseModel):

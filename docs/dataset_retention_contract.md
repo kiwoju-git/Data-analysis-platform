@@ -14,8 +14,8 @@ APIs:
 - `GET /api/v1/dataset-versions/{version_id}/deletion-preflight`
 - `DELETE /api/v1/dataset-versions/{version_id}/deletion`
 
-Both operational schemas start at 1. Delete requires the exact version ID and
-the current `deletion_manifest_sha256` returned by preflight.
+Operational preflight and delete-response schemas are 2. Delete requires the
+exact version ID, an explicit mode, and that mode's current manifest SHA.
 
 ## Dependency Graph
 
@@ -39,8 +39,13 @@ Stable blocker codes include:
 Every `dataset_artifacts` row for the target version is required to resolve
 under `workspaces/datasets/{dataset_id}/versions/{version_id}`. Canonical rows
 and canonical manifest are mandatory; a profile artifact is included when it
-exists. Preflight rejects absolute or escaping paths, symlinks, duplicate
-paths, missing/non-file entries, size mismatch, and SHA-256 mismatch.
+exists. Stored relative paths normalize Windows `\` to `/` and compare the
+recognized workspace layout case-insensitively. Drive-letter, UNC, absolute,
+escaping, empty-component, and unrecognized layouts remain invalid. Reparse
+checks begin at the workspace root's children, so a workspace root that is
+itself on a Windows junction does not invalidate every asset. Preflight rejects
+symlinks, duplicate paths, missing/non-file entries, size mismatch, and SHA-256
+mismatch.
 
 If another version belongs to the same dataset root, deletion scope is
 `version_only`: only the target version, columns, user metadata, artifact rows,
@@ -49,6 +54,23 @@ root remain. If this is the last version, scope is `dataset_root` and the exact
 recorded `raw/source.<type>` file is also verified and removed with the root
 metadata. API responses expose counts and hashes, not internal paths or raw
 filenames.
+
+## Integrity Modes
+
+Dependency counting is independent of file verification. Preflight reports
+`integrity_state`, issue codes, and two mutually exclusive operations:
+
+- `verified_files_and_metadata` retains checksum/path/size validation,
+  quarantine, transaction, restore, and recovery behavior.
+- `metadata_only_preserve_unverified_files` is offered only when every inbound
+  dependency count is zero and physical file ownership cannot be verified.
+
+Metadata-only cleanup never opens, moves, hashes, or unlinks an unverified
+file. It removes the exact version/column/artifact/user-metadata snapshot in a
+`BEGIN IMMEDIATE` transaction and may remove the last dataset-root metadata
+row, while leaving raw and artifact bytes on disk. The response reports the
+preserved-file count and warns that disk space might not be reclaimed.
+Absolute/escaping or symlink metadata therefore cannot delete an external file.
 
 ## Transaction And Recovery
 
@@ -82,6 +104,10 @@ version must be changed first. Successful deletion refreshes both the manager
 and active selector catalogs. The confirmation shows only the user label or
 catalog filename, row count, and short version ID; it never shows a workspace
 path.
+
+For an unverified, dependency-free version the UI presents a separate checkbox
+and `파일을 보존하고 목록에서 제거` action. It is never offered for a
+referenced or active version.
 
 The UI distinguishes a generic route 404 (runtime contract mismatch) from
 `dataset_version_not_found`, dependency blockers, optimistic metadata conflict,

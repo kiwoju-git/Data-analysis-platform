@@ -187,13 +187,24 @@ export async function fetchDatasetVersionDeletionPreflight(
 
 export async function deleteDatasetVersion(
   preflight: DatasetVersionDeletionPreflightResponse,
+  mode:
+    | "verified_files_and_metadata"
+    | "metadata_only_preserve_unverified_files" = "verified_files_and_metadata",
 ): Promise<DatasetVersionDeleteResponse> {
+  const manifest =
+    mode === "verified_files_and_metadata"
+      ? preflight.verified_deletion_manifest_sha256
+      : preflight.metadata_only_deletion_manifest_sha256;
+  if (manifest === null) {
+    throw new Error("dataset_version_deletion_mode_not_ready");
+  }
   const response = await fetchApi(apiRoutes.datasetVersionDeletion(preflight.version_id), {
     method: "DELETE",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify({
       confirmation_version_id: preflight.version_id,
-      expected_deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+      expected_deletion_manifest_sha256: manifest,
+      mode,
     }),
   });
   if (!response.ok) {

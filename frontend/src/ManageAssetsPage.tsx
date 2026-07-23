@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
 import type {
+  AnalysisRunDeletionPreflightResponse,
   DatasetVersionCatalogItem,
+  RegressionModelDependentPredictionDescriptor,
   RegressionModelCatalogItem,
+} from "./api";
+import {
+  deleteStoredAnalysisRun,
+  fetchAnalysisRunDeletionPreflight,
 } from "./api";
 import type { AssetManagementError } from "./assetManagementErrors";
 import { formatLocalDateTime } from "./dateFormat";
@@ -144,6 +150,7 @@ function DatasetAssetEditor({
   const [note, setNote] = useState(item.note ?? "");
   const [pinned, setPinned] = useState(item.pinned);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [metadataOnlyConfirmed, setMetadataOnlyConfirmed] = useState(false);
   const retention = useDatasetVersionRetentionState(item.version_id, onDeleted);
   return (
     <article className="asset-management-item">
@@ -210,7 +217,9 @@ function DatasetAssetEditor({
           preflight={retention.preflight}
           deleting={retention.isDeleting}
           onConfirmedChange={setDeleteConfirmed}
-          onDelete={() => retention.onDelete(retention.preflight!)}
+          metadataOnlyConfirmed={metadataOnlyConfirmed}
+          onMetadataOnlyConfirmedChange={setMetadataOnlyConfirmed}
+          onDelete={(mode) => retention.onDelete(retention.preflight!, mode)}
         />
       ) : null}
       {retention.error !== null ? (
@@ -279,6 +288,7 @@ function ModelAssetEditor({
   const [note, setNote] = useState(item.note ?? "");
   const [pinned, setPinned] = useState(item.pinned);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [cascadeConfirmed, setCascadeConfirmed] = useState(false);
   const retention = useRegressionModelRetentionState(item.model_id);
   const deletionNotificationRef = useRef<string | null>(null);
   useEffect(() => {
@@ -346,6 +356,25 @@ function ModelAssetEditor({
           <span>
             종속 예측 {retention.preflight.counts.dependent_prediction_count.toLocaleString()}건
           </span>
+          {retention.preflight.dependent_predictions.length > 0 ? (
+            <details>
+              <summary>종속 예측 위치와 삭제 작업</summary>
+              <div className="asset-dependent-list">
+                {retention.preflight.dependent_predictions.map((prediction) => (
+                  <DependentPredictionItem
+                    key={prediction.analysis_id}
+                    prediction={prediction}
+                    onDeleted={retention.onLoadPreflight}
+                  />
+                ))}
+              </div>
+              {retention.preflight.dependent_predictions_truncated ? (
+                <span className="field-note">
+                  첫 5건만 표시합니다. 전체 목록은 향후 페이지 탐색 API로 확인할 수 있습니다.
+                </span>
+              ) : null}
+            </details>
+          ) : null}
           {retention.preflight.deletion_ready ? (
             <>
               <label className="checkbox-field">
@@ -366,7 +395,44 @@ function ModelAssetEditor({
               </button>
             </>
           ) : (
-            <span>종속 예측 결과를 먼저 삭제해야 합니다.</span>
+            <>
+              <span>
+                각 예측을 위에서 직접 삭제하거나, 아래에서 모든 종속 예측과 모델을
+                원자적으로 함께 삭제할 수 있습니다.
+              </span>
+              {retention.preflight.cascade_deletion_ready ? (
+                <>
+                  <label className="checkbox-field">
+                    <input
+                      checked={cascadeConfirmed}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setCascadeConfirmed(event.currentTarget.checked)
+                      }
+                    />
+                    <span>
+                      종속 예측 {retention.preflight.counts.dependent_prediction_count}건과
+                      모델을 함께 영구 삭제하는 영향을 확인했습니다.
+                    </span>
+                  </label>
+                  <button
+                    className="danger-button"
+                    disabled={!cascadeConfirmed || retention.isDeleting}
+                    onClick={() =>
+                      retention.onDelete(retention.preflight!, "model_and_predictions")
+                    }
+                    type="button"
+                  >
+                    {retention.isDeleting ? "삭제 중" : "예측과 모델 함께 삭제"}
+                  </button>
+                </>
+              ) : (
+                <span className="field-note">
+                  종속 예측 중 검증되지 않았거나 삭제 blocker가 있는 항목이 있어 일괄
+                  삭제할 수 없습니다.
+                </span>
+              )}
+            </>
           )}
         </div>
       ) : null}
@@ -377,19 +443,136 @@ function ModelAssetEditor({
   );
 }
 
+function DependentPredictionItem({
+  onDeleted,
+  prediction,
+}: {
+  onDeleted: () => void;
+  prediction: RegressionModelDependentPredictionDescriptor;
+}) {
+  const [preflight, setPreflight] =
+    useState<AnalysisRunDeletionPreflightResponse | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPreflight = () => {
+    setBusy(true);
+    setError(null);
+    void fetchAnalysisRunDeletionPreflight(prediction.analysis_id)
+      .then(setPreflight)
+      .catch((requestError) =>
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "analysis_run_deletion_preflight_failed",
+        ),
+      )
+      .finally(() => setBusy(false));
+  };
+  const deletePrediction = () => {
+    if (preflight === null || !preflight.deletion_ready || !confirmed) return;
+    setBusy(true);
+    setError(null);
+    void deleteStoredAnalysisRun(prediction.analysis_id, {
+      confirmation_analysis_id: prediction.analysis_id,
+      expected_deletion_manifest_sha256: preflight.deletion_manifest_sha256,
+    })
+      .then(() => {
+        setPreflight(null);
+        onDeleted();
+      })
+      .catch((requestError) =>
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "analysis_run_delete_failed",
+        ),
+      )
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <article className="asset-dependent-item">
+      <div>
+        <strong>{prediction.target_dataset_display_name}</strong>
+        <span>
+          {formatLocalDateTime(prediction.created_at)} · 전체{" "}
+          {prediction.row_count_total.toLocaleString()}행 · 예측{" "}
+          {prediction.row_count_predicted.toLocaleString()}행
+        </span>
+        <span>
+          {prediction.stale ? "stale" : "current"} · ID {shortId(prediction.analysis_id)}
+        </span>
+      </div>
+      <div className="button-row">
+        <a
+          className="secondary-button link-button"
+          href={`/reports?tab=reports&method_id=regression.predict&analysis_id=${encodeURIComponent(prediction.analysis_id)}`}
+        >
+          리포트에서 열기
+        </a>
+        <button
+          className="secondary-button"
+          disabled={busy}
+          onClick={loadPreflight}
+          type="button"
+        >
+          {busy ? "확인 중" : "삭제 영향 확인"}
+        </button>
+      </div>
+      {preflight !== null ? (
+        preflight.deletion_ready ? (
+          <>
+            <label className="checkbox-field">
+              <input
+                checked={confirmed}
+                type="checkbox"
+                onChange={(event) => setConfirmed(event.currentTarget.checked)}
+              />
+              <span>이 예측 결과만 영구 삭제합니다.</span>
+            </label>
+            <button
+              className="danger-button"
+              disabled={busy || !confirmed}
+              onClick={deletePrediction}
+              type="button"
+            >
+              예측 결과 삭제
+            </button>
+          </>
+        ) : (
+          <span className="field-note">
+            blocker: {preflight.blockers.join(", ")}
+          </span>
+        )
+      ) : null}
+      {error !== null ? <span className="error-text">{error}</span> : null}
+    </article>
+  );
+}
+
 function DatasetDeletionImpact({
   confirmed,
   deleting,
   item,
+  metadataOnlyConfirmed,
   onConfirmedChange,
   onDelete,
+  onMetadataOnlyConfirmedChange,
   preflight,
 }: {
   confirmed: boolean;
   deleting: boolean;
   item: DatasetVersionCatalogItem;
+  metadataOnlyConfirmed: boolean;
   onConfirmedChange: (confirmed: boolean) => void;
-  onDelete: () => void;
+  onDelete: (
+    mode:
+      | "verified_files_and_metadata"
+      | "metadata_only_preserve_unverified_files",
+  ) => void;
+  onMetadataOnlyConfirmedChange: (confirmed: boolean) => void;
   preflight: import("./api").DatasetVersionDeletionPreflightResponse;
 }) {
   const counts = preflight.counts;
@@ -415,7 +598,7 @@ function DatasetDeletionImpact({
         <span>job {counts.job_count.toLocaleString()}건</span>
         <span>다른 버전 {counts.sibling_version_count.toLocaleString()}개</span>
       </div>
-      {preflight.deletion_ready ? (
+      {preflight.verified_delete_ready ? (
         <>
           <p>
             {preflight.deletion_scope === "dataset_root"
@@ -435,10 +618,38 @@ function DatasetDeletionImpact({
           <button
             className="secondary-button danger-button"
             disabled={!confirmed || deleting}
-            onClick={onDelete}
+            onClick={() => onDelete("verified_files_and_metadata")}
             type="button"
           >
             {deleting ? "삭제 중" : "데이터셋 버전 삭제"}
+          </button>
+        </>
+      ) : preflight.metadata_only_cleanup_ready ? (
+        <>
+          <strong>파일 검증 실패 · 목록에서만 안전하게 정리 가능</strong>
+          <p>
+            저장 경로나 checksum을 확인할 수 없어 실제 파일은 삭제하지 않습니다.
+            데이터셋 메타데이터만 제거하며 최대{" "}
+            {preflight.preserved_unverified_file_count.toLocaleString()}개 파일이 디스크에
+            남을 수 있습니다.
+          </p>
+          <label className="checkbox-field">
+            <input
+              checked={metadataOnlyConfirmed}
+              type="checkbox"
+              onChange={(event) =>
+                onMetadataOnlyConfirmedChange(event.currentTarget.checked)
+              }
+            />
+            <span>검증되지 않은 파일을 보존하고 목록에서만 제거하는 것을 확인했습니다.</span>
+          </label>
+          <button
+            className="secondary-button danger-button"
+            disabled={!metadataOnlyConfirmed || deleting}
+            onClick={() => onDelete("metadata_only_preserve_unverified_files")}
+            type="button"
+          >
+            {deleting ? "정리 중" : "파일을 보존하고 목록에서 제거"}
           </button>
         </>
       ) : (

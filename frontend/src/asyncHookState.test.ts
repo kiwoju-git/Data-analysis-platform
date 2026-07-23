@@ -639,7 +639,11 @@ describe("async workbench hooks", () => {
     const preflight = {
       version_id: "version-a",
       deletion_ready: true,
+      verified_delete_ready: true,
+      metadata_only_cleanup_ready: false,
       deletion_manifest_sha256: "a".repeat(64),
+      verified_deletion_manifest_sha256: "a".repeat(64),
+      metadata_only_deletion_manifest_sha256: null,
     } as DatasetVersionDeletionPreflightResponse;
     const response = {
       version_id: "version-a",
@@ -655,7 +659,10 @@ describe("async workbench hooks", () => {
     await runner.act(() => runner.output.onLoadPreflight());
     await runner.act(() => runner.output.onDelete(runner.output.preflight!));
 
-    expect(apiMocks.deleteDatasetVersion).toHaveBeenCalledWith(preflight);
+    expect(apiMocks.deleteDatasetVersion).toHaveBeenCalledWith(
+      preflight,
+      "verified_files_and_metadata",
+    );
     expect(runner.output.deletion).toEqual(response);
     expect(onDeleted).toHaveBeenCalledWith(response);
     runner.unmount();
@@ -1070,6 +1077,37 @@ describe("async workbench hooks", () => {
     expect(runner.output.deletedModelId).toBe("model-a");
     expect(runner.output.availability).toBe("unavailable_or_deleted");
     expect(runner.output.availabilityError).toBe("regression_model_not_found");
+    runner.unmount();
+  });
+
+  it("binds an explicit model cascade to the cascade manifest", async () => {
+    const preflight = {
+      model_id: "model-a",
+      deletion_ready: false,
+      cascade_deletion_ready: true,
+      deletion_manifest_sha256: "a".repeat(64),
+      cascade_deletion_manifest_sha256: "b".repeat(64),
+    } as RegressionModelDeletionPreflightResponse;
+    apiMocks.fetchRegressionModelDeletionPreflight.mockResolvedValue(preflight);
+    apiMocks.deleteRegressionModel.mockResolvedValue({
+      model_id: "model-a",
+      deletion_mode: "model_and_predictions",
+    } as RegressionModelDeleteResponse);
+    const runner = new HookRunner<
+      Parameters<typeof useRegressionModelRetentionState>[0],
+      ReturnType<typeof useRegressionModelRetentionState>
+    >(useRegressionModelRetentionState, "model-a");
+    await runner.flush();
+    await runner.act(() => runner.output.onLoadPreflight());
+    await runner.act(() =>
+      runner.output.onDelete(runner.output.preflight!, "model_and_predictions"),
+    );
+
+    expect(apiMocks.deleteRegressionModel).toHaveBeenCalledWith("model-a", {
+      confirmation_model_id: "model-a",
+      expected_deletion_manifest_sha256: "b".repeat(64),
+      mode: "model_and_predictions",
+    });
     runner.unmount();
   });
 

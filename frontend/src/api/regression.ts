@@ -4,6 +4,7 @@ import type {
   RegressionModelDeleteRequest,
   RegressionModelDeleteResponse,
   RegressionModelDeletionPreflightResponse,
+  RegressionModelDependentPredictionPage,
   RegressionModelManifestResponse,
   RegressionModelCatalogResponse,
   RegressionModelMetadataResponse,
@@ -81,6 +82,24 @@ export async function deleteRegressionModel(
     throw await apiRequestError(response, "regression_model_deletion_failed");
   }
   return (await response.json()) as RegressionModelDeleteResponse;
+}
+
+export async function fetchRegressionModelDependentPredictions(
+  modelId: string,
+  offset = 0,
+  limit = 20,
+): Promise<RegressionModelDependentPredictionPage> {
+  const response = await fetchApi(
+    apiRoutes.regressionModelDependentPredictions(modelId, offset, limit),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw await apiRequestError(
+      response,
+      "regression_model_dependent_predictions_failed",
+    );
+  }
+  return (await response.json()) as RegressionModelDependentPredictionPage;
 }
 
 export async function fetchRegressionPredictionPreflight(
