@@ -9,11 +9,28 @@ DataLab Studio is developed as a local single-user application for Windows 11, P
 
 ## Initial Setup
 
-Run the shared bootstrap from the repository root in PowerShell:
+With Git available, clone the repository and run the shared bootstrap from the
+repository root in PowerShell:
 
 ```powershell
+git clone https://github.com/kiwoju-git/Data-analysis-platform.git
+cd Data-analysis-platform
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```
+
+In a restricted environment where Git cannot be installed or executed, use
+GitHub's **Download ZIP**, extract it to a new directory, and run the same
+bootstrap command from the extracted project root. Git is not required for
+this path. To update, extract a newer ZIP into a separate source directory and
+run bootstrap there. The default runtime workspace remains under
+`%LOCALAPPDATA%\DataLabStudio\`; it is separate from either source directory.
+
+`dev.ps1` identifies a normal checkout by its exact 40-character Git commit.
+When `.git` or Git is unavailable, it instead calculates a deterministic
+`archive-sha256-...` identity from runtime source relative paths and file
+contents. Extraction location and timestamps do not affect this identity, and
+generated dependencies, caches, logs, and local workspace files are excluded.
+The same identity is sent to both backend and frontend compatibility checks.
 
 The bootstrap creates `.venv` when needed, installs the CPython 3.10 Windows
 AMD64 wheel set from `backend/requirements-py310-win.lock` with

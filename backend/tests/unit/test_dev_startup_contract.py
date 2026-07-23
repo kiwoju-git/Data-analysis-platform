@@ -1,4 +1,6 @@
 import os
+import re
+import shutil
 import socket
 import subprocess
 import threading
@@ -74,6 +76,9 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "Get-DevRuntimeInfo" in dev_text
     assert "Receive-Job" in dev_text
     assert "Stop-Process" not in dev_text
+    assert "Get-DevRepositoryBuildId" in dev_text
+    assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
+    assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$script:ExpectedApiContractVersion = 2" in helper_text
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
@@ -92,7 +97,7 @@ def test_dev_runtime_helper_returns_the_repository_commit() -> None:
     ).stdout.strip()
     command = (
         f". '{repo_root / 'scripts/dev_runtime_helpers.ps1'}'; "
-        f"Get-DevRepositoryCommit -RepoRoot '{repo_root}'"
+        f"Get-DevRepositoryBuildId -RepoRoot '{repo_root}'"
     )
 
     result = subprocess.run(
@@ -109,6 +114,164 @@ def test_dev_runtime_helper_returns_the_repository_commit() -> None:
 
     assert result.returncode == 0
     assert result.stdout.strip() == expected
+
+
+def test_archive_source_fingerprint_is_path_independent_and_content_sensitive(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    first = tmp_path / "첫 번째 폴더"
+    second = tmp_path / "second folder"
+    _write_archive_source(first)
+    shutil.copytree(first, second)
+
+    first_id = _get_build_id(repo_root, first)
+    second_id = _get_build_id(repo_root, second)
+
+    assert re.fullmatch(r"archive-sha256-[0-9a-f]{64}", first_id)
+    assert second_id == first_id
+
+    (second / "frontend/src/main.tsx").write_text(
+        "export const build = 'changed';\n",
+        encoding="utf-8",
+    )
+    changed_id = _get_build_id(repo_root, second)
+    assert changed_id != first_id
+
+
+def test_archive_source_fingerprint_ignores_generated_and_workspace_files(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    source = tmp_path / "archive"
+    _write_archive_source(source)
+    original_id = _get_build_id(repo_root, source)
+
+    generated_files = {
+        ".venv/ignored.txt": "venv",
+        "frontend/node_modules/pkg/index.js": "module",
+        "frontend/dist/app.js": "bundle",
+        ".tmp/runtime.log": "temporary",
+        "local-workspace/metadata.sqlite3": "database",
+    }
+    for relative_path, content in generated_files.items():
+        path = source / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    assert _get_build_id(repo_root, source) == original_id
+
+
+def test_detached_head_returns_the_exact_git_commit(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    source = tmp_path / "detached repository"
+    _write_archive_source(source)
+    for command in (
+        ["git", "init"],
+        ["git", "config", "user.email", "test@example.invalid"],
+        ["git", "config", "user.name", "DataLab Test"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "fixture"],
+        ["git", "checkout", "--detach"],
+    ):
+        subprocess.run(
+            command,
+            cwd=source,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
+    expected = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=source,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout.strip()
+
+    assert _get_build_id(repo_root, source) == expected
+
+
+def test_missing_git_and_ambiguous_head_use_archive_fingerprint_without_git_error(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    source = tmp_path / "broken git archive"
+    _write_archive_source(source)
+    (source / ".git").mkdir()
+
+    result = _run_build_id(repo_root, source, clear_path=True)
+
+    assert result.returncode == 0
+    assert re.fullmatch(r"archive-sha256-[0-9a-f]{64}", result.stdout.strip())
+    assert "fatal:" not in result.stdout
+    assert "NativeCommandError" not in result.stdout
+
+    result_with_git = _run_build_id(repo_root, source)
+    assert result_with_git.returncode == 0
+    assert re.fullmatch(
+        r"archive-sha256-[0-9a-f]{64}",
+        result_with_git.stdout.strip(),
+    )
+    assert "fatal:" not in result_with_git.stdout
+    assert "NativeCommandError" not in result_with_git.stdout
+
+
+def _write_archive_source(root: Path) -> None:
+    files = {
+        "backend/app/main.py": "APP = 'datalab'\n",
+        "backend/pyproject.toml": "[project]\nname = 'datalab'\n",
+        "frontend/src/main.tsx": "export const build = 'initial';\n",
+        "frontend/package.json": '{"name":"datalab"}\n',
+        "frontend/package-lock.json": '{"lockfileVersion":3}\n',
+        "frontend/index.html": "<div id=\"root\"></div>\n",
+        "frontend/tsconfig.json": '{"compilerOptions":{"strict":true}}\n',
+        "frontend/vite.config.ts": "export default {};\n",
+        "scripts/dev.ps1": "Write-Host 'dev'\n",
+        ".gitattributes": "* text=auto\n",
+    }
+    for relative_path, content in files.items():
+        path = root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+
+def _get_build_id(helper_repo_root: Path, source_root: Path) -> str:
+    result = _run_build_id(helper_repo_root, source_root)
+    assert result.returncode == 0, result.stdout
+    return result.stdout.strip()
+
+
+def _run_build_id(
+    helper_repo_root: Path,
+    source_root: Path,
+    *,
+    clear_path: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    helper = helper_repo_root / "scripts/dev_runtime_helpers.ps1"
+    path_setup = "$env:PATH = '';" if clear_path else ""
+    command = (
+        f". '{helper}'; {path_setup} "
+        "Get-DevRepositoryBuildId -RepoRoot $env:TEST_REPO_ROOT"
+    )
+    environment = os.environ.copy()
+    environment["TEST_REPO_ROOT"] = str(source_root)
+    return subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", command],
+        cwd=helper_repo_root,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
 
 
 def _run_dev(repo_root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:

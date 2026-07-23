@@ -9,9 +9,9 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "dev_runtime_helpers.ps1")
 
-$commit = Get-DevRepositoryCommit -RepoRoot $RepoRoot
+$buildId = Get-DevRepositoryBuildId -RepoRoot $RepoRoot
 Write-Host "Repository: $RepoRoot"
-Write-Host "Git commit: $commit"
+Write-Host "Source identity: $(Format-DevSourceIdentity -BuildId $buildId)"
 
 $python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 Write-Host "Python: $python"
@@ -34,7 +34,7 @@ if ($null -eq $runtime) {
 }
 else {
     Write-Host "Runtime info: contract=$($runtime.api_contract_version), schema=$($runtime.metadata_schema_version), build=$($runtime.build_commit)"
-    Write-Host "Runtime compatible with this checkout: $(Test-DevRuntimeCompatibility -RuntimeInfo $runtime -ExpectedCommit $commit -RequireExactCommit)"
+    Write-Host "Runtime compatible with this source: $(Test-DevRuntimeCompatibility -RuntimeInfo $runtime -ExpectedBuildId $buildId -RequireExactCommit)"
 }
 
 try {

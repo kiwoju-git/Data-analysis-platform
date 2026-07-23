@@ -51,6 +51,14 @@ cd Data-analysis-platform
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```
 
+Git 실행이 차단된 환경에서는 GitHub의 **Download ZIP**으로 받은 소스를 별도
+폴더에 압축 해제한 뒤, 그 프로젝트 루트에서 같은 `bootstrap.ps1`과
+`dev.ps1`을 실행할 수 있습니다. `.git`이 없는 경우 `dev.ps1`은 절대 경로나
+파일 시각이 아닌 런타임 소스의 상대 경로와 내용으로
+`archive-sha256-...` fingerprint를 계산합니다. 따라서 같은 ZIP은 어느
+폴더에 풀어도 같은 build ID를 사용하고, 서로 다른 소스 ZIP은 호환 backend로
+잘못 재사용되지 않습니다.
+
 의존성을 설치한 뒤에는 core runtime이 외부 데이터 전송 없이 동작하도록 설계되어
 있습니다. Python 3.10 Windows 환경은 hash-locked wheel 설치 경로를 사용합니다.
 
@@ -59,6 +67,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
+
+정상 Git checkout에서는 실행 로그의 source identity가 실제 40자리 HEAD SHA를
+사용합니다. Download ZIP 또는 Git 실행 불가 환경에서는 archive fingerprint를
+사용하며, 동일한 ID가 backend와 frontend runtime compatibility 검사에 전달됩니다.
 
 브라우저 주소는 Vite와 backend가 출력하는 localhost 주소를 사용합니다. 이미 사용 중인
 포트가 있으면 `dev.ps1`은 PID와 process 정보를 표시하고 종료합니다. 기존 process를

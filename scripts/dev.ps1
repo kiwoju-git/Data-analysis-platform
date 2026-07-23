@@ -32,7 +32,8 @@ try {
         }
     }
 
-    $RepositoryCommit = Get-DevRepositoryCommit -RepoRoot $RepoRoot
+    $RepositoryBuildId = Get-DevRepositoryBuildId -RepoRoot $RepoRoot
+    Write-Host "Source identity: $(Format-DevSourceIdentity -BuildId $RepositoryBuildId)"
     $BackendOwner = Get-DevPortOwner -Port $BackendPort
     $UsingExistingBackend = $false
 
@@ -41,7 +42,7 @@ try {
         $Compatible = $null -ne $RuntimeInfo -and (
             Test-DevRuntimeCompatibility `
                 -RuntimeInfo $RuntimeInfo `
-                -ExpectedCommit $RepositoryCommit `
+                -ExpectedBuildId $RepositoryBuildId `
                 -RequireExactCommit
         )
         if (($ReuseCompatibleBackend -or $FrontendOnly) -and $Compatible) {
@@ -75,14 +76,14 @@ try {
             Write-Host "Compatible backend is already ready at http://127.0.0.1:$BackendPort"
             exit
         }
-        $env:DATALAB_GIT_COMMIT = $RepositoryCommit
+        $env:DATALAB_GIT_COMMIT = $RepositoryBuildId
         & $Python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $BackendPort
         exit
     }
 
     if ($FrontendOnly) {
         $env:VITE_API_BASE_URL = "http://127.0.0.1:$BackendPort"
-        $env:VITE_GIT_COMMIT = $RepositoryCommit
+        $env:VITE_GIT_COMMIT = $RepositoryBuildId
         npm --prefix .\frontend run dev -- --port $FrontendPort --strictPort
         exit
     }
@@ -97,7 +98,7 @@ try {
             Set-Location $Root
             $env:DATALAB_GIT_COMMIT = $Commit
             & $PythonPath -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $Port
-            } -ArgumentList $Python, $RepoRoot, $BackendPort, $RepositoryCommit
+            } -ArgumentList $Python, $RepoRoot, $BackendPort, $RepositoryBuildId
 
             $deadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
             $RuntimeInfo = $null
@@ -115,14 +116,14 @@ try {
                 $backendOutput = Receive-Job -Job $BackendJob -Keep 2>&1 | Out-String
                 throw "Backend did not become ready within $StartupTimeoutSeconds seconds.`n$backendOutput"
             }
-            if (-not (Test-DevRuntimeCompatibility -RuntimeInfo $RuntimeInfo -ExpectedCommit $RepositoryCommit -RequireExactCommit)) {
+            if (-not (Test-DevRuntimeCompatibility -RuntimeInfo $RuntimeInfo -ExpectedBuildId $RepositoryBuildId -RequireExactCommit)) {
                 throw "Started backend returned an incompatible runtime contract. contract=$($RuntimeInfo.api_contract_version), schema=$($RuntimeInfo.metadata_schema_version), build=$($RuntimeInfo.build_commit)"
             }
             Write-Host "Backend ready: http://127.0.0.1:$BackendPort (contract $($RuntimeInfo.api_contract_version), schema $($RuntimeInfo.metadata_schema_version), build $($RuntimeInfo.build_commit))"
         }
 
         $env:VITE_API_BASE_URL = "http://127.0.0.1:$BackendPort"
-        $env:VITE_GIT_COMMIT = $RepositoryCommit
+        $env:VITE_GIT_COMMIT = $RepositoryBuildId
         Write-Host "Frontend starting: http://127.0.0.1:$FrontendPort"
         npm --prefix .\frontend run dev -- --port $FrontendPort --strictPort
     }
