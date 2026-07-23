@@ -1,12 +1,15 @@
 import type { RuntimeCapabilities, RuntimeInfoResponse } from "./api";
 
-export const EXPECTED_API_CONTRACT_VERSION = 2;
-export const MINIMUM_METADATA_SCHEMA_VERSION = 15;
+export const EXPECTED_API_CONTRACT_VERSION = 3;
+export const MINIMUM_METADATA_SCHEMA_VERSION = 16;
 
 export const REQUIRED_RUNTIME_CAPABILITIES = [
   "asset_management",
   "dataset_version_metadata",
   "dataset_version_deletion",
+  "dataset_version_archiving",
+  "dataset_version_cascade_deletion",
+  "dataset_version_preserve_unverified_cleanup",
   "regression_model_metadata",
   "regression_model_deletion",
   "dedicated_predict",

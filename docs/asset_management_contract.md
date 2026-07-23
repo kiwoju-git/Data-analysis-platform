@@ -23,6 +23,14 @@ SQLite schema 15 adds `dataset_version_user_metadata` and
 model and contains nullable `user_label`, nullable `note`, `pinned`, and
 `updated_at`. Owner deletion cascades only this operational metadata row.
 
+SQLite schema 16 extends dataset-version metadata only with `archived` and
+`archived_at`. Existing rows migrate to visible state. Archiving is reversible,
+does not touch files or dependent assets, and does not alter schema hashes,
+analysis freshness, model manifests, or statistical results. The normal
+dataset catalog defaults to `visibility=visible`; the management page can
+request `visible`, `archived`, or `all`. Exact-ID lookup remains available for
+restored audit links.
+
 - labels are trimmed and limited to 120 characters;
 - notes are trimmed and limited to 500 characters;
 - control characters are rejected and empty strings become null;
@@ -37,6 +45,11 @@ The update APIs are:
 
 - `PATCH /api/v1/dataset-versions/{version_id}/metadata`
 - `PATCH /api/v1/regression-models/{model_id}/metadata`
+
+The dataset metadata PATCH also accepts `archived`. An active dataset is
+protected in the UI and must be replaced before archiving. Archived datasets
+are omitted from ordinary dataset selectors but remain available under the
+management page's `보관됨` filter and can be restored with `archived=false`.
 
 Catalogs sort pinned items first, then by metadata/creation time and a stable ID
 tie-break. They return no raw rows, coefficients, predictor levels, manifest

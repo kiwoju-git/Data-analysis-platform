@@ -536,6 +536,8 @@ function datasetCatalogItem(index: number): DatasetVersionCatalogItem {
     note: null,
     pinned: false,
     metadata_updated_at: null,
+    archived: false,
+    archived_at: null,
   };
 }
 
@@ -545,13 +547,16 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 2,
-    metadata_schema_version: 15,
+    api_contract_version: 3,
+    metadata_schema_version: 16,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
       dataset_version_metadata: true,
       dataset_version_deletion: true,
+      dataset_version_archiving: true,
+      dataset_version_cascade_deletion: true,
+      dataset_version_preserve_unverified_cleanup: true,
       regression_model_metadata: true,
       regression_model_deletion: true,
       dedicated_predict: true,

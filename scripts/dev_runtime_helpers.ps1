@@ -1,8 +1,11 @@
-$script:ExpectedApiContractVersion = 2
+$script:ExpectedApiContractVersion = 3
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",
     "dataset_version_metadata",
     "dataset_version_deletion",
+    "dataset_version_archiving",
+    "dataset_version_cascade_deletion",
+    "dataset_version_preserve_unverified_cleanup",
     "regression_model_metadata",
     "regression_model_deletion",
     "dedicated_predict",
@@ -60,7 +63,7 @@ function Test-DevRuntimeCompatibility {
     if ([int]$RuntimeInfo.api_contract_version -ne $script:ExpectedApiContractVersion) {
         return $false
     }
-    if ([int]$RuntimeInfo.metadata_schema_version -lt 15) { return $false }
+    if ([int]$RuntimeInfo.metadata_schema_version -lt 16) { return $false }
     foreach ($capability in $script:RequiredRuntimeCapabilities) {
         $property = $RuntimeInfo.capabilities.PSObject.Properties[$capability]
         if ($null -eq $property -or $property.Value -ne $true) { return $false }

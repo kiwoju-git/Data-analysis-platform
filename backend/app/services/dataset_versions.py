@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Final, TextIO
+from typing import Final, Literal, TextIO
 from uuid import UUID, uuid4
 
 from fastapi import status
@@ -186,12 +186,17 @@ def list_dataset_version_catalog(
     *,
     limit: int,
     offset: int,
+    visibility: Literal["visible", "archived", "all"] = "visible",
 ) -> DatasetVersionCatalogResponse:
-    total = count_dataset_version_catalog_records(settings.workspace_root)
+    total = count_dataset_version_catalog_records(
+        settings.workspace_root,
+        visibility=visibility,
+    )
     records = list_dataset_version_catalog_records(
         settings.workspace_root,
         limit=limit,
         offset=offset,
+        visibility=visibility,
     )
     versions = [
         DatasetVersionCatalogItem(
@@ -206,6 +211,8 @@ def list_dataset_version_catalog(
             note=record.note,
             pinned=record.pinned,
             metadata_updated_at=record.metadata_updated_at,
+            archived=record.archived,
+            archived_at=record.archived_at,
         )
         for record in records
     ]
@@ -235,6 +242,16 @@ def update_dataset_version_metadata(
     note = body.note if "note" in fields else current.note if current else None
     pinned = body.pinned if "pinned" in fields else current.pinned if current else False
     updated_at = datetime.now(timezone.utc).isoformat()
+    archived = (
+        body.archived if "archived" in fields else current.archived if current else False
+    )
+    archived_at = (
+        updated_at
+        if archived and (current is None or not current.archived)
+        else current.archived_at
+        if archived and current is not None
+        else None
+    )
     try:
         metadata = upsert_dataset_version_user_metadata(
             settings.workspace_root,
@@ -242,6 +259,8 @@ def update_dataset_version_metadata(
             user_label=user_label,
             note=note,
             pinned=bool(pinned),
+            archived=bool(archived),
+            archived_at=archived_at,
             updated_at=updated_at,
             expected_updated_at=body.expected_metadata_updated_at,
         )
@@ -256,6 +275,8 @@ def update_dataset_version_metadata(
         user_label=metadata.user_label,
         note=metadata.note,
         pinned=metadata.pinned,
+        archived=metadata.archived,
+        archived_at=metadata.archived_at,
         metadata_updated_at=metadata.updated_at,
     )
 

@@ -146,8 +146,9 @@ export async function fetchDatasetProfile(versionId: string): Promise<DatasetPro
 export async function fetchDatasetVersions(
   limit: number,
   offset: number,
+  visibility: "visible" | "archived" | "all" = "visible",
 ): Promise<DatasetVersionCatalogResponse> {
-  const response = await fetchApi(apiRoutes.datasetVersions(limit, offset), {
+  const response = await fetchApi(apiRoutes.datasetVersions(limit, offset, visibility), {
     headers: { Accept: "application/json" },
   });
 

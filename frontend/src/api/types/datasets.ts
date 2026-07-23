@@ -135,12 +135,15 @@ export interface DatasetVersionCatalogItem {
   note: string | null;
   pinned: boolean;
   metadata_updated_at: string | null;
+  archived: boolean;
+  archived_at: string | null;
 }
 
 export interface DatasetVersionMetadataUpdateRequest {
   user_label?: string | null;
   note?: string | null;
   pinned?: boolean | null;
+  archived?: boolean | null;
   expected_metadata_updated_at?: string | null;
 }
 
@@ -149,6 +152,8 @@ export interface DatasetVersionMetadataResponse {
   user_label: string | null;
   note: string | null;
   pinned: boolean;
+  archived: boolean;
+  archived_at: string | null;
   metadata_updated_at: string;
 }
 

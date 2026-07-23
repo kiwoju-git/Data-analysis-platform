@@ -95,6 +95,29 @@ function DatasetManagementPanel({
           목록 새로고침
         </button>
       </div>
+      <div
+        className="segmented-control compact-segments"
+        role="group"
+        aria-label="데이터셋 표시 범위"
+      >
+        {(
+          [
+            ["visible", "표시 중"],
+            ["archived", "보관됨"],
+            ["all", "전체"],
+          ] as const
+        ).map(([visibility, label]) => (
+          <button
+            aria-pressed={state.datasetVisibility === visibility}
+            className={state.datasetVisibility === visibility ? "segment-active" : ""}
+            key={visibility}
+            onClick={() => state.onDatasetVisibilityChange(visibility)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {state.datasetLoading ? <p role="status">데이터셋 목록 확인 중</p> : null}
       {state.datasetError !== null ? (
         <AssetManagementErrorNotice error={state.datasetError} />
@@ -198,6 +221,21 @@ function DatasetAssetEditor({
           {saving ? "저장 중" : "이름 저장"}
         </button>
         {saved ? <span className="field-note" role="status">이름과 메모를 저장했습니다.</span> : null}
+        <button
+          className="secondary-button"
+          disabled={saving || active}
+          onClick={() =>
+            void onSave(item.version_id, {
+              archived: !item.archived,
+              expected_metadata_updated_at: item.metadata_updated_at,
+            }).then((updated) => {
+              if (updated) onMetadataChanged();
+            })
+          }
+          type="button"
+        >
+          {item.archived ? "다시 표시" : "목록에서 숨기기"}
+        </button>
         <button
           className="secondary-button"
           disabled={active || retention.isLoadingPreflight || retention.isDeleting}

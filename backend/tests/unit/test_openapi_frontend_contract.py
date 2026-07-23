@@ -142,7 +142,9 @@ FRONTEND_ROUTE_CONTRACTS = [
         path="/api/v1/dataset-versions",
         success_status="200",
         response_schema="DatasetVersionCatalogResponse",
-        parameters=frozenset({("limit", "query"), ("offset", "query")}),
+        parameters=frozenset(
+            {("limit", "query"), ("offset", "query"), ("visibility", "query")}
+        ),
     ),
     OperationContract(
         route_name="datasetVersionProfile",
@@ -1423,6 +1425,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "asset_management",
                 "dataset_version_metadata",
                 "dataset_version_deletion",
+                "dataset_version_archiving",
+                "dataset_version_cascade_deletion",
+                "dataset_version_preserve_unverified_cleanup",
                 "regression_model_metadata",
                 "regression_model_deletion",
                 "dedicated_predict",
@@ -1435,6 +1440,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "asset_management",
                 "dataset_version_metadata",
                 "dataset_version_deletion",
+                "dataset_version_archiving",
+                "dataset_version_cascade_deletion",
+                "dataset_version_preserve_unverified_cleanup",
                 "regression_model_metadata",
                 "regression_model_deletion",
                 "dedicated_predict",
@@ -2386,9 +2394,27 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
     ),
     SchemaComponentContract(
         name="DatasetVersionMetadataResponse",
-        properties=frozenset({"version_id", "user_label", "note", "pinned", "metadata_updated_at"}),
+        properties=frozenset(
+            {
+                "version_id",
+                "user_label",
+                "note",
+                "pinned",
+                "archived",
+                "archived_at",
+                "metadata_updated_at",
+            }
+        ),
         required_fields=frozenset(
-            {"version_id", "user_label", "note", "pinned", "metadata_updated_at"}
+            {
+                "version_id",
+                "user_label",
+                "note",
+                "pinned",
+                "archived",
+                "archived_at",
+                "metadata_updated_at",
+            }
         ),
     ),
     SchemaComponentContract(

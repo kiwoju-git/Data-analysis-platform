@@ -102,7 +102,7 @@ def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
     with sqlite3.connect(db_path) as connection:
         connection.execute("DROP TABLE regression_model_user_metadata")
         connection.execute("DROP TABLE dataset_version_user_metadata")
-        connection.execute("DELETE FROM schema_migrations WHERE version = 15")
+        connection.execute("DELETE FROM schema_migrations WHERE version >= 15")
         connection.execute("PRAGMA user_version = 14")
 
     with TestClient(create_app(settings)):
@@ -118,7 +118,103 @@ def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
         user_version = connection.execute("PRAGMA user_version").fetchone()[0]
     assert "dataset_version_user_metadata" in tables
     assert "regression_model_user_metadata" in tables
-    assert user_version == 15
+    assert user_version == 16
+
+
+def test_dataset_archive_visibility_round_trip_and_schema_15_upgrade(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    initialize_metadata_store(settings.workspace_root)
+    _, visible_version = _insert_dataset(
+        settings,
+        created_at="2026-07-20T00:00:00Z",
+    )
+    _, archived_version = _insert_dataset(
+        settings,
+        created_at="2026-07-21T00:00:00Z",
+    )
+
+    with TestClient(create_app(settings)) as client:
+        archived = client.patch(
+            f"/api/v1/dataset-versions/{archived_version}/metadata",
+            json={"archived": True},
+        )
+        visible_catalog = client.get(
+            "/api/v1/dataset-versions?offset=0&limit=20&visibility=visible"
+        )
+        archived_catalog = client.get(
+            "/api/v1/dataset-versions?offset=0&limit=20&visibility=archived"
+        )
+        all_catalog = client.get(
+            "/api/v1/dataset-versions?offset=0&limit=20&visibility=all"
+        )
+        direct = client.get(f"/api/v1/dataset-versions/{archived_version}")
+        restored = client.patch(
+            f"/api/v1/dataset-versions/{archived_version}/metadata",
+            json={
+                "archived": False,
+                "expected_metadata_updated_at": archived.json()["metadata_updated_at"],
+            },
+        )
+
+    assert archived.status_code == 200
+    assert archived.json()["archived"] is True
+    assert archived.json()["archived_at"] is not None
+    assert [item["version_id"] for item in visible_catalog.json()["versions"]] == [
+        visible_version
+    ]
+    assert [item["version_id"] for item in archived_catalog.json()["versions"]] == [
+        archived_version
+    ]
+    assert all_catalog.json()["total"] == 2
+    assert direct.status_code == 200
+    assert restored.status_code == 200
+    assert restored.json()["archived"] is False
+    assert restored.json()["archived_at"] is None
+
+    db_path = metadata_db_path(settings.workspace_root)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("DELETE FROM schema_migrations WHERE version = 16")
+        connection.execute("DROP INDEX idx_dataset_version_user_metadata_visibility")
+        connection.execute(
+            """
+            CREATE TABLE dataset_version_user_metadata_v15 (
+                version_id TEXT PRIMARY KEY
+                    REFERENCES dataset_versions(version_id) ON DELETE CASCADE,
+                user_label TEXT,
+                note TEXT,
+                pinned INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL
+            );
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO dataset_version_user_metadata_v15
+                (version_id, user_label, note, pinned, updated_at)
+            SELECT version_id, user_label, note, pinned, updated_at
+            FROM dataset_version_user_metadata;
+            """
+        )
+        connection.execute("DROP TABLE dataset_version_user_metadata")
+        connection.execute(
+            "ALTER TABLE dataset_version_user_metadata_v15 "
+            "RENAME TO dataset_version_user_metadata"
+        )
+        connection.execute("PRAGMA user_version = 15")
+
+    initialize_metadata_store(settings.workspace_root)
+    with sqlite3.connect(db_path) as connection:
+        columns = {
+            row[1]
+            for row in connection.execute(
+                "PRAGMA table_info(dataset_version_user_metadata)"
+            ).fetchall()
+        }
+        archived_values = connection.execute(
+            "SELECT archived, archived_at FROM dataset_version_user_metadata"
+        ).fetchall()
+    assert {"archived", "archived_at"}.issubset(columns)
+    assert all(row == (0, None) for row in archived_values)
 
 
 def _insert_dataset(settings: Settings, *, created_at: str) -> tuple[str, str]:
@@ -145,7 +241,7 @@ def _insert_dataset(settings: Settings, *, created_at: str) -> tuple[str, str]:
             dataset_id=dataset_id,
             version_number=1,
             source_sha256="a" * 64,
-            parsing_options_json="{}",
+            parsing_options_json='{"kind":"delimited_text"}',
             row_count=2,
             column_count=1,
             schema_hash="b" * 64,

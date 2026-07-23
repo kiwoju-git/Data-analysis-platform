@@ -202,6 +202,8 @@ class DatasetVersionCatalogItem(BaseModel):
     note: str | None
     pinned: bool
     metadata_updated_at: str | None
+    archived: bool
+    archived_at: str | None
 
 
 class DatasetVersionMetadataUpdateRequest(BaseModel):
@@ -210,6 +212,7 @@ class DatasetVersionMetadataUpdateRequest(BaseModel):
     user_label: str | None = Field(default=None, max_length=120)
     note: str | None = Field(default=None, max_length=500)
     pinned: bool | None = None
+    archived: bool | None = None
     expected_metadata_updated_at: str | None = None
 
     @field_validator("user_label", "note", mode="before")
@@ -230,6 +233,8 @@ class DatasetVersionMetadataResponse(BaseModel):
     user_label: str | None
     note: str | None
     pinned: bool
+    archived: bool
+    archived_at: str | None
     metadata_updated_at: str
 
 

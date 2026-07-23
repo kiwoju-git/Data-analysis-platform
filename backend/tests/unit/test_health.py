@@ -45,13 +45,16 @@ def test_runtime_info_reports_current_contract_without_workspace_details(tmp_pat
     assert response.json() == {
         "service": "datalab-studio-api",
         "app_version": "0.1.0",
-        "api_contract_version": 2,
-        "metadata_schema_version": 15,
+        "api_contract_version": 3,
+        "metadata_schema_version": 16,
         "build_commit": "unknown",
         "capabilities": {
             "asset_management": True,
             "dataset_version_metadata": True,
             "dataset_version_deletion": True,
+            "dataset_version_archiving": True,
+            "dataset_version_cascade_deletion": True,
+            "dataset_version_preserve_unverified_cleanup": True,
             "regression_model_metadata": True,
             "regression_model_deletion": True,
             "dedicated_predict": True,

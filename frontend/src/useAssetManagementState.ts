@@ -22,12 +22,14 @@ export interface AssetManagementState {
   datasetCatalog: DatasetVersionCatalogResponse | null;
   datasetError: AssetManagementError | null;
   datasetLoading: boolean;
+  datasetVisibility: "visible" | "archived" | "all";
   modelCatalog: RegressionModelCatalogResponse | null;
   modelError: AssetManagementError | null;
   modelLoading: boolean;
   savingId: string | null;
   savedId: string | null;
   onDatasetPageChange: (offset: number) => void;
+  onDatasetVisibilityChange: (visibility: "visible" | "archived" | "all") => void;
   onModelPageChange: (offset: number) => void;
   onRefreshDatasets: () => void;
   onRefreshModels: () => void;
@@ -50,6 +52,8 @@ export function useAssetManagementState(): AssetManagementState {
   const [datasetLoading, setDatasetLoading] = useState(false);
   const [modelLoading, setModelLoading] = useState(false);
   const [datasetOffset, setDatasetOffset] = useState(0);
+  const [datasetVisibility, setDatasetVisibility] =
+    useState<"visible" | "archived" | "all">("visible");
   const [modelOffset, setModelOffset] = useState(0);
   const [datasetRevision, setDatasetRevision] = useState(0);
   const [modelRevision, setModelRevision] = useState(0);
@@ -63,7 +67,7 @@ export function useAssetManagementState(): AssetManagementState {
     const request = datasetRequest.begin();
     setDatasetLoading(true);
     setDatasetError(null);
-    void fetchDatasetVersions(pageSize, datasetOffset)
+    void fetchDatasetVersions(pageSize, datasetOffset, datasetVisibility)
       .then((response) => {
         if (datasetRequest.isCurrent(request)) setDatasetCatalog(response);
       })
@@ -76,7 +80,7 @@ export function useAssetManagementState(): AssetManagementState {
         if (datasetRequest.isCurrent(request)) setDatasetLoading(false);
       });
     return () => datasetRequest.cancel(request);
-  }, [datasetOffset, datasetRequest, datasetRevision]);
+  }, [datasetOffset, datasetRequest, datasetRevision, datasetVisibility]);
 
   useEffect(() => {
     const request = modelRequest.begin();
@@ -149,12 +153,17 @@ export function useAssetManagementState(): AssetManagementState {
     datasetCatalog,
     datasetError,
     datasetLoading,
+    datasetVisibility,
     modelCatalog,
     modelError,
     modelLoading,
     savingId,
     savedId,
     onDatasetPageChange: (offset) => setDatasetOffset(Math.max(0, offset)),
+    onDatasetVisibilityChange: (visibility) => {
+      setDatasetOffset(0);
+      setDatasetVisibility(visibility);
+    },
     onModelPageChange: (offset) => setModelOffset(Math.max(0, offset)),
     onRefreshDatasets: () => setDatasetRevision((revision) => revision + 1),
     onRefreshModels: () => setModelRevision((revision) => revision + 1),

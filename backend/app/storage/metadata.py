@@ -3,10 +3,10 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 15
+SCHEMA_VERSION: Final = 16
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -86,6 +86,8 @@ class DatasetVersionCatalogRecord:
     note: str | None
     pinned: bool
     metadata_updated_at: str | None
+    archived: bool
+    archived_at: str | None
 
 
 @dataclass(frozen=True)
@@ -196,6 +198,8 @@ class AssetUserMetadataRecord:
     note: str | None
     pinned: bool
     updated_at: str
+    archived: bool = False
+    archived_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1057,6 +1061,22 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         ON regression_model_user_metadata(pinned DESC, updated_at DESC, model_id);
         """,
     ),
+    Migration(
+        version=16,
+        name="add_dataset_version_archive_metadata",
+        sql="""
+        ALTER TABLE dataset_version_user_metadata
+        ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1));
+
+        ALTER TABLE dataset_version_user_metadata
+        ADD COLUMN archived_at TEXT;
+
+        CREATE INDEX idx_dataset_version_user_metadata_visibility
+        ON dataset_version_user_metadata(
+            archived, pinned DESC, updated_at DESC, version_id
+        );
+        """,
+    ),
 )
 
 
@@ -1477,9 +1497,23 @@ def list_dataset_version_records(
     return [_dataset_version_from_row(row) for row in rows]
 
 
-def count_dataset_version_catalog_records(workspace_root: Path) -> int:
+def count_dataset_version_catalog_records(
+    workspace_root: Path,
+    *,
+    visibility: Literal["visible", "archived", "all"] = "visible",
+) -> int:
+    where_clause = _dataset_catalog_visibility_clause(visibility)
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
-        row = connection.execute("SELECT COUNT(*) FROM dataset_versions;").fetchone()
+        row = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM dataset_versions AS version
+            LEFT JOIN dataset_version_user_metadata AS metadata
+                ON metadata.version_id = version.version_id
+            """
+            + where_clause
+            + ";"
+        ).fetchone()
     return 0 if row is None else _row_int(row[0])
 
 
@@ -1488,7 +1522,9 @@ def list_dataset_version_catalog_records(
     *,
     limit: int,
     offset: int,
+    visibility: Literal["visible", "archived", "all"] = "visible",
 ) -> list[DatasetVersionCatalogRecord]:
+    where_clause = _dataset_catalog_visibility_clause(visibility)
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         rows = connection.execute(
             """
@@ -1500,17 +1536,22 @@ def list_dataset_version_catalog_records(
                 version.row_count,
                 version.column_count,
                 version.created_at,
-                metadata.user_label,
-                metadata.note,
-                COALESCE(metadata.pinned, 0),
-                metadata.updated_at
+                 metadata.user_label,
+                 metadata.note,
+                 COALESCE(metadata.pinned, 0),
+                 metadata.updated_at,
+                 COALESCE(metadata.archived, 0),
+                 metadata.archived_at
             FROM dataset_versions AS version
             INNER JOIN datasets AS dataset
                 ON dataset.dataset_id = version.dataset_id
-            LEFT JOIN dataset_version_user_metadata AS metadata
-                ON metadata.version_id = version.version_id
-            ORDER BY COALESCE(metadata.pinned, 0) DESC,
-                     COALESCE(metadata.updated_at, version.created_at) DESC,
+             LEFT JOIN dataset_version_user_metadata AS metadata
+                 ON metadata.version_id = version.version_id
+            """
+            + where_clause
+            + """
+             ORDER BY COALESCE(metadata.pinned, 0) DESC,
+                      COALESCE(metadata.updated_at, version.created_at) DESC,
                      version.created_at DESC,
                      version.version_id
             LIMIT ? OFFSET ?;
@@ -1531,6 +1572,8 @@ def list_dataset_version_catalog_records(
             note=None if row[8] is None else str(row[8]),
             pinned=_row_bool(row[9]),
             metadata_updated_at=None if row[10] is None else str(row[10]),
+            archived=_row_bool(row[11]),
+            archived_at=None if row[12] is None else str(row[12]),
         )
         for row in rows
     ]
@@ -1546,7 +1589,8 @@ def get_dataset_version_catalog_record(
             SELECT version.version_id, version.dataset_id, dataset.original_filename,
                    version.version_number, version.row_count, version.column_count,
                    version.created_at, metadata.user_label, metadata.note,
-                   COALESCE(metadata.pinned, 0), metadata.updated_at
+                   COALESCE(metadata.pinned, 0), metadata.updated_at,
+                   COALESCE(metadata.archived, 0), metadata.archived_at
             FROM dataset_versions AS version
             INNER JOIN datasets AS dataset ON dataset.dataset_id = version.dataset_id
             LEFT JOIN dataset_version_user_metadata AS metadata
@@ -1569,7 +1613,21 @@ def get_dataset_version_catalog_record(
         note=None if row[8] is None else str(row[8]),
         pinned=_row_bool(row[9]),
         metadata_updated_at=None if row[10] is None else str(row[10]),
+        archived=_row_bool(row[11]),
+        archived_at=None if row[12] is None else str(row[12]),
     )
+
+
+def _dataset_catalog_visibility_clause(
+    visibility: Literal["visible", "archived", "all"],
+) -> str:
+    if visibility == "visible":
+        return " WHERE COALESCE(metadata.archived, 0) = 0"
+    if visibility == "archived":
+        return " WHERE COALESCE(metadata.archived, 0) = 1"
+    if visibility == "all":
+        return ""
+    raise ValueError("unsupported_dataset_catalog_visibility")
 
 
 def get_dataset_version_record(
@@ -2832,19 +2890,53 @@ def upsert_dataset_version_user_metadata(
     user_label: str | None,
     note: str | None,
     pinned: bool,
+    archived: bool,
+    archived_at: str | None,
     updated_at: str,
     expected_updated_at: str | None,
 ) -> AssetUserMetadataRecord:
-    return _upsert_asset_user_metadata(
-        workspace_root,
-        table="dataset_version_user_metadata",
-        owner_column="version_id",
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        current = connection.execute(
+            "SELECT updated_at FROM dataset_version_user_metadata WHERE version_id = ?;",
+            (version_id,),
+        ).fetchone()
+        current_updated_at = None if current is None else str(current[0])
+        if expected_updated_at is not None and expected_updated_at != current_updated_at:
+            raise WorkspaceAssetStorageConflict("asset_user_metadata_conflict")
+        connection.execute(
+            """
+            INSERT INTO dataset_version_user_metadata (
+                version_id, user_label, note, pinned, updated_at, archived, archived_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(version_id) DO UPDATE SET
+                user_label = excluded.user_label,
+                note = excluded.note,
+                pinned = excluded.pinned,
+                updated_at = excluded.updated_at,
+                archived = excluded.archived,
+                archived_at = excluded.archived_at;
+            """,
+            (
+                version_id,
+                user_label,
+                note,
+                int(pinned),
+                updated_at,
+                int(archived),
+                archived_at,
+            ),
+        )
+        connection.commit()
+    return AssetUserMetadataRecord(
         owner_id=version_id,
         user_label=user_label,
         note=note,
         pinned=pinned,
         updated_at=updated_at,
-        expected_updated_at=expected_updated_at,
+        archived=archived,
+        archived_at=archived_at,
     )
 
 
@@ -2852,11 +2944,25 @@ def get_dataset_version_user_metadata(
     workspace_root: Path,
     version_id: str,
 ) -> AssetUserMetadataRecord | None:
-    return _get_asset_user_metadata(
-        workspace_root,
-        table="dataset_version_user_metadata",
-        owner_column="version_id",
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT user_label, note, pinned, updated_at, archived, archived_at
+            FROM dataset_version_user_metadata
+            WHERE version_id = ?;
+            """,
+            (version_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return AssetUserMetadataRecord(
         owner_id=version_id,
+        user_label=None if row[0] is None else str(row[0]),
+        note=None if row[1] is None else str(row[1]),
+        pinned=_row_bool(row[2]),
+        updated_at=str(row[3]),
+        archived=_row_bool(row[4]),
+        archived_at=None if row[5] is None else str(row[5]),
     )
 
 
@@ -4373,7 +4479,7 @@ def _connection_dataset_version_deletion_snapshot(
     ).fetchall()
     metadata_row = connection.execute(
         """
-        SELECT version_id, user_label, note, pinned, updated_at
+        SELECT version_id, user_label, note, pinned, updated_at, archived, archived_at
         FROM dataset_version_user_metadata
         WHERE version_id = ?;
         """,
@@ -4453,6 +4559,8 @@ def _connection_dataset_version_deletion_snapshot(
             note=None if metadata_row[2] is None else str(metadata_row[2]),
             pinned=_row_bool(metadata_row[3]),
             updated_at=str(metadata_row[4]),
+            archived=_row_bool(metadata_row[5]),
+            archived_at=None if metadata_row[6] is None else str(metadata_row[6]),
         ),
         sibling_version_count=sibling_count,
         dependencies=DatasetVersionDependencyCounts(

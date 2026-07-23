@@ -119,3 +119,14 @@ DELETE can be initiated from the management page.
 Bulk deletion, dataset-root cascade into dependent assets, age-based cleanup,
 automatic retention, DOE root deletion, and in-place dataset mutation remain
 out of scope.
+## Archive Versus Delete
+
+Archive is reversible catalog metadata. It never validates, moves, or deletes
+workspace files and never removes analyses, exports, models, predictions,
+limit sets, jobs, or other dependent assets. Ordinary catalogs default to
+visible versions; `/manage` can list archived versions and restore them.
+
+Permanent deletion remains a separate exact-manifest operation. Verified
+deletion removes only checksum-validated owned files. Preserve-unverified
+cleanup may remove metadata after explicit confirmation while leaving
+unverified files untouched, so it may not reclaim disk space.

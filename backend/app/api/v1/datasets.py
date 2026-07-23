@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, File, Query, Request, UploadFile, status
@@ -46,11 +46,13 @@ def list_dataset_version_catalog_route(
     request: Request,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    visibility: Literal["visible", "archived", "all"] = Query(default="visible"),
 ) -> DatasetVersionCatalogResponse:
     return list_dataset_version_catalog(
         settings=request.app.state.settings,
         limit=limit,
         offset=offset,
+        visibility=visibility,
     )
 
 

@@ -23,6 +23,9 @@ class RuntimeCapabilities(BaseModel):
     asset_management: bool
     dataset_version_metadata: bool
     dataset_version_deletion: bool
+    dataset_version_archiving: bool
+    dataset_version_cascade_deletion: bool
+    dataset_version_preserve_unverified_cleanup: bool
     regression_model_metadata: bool
     regression_model_deletion: bool
     dedicated_predict: bool

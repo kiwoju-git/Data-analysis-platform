@@ -1687,7 +1687,7 @@ describe("App", () => {
       "http://127.0.0.1:8000/api/v1/dataset-versions/version%2F1/rows?limit=10&offset=5",
     );
     expect(apiRoutes.datasetVersions(20, 40)).toBe(
-      "http://127.0.0.1:8000/api/v1/dataset-versions?limit=20&offset=40",
+      "http://127.0.0.1:8000/api/v1/dataset-versions?limit=20&offset=40&visibility=visible",
     );
     expect(apiRoutes.regressionPredictionRows("prediction/1", 25, 50)).toBe(
       "http://127.0.0.1:8000/api/v1/regression-models/predictions/prediction%2F1/rows?limit=25&offset=50",
@@ -2612,6 +2612,8 @@ describe("App", () => {
           note: null,
           pinned: false,
           metadata_updated_at: null,
+          archived: false,
+          archived_at: null,
         },
         {
           version_id: targetVersionId,
@@ -2625,6 +2627,8 @@ describe("App", () => {
           note: null,
           pinned: false,
           metadata_updated_at: null,
+          archived: false,
+          archived_at: null,
         },
       ],
     };
@@ -4987,6 +4991,8 @@ describe("App", () => {
               note: null,
               pinned: false,
               metadata_updated_at: null,
+              archived: false,
+              archived_at: null,
             },
             catalog: {
               offset: 0,
@@ -5008,6 +5014,8 @@ describe("App", () => {
                   note: null,
                   pinned: false,
                   metadata_updated_at: null,
+                  archived: false,
+                  archived_at: null,
                 },
               ],
             },
@@ -5066,6 +5074,9 @@ describe("App", () => {
     expect(html).toContain("회귀모델");
     expect(html).toContain("목록 새로고침");
     expect(html).toContain("로컬 저장됨");
+    expect(html).toContain("표시 중");
+    expect(html).toContain("보관됨");
+    expect(html).toContain("전체");
   });
 
   it("maps parsing suggestions into explicit confirmation options", () => {

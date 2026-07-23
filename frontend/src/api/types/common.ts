@@ -8,6 +8,9 @@ export interface RuntimeCapabilities {
   asset_management: boolean;
   dataset_version_metadata: boolean;
   dataset_version_deletion: boolean;
+  dataset_version_archiving: boolean;
+  dataset_version_cascade_deletion: boolean;
+  dataset_version_preserve_unverified_cleanup: boolean;
   regression_model_metadata: boolean;
   regression_model_deletion: boolean;
   dedicated_predict: boolean;

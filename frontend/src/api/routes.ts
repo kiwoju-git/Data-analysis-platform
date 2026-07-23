@@ -74,10 +74,15 @@ export const apiRoutes = {
     return apiUrl(`/dataset-versions/${pathId(versionId)}/profile`);
   },
 
-  datasetVersions(limit: number, offset: number): string {
+  datasetVersions(
+    limit: number,
+    offset: number,
+    visibility: "visible" | "archived" | "all" = "visible",
+  ): string {
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
+      visibility,
     });
     return urlWithQuery("/dataset-versions", params);
   },
