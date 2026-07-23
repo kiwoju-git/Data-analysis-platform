@@ -51,6 +51,7 @@ import {
 } from "./api";
 import { AppChrome } from "./AppChrome";
 import type { AnalysisShellProps } from "./AnalysisShell";
+import type { DescriptiveQuickGraphState } from "./DescriptiveAnalysisPanel";
 import {
   serializeAnalysisFilterDrafts,
   validateAnalysisFilterDrafts,
@@ -292,6 +293,15 @@ export default function App() {
   const [linearModelConfidenceLevel, setLinearModelConfidenceLevel] = useState(0.95);
   const [analysisFilterDrafts, setAnalysisFilterDrafts] = useState<AnalysisFilterDraft[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
+  const [descriptiveQuickGraphState, setDescriptiveQuickGraphState] =
+    useState<DescriptiveQuickGraphState>({
+      columnId: null,
+      error: null,
+      result: null,
+      status: "idle",
+    });
+  const descriptiveQuickGraphRequestIdRef = useRef(0);
+  const descriptiveQuickGraphCacheRef = useRef(new Map<string, GraphicalSummaryResult>());
   const [datasetStateRevision, setDatasetStateRevision] = useState(0);
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
   const [factorialDesign, setFactorialDesign] = useState<FactorialDesignResponse | null>(null);
@@ -1048,6 +1058,16 @@ export default function App() {
     analysisFilterValidationError === null
       ? null
       : filterValidationMessage(analysisFilterValidationError);
+
+  useEffect(() => {
+    descriptiveQuickGraphRequestIdRef.current += 1;
+    setDescriptiveQuickGraphState({
+      columnId: null,
+      error: null,
+      result: null,
+      status: "idle",
+    });
+  }, [analysisFilterDrafts, version?.version_id]);
 
   function handleAnalysisFilterDraftsChange(drafts: AnalysisFilterDraft[]) {
     setAnalysisFilterDrafts(drafts);
@@ -3211,6 +3231,119 @@ export default function App() {
     }
   }
 
+  async function handleToggleDescriptiveQuickGraph(
+    columnId: string,
+    options: { force?: boolean } = {},
+  ) {
+    if (
+      version === null ||
+      analysisFilterValidationError !== null ||
+      descriptiveQuickGraphState.status === "loading" &&
+        descriptiveQuickGraphState.columnId === columnId
+    ) {
+      return;
+    }
+    if (
+      !options.force &&
+      descriptiveQuickGraphState.columnId === columnId &&
+      descriptiveQuickGraphState.status !== "error"
+    ) {
+      descriptiveQuickGraphRequestIdRef.current += 1;
+      setDescriptiveQuickGraphState({
+        columnId: null,
+        error: null,
+        result: null,
+        status: "idle",
+      });
+      return;
+    }
+    const method = analysisCatalog?.methods.find(
+      (candidate) => candidate.method_id === "eda.graphical_summary",
+    );
+    if (method === undefined || method.availability !== "available") {
+      setDescriptiveQuickGraphState({
+        columnId,
+        error: "graphical_summary_method_unavailable",
+        result: null,
+        status: "error",
+      });
+      return;
+    }
+
+    const filterConditions = serializeAnalysisFilterDrafts(
+      analysisFilterDrafts,
+      version.columns,
+    );
+    const requestKey = JSON.stringify({
+      columnId,
+      datasetVersionId: version.version_id,
+      filterConditions,
+    });
+    const cached = descriptiveQuickGraphCacheRef.current.get(requestKey);
+    if (cached !== undefined) {
+      setDescriptiveQuickGraphState({
+        columnId,
+        error: null,
+        result: cached,
+        status: "ready",
+      });
+      return;
+    }
+
+    const requestId = descriptiveQuickGraphRequestIdRef.current + 1;
+    descriptiveQuickGraphRequestIdRef.current = requestId;
+    setDescriptiveQuickGraphState({
+      columnId,
+      error: null,
+      result: null,
+      status: "loading",
+    });
+    try {
+      const response = await createAnalysisRun({
+        method_id: method.method_id,
+        method_version: method.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: {
+          expression_version: 1,
+          conditions: filterConditions,
+        },
+        roles: {},
+        options: {
+          column_ids: [columnId],
+          point_limit: 1000,
+        },
+      });
+      if (requestId !== descriptiveQuickGraphRequestIdRef.current) {
+        return;
+      }
+      if (!isGraphicalSummaryResult(response.result)) {
+        throw new Error("graphical_summary_result_invalid");
+      }
+      descriptiveQuickGraphCacheRef.current.set(requestKey, response.result);
+      setDescriptiveQuickGraphState({
+        columnId,
+        error: null,
+        result: response.result,
+        status: "ready",
+      });
+    } catch (error) {
+      if (requestId !== descriptiveQuickGraphRequestIdRef.current) {
+        return;
+      }
+      setDescriptiveQuickGraphState({
+        columnId,
+        error: error instanceof Error ? error.message : "analysis_run_failed",
+        result: null,
+        status: "error",
+      });
+    }
+  }
+
+  function handleOpenFullGraphicalSummary(columnId: string) {
+    setSelectedGraphicalSummaryColumnIds([columnId]);
+    handleSelectAnalysisMethod("exploration", "eda.graphical_summary");
+  }
+
   async function handleIndividualsChartAnalysis() {
     if (
       version === null ||
@@ -3483,6 +3616,7 @@ export default function App() {
     chiSquareAssociationRowColumnId: selectedChiSquareAssociationRowColumnId,
     chiSquareAssociationRowColumns,
     descriptiveColumns,
+    descriptiveQuickGraphState,
     descriptiveResult,
     equalVariancesAlpha,
     equalVariancesAnalysisResult,
@@ -3727,6 +3861,14 @@ export default function App() {
     onRunDescriptiveAnalysis: () => {
       void handleRunDescriptiveAnalysis();
     },
+    onOpenFullGraphicalSummary: handleOpenFullGraphicalSummary,
+    onRetryDescriptiveQuickGraph: () => {
+      if (descriptiveQuickGraphState.columnId !== null) {
+        void handleToggleDescriptiveQuickGraph(descriptiveQuickGraphState.columnId, {
+          force: true,
+        });
+      }
+    },
     onRunEqualVariancesAnalysis: () => {
       void handleRunEqualVariancesAnalysis();
     },
@@ -3800,6 +3942,9 @@ export default function App() {
       void handleRunTwoProportionAnalysis();
     },
     onSelectMethod: handleSelectAnalysisMethod,
+    onToggleDescriptiveQuickGraph: (columnId: string) => {
+      void handleToggleDescriptiveQuickGraph(columnId);
+    },
     onOpenHelp: handleOpenHelpPage,
     onChiSquareAssociationAlphaChange: handleChiSquareAssociationAlphaChange,
     onChiSquareAssociationColumnColumnChange: handleChiSquareAssociationColumnColumnChange,

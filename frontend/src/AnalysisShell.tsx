@@ -7,7 +7,10 @@ import {
   type AnalysisWorkbenchRestoredState,
 } from "./AnalysisWorkbench";
 import { ChiSquareAssociationPanel } from "./ChiSquareAssociationPanel";
-import { DescriptiveAnalysisPanel } from "./DescriptiveAnalysisPanel";
+import {
+  DescriptiveAnalysisPanel,
+  type DescriptiveQuickGraphState,
+} from "./DescriptiveAnalysisPanel";
 import { EqualVariancesPanel } from "./EqualVariancesPanel";
 import { EquivalenceTostPanel } from "./EquivalenceTostPanel";
 import { GraphicalSummaryPanel } from "./GraphicalSummaryPanel";
@@ -158,6 +161,7 @@ export interface AnalysisShellProps {
   chiSquareAssociationRowColumnId: string | null;
   chiSquareAssociationRowColumns: DatasetColumnResponse[];
   descriptiveColumns: DatasetColumnResponse[];
+  descriptiveQuickGraphState?: DescriptiveQuickGraphState;
   descriptiveResult: DescriptiveStatisticsResult | null;
   equalVariancesAlpha: number;
   equalVariancesAnalysisResult: AnalysisResultEnvelope | null;
@@ -378,6 +382,8 @@ export interface AnalysisShellProps {
   onRunChiSquareAssociationAnalysis: () => void;
   onRunAttributeControlChartAnalysis?: () => void;
   onRunDescriptiveAnalysis: () => void;
+  onOpenFullGraphicalSummary?: (columnId: string) => void;
+  onRetryDescriptiveQuickGraph?: () => void;
   onRunEqualVariancesAnalysis: () => void;
   onRunEquivalenceTostAnalysis: () => void;
   onRunGraphicalSummaryAnalysis: () => void;
@@ -483,6 +489,7 @@ export interface AnalysisShellProps {
   onTwoProportionGroupColumnChange: (columnId: string) => void;
   onTwoProportionResponseColumnChange: (columnId: string) => void;
   onToggleDescriptiveColumn: (columnId: string, checked: boolean) => void;
+  onToggleDescriptiveQuickGraph?: (columnId: string) => void;
   onToggleGraphicalSummaryColumn: (columnId: string, checked: boolean) => void;
   onToggleNormalityColumn: (columnId: string, checked: boolean) => void;
   onToggleLinearModelPredictorColumn?: (columnId: string, checked: boolean) => void;
@@ -528,6 +535,7 @@ export function AnalysisShell({
   chiSquareAssociationRowColumnId,
   chiSquareAssociationRowColumns,
   descriptiveColumns,
+  descriptiveQuickGraphState,
   descriptiveResult,
   equalVariancesAlpha,
   equalVariancesAnalysisResult,
@@ -762,6 +770,8 @@ export function AnalysisShell({
   onRunAttributeControlChartAnalysis = () => undefined,
   onRunChiSquareAssociationAnalysis,
   onRunDescriptiveAnalysis,
+  onOpenFullGraphicalSummary = () => undefined,
+  onRetryDescriptiveQuickGraph = () => undefined,
   onRunEqualVariancesAnalysis,
   onRunEquivalenceTostAnalysis,
   onRunGraphicalSummaryAnalysis,
@@ -867,6 +877,7 @@ export function AnalysisShell({
   onTwoProportionGroupColumnChange,
   onTwoProportionResponseColumnChange,
   onToggleDescriptiveColumn,
+  onToggleDescriptiveQuickGraph = () => undefined,
   onToggleGraphicalSummaryColumn,
   onToggleNormalityColumn,
   onToggleLinearModelPredictorColumn = () => undefined,
@@ -961,6 +972,7 @@ export function AnalysisShell({
                 <DescriptiveAnalysisPanel
                   analysisResult={analysisResult}
                   descriptiveColumns={descriptiveColumns}
+                  quickGraphState={descriptiveQuickGraphState}
                   descriptiveResult={descriptiveResult}
                   filterValidationError={analysisFilterValidationError}
                   isRunningAnalysis={isRunningAnalysis}
@@ -968,7 +980,10 @@ export function AnalysisShell({
                   selectedColumnIds={selectedDescriptiveColumnIds}
                   version={version}
                   onRun={onRunDescriptiveAnalysis}
+                  onOpenFullGraphicalSummary={onOpenFullGraphicalSummary}
+                  onRetryQuickGraph={onRetryDescriptiveQuickGraph}
                   onToggleColumn={onToggleDescriptiveColumn}
+                  onToggleQuickGraph={onToggleDescriptiveQuickGraph}
                 />
               );
             }

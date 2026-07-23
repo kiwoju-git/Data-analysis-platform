@@ -43,6 +43,15 @@ The screen states that switching resets unsaved general-analysis input and
 current screen output; it does not imply that saved analyses or models are
 deleted. QA should switch versions rapidly and confirm that version metadata,
 schema, preview, profile, and analysis columns always belong to one version.
+The selector and its active summary show the dataset version creation time in
+the browser's local timezone, so versions with similar names can be
+distinguished without treating a later label edit as a new dataset version.
+
+After running descriptive statistics, each column-name button opens one inline
+histogram and boxplot computed by the existing graphical-summary method with
+the same dataset and filters. Opening another column closes the previous quick
+view. `그래프 요약에서 전체 보기` keeps that column selected and moves to the
+full Q-Q and ECDF workflow.
 
 Predict distinguishes reviewable target warnings from source blockers. A
 separate target can have a different schema hash and internal IDs while six

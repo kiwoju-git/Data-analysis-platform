@@ -59,12 +59,19 @@ Implemented:
 | --- | --- | --- |
 | Normality and graphical Q-Q | point number, theoretical quantile, observed quantile, reference deviation, column, N basis | only bounded persisted Q-Q points; no invented row index |
 | Histogram | bin number, lower/upper bound and inclusion, count, count/N | persisted aggregate bins only |
-| Boxplot | lower/upper whisker, Q1, median, Q3, lower/upper fence, outlier count, IQR | aggregate elements only; individual outlier values are unavailable and never fabricated |
+| Boxplot | lower/upper whisker, Q1, median, Q3, lower/upper fence, outlier count, IQR | aggregate elements only; the five primary values are always labeled on the axis, coincident values are grouped, and individual outlier values are unavailable and never fabricated |
 | ECDF | point number, X, cumulative probability, approximate rank, N basis | only bounded persisted ECDF points |
 
 Pointer, touch, focus, roving keys, selection outline, SVG title, and the text
 detail region use the same values. Existing result point/bin caps and truncated
 copy remain visible.
+
+The descriptive-statistics table can request a one-column
+`eda.graphical_summary` result for the current immutable dataset version and
+filter snapshot. Its inline quick view reuses the same histogram and boxplot
+components in `quick` mode; the full method uses `full` mode and additionally
+shows Q-Q and ECDF. Quick results never overwrite the descriptive result and
+are invalidated when the active dataset or filter draft changes.
 
 ## Later Phase 2 Backlog
 

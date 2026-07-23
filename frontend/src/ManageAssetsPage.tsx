@@ -5,6 +5,7 @@ import type {
   RegressionModelCatalogItem,
 } from "./api";
 import type { AssetManagementError } from "./assetManagementErrors";
+import { formatLocalDateTime } from "./dateFormat";
 import { useAssetManagementState } from "./useAssetManagementState";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
@@ -159,6 +160,7 @@ function DatasetAssetEditor({
         <span>{item.row_count.toLocaleString()}행</span>
         <span>{item.column_count.toLocaleString()}열</span>
         <span>v{item.version_number}</span>
+        <span>생성 {formatLocalDateTime(item.created_at)}</span>
         <span>ID {shortId(item.version_id)}</span>
       </div>
       <AssetMetadataFields

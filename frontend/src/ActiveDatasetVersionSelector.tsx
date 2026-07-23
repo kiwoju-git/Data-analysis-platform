@@ -1,4 +1,5 @@
 import type { DatasetVersionResponse } from "./api";
+import { formatLocalDateTime } from "./dateFormat";
 import { shortHash } from "./datasetDisplay";
 import type { DatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 
@@ -60,6 +61,7 @@ export function ActiveDatasetVersionSelector({
           <span>v{version.version_number}</span>
           <span>{version.row_count.toLocaleString()}행</span>
           <span>{version.column_count.toLocaleString()}컬럼</span>
+          <span>생성 {formatLocalDateTime(version.created_at)}</span>
           <span className="hash-text">schema {shortHash(version.schema_hash)}</span>
           <span className="hash-text">ID {shortId(version.version_id)}</span>
         </div>
@@ -118,7 +120,7 @@ export function ActiveDatasetVersionSelector({
 function catalogItemLabel(item: NonNullable<DatasetVersionCatalogState["activeItem"]>) {
   const label = item.user_label ?? item.original_filename;
   const original = item.user_label === null ? "" : ` · ${item.original_filename}`;
-  return `${label}${original} · ${item.row_count.toLocaleString()}행 · ${item.column_count.toLocaleString()}열 · v${item.version_number} · ${shortId(item.version_id)}`;
+  return `${label}${original} · ${item.row_count.toLocaleString()}행 · ${item.column_count.toLocaleString()}열 · 생성 ${formatLocalDateTime(item.created_at)} · v${item.version_number} · ${shortId(item.version_id)}`;
 }
 
 function shortId(value: string) {
