@@ -354,7 +354,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "doe.factorial_design",
-          method_version: "0.1.0",
+          method_version: "0.2.0",
           module_id: "doe",
           label_ko: "실험 계획 생성",
           label_en: "Design of Experiments",
@@ -3033,7 +3033,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "quality.run_chart",
-          method_version: "0.1.0",
+          method_version: "0.2.0",
           module_id: "quality",
           label_ko: "런 차트",
           label_en: "Run Chart",
@@ -3083,6 +3083,96 @@ describe("App", () => {
     expect(html).toContain("Run count");
     expect(html).toContain("A run chart");
     expect(html).toContain("run_chart_trend");
+    expect(html).toContain("이전 버전 결과에는 네 가지 근사 p-value가 없습니다.");
+  });
+
+  it("renders the four approximate run-chart randomness p-values separately", () => {
+    const columns = filterTestColumns();
+    const version: DatasetVersionResponse = {
+      ...datasetVersionTestResponse(),
+      columns,
+      column_count: columns.length,
+    };
+    const catalog: AnalysisMethodListResponse = {
+      modules: [
+        {
+          module_id: "quality",
+          label_ko: "품질 관리",
+          label_en: "Quality Control",
+          order: 5,
+        },
+      ],
+      methods: [
+        {
+          method_id: "quality.run_chart",
+          method_version: "0.2.0",
+          module_id: "quality",
+          label_ko: "런 차트",
+          label_en: "Run Chart",
+          availability: "available",
+          execution_mode: "inline",
+          requires_dataset: true,
+          order: 4,
+          disabled_reason: null,
+        },
+      ],
+    };
+    const result: RunChartResult = {
+      ...runChartTestResult(),
+      schema_version: 2,
+      approximate_randomness_tests: {
+        alpha: 0.05,
+        about_median: {
+          method: "normal_approximation_runs_about_median",
+          available: true,
+          skipped_reason: null,
+          observed_runs: 30,
+          expected_runs: 31,
+          variance: 14.745762711864407,
+          z: -0.2604152298810939,
+          n_above: 30,
+          n_at_or_below: 30,
+          tie_policy: "center_is_below",
+          p_value_clustering: 0.01,
+          p_value_mixture: 0.99,
+        },
+        up_down: {
+          method: "normal_approximation_runs_up_down",
+          available: true,
+          skipped_reason: null,
+          observed_runs: 37,
+          expected_runs: 39.6666666667,
+          variance: 10.3444444444,
+          z: -0.8291157144,
+          n_points: 60,
+          flat_policy: "flat_as_down",
+          p_value_trend: 0.2035194662,
+          p_value_oscillation: 0.7964805338,
+        },
+      },
+    };
+    const html = renderToString(
+      <AnalysisPage
+        {...analysisPageTestProps()}
+        analysisCatalog={catalog}
+        runChartResult={result}
+        runChartValueColumnId="column-a"
+        runChartValueColumns={[columns[0]]}
+        selectedMethod={catalog.methods[0]}
+        selectedMethods={catalog.methods}
+        selectedModuleId="quality"
+        version={version}
+      />,
+    );
+
+    expect(html).toContain("근사 랜덤성 검정");
+    expect(html).toContain("군집");
+    expect(html).toContain("혼합");
+    expect(html).toContain("추세");
+    expect(html).toContain("진동");
+    expect(html).toContain("complementary one-sided");
+    expect(html).toContain("원인 검토가 필요합니다");
+    expect(html).not.toContain("이상이 확정");
   });
 
   it("renders the subgroup chart execution panel for the first quality method", () => {

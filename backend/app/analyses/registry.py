@@ -33,7 +33,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "quality.attribute_control_chart": "0.3.0",
     "quality.individuals_chart": METHOD_VERSION,
     "quality.subgroup_chart": METHOD_VERSION,
-    "quality.run_chart": METHOD_VERSION,
+    "quality.run_chart": "0.2.0",
     "quality.capability": METHOD_VERSION,
     "quality.gage_rr": METHOD_VERSION,
     "quality.gage_run_chart": METHOD_VERSION,

@@ -12,6 +12,7 @@ def test_run_chart_is_hand_checkable_for_median_runs_and_trend() -> None:
     )
 
     assert result["summary_type"] == "run_chart"
+    assert result["schema_version"] == 2
     assert result["method"] == "median_run_chart"
     assert result["center_method"] == "median"
     assert result["order_source"] == "canonical_row_order"
@@ -464,8 +465,14 @@ def test_run_chart_rejects_invalid_inputs_without_fake_signals() -> None:
     with pytest.raises(RunChartError, match="run_chart_n_too_small"):
         calculate_run_chart([["1"], ["2"]], _value_column())
 
-    with pytest.raises(RunChartError, match="run_chart_all_values_tied_to_center"):
-        calculate_run_chart([["2"], ["2"], ["2"]], _value_column())
+    constant = calculate_run_chart([["2"], ["2"], ["2"]], _value_column())
+    assert constant["runs_test"]["available"] is False
+    assert constant["approximate_randomness_tests"]["about_median"]["skipped_reason"] == (
+        "one_side_absent"
+    )
+    assert constant["approximate_randomness_tests"]["up_down"]["skipped_reason"] == (
+        "all_values_equal"
+    )
 
     with pytest.raises(RunChartError, match="invalid_run_chart_center_method"):
         calculate_run_chart([["1"], ["2"], ["3"]], _value_column(), center_method="mean")
@@ -490,6 +497,51 @@ def test_run_chart_rejects_invalid_inputs_without_fake_signals() -> None:
             _value_column(),
             runs_test_alpha=0.5,
         )
+
+
+def test_run_chart_approximate_about_median_reference_and_complement() -> None:
+    values: list[list[str]] = []
+    for group_index in range(30):
+        value = "-1" if group_index % 2 == 0 else "1"
+        values.extend([[value], [value]])
+
+    result = calculate_run_chart(values, _value_column())
+    approximate = result["approximate_randomness_tests"]["about_median"]
+
+    assert approximate["available"] is True
+    assert approximate["n_above"] == 30
+    assert approximate["n_at_or_below"] == 30
+    assert approximate["observed_runs"] == 30
+    assert approximate["expected_runs"] == pytest.approx(31.0)
+    assert approximate["p_value_clustering"] == pytest.approx(0.3972717482, abs=1e-10)
+    assert approximate["p_value_mixture"] == pytest.approx(0.6027282518, abs=1e-10)
+    assert approximate["p_value_clustering"] + approximate["p_value_mixture"] == pytest.approx(
+        1.0,
+        abs=1e-15,
+    )
+
+
+def test_run_chart_approximate_up_down_reference_and_complement() -> None:
+    directions = [1 if index % 2 == 0 else -1 for index in range(36)] + [1] * 23
+    value = 0
+    values = [["0"]]
+    for direction in directions:
+        value += direction
+        values.append([str(value)])
+
+    result = calculate_run_chart(values, _value_column())
+    approximate = result["approximate_randomness_tests"]["up_down"]
+
+    assert len(values) == 60
+    assert approximate["available"] is True
+    assert approximate["observed_runs"] == 37
+    assert approximate["expected_runs"] == pytest.approx(39.6666666667)
+    assert approximate["p_value_trend"] == pytest.approx(0.2035194662, abs=1e-10)
+    assert approximate["p_value_oscillation"] == pytest.approx(0.7964805338, abs=1e-10)
+    assert approximate["p_value_trend"] + approximate["p_value_oscillation"] == pytest.approx(
+        1.0,
+        abs=1e-15,
+    )
 
 
 def _value_column() -> RunChartColumn:

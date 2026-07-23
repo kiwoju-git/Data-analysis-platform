@@ -4,8 +4,8 @@ This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
 `doe.factorial_design` and `regression.response_optimizer` are `0.3.0`, and
 `doe.response_surface` is `0.2.0`. `doe.bayesian_optimization` is `0.2.2`,
-`quality.attribute_control_chart` is `0.3.0`, and `eda.normality` is `0.2.0`;
-the other stable IDs remain on `0.1.0`.
+`quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
+`quality.run_chart` is `0.2.0`; the other stable IDs remain on `0.1.0`.
 
 ## Source Of Truth
 
@@ -39,6 +39,14 @@ SciPy statistic, critical-value table, and table-based decision keep their
 original meaning. Schema-1 results remain readable and the frontend labels
 their unavailable AD p-value as a legacy-result limitation; stored results are
 not rewritten.
+
+`quality.run_chart` moves from `0.1.0`/result schema `1` to
+`0.2.0`/result schema `2` because it adds four separately named,
+normal-approximation randomness p-values and their tie/flat policies. The
+existing exact conditional runs tails and strict consecutive-pattern signals
+retain their original fields and meaning. Stored schema-1 results are not
+rewritten; the frontend renders their original content and labels the new
+p-values as unavailable for that legacy result.
 
 Adding operational user label/note/pinned metadata, management routes, and
 dependency-safe dataset-version deletion does not change a statistical request,

@@ -374,6 +374,41 @@ export interface RunChartRunsTest {
   max_exact_n: number;
 }
 
+export interface RunChartApproximateAboutMedianTest {
+  method: "normal_approximation_runs_about_median";
+  available: boolean;
+  skipped_reason: string | null;
+  observed_runs: number;
+  expected_runs: number | null;
+  variance: number | null;
+  z: number | null;
+  n_above: number;
+  n_at_or_below: number;
+  tie_policy: "center_is_below";
+  p_value_clustering: number | null;
+  p_value_mixture: number | null;
+}
+
+export interface RunChartApproximateUpDownTest {
+  method: "normal_approximation_runs_up_down";
+  available: boolean;
+  skipped_reason: string | null;
+  observed_runs: number;
+  expected_runs: number | null;
+  variance: number | null;
+  z: number | null;
+  n_points: number;
+  flat_policy: "flat_as_down";
+  p_value_trend: number | null;
+  p_value_oscillation: number | null;
+}
+
+export interface RunChartApproximateRandomnessTests {
+  alpha: number;
+  about_median: RunChartApproximateAboutMedianTest;
+  up_down: RunChartApproximateUpDownTest;
+}
+
 export interface RunChartSignal {
   signal_id: string;
   code: string;
@@ -422,6 +457,7 @@ export interface RunChartResult {
     minimum_length: number;
   };
   runs_test: RunChartRunsTest;
+  approximate_randomness_tests?: RunChartApproximateRandomnessTests;
   warnings: string[];
   value: RunChartColumnRef;
   order: RunChartColumnRef | null;

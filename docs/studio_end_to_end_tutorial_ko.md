@@ -345,7 +345,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 - **클릭 순서:** 역할/규칙 > 사전점검 > 실행 > signal list.
 - **실행 전 확인:** timestamp가 실제 synthetic 순서이고 duplicate/missing이 없는지 본다.
 <!-- TUTORIAL_RESULT:quality.run_chart:start -->
-- **검증 source:** `quality.run_chart` v0.1.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
+- **검증 source:** `quality.run_chart` v0.2.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
 - **예상 실제 결과 (표시 반올림):**
   - N=240, center median=80.7539, points=240, signals=0
 <!-- TUTORIAL_RESULT:quality.run_chart:end -->

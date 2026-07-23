@@ -400,7 +400,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280",
       "method_id": "quality.run_chart",
-      "method_version": "0.1.0",
+      "method_version": "0.2.0",
       "relative_tolerance": 1e-08,
       "result": {
         "center_line": 80.7539,

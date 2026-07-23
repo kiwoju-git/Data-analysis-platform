@@ -2,9 +2,9 @@
 
 Method ID: `quality.run_chart`
 
-Method version: `0.1.0`
+Method version: `0.2.0`
 
-Current status: available Gate D slice with exact run-count signals
+Current status: available Gate D slice with exact run-count signals and separate approximate randomness tests
 
 ## Scope
 
@@ -24,6 +24,7 @@ Included:
 - strictly monotonic trend signal with a default minimum length of 6 points
 - strictly alternating oscillation signal with a default minimum length of 14 points
 - exact conditional run-count test for clustering and mixture signals, default alpha `0.05`
+- complementary normal-approximation p-values for clustering/mixture and trend/oscillation, default alpha `0.05`
 - capped chart payload for inline frontend SVG rendering
 
 Out of scope:
@@ -66,6 +67,7 @@ The result uses:
 - `order_duplicate_count`: count of order-column ties after exclusions
 - `runs`: run count, above/below/tie counts, longest run length, and run definition
 - `runs_test`: exact conditional run-count test summary with observed run count, above/below/tie counts, expected run count, variance, low/high tail p-values, interpretation, and explicit skip reason when unavailable
+- `approximate_randomness_tests`: schema-2 summaries for runs about the median and up/down runs, including availability, skip reason, observed/expected runs, variance, z, tie/flat policy, and complementary one-sided p-values
 - `signals`: currently `run_chart_trend`, `run_chart_oscillation`, `run_chart_clustering`, and `run_chart_mixture`
 - `chart`: capped points with x-axis position, numeric value, relative-to-center label, and signal codes
 
@@ -91,7 +93,6 @@ When an order column is selected, chart points expose only order rank plus canon
 - `invalid_run_chart_runs_test_alpha`
 - `invalid_run_chart_point_limit`
 - `run_chart_n_too_small`
-- `run_chart_all_values_tied_to_center`
 
 ## Interpretation Rules
 
@@ -103,7 +104,25 @@ Run chart signals are not control-chart out-of-control signals. This method does
 
 `run_chart_mixture` means the observed median above/below run count is unusually high under the same exact conditional distribution.
 
-The exact run-count test excludes points tied to the median. If above or below is absent, or if the non-tie count exceeds the current exact calculation limit of 5000, the result records `available=false` and no clustering/mixture signal is emitted. No normal approximation or fallback signal is used.
+The exact run-count test excludes points tied to the median. If above or below is absent, or if the non-tie count exceeds the current exact calculation limit of 5000, the result records `available=false` and no exact clustering/mixture signal is emitted.
+
+The schema-2 approximate about-median test is separate from that exact test. It
+assigns values equal to the center to the at-or-below side. With `m` above, `n`
+at-or-below, total `N`, and observed runs `R`, it uses
+`E(R)=1+2mn/N` and `Var(R)=2mn(2mn-N)/(N^2(N-1))`. Clustering is `Phi(z)` and
+mixture is exactly `1-Phi(z)`.
+
+The approximate up/down test treats equal adjacent values as down, counts runs
+in the resulting direction sequence, and uses `E(V)=(2N-1)/3` and
+`Var(V)=(16N-29)/90`. Trend is `Phi(z)` and oscillation is exactly
+`1-Phi(z)`. These approximate p-values do not replace the strict six-point
+trend or fourteen-point oscillation rules. A small p-value is evidence to
+review a possible non-random pattern; it does not prove a defect or process
+instability.
+
+Legacy `0.1.0`/schema-1 results remain readable. They show the persisted chart,
+exact runs test, and strict signals, plus a notice that the four approximate
+p-values were not part of that stored result.
 
 Canonical row order is only valid when the dataset row order represents the process/run order. If a numeric or datetime run/order column exists, users can select it and the method sorts ascending with canonical row position as a stable tie-breaker.
 Datetime order columns support ISO 8601 and the same common date/time formats used by dataset profile preflight. Timezone-aware datetime values are compared after UTC normalization. Mixing timezone-aware and timezone-naive values is rejected with `run_chart_order_mixed_timezone_awareness` instead of silently imposing an ambiguous order. Raw datetime values are not included in the result payload.

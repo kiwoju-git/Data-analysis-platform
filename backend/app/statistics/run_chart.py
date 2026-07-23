@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from math import exp, fsum, isfinite, lgamma, log
+from statistics import NormalDist
 
 MIN_N = 3
 DEFAULT_POINT_LIMIT = 1000
@@ -178,13 +179,13 @@ def calculate_run_chart(
         for index, candidate in enumerate(values, start=1)
     ]
     run_summary = _run_summary(points)
-    n_above = _int_summary_value(run_summary, "n_above")
-    n_below = _int_summary_value(run_summary, "n_below")
     n_ties = _int_summary_value(run_summary, "n_ties")
-    if n_above == 0 and n_below == 0:
-        raise RunChartError("run_chart_all_values_tied_to_center")
-
     runs_test = _runs_test(points, run_summary, alpha=runs_test_alpha)
+    approximate_randomness_tests = _approximate_randomness_tests(
+        points,
+        center_line=center_line,
+        alpha=runs_test_alpha,
+    )
     signals = [
         *_trend_signals(points, min_length=trend_min_length),
         *_oscillation_signals(points, min_length=oscillation_min_length),
@@ -206,7 +207,7 @@ def calculate_run_chart(
     )
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "run_chart",
         "method": "median_run_chart",
         "center_method": center_method,
@@ -226,6 +227,7 @@ def calculate_run_chart(
             "minimum_length": oscillation_min_length,
         },
         "runs_test": runs_test,
+        "approximate_randomness_tests": approximate_randomness_tests,
         "warnings": warnings,
         "value": _column_payload(value_column),
         "order": _column_payload(order_column) if order_column is not None else None,
@@ -476,6 +478,137 @@ def _runs_test(
         },
     )
     return payload
+
+
+def _approximate_randomness_tests(
+    points: Sequence[_RunChartPoint],
+    *,
+    center_line: float,
+    alpha: float,
+) -> dict[str, object]:
+    return {
+        "alpha": alpha,
+        "about_median": _approximate_runs_about_median(points, center_line=center_line),
+        "up_down": _approximate_runs_up_down(points),
+    }
+
+
+def _approximate_runs_about_median(
+    points: Sequence[_RunChartPoint],
+    *,
+    center_line: float,
+) -> dict[str, object]:
+    sides = [1 if point.value > center_line else -1 for point in points]
+    n_above = sides.count(1)
+    n_at_or_below = len(sides) - n_above
+    observed_runs = _direction_run_count(sides)
+    payload: dict[str, object] = {
+        "method": "normal_approximation_runs_about_median",
+        "available": False,
+        "skipped_reason": None,
+        "observed_runs": observed_runs,
+        "expected_runs": None,
+        "variance": None,
+        "z": None,
+        "n_above": n_above,
+        "n_at_or_below": n_at_or_below,
+        "tie_policy": "center_is_below",
+        "p_value_clustering": None,
+        "p_value_mixture": None,
+    }
+    total = len(sides)
+    if total < MIN_N:
+        payload["skipped_reason"] = "insufficient_points"
+        return payload
+    if n_above == 0 or n_at_or_below == 0:
+        payload["skipped_reason"] = "one_side_absent"
+        return payload
+
+    expected_runs = 1 + (2 * n_above * n_at_or_below / total)
+    variance = (
+        2
+        * n_above
+        * n_at_or_below
+        * ((2 * n_above * n_at_or_below) - total)
+        / ((total**2) * (total - 1))
+    )
+    if not isfinite(variance) or variance <= 0:
+        payload["skipped_reason"] = "non_positive_variance"
+        return payload
+    z = (observed_runs - expected_runs) / variance**0.5
+    if not isfinite(z):
+        payload["skipped_reason"] = "non_finite_standardized_statistic"
+        return payload
+    p_value_clustering = _clamp_probability(NormalDist().cdf(z))
+    payload.update(
+        {
+            "available": True,
+            "expected_runs": expected_runs,
+            "variance": variance,
+            "z": z,
+            "p_value_clustering": p_value_clustering,
+            "p_value_mixture": 1.0 - p_value_clustering,
+        },
+    )
+    return payload
+
+
+def _approximate_runs_up_down(points: Sequence[_RunChartPoint]) -> dict[str, object]:
+    directions = [
+        1 if points[index].value > points[index - 1].value else -1
+        for index in range(1, len(points))
+    ]
+    observed_runs = _direction_run_count(directions)
+    total = len(points)
+    payload: dict[str, object] = {
+        "method": "normal_approximation_runs_up_down",
+        "available": False,
+        "skipped_reason": None,
+        "observed_runs": observed_runs,
+        "expected_runs": None,
+        "variance": None,
+        "z": None,
+        "n_points": total,
+        "flat_policy": "flat_as_down",
+        "p_value_trend": None,
+        "p_value_oscillation": None,
+    }
+    if total < MIN_N:
+        payload["skipped_reason"] = "insufficient_points"
+        return payload
+    if len({point.value for point in points}) == 1:
+        payload["skipped_reason"] = "all_values_equal"
+        return payload
+
+    expected_runs = (2 * total - 1) / 3
+    variance = (16 * total - 29) / 90
+    if not isfinite(variance) or variance <= 0:
+        payload["skipped_reason"] = "non_positive_variance"
+        return payload
+    z = (observed_runs - expected_runs) / variance**0.5
+    if not isfinite(z):
+        payload["skipped_reason"] = "non_finite_standardized_statistic"
+        return payload
+    p_value_trend = _clamp_probability(NormalDist().cdf(z))
+    payload.update(
+        {
+            "available": True,
+            "expected_runs": expected_runs,
+            "variance": variance,
+            "z": z,
+            "p_value_trend": p_value_trend,
+            "p_value_oscillation": 1.0 - p_value_trend,
+        },
+    )
+    return payload
+
+
+def _direction_run_count(directions: Sequence[int]) -> int:
+    if not directions:
+        return 0
+    return 1 + sum(
+        directions[index] != directions[index - 1] for index in range(1, len(directions))
+    )
 
 
 def _run_count_tail_probabilities(

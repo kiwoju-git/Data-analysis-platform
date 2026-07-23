@@ -163,6 +163,7 @@ export function RunChartPanel({
                 <span>관리한계</span>
                 <strong>계산 안 함</strong>
               </div>
+              <ApproximateRandomnessTests result={result} />
               <div className="result-section" aria-label="런 차트 결과">
                 <div className="panel-heading">
                   <div>
@@ -244,6 +245,116 @@ export function RunChartPanel({
           ) : null}
         </>
       )}
+    </section>
+  );
+}
+
+function ApproximateRandomnessTests({ result }: { result: RunChartResult }) {
+  const tests = result.approximate_randomness_tests;
+  if (tests === undefined) {
+    return (
+      <div className="notice-box">
+        이전 버전 결과에는 네 가지 근사 p-value가 없습니다. 기존 exact runs test와
+        연속 패턴 결과는 그대로 확인할 수 있습니다.
+      </div>
+    );
+  }
+  const about = tests.about_median;
+  const upDown = tests.up_down;
+  const cards = [
+    {
+      key: "clustering",
+      label: "군집",
+      pValue: about.p_value_clustering,
+      available: about.available,
+      skippedReason: about.skipped_reason,
+      observed: about.observed_runs,
+      expected: about.expected_runs,
+      policy: "중앙값과 같은 값은 아래쪽에 포함",
+    },
+    {
+      key: "mixture",
+      label: "혼합",
+      pValue: about.p_value_mixture,
+      available: about.available,
+      skippedReason: about.skipped_reason,
+      observed: about.observed_runs,
+      expected: about.expected_runs,
+      policy: "중앙값과 같은 값은 아래쪽에 포함",
+    },
+    {
+      key: "trend",
+      label: "추세",
+      pValue: upDown.p_value_trend,
+      available: upDown.available,
+      skippedReason: upDown.skipped_reason,
+      observed: upDown.observed_runs,
+      expected: upDown.expected_runs,
+      policy: "같은 값은 하강 방향에 포함",
+    },
+    {
+      key: "oscillation",
+      label: "진동",
+      pValue: upDown.p_value_oscillation,
+      available: upDown.available,
+      skippedReason: upDown.skipped_reason,
+      observed: upDown.observed_runs,
+      expected: upDown.expected_runs,
+      policy: "같은 값은 하강 방향에 포함",
+    },
+  ];
+  return (
+    <section className="result-section" aria-labelledby="run-chart-randomness-title">
+      <div className="panel-heading">
+        <div>
+          <h4 id="run-chart-randomness-title">근사 랜덤성 검정</h4>
+          <p>
+            군집/혼합과 추세/진동은 각 쌍이 합계 1인 complementary one-sided
+            p-value입니다. 연속 6점/14점 패턴 규칙 및 기존 exact runs test와 별도입니다.
+          </p>
+        </div>
+      </div>
+      <div className="run-chart-randomness-grid">
+        {cards.map((card) => {
+          const significant =
+            card.available && card.pValue !== null && card.pValue <= tests.alpha;
+          return (
+            <article className="metric-card" key={card.key}>
+              <span>{card.label}</span>
+              <strong>
+                {card.available
+                  ? `p=${formatRunChartNumber(card.pValue)}`
+                  : "계산할 수 없음"}
+              </strong>
+              <span>α={formatRunChartNumber(tests.alpha)}</span>
+              <p>
+                {card.available
+                  ? significant
+                    ? "비랜덤 패턴의 통계적 증거가 있어 원인 검토가 필요합니다."
+                    : "이 패턴에 대한 유의한 증거가 부족합니다."
+                  : `계산 조건 부족: ${card.skippedReason ?? "unknown"}`}
+              </p>
+              <details>
+                <summary>상세정보</summary>
+                <dl className="compact-definition-list">
+                  <div>
+                    <dt>관측 run</dt>
+                    <dd>{card.observed.toLocaleString()}</dd>
+                  </div>
+                  <div>
+                    <dt>기대 run</dt>
+                    <dd>{formatRunChartNumber(card.expected)}</dd>
+                  </div>
+                  <div>
+                    <dt>tie/flat 정책</dt>
+                    <dd>{card.policy}</dd>
+                  </div>
+                </dl>
+              </details>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }

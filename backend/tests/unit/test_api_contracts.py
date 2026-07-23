@@ -6516,7 +6516,7 @@ def test_analysis_run_executes_run_chart_from_dataset_version(tmp_path) -> None:
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": value_column_id,
@@ -6625,7 +6625,7 @@ def test_analysis_run_executes_run_chart_with_numeric_order_column(tmp_path) -> 
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": value_column_id,
@@ -6723,7 +6723,7 @@ def test_analysis_run_executes_run_chart_with_datetime_order_column(tmp_path) ->
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": value_column_id,
@@ -6807,7 +6807,7 @@ def test_analysis_run_executes_run_chart_with_oscillation_signal(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": value_column_id,
@@ -6900,7 +6900,7 @@ def test_analysis_run_executes_run_chart_with_clustering_signal(tmp_path) -> Non
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": value_column_id,
@@ -6976,7 +6976,7 @@ def test_analysis_run_rejects_run_chart_non_numeric_order_column(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": version["columns"][0]["column_id"],
@@ -7031,7 +7031,7 @@ def test_analysis_run_rejects_run_chart_mixed_timezone_order_column(tmp_path) ->
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": version["columns"][0]["column_id"],
@@ -7081,7 +7081,7 @@ def test_analysis_run_rejects_invalid_run_chart_oscillation_min_length(tmp_path)
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": version["columns"][0]["column_id"],
@@ -7130,7 +7130,7 @@ def test_analysis_run_rejects_invalid_run_chart_runs_test_alpha(tmp_path) -> Non
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.run_chart",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "value": version["columns"][0]["column_id"],
