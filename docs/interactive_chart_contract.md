@@ -59,7 +59,7 @@ Implemented:
 | --- | --- | --- |
 | Normality and graphical Q-Q | point number, theoretical quantile, observed quantile, reference deviation, column, N basis | only bounded persisted Q-Q points; no invented row index |
 | Histogram | bin number, lower/upper bound and inclusion, count, count/N | persisted aggregate bins only |
-| Boxplot | lower/upper whisker, Q1, median, Q3, lower/upper fence, outlier count, IQR | aggregate elements only; the five primary values are always labeled on the axis, coincident values are grouped, and individual outlier values are unavailable and never fabricated |
+| Boxplot | lower/upper whisker, Q1, median, Q3, lower/upper fence, outlier count, IQR | aggregate elements only; the five primary numeric values share one axis-label baseline, close labels use short guides, coincident values are grouped, names remain in accessible detail/tooltip, and individual outlier values are unavailable and never fabricated |
 | ECDF | point number, X, cumulative probability, approximate rank, N basis | only bounded persisted ECDF points |
 
 Pointer, touch, focus, roving keys, selection outline, SVG title, and the text

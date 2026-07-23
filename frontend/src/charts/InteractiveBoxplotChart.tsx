@@ -21,8 +21,8 @@ interface InteractiveBoxplotChartProps {
 }
 
 const width = 420;
-const height = 282;
-const plot = { left: 46, right: 18, top: 18, bottom: 116 };
+const height = 230;
+const plot = { left: 46, right: 18, top: 18, bottom: 70 };
 
 export function InteractiveBoxplotChart({
   boxplot,
@@ -81,7 +81,7 @@ export function InteractiveBoxplotChart({
   ];
   const markerLabels = layoutBoxplotMarkers(
     markerEntries,
-    86,
+    52,
     plot.left,
     plot.left + plotWidth,
   );
@@ -165,19 +165,27 @@ export function InteractiveBoxplotChart({
           />
         ))}
         {markerLabels.map((marker) => (
-          <text
-            className="boxplot-value-label"
-            data-marker-label={marker.keys.join(",")}
-            key={marker.keys.join("-")}
-            textAnchor={marker.anchor}
-            x={marker.x}
-            y={axisY + 24 + marker.row * 28}
-          >
-            <tspan x={marker.x}>{marker.label}</tspan>
-            <tspan className="boxplot-value-number" dy="13" x={marker.x}>
+          <g key={marker.keys.join("-")}>
+            {Math.abs(marker.x - marker.markerX) > 0.5 ? (
+              <line
+                className="boxplot-value-guide"
+                x1={marker.markerX}
+                x2={marker.x}
+                y1={axisY + 8}
+                y2={axisY + 15}
+              />
+            ) : null}
+            <text
+              aria-label={`${marker.label}: ${formatNumber(marker.value)}`}
+              className="boxplot-value-label"
+              data-marker-label={marker.keys.join(",")}
+              textAnchor={marker.anchor}
+              x={marker.x}
+              y={axisY + 30}
+            >
               {formatNumber(marker.value)}
-            </tspan>
-          </text>
+            </text>
+          </g>
         ))}
         {[...entries, outlierEntry].map((entry) => {
           const itemX = entry.id === outlierEntry.id ? plot.left + 42 : x(entry.value);

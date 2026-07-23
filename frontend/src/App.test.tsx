@@ -446,7 +446,8 @@ describe("App", () => {
 
     expect(html).not.toContain("무엇을 알고 싶나요?");
     expect(html).not.toContain("역할 설명");
-    expect(html).toContain("분석 선택이 어렵나요? 도움말에서 질문으로 찾기");
+    expect(html).toContain("분석 선택 도움말");
+    expect(html).toContain("역할 사전");
     expect(html).toContain("분석 도움말");
     expect(helpHtml).toContain("무엇을 알고 싶나요?");
     expect(helpHtml).toContain("한 컬럼의 분포와 이상치를 보고 싶다");

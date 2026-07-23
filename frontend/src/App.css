@@ -2333,14 +2333,14 @@ td {
   stroke-width: 1.4;
 }
 
-.boxplot-value-label {
-  fill: #384457;
-  font-size: 9px;
-  font-weight: 600;
+.boxplot-value-guide {
+  stroke: #7b8798;
+  stroke-width: 1;
 }
 
-.boxplot-value-number {
+.boxplot-value-label {
   fill: #172033;
+  font-size: 9px;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
@@ -2374,22 +2374,40 @@ td {
   }
 }
 
-.table-link-button {
-  border: 0;
-  background: transparent;
-  padding: 2px 0;
-  color: #165f91;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 650;
-  text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.descriptive-column-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
 }
 
-.table-link-button:focus-visible {
+.descriptive-column-name {
+  color: #172033;
+  font-weight: 650;
+}
+
+.descriptive-graph-button {
+  min-height: 24px;
+  border: 1px solid #aeb8c6;
+  border-radius: 4px;
+  background: #ffffff;
+  padding: 2px 7px;
+  color: #34445b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.descriptive-graph-button:hover {
+  border-color: #607086;
+  background: #f4f7fa;
+}
+
+.descriptive-graph-button:focus-visible {
   outline: 2px solid #1d6f95;
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .descriptive-quick-graph-row > td {

@@ -32,7 +32,10 @@ describe("EDA usability foundations", () => {
     expect(labels[1].label).toBe("Q1 · Median · Q3");
     expect(labels[0].anchor).toBe("start");
     expect(labels[2].anchor).toBe("end");
-    expect(labels.every((label) => label.row >= 0 && label.row <= 2)).toBe(true);
+    expect(labels.every((label) => label.row === 0)).toBe(true);
+    expect(labels.every((label, index) => index === 0 || label.x > labels[index - 1].x)).toBe(
+      true,
+    );
   });
 
   it("always renders the five primary boxplot values without fabricating outlier points", () => {
@@ -58,7 +61,8 @@ describe("EDA usability foundations", () => {
     expect(html).toContain('data-marker="median"');
     expect(html).toContain('data-marker="q3"');
     expect(html).toContain('data-marker="upper-whisker"');
-    expect(html).toContain("Q1 · Median");
+    expect(html).toContain('aria-label="Q1 · Median: 1"');
+    expect(html).not.toContain("<tspan>Lower whisker</tspan>");
     expect(html).toContain("outliers");
     expect(html).toContain(">2</text>");
   });
@@ -117,8 +121,9 @@ describe("EDA usability foundations", () => {
     );
 
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("온도");
-    expect(html).toContain("그래프 보기");
+    expect(html).toContain('<span class="descriptive-column-name">온도</span>');
+    expect(html).toContain('class="descriptive-graph-button"');
+    expect(html).toContain(">그래프</button>");
     expect(html).toContain("그래프 요약에서 전체 보기");
     expect(html).toContain("히스토그램");
     expect(html).toContain("박스플롯");

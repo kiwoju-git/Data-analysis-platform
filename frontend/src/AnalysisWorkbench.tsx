@@ -237,10 +237,10 @@ export function AnalysisWorkbench({
       </nav>
       <div className="analysis-help-links" aria-label="분석 선택 도움말">
         <button className="text-button" onClick={() => onOpenHelp("purpose")} type="button">
-          분석 선택이 어렵나요? 도움말에서 질문으로 찾기
+          분석 선택 도움말
         </button>
         <button className="text-button" onClick={() => onOpenHelp("roles")} type="button">
-          역할이 헷갈리나요? 역할 사전 열기
+          역할 사전
         </button>
       </div>
       <div className="method-grid" aria-label="분석 메서드">

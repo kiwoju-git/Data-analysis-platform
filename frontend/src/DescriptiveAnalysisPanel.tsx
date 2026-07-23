@@ -153,18 +153,26 @@ export function DescriptiveAnalysisPanel({
                       <Fragment key={column.column_id}>
                         <tr>
                           <td>
-                            <button
-                              aria-controls={panelId}
-                              aria-expanded={expanded}
-                              className="table-link-button"
-                              onClick={(event) => {
-                                focusQuickResultRef.current = event.detail === 0;
-                                onToggleQuickGraph(column.column_id);
-                              }}
-                              type="button"
-                            >
-                              {column.display_name} 그래프 보기
-                            </button>
+                            <div className="descriptive-column-control">
+                              <span className="descriptive-column-name">
+                                {column.display_name}
+                              </span>
+                              <button
+                                aria-controls={panelId}
+                                aria-expanded={expanded}
+                                aria-label={`${column.display_name} 그래프 ${
+                                  expanded ? "닫기" : "보기"
+                                }`}
+                                className="descriptive-graph-button"
+                                onClick={(event) => {
+                                  focusQuickResultRef.current = event.detail === 0;
+                                  onToggleQuickGraph(column.column_id);
+                                }}
+                                type="button"
+                              >
+                                그래프
+                              </button>
+                            </div>
                           </td>
                           <td>{column.n_used}</td>
                           <td>{column.n_missing}</td>

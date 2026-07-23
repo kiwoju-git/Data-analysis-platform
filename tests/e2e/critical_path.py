@@ -689,12 +689,10 @@ def verify_descriptive_quick_charts_and_run_chart(page: Page) -> None:
     expect(quick_graph).to_be_visible(timeout=20_000)
     expect(quick_graph.get_by_text("히스토그램", exact=True)).to_be_visible()
     expect(quick_graph.get_by_text("박스플롯", exact=True)).to_be_visible()
-    for marker in ("Lower whisker", "Q1", "Median", "Q3", "Upper whisker"):
-        expect(
-            quick_graph.locator("text[data-marker-label] > tspan:first-child").filter(
-                has_text=re.compile(rf"^{re.escape(marker)}$")
-            )
-        ).to_be_visible()
+    marker_labels = quick_graph.locator("text.boxplot-value-label")
+    expect(marker_labels).to_have_count(5)
+    for index in range(5):
+        expect(marker_labels.nth(index)).to_have_text(re.compile(r"^-?[\d,.]+$"))
 
     select_method_card(page, "품질 관리", "런 차트")
     page.get_by_label("측정값").select_option(label="Value")

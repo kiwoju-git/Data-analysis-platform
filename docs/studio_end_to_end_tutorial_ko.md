@@ -129,10 +129,11 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 <!-- TUTORIAL_RESULT:eda.graphical_summary:end -->
 - **먼저 읽을 값:** N/exclusions, mean/median, SD/IQR, min/max, boxplot outlier count.
 - **해석 예시:** 수율의 중심과 관측 간 산포를 함께 읽고, 범위와 사분위수 밖 후보를 확인한다.
-- **빠른 그래프:** 기술통계 표에서 `yield_pct 그래프 보기`를 선택하면 같은
+- **빠른 그래프:** 기술통계 표에서 `yield_pct` 옆의 `그래프` 버튼을 선택하면 같은
   dataset/filter 조건의 histogram과 boxplot이 행 바로 아래에 열린다. 한 번에 한
   컬럼만 열리며 `그래프 요약에서 전체 보기`로 Q-Q와 ECDF까지 이어서 확인한다.
-  Boxplot에는 lower whisker, Q1, median, Q3, upper whisker가 항상 표시된다.
+  Boxplot에는 lower whisker, Q1, median, Q3, upper whisker의 다섯 주요 수치가
+  축 아래 한 줄에 숫자로 표시된다.
 - **과해석 금지:** histogram 모양만으로 정규성, 안정성 또는 원인을 확정하지 않는다.
 - **예상 warning:** 그래프는 진단 도구이며 자동 검정 선택 규칙이 아니다.
 - **오류 확인:** 숫자 컬럼이 nominal/string으로 확정되지 않았는지, filter 후 N=0인지 본다.
