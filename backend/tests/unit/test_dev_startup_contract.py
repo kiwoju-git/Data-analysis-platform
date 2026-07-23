@@ -228,7 +228,7 @@ def _write_archive_source(root: Path) -> None:
         "frontend/src/main.tsx": "export const build = 'initial';\n",
         "frontend/package.json": '{"name":"datalab"}\n',
         "frontend/package-lock.json": '{"lockfileVersion":3}\n',
-        "frontend/index.html": "<div id=\"root\"></div>\n",
+        "frontend/index.html": '<div id="root"></div>\n',
         "frontend/tsconfig.json": '{"compilerOptions":{"strict":true}}\n',
         "frontend/vite.config.ts": "export default {};\n",
         "scripts/dev.ps1": "Write-Host 'dev'\n",
@@ -255,8 +255,7 @@ def _run_build_id(
     helper = helper_repo_root / "scripts/dev_runtime_helpers.ps1"
     path_setup = "$env:PATH = '';" if clear_path else ""
     command = (
-        f". '{helper}'; {path_setup} "
-        "Get-DevRepositoryBuildId -RepoRoot $env:TEST_REPO_ROOT"
+        f". '{helper}'; {path_setup} " "Get-DevRepositoryBuildId -RepoRoot $env:TEST_REPO_ROOT"
     )
     environment = os.environ.copy()
     environment["TEST_REPO_ROOT"] = str(source_root)

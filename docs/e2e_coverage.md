@@ -4,6 +4,26 @@ This document describes what the current Playwright smoke covers, how to run it,
 and how to inspect failures. It is an operations and coverage note, not a
 statistical-method expansion plan.
 
+## Current Usability Slice Coverage
+
+The browser critical path now creates a fresh numeric dataset after the
+existing upload/parser/analysis flows and verifies:
+
+- the active dataset summary includes the version creation time;
+- a descriptive column opens one inline shared histogram/boxplot result;
+- the boxplot visibly labels lower whisker, Q1, median, Q3, and upper whisker;
+- Run Chart renders the separate 군집/혼합/추세/진동 approximate-randomness
+  cards;
+- Report Center actions are a sibling detail panel immediately below the
+  selected list row; and
+- a Help purpose method selection updates `method_id`, scrolls, and focuses the
+  selected detail.
+
+Dataset metadata-only cleanup and model/prediction atomic cascade failure
+branches remain covered by backend integration and frontend component/state
+tests, where file tamper, stale manifests, transaction conflict, and rollback
+can be asserted deterministically without risking a browser-created workspace.
+
 ## Runtime Compatibility And Compact History Coverage
 
 The current revision adds component/contract coverage that blocks missing or
@@ -262,6 +282,7 @@ browser critical path.
 - `verify delimiter option editing`
 - `verify XLSX sheet selection recovery`
 - `verify CP949 encoding selection recovery`
+- `verify descriptive quick charts and run chart p-values`
 - `verify lazy panel direct routes`
 - `verify lazy panel error boundary`
 

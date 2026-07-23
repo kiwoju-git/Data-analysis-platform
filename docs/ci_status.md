@@ -4,6 +4,29 @@ Last updated: 2026-07-23
 
 ## Local Validation
 
+- The usability/retention/run-chart/ZIP feature branch based on pushed main
+  `e6f74f031daaa5208eac77f8beba35b427d44d9d` passed the final development
+  validation on 2026-07-23. `scripts/check.ps1` took 945.9 seconds: tutorial
+  Markdown blocks 18, Ruff/format over 166 Python files, mypy over 103 source
+  files, backend pytest 829, frontend lint/typecheck and Vitest 185, direct
+  OpenAPI/frontend contracts 168, and production build.
+- The real-API tutorial smoke passed all 18 sections in 18.7 seconds. The final
+  Chromium critical path passed in 88.3 seconds and includes descriptive quick
+  histogram/boxplot, five persistent boxplot labels, Run Chart four-card
+  approximate randomness output, dataset creation time, Report inline actions,
+  Help method focus, and all retained Predict/Optimizer/Bayesian/retention/
+  upload/lazy-route paths.
+- The production build measured main at 503.51 kB / 123.84 kB gzip, Report at
+  39.01/8.67 kB, Regression at 59.65/13.36 kB, Manage at 20.35/5.38 kB,
+  Quality at 67.05/12.82 kB, DOE at 111.16/26.24 kB, and Help at 18.40/6.47
+  kB. Main remains above Vite's 500 kB warning threshold; no unsafe split or
+  dependency was added to hide it.
+- The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
+  24.17.0. This is development evidence, not Windows 11/Python 3.10/Node 22
+  release evidence.
+- Remote Actions for this feature branch are pending push. Hosted success is
+  not inferred from the local results.
+
 - The runtime-compatibility and compact-history worktree based on pushed main
   `6cc097a6f3d2983feab1fd7e4ccc2c5ab16f765d` passed `scripts/check.ps1` on
   2026-07-23. The final rerun after hosted-Windows fixture stabilization took

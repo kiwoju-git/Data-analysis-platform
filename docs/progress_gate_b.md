@@ -2,6 +2,43 @@
 
 Last updated: 2026-07-23
 
+## Usability, Retention, Run Chart, And ZIP Support
+
+- Descriptive result column buttons now execute the existing
+  `eda.graphical_summary` contract for exactly one column and the current
+  dataset/filter snapshot. Histogram and boxplot render inline through the
+  shared graphical-summary component; cache/request guards prevent duplicate
+  runs and stale previews close on dataset/filter changes.
+- Interactive boxplots always show lower whisker, Q1, median, Q3, and upper
+  whisker at their scaled positions. A pure layout helper merges equal values
+  and staggers close labels without removing pointer, touch, roving-keyboard,
+  or text-detail access.
+- `quality.run_chart` is now `0.2.0`/result schema `2`. The four approximate
+  complementary one-sided randomness p-values are distinct from the retained
+  exact conditional runs test and strict 6/14-point sequence rules. Legacy
+  schema-1 results remain readable and explicitly lack the new fields.
+- Dataset retention operational preflight schema `2` calculates dependencies
+  independently of file integrity. Verified deletion retains quarantine and
+  transaction revalidation. When dependencies are zero but owned files cannot
+  be verified, an explicit metadata-only mode preserves every unverified file
+  and removes only the reviewed metadata graph.
+- Regression-model retention exposes bounded dependent-prediction descriptors
+  plus pagination. Predictions can be individually deleted through the
+  analysis-run retention contract, or an opt-in model-and-predictions operation
+  binds every exact manifest and quarantines all files before one DB
+  transaction. Source fits, datasets, unrelated predictions, and unrelated
+  exports are not cascade targets.
+- Report Center places export and analysis-deletion actions immediately below
+  the selected row and preserves ID-only reload. Help purpose selections move
+  and focus the single method detail before the full list. Active dataset
+  labels include the version `created_at` in browser-local time.
+- `dev.ps1` uses an exact Git SHA only for a valid checkout. Download ZIP or
+  Git-restricted sources use a deterministic `archive-sha256-...` identity
+  derived from normalized runtime-source paths and bytes, excluding
+  dependencies, caches, logs, and local workspaces.
+- No SQLite migration is needed for this slice. Run Chart is the only
+  statistical method/result version change.
+
 ## Runtime Compatibility And Analysis History Stabilization
 
 - A mixed-version runtime was reproduced: an older ready backend owned port

@@ -129,6 +129,10 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 <!-- TUTORIAL_RESULT:eda.graphical_summary:end -->
 - **먼저 읽을 값:** N/exclusions, mean/median, SD/IQR, min/max, boxplot outlier count.
 - **해석 예시:** 수율의 중심과 관측 간 산포를 함께 읽고, 범위와 사분위수 밖 후보를 확인한다.
+- **빠른 그래프:** 기술통계 표에서 `yield_pct 그래프 보기`를 선택하면 같은
+  dataset/filter 조건의 histogram과 boxplot이 행 바로 아래에 열린다. 한 번에 한
+  컬럼만 열리며 `그래프 요약에서 전체 보기`로 Q-Q와 ECDF까지 이어서 확인한다.
+  Boxplot에는 lower whisker, Q1, median, Q3, upper whisker가 항상 표시된다.
 - **과해석 금지:** histogram 모양만으로 정규성, 안정성 또는 원인을 확정하지 않는다.
 - **예상 warning:** 그래프는 진단 도구이며 자동 검정 선택 규칙이 아니다.
 - **오류 확인:** 숫자 컬럼이 nominal/string으로 확정되지 않았는지, filter 후 N=0인지 본다.
@@ -350,7 +354,13 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
   - N=240, center median=80.7539, points=240, signals=0
 <!-- TUTORIAL_RESULT:quality.run_chart:end -->
 - **먼저 읽을 값:** order source, N/exclusions, center, rule definition과 signal 위치.
-- **해석 예시:** 활성화된 run-chart 규칙에서는 신호가 검출되지 않았다.
+- **해석 예시:** 활성화된 run-chart 규칙에서는 신호가 검출되지 않았다. 새
+  `근사 랜덤성 검정`의 군집/혼합 및 추세/진동은 각 쌍이 합계 1인 one-sided
+  p-value다. p가 작으면 해당 비무작위 패턴의 통계적 증거를 근거로 원인을
+  검토하되, 불량이나 공정 이상이 확정됐다고 표현하지 않는다.
+- **구분:** 네 근사 p-value, 기존 exact median runs test, 연속 6점 trend와
+  14점 oscillation 신호는 서로 다른 진단이다. 중앙값 tie와 flat 방향 정책도
+  결과의 상세정보에서 확인한다.
 - **과해석 금지:** Run Chart는 control chart가 아니며 신호 0이 안정성을 증명하지 않는다.
 - **예상 warning:** not-control-chart, datetime order, 정의된 trend/oscillation/runs test.
 - **오류 확인:** order type, duplicate order, missing value와 point cap을 확인한다.
@@ -571,7 +581,16 @@ Dataset version 삭제는 `삭제 영향 확인` 후 dependency가 전혀 없고
 통과한 경우에만 가능하다. 참조 분석, 모델, source/target prediction, export, limit set,
 Phase II 결과 또는 job이 있으면 먼저 각 자산의 명시적 삭제 흐름을 완료해야 한다. Studio는
 이 관계를 silent cascade로 지우지 않는다. 같은 dataset root에 다른 version이 있으면 공유 raw
-upload는 보존된다.
+upload는 보존된다. Dependency가 0이지만 구버전 경로, missing 또는 checksum 문제로
+파일을 검증할 수 없으면 별도 확인 후 `파일을 보존하고 목록에서 제거`만 사용할 수
+있다. 이 mode는 검증되지 않은 파일을 열거나 이동하거나 삭제하지 않으므로 디스크
+공간이 회수되지 않을 수 있다.
+
+회귀모델의 삭제 영향에는 종속 prediction의 대상 dataset, 생성 시각, 행 수와 상태가
+표시된다. 각 prediction은 Report Center에서 열어 analysis-run 삭제 계약으로 먼저
+삭제할 수 있다. 모든 prediction과 모델을 함께 삭제하는 option은 기본 꺼짐이며,
+각 artifact가 모두 검증된 경우에만 exact manifest와 별도 irreversible 확인을 거쳐
+원자적으로 실행된다. Source linear-model fit과 source/target dataset은 남는다.
 
 ## 30. 자주 발생하는 오류
 

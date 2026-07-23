@@ -18,10 +18,12 @@ synthetic critical-path 검증은 구현되어 있고 최신 main push의 hosted
 - 탐색적 분석, 근사 AD p-value를 포함한 정규성 진단, 가설 검정, 범주형 데이터 분석
 - 상관관계, 선형 회귀, 저장 모형 기반 Predict, Response Optimizer
 - Run/Individuals/Subgroup Chart, Capability, Gage R&R, P/NP/C/U 관리도
+  - Run Chart는 기존 exact/연속 패턴과 구분된 군집·혼합·추세·진동 근사 p-value를 함께 표시합니다.
 - Factorial DOE, RSM, Bayesian Optimization study/관측/추천 lifecycle
 - immutable dataset version, 분석 저장/복원/비교, checksum 검증
 - 저장된 dataset version을 다시 활성화하는 paged 상단 selector
 - `관리` 화면의 dataset/model 사용자 이름·메모·고정, dependency-safe dataset-version 삭제
+  - 파일 무결성을 확인할 수 없고 dependency가 0이면 파일을 보존한 metadata-only 목록 정리를 별도 확인으로 제공합니다.
 - generic JSON/CSV/HTML export와 Report Center
 - Excel 범위용 view-only paste staging grid와 paged canonical preview
 - 한국어 Help Center, method context help, end-to-end 튜토리얼

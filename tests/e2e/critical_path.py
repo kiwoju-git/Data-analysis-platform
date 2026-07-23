@@ -517,6 +517,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
                 page,
                 Path(tempfile.mkdtemp(prefix="datalab-e2e-encoding-options-")),
             )
+            diagnostics.step("verify descriptive quick charts and run chart p-values")
+            verify_descriptive_quick_charts_and_run_chart(page)
             diagnostics.step("verify lazy panel direct routes")
             verify_lazy_panel_direct_routes(page, frontend_base_url)
             diagnostics.step("verify lazy panel error boundary")
@@ -605,6 +607,9 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
     expect(page.get_by_role("heading", name="선택한 결과")).to_be_visible(
         timeout=15_000
     )
+    expect(
+        report_rows.first.locator("xpath=..").locator(".report-selected-result")
+    ).to_be_visible()
     expect(page.get_by_role("button", name="HTML 생성")).to_be_enabled()
     expect(page.get_by_text("현재 지원되지 않음", exact=True).first).to_be_visible()
     page.get_by_role("button", name="HTML 생성").click()
@@ -628,6 +633,9 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
     expect_lazy_workspace_page(page, "HelpCenterPage")
     expect(page.get_by_text("무엇을 알고 싶나요?")).to_be_visible()
     expect(page.get_by_role("heading", name="변수 역할 사전")).to_be_visible()
+    page.get_by_role("button", name="그래프 요약 메서드 보기").click()
+    expect(page.get_by_role("heading", name="그래프 요약", exact=True)).to_be_focused()
+    expect(page).to_have_url(re.compile(r"[?&]method_id=eda\.graphical_summary"))
     page.reload(wait_until="networkidle")
     expect(page.get_by_role("heading", name="도움말", exact=True)).to_be_visible(
         timeout=15_000
@@ -657,6 +665,46 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
     page.keyboard.press("Escape")
     expect(help_drawer).to_have_count(0)
     expect(help_trigger).to_be_focused()
+
+
+def verify_descriptive_quick_charts_and_run_chart(page: Page) -> None:
+    page.get_by_role("button", name="데이터셋", exact=True).click()
+    paste_plain_text(page, SAMPLE_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect(
+        page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
+    ).to_be_visible(timeout=20_000)
+    expect(page.locator(".active-dataset-summary")).to_contain_text("생성")
+
+    page.get_by_role("button", name="분석", exact=True).click()
+    select_method_card(page, "탐색적 분석", "기술통계")
+    page.get_by_role("button", name="기술통계 실행").click()
+    expect(page.get_by_role("button", name="Value 그래프 보기")).to_be_visible(
+        timeout=20_000
+    )
+    page.get_by_role("button", name="Value 그래프 보기").click()
+    quick_graph = page.get_by_label("Value 그래프 요약")
+    expect(quick_graph).to_be_visible(timeout=20_000)
+    expect(quick_graph.get_by_text("히스토그램", exact=True)).to_be_visible()
+    expect(quick_graph.get_by_text("박스플롯", exact=True)).to_be_visible()
+    for marker in ("Lower whisker", "Q1", "Median", "Q3", "Upper whisker"):
+        expect(
+            quick_graph.locator("text[data-marker-label] > tspan:first-child").filter(
+                has_text=re.compile(rf"^{re.escape(marker)}$")
+            )
+        ).to_be_visible()
+
+    select_method_card(page, "품질 관리", "런 차트")
+    page.get_by_label("측정값").select_option(label="Value")
+    page.get_by_role("button", name="런 차트 실행").click()
+    randomness_section = page.get_by_role("region", name="근사 랜덤성 검정")
+    expect(randomness_section).to_be_visible(timeout=20_000)
+    for label in ("군집", "혼합", "추세", "진동"):
+        expect(
+            randomness_section.locator(".metric-card").filter(has_text=label)
+        ).to_be_visible()
 
 
 def restore_and_compare_saved_results(page: Page) -> None:

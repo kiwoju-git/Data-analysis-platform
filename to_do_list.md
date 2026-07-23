@@ -21,22 +21,25 @@ Current source-of-truth note:
 
 Current and next development order:
 
-Runtime compatibility stabilization is the current closure slice. API contract
-2, runtime capability gating, strict dev-port/startup checks, typed management
-error distinctions, and compact selected-method history with full Report
-Center ownership are implemented without changing statistical calculations,
-method versions, metadata schema 15, deletion blockers, or Bayesian GP/EI.
-The mixed old-backend/new-frontend failure and operating procedure are recorded
-in `docs/runtime_compatibility_contract.md`. After validation and push:
+The usability/retention/run-chart/ZIP support slice is the current closure
+work. It adds descriptive-to-graph drill-through, persistent boxplot five-value
+labels, `quality.run_chart` `0.2.0`/result schema `2` approximate randomness
+tests, dependency-independent dataset retention preflight with an explicit
+metadata-only preservation mode, dependent-prediction discovery and atomic
+model cascade deletion, inline Report Center actions, immediate Help method
+detail, dataset creation times, and Git-free archive source identities.
+Statistical formulas outside Run Chart, SQLite schema 15, raw data, and
+unrelated stored results remain unchanged. After validation and draft PR:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
-2. Verify the new main push's hosted Windows/E2E jobs and authenticated
-   `e2e-logs` contents; review required-check/branch protection separately.
-3. Continue measured main-bundle boundaries without weakening runtime gates.
-4. Add separately contracted Predict/RSM/Optimizer/Bayesian HTML reports.
-5. Add catalog search/lightweight verified summaries with exact asset
+2. Verify the feature PR and eventual main merge's hosted Windows/E2E jobs;
+   review required-check/branch protection separately.
+3. Add separately contracted Predict/RSM/Optimizer/Bayesian HTML reports.
+4. Add catalog search/lightweight verified summaries with exact asset
    validation retained on selection.
-6. Keep dataset-root/DOE-root retention as separate reviewed ownership graphs.
+5. Extend chart interaction only through `docs/interactive_chart_contract.md`.
+6. Keep full dataset-root and DOE-root bulk retention as separate reviewed
+   ownership graphs.
 
 Historical order before this closure:
 
