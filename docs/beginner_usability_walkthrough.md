@@ -2,6 +2,12 @@
 
 ## Current Help And Report Placement
 
+Selecting a method from `무엇을 알고 싶나요?` updates the ID-only Help URL,
+scrolls to the selected method detail, and moves keyboard focus to its heading.
+The selected detail is directly below method search and before the full method
+list. Reduced-motion preference disables smooth scrolling; direct URLs and
+browser back/forward restore the selection.
+
 The analysis page now starts with module and method selection. The large
 question-based helper and full role dictionary moved to the left `도움말`
 route so repeated analysis work does not require scrolling past them. Each

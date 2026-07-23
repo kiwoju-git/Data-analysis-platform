@@ -2766,6 +2766,37 @@ td select {
   text-align: left;
 }
 
+.report-run-item {
+  display: grid;
+  gap: 0;
+}
+
+.report-run-row.is-selected {
+  background: #edf8f2;
+  border-color: #1d7f5f;
+}
+
+.report-run-item .report-selected-result,
+.report-direct-selection .report-selected-result {
+  background: #f8fafc;
+  border: 0;
+  border-left: 3px solid #1d7f5f;
+  border-radius: 0;
+  margin: 0 8px 12px;
+  padding: 16px;
+}
+
+.report-analysis-deletion {
+  border-top: 1px solid #d8dde5;
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.help-method-detail {
+  scroll-margin-top: 16px;
+}
+
 .help-method-row {
   grid-template-columns: minmax(140px, 1fr) minmax(150px, 1fr) minmax(190px, 1fr);
 }

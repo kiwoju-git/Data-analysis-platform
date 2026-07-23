@@ -35,6 +35,7 @@ import type {
 import { useAnalysisComparisonState } from "./useAnalysisComparisonState";
 import { useAnalysisExportState } from "./useAnalysisExportState";
 import { useAnalysisHistoryState } from "./useAnalysisHistoryState";
+import { useAnalysisRunDeletionState } from "./useAnalysisRunDeletionState";
 import { useAttributeControlPhase2State } from "./useAttributeControlPhase2State";
 import { useRegressionPredictionExportState } from "./useRegressionPredictionExportState";
 import { useRegressionPredictionRowsState } from "./useRegressionPredictionRowsState";
@@ -52,6 +53,7 @@ import { useChartPointInteraction } from "./charts/useChartPointInteraction";
 import { useDatasetWorkflow } from "./useDatasetWorkflow";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
+import { useReportCenterState } from "./useReportCenterState";
 
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
@@ -1155,6 +1157,58 @@ describe("async workbench hooks", () => {
 
     expect(apiMocks.fetchAnalysisRuns).toHaveBeenCalledOnce();
     expect(runner.output.analysisHistory?.dataset_version_id).toBe("dataset-a");
+    runner.unmount();
+  });
+
+  it("restores a Report Center result from the analysis_id query", async () => {
+    const replaceState = vi.fn();
+    vi.stubGlobal("window", {
+      location: {
+        href: "http://127.0.0.1:5173/reports?tab=reports&analysis_id=analysis-a",
+      },
+      history: { replaceState },
+    });
+    const result = {
+      analysis_id: "analysis-a",
+      method_id: "eda.descriptive",
+      method_version: "0.1.0",
+      dataset_version_id: "dataset-a",
+    } as AnalysisResultEnvelope;
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockResolvedValue(result);
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.flush();
+
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledWith("analysis-a");
+    expect(runner.output.selectedAnalysisId).toBe("analysis-a");
+    expect(runner.output.selectedResult).toEqual(result);
+    expect(replaceState).toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it("deletes a selected analysis through the reusable deletion state", async () => {
+    const preflight = analysisDeletionPreflight("analysis-a");
+    const response = {
+      analysis_id: "analysis-a",
+      cleanup_status: "deleted",
+    } as AnalysisRunDeleteResponse;
+    apiMocks.fetchAnalysisRunDeletionPreflight.mockResolvedValue(preflight);
+    apiMocks.deleteStoredAnalysisRun.mockResolvedValue(response);
+    const onDeleted = vi.fn();
+    const runner = new HookRunner(
+      (analysisId: string | null) =>
+        useAnalysisRunDeletionState(analysisId, onDeleted),
+      "analysis-a",
+    );
+    await runner.act(() => runner.output.onLoadPreflight());
+    await runner.act(() => runner.output.onDelete(runner.output.preflight!));
+
+    expect(apiMocks.deleteStoredAnalysisRun).toHaveBeenCalledWith("analysis-a", {
+      confirmation_analysis_id: "analysis-a",
+      expected_deletion_manifest_sha256:
+        preflight.deletion_manifest_sha256,
+    });
+    expect(onDeleted).toHaveBeenCalledWith(response);
     runner.unmount();
   });
 

@@ -27,6 +27,9 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
   const [selectedResult, setSelectedResult] = useState<AnalysisResultEnvelope | null>(null);
   const [selectedResultError, setSelectedResultError] = useState<string | null>(null);
   const [isLoadingResult, setIsLoadingResult] = useState(false);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(
+    initialSelectedAnalysisId,
+  );
   const listRequest = useRef(createLatestRequestGuard()).current;
   const resultRequest = useRef(createLatestRequestGuard()).current;
 
@@ -57,12 +60,16 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
 
   const selectAnalysis = useCallback(async (analysisId: string) => {
     const request = resultRequest.begin();
+    setSelectedAnalysisId(analysisId);
     setIsLoadingResult(true);
     setSelectedResult(null);
     setSelectedResultError(null);
     try {
       const response = await fetchAnalysisRunResult(analysisId);
-      if (resultRequest.isCurrent(request)) setSelectedResult(response);
+      if (resultRequest.isCurrent(request)) {
+        setSelectedResult(response);
+        updateSelectedAnalysisQuery(analysisId);
+      }
     } catch (error) {
       if (resultRequest.isCurrent(request)) {
         setSelectedResultError(error instanceof Error ? error.message : "report_center_result_failed");
@@ -77,6 +84,12 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
     return () => listRequest.cancel();
   }, [refresh, listRequest]);
 
+  useEffect(() => {
+    const analysisId = initialSelectedAnalysisId();
+    if (analysisId !== null) void selectAnalysis(analysisId);
+    return () => resultRequest.cancel();
+  }, [resultRequest, selectAnalysis]);
+
   return {
     currentDatasetOnly,
     isLoadingList,
@@ -86,6 +99,7 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
     methodId,
     offset,
     resultFilter,
+    selectedAnalysisId,
     selectedResult,
     selectedResultError,
     staleFilter,
@@ -98,5 +112,27 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
     onChangeStatus: (value: AnalysisRunState | "") => { setStatus(value); setOffset(0); },
     onRefresh: () => void refresh(),
     onSelectAnalysis: (analysisId: string) => void selectAnalysis(analysisId),
+    onSelectedAnalysisDeleted: () => {
+      resultRequest.cancel();
+      setSelectedAnalysisId(null);
+      setSelectedResult(null);
+      setSelectedResultError(null);
+      setIsLoadingResult(false);
+      updateSelectedAnalysisQuery(null);
+      void refresh();
+    },
   };
+}
+
+function initialSelectedAnalysisId(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URL(window.location.href).searchParams.get("analysis_id");
+}
+
+function updateSelectedAnalysisQuery(analysisId: string | null): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (analysisId === null) url.searchParams.delete("analysis_id");
+  else url.searchParams.set("analysis_id", analysisId);
+  window.history.replaceState(null, "", `${url.pathname}${url.search}`);
 }

@@ -9,6 +9,19 @@ the existing checksum-validated analysis-run result and export APIs. It does not
 result renderer, reinterpret stored artifacts, or imply that every dedicated workflow has an HTML
 report.
 
+Selecting a stored run renders its result/export/delete action panel immediately
+after that list item. The selection is represented by the ID-only
+`analysis_id` query parameter and is restored by exact result lookup after
+reload. Long lists and pagination no longer place selected controls at the end
+of the page. The selection button and inline action panel are siblings, so
+interactive controls are never nested.
+
+The inline panel distinguishes deleting one generated export artifact, which
+preserves the analysis result, from deleting the stored analysis run. Stored-run
+deletion reuses the checksum-bound analysis-run preflight and quarantine
+contract and removes its owned result, row snapshot, and exports only when no
+blocker exists.
+
 The analysis Workbench shows a closed-by-default `저장된 분석 이력` summary.
 Opening it fetches only the selected dataset/method's three most recent runs;
 the collapsed state does not issue the full-history request. `전체 이력 관리`

@@ -458,6 +458,26 @@ describe("App", () => {
     expect(html).not.toContain("p-value는 차이가 있는지의 근거");
   });
 
+  it("places a directly selected Help method detail before the long method list", () => {
+    vi.stubGlobal("window", {
+      location: {
+        href: "http://127.0.0.1:5173/help?method_id=eda.descriptive",
+      },
+    });
+    const html = renderToString(
+      <HelpCenterPage
+        catalog={analysisTestCatalog()}
+        onOpenAnalysis={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("help-method-detail");
+    expect(html.indexOf("help-method-detail")).toBeLessThan(
+      html.indexOf("help-method-list"),
+    );
+    expect(html).toContain("eda.descriptive");
+  });
+
   it("renders accessible selected-method context help without hiding required caveats", () => {
     const method = analysisTestCatalog().methods[0];
     const html = renderToString(
