@@ -24,8 +24,13 @@ Last updated: 2026-07-23
 - The measured host is Windows 10 Home build 19045, CPython 3.10.11, and Node
   24.17.0. This is development evidence, not Windows 11/Python 3.10/Node 22
   release evidence.
-- Remote Actions for this feature branch are pending push. Hosted success is
-  not inferred from the local results.
+- Hosted PR run `29995284572` for feature head
+  `5268797d295d538062f1d3407965e652c707cb04` passed the `windows` job and its
+  dependent `e2e` job. The `e2e-logs` artifact exists with size 5,302 bytes
+  and digest
+  `sha256:1beca9635146c31daea4662d730caa803a540803c5066046d2e1bedc7c30a16a`.
+  The connector confirmed artifact metadata but did not download the archive,
+  so its internal file list/content is not claimed as independently inspected.
 
 - The runtime-compatibility and compact-history worktree based on pushed main
   `6cc097a6f3d2983feab1fd7e4ccc2c5ab16f765d` passed `scripts/check.ps1` on
