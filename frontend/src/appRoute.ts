@@ -2,6 +2,9 @@ import { parseAnalysisLocation, type AnalysisSelection } from "./analysisNavigat
 
 export type AppRoute =
   | {
+      page: "project";
+    }
+  | {
       page: "dataset";
     }
   | {
@@ -14,6 +17,9 @@ export type AppRoute =
 
 export function parseAppRoute(pathname: string, hash: string): AppRoute {
   const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (normalizedPath === "/project") {
+    return { page: "project" };
+  }
   if (normalizedPath === "/reports") {
     return { page: "reports" };
   }

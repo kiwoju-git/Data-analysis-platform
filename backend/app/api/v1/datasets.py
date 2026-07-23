@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, File, Query, Request, UploadFile, status
 
 from app.api.v1.schemas.datasets import (
+    DatasetDeletionDependencyPage,
     DatasetParsingConfirmationRequest,
     DatasetProfileResponse,
     DatasetRowsPreviewResponse,
@@ -25,6 +26,7 @@ from app.services.dataset_upload import create_dataset_from_pasted_text, create_
 from app.services.dataset_version_retention import (
     delete_stored_dataset_version,
     get_dataset_version_deletion_preflight,
+    list_dataset_version_deletion_dependency_page,
 )
 from app.services.dataset_versions import (
     confirm_dataset_parsing,
@@ -158,6 +160,35 @@ def get_dataset_version_deletion_preflight_route(
     return get_dataset_version_deletion_preflight(
         settings=request.app.state.settings,
         version_id=version_id,
+    )
+
+
+@version_router.get(
+    "/{version_id}/deletion-dependencies",
+    response_model=DatasetDeletionDependencyPage,
+)
+def list_dataset_version_deletion_dependencies_route(
+    request: Request,
+    version_id: UUID,
+    asset_type: Literal[
+        "analysis_run",
+        "regression_model",
+        "prediction",
+        "analysis_export",
+        "attribute_control_limit_set",
+        "phase_2_analysis",
+        "job",
+    ]
+    | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> DatasetDeletionDependencyPage:
+    return list_dataset_version_deletion_dependency_page(
+        settings=request.app.state.settings,
+        version_id=version_id,
+        asset_type=asset_type,
+        offset=offset,
+        limit=limit,
     )
 
 

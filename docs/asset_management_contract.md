@@ -80,6 +80,6 @@ confirmation.
 
 ## Version Decision
 
-This is operational metadata. It requires SQLite schema 15 and migration tests,
-but no statistical method, result, config, dataset schema, or model manifest
-version changes.
+User labels require SQLite schema 15 and dataset archive visibility requires
+schema 16, both with upgrade tests. Neither changes a statistical method,
+result/config schema, dataset schema hash, or model manifest version.

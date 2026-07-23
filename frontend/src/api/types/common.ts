@@ -26,3 +26,11 @@ export interface RuntimeInfoResponse {
   build_commit: string;
   capabilities: RuntimeCapabilities;
 }
+
+export interface WorkspaceSummaryResponse {
+  visible_dataset_version_count: number;
+  archived_dataset_version_count: number;
+  regression_model_count: number;
+  stored_analysis_count: number;
+  export_report_count: number;
+}

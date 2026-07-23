@@ -23,7 +23,10 @@ synthetic critical-path 검증은 구현되어 있고 최신 main push의 hosted
 - immutable dataset version, 분석 저장/복원/비교, checksum 검증
 - 저장된 dataset version을 다시 활성화하는 paged 상단 selector
 - `관리` 화면의 dataset/model 사용자 이름·메모·고정, dependency-safe dataset-version 삭제
-  - 파일 무결성을 확인할 수 없고 dependency가 0이면 파일을 보존한 metadata-only 목록 정리를 별도 확인으로 제공합니다.
+  - 데이터셋 보관은 파일과 연결 자산을 유지한 채 일반 목록에서 숨기며 되돌릴 수 있습니다.
+  - 영구 삭제는 실제 dependency 항목을 보여주고, 별도 확인한 atomic cascade에서만 연결 분석·리포트·모델·예측을 삭제합니다.
+  - 검증하지 못한 파일은 명시적 preserve operation에서도 열거나 이동하지 않고 남겨둡니다.
+- `프로젝트`의 단일 local workspace overview와 빠른 데이터·분석·관리 진입
 - generic JSON/CSV/HTML export와 Report Center
 - Excel 범위용 view-only paste staging grid와 paged canonical preview
 - 한국어 Help Center, method context help, end-to-end 튜토리얼
@@ -91,8 +94,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 `현재 분석 데이터셋` selector를 사용합니다. 전환은 실행 전 입력과 화면 결과를 초기화하지만
 저장된 분석·모델·예측 결과를 삭제하지 않습니다. 선형 회귀 결과의 Observed vs Fitted,
 Residuals vs Fitted, Leverage vs Cook's D 점은 마우스와 키보드로 값을 확인할 수 있습니다.
-저장 자산의 이름과 메모는 왼쪽 `관리`에서 지정합니다. Dataset version 삭제는 전체
-dependency preflight가 통과한 경우에만 가능하며 참조 자산을 자동으로 연쇄 삭제하지 않습니다.
+저장 자산의 이름과 메모는 왼쪽 `관리`에서 지정합니다. 보관은 파일을 삭제하지
+않습니다. Dataset version 영구 삭제는 기본적으로 dependency를 차단하며, 연결 자산
+목록과 cross-dataset 영향을 검토하고 checkbox 및 이름/짧은 ID를 확인한 경우에만
+하나의 backend transaction으로 cascade할 수 있습니다. 다른 dataset version 자체는
+삭제하지 않습니다.
+
+왼쪽 `프로젝트`는 현재 한 개의 로컬 workspace를 요약합니다. 다중 프로젝트 생성,
+cloud sync 또는 협업 기능을 제공하는 화면은 아닙니다. `Statistical Twin`은
+DataLab Studio의 sidebar subtitle이며 제품명이나 workspace 형식을 바꾸지 않습니다.
 
 처음 사용하는 경우 앱의 `도움말`과
 [한국어 end-to-end 튜토리얼](docs/studio_end_to_end_tutorial_ko.md)을 먼저 확인하십시오.
@@ -175,6 +185,7 @@ tests/e2e/            Chromium critical path
 - [Bayesian P0 release checklist](docs/bayesian_p0_release_checklist.md)
 - [Bayesian catalog 성능](docs/bayesian_catalog_performance.md)
 - [Runtime compatibility 계약](docs/runtime_compatibility_contract.md)
+- [Dataset retention 계약](docs/dataset_retention_contract.md)
 - [Report Center 계약](docs/report_center_contract.md)
 - [한국어 튜토리얼](docs/studio_end_to_end_tutorial_ko.md)
 

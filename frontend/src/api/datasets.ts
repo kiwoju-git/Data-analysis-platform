@@ -2,6 +2,9 @@ import { apiErrorCode, apiRequestError, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type {
   DatasetParsingConfirmationRequest,
+  DatasetDeletionDependencyAssetType,
+  DatasetDeletionDependencyPage,
+  DatasetDeletionOperationId,
   DatasetProfileResponse,
   DatasetRowsPreviewResponse,
   DatasetSchemaResponse,
@@ -186,19 +189,42 @@ export async function fetchDatasetVersionDeletionPreflight(
   return (await response.json()) as DatasetVersionDeletionPreflightResponse;
 }
 
+export async function fetchDatasetVersionDeletionDependencies(
+  versionId: string,
+  assetType: DatasetDeletionDependencyAssetType | null,
+  offset = 0,
+  limit = 20,
+): Promise<DatasetDeletionDependencyPage> {
+  const response = await fetchApi(
+    apiRoutes.datasetVersionDeletionDependencies(
+      versionId,
+      assetType,
+      offset,
+      limit,
+    ),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw await apiRequestError(response, "dataset_version_dependencies_fetch_failed");
+  }
+  return (await response.json()) as DatasetDeletionDependencyPage;
+}
+
 export async function deleteDatasetVersion(
   preflight: DatasetVersionDeletionPreflightResponse,
-  mode:
-    | "verified_files_and_metadata"
-    | "metadata_only_preserve_unverified_files" = "verified_files_and_metadata",
+  operationId: DatasetDeletionOperationId = "delete_dataset_verified",
 ): Promise<DatasetVersionDeleteResponse> {
-  const manifest =
-    mode === "verified_files_and_metadata"
-      ? preflight.verified_deletion_manifest_sha256
-      : preflight.metadata_only_deletion_manifest_sha256;
+  const operation = preflight.available_operations.find(
+    (item) => item.operation_id === operationId,
+  );
+  const manifest = operation?.manifest_sha256 ?? null;
   if (manifest === null) {
     throw new Error("dataset_version_deletion_mode_not_ready");
   }
+  const mode =
+    operationId === "remove_dataset_metadata_preserve_files"
+      ? "metadata_only_preserve_unverified_files"
+      : "verified_files_and_metadata";
   const response = await fetchApi(apiRoutes.datasetVersionDeletion(preflight.version_id), {
     method: "DELETE",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
@@ -206,6 +232,7 @@ export async function deleteDatasetVersion(
       confirmation_version_id: preflight.version_id,
       expected_deletion_manifest_sha256: manifest,
       mode,
+      operation_id: operationId,
     }),
   });
   if (!response.ok) {

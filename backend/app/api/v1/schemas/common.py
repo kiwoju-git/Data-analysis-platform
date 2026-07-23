@@ -59,3 +59,13 @@ class ResultReference(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     result_id: ResultId
+
+
+class WorkspaceSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    visible_dataset_version_count: int = Field(ge=0)
+    archived_dataset_version_count: int = Field(ge=0)
+    regression_model_count: int = Field(ge=0)
+    stored_analysis_count: int = Field(ge=0)
+    export_report_count: int = Field(ge=0)

@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ## 1. Required Reading And Priority
 
@@ -21,15 +21,19 @@ Current source-of-truth note:
 
 Current and next development order:
 
-The usability/retention/run-chart/ZIP support slice is the current closure
-work. It adds descriptive-to-graph drill-through, persistent boxplot five-value
-labels, `quality.run_chart` `0.2.0`/result schema `2` approximate randomness
-tests, dependency-independent dataset retention preflight with an explicit
-metadata-only preservation mode, dependent-prediction discovery and atomic
-model cascade deletion, inline Report Center actions, immediate Help method
-detail, dataset creation times, and Git-free archive source identities.
-Statistical formulas outside Run Chart, SQLite schema 15, raw data, and
-unrelated stored results remain unchanged. After validation and draft PR:
+The dataset cleanup and project-home slice is the current closure work. SQLite
+schema 16 adds reversible dataset-version archive metadata. Dataset retention
+operational schema 3 exposes bounded dependency descriptors and four explicit
+operations: dependency-free verified deletion, metadata-only cleanup that
+preserves unverified files, verified dependency cascade, and dependency
+cascade that preserves unverified files. Cascade is opt-in, binds the exact
+dependency closure and manifest, quarantines only verified owned files, and
+removes the reviewed metadata graph in one transaction. The `/project` page is
+a route-lazy overview of the existing single local workspace; it does not
+pretend to provide multi-project storage. `Statistical Twin` is the sidebar
+subtitle, while the product name remains DataLab Studio. No statistical
+formula, method version, or stored analysis-result schema changes in this
+slice. After validation and main integration:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Verify the feature PR and eventual main merge's hosted Windows/E2E jobs;
@@ -38,8 +42,8 @@ unrelated stored results remain unchanged. After validation and draft PR:
 4. Add catalog search/lightweight verified summaries with exact asset
    validation retained on selection.
 5. Extend chart interaction only through `docs/interactive_chart_contract.md`.
-6. Keep full dataset-root and DOE-root bulk retention as separate reviewed
-   ownership graphs.
+6. Extend the same reviewed plan/manifest discipline to DOE-root retention;
+   do not broaden dataset cascade to unsupported asset families silently.
 
 Historical order before this closure:
 
@@ -56,8 +60,8 @@ validated on pushed commit `7e11d08e91b664417b3eb4eb4d2a980fae8ec8b1`; it includ
 Study-selection action isolation, direct lifecycle/recommendation/retention race tests,
 route-level Help/Report loading, a bounded P0 release checklist, and measured 20/100/500-Study
 catalog evidence. Bayesian math, request/result/storage contracts, and method
-`0.2.2` remain unchanged; SQLite is now schema 15 only because the independent
-asset-user-metadata tables were added. Next:
+`0.2.2` remain unchanged; that slice advanced SQLite to schema 15 only because
+the independent asset-user-metadata tables were added. Next:
 
 1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
 2. Review required Windows/E2E checks and repository protection outside this code PR. Push run
@@ -67,8 +71,8 @@ asset-user-metadata tables were added. Next:
 4. Add separately contracted Predict/RSM/Optimizer/Bayesian dedicated HTML reports.
 5. Specify a lightweight immutable catalog summary/index and search contract while retaining
    exact selected-Study full validation and a measured latency threshold.
-6. Keep dataset-root bulk deletion separate from the implemented one-version ownership graph;
-   add DOE-root retention only through a reviewed graph with explicit inbound-reference blockers.
+6. Keep DOE-root retention separate; extend dataset cascade only through
+   reviewed dependency fragments with explicit unsupported-reference blockers.
 7. Migrate remaining quality/DOE charts only by the staged `docs/interactive_chart_contract.md` contract.
 8. Continue the advanced quality/statistics backlog through a separately approved contract.
 
@@ -91,7 +95,7 @@ Already implemented:
 - Local-only default host `127.0.0.1` and narrow CORS
 - React 18 + Vite + TypeScript shell with API health display
 - PowerShell workflow scripts: `bootstrap.ps1`, `dev.ps1`, `test.ps1`, `check.ps1`
-- SQLite migration skeleton through schema version `15`
+- SQLite migration skeleton through schema version `16`
 - `datasets` metadata table for raw upload provenance
 - `dataset_versions` metadata table for immutable parsing-confirmed versions
 - `dataset_columns` metadata table preserving original names and unique display names
@@ -108,7 +112,9 @@ Already implemented:
 - `GET /api/v1/dataset-versions/{version_id}/profile`
 - `PATCH /api/v1/dataset-versions/{version_id}/metadata`
 - `GET /api/v1/dataset-versions/{version_id}/deletion-preflight`
+- `GET /api/v1/dataset-versions/{version_id}/deletion-dependencies`
 - `DELETE /api/v1/dataset-versions/{version_id}/deletion`
+- `GET /api/v1/workspace/summary`
 - `GET /api/v1/analysis-methods`
 - `POST /api/v1/analysis-runs` unavailable-method guard
 - `GET /api/v1/analysis-runs/{analysis_id}`
@@ -137,7 +143,8 @@ Already implemented:
 - Minimal React UI for profile/preflight warnings, canonical/profile artifact summary, preflight summary, and column-level aggregate/numeric/date-time profile table
 - Minimal React schema UI includes a guarded 34-column headerless Bayesian sample role preset: `column_1` as ID, `column_2`-`column_25` as X/features, and `column_26`-`column_34` as Y/responses
 - App chrome rendering is split into `frontend/src/AppChrome.tsx`, while `App.tsx` keeps API bootstrap and analysis state ownership
-- App routes include reload-safe dataset, analysis, Report Center (`/reports`),
+- App routes include reload-safe project overview (`/project`), dataset,
+  analysis, Report Center (`/reports`),
   and Help Center (`/help`) pages. The analysis page starts with module/method
   selection and keeps global purpose/role guidance in Help Center; selected
   method guidance opens in an accessible context drawer.

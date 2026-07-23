@@ -3045,3 +3045,30 @@ td select {
     grid-template-columns: 1fr;
   }
 }
+.project-overview-page {
+  display: grid;
+  gap: 18px;
+}
+
+.project-overview-band {
+  border-top: 1px solid var(--border-color, #d8dee8);
+  padding-top: 16px;
+}
+
+.project-recent-list,
+.asset-dependency-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.project-recent-list li,
+.asset-dependency-list li {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+}

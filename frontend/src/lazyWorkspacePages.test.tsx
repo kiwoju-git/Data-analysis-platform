@@ -34,19 +34,25 @@ describe("lazy workspace pages", () => {
     expect(html).not.toContain("private route detail");
   });
 
-  it("keeps Help, Report, and Manage pages behind independent route loaders", async () => {
-    const [help, reports, manage] = await Promise.all([
+  it("keeps Help, Report, Manage, and Project pages behind independent route loaders", async () => {
+    const [help, reports, manage, project] = await Promise.all([
       import("./HelpCenterPage"),
       import("./ReportCenterPage"),
       import("./ManageAssetsPage"),
+      import("./ProjectOverviewPage"),
     ]);
 
     expect(Object.keys(help)).toEqual(["HelpCenterPage"]);
     expect(Object.keys(reports)).toEqual(["ReportCenterPage"]);
-    expect(Object.keys(manage)).toEqual(["ManageAssetsPage"]);
+    expect(Object.keys(manage).sort()).toEqual([
+      "DatasetDeletionImpact",
+      "ManageAssetsPage",
+    ]);
+    expect(Object.keys(project)).toEqual(["ProjectOverviewPage"]);
     expect(Object.keys(lazyPages).sort()).toEqual([
       "HelpCenterPage",
       "ManageAssetsPage",
+      "ProjectOverviewPage",
       "ReportCenterPage",
     ]);
   });

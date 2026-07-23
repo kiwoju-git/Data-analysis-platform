@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type {
   AnalysisRunDeletionPreflightResponse,
+  DatasetDeletionOperationId,
   DatasetVersionCatalogItem,
   RegressionModelDependentPredictionDescriptor,
   RegressionModelCatalogItem,
@@ -19,12 +20,14 @@ import { useRegressionModelRetentionState } from "./useRegressionModelRetentionS
 export interface ManageAssetsPageProps {
   activeDatasetVersionId: string | null;
   onActivateDataset: (versionId: string) => void;
+  onAssetsDeleted: () => void;
   onDatasetMetadataChanged: () => void;
 }
 
 export function ManageAssetsPage({
   activeDatasetVersionId,
   onActivateDataset,
+  onAssetsDeleted,
   onDatasetMetadataChanged,
 }: ManageAssetsPageProps) {
   const state = useAssetManagementState();
@@ -64,6 +67,7 @@ export function ManageAssetsPage({
           activeDatasetVersionId={activeDatasetVersionId}
           state={state}
           onActivateDataset={onActivateDataset}
+          onAssetsDeleted={onAssetsDeleted}
           onDatasetMetadataChanged={onDatasetMetadataChanged}
         />
       ) : (
@@ -76,11 +80,13 @@ export function ManageAssetsPage({
 function DatasetManagementPanel({
   activeDatasetVersionId,
   onActivateDataset,
+  onAssetsDeleted,
   onDatasetMetadataChanged,
   state,
 }: {
   activeDatasetVersionId: string | null;
   onActivateDataset: (versionId: string) => void;
+  onAssetsDeleted: () => void;
   onDatasetMetadataChanged: () => void;
   state: ReturnType<typeof useAssetManagementState>;
 }) {
@@ -135,7 +141,7 @@ function DatasetManagementPanel({
             onMetadataChanged={onDatasetMetadataChanged}
             onDeleted={() => {
               state.onRefreshDatasets();
-              onDatasetMetadataChanged();
+              onAssetsDeleted();
             }}
             onSave={state.onSaveDatasetMetadata}
           />
@@ -174,6 +180,8 @@ function DatasetAssetEditor({
   const [pinned, setPinned] = useState(item.pinned);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [metadataOnlyConfirmed, setMetadataOnlyConfirmed] = useState(false);
+  const [cascadeConfirmed, setCascadeConfirmed] = useState(false);
+  const [cascadeConfirmationText, setCascadeConfirmationText] = useState("");
   const retention = useDatasetVersionRetentionState(item.version_id, onDeleted);
   return (
     <article className="asset-management-item">
@@ -256,7 +264,13 @@ function DatasetAssetEditor({
           deleting={retention.isDeleting}
           onConfirmedChange={setDeleteConfirmed}
           metadataOnlyConfirmed={metadataOnlyConfirmed}
+          cascadeConfirmed={cascadeConfirmed}
+          cascadeConfirmationText={cascadeConfirmationText}
+          dependencies={retention.dependencies}
+          onCascadeConfirmedChange={setCascadeConfirmed}
+          onCascadeConfirmationTextChange={setCascadeConfirmationText}
           onMetadataOnlyConfirmedChange={setMetadataOnlyConfirmed}
+          onLoadDependencies={retention.onLoadDependencies}
           onDelete={(mode) => retention.onDelete(retention.preflight!, mode)}
         />
       ) : null}
@@ -590,25 +604,36 @@ function DependentPredictionItem({
   );
 }
 
-function DatasetDeletionImpact({
+export function DatasetDeletionImpact({
+  cascadeConfirmed,
+  cascadeConfirmationText,
   confirmed,
+  dependencies,
   deleting,
   item,
   metadataOnlyConfirmed,
+  onCascadeConfirmedChange,
+  onCascadeConfirmationTextChange,
   onConfirmedChange,
   onDelete,
+  onLoadDependencies,
   onMetadataOnlyConfirmedChange,
   preflight,
 }: {
+  cascadeConfirmed: boolean;
+  cascadeConfirmationText: string;
   confirmed: boolean;
+  dependencies: import("./api").DatasetDeletionDependencyPage | null;
   deleting: boolean;
   item: DatasetVersionCatalogItem;
   metadataOnlyConfirmed: boolean;
+  onCascadeConfirmedChange: (confirmed: boolean) => void;
+  onCascadeConfirmationTextChange: (value: string) => void;
   onConfirmedChange: (confirmed: boolean) => void;
-  onDelete: (
-    mode:
-      | "verified_files_and_metadata"
-      | "metadata_only_preserve_unverified_files",
+  onDelete: (operationId: DatasetDeletionOperationId) => void;
+  onLoadDependencies: (
+    assetType: import("./api").DatasetDeletionDependencyAssetType | null,
+    offset?: number,
   ) => void;
   onMetadataOnlyConfirmedChange: (confirmed: boolean) => void;
   preflight: import("./api").DatasetVersionDeletionPreflightResponse;
@@ -623,6 +648,23 @@ function DatasetDeletionImpact({
     counts.attribute_control_limit_set_count +
     counts.phase_2_analysis_count +
     counts.job_count;
+  const operation = (id: DatasetDeletionOperationId) =>
+    preflight.available_operations.find((candidate) => candidate.operation_id === id);
+  const verified = operation("delete_dataset_verified");
+  const metadataOnly = operation("remove_dataset_metadata_preserve_files");
+  const cascadeVerified = operation("delete_dataset_and_dependents_verified");
+  const cascadePreserve = operation(
+    "delete_dataset_and_dependents_preserve_unverified",
+  );
+  const selectedCascade =
+    cascadeVerified?.ready === true ? cascadeVerified : cascadePreserve;
+  const expectedConfirmationValues = [
+    shortId(item.version_id),
+    item.user_label?.trim(),
+  ].filter((value): value is string => Boolean(value));
+  const cascadeTextMatches = expectedConfirmationValues.includes(
+    cascadeConfirmationText.trim(),
+  );
   return (
     <div className="notice-box dataset-deletion-impact">
       <strong>삭제 영향</strong>
@@ -636,7 +678,50 @@ function DatasetDeletionImpact({
         <span>job {counts.job_count.toLocaleString()}건</span>
         <span>다른 버전 {counts.sibling_version_count.toLocaleString()}개</span>
       </div>
-      {preflight.verified_delete_ready ? (
+      {preflight.integrity_issue_codes.length > 0 ? (
+        <div className="warning-box">
+          <strong>{integrityIssueTitle(preflight.integrity_issue_codes[0])}</strong>
+          <p>{integrityIssueDescription(preflight.integrity_issue_codes[0])}</p>
+          <p>내부 경로나 파일 내용은 표시하지 않습니다.</p>
+        </div>
+      ) : null}
+      {preflight.dependency_preview.length > 0 ? (
+        <details
+          onToggle={(event) => {
+            if (event.currentTarget.open && dependencies === null) {
+              onLoadDependencies(null, 0);
+            }
+          }}
+        >
+          <summary>연결 자산 {dependencyTotal.toLocaleString()}건 보기</summary>
+          <ul className="asset-dependency-list">
+            {(dependencies?.dependencies ?? preflight.dependency_preview).map(
+              (dependency) => (
+                <li key={`${dependency.asset_type}:${dependency.asset_id}`}>
+                  <strong>{dependency.display_name}</strong>
+                  <span>{dependencyLabel(dependency.asset_type)}</span>
+                  {dependency.related_dataset_version_id !== null &&
+                  dependency.related_dataset_version_id !== item.version_id ? (
+                    <span>다른 데이터셋의 결과도 함께 삭제됩니다.</span>
+                  ) : null}
+                </li>
+              ),
+            )}
+          </ul>
+          {dependencies?.has_next ? (
+            <button
+              className="secondary-button"
+              onClick={() =>
+                onLoadDependencies(null, dependencies.offset + dependencies.limit)
+              }
+              type="button"
+            >
+              다음 연결 자산
+            </button>
+          ) : null}
+        </details>
+      ) : null}
+      {verified?.ready ? (
         <>
           <p>
             {preflight.deletion_scope === "dataset_root"
@@ -656,13 +741,13 @@ function DatasetDeletionImpact({
           <button
             className="secondary-button danger-button"
             disabled={!confirmed || deleting}
-            onClick={() => onDelete("verified_files_and_metadata")}
+            onClick={() => onDelete("delete_dataset_verified")}
             type="button"
           >
             {deleting ? "삭제 중" : "데이터셋 버전 삭제"}
           </button>
         </>
-      ) : preflight.metadata_only_cleanup_ready ? (
+      ) : metadataOnly?.ready ? (
         <>
           <strong>파일 검증 실패 · 목록에서만 안전하게 정리 가능</strong>
           <p>
@@ -684,17 +769,116 @@ function DatasetDeletionImpact({
           <button
             className="secondary-button danger-button"
             disabled={!metadataOnlyConfirmed || deleting}
-            onClick={() => onDelete("metadata_only_preserve_unverified_files")}
+            onClick={() => onDelete("remove_dataset_metadata_preserve_files")}
             type="button"
           >
             {deleting ? "정리 중" : "파일을 보존하고 목록에서 제거"}
           </button>
         </>
-      ) : (
-        <p>종속 자산 {dependencyTotal.toLocaleString()}건을 먼저 명시적으로 삭제해야 합니다. 자동 연쇄 삭제는 하지 않습니다.</p>
-      )}
+      ) : null}
+      {dependencyTotal > 0 && selectedCascade?.ready ? (
+        <div className="danger-zone">
+          <strong>연결 자산과 데이터셋 모두 영구 삭제</strong>
+          <p>
+            분석·리포트·모델·예측 등 연결 자산{" "}
+            {selectedCascade.affected_asset_count.toLocaleString()}건을 하나의 원자적
+            작업으로 삭제합니다. 다른 데이터셋 자체는 삭제하지 않습니다.
+          </p>
+          {selectedCascade.unverified_file_policy === "preserve" ? (
+            <p>
+              검증하지 못한 파일{" "}
+              {selectedCascade.preserved_unverified_file_count.toLocaleString()}개는 열거나
+              이동하지 않고 디스크에 보존합니다.
+            </p>
+          ) : null}
+          <label className="checkbox-field">
+            <input
+              checked={cascadeConfirmed}
+              onChange={(event) =>
+                onCascadeConfirmedChange(event.currentTarget.checked)
+              }
+              type="checkbox"
+            />
+            <span>
+              연결된 자산 {selectedCascade.affected_asset_count.toLocaleString()}건도 함께
+              영구 삭제되는 것을 확인했습니다.
+            </span>
+          </label>
+          <label>
+            <span>
+              확인을 위해 {item.user_label ? "데이터셋 이름 또는 " : ""}
+              짧은 ID <strong>{shortId(item.version_id)}</strong> 입력
+            </span>
+            <input
+              aria-label="데이터셋 cascade 삭제 확인"
+              value={cascadeConfirmationText}
+              onChange={(event) =>
+                onCascadeConfirmationTextChange(event.currentTarget.value)
+              }
+            />
+          </label>
+          <button
+            className="danger-button"
+            disabled={!cascadeConfirmed || !cascadeTextMatches || deleting}
+            onClick={() => onDelete(selectedCascade.operation_id)}
+            type="button"
+          >
+            {deleting
+              ? "삭제 중"
+              : `연결 자산 ${selectedCascade.affected_asset_count.toLocaleString()}건과 데이터셋 모두 삭제`}
+          </button>
+        </div>
+      ) : dependencyTotal > 0 ? (
+        <p>
+          연결 자산을 포함한 안전한 삭제 계획을 만들 수 없습니다. blocker:{" "}
+          {[
+            ...(cascadeVerified?.blockers ?? []),
+            ...(cascadePreserve?.blockers ?? []),
+          ]
+            .filter((value, index, all) => all.indexOf(value) === index)
+            .join(", ")}
+        </p>
+      ) : null}
     </div>
   );
+}
+
+function integrityIssueTitle(code: string): string {
+  if (code === "dataset_version_path_invalid") return "저장 경로 검증 실패";
+  if (code === "dataset_version_artifact_mismatch") return "저장 파일 무결성 불일치";
+  if (code === "dataset_version_file_missing") return "저장 파일 누락";
+  return "저장 자산 무결성 확인 필요";
+}
+
+function integrityIssueDescription(code: string): string {
+  if (code === "dataset_version_path_invalid") {
+    return "일부 저장 위치 정보가 안전한 workspace 규칙과 일치하지 않습니다. 외부 파일을 잘못 삭제하지 않도록 물리 파일 삭제를 중단했습니다.";
+  }
+  if (code === "dataset_version_artifact_mismatch") {
+    return "저장 파일의 크기 또는 checksum이 등록 당시 정보와 다릅니다.";
+  }
+  if (code === "dataset_version_file_missing") {
+    return "등록된 저장 파일 중 일부를 찾을 수 없습니다.";
+  }
+  return "검증되지 않은 파일은 삭제하지 않고 보존합니다.";
+}
+
+function dependencyLabel(
+  assetType: import("./api").DatasetDeletionDependencyAssetType,
+): string {
+  const labels: Record<
+    import("./api").DatasetDeletionDependencyAssetType,
+    string
+  > = {
+    analysis_run: "분석 결과",
+    regression_model: "회귀모델",
+    prediction: "예측 결과",
+    analysis_export: "리포트/내보내기",
+    attribute_control_limit_set: "관리한계",
+    phase_2_analysis: "Phase II 분석",
+    job: "Job 기록",
+  };
+  return labels[assetType];
 }
 
 function AssetMetadataFields({

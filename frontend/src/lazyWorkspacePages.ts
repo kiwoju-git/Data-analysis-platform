@@ -11,3 +11,9 @@ export const ReportCenterPage = lazy(() =>
 export const ManageAssetsPage = lazy(() =>
   import("./ManageAssetsPage").then((module) => ({ default: module.ManageAssetsPage })),
 );
+
+export const ProjectOverviewPage = lazy(() =>
+  import("./ProjectOverviewPage").then((module) => ({
+    default: module.ProjectOverviewPage,
+  })),
+);

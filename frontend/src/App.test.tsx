@@ -62,6 +62,7 @@ import type {
   DatasetRowsPreviewResponse,
   DatasetUploadResponse,
   DatasetVersionCatalogResponse,
+  DatasetVersionDeletionPreflightResponse,
   DatasetVersionResponse,
   DoeDesignResponsesResponse,
   DoeFactorialAnalysisResponse,
@@ -89,7 +90,8 @@ import { apiRoutes } from "./api/routes";
 import { AppChrome } from "./AppChrome";
 import { HelpCenterPage } from "./HelpCenterPage";
 import { MethodHelpDrawer } from "./MethodHelpDrawer";
-import { ManageAssetsPage } from "./ManageAssetsPage";
+import { DatasetDeletionImpact, ManageAssetsPage } from "./ManageAssetsPage";
+import { ProjectOverviewPage } from "./ProjectOverviewPage";
 import { RoleDictionary } from "./RoleDictionary";
 import { ReportCenterPage } from "./ReportCenterPage";
 import {
@@ -217,6 +219,7 @@ describe("App", () => {
     expect(parseAppRoute("/reports/", "")).toEqual({ page: "reports" });
     expect(parseAppRoute("/help", "")).toEqual({ page: "help" });
     expect(parseAppRoute("/manage", "")).toEqual({ page: "manage" });
+    expect(parseAppRoute("/project", "")).toEqual({ page: "project" });
   });
 
   it("rejects unknown analysis module routes", () => {
@@ -4936,8 +4939,13 @@ describe("App", () => {
         datasetPageProps={datasetPageTestProps()}
         routePage="dataset"
         onActivateDataset={() => undefined}
+        onAssetsDeleted={() => undefined}
         onDatasetMetadataChanged={() => undefined}
+        onOpenAnalysisPage={() => undefined}
         onOpenAnalysisMethod={() => undefined}
+        onOpenDatasetPage={() => undefined}
+        onOpenManagePage={() => undefined}
+        onOpenReportsPage={() => undefined}
       />,
     );
     const analysisHtml = renderToString(
@@ -4954,8 +4962,13 @@ describe("App", () => {
         currentDatasetVersionId="dataset-version-id"
         routePage="analysis"
         onActivateDataset={() => undefined}
+        onAssetsDeleted={() => undefined}
         onDatasetMetadataChanged={() => undefined}
+        onOpenAnalysisPage={() => undefined}
         onOpenAnalysisMethod={() => undefined}
+        onOpenDatasetPage={() => undefined}
+        onOpenManagePage={() => undefined}
+        onOpenReportsPage={() => undefined}
       />,
     );
 
@@ -5038,6 +5051,7 @@ describe("App", () => {
         onOpenDatasetPage={() => undefined}
         onOpenHelpPage={() => undefined}
         onOpenManagePage={() => undefined}
+        onOpenProjectPage={() => undefined}
         onOpenReportsPage={() => undefined}
       >
         <div>Workspace child</div>
@@ -5045,7 +5059,8 @@ describe("App", () => {
     );
 
     expect(html).toContain("DataLab Studio");
-    expect(html).toContain("로컬 분석 작업대");
+    expect(html).toContain("Statistical Twin");
+    expect(html).not.toContain("로컬 분석 작업대");
     expect(html).toContain("Gate A 기반 구성");
     expect(html).toContain("API ok");
     expect(html).toContain("현재 분석 데이터셋");
@@ -5065,6 +5080,7 @@ describe("App", () => {
       <ManageAssetsPage
         activeDatasetVersionId={null}
         onActivateDataset={() => undefined}
+        onAssetsDeleted={() => undefined}
         onDatasetMetadataChanged={() => undefined}
       />,
     );
@@ -5077,6 +5093,138 @@ describe("App", () => {
     expect(html).toContain("표시 중");
     expect(html).toContain("보관됨");
     expect(html).toContain("전체");
+  });
+
+  it("renders dependency descriptors and explicit preserve cascade confirmation", () => {
+    const version = datasetVersionTestResponse();
+    const item = {
+      version_id: version.version_id,
+      dataset_id: version.dataset_id,
+      original_filename: "sample.csv",
+      version_number: 1,
+      row_count: 3,
+      column_count: 2,
+      created_at: version.created_at,
+      user_label: "공정 데이터",
+      note: null,
+      pinned: false,
+      metadata_updated_at: null,
+      archived: false,
+      archived_at: null,
+    };
+    const counts = {
+      dataset_version_count: 1 as const,
+      dataset_root_count: 1,
+      dataset_column_count: 2,
+      dataset_artifact_count: 2,
+      artifact_file_count: 2,
+      artifact_file_bytes: 128,
+      raw_upload_file_count: 1,
+      raw_upload_file_bytes: 64,
+      sibling_version_count: 0,
+      analysis_run_count: 1,
+      regression_model_count: 0,
+      prediction_source_count: 0,
+      prediction_target_count: 0,
+      analysis_export_count: 1,
+      job_count: 0,
+      attribute_control_limit_set_count: 0,
+      phase_2_analysis_count: 0,
+    };
+    const dependency = {
+      asset_type: "analysis_run" as const,
+      asset_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      display_name: "eda.descriptive (aaaaaaaa)",
+      method_id: "eda.descriptive",
+      relationship: "direct_analysis" as const,
+      created_at: "2026-07-24T00:00:00Z",
+      status: "succeeded",
+      stale: false,
+      result_available: true,
+      related_dataset_version_id: version.version_id,
+      related_dataset_display_name: "Dataset (version-)",
+      integrity_state: "not_applicable" as const,
+      blocker_codes: [],
+    };
+    const preflight: DatasetVersionDeletionPreflightResponse = {
+      preflight_schema_version: 3,
+      version_id: version.version_id,
+      dataset_id: version.dataset_id,
+      row_count: 3,
+      column_count: 2,
+      version_number: 1,
+      deletion_scope: "dataset_root",
+      deletion_ready: false,
+      dependency_ready: false,
+      integrity_state: "unverified",
+      integrity_issue_codes: ["dataset_version_path_invalid"],
+      verified_delete_ready: false,
+      metadata_only_cleanup_ready: false,
+      preserved_unverified_file_count: 2,
+      blockers: ["dataset_version_deletion_analysis_dependency"],
+      counts,
+      deletion_manifest_sha256: "0".repeat(64),
+      verified_deletion_manifest_sha256: null,
+      metadata_only_deletion_manifest_sha256: "1".repeat(64),
+      available_operations: [
+        {
+          operation_id: "delete_dataset_and_dependents_preserve_unverified",
+          dependency_policy: "cascade",
+          unverified_file_policy: "preserve",
+          ready: true,
+          manifest_sha256: "2".repeat(64),
+          affected_asset_count: 2,
+          verified_file_count: 2,
+          verified_file_bytes: 128,
+          preserved_unverified_file_count: 2,
+          blockers: [],
+        },
+      ],
+      dependency_preview: [dependency],
+      dependency_preview_truncated: false,
+    };
+    const html = renderToString(
+      <DatasetDeletionImpact
+        cascadeConfirmed={false}
+        cascadeConfirmationText=""
+        confirmed={false}
+        deleting={false}
+        dependencies={null}
+        item={item}
+        metadataOnlyConfirmed={false}
+        onCascadeConfirmedChange={() => undefined}
+        onCascadeConfirmationTextChange={() => undefined}
+        onConfirmedChange={() => undefined}
+        onDelete={() => undefined}
+        onLoadDependencies={() => undefined}
+        onMetadataOnlyConfirmedChange={() => undefined}
+        preflight={preflight}
+      />,
+    );
+
+    expect(html).toContain("저장 경로 검증 실패");
+    expect(html).toMatch(/연결 자산.*2.*건 보기/);
+    expect(html).toContain("eda.descriptive");
+    expect(html).toContain("연결 자산과 데이터셋 모두 영구 삭제");
+    expect(html).not.toContain("workspaces/");
+  });
+
+  it("renders the single-workspace project overview surface", () => {
+    const html = renderToString(
+      <ProjectOverviewPage
+        currentDatasetVersion={datasetVersionTestResponse()}
+        onOpenAnalysis={() => undefined}
+        onOpenDatasetPage={() => undefined}
+        onOpenManage={() => undefined}
+        onOpenReports={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("프로젝트");
+    expect(html).toContain("하나의 로컬 작업공간");
+    expect(html).toContain("현재 분석 데이터셋");
+    expect(html).toContain("모델 및 리포트");
+    expect(html).not.toContain("프로젝트 생성");
   });
 
   it("maps parsing suggestions into explicit confirmation options", () => {

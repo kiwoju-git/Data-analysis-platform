@@ -4,31 +4,52 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import status
 
 from app.api.v1.schemas.datasets import (
+    DatasetDeletionDependencyDescriptor,
+    DatasetDeletionDependencyPage,
     DatasetVersionDeleteRequest,
     DatasetVersionDeleteResponse,
     DatasetVersionDeletionCounts,
+    DatasetVersionDeletionOperation,
     DatasetVersionDeletionPreflightResponse,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import canonical_json_bytes, utc_now
+from app.services.analysis_run_retention import (
+    _deletion_context as _analysis_run_deletion_context,
+)
+from app.services.analysis_run_retention import (
+    _OwnedFile as _AnalysisOwnedFile,
+)
+from app.services.analysis_run_retention import (
+    _quarantine_path as _analysis_quarantine_path,
+)
+from app.services.workspace_asset_retention import (
+    _limit_set_context,
+)
 from app.storage.metadata import (
+    DatasetDeletionDependencyDescriptorRecord,
+    DatasetVersionCascadeSnapshot,
     DatasetVersionDeletionSnapshot,
     DatasetVersionStorageConflict,
+    _dataset_deletion_dependency_descriptors,
+    delete_dataset_version_cascade_records,
     delete_dataset_version_records,
+    get_dataset_version_cascade_snapshot,
     get_dataset_version_deletion_snapshot,
     list_dataset_artifact_records_by_id_prefix,
     list_dataset_records_by_id_prefix,
+    list_dataset_version_deletion_dependencies,
 )
 
-DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[2] = 2
-DATASET_VERSION_DELETION_SCHEMA_VERSION: Literal[2] = 2
+DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[3] = 3
+DATASET_VERSION_DELETION_SCHEMA_VERSION: Literal[3] = 3
 _ARTIFACT_QUARANTINE = re.compile(r"^\.delete-d-([0-9a-f]{12})-([0-9a-f]{8})\.q$")
 _RAW_QUARANTINE = re.compile(r"^\.delete-u-([0-9a-f]{12})-([0-9a-f]{8})\.q$")
 
@@ -70,11 +91,77 @@ class _DeletionContext:
     preserved_unverified_file_count: int
 
 
+@dataclass(frozen=True)
+class _CascadeFile:
+    key: str
+    kind: Literal["dataset", "analysis", "limit_set"]
+    path: Path
+    sha256: str
+    size_bytes: int
+    owner_id: str
+    analysis_file: _AnalysisOwnedFile | None = None
+
+
+@dataclass(frozen=True)
+class _CascadeContext:
+    snapshot: DatasetVersionCascadeSnapshot
+    dataset_context: _DeletionContext
+    files: tuple[_CascadeFile, ...]
+    preserved_unverified_file_count: int
+    integrity_issue_codes: tuple[str, ...]
+    blockers: tuple[str, ...]
+    verified_manifest_sha256: str
+    preserve_manifest_sha256: str
+
+
+@dataclass(frozen=True)
+class _CascadeQuarantinedFile:
+    owned: _CascadeFile
+    path: Path
+
+
 def get_dataset_version_deletion_preflight(
     settings: Settings,
     version_id: UUID,
 ) -> DatasetVersionDeletionPreflightResponse:
-    return _preflight_response(_deletion_context(settings, version_id))
+    context = _deletion_context(settings, version_id)
+    cascade = _cascade_context(settings, version_id, context)
+    return _preflight_response(context, cascade)
+
+
+def list_dataset_version_deletion_dependency_page(
+    settings: Settings,
+    version_id: UUID,
+    *,
+    asset_type: str | None,
+    offset: int,
+    limit: int,
+) -> DatasetDeletionDependencyPage:
+    total, records = list_dataset_version_deletion_dependencies(
+        settings.workspace_root,
+        str(version_id),
+        asset_type=cast(Any, asset_type),
+        offset=offset,
+        limit=limit,
+    )
+    if get_dataset_version_deletion_snapshot(settings.workspace_root, str(version_id)) is None:
+        raise ApiError(
+            code="dataset_version_not_found",
+            message="요청한 데이터셋 버전을 찾을 수 없습니다.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    dependencies = [_dependency_descriptor(item) for item in records]
+    return DatasetDeletionDependencyPage(
+        version_id=version_id,
+        asset_type=cast(Any, asset_type),
+        offset=offset,
+        limit=limit,
+        total=total,
+        returned=len(dependencies),
+        has_previous=offset > 0,
+        has_next=offset + len(dependencies) < total,
+        dependencies=dependencies,
+    )
 
 
 def delete_stored_dataset_version(
@@ -85,29 +172,47 @@ def delete_stored_dataset_version(
     if body.confirmation_version_id != version_id:
         raise _confirmation_error()
     context = _deletion_context(settings, version_id)
-    preflight = _preflight_response(context)
-    mode = body.mode
-    mode_ready = (
-        preflight.verified_delete_ready
-        if mode == "verified_files_and_metadata"
-        else preflight.metadata_only_cleanup_ready
+    cascade = _cascade_context(settings, version_id, context)
+    preflight = _preflight_response(context, cascade)
+    operation_id = body.operation_id or (
+        "delete_dataset_verified"
+        if body.mode == "verified_files_and_metadata"
+        else "remove_dataset_metadata_preserve_files"
     )
-    expected_manifest = (
-        context.verified_manifest_sha256
-        if mode == "verified_files_and_metadata"
-        else context.metadata_only_manifest_sha256
+    operation = next(
+        (item for item in preflight.available_operations if item.operation_id == operation_id),
+        None,
     )
-    if not mode_ready:
+    expected_manifest = None if operation is None else operation.manifest_sha256
+    if operation is None or not operation.ready:
         raise ApiError(
             code="dataset_version_deletion_blocked",
-            message="이 데이터셋 버전을 참조하는 저장 자산이 있어 삭제할 수 없습니다.",
+            message="연결된 자산 또는 무결성 문제 때문에 선택한 삭제 작업을 실행할 수 없습니다.",
             status_code=status.HTTP_409_CONFLICT,
-            developer_detail=",".join(preflight.blockers),
+            developer_detail=",".join(() if operation is None else operation.blockers),
         )
     if expected_manifest is None or body.expected_deletion_manifest_sha256 != expected_manifest:
         raise _confirmation_error()
 
-    if mode == "metadata_only_preserve_unverified_files":
+    if operation_id in {
+        "delete_dataset_and_dependents_verified",
+        "delete_dataset_and_dependents_preserve_unverified",
+    }:
+        return _delete_dataset_cascade(
+            settings,
+            context,
+            cascade,
+            cast(
+                Literal[
+                    "delete_dataset_and_dependents_verified",
+                    "delete_dataset_and_dependents_preserve_unverified",
+                ],
+                operation_id,
+            ),
+            expected_manifest,
+        )
+
+    if operation_id == "remove_dataset_metadata_preserve_files":
         try:
             delete_dataset_version_records(
                 settings.workspace_root,
@@ -132,8 +237,10 @@ def delete_stored_dataset_version(
             deletion_manifest_sha256=expected_manifest,
             deleted_at=utc_now(),
             deleted_counts=context.counts,
-            deletion_mode=mode,
+            deletion_mode="metadata_only_preserve_unverified_files",
+            operation_id=operation_id,
             preserved_unverified_file_count=context.preserved_unverified_file_count,
+            deleted_dependency_count=0,
             cleanup_status="metadata_removed_files_preserved",
         )
 
@@ -189,10 +296,289 @@ def delete_stored_dataset_version(
         deletion_manifest_sha256=expected_manifest,
         deleted_at=utc_now(),
         deleted_counts=context.counts,
-        deletion_mode=mode,
+        deletion_mode="verified_files_and_metadata",
+        operation_id=operation_id,
         preserved_unverified_file_count=0,
+        deleted_dependency_count=0,
         cleanup_status=cleanup_status,
     )
+
+
+def _cascade_context(
+    settings: Settings,
+    version_id: UUID,
+    dataset_context: _DeletionContext,
+) -> _CascadeContext:
+    snapshot = get_dataset_version_cascade_snapshot(settings.workspace_root, str(version_id))
+    if snapshot is None:
+        raise ApiError(
+            code="dataset_version_not_found",
+            message="요청한 데이터셋 버전을 찾을 수 없습니다.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    files: list[_CascadeFile] = []
+    preserved = 0
+    issues: set[str] = set(dataset_context.integrity_issue_codes)
+    blockers: set[str] = set()
+    if dataset_context.integrity_state == "verified":
+        for dataset_file in dataset_context.files:
+            files.append(
+                _CascadeFile(
+                    key=f"dataset:{dataset_file.owner_id}",
+                    kind="dataset",
+                    path=dataset_file.path,
+                    sha256=dataset_file.sha256,
+                    size_bytes=dataset_file.size_bytes,
+                    owner_id=dataset_file.owner_id,
+                )
+            )
+    else:
+        preserved += dataset_context.preserved_unverified_file_count
+
+    artifacts_by_analysis: dict[str, int] = {}
+    for artifact in snapshot.analysis_artifacts:
+        artifacts_by_analysis[artifact.analysis_id] = (
+            artifacts_by_analysis.get(artifact.analysis_id, 0) + 1
+        )
+    allowed_analysis_blockers = {
+        "analysis_run_deletion_regression_model_dependency",
+        "analysis_run_deletion_regression_prediction_dependency",
+        "analysis_run_deletion_limit_set_dependency",
+        "analysis_run_deletion_job_dependency",
+    }
+    for run in snapshot.analysis_runs:
+        try:
+            analysis_context = _analysis_run_deletion_context(settings, UUID(run.analysis_id))
+        except ApiError as exc:
+            issues.add(exc.code)
+            preserved += 1 + artifacts_by_analysis.get(run.analysis_id, 0)
+            continue
+        blockers.update(
+            blocker
+            for blocker in analysis_context.blockers
+            if blocker not in allowed_analysis_blockers
+        )
+        for analysis_file in analysis_context.files:
+            files.append(
+                _CascadeFile(
+                    key=f"analysis:{analysis_file.key}:{run.analysis_id}",
+                    kind="analysis",
+                    path=analysis_file.path,
+                    sha256=analysis_file.sha256,
+                    size_bytes=analysis_file.size_bytes,
+                    owner_id=run.analysis_id,
+                    analysis_file=analysis_file,
+                )
+            )
+
+    for limit_set in snapshot.limit_sets:
+        try:
+            limit_context = _limit_set_context(settings, UUID(limit_set.limit_set_id))
+        except ApiError as exc:
+            issues.add(exc.code)
+            preserved += 1
+            continue
+        files.append(
+            _CascadeFile(
+                key=f"limit_set:{limit_set.limit_set_id}",
+                kind="limit_set",
+                path=limit_context.path,
+                sha256=limit_set.asset_sha256,
+                size_bytes=limit_context.size_bytes,
+                owner_id=limit_set.limit_set_id,
+            )
+        )
+
+    for job in snapshot.jobs:
+        if job.state in {"queued", "running", "cancel_requested"}:
+            blockers.add("dataset_version_cascade_active_job")
+
+    path_keys: dict[str, _CascadeFile] = {}
+    duplicate_paths: set[str] = set()
+    for cascade_file in files:
+        key = str(cascade_file.path).casefold()
+        if key in path_keys:
+            duplicate_paths.add(key)
+        else:
+            path_keys[key] = cascade_file
+    if duplicate_paths:
+        issues.add("dataset_version_cascade_duplicate_path")
+        files = [
+            cascade_file
+            for cascade_file in files
+            if str(cascade_file.path).casefold() not in duplicate_paths
+        ]
+        preserved += len(duplicate_paths)
+
+    manifest_common = {
+        "preflight_schema_version": DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION,
+        "version_id": str(version_id),
+        "dataset_snapshot": {
+            "version": snapshot.dataset.version.__dict__,
+            "dataset": snapshot.dataset.dataset.__dict__,
+            "columns": [item.__dict__ for item in snapshot.dataset.columns],
+            "artifacts": [item.__dict__ for item in snapshot.dataset.artifacts],
+            "user_metadata": (
+                None
+                if snapshot.dataset.user_metadata is None
+                else snapshot.dataset.user_metadata.__dict__
+            ),
+            "sibling_version_count": snapshot.dataset.sibling_version_count,
+        },
+        "analysis_runs": [item.__dict__ for item in snapshot.analysis_runs],
+        "analysis_artifacts": [item.__dict__ for item in snapshot.analysis_artifacts],
+        "regression_models": [item.__dict__ for item in snapshot.regression_models],
+        "limit_sets": [item.__dict__ for item in snapshot.limit_sets],
+        "jobs": [item.__dict__ for item in snapshot.jobs],
+        "verified_files": [
+            {
+                "key": item.key,
+                "kind": item.kind,
+                "sha256": item.sha256,
+                "size_bytes": item.size_bytes,
+                "owner_id": item.owner_id,
+            }
+            for item in files
+        ],
+        "integrity_issue_codes": sorted(issues),
+        "preserved_unverified_file_count": preserved,
+        "blockers": sorted(blockers),
+    }
+    verified_manifest = hashlib.sha256(
+        canonical_json_bytes(
+            {
+                **manifest_common,
+                "operation_id": "delete_dataset_and_dependents_verified",
+            }
+        )
+    ).hexdigest()
+    preserve_manifest = hashlib.sha256(
+        canonical_json_bytes(
+            {
+                **manifest_common,
+                "operation_id": ("delete_dataset_and_dependents_preserve_unverified"),
+            }
+        )
+    ).hexdigest()
+    return _CascadeContext(
+        snapshot=snapshot,
+        dataset_context=dataset_context,
+        files=tuple(files),
+        preserved_unverified_file_count=preserved,
+        integrity_issue_codes=tuple(sorted(issues)),
+        blockers=tuple(sorted(blockers)),
+        verified_manifest_sha256=verified_manifest,
+        preserve_manifest_sha256=preserve_manifest,
+    )
+
+
+def _delete_dataset_cascade(
+    settings: Settings,
+    dataset_context: _DeletionContext,
+    cascade: _CascadeContext,
+    operation_id: Literal[
+        "delete_dataset_and_dependents_verified",
+        "delete_dataset_and_dependents_preserve_unverified",
+    ],
+    expected_manifest: str,
+) -> DatasetVersionDeleteResponse:
+    quarantined: list[_CascadeQuarantinedFile] = []
+    try:
+        for owned in cascade.files:
+            if owned.kind == "analysis":
+                if owned.analysis_file is None:
+                    raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+                quarantine = _analysis_quarantine_path(UUID(owned.owner_id), owned.analysis_file)
+            elif owned.kind == "limit_set":
+                quarantine = owned.path.with_name(
+                    f".delete-l-{owned.owner_id}-{uuid4().hex[:16]}.q"
+                )
+            else:
+                dataset_owned = next(
+                    item for item in dataset_context.files if item.owner_id == owned.owner_id
+                )
+                marker = "d" if dataset_owned.kind == "artifact" else "u"
+                owner_token = owned.owner_id.replace("-", "")[:12].lower()
+                quarantine = owned.path.with_name(
+                    f".delete-{marker}-{owner_token}-{uuid4().hex[:8]}.q"
+                )
+            os.replace(owned.path, quarantine)
+            quarantined.append(_CascadeQuarantinedFile(owned, quarantine))
+            if not _file_matches(quarantine, owned.sha256, owned.size_bytes):
+                raise DatasetVersionStorageConflict("dataset_version_artifact_mismatch")
+        delete_dataset_version_cascade_records(
+            settings.workspace_root,
+            expected_snapshot=cascade.snapshot,
+        )
+    except (DatasetVersionStorageConflict, OSError) as exc:
+        _restore_cascade_files(quarantined)
+        code = (
+            "dataset_version_quarantine_failed"
+            if isinstance(exc, OSError)
+            else "dataset_version_deletion_conflict"
+        )
+        raise ApiError(
+            code=code,
+            message="삭제 확인 후 저장 자산 또는 파일 상태가 변경되었습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+    except Exception:
+        _restore_cascade_files(quarantined)
+        raise
+
+    cleanup_status: Literal["deleted", "quarantined_pending_cleanup"] = "deleted"
+    for item in quarantined:
+        try:
+            item.path.unlink(missing_ok=True)
+        except OSError:
+            cleanup_status = "quarantined_pending_cleanup"
+    _remove_empty_owned_directories(settings.workspace_root, dataset_context)
+    dependency_count = (
+        len(cascade.snapshot.analysis_runs)
+        + len(cascade.snapshot.regression_models)
+        + len(cascade.snapshot.limit_sets)
+        + len(cascade.snapshot.jobs)
+    )
+    return DatasetVersionDeleteResponse(
+        deletion_schema_version=DATASET_VERSION_DELETION_SCHEMA_VERSION,
+        version_id=UUID(cascade.snapshot.dataset.version.version_id),
+        dataset_id=UUID(cascade.snapshot.dataset.dataset.dataset_id),
+        deletion_scope=dataset_context.deletion_scope,
+        deletion_manifest_sha256=expected_manifest,
+        deleted_at=utc_now(),
+        deleted_counts=dataset_context.counts,
+        deletion_mode=operation_id,
+        operation_id=operation_id,
+        preserved_unverified_file_count=(
+            cascade.preserved_unverified_file_count
+            if operation_id == "delete_dataset_and_dependents_preserve_unverified"
+            else 0
+        ),
+        deleted_dependency_count=dependency_count,
+        cleanup_status=cleanup_status,
+    )
+
+
+def _restore_cascade_files(items: list[_CascadeQuarantinedFile]) -> None:
+    failed = False
+    for item in reversed(items):
+        if not item.path.exists():
+            continue
+        try:
+            if item.owned.path.exists() or not _file_matches(
+                item.path, item.owned.sha256, item.owned.size_bytes
+            ):
+                failed = True
+                continue
+            os.replace(item.path, item.owned.path)
+        except OSError:
+            failed = True
+    if failed:
+        raise ApiError(
+            code="dataset_version_restore_failed",
+            message="삭제 중 오류 후 일부 파일을 원래 위치로 복원하지 못했습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
 
 
 def recover_dataset_version_quarantine_files(
@@ -457,7 +843,10 @@ def _verified_deletion_context(settings: Settings, version_id: UUID) -> _Deletio
     )
 
 
-def _preflight_response(context: _DeletionContext) -> DatasetVersionDeletionPreflightResponse:
+def _preflight_response(
+    context: _DeletionContext,
+    cascade: _CascadeContext,
+) -> DatasetVersionDeletionPreflightResponse:
     version = context.snapshot.version
     dependency_ready = not context.blockers
     verified_ready = dependency_ready and context.integrity_state == "verified"
@@ -469,6 +858,75 @@ def _preflight_response(context: _DeletionContext) -> DatasetVersionDeletionPref
     )
     if selected_manifest is None:
         selected_manifest = "0" * 64
+    dependency_records = _dataset_deletion_dependency_descriptors(cascade.snapshot)
+    dependency_count = len(dependency_records)
+    cascade_common_blockers = list(cascade.blockers)
+    if dependency_count == 0:
+        cascade_common_blockers.append("dataset_version_cascade_no_dependencies")
+    cascade_verified_blockers = list(cascade_common_blockers)
+    if cascade.integrity_issue_codes:
+        cascade_verified_blockers.append("dataset_version_cascade_integrity_unverified")
+    verified_file_bytes = sum(item.size_bytes for item in cascade.files)
+    operations = [
+        DatasetVersionDeletionOperation(
+            operation_id="delete_dataset_verified",
+            dependency_policy="block",
+            unverified_file_policy="block",
+            ready=verified_ready,
+            manifest_sha256=context.verified_manifest_sha256,
+            affected_asset_count=0,
+            verified_file_count=len(context.files),
+            verified_file_bytes=sum(item.size_bytes for item in context.files),
+            preserved_unverified_file_count=0,
+            blockers=list(context.blockers)
+            + (
+                ["dataset_version_deletion_integrity_unverified"]
+                if context.integrity_state != "verified"
+                else []
+            ),
+        ),
+        DatasetVersionDeletionOperation(
+            operation_id="remove_dataset_metadata_preserve_files",
+            dependency_policy="block",
+            unverified_file_policy="preserve",
+            ready=metadata_only_ready,
+            manifest_sha256=context.metadata_only_manifest_sha256,
+            affected_asset_count=0,
+            verified_file_count=0,
+            verified_file_bytes=0,
+            preserved_unverified_file_count=context.preserved_unverified_file_count,
+            blockers=list(context.blockers)
+            + (
+                ["dataset_version_deletion_integrity_verified"]
+                if context.integrity_state == "verified"
+                else []
+            ),
+        ),
+        DatasetVersionDeletionOperation(
+            operation_id="delete_dataset_and_dependents_verified",
+            dependency_policy="cascade",
+            unverified_file_policy="block",
+            ready=not cascade_verified_blockers,
+            manifest_sha256=cascade.verified_manifest_sha256,
+            affected_asset_count=dependency_count,
+            verified_file_count=len(cascade.files),
+            verified_file_bytes=verified_file_bytes,
+            preserved_unverified_file_count=0,
+            blockers=sorted(set(cascade_verified_blockers)),
+        ),
+        DatasetVersionDeletionOperation(
+            operation_id="delete_dataset_and_dependents_preserve_unverified",
+            dependency_policy="cascade",
+            unverified_file_policy="preserve",
+            ready=not cascade_common_blockers,
+            manifest_sha256=cascade.preserve_manifest_sha256,
+            affected_asset_count=dependency_count,
+            verified_file_count=len(cascade.files),
+            verified_file_bytes=verified_file_bytes,
+            preserved_unverified_file_count=cascade.preserved_unverified_file_count,
+            blockers=sorted(set(cascade_common_blockers)),
+        ),
+    ]
     return DatasetVersionDeletionPreflightResponse(
         preflight_schema_version=DATASET_VERSION_DELETION_PREFLIGHT_SCHEMA_VERSION,
         version_id=UUID(version.version_id),
@@ -489,6 +947,33 @@ def _preflight_response(context: _DeletionContext) -> DatasetVersionDeletionPref
         deletion_manifest_sha256=selected_manifest,
         verified_deletion_manifest_sha256=context.verified_manifest_sha256,
         metadata_only_deletion_manifest_sha256=context.metadata_only_manifest_sha256,
+        available_operations=operations,
+        dependency_preview=[_dependency_descriptor(item) for item in dependency_records[:10]],
+        dependency_preview_truncated=dependency_count > 10,
+    )
+
+
+def _dependency_descriptor(
+    record: DatasetDeletionDependencyDescriptorRecord,
+) -> DatasetDeletionDependencyDescriptor:
+    return DatasetDeletionDependencyDescriptor(
+        asset_type=cast(Any, record.asset_type),
+        asset_id=UUID(record.asset_id),
+        display_name=record.display_name,
+        method_id=record.method_id,
+        relationship=cast(Any, record.relationship),
+        created_at=record.created_at,
+        status=record.status,
+        stale=record.stale,
+        result_available=record.result_available,
+        related_dataset_version_id=(
+            None
+            if record.related_dataset_version_id is None
+            else UUID(record.related_dataset_version_id)
+        ),
+        related_dataset_display_name=record.related_dataset_display_name,
+        integrity_state=cast(Any, record.integrity_state),
+        blocker_codes=list(record.blocker_codes),
     )
 
 

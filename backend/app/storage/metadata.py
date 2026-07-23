@@ -139,6 +139,42 @@ class DatasetVersionDeletionSnapshot:
 
 
 @dataclass(frozen=True)
+class DatasetVersionCascadeSnapshot:
+    dataset: DatasetVersionDeletionSnapshot
+    analysis_runs: tuple["AnalysisRunRecord", ...]
+    analysis_artifacts: tuple["AnalysisArtifactRecord", ...]
+    regression_models: tuple["RegressionModelRecord", ...]
+    limit_sets: tuple["AttributeControlLimitSetRecord", ...]
+    jobs: tuple["JobRecord", ...]
+
+
+@dataclass(frozen=True)
+class DatasetDeletionDependencyDescriptorRecord:
+    asset_type: str
+    asset_id: str
+    display_name: str
+    method_id: str | None
+    relationship: str
+    created_at: str | None
+    status: str | None
+    stale: bool | None
+    result_available: bool | None
+    related_dataset_version_id: str | None
+    related_dataset_display_name: str | None
+    integrity_state: str
+    blocker_codes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class WorkspaceSummaryCounts:
+    visible_dataset_version_count: int
+    archived_dataset_version_count: int
+    regression_model_count: int
+    stored_analysis_count: int
+    export_report_count: int
+
+
+@dataclass(frozen=True)
 class AnalysisRunRecord:
     analysis_id: str
     method_id: str
@@ -1782,6 +1818,150 @@ def get_dataset_version_deletion_snapshot(
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
         return _connection_dataset_version_deletion_snapshot(connection, version_id)
+
+
+def get_dataset_version_cascade_snapshot(
+    workspace_root: Path,
+    version_id: str,
+) -> DatasetVersionCascadeSnapshot | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        return _connection_dataset_version_cascade_snapshot(connection, version_id)
+
+
+def get_workspace_summary_counts(workspace_root: Path) -> WorkspaceSummaryCounts:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        visible = _connection_count(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM dataset_versions AS version
+            LEFT JOIN dataset_version_user_metadata AS metadata
+                ON metadata.version_id = version.version_id
+            WHERE COALESCE(metadata.archived, 0) = 0;
+            """,
+            (),
+        )
+        archived = _connection_count(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM dataset_versions AS version
+            JOIN dataset_version_user_metadata AS metadata
+                ON metadata.version_id = version.version_id
+            WHERE metadata.archived = 1;
+            """,
+            (),
+        )
+        models = _connection_count(connection, "SELECT COUNT(*) FROM regression_models;", ())
+        analyses = _connection_count(
+            connection,
+            """
+            SELECT COUNT(*) FROM analysis_runs
+            WHERE status = 'succeeded'
+              AND result_path IS NOT NULL
+              AND result_sha256 IS NOT NULL;
+            """,
+            (),
+        )
+        exports = _connection_count(
+            connection,
+            """
+            SELECT COUNT(*) FROM analysis_artifacts
+            WHERE kind IN (
+                'analysis_result_json_export',
+                'analysis_result_csv_export',
+                'analysis_result_html_report',
+                'regression_prediction_csv_export'
+            );
+            """,
+            (),
+        )
+    return WorkspaceSummaryCounts(visible, archived, models, analyses, exports)
+
+
+def list_dataset_version_deletion_dependencies(
+    workspace_root: Path,
+    version_id: str,
+    *,
+    asset_type: str | None,
+    offset: int,
+    limit: int,
+) -> tuple[int, list[DatasetDeletionDependencyDescriptorRecord]]:
+    snapshot = get_dataset_version_cascade_snapshot(workspace_root, version_id)
+    if snapshot is None:
+        return 0, []
+    records = _dataset_deletion_dependency_descriptors(snapshot)
+    if asset_type is not None:
+        records = [item for item in records if item.asset_type == asset_type]
+    return len(records), records[offset : offset + limit]
+
+
+def delete_dataset_version_cascade_records(
+    workspace_root: Path,
+    *,
+    expected_snapshot: DatasetVersionCascadeSnapshot,
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        current = _connection_dataset_version_cascade_snapshot(
+            connection, expected_snapshot.dataset.version.version_id
+        )
+        if current is None or current != expected_snapshot:
+            raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+
+        analysis_ids = tuple(item.analysis_id for item in current.analysis_runs)
+        model_ids = tuple(item.model_id for item in current.regression_models)
+        limit_set_ids = tuple(item.limit_set_id for item in current.limit_sets)
+        job_ids = tuple(item.job_id for item in current.jobs)
+
+        for job_id in job_ids:
+            deleted = connection.execute("DELETE FROM jobs WHERE job_id = ?;", (job_id,))
+            if deleted.rowcount != 1:
+                raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+        for limit_set_id in limit_set_ids:
+            deleted = connection.execute(
+                "DELETE FROM attribute_control_limit_sets WHERE limit_set_id = ?;",
+                (limit_set_id,),
+            )
+            if deleted.rowcount != 1:
+                raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+        for model_id in model_ids:
+            deleted = connection.execute(
+                "DELETE FROM regression_models WHERE model_id = ?;",
+                (model_id,),
+            )
+            if deleted.rowcount != 1:
+                raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+        for analysis_id in analysis_ids:
+            deleted = connection.execute(
+                "DELETE FROM analysis_runs WHERE analysis_id = ?;",
+                (analysis_id,),
+            )
+            if deleted.rowcount != 1:
+                raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+
+        deleted_version = connection.execute(
+            "DELETE FROM dataset_versions WHERE version_id = ?;",
+            (current.dataset.version.version_id,),
+        )
+        if deleted_version.rowcount != 1:
+            raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+        if current.dataset.sibling_version_count == 0:
+            deleted_root = connection.execute(
+                "DELETE FROM datasets WHERE dataset_id = ?;",
+                (current.dataset.dataset.dataset_id,),
+            )
+            if deleted_root.rowcount != 1:
+                raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def delete_dataset_version_records(
@@ -4574,6 +4754,286 @@ def _connection_dataset_version_deletion_snapshot(
             phase_2_analysis_count=phase_2_count,
         ),
     )
+
+
+def _connection_dataset_version_cascade_snapshot(
+    connection: sqlite3.Connection,
+    version_id: str,
+) -> DatasetVersionCascadeSnapshot | None:
+    dataset = _connection_dataset_version_deletion_snapshot(connection, version_id)
+    if dataset is None:
+        return None
+
+    run_rows = connection.execute(
+        """
+        SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
+               status, result_path, result_sha256, stale, created_at, updated_at,
+               completed_at, app_version
+        FROM analysis_runs;
+        """
+    ).fetchall()
+    all_runs = [_analysis_run_from_row(row) for row in run_rows]
+    model_rows = connection.execute(
+        """
+        SELECT model_id, analysis_id, dataset_version_id, method_id, method_version,
+               manifest_path, manifest_sha256, schema_hash, created_at, app_version
+        FROM regression_models;
+        """
+    ).fetchall()
+    all_models = [_regression_model_from_row(row) for row in model_rows]
+    limit_set_rows = connection.execute(
+        f"SELECT {_ATTRIBUTE_CONTROL_LIMIT_SET_COLUMNS} FROM attribute_control_limit_sets;"
+    ).fetchall()
+    all_limit_sets = [_attribute_control_limit_set_from_row(row) for row in limit_set_rows]
+
+    analysis_ids = {
+        run.analysis_id
+        for run in all_runs
+        if run.dataset_version_id == version_id
+        or (
+            run.method_id == "regression.predict"
+            and _prediction_config_references_dataset(
+                run.config_json, version_id, key="source_dataset_version_id"
+            )
+        )
+    }
+    model_ids = {model.model_id for model in all_models if model.dataset_version_id == version_id}
+    limit_set_ids = {
+        item.limit_set_id for item in all_limit_sets if item.source_dataset_version_id == version_id
+    }
+
+    changed = True
+    while changed:
+        before = (len(analysis_ids), len(model_ids), len(limit_set_ids))
+        for model in all_models:
+            if model.dataset_version_id == version_id or model.analysis_id in analysis_ids:
+                model_ids.add(model.model_id)
+                analysis_ids.add(model.analysis_id)
+        model_source_ids = {
+            model.analysis_id for model in all_models if model.model_id in model_ids
+        }
+        for run in all_runs:
+            if run.method_id == "regression.predict" and any(
+                _regression_prediction_config_references(
+                    run.config_json,
+                    source_analysis_id=source_analysis_id,
+                    model_id=model_id,
+                )
+                for source_analysis_id, model_id in (
+                    (model.analysis_id, model.model_id)
+                    for model in all_models
+                    if model.model_id in model_ids
+                )
+            ):
+                analysis_ids.add(run.analysis_id)
+            if run.method_id == "quality.attribute_control_chart" and any(
+                _attribute_control_phase_2_config_references(run.config_json, limit_set_id)
+                for limit_set_id in limit_set_ids
+            ):
+                analysis_ids.add(run.analysis_id)
+        for item in all_limit_sets:
+            if (
+                item.source_dataset_version_id == version_id
+                or item.source_analysis_id in analysis_ids
+            ):
+                limit_set_ids.add(item.limit_set_id)
+                analysis_ids.add(item.source_analysis_id)
+        analysis_ids.update(model_source_ids)
+        changed = before != (len(analysis_ids), len(model_ids), len(limit_set_ids))
+
+    analysis_runs = tuple(
+        sorted(
+            (run for run in all_runs if run.analysis_id in analysis_ids),
+            key=lambda item: item.analysis_id,
+        )
+    )
+    models = tuple(
+        sorted(
+            (model for model in all_models if model.model_id in model_ids),
+            key=lambda item: item.model_id,
+        )
+    )
+    limit_sets = tuple(
+        sorted(
+            (item for item in all_limit_sets if item.limit_set_id in limit_set_ids),
+            key=lambda item: item.limit_set_id,
+        )
+    )
+    artifacts: tuple[AnalysisArtifactRecord, ...] = ()
+    jobs: tuple[JobRecord, ...] = ()
+    if analysis_ids:
+        placeholders = ",".join("?" for _ in analysis_ids)
+        parameters = tuple(sorted(analysis_ids))
+        artifact_rows = connection.execute(
+            f"""
+            SELECT artifact_id, analysis_id, kind, path, sha256, media_type, created_at
+            FROM analysis_artifacts
+            WHERE analysis_id IN ({placeholders})
+            ORDER BY analysis_id, created_at DESC, rowid DESC;
+            """,
+            parameters,
+        ).fetchall()
+        artifacts = tuple(_analysis_artifact_from_row(row) for row in artifact_rows)
+        job_rows = connection.execute(
+            f"""
+            SELECT job_id, analysis_id, job_type, state, progress, cancel_requested,
+                   error_code, created_at, updated_at, completed_at
+            FROM jobs
+            WHERE analysis_id IN ({placeholders})
+            ORDER BY analysis_id, job_id;
+            """,
+            parameters,
+        ).fetchall()
+        jobs = tuple(_job_from_row(row) for row in job_rows)
+    return DatasetVersionCascadeSnapshot(
+        dataset=dataset,
+        analysis_runs=analysis_runs,
+        analysis_artifacts=artifacts,
+        regression_models=models,
+        limit_sets=limit_sets,
+        jobs=jobs,
+    )
+
+
+def _dataset_deletion_dependency_descriptors(
+    snapshot: DatasetVersionCascadeSnapshot,
+) -> list[DatasetDeletionDependencyDescriptorRecord]:
+    version_id = snapshot.dataset.version.version_id
+    limit_set_ids = {item.limit_set_id for item in snapshot.limit_sets}
+    descriptors: list[DatasetDeletionDependencyDescriptorRecord] = []
+    for run in snapshot.analysis_runs:
+        is_prediction = run.method_id == "regression.predict"
+        is_phase_2 = run.method_id == "quality.attribute_control_chart" and any(
+            _attribute_control_phase_2_config_references(run.config_json, item)
+            for item in limit_set_ids
+        )
+        if is_prediction:
+            relationship = (
+                "prediction_uses_as_target"
+                if run.dataset_version_id == version_id
+                else "prediction_uses_as_source"
+            )
+            asset_type = "prediction"
+        elif is_phase_2:
+            relationship = "phase_2_uses_limit_set"
+            asset_type = "phase_2_analysis"
+        else:
+            relationship = "direct_analysis"
+            asset_type = "analysis_run"
+        descriptors.append(
+            DatasetDeletionDependencyDescriptorRecord(
+                asset_type=asset_type,
+                asset_id=run.analysis_id,
+                display_name=f"{run.method_id} ({run.analysis_id[:8]})",
+                method_id=run.method_id,
+                relationship=relationship,
+                created_at=run.created_at,
+                status=run.status,
+                stale=run.stale,
+                result_available=run.result_path is not None and run.result_sha256 is not None,
+                related_dataset_version_id=run.dataset_version_id,
+                related_dataset_display_name=(
+                    None
+                    if run.dataset_version_id is None
+                    else f"Dataset ({run.dataset_version_id[:8]})"
+                ),
+                integrity_state="not_applicable",
+                blocker_codes=(),
+            )
+        )
+    for model in snapshot.regression_models:
+        descriptors.append(
+            DatasetDeletionDependencyDescriptorRecord(
+                asset_type="regression_model",
+                asset_id=model.model_id,
+                display_name=f"Regression model ({model.model_id[:8]})",
+                method_id=model.method_id,
+                relationship="model_fitted_from_dataset",
+                created_at=model.created_at,
+                status=None,
+                stale=None,
+                result_available=True,
+                related_dataset_version_id=model.dataset_version_id,
+                related_dataset_display_name=f"Dataset ({model.dataset_version_id[:8]})",
+                integrity_state="not_applicable",
+                blocker_codes=(),
+            )
+        )
+    export_kinds = {
+        "analysis_result_json_export",
+        "analysis_result_csv_export",
+        "analysis_result_html_report",
+        "regression_prediction_csv_export",
+    }
+    for artifact in snapshot.analysis_artifacts:
+        if artifact.kind not in export_kinds:
+            continue
+        descriptors.append(
+            DatasetDeletionDependencyDescriptorRecord(
+                asset_type="analysis_export",
+                asset_id=artifact.artifact_id,
+                display_name=f"Export ({artifact.artifact_id[:8]})",
+                method_id=None,
+                relationship="export_owned_by_analysis",
+                created_at=artifact.created_at,
+                status=None,
+                stale=None,
+                result_available=True,
+                related_dataset_version_id=None,
+                related_dataset_display_name=None,
+                integrity_state="not_applicable",
+                blocker_codes=(),
+            )
+        )
+    for item in snapshot.limit_sets:
+        descriptors.append(
+            DatasetDeletionDependencyDescriptorRecord(
+                asset_type="attribute_control_limit_set",
+                asset_id=item.limit_set_id,
+                display_name=f"Control limit set ({item.limit_set_id[:8]})",
+                method_id=item.method_id,
+                relationship="limit_set_derived_from_dataset",
+                created_at=item.created_at,
+                status=None,
+                stale=None,
+                result_available=True,
+                related_dataset_version_id=item.source_dataset_version_id,
+                related_dataset_display_name=f"Dataset ({item.source_dataset_version_id[:8]})",
+                integrity_state="not_applicable",
+                blocker_codes=(),
+            )
+        )
+    for job in snapshot.jobs:
+        descriptors.append(
+            DatasetDeletionDependencyDescriptorRecord(
+                asset_type="job",
+                asset_id=job.job_id,
+                display_name=f"Job ({job.job_id[:8]})",
+                method_id=None,
+                relationship="job_owned_by_analysis",
+                created_at=job.created_at,
+                status=job.state,
+                stale=None,
+                result_available=None,
+                related_dataset_version_id=None,
+                related_dataset_display_name=None,
+                integrity_state="not_applicable",
+                blocker_codes=(
+                    ("dataset_version_cascade_active_job",)
+                    if job.state in {"queued", "running", "cancel_requested"}
+                    else ()
+                ),
+            )
+        )
+    descriptors.sort(
+        key=lambda item: (
+            item.asset_type,
+            "" if item.created_at is None else item.created_at,
+            item.asset_id,
+        ),
+        reverse=True,
+    )
+    return descriptors
 
 
 def _dataset_version_has_dependencies(counts: DatasetVersionDependencyCounts) -> bool:

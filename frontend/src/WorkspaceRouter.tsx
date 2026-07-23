@@ -15,7 +15,12 @@ import {
   DatasetPreparationPage,
   type DatasetPreparationPageProps,
 } from "./DatasetPreparationPage";
-import { HelpCenterPage, ManageAssetsPage, ReportCenterPage } from "./lazyWorkspacePages";
+import {
+  HelpCenterPage,
+  ManageAssetsPage,
+  ProjectOverviewPage,
+  ReportCenterPage,
+} from "./lazyWorkspacePages";
 import { WorkspacePageBoundary } from "./WorkspacePageBoundary";
 
 export interface WorkspaceRouterProps {
@@ -30,7 +35,12 @@ export interface WorkspaceRouterProps {
   routePage: AppRoute["page"];
   onOpenAnalysisMethod: (method: AnalysisMethodDescriptor) => void;
   onActivateDataset: (versionId: string) => void;
+  onAssetsDeleted: () => void;
   onDatasetMetadataChanged: () => void;
+  onOpenAnalysisPage: () => void;
+  onOpenDatasetPage: () => void;
+  onOpenManagePage: () => void;
+  onOpenReportsPage: (analysisId?: string) => void;
 }
 
 export function WorkspaceRouter({
@@ -45,9 +55,14 @@ export function WorkspaceRouter({
   routePage,
   onOpenAnalysisMethod,
   onActivateDataset,
+  onAssetsDeleted,
   onDatasetMetadataChanged,
+  onOpenAnalysisPage,
+  onOpenDatasetPage,
+  onOpenManagePage,
+  onOpenReportsPage,
 }: WorkspaceRouterProps) {
-  const labelledBy = routePage === "analysis" ? "analysis-modules-title" : routePage === "reports" ? "report-center-title" : routePage === "help" ? "help-quick-start-title" : routePage === "manage" ? "asset-management-title" : "workspace-title";
+  const labelledBy = routePage === "analysis" ? "analysis-modules-title" : routePage === "reports" ? "report-center-title" : routePage === "help" ? "help-quick-start-title" : routePage === "manage" ? "asset-management-title" : routePage === "project" ? "project-overview-title" : "workspace-title";
   return (
     <section
       className="workspace"
@@ -55,6 +70,17 @@ export function WorkspaceRouter({
     >
       {routePage === "analysis" ? <AnalysisPage {...analysisPageProps} /> : null}
       {routePage === "dataset" ? <DatasetPreparationPage {...datasetPageProps} /> : null}
+      {routePage === "project" ? (
+        <WorkspacePageBoundary pageKey="project">
+          <ProjectOverviewPage
+            currentDatasetVersion={currentDatasetVersion ?? null}
+            onOpenAnalysis={onOpenAnalysisPage}
+            onOpenDatasetPage={onOpenDatasetPage}
+            onOpenManage={onOpenManagePage}
+            onOpenReports={onOpenReportsPage}
+          />
+        </WorkspacePageBoundary>
+      ) : null}
       {routePage === "reports" ? (
         <WorkspacePageBoundary pageKey="reports">
           <ReportCenterPage
@@ -77,6 +103,7 @@ export function WorkspaceRouter({
           <ManageAssetsPage
             activeDatasetVersionId={currentDatasetVersionId}
             onActivateDataset={onActivateDataset}
+            onAssetsDeleted={onAssetsDeleted}
             onDatasetMetadataChanged={onDatasetMetadataChanged}
           />
         </WorkspacePageBoundary>

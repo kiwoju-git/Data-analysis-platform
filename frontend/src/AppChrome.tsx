@@ -17,6 +17,7 @@ export interface AppChromeProps {
   onOpenDatasetPage: () => void;
   onOpenHelpPage: () => void;
   onOpenManagePage: () => void;
+  onOpenProjectPage: () => void;
   onOpenReportsPage: () => void;
 }
 
@@ -31,6 +32,7 @@ export function AppChrome({
   onOpenDatasetPage,
   onOpenHelpPage,
   onOpenManagePage,
+  onOpenProjectPage,
   onOpenReportsPage,
 }: AppChromeProps) {
   return (
@@ -38,10 +40,19 @@ export function AppChrome({
       <aside className="sidebar" aria-label="주요 단계">
         <div className="brand">
           <h1 className="brand-title">DataLab Studio</h1>
-          <p className="brand-subtitle">로컬 분석 작업대</p>
+          <p className="brand-subtitle" lang="en">Statistical Twin</p>
         </div>
         <ol className="nav-list">
-          <li className="nav-item">프로젝트</li>
+          <li className={activePage === "project" ? "nav-item nav-item-active" : "nav-item"}>
+            <button
+              aria-current={activePage === "project" ? "page" : undefined}
+              className="nav-button"
+              onClick={onOpenProjectPage}
+              type="button"
+            >
+              프로젝트
+            </button>
+          </li>
           <li className={activePage === "dataset" ? "nav-item nav-item-active" : "nav-item"}>
             <button
               aria-current={activePage === "dataset" ? "page" : undefined}

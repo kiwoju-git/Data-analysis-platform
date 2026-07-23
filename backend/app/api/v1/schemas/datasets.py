@@ -260,10 +260,85 @@ class DatasetVersionDeletionCounts(BaseModel):
     phase_2_analysis_count: int = Field(ge=0)
 
 
+DatasetDeletionDependencyAssetType = Literal[
+    "analysis_run",
+    "regression_model",
+    "prediction",
+    "analysis_export",
+    "attribute_control_limit_set",
+    "phase_2_analysis",
+    "job",
+]
+
+
+class DatasetDeletionDependencyDescriptor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset_type: DatasetDeletionDependencyAssetType
+    asset_id: UUID
+    display_name: str
+    method_id: str | None
+    relationship: Literal[
+        "direct_analysis",
+        "model_fitted_from_dataset",
+        "prediction_uses_as_source",
+        "prediction_uses_as_target",
+        "export_owned_by_analysis",
+        "limit_set_derived_from_dataset",
+        "phase_2_uses_limit_set",
+        "job_owned_by_analysis",
+    ]
+    created_at: str | None
+    status: str | None
+    stale: bool | None
+    result_available: bool | None
+    related_dataset_version_id: UUID | None
+    related_dataset_display_name: str | None
+    integrity_state: Literal["verified", "unverified", "not_applicable"]
+    blocker_codes: list[str]
+
+
+class DatasetDeletionDependencyPage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version_id: UUID
+    asset_type: DatasetDeletionDependencyAssetType | None
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    total: int = Field(ge=0)
+    returned: int = Field(ge=0)
+    has_previous: bool
+    has_next: bool
+    dependencies: list[DatasetDeletionDependencyDescriptor]
+
+
+DatasetDeletionOperationId = Literal[
+    "delete_dataset_verified",
+    "remove_dataset_metadata_preserve_files",
+    "delete_dataset_and_dependents_verified",
+    "delete_dataset_and_dependents_preserve_unverified",
+]
+
+
+class DatasetVersionDeletionOperation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operation_id: DatasetDeletionOperationId
+    dependency_policy: Literal["block", "cascade"]
+    unverified_file_policy: Literal["block", "preserve"]
+    ready: bool
+    manifest_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    affected_asset_count: int = Field(ge=0)
+    verified_file_count: int = Field(ge=0)
+    verified_file_bytes: int = Field(ge=0)
+    preserved_unverified_file_count: int = Field(ge=0)
+    blockers: list[str]
+
+
 class DatasetVersionDeletionPreflightResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    preflight_schema_version: Literal[2]
+    preflight_schema_version: Literal[3]
     version_id: UUID
     dataset_id: UUID
     row_count: int = Field(ge=0)
@@ -284,6 +359,9 @@ class DatasetVersionDeletionPreflightResponse(BaseModel):
     metadata_only_deletion_manifest_sha256: str | None = Field(
         default=None, pattern=r"^[0-9a-f]{64}$"
     )
+    available_operations: list[DatasetVersionDeletionOperation]
+    dependency_preview: list[DatasetDeletionDependencyDescriptor]
+    dependency_preview_truncated: bool
 
 
 class DatasetVersionDeleteRequest(BaseModel):
@@ -295,12 +373,13 @@ class DatasetVersionDeleteRequest(BaseModel):
         "verified_files_and_metadata",
         "metadata_only_preserve_unverified_files",
     ] = "verified_files_and_metadata"
+    operation_id: DatasetDeletionOperationId | None = None
 
 
 class DatasetVersionDeleteResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    deletion_schema_version: Literal[2]
+    deletion_schema_version: Literal[3]
     version_id: UUID
     dataset_id: UUID
     deletion_scope: Literal["version_only", "dataset_root"]
@@ -310,8 +389,12 @@ class DatasetVersionDeleteResponse(BaseModel):
     deletion_mode: Literal[
         "verified_files_and_metadata",
         "metadata_only_preserve_unverified_files",
+        "delete_dataset_and_dependents_verified",
+        "delete_dataset_and_dependents_preserve_unverified",
     ]
+    operation_id: DatasetDeletionOperationId
     preserved_unverified_file_count: int = Field(ge=0)
+    deleted_dependency_count: int = Field(ge=0)
     cleanup_status: Literal[
         "deleted",
         "quarantined_pending_cleanup",

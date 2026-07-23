@@ -3535,11 +3535,32 @@ export default function App() {
     });
   }
 
-  function handleOpenReportsPage() {
+  function handleOpenReportsPage(analysisId?: string) {
     if (typeof window !== "undefined") {
-      window.history.pushState(null, "", pathWithActiveDatasetQuery("/reports"));
+      const url = new URL("/reports", window.location.origin);
+      const activeVersionId = activeDatasetIdFromCurrentLocation();
+      if (activeVersionId !== null) {
+        url.searchParams.set("dataset_version_id", activeVersionId);
+      }
+      if (analysisId !== undefined) {
+        url.searchParams.set("analysis_id", analysisId);
+      }
+      window.history.pushState(null, "", `${url.pathname}${url.search}`);
     }
     setAppRoute({ page: "reports" });
+  }
+
+  function handleOpenProjectPage() {
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", pathWithActiveDatasetQuery("/project"));
+    }
+    setAppRoute({ page: "project" });
+  }
+
+  function handleAssetsDeleted() {
+    activeDatasetSelectorProps.catalogState.onRefresh();
+    setDatasetStateRevision((revision) => revision + 1);
+    setAnalysisResult(null);
   }
 
   function handleOpenManagePage() {
@@ -4053,6 +4074,7 @@ export default function App() {
       onOpenDatasetPage={handleOpenDatasetPage}
       onOpenHelpPage={() => handleOpenHelpPage()}
       onOpenManagePage={handleOpenManagePage}
+      onOpenProjectPage={handleOpenProjectPage}
       onOpenReportsPage={handleOpenReportsPage}
     >
       <WorkspaceRouter
@@ -4067,7 +4089,12 @@ export default function App() {
         routePage={appRoute.page}
         onOpenAnalysisMethod={handleOpenAnalysisMethod}
         onActivateDataset={activeDatasetSelectorProps.onSelect}
+        onAssetsDeleted={handleAssetsDeleted}
         onDatasetMetadataChanged={activeDatasetSelectorProps.catalogState.onRefresh}
+        onOpenAnalysisPage={handleOpenAnalysisPage}
+        onOpenDatasetPage={handleOpenDatasetPage}
+        onOpenManagePage={handleOpenManagePage}
+        onOpenReportsPage={handleOpenReportsPage}
       />
     </AppChrome>
   );

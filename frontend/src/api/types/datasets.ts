@@ -177,8 +177,72 @@ export interface DatasetVersionDeletionCounts {
   phase_2_analysis_count: number;
 }
 
+export type DatasetDeletionDependencyAssetType =
+  | "analysis_run"
+  | "regression_model"
+  | "prediction"
+  | "analysis_export"
+  | "attribute_control_limit_set"
+  | "phase_2_analysis"
+  | "job";
+
+export interface DatasetDeletionDependencyDescriptor {
+  asset_type: DatasetDeletionDependencyAssetType;
+  asset_id: string;
+  display_name: string;
+  method_id: string | null;
+  relationship:
+    | "direct_analysis"
+    | "model_fitted_from_dataset"
+    | "prediction_uses_as_source"
+    | "prediction_uses_as_target"
+    | "export_owned_by_analysis"
+    | "limit_set_derived_from_dataset"
+    | "phase_2_uses_limit_set"
+    | "job_owned_by_analysis";
+  created_at: string | null;
+  status: string | null;
+  stale: boolean | null;
+  result_available: boolean | null;
+  related_dataset_version_id: string | null;
+  related_dataset_display_name: string | null;
+  integrity_state: "verified" | "unverified" | "not_applicable";
+  blocker_codes: string[];
+}
+
+export interface DatasetDeletionDependencyPage {
+  version_id: string;
+  asset_type: DatasetDeletionDependencyAssetType | null;
+  offset: number;
+  limit: number;
+  total: number;
+  returned: number;
+  has_previous: boolean;
+  has_next: boolean;
+  dependencies: DatasetDeletionDependencyDescriptor[];
+}
+
+export type DatasetDeletionOperationId =
+  | "delete_dataset_verified"
+  | "remove_dataset_metadata_preserve_files"
+  | "delete_dataset_and_dependents_verified"
+  | "delete_dataset_and_dependents_preserve_unverified";
+
+export interface DatasetVersionDeletionOperation {
+  operation_id: DatasetDeletionOperationId;
+  dependency_policy: "block" | "cascade";
+  unverified_file_policy: "block" | "preserve";
+  ready: boolean;
+  manifest_sha256: string | null;
+  affected_asset_count: number;
+  verified_file_count: number;
+  verified_file_bytes: number;
+  preserved_unverified_file_count: number;
+  blockers: string[];
+}
+
 export interface DatasetVersionDeletionPreflightResponse {
-  preflight_schema_version: 2;
+  preflight_schema_version: 3;
   version_id: string;
   dataset_id: string;
   row_count: number;
@@ -197,10 +261,13 @@ export interface DatasetVersionDeletionPreflightResponse {
   deletion_manifest_sha256: string;
   verified_deletion_manifest_sha256: string | null;
   metadata_only_deletion_manifest_sha256: string | null;
+  available_operations: DatasetVersionDeletionOperation[];
+  dependency_preview: DatasetDeletionDependencyDescriptor[];
+  dependency_preview_truncated: boolean;
 }
 
 export interface DatasetVersionDeleteResponse {
-  deletion_schema_version: 2;
+  deletion_schema_version: 3;
   version_id: string;
   dataset_id: string;
   deletion_scope: "version_only" | "dataset_root";
@@ -209,8 +276,12 @@ export interface DatasetVersionDeleteResponse {
   deleted_counts: DatasetVersionDeletionCounts;
   deletion_mode:
     | "verified_files_and_metadata"
-    | "metadata_only_preserve_unverified_files";
+    | "metadata_only_preserve_unverified_files"
+    | "delete_dataset_and_dependents_verified"
+    | "delete_dataset_and_dependents_preserve_unverified";
+  operation_id: DatasetDeletionOperationId;
   preserved_unverified_file_count: number;
+  deleted_dependency_count: number;
   cleanup_status:
     | "deleted"
     | "quarantined_pending_cleanup"

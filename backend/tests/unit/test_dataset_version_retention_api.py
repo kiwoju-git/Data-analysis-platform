@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+import app.services.dataset_version_retention as dataset_version_retention
 from app.core.config import Settings
 from app.main import create_app
 from app.services.dataset_version_retention import recover_dataset_version_quarantine_files
@@ -16,6 +17,7 @@ from app.storage.metadata import (
     DatasetColumnRecord,
     DatasetVersionRecord,
     JobRecord,
+    get_analysis_run_record,
     get_dataset_artifact_record,
     get_dataset_record,
     get_dataset_version_record,
@@ -23,6 +25,7 @@ from app.storage.metadata import (
     insert_analysis_run_record,
     insert_dataset_version_record,
     insert_job_record,
+    list_analysis_artifact_records,
     list_dataset_artifact_records,
     list_dataset_column_records,
     metadata_db_path,
@@ -178,6 +181,192 @@ def test_dataset_version_deletion_blocks_analysis_and_rejects_stale_confirmation
     assert "dataset_version_deletion_job_dependency" in payload["blockers"]
 
 
+def test_dataset_version_cascade_lists_and_deletes_analysis_and_export_atomically(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_and_confirm(client)
+        analysis = _create_descriptive_analysis(client, version)
+        analysis_id = str(analysis["analysis_id"])
+        exported = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/json")
+        assert exported.status_code == 201, exported.text
+
+        dependency_page = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion-dependencies",
+            params={"offset": 0, "limit": 1},
+        )
+        assert dependency_page.status_code == 200
+        assert dependency_page.json()["has_next"] is True
+        dependency_next_page = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion-dependencies",
+            params={"offset": 1, "limit": 20},
+        )
+        assert dependency_next_page.status_code == 200
+        dependencies = [
+            *dependency_page.json()["dependencies"],
+            *dependency_next_page.json()["dependencies"],
+        ]
+        dependency_types = {item["asset_type"] for item in dependencies}
+        assert {"analysis_run", "analysis_export"} <= dependency_types
+        assert "path" not in dependency_page.text
+        assert "path" not in dependency_next_page.text
+        summary = client.get("/api/v1/workspace/summary")
+        assert summary.status_code == 200
+        assert summary.json()["visible_dataset_version_count"] == 1
+        assert summary.json()["stored_analysis_count"] == 1
+        assert summary.json()["export_report_count"] == 1
+
+        preflight = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion-preflight"
+        ).json()
+        operation = next(
+            item
+            for item in preflight["available_operations"]
+            if item["operation_id"] == "delete_dataset_and_dependents_verified"
+        )
+        assert operation["ready"] is True
+        result = client.request(
+            "DELETE",
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion",
+            json={
+                "confirmation_version_id": version["version_id"],
+                "expected_deletion_manifest_sha256": operation["manifest_sha256"],
+                "operation_id": operation["operation_id"],
+            },
+        )
+        summary_after = client.get("/api/v1/workspace/summary")
+        assert summary_after.status_code == 200
+        assert summary_after.json()["visible_dataset_version_count"] == 0
+        assert summary_after.json()["stored_analysis_count"] == 0
+        assert summary_after.json()["export_report_count"] == 0
+
+    assert result.status_code == 200, result.text
+    assert result.json()["deleted_dependency_count"] >= 1
+    assert get_analysis_run_record(settings.workspace_root, analysis_id) is None
+    assert get_dataset_version_record(settings.workspace_root, str(version["version_id"])) is None
+
+
+def test_dataset_version_cascade_preserves_unverified_dataset_files(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_and_confirm(client)
+        analysis = _create_descriptive_analysis(client, version)
+        canonical = get_dataset_artifact_record(
+            settings.workspace_root, str(version["version_id"]), "canonical_rows"
+        )
+        assert canonical is not None
+        preserved = settings.workspace_root / canonical.path
+        preserved.write_bytes(preserved.read_bytes() + b"tamper")
+
+        preflight_response = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion-preflight"
+        )
+        assert preflight_response.status_code == 200, preflight_response.text
+        preflight = preflight_response.json()
+        strict = next(
+            item
+            for item in preflight["available_operations"]
+            if item["operation_id"] == "delete_dataset_and_dependents_verified"
+        )
+        preserve = next(
+            item
+            for item in preflight["available_operations"]
+            if item["operation_id"] == "delete_dataset_and_dependents_preserve_unverified"
+        )
+        assert strict["ready"] is False
+        assert preserve["ready"] is True
+        assert preserve["preserved_unverified_file_count"] >= 1
+        deleted = client.request(
+            "DELETE",
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion",
+            json={
+                "confirmation_version_id": version["version_id"],
+                "expected_deletion_manifest_sha256": preserve["manifest_sha256"],
+                "operation_id": preserve["operation_id"],
+            },
+        )
+
+    assert deleted.status_code == 200, deleted.text
+    assert preserved.exists()
+    assert get_analysis_run_record(settings.workspace_root, str(analysis["analysis_id"])) is None
+    assert get_dataset_version_record(settings.workspace_root, str(version["version_id"])) is None
+
+
+def test_dataset_version_cascade_restores_quarantined_files_when_a_later_move_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_and_confirm(client)
+        analysis = _create_descriptive_analysis(client, version)
+        analysis_id = str(analysis["analysis_id"])
+        exported = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/json")
+        assert exported.status_code == 201, exported.text
+
+        dataset = get_dataset_record(settings.workspace_root, str(version["dataset_id"]))
+        assert dataset is not None
+        original_paths = [settings.workspace_root / dataset.stored_path]
+        original_paths.extend(
+            settings.workspace_root / artifact.path
+            for artifact in list_dataset_artifact_records(
+                settings.workspace_root,
+                str(version["version_id"]),
+            )
+        )
+        original_paths.extend(
+            settings.workspace_root / artifact.path
+            for artifact in list_analysis_artifact_records(
+                settings.workspace_root,
+                analysis_id,
+            )
+        )
+        assert len(original_paths) >= 2
+        assert all(path.exists() for path in original_paths)
+
+        preflight = client.get(
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion-preflight"
+        ).json()
+        operation = next(
+            item
+            for item in preflight["available_operations"]
+            if item["operation_id"] == "delete_dataset_and_dependents_verified"
+        )
+        assert operation["ready"] is True
+
+        real_replace = dataset_version_retention.os.replace
+        move_count = 0
+
+        def fail_second_move(source, target) -> None:
+            nonlocal move_count
+            move_count += 1
+            if move_count == 2:
+                raise OSError("simulated file sharing violation")
+            real_replace(source, target)
+
+        monkeypatch.setattr(dataset_version_retention.os, "replace", fail_second_move)
+        response = client.request(
+            "DELETE",
+            f"/api/v1/dataset-versions/{version['version_id']}/deletion",
+            json={
+                "confirmation_version_id": version["version_id"],
+                "expected_deletion_manifest_sha256": operation["manifest_sha256"],
+                "operation_id": operation["operation_id"],
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "dataset_version_quarantine_failed"
+    assert (
+        get_dataset_version_record(settings.workspace_root, str(version["version_id"])) is not None
+    )
+    assert get_analysis_run_record(settings.workspace_root, analysis_id) is not None
+    assert all(path.exists() for path in original_paths)
+
+
 def test_dataset_version_preflight_preserves_tampered_or_escaped_files_for_metadata_cleanup(
     tmp_path,
 ) -> None:
@@ -324,6 +513,31 @@ def test_dataset_quarantine_recovery_restores_valid_file(tmp_path) -> None:
 def _upload_and_confirm(client: TestClient) -> dict[str, object]:
     upload = _upload(client)
     return _confirm(client, upload["dataset_id"])
+
+
+def _create_descriptive_analysis(
+    client: TestClient,
+    version: dict[str, object],
+) -> dict[str, object]:
+    columns = version["columns"]
+    assert isinstance(columns, list) and columns
+    column = columns[0]
+    assert isinstance(column, dict)
+    response = client.post(
+        "/api/v1/analysis-runs",
+        json={
+            "method_id": "eda.descriptive",
+            "method_version": "0.1.0",
+            "dataset_version_id": version["version_id"],
+            "roles": {},
+            "options": {
+                "column_ids": [column["column_id"]],
+                "missing_policy": "available_case_by_column",
+            },
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 def _upload(client: TestClient) -> dict[str, object]:

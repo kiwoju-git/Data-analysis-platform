@@ -151,4 +151,12 @@ Runtime workspaces, exports, logs, temp files, and SQLite data must not be store
 
 The metadata database is initialized at `db\metadata.sqlite3` under the configured workspace root. See `docs/storage.md` for migration notes.
 
+The `관리` screen can archive a dataset version without touching its files or
+dependent assets. Permanent deletion is separate: it requires a current
+dependency/file preflight and exact manifest confirmation. A preserve-unverified
+operation can remove metadata while leaving files that could not be safely
+validated, so it might not reclaim all disk space. Explicit cascade deletion
+can remove connected analyses, exports, models, predictions, limit sets, and
+Phase II results, but never another dataset version itself.
+
 The default upload size limit is 100 MB and can be adjusted with `DATALAB_MAX_UPLOAD_BYTES` for development.

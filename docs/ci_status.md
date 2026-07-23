@@ -1,8 +1,21 @@
 # CI Status
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ## Local Validation
+
+- The dataset-cleanup/project-overview feature branch is based on pushed main
+  `fd7612c028e7a1067003f8fc686c3704cc2ed1dd`. Targeted validation covers
+  schema-15-to-16 migration and archive visibility, dependency descriptor
+  pagination/redaction, verified and preserve-unverified cascade, model and
+  cross-dataset prediction closure, limit-set/Phase-II closure, quarantine
+  failure rollback, OpenAPI/frontend route contracts, `/project`, management
+  confirmation UX, and `Statistical Twin`. Full check, tutorial, browser E2E,
+  final SHA, and remote Actions evidence are recorded only after those commands
+  complete.
+- The measured host remains Windows 10 Home build 19045, CPython 3.10.11, and
+  Node 24.17.0. Any passing result from this host is development evidence, not
+  the Windows 11/Python 3.10/Node 22 release gate.
 
 - The usability/retention/run-chart/ZIP feature branch based on pushed main
   `e6f74f031daaa5208eac77f8beba35b427d44d9d` passed the final development

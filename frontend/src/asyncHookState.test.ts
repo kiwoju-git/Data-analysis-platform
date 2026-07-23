@@ -651,7 +651,21 @@ describe("async workbench hooks", () => {
       deletion_manifest_sha256: "a".repeat(64),
       verified_deletion_manifest_sha256: "a".repeat(64),
       metadata_only_deletion_manifest_sha256: null,
-    } as DatasetVersionDeletionPreflightResponse;
+      available_operations: [
+        {
+          affected_asset_count: 1,
+          blockers: [],
+          dependency_policy: "block",
+          manifest_sha256: "a".repeat(64),
+          operation_id: "delete_dataset_verified",
+          preserved_unverified_file_count: 0,
+          ready: true,
+          unverified_file_policy: "block",
+          verified_file_bytes: 100,
+          verified_file_count: 1,
+        },
+      ],
+    } as unknown as DatasetVersionDeletionPreflightResponse;
     const response = {
       version_id: "version-a",
       cleanup_status: "deleted",
@@ -668,7 +682,7 @@ describe("async workbench hooks", () => {
 
     expect(apiMocks.deleteDatasetVersion).toHaveBeenCalledWith(
       preflight,
-      "verified_files_and_metadata",
+      "delete_dataset_verified",
     );
     expect(runner.output.deletion).toEqual(response);
     expect(onDeleted).toHaveBeenCalledWith(response);

@@ -148,6 +148,60 @@ def test_regression_model_deletion_preserves_source_analysis_and_blocks_predicti
     assert dataset_after_cascade.status_code == 200
 
 
+def test_dataset_cascade_deletes_source_model_and_predictions_but_no_other_dataset(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        model = _create_linear_model(client)
+        retained = _create_linear_model(client)
+        prediction = client.post(
+            f"/api/v1/regression-models/{model['model_id']}/predictions",
+            json={
+                "dataset_version_id": retained["dataset_version_id"],
+                "confidence_level": 0.95,
+                "missing_policy": "complete_case",
+                "include_intervals": True,
+            },
+        )
+        assert prediction.status_code == 200, prediction.text
+
+        preflight = client.get(
+            f"/api/v1/dataset-versions/{model['dataset_version_id']}/deletion-preflight"
+        ).json()
+        dependency_types = {item["asset_type"] for item in preflight["dependency_preview"]}
+        assert {"analysis_run", "regression_model", "prediction"} <= dependency_types
+        cross_dataset = [
+            item for item in preflight["dependency_preview"] if item["asset_type"] == "prediction"
+        ]
+        assert cross_dataset[0]["related_dataset_version_id"] == retained["dataset_version_id"]
+        operation = next(
+            item
+            for item in preflight["available_operations"]
+            if item["operation_id"] == "delete_dataset_and_dependents_verified"
+        )
+        assert operation["ready"] is True
+        deleted = client.request(
+            "DELETE",
+            f"/api/v1/dataset-versions/{model['dataset_version_id']}/deletion",
+            json={
+                "confirmation_version_id": model["dataset_version_id"],
+                "expected_deletion_manifest_sha256": operation["manifest_sha256"],
+                "operation_id": operation["operation_id"],
+            },
+        )
+        source_after = client.get(f"/api/v1/analysis-runs/{model['analysis_id']}")
+        prediction_after = client.get(f"/api/v1/analysis-runs/{prediction.json()['prediction_id']}")
+        target_after = client.get(f"/api/v1/dataset-versions/{retained['dataset_version_id']}")
+        unrelated_model_after = client.get(f"/api/v1/regression-models/{retained['model_id']}")
+
+    assert deleted.status_code == 200, deleted.text
+    assert source_after.status_code == 404
+    assert prediction_after.status_code == 404
+    assert target_after.status_code == 200
+    assert unrelated_model_after.status_code == 200
+
+
 def test_limit_set_deletion_preserves_phase_one_and_blocks_phase_two(tmp_path: Path) -> None:
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:
@@ -215,6 +269,41 @@ def test_limit_set_deletion_preserves_phase_one_and_blocks_phase_two(tmp_path: P
     assert blocked.status_code == 409
     assert blocked.json()["error"]["code"] == ("attribute_control_limit_set_deletion_blocked")
     assert str(tmp_path) not in json.dumps(blocked.json())
+
+
+def test_dataset_cascade_includes_limit_set_and_phase_two_analysis(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        limit_set = _create_limit_set(client)
+        phase_2 = _run_phase_2(client, limit_set)
+        assert phase_2.status_code == 201, phase_2.text
+        preflight = client.get(
+            f"/api/v1/dataset-versions/{limit_set['target_dataset_version_id']}"
+            "/deletion-preflight"
+        ).json()
+        dependency_types = {item["asset_type"] for item in preflight["dependency_preview"]}
+        assert "attribute_control_limit_set" in dependency_types
+        assert "phase_2_analysis" in dependency_types
+        operation = next(
+            item
+            for item in preflight["available_operations"]
+            if item["operation_id"] == "delete_dataset_and_dependents_verified"
+        )
+        assert operation["ready"] is True
+        deleted = client.request(
+            "DELETE",
+            f"/api/v1/dataset-versions/{limit_set['target_dataset_version_id']}" "/deletion",
+            json={
+                "confirmation_version_id": limit_set["target_dataset_version_id"],
+                "expected_deletion_manifest_sha256": operation["manifest_sha256"],
+                "operation_id": operation["operation_id"],
+            },
+        )
+
+    assert deleted.status_code == 200, deleted.text
+    assert get_attribute_control_limit_set_record(tmp_path, limit_set["limit_set_id"]) is None
 
 
 def test_workspace_asset_quarantine_recovery_restores_uncommitted_moves(

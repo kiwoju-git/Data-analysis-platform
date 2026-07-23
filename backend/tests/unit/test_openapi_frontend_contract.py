@@ -61,6 +61,13 @@ FRONTEND_ROUTE_CONTRACTS = [
         response_schema="RuntimeInfoResponse",
     ),
     OperationContract(
+        route_name="workspaceSummary",
+        method="get",
+        path="/api/v1/workspace/summary",
+        success_status="200",
+        response_schema="WorkspaceSummaryResponse",
+    ),
+    OperationContract(
         route_name="datasets",
         method="post",
         path="/api/v1/datasets",
@@ -120,6 +127,21 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("version_id", "path")}),
     ),
     OperationContract(
+        route_name="datasetVersionDeletionDependencies",
+        method="get",
+        path="/api/v1/dataset-versions/{version_id}/deletion-dependencies",
+        success_status="200",
+        response_schema="DatasetDeletionDependencyPage",
+        parameters=frozenset(
+            {
+                ("version_id", "path"),
+                ("asset_type", "query"),
+                ("offset", "query"),
+                ("limit", "query"),
+            }
+        ),
+    ),
+    OperationContract(
         route_name="datasetVersionDeletion",
         method="delete",
         path="/api/v1/dataset-versions/{version_id}/deletion",
@@ -142,9 +164,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         path="/api/v1/dataset-versions",
         success_status="200",
         response_schema="DatasetVersionCatalogResponse",
-        parameters=frozenset(
-            {("limit", "query"), ("offset", "query"), ("visibility", "query")}
-        ),
+        parameters=frozenset({("limit", "query"), ("offset", "query"), ("visibility", "query")}),
     ),
     OperationContract(
         route_name="datasetVersionProfile",
@@ -1477,6 +1497,27 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         property_consts=(("service", "datalab-studio-api"),),
     ),
     SchemaComponentContract(
+        name="WorkspaceSummaryResponse",
+        properties=frozenset(
+            {
+                "visible_dataset_version_count",
+                "archived_dataset_version_count",
+                "regression_model_count",
+                "stored_analysis_count",
+                "export_report_count",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "visible_dataset_version_count",
+                "archived_dataset_version_count",
+                "regression_model_count",
+                "stored_analysis_count",
+                "export_report_count",
+            }
+        ),
+    ),
+    SchemaComponentContract(
         name="AnalysisRunState",
         enum_values=frozenset(
             {"queued", "running", "succeeded", "failed", "cancel_requested", "cancelled"}
@@ -2486,6 +2527,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "deletion_manifest_sha256",
                 "verified_deletion_manifest_sha256",
                 "metadata_only_deletion_manifest_sha256",
+                "available_operations",
+                "dependency_preview",
+                "dependency_preview_truncated",
             }
         ),
         required_fields=frozenset(
@@ -2507,10 +2551,17 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "blockers",
                 "counts",
                 "deletion_manifest_sha256",
+                "available_operations",
+                "dependency_preview",
+                "dependency_preview_truncated",
             }
         ),
         property_refs=(("counts", "DatasetVersionDeletionCounts"),),
-        property_consts=(("preflight_schema_version", 2),),
+        array_item_refs=(
+            ("available_operations", "DatasetVersionDeletionOperation"),
+            ("dependency_preview", "DatasetDeletionDependencyDescriptor"),
+        ),
+        property_consts=(("preflight_schema_version", 3),),
     ),
     SchemaComponentContract(
         name="DatasetVersionDeleteResponse",
@@ -2525,6 +2576,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "deleted_counts",
                 "deletion_mode",
                 "preserved_unverified_file_count",
+                "operation_id",
+                "deleted_dependency_count",
                 "cleanup_status",
             }
         ),
@@ -2539,11 +2592,13 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "deleted_counts",
                 "deletion_mode",
                 "preserved_unverified_file_count",
+                "operation_id",
+                "deleted_dependency_count",
                 "cleanup_status",
             }
         ),
         property_refs=(("deleted_counts", "DatasetVersionDeletionCounts"),),
-        property_consts=(("deletion_schema_version", 2),),
+        property_consts=(("deletion_schema_version", 3),),
     ),
     SchemaComponentContract(
         name="RegressionModelMetadataResponse",

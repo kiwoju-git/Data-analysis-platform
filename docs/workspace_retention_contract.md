@@ -1,9 +1,9 @@
 # Workspace Retention And Deletion Contract
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 Runtime note: destructive asset operations are exposed by the frontend only
-after API contract 2 and the relevant deletion capability pass. A generic
+after API contract 3 and the relevant deletion capability pass. A generic
 route 404 is treated as a mixed-version runtime, while stable dependency
 blockers and integrity errors preserve their existing retention meanings.
 
@@ -22,9 +22,10 @@ slices are implemented:
    `analysis_artifacts` metadata rows; and
 5. deletion of one immutable attribute-control limit-set asset plus its
    metadata row; and
-6. deletion of one dependency-free, checksum-validated dataset version,
-   including its owned artifacts and, only for the last version, its shared raw
-   upload and dataset-root record.
+6. reversible dataset-version archive visibility; and
+7. deletion of one dataset version, either dependency-free or with an explicit
+   fixed-point dependent-asset cascade, including only verified owned files and,
+   only for the last version, its shared raw upload and dataset-root record.
 
 Individual export deletion preserves the stored analysis result and every
 other artifact. Analysis-run deletion is intentionally narrower than cascade
@@ -101,9 +102,10 @@ of this graph, not a claim that the whole application is metadata-only.
     same-directory quarantine, `BEGIN IMMEDIATE` revalidation, compensating
     restore, and startup recovery without cascading into source results.
 15. Dataset-version deletion uses the full inbound-reference and file-ownership
-    graph in `docs/dataset_retention_contract.md`. It preserves a shared raw
-    upload while sibling versions remain, and never cascades into a dependent
-    analysis, model, prediction, export, limit set, Phase II result, or job.
+    graph in `docs/dataset_retention_contract.md`. Default deletion remains
+    dependency-blocked. Explicit cascade binds the exact analysis/model/
+    prediction/export/job/limit-set/Phase II ID closure and never deletes another
+    dataset version or unrelated asset.
 
 ## Implemented API
 
@@ -119,6 +121,7 @@ of this graph, not a claim that the whole application is metadata-only.
 - `GET /api/v1/quality/attribute-control-limit-sets/{limit_set_id}/deletion-preflight`
 - `DELETE /api/v1/quality/attribute-control-limit-sets/{limit_set_id}`
 - `GET /api/v1/dataset-versions/{version_id}/deletion-preflight`
+- `GET /api/v1/dataset-versions/{version_id}/deletion-dependencies`
 - `DELETE /api/v1/dataset-versions/{version_id}/deletion`
 
 Stable blocker/error codes are:
@@ -232,9 +235,9 @@ these invariants rather than infer ownership from a directory name:
    mutation. Never infer ownership from a directory name alone.
 3. Compute inbound references from analyses, models, predictions, exports,
    limit sets, DOE analyses/revisions, optimizers, and Bayesian lineage.
-4. Default to blocking referenced-root deletion. Cascade may be added only as a
-   separately reviewed, complete graph operation with an explicit affected-item
-   list.
+4. Default to blocking referenced-root deletion. The implemented explicit
+   cascade uses a complete affected-item list, exact manifest, full revalidation,
+   one DB transaction, and compensating file restore.
 5. On Windows, close handles before rename/delete and treat sharing violations
    as typed recoverable failures. Do not remove SQLite metadata while files
    remain ambiguously owned.
@@ -246,8 +249,8 @@ these invariants rather than infer ownership from a directory name:
 
 ## Future Acceptance Criteria
 
-- Dataset-root bulk deletion remains unavailable; the current API removes only
-  one verified version and removes its root/raw upload only when it is the last
+- Dataset-root bulk deletion remains unavailable; the current API removes one
+  selected version and removes its root/raw upload only when it is the last
   version.
 - DOE root deletion must preserve model, prediction, limit-set,
   response-revision, analysis, and optimizer references without silent cascade.
@@ -271,8 +274,9 @@ study/history/recommendation/lifecycle artifact meaning, or any existing
 checksum payload. `doe.bayesian_optimization` remains `0.2.2`; study, history,
 recommendation config/result/model, and lifecycle-event schemas remain 1.
 That slice required no migration because the ownership relations and cascade
-keys already existed at schema 14. The current database is schema 15 solely for
-asset user metadata. Deletion preflight and response schemas start at 1.
+keys already existed at schema 14. The current database is schema 16; schemas
+15 and 16 add only asset user metadata and dataset archive visibility. Bayesian
+deletion preflight and response schemas start at 1.
 
 Individual export deletion likewise changes no statistical calculation,
 persisted result/export interpretation, or SQLite relation. Method versions,
@@ -293,8 +297,8 @@ versions, result/config schemas, model manifest schema 2, limit-set asset schema
 operational schemas remain 1; regression-model preflight/delete schemas are 2
 for bounded prediction descriptors and an explicit atomic cascade mode.
 
-The current dataset-version/user-metadata slice advances SQLite to schema 15
-for `dataset_version_user_metadata` and `regression_model_user_metadata` only.
-Dataset deletion uses existing ownership keys plus operational preflight/delete
-schema 2. No statistical method, result/config schema, dataset schema hash, or
-model manifest schema is changed by this migration.
+SQLite schema 15 adds dataset/model user metadata and schema 16 adds only
+dataset-version `archived`/`archived_at` visibility fields. Dataset cascade uses
+existing ownership keys plus operational preflight/delete schema 3. No
+statistical method, result/config schema, dataset schema hash, or model manifest
+schema is changed by these operational changes.

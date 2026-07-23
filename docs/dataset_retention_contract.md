@@ -1,29 +1,41 @@
 # Dataset Version Retention Contract
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ## Scope
 
-This P0 operation deletes exactly one immutable dataset version after a full
-dependency and file-integrity preflight. It never edits a version in place and
-never cascades into analyses, models, predictions, exports, jobs, or control
-limit sets.
+This operation deletes one immutable dataset version after a full dependency
+and file-integrity preflight. The default operation remains dependency-blocked.
+An explicit cascade operation can additionally remove the exact planned
+analysis/model/prediction/export/job/control-limit/Phase II closure.
 
 APIs:
 
 - `GET /api/v1/dataset-versions/{version_id}/deletion-preflight`
+- `GET /api/v1/dataset-versions/{version_id}/deletion-dependencies`
 - `DELETE /api/v1/dataset-versions/{version_id}/deletion`
 
-Operational preflight and delete-response schemas are 2. Delete requires the
-exact version ID, an explicit mode, and that mode's current manifest SHA.
+Operational preflight and delete-response schemas are 3. Delete requires the
+exact version ID, an explicit operation ID, and that operation's current
+manifest SHA. The v2 mode names remain safe aliases for dependency-free
+clients.
 
 ## Dependency Graph
 
 Preflight separately counts direct analysis runs, regression models,
 predictions using the version as source or target, exports belonging to those
 runs, jobs, attribute-control limit sets, and Phase II target analyses. Any
-inbound reference blocks deletion with a stable blocker. The operation does not
-offer an automatic dependent-root cascade.
+inbound reference blocks the default deletion. Preflight returns a bounded
+descriptor preview; the paged dependency route returns safe IDs, method/status,
+relationship, timestamps, cross-dataset references, and blocker codes without
+raw values or paths.
+
+The explicit cascade closure includes direct analyses, models fitted from the
+target version, every prediction using those models or the version as
+source/target, owned exports and completed jobs, limit sets derived from the
+version, and Phase II analyses using those sets. It is recalculated to a fixed
+point. Other dataset versions, unrelated assets, and other dataset records are
+never included. Active jobs and unsupported inbound references block cascade.
 
 Stable blocker codes include:
 
@@ -58,7 +70,7 @@ filenames.
 ## Integrity Modes
 
 Dependency counting is independent of file verification. Preflight reports
-`integrity_state`, issue codes, and two mutually exclusive operations:
+`integrity_state`, issue codes, and four operation choices:
 
 - `verified_files_and_metadata` retains checksum/path/size validation,
   quarantine, transaction, restore, and recovery behavior.
@@ -72,6 +84,13 @@ row, while leaving raw and artifact bytes on disk. The response reports the
 preserved-file count and warns that disk space might not be reclaimed.
 Absolute/escaping or symlink metadata therefore cannot delete an external file.
 
+- `delete_dataset_and_dependents_verified` is ready only when the full closure
+  and every owned file validate.
+- `delete_dataset_and_dependents_preserve_unverified` removes the exact metadata
+  closure but quarantines and deletes only verified files. Unverified,
+  escaping, symlink/reparse, missing, mismatched, or duplicate references are
+  never opened or moved and may remain on disk.
+
 ## Transaction And Recovery
 
 1. Preflight builds a canonical manifest from immutable records, operational
@@ -80,9 +99,11 @@ Absolute/escaping or symlink metadata therefore cannot delete an external file.
 3. Owned files are moved to short same-directory quarantine names. Short owner
    tokens avoid Windows path-length failures; token collisions remain pending
    instead of restoring an ambiguous file.
-4. `BEGIN IMMEDIATE` reloads the full snapshot. A changed row, metadata update,
-   sibling count, artifact, or dependency rolls back.
-5. The version row is deleted only after all references are zero. The dataset
+4. `BEGIN IMMEDIATE` reloads the full version and dependency closure. A changed
+   ID set, row, metadata update, sibling count, artifact, or dependency rolls
+   back.
+5. Cascade removes jobs, limit sets, models, analysis runs and their owned
+   artifact rows before the version. Exact row counts are checked. The dataset
    root row is deleted only for the last version.
 6. A DB failure restores moved files in reverse order. Restore failure is a
    typed error.
@@ -99,11 +120,11 @@ Stable integrity/transition errors include
 ## UI Contract
 
 The management page shows dependency counts before the irreversible checkbox.
-Referenced versions show blockers and no enabled delete action. The active
-version must be changed first. Successful deletion refreshes both the manager
-and active selector catalogs. The confirmation shows only the user label or
-catalog filename, row count, and short version ID; it never shows a workspace
-path.
+Referenced versions show their dependency items and an explicit cascade choice.
+The active version must be changed first. Successful deletion refreshes manager,
+selector, project summary, history/report/model and restored-result state. The
+cascade confirmation requires both a checkbox and the user label or short
+version ID; it never shows a workspace path.
 
 For an unverified, dependency-free version the UI presents a separate checkbox
 and `파일을 보존하고 목록에서 제거` action. It is never offered for a
@@ -116,9 +137,8 @@ DELETE can be initiated from the management page.
 
 ## Non-goals
 
-Bulk deletion, dataset-root cascade into dependent assets, age-based cleanup,
-automatic retention, DOE root deletion, and in-place dataset mutation remain
-out of scope.
+Bulk deletion, age-based cleanup, automatic retention, DOE root deletion,
+multi-project ownership, and in-place dataset mutation remain out of scope.
 ## Archive Versus Delete
 
 Archive is reversible catalog metadata. It never validates, moves, or deletes

@@ -1,5 +1,8 @@
 import { getApiBaseUrl } from "./client";
-import type { AnalysisRunState } from "./types";
+import type {
+  AnalysisRunState,
+  DatasetDeletionDependencyAssetType,
+} from "./types";
 
 const API_V1_PREFIX = "/api/v1";
 
@@ -40,6 +43,10 @@ export const apiRoutes = {
 
   runtimeInfo(): string {
     return apiUrl("/runtime-info");
+  },
+
+  workspaceSummary(): string {
+    return apiUrl("/workspace/summary");
   },
 
   datasets(): string {
@@ -97,6 +104,23 @@ export const apiRoutes = {
 
   datasetVersionDeletionPreflight(versionId: string): string {
     return apiUrl(`/dataset-versions/${pathId(versionId)}/deletion-preflight`);
+  },
+
+  datasetVersionDeletionDependencies(
+    versionId: string,
+    assetType: DatasetDeletionDependencyAssetType | null,
+    offset: number,
+    limit: number,
+  ): string {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (assetType !== null) params.set("asset_type", assetType);
+    return urlWithQuery(
+      `/dataset-versions/${pathId(versionId)}/deletion-dependencies`,
+      params,
+    );
   },
 
   datasetVersionDeletion(versionId: string): string {

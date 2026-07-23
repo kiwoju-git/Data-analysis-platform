@@ -1,6 +1,42 @@
 # Gate B Progress
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
+
+## Dataset Cleanup And Project Overview
+
+- SQLite schema `16` adds reversible `archived`/`archived_at` metadata only for
+  dataset versions. Visible catalogs and the active selector exclude archived
+  versions by default, while `/manage` can filter archived/all records and
+  restore them. Archiving never opens, moves, deletes, or rewrites dataset
+  files and is blocked for the active version.
+- Dataset retention operational schema `3` separates dependency discovery from
+  file integrity. Path, missing-file, or checksum failures therefore return a
+  normal preflight with integrity issue codes and safe available operations
+  instead of hiding the dependency graph behind a generic 409.
+- The dependency endpoint returns bounded, paginated safe descriptors for
+  analyses, exports, regression models, source/target predictions, attribute
+  limit sets, cross-dataset Phase II analyses, and jobs. It does not expose raw
+  rows, coefficients, or internal paths.
+- Dependency-free deletion remains the default. Explicit cascade operations
+  compute a fixed closure, bind exact metadata snapshots and file identities to
+  a manifest, quarantine only verified owned files, revalidate under
+  `BEGIN IMMEDIATE`, verify deleted row counts, and restore moved files in
+  reverse order on failure. Preserve-unverified operations never resolve,
+  open, move, or unlink the unverified references.
+- Cascade can remove dependent predictions or Phase II results that use other
+  datasets, but it never removes those other datasets or unrelated assets.
+  Unsupported inbound relationships block the operation rather than being
+  severed silently.
+- The route-lazy `/project` page summarizes the current dataset, visible and
+  archived dataset counts, recent analyses, regression models, and reports
+  using existing catalogs plus the raw-data-free `/api/v1/workspace/summary`.
+  It explicitly represents the single local workspace; multi-project storage,
+  cloud sync, and collaboration are not claimed.
+- The sidebar subtitle is `Statistical Twin` with an English language marker.
+  DataLab Studio remains the product and API service name.
+- API contract `3` advertises dataset archiving, cascade deletion, and
+  preserve-unverified cleanup. No statistical calculation, method version, or
+  stored analysis-result schema changed.
 
 ## Usability, Retention, Run Chart, And ZIP Support
 
