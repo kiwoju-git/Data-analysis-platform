@@ -385,7 +385,7 @@ describe("App", () => {
     );
 
     expect(html).toContain("실험 계획법");
-    expect(html).toContain("2-level full factorial 설계 생성");
+    expect(html).not.toContain('id="factorial-design-title"');
     expect(html).toContain("DOE 설계 생성");
     expect(html).toContain("screening design");
     expect(html).toContain("two_level_full_factorial");
@@ -431,6 +431,9 @@ describe("App", () => {
     expect(methodGridHtml).toContain('class="method-card-tags"');
     expect(html).toContain("검정 선택 빠른 가이드");
     expect(html).toContain("표본 수 30과 정규성 검정 p-value는 절대적인 자동 선택 기준이 아닙니다");
+    expect(html).not.toContain('class="workbench-steps"');
+    expect(html).not.toContain('class="workbench-summary"');
+    expect(html).not.toContain("실행 방식");
   });
 
   it("moves global beginner guidance to Help Center and keeps readable preflight copy", () => {
@@ -683,8 +686,9 @@ describe("App", () => {
       />,
     );
     expect(html).toContain("사용 가능 · 전용 워크플로");
-    expect(html).toContain("저장 회귀모형 선택");
-    expect(html).toContain("generic analysis-run으로 실행되지 않습니다");
+    expect(html).not.toContain("저장 회귀모형 선택");
+    expect(html).not.toContain("실행 방식");
+    expect(html).toContain("확인을 통과한 자산만 실행할 수 있습니다");
     expect(html).toContain("Predict 전용 패널");
     expect(html).not.toContain("공통 데이터 필터");
     expect(html).not.toContain("분석 이력");
@@ -740,12 +744,12 @@ describe("App", () => {
       <ResponseOptimizerWorkspace onNavigateToResponseSurface={() => undefined} />,
     );
 
-    expect(predictionHtml).toContain("저장된 회귀모형으로 예측");
     expect(predictionHtml).toContain("Source 회귀모형");
-    expect(predictionHtml).toContain("사용 가능 · 전용");
-    expect(optimizerHtml).toContain("저장된 RSM 분석으로 반응 최적화");
+    expect(predictionHtml).not.toContain("전용 워크플로");
+    expect(predictionHtml).not.toContain('id="prediction-workspace-title"');
     expect(optimizerHtml).toContain("Source 반응표면 분석");
-    expect(optimizerHtml).toContain("사용 가능 · 전용");
+    expect(optimizerHtml).not.toContain("전용 워크플로");
+    expect(optimizerHtml).not.toContain('id="optimizer-workspace-title"');
   });
 
   it("accepts only a stored prediction matching the deep-link source selection", () => {
@@ -2796,7 +2800,7 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("계수형 관리도 실행");
+    expect(html).not.toContain('id="attribute-chart-title"');
     expect(html).toContain("Phase I 기준선 추정");
     expect(html).toContain("Phase II 고정 한계 모니터링");
     expect(html).toContain("Phase I은 현재 데이터에서 기준선을 추정합니다");
@@ -3040,6 +3044,8 @@ describe("App", () => {
 
     expect(html).toContain("품질 관리");
     expect(html).toContain("I-MR 관리도 실행");
+    expect(html).not.toContain('id="individuals-chart-title"');
+    expect(html).not.toContain("<p>quality.individuals_chart</p>");
     expect(html).toContain("순서 컬럼");
     expect(html).toContain("선택 안 함");
     expect(html).toContain("canonical row order");
@@ -3379,7 +3385,8 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("Gage R&amp;R 실행");
+    expect(html).toContain("Gage R&amp;R 계산");
+    expect(html).not.toContain('id="gage-rr-preflight-title"');
     expect(html).toContain("사용 가능");
     expect(html).toContain("balanced crossed ANOVA");
     expect(html).toContain("Gage R&amp;R 계산");
@@ -4834,7 +4841,8 @@ describe("App", () => {
     );
 
     expect(html).toContain("카이제곱 독립성 검정");
-    expect(html).toContain("카이제곱 독립성 검정 실행");
+    expect(html).toContain("카이제곱 검정 실행");
+    expect(html).not.toContain('id="chi-square-title"');
     expect(html).toContain("행 변수");
     expect(html).toContain("열 변수");
     expect(html).toContain("Pearson 카이제곱");

@@ -119,14 +119,7 @@ export function BayesianOptimizationWorkspace() {
   }
 
   return (
-    <section className="analysis-run-panel" aria-labelledby="bayesian-optimization-title">
-      <div className="panel-heading">
-        <div>
-          <h3 id="bayesian-optimization-title">Bayesian 최적화</h3>
-          <p>doe.bayesian_optimization · lifecycle별 전용 워크플로</p>
-        </div>
-        <span className="status-pill status-ready">전용 API</span>
-      </div>
+    <section className="analysis-run-panel" aria-label="Bayesian 최적화 Study 작업">
       <div className="info-box">
         앱은 목적함수를 실행하지 않습니다. 실제 실험 관측값만 입력하며, 추천 trial은 관측 전까지
         pending 상태입니다.

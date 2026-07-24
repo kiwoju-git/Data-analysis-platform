@@ -28,6 +28,14 @@ they intend to compare. In particular, Wilcoxon is not presented as an
 automatic small-sample replacement, and chi-square is valid for 2x2 as well as
 larger contingency tables when expected-count requirements are reviewed.
 
+After a method is selected, its Korean title, English title, stable method ID,
+Help action, and availability appear once in the Workbench header. The former
+six-step strip and dataset/preflight/execution-mode summary cards are removed,
+so the shared filter and the method's role controls follow immediately.
+Method-specific run panels no longer repeat the title, method ID, or
+availability badge; their explicit run buttons and all result, history, and
+export sections remain.
+
 The left `리포트` route opens Report Center. A beginner can filter successful
 stored analysis runs, restore a checksum-validated result, and create/download
 the existing JSON/CSV/HTML formats. A text capability matrix directs dedicated

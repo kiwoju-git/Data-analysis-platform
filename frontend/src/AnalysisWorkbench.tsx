@@ -129,15 +129,6 @@ interface AnalysisWorkbenchProps {
   renderExecutableMethod: (method: AnalysisMethodDescriptor) => ReactNode;
 }
 
-const workbenchSteps = [
-  "데이터",
-  "역할",
-  "옵션",
-  "사전점검",
-  "실행",
-  "결과",
-] as const;
-
 export function AnalysisWorkbench({
   catalog,
   selectedModuleId,
@@ -322,47 +313,10 @@ export function AnalysisWorkbench({
             version={version}
             onClose={() => setIsMethodHelpOpen(false)}
           />
-          <ol className="workbench-steps" aria-label="분석 실행 단계">
-            {workbenchSteps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-          <div className="workbench-summary">
-            <div>
-              <span>데이터셋</span>
-              <strong>
-                {selectedMethod.execution_mode === "dedicated"
-                  ? selectedMethod.source_prerequisite === "regression_model"
-                    ? "저장 회귀모형 선택"
-                    : selectedMethod.source_prerequisite === "response_surface_analysis"
-                      ? "저장 RSM 분석 선택"
-                      : "전용 워크플로 입력"
-                  : version === null
-                  ? selectedMethod.requires_dataset
-                    ? "필요"
-                    : "선택 사항"
-                  : `v${version.version_number} · ${version.row_count.toLocaleString()}행`}
-              </strong>
-            </div>
-            <div>
-              <span>사전점검</span>
-              <strong>
-                {selectedMethod.execution_mode === "dedicated"
-                  ? "Source 선택 후 전용 점검"
-                  : profile === null
-                  ? "대기"
-                  : `${profile.columns.length.toLocaleString()}컬럼 점검됨`}
-              </strong>
-            </div>
-            <div>
-              <span>실행 방식</span>
-              <strong>{selectedMethod.execution_mode}</strong>
-            </div>
-          </div>
           {selectedMethod.execution_mode === "dedicated" ? (
             <div className="notice-box">
-              이 메서드는 저장된 source 자산을 선택한 뒤 전용 API에서 dependency와 checksum을
-              다시 검증합니다. generic analysis-run으로 실행되지 않습니다.
+              저장된 Source 자산을 선택하면 연결 관계와 파일 무결성을 다시 확인합니다.
+              확인을 통과한 자산만 실행할 수 있습니다.
             </div>
           ) : null}
           {selectedMethod.execution_mode !== "dedicated" &&
@@ -420,16 +374,7 @@ export function AnalysisWorkbench({
             <AnalysisRunErrorNotice errorCode={analysisRunError} />
           ) : null}
           {executablePanel === null || executablePanel === undefined ? (
-            <section className="analysis-run-panel" aria-labelledby="method-status-title">
-              <div className="panel-heading">
-                <div>
-                  <h3 id="method-status-title">실행 상태</h3>
-                  <p>{selectedMethod.method_id}</p>
-                </div>
-                <span className={`availability-badge availability-${selectedMethod.availability}`}>
-                  {availabilityLabel(selectedMethod)}
-                </span>
-              </div>
+            <section className="analysis-run-panel" aria-label="분석 실행 상태">
               <div className="notice-box">{workbenchStatusMessage(selectedMethod)}</div>
             </section>
           ) : null}

@@ -181,15 +181,7 @@ export function ResponseSurfacePanel() {
   };
 
   return (
-    <section className="analysis-run-panel" aria-labelledby="response-surface-title">
-      <div className="panel-heading">
-        <div>
-          <h3 id="response-surface-title">반응표면법</h3>
-          <p>doe.response_surface</p>
-        </div>
-        <span className="status-pill status-ready">전용 API</span>
-      </div>
-
+    <section className="analysis-run-panel" aria-label="반응표면법 설계와 분석 입력">
       <div className="option-grid">
         <label>
           <span>설계 이름</span>

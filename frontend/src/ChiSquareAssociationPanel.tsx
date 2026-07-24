@@ -50,14 +50,7 @@ export function ChiSquareAssociationPanel({
     filterValidationError === null;
 
   return (
-    <section className="analysis-run-panel" aria-labelledby="chi-square-title">
-      <div className="panel-heading">
-        <div>
-          <h3 id="chi-square-title">카이제곱 독립성 검정 실행</h3>
-          <p>{methodId}</p>
-        </div>
-        <span className="status-pill status-ready">사용 가능</span>
-      </div>
+    <section className="analysis-run-panel" data-analysis-execution={methodId}>
       {version === null ? (
         <div className="notice-box">데이터셋 버전 생성 후 실행할 수 있습니다.</div>
       ) : (

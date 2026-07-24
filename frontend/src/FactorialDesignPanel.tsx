@@ -92,14 +92,7 @@ export function FactorialDesignPanel({
   );
 
   return (
-    <section className="analysis-run-panel" aria-labelledby="factorial-design-title">
-      <div className="panel-heading">
-        <div>
-          <h3 id="factorial-design-title">2-level full factorial 설계 생성</h3>
-          <p>{methodId}</p>
-        </div>
-        <span className="status-pill status-ready">사용 가능</span>
-      </div>
+    <section className="analysis-run-panel" data-analysis-execution={methodId}>
       <div className="option-grid">
         <label>
           <span>설계 이름</span>

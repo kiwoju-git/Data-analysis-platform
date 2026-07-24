@@ -1248,53 +1248,6 @@ textarea {
   align-items: center;
 }
 
-.workbench-steps {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.workbench-steps li {
-  min-height: 38px;
-  border: 1px solid #d8dde5;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #384457;
-  padding: 8px 10px;
-  font-size: 0.86rem;
-  font-weight: 700;
-  text-align: center;
-}
-
-.workbench-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.workbench-summary div {
-  display: grid;
-  gap: 4px;
-  border: 1px solid #d8dde5;
-  border-radius: 6px;
-  background: #ffffff;
-  padding: 10px;
-}
-
-.workbench-summary span {
-  color: #667185;
-  font-size: 0.82rem;
-}
-
-.workbench-summary strong {
-  color: #172033;
-  font-size: 0.92rem;
-  overflow-wrap: anywhere;
-}
-
 .preflight-explanation-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3613,8 +3566,6 @@ td select {
     grid-template-columns: 1fr;
   }
 
-  .workbench-steps,
-  .workbench-summary,
   .analysis-selection-guide-grid,
   .analysis-selection-guide-actions-row,
   .purpose-card-grid,

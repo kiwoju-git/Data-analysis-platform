@@ -96,14 +96,7 @@ export function AttributeControlChartPanel({
   const denominatorLabel = chartType === "u" ? "검사 기회" : "표본 크기";
 
   return (
-    <section className="analysis-run-panel" aria-labelledby="attribute-chart-title">
-      <div className="panel-heading">
-        <div>
-          <h3 id="attribute-chart-title">계수형 관리도 실행</h3>
-          <p>{methodId}</p>
-        </div>
-        <span className="status-pill status-ready">사용 가능</span>
-      </div>
+    <section className="analysis-run-panel" data-analysis-execution={methodId}>
       <div className="notice-box">
         {phase === "phase_1"
           ? "Phase I은 현재 데이터에서 기준선을 추정합니다. 안정성을 확인한 결과만 immutable limit set으로 닫으세요."

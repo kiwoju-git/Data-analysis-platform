@@ -57,14 +57,7 @@ export function OneSampleTPanel({
     filterValidationError === null;
 
   return (
-    <section className="analysis-run-panel" aria-labelledby="one-sample-t-title">
-      <div className="panel-heading">
-        <div>
-          <h3 id="one-sample-t-title">1-표본 t-검정 실행</h3>
-          <p>{methodId}</p>
-        </div>
-        <span className="status-pill status-ready">사용 가능</span>
-      </div>
+    <section className="analysis-run-panel" data-analysis-execution={methodId}>
       {version === null ? (
         <div className="notice-box">데이터셋 버전 생성 후 실행할 수 있습니다.</div>
       ) : (

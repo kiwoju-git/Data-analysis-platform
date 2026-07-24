@@ -128,6 +128,8 @@ describe("EDA usability foundations", () => {
     expect(html).toContain("히스토그램");
     expect(html).toContain("박스플롯");
     expect(html).not.toContain("Q-Q Plot");
+    expect(html).not.toContain('id="descriptive-title"');
+    expect(html).not.toContain("<h3>기술통계 실행</h3>");
   });
 
   it("formats created_at and safely falls back for invalid timestamps", () => {

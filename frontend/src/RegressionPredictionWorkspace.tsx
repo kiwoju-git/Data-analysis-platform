@@ -140,14 +140,7 @@ export function RegressionPredictionWorkspace({
   }
 
   return (
-    <section className="analysis-run-panel" aria-labelledby="prediction-workspace-title">
-      <div className="panel-heading">
-        <div>
-          <h3 id="prediction-workspace-title">저장된 회귀모형으로 예측</h3>
-          <p>regression.predict · 전용 워크플로</p>
-        </div>
-        <span className="status-pill status-ready">사용 가능 · 전용</span>
-      </div>
+    <section className="analysis-run-panel" aria-label="예측 source와 대상 선택">
       <div className="notice-box">
         저장된 app-created JSON 회귀모형을 선택한 뒤 대상 데이터셋의 schema와 학습 범위를
         점검합니다. 원본 predictor 값은 예측 결과와 export에 저장하지 않습니다.

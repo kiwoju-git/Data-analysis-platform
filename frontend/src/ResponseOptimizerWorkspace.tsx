@@ -127,14 +127,7 @@ export function ResponseOptimizerWorkspace({
       : "";
 
   return (
-    <section className="analysis-run-panel" aria-labelledby="optimizer-workspace-title">
-      <div className="panel-heading">
-        <div>
-          <h3 id="optimizer-workspace-title">저장된 RSM 분석으로 반응 최적화</h3>
-          <p>regression.response_optimizer · 전용 워크플로</p>
-        </div>
-        <span className="status-pill status-ready">사용 가능 · 전용</span>
-      </div>
+    <section className="analysis-run-panel" aria-label="Response Optimizer source 선택">
       <div className="notice-box">
         저장된 full quadratic RSM 분석을 선택합니다. Source dependency와 checksum을 다시
         검증하며, blocking model은 최적화를 실행할 수 없습니다.
