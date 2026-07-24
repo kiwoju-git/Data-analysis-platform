@@ -4,6 +4,38 @@ Last updated: 2026-07-24
 
 ## Local Validation
 
+- The workspace-invalidation/corporate-shell feature branch is based on
+  pushed main `00e3b9d634fda325ea450287e0013dc99809bf9f`. The backend cascade
+  consistency audit confirmed that related model, prediction, analysis, export,
+  job, artifact, and user-metadata rows are removed while unrelated assets
+  remain. The frontend now reconciles dataset, model, report, history,
+  prediction, and project catalogs through one monotonic workspace mutation
+  revision and self-heals stale row-level 404 responses.
+- Final development validation on 2026-07-24 passed tutorial Markdown block
+  verification 18, Ruff/format over 167 Python files, mypy over 104 source
+  files, backend pytest 838, frontend lint/typecheck and Vitest 193, direct
+  OpenAPI/frontend contracts 171, and production build.
+  `scripts/check.ps1` completed in 1009.6 seconds. The real-API tutorial smoke
+  passed all 18 sections in 21.1 seconds, and the isolated Chromium critical
+  path passed in 92.2 seconds.
+- The build measured main at 512.47 kB / 126.78 kB gzip, CSS at 47.70/9.52
+  kB, Project at 6.26/1.91 kB, Manage at 27.33/7.28 kB, Report at 40.40/9.07
+  kB, Regression at 59.75/13.42 kB, Quality at 67.05/12.81 kB, DOE at
+  111.15/26.26 kB, Help at 18.56/6.50 kB, and the local logo asset at 10.83
+  kB. Main remains above Vite's 500 kB warning threshold; no unsafe split or
+  dependency was added to conceal it.
+- Corporate-shell screenshots were inspected at desktop, laptop, and 390 px
+  mobile viewports under `.tmp/e2e-diagnostics-corporate`; diagnostics remain
+  untracked. The sidebar uses the local Samsung Bioepis logo, blue active
+  groups, readable gray inactive groups, a non-interactive white notch, nested
+  URL-synchronized leaves, and an Escape/focus-managed mobile drawer. No chart
+  component or data-series palette was changed.
+- The measured host remains Windows 10 Home build 19045, CPython 3.10.11, and
+  Node 24.17.0. These results are development evidence, not the Windows
+  11/Python 3.10/Node 22 release gate. A matching hosted main run cannot exist
+  until this branch is pushed; remote status is not inferred from local
+  validation.
+
 - The dataset-cleanup/project-overview feature branch is based on pushed main
   `fd7612c028e7a1067003f8fc686c3704cc2ed1dd`; feature commits
   `c0df903` and `5a79322` contain schema-16 archive visibility, operational

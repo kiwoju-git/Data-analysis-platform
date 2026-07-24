@@ -11,7 +11,7 @@ Users can page and refresh each catalog, assign an optional name and note, pin
 an item, activate a dataset version, open a model in Predict, and run the
 existing deletion impact workflows.
 
-The page is mounted only after the API contract-2 runtime handshake succeeds.
+The page is mounted only after the API contract-3 runtime handshake succeeds.
 A generic HTTP 404 from a missing route is reported as a frontend/backend
 version mismatch, while stable dataset/model not-found, optimistic metadata
 conflict, dependency blocker, and integrity failure remain separate states.
@@ -77,6 +77,15 @@ dependent-prediction descriptors, Report Center links, individual prediction
 deletion through the existing analysis-run contract, and an opt-in atomic
 model-plus-predictions operation guarded by a separate irreversible
 confirmation.
+
+Dataset, model, analysis, export, archive, and restore mutations publish one
+monotonic workspace-asset revision. The mounted management page revalidates
+both dataset and regression-model catalogs after any revision rather than
+refreshing only the tab that initiated the mutation. A row action that races
+with another tab and receives a stable owner-not-found code clears the stale
+row, refreshes the bounded catalog, normalizes an empty last page, and displays
+a non-blocking informational notice. Direct links to an unknown owner retain
+the explicit not-found empty state.
 
 ## Version Decision
 

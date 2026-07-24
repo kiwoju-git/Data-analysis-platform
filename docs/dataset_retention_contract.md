@@ -135,6 +135,14 @@ The UI distinguishes a generic route 404 (runtime contract mismatch) from
 and artifact-integrity failures. The runtime gate must pass before preflight or
 DELETE can be initiated from the management page.
 
+Successful cascade deletion publishes the complete delete response as a
+workspace mutation. Dataset selectors, both management catalogs, Report
+Center, analysis history, regression prediction model choices, restored or
+compared results, and the project overview then revalidate their existing
+filters and pagination. A selected report that no longer exists is cleared
+with its `analysis_id` query parameter and an informational notice; a late
+pre-mutation response cannot repopulate the deleted item.
+
 ## Non-goals
 
 Bulk deletion, age-based cleanup, automatic retention, DOE root deletion,

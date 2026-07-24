@@ -27,6 +27,8 @@ synthetic critical-path 검증은 구현되어 있고 최신 main push의 hosted
   - 영구 삭제는 실제 dependency 항목을 보여주고, 별도 확인한 atomic cascade에서만 연결 분석·리포트·모델·예측을 삭제합니다.
   - 검증하지 못한 파일은 명시적 preserve operation에서도 열거나 이동하지 않고 남겨둡니다.
 - `프로젝트`의 단일 local workspace overview와 빠른 데이터·분석·관리 진입
+- Samsung Bioepis 로컬 로고와 `Statistical Twin` 제목을 사용하는 blue-gray
+  기업형 shell, 중첩 sidebar, keyboard/mobile navigation
 - generic JSON/CSV/HTML export와 Report Center
 - Excel 범위용 view-only paste staging grid와 paged canonical preview
 - 한국어 Help Center, method context help, end-to-end 튜토리얼
@@ -101,8 +103,15 @@ Residuals vs Fitted, Leverage vs Cook's D 점은 마우스와 키보드로 값�
 삭제하지 않습니다.
 
 왼쪽 `프로젝트`는 현재 한 개의 로컬 workspace를 요약합니다. 다중 프로젝트 생성,
-cloud sync 또는 협업 기능을 제공하는 화면은 아닙니다. `Statistical Twin`은
-DataLab Studio의 sidebar subtitle이며 제품명이나 workspace 형식을 바꾸지 않습니다.
+cloud sync 또는 협업 기능을 제공하는 화면은 아닙니다. Sidebar에는 로컬 Samsung
+Bioepis 로고와 `Statistical Twin` 제목을 표시합니다. 이는 visible shell branding이며
+backend service name, package ID, 저장 workspace 형식은 `DataLab Studio` 계약을
+그대로 유지합니다. 데이터셋 cascade 정리 후에는 관리의 모델 목록, Report Center,
+분석 이력과 프로젝트 요약을 자동으로 다시 검증하므로 전체 페이지를 새로고침할
+필요가 없습니다. Corporate shell은 blue-gray navigation과 공통 control 표면에만
+적용되며 통계 chart의 data series, signal, control-limit 색상은 변경하지 않습니다.
+설계 참고 screenshot은 제품 asset이 아니며 저장소에는 오프라인 로고 asset만
+포함합니다.
 
 처음 사용하는 경우 앱의 `도움말`과
 [한국어 end-to-end 튜토리얼](docs/studio_end_to_end_tutorial_ko.md)을 먼저 확인하십시오.

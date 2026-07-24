@@ -302,3 +302,14 @@ dataset-version `archived`/`archived_at` visibility fields. Dataset cascade uses
 existing ownership keys plus operational preflight/delete schema 3. No
 statistical method, result/config schema, dataset schema hash, or model manifest
 schema is changed by these operational changes.
+
+## Frontend Workspace Reconciliation
+
+Atomic backend deletion is followed by a monotonic frontend workspace mutation,
+not a full-page reload. The revision revalidates dataset/model catalogs,
+Report Center and analysis history, regression prediction model choices, and
+the single-workspace project summary. Selection and export state are retained
+only while their exact owner still exists. Stable row-level owner-not-found
+responses self-heal an already mounted catalog and show a non-blocking notice;
+an invalid direct URL remains a normal explicit not-found state. Latest-request
+guards prevent an obsolete response from restoring a deleted asset.

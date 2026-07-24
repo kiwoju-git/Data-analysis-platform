@@ -40,6 +40,13 @@ the screen warns that reusing the same seed may regenerate the same initial
 conditions and states that observations, history, and recommendations are not
 copied.
 
+The application shell uses a local Samsung Bioepis logo and the visible
+`Statistical Twin` heading. Six blue-gray navigation groups keep their child
+destinations visible on desktop; the active child has `aria-current`, while the
+mobile drawer returns focus to its toggle after Escape. Report, management, and
+Help children preserve their tab or section in the URL so reload and browser
+navigation return to the same view.
+
 ## Active Dataset And Regression Diagnostics
 
 The top `현재 분석 데이터셋` selector is the source of the general analysis
