@@ -12,6 +12,7 @@ from app.storage.metadata import (
     WorkspaceAssetStorageConflict,
     get_attribute_control_limit_set_record,
     get_regression_model_record,
+    get_regression_model_user_metadata,
 )
 
 
@@ -165,6 +166,11 @@ def test_dataset_cascade_deletes_source_model_and_predictions_but_no_other_datas
             },
         )
         assert prediction.status_code == 200, prediction.text
+        metadata = client.patch(
+            f"/api/v1/regression-models/{model['model_id']}/metadata",
+            json={"user_label": "Cascade model", "pinned": True},
+        )
+        assert metadata.status_code == 200, metadata.text
 
         preflight = client.get(
             f"/api/v1/dataset-versions/{model['dataset_version_id']}/deletion-preflight"
@@ -194,12 +200,32 @@ def test_dataset_cascade_deletes_source_model_and_predictions_but_no_other_datas
         prediction_after = client.get(f"/api/v1/analysis-runs/{prediction.json()['prediction_id']}")
         target_after = client.get(f"/api/v1/dataset-versions/{retained['dataset_version_id']}")
         unrelated_model_after = client.get(f"/api/v1/regression-models/{retained['model_id']}")
+        deleted_model_after = client.get(f"/api/v1/regression-models/{model['model_id']}")
+        model_catalog_after = client.get("/api/v1/regression-models")
+        analysis_catalog_after = client.get(
+            "/api/v1/analysis-runs",
+            params={"status": "succeeded", "result_available": True},
+        )
+        summary_after = client.get("/api/v1/workspace/summary")
 
     assert deleted.status_code == 200, deleted.text
     assert source_after.status_code == 404
     assert prediction_after.status_code == 404
     assert target_after.status_code == 200
     assert unrelated_model_after.status_code == 200
+    assert deleted_model_after.status_code == 404
+    assert model_catalog_after.status_code == 200
+    assert {item["model_id"] for item in model_catalog_after.json()["models"]} == {
+        retained["model_id"]
+    }
+    assert analysis_catalog_after.status_code == 200
+    remaining_analysis_ids = {item["analysis_id"] for item in analysis_catalog_after.json()["runs"]}
+    assert model["analysis_id"] not in remaining_analysis_ids
+    assert prediction.json()["prediction_id"] not in remaining_analysis_ids
+    assert retained["analysis_id"] in remaining_analysis_ids
+    assert summary_after.status_code == 200
+    assert summary_after.json()["regression_model_count"] == 1
+    assert get_regression_model_user_metadata(tmp_path, model["model_id"]) is None
 
 
 def test_limit_set_deletion_preserves_phase_one_and_blocks_phase_two(tmp_path: Path) -> None:

@@ -29,6 +29,7 @@ import type {
   RegressionPredictionResponse,
   RegressionPredictionRowsPageResponse,
   RegressionModelDeleteResponse,
+  RegressionModelCatalogResponse,
   RegressionModelDeletionPreflightResponse,
   RuntimeInfoResponse,
 } from "./api";
@@ -54,6 +55,7 @@ import { useDatasetWorkflow } from "./useDatasetWorkflow";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
 import { useReportCenterState } from "./useReportCenterState";
+import { useAssetManagementState } from "./useAssetManagementState";
 
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
@@ -96,6 +98,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchRegressionPredictionRows: vi.fn(),
   fetchRegressionModelDeletionPreflight: vi.fn(),
   fetchRegressionModelManifest: vi.fn(),
+  fetchRegressionModels: vi.fn(),
   recordBayesianObservation: vi.fn(),
 }));
 
@@ -581,6 +584,15 @@ beforeEach(() => {
     has_next: false,
     versions: [],
   });
+  apiMocks.fetchRegressionModels.mockResolvedValue({
+    models: [],
+    total: 0,
+    returned: 0,
+    limit: 20,
+    offset: 0,
+    has_previous: false,
+    has_next: false,
+  } as RegressionModelCatalogResponse);
 });
 
 afterEach(() => {
@@ -588,6 +600,24 @@ afterEach(() => {
 });
 
 describe("async workbench hooks", () => {
+  it("refreshes both management catalogs after a workspace mutation", async () => {
+    const runner = new HookRunner<
+      number,
+      ReturnType<typeof useAssetManagementState>
+    >(useAssetManagementState, 0);
+    await runner.flush();
+
+    expect(apiMocks.fetchDatasetVersions).toHaveBeenCalledTimes(1);
+    expect(apiMocks.fetchRegressionModels).toHaveBeenCalledTimes(1);
+
+    runner.update(1);
+    await runner.flush();
+
+    expect(apiMocks.fetchDatasetVersions).toHaveBeenCalledTimes(2);
+    expect(apiMocks.fetchRegressionModels).toHaveBeenCalledTimes(2);
+    runner.unmount();
+  });
+
   it("blocks an old runtime and retries into the compatible contract", async () => {
     const oldRuntime = runtimeInfo({ api_contract_version: 1 });
     apiMocks.fetchRuntimeInfo.mockResolvedValueOnce(oldRuntime);
@@ -1056,6 +1086,24 @@ describe("async workbench hooks", () => {
     corruptRunner.unmount();
   });
 
+  it("notifies a mounted catalog when a stale model row resolves as deleted", async () => {
+    apiMocks.fetchRegressionModelManifest.mockRejectedValueOnce(
+      new Error("regression_model_not_found"),
+    );
+    const onStaleAsset = vi.fn();
+    const useRetentionWithCatalogRecovery = (modelId: string | null) =>
+      useRegressionModelRetentionState(modelId, onStaleAsset);
+    const runner = new HookRunner<
+      string | null,
+      ReturnType<typeof useRegressionModelRetentionState>
+    >(useRetentionWithCatalogRecovery, "model-stale");
+    await runner.flush();
+
+    expect(onStaleAsset).toHaveBeenCalledTimes(1);
+    expect(runner.output.availability).toBe("unavailable_or_deleted");
+    runner.unmount();
+  });
+
   it("keeps transient model availability errors visible and retries explicitly", async () => {
     apiMocks.fetchRegressionModelManifest
       .mockRejectedValueOnce(new Error("api_unreachable"))
@@ -1202,6 +1250,47 @@ describe("async workbench hooks", () => {
     expect(runner.output.selectedAnalysisId).toBe("analysis-a");
     expect(runner.output.selectedResult).toEqual(result);
     expect(replaceState).toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it("clears a selected Report Center result after mutation revalidation returns not found", async () => {
+    const replaceState = vi.fn();
+    vi.stubGlobal("window", {
+      location: {
+        href: "http://127.0.0.1:5173/reports?tab=reports&analysis_id=analysis-a",
+      },
+      history: { replaceState },
+    });
+    const result = {
+      analysis_id: "analysis-a",
+      method_id: "eda.descriptive",
+      method_version: "0.1.0",
+      dataset_version_id: "dataset-a",
+    } as AnalysisResultEnvelope;
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockResolvedValueOnce(result);
+    const runner = new HookRunner(
+      (props: { datasetVersionId: string; revision: number }) =>
+        useReportCenterState(props.datasetVersionId, props.revision),
+      { datasetVersionId: "dataset-a", revision: 0 },
+    );
+    await runner.flush();
+    expect(runner.output.selectedAnalysisId).toBe("analysis-a");
+
+    apiMocks.fetchAnalysisRunResult.mockRejectedValueOnce(
+      new Error("analysis_run_not_found"),
+    );
+    runner.update({ datasetVersionId: "dataset-a", revision: 1 });
+    await runner.flush();
+
+    expect(runner.output.selectedAnalysisId).toBeNull();
+    expect(runner.output.selectedResult).toBeNull();
+    expect(runner.output.notice).toContain("함께 삭제");
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      "",
+      "/reports?tab=reports",
+    );
     runner.unmount();
   });
 

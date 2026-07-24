@@ -48,7 +48,12 @@ export function DatasetVersionPanel({
   onSchemaDraftChange,
 }: DatasetVersionPanelProps) {
   return (
-    <section className="version-panel" aria-labelledby="version-title">
+    <section
+      className="version-panel"
+      id="dataset-version"
+      aria-labelledby="version-title"
+      tabIndex={-1}
+    >
       <div className="panel-heading">
         <div>
           <h3 id="version-title">Dataset version v{version.version_number}</h3>

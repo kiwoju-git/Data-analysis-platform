@@ -11,7 +11,7 @@ import {
   type WorkspaceSummaryResponse,
 } from "./api";
 
-export function useProjectOverviewState() {
+export function useProjectOverviewState(workspaceAssetRevision = 0) {
   const [summary, setSummary] = useState<WorkspaceSummaryResponse | null>(null);
   const [recentDatasets, setRecentDatasets] =
     useState<DatasetVersionCatalogResponse | null>(null);
@@ -54,7 +54,7 @@ export function useProjectOverviewState() {
     return () => {
       active = false;
     };
-  }, [revision]);
+  }, [revision, workspaceAssetRevision]);
 
   return {
     error,

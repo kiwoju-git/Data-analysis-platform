@@ -6,6 +6,7 @@ import type {
   AnalysisModuleId,
 } from "./api";
 import { buildAnalysisPath, parseAnalysisLocation } from "./analysisNavigation";
+import { appLocationChangeEvent } from "./browserNavigation";
 
 export const defaultAnalysisModuleId: AnalysisModuleId = "exploration";
 
@@ -42,16 +43,22 @@ export function useAnalysisSelection(catalog: AnalysisMethodListResponse | null)
     }
 
     function handleRouteChange() {
-      const selection = initialAnalysisSelectionFromLocation();
-      setSelectedModuleId(selection.moduleId);
-      setSelectedMethodId(selection.methodId);
+      const parsed = parseAnalysisLocation(
+        window.location.pathname,
+        window.location.hash,
+      );
+      if (parsed === null) return;
+      setSelectedModuleId(parsed.moduleId);
+      setSelectedMethodId(parsed.methodId);
     }
 
     window.addEventListener("popstate", handleRouteChange);
     window.addEventListener("hashchange", handleRouteChange);
+    window.addEventListener(appLocationChangeEvent, handleRouteChange);
     return () => {
       window.removeEventListener("popstate", handleRouteChange);
       window.removeEventListener("hashchange", handleRouteChange);
+      window.removeEventListener(appLocationChangeEvent, handleRouteChange);
     };
   }, []);
 

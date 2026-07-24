@@ -5058,10 +5058,15 @@ describe("App", () => {
       </AppChrome>,
     );
 
-    expect(html).toContain("DataLab Studio");
+    expect(html).toContain('alt="Samsung Bioepis"');
     expect(html).toContain("Statistical Twin");
+    expect(html).not.toContain("DataLab Studio");
+    expect(html).toContain('aria-label="주요 메뉴"');
+    expect(html.match(/class="sidebar-group(?: sidebar-group-active)?"/g)).toHaveLength(6);
+    expect(html).toContain('aria-current="page"');
     expect(html).not.toContain("로컬 분석 작업대");
-    expect(html).toContain("Gate A 기반 구성");
+    expect(html).toContain("데이터셋");
+    expect(html).not.toContain("Gate A 기반 구성");
     expect(html).toContain("API ok");
     expect(html).toContain("현재 분석 데이터셋");
     expect(html).toContain("sample.txt");

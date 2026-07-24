@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AnalysisMethodDescriptor, AnalysisMethodListResponse } from "./api";
+import {
+  appLocationChangeEvent,
+  pushAppLocation,
+} from "./browserNavigation";
 import { MethodHelpContent } from "./MethodHelpDrawer";
 import { MethodPurposeHelper } from "./MethodPurposeHelper";
 import { RoleDictionary } from "./RoleDictionary";
@@ -38,13 +42,17 @@ export function HelpCenterPage({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const syncFromLocation = () => setSelectedMethodId(methodIdFromLocation());
+    const syncFromLocation = () => {
+      setSelectedMethodId(methodIdFromLocation());
+      revealHelpSection();
+    };
     window.addEventListener("popstate", syncFromLocation);
-    const section = new URL(window.location.href).searchParams.get("section");
-    if (section === "purpose" || section === "roles" || section === "tutorial") {
-      document.getElementById(section)?.scrollIntoView({ block: "start" });
-    }
-    return () => window.removeEventListener("popstate", syncFromLocation);
+    window.addEventListener(appLocationChangeEvent, syncFromLocation);
+    revealHelpSection();
+    return () => {
+      window.removeEventListener("popstate", syncFromLocation);
+      window.removeEventListener(appLocationChangeEvent, syncFromLocation);
+    };
   }, []);
 
   const revealSelectedMethod = () => {
@@ -67,7 +75,7 @@ export function HelpCenterPage({
       const url = new URL(window.location.href);
       url.searchParams.set("method_id", method.method_id);
       url.searchParams.delete("section");
-      window.history.pushState(null, "", `${url.pathname}${url.search}`);
+      pushAppLocation(`${url.pathname}${url.search}`);
     }
     revealSelectedMethod();
   };
@@ -106,6 +114,7 @@ export function HelpCenterPage({
       )}
       <section
         className="help-method-browser"
+        id="methods"
         aria-labelledby="help-method-browser-title"
       >
         <div className="panel-heading help-section-heading">
@@ -185,4 +194,20 @@ export function HelpCenterPage({
       </section>
     </div>
   );
+}
+
+function revealHelpSection(): void {
+  if (typeof window === "undefined") return;
+  const section = new URL(window.location.href).searchParams.get("section");
+  if (
+    section !== "purpose" &&
+    section !== "roles" &&
+    section !== "methods" &&
+    section !== "tutorial"
+  ) {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    document.getElementById(section)?.scrollIntoView({ block: "start" });
+  });
 }

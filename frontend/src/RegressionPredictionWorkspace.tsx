@@ -17,8 +17,10 @@ import { useRegressionPredictionTargetState } from "./useRegressionPredictionTar
 
 export function RegressionPredictionWorkspace({
   onNavigateToLinearModel,
+  workspaceAssetRevision = 0,
 }: {
   onNavigateToLinearModel: () => void;
+  workspaceAssetRevision?: number;
 }) {
   const initialQuery = useMemo(
     () => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search),
@@ -33,7 +35,10 @@ export function RegressionPredictionWorkspace({
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [isRestoringPrediction, setIsRestoringPrediction] = useState(false);
   const restoreGuard = useRef(createLatestRequestGuard()).current;
-  const modelCatalog = useRegressionModelCatalogState(initialModelId);
+  const modelCatalog = useRegressionModelCatalogState(
+    initialModelId,
+    workspaceAssetRevision,
+  );
   const retention = useRegressionModelRetentionState(modelCatalog.selectedModelId);
   const sourceVersionId =
     retention.manifest?.dataset_version_id ??

@@ -15,6 +15,10 @@ import type {
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
 import { formatDateTime } from "./analysisWorkbenchUtils";
 import {
+  appLocationChangeEvent,
+  pushAppLocation,
+} from "./browserNavigation";
+import {
   reportCreationCapabilities,
   reportWorkflowCapabilities,
 } from "./reportCenterCapabilities";
@@ -29,6 +33,8 @@ export function ReportCenterPage({
   historyState,
   restoredState,
   version,
+  workspaceAssetRevision = 0,
+  onWorkspaceMutation,
 }: {
   catalog: AnalysisMethodListResponse | null;
   comparisonState?: AnalysisWorkbenchComparisonState;
@@ -36,6 +42,8 @@ export function ReportCenterPage({
   historyState?: AnalysisWorkbenchHistoryState;
   restoredState?: AnalysisWorkbenchRestoredState;
   version?: DatasetVersionResponse | null;
+  workspaceAssetRevision?: number;
+  onWorkspaceMutation?: (kind: "analysis_deleted" | "export_deleted") => void;
 }) {
   const [tab, setTab] = useState<"reports" | "history">(initialReportCenterTab);
   const onChangeHistoryFilters = historyState?.onChangeAnalysisHistoryFilters;
@@ -50,12 +58,22 @@ export function ReportCenterPage({
     });
   }, [onChangeHistoryFilters, tab]);
 
+  useEffect(() => {
+    const syncTab = () => setTab(initialReportCenterTab());
+    window.addEventListener("popstate", syncTab);
+    window.addEventListener(appLocationChangeEvent, syncTab);
+    return () => {
+      window.removeEventListener("popstate", syncTab);
+      window.removeEventListener(appLocationChangeEvent, syncTab);
+    };
+  }, []);
+
   const selectTab = (nextTab: "reports" | "history") => {
     setTab(nextTab);
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.set("tab", nextTab);
-    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    pushAppLocation(`${url.pathname}${url.search}`);
   };
 
   return (
@@ -99,6 +117,8 @@ export function ReportCenterPage({
         <ReportBrowser
           catalog={catalog}
           currentDatasetVersionId={currentDatasetVersionId}
+          onWorkspaceMutation={onWorkspaceMutation}
+          workspaceAssetRevision={workspaceAssetRevision}
         />
       ) : null}
     </div>
@@ -108,11 +128,18 @@ export function ReportCenterPage({
 function ReportBrowser({
   catalog,
   currentDatasetVersionId,
+  onWorkspaceMutation,
+  workspaceAssetRevision,
 }: {
   catalog: AnalysisMethodListResponse | null;
   currentDatasetVersionId: string | null;
+  onWorkspaceMutation?: (kind: "analysis_deleted" | "export_deleted") => void;
+  workspaceAssetRevision: number;
 }) {
-  const state = useReportCenterState(currentDatasetVersionId);
+  const state = useReportCenterState(
+    currentDatasetVersionId,
+    workspaceAssetRevision,
+  );
   const selectedItem =
     state.list?.runs.find(
       (item) => item.analysis_id === state.selectedAnalysisId,
@@ -124,6 +151,18 @@ function ReportBrowser({
         Report Center는 기존 checksum 검증 export API를 사용합니다. 지원하지 않는
         dedicated HTML 형식은 일반 HTML로 대체하지 않습니다.
       </div>
+      {state.notice !== null ? (
+        <div className="notice-box" role="status">
+          <span>{state.notice}</span>
+          <button
+            className="secondary-button compact-button"
+            onClick={state.onClearNotice}
+            type="button"
+          >
+            확인
+          </button>
+        </div>
+      ) : null}
       <section className="report-browser" aria-labelledby="report-browser-title">
         <div className="panel-heading">
           <div>
@@ -193,7 +232,11 @@ function ReportBrowser({
                 {selected ? (
                   <SelectedReportState
                     isLoading={state.isLoadingResult}
-                    onDeleted={state.onSelectedAnalysisDeleted}
+                    onDeleted={() => {
+                      state.onSelectedAnalysisDeleted();
+                      onWorkspaceMutation?.("analysis_deleted");
+                    }}
+                    onExportDeleted={() => onWorkspaceMutation?.("export_deleted")}
                     result={state.selectedResult}
                     resultError={state.selectedResultError}
                     stale={run.stale}
@@ -207,7 +250,11 @@ function ReportBrowser({
           <div className="report-direct-selection">
             <SelectedReportState
               isLoading={state.isLoadingResult}
-              onDeleted={state.onSelectedAnalysisDeleted}
+              onDeleted={() => {
+                state.onSelectedAnalysisDeleted();
+                onWorkspaceMutation?.("analysis_deleted");
+              }}
+              onExportDeleted={() => onWorkspaceMutation?.("export_deleted")}
               result={state.selectedResult}
               resultError={state.selectedResultError}
               stale={false}
@@ -335,12 +382,14 @@ function ReportFilters({
 function SelectedReportState({
   isLoading,
   onDeleted,
+  onExportDeleted,
   result,
   resultError,
   stale,
 }: {
   isLoading: boolean;
   onDeleted: () => void;
+  onExportDeleted: () => void;
   result: AnalysisResultEnvelope | null;
   resultError: string | null;
   stale: boolean;
@@ -360,16 +409,23 @@ function SelectedReportState({
     );
   }
   return result === null ? null : (
-    <SelectedReportActions onDeleted={onDeleted} result={result} stale={stale} />
+    <SelectedReportActions
+      onDeleted={onDeleted}
+      onExportDeleted={onExportDeleted}
+      result={result}
+      stale={stale}
+    />
   );
 }
 
 function SelectedReportActions({
   onDeleted,
+  onExportDeleted,
   result,
   stale,
 }: {
   onDeleted: () => void;
+  onExportDeleted: () => void;
   result: AnalysisResultEnvelope;
   stale: boolean;
 }) {
@@ -381,10 +437,20 @@ function SelectedReportActions({
   });
   const deletionState = useAnalysisRunDeletionState(result.analysis_id, onDeleted);
   const capabilities = reportCreationCapabilities(result.method_id);
+  const exportedDeletionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     headingRef.current?.focus();
   }, [result.analysis_id]);
+
+  useEffect(() => {
+    const deletion = exportState.analysisResultExportDeletion;
+    if (deletion === null || exportedDeletionIdRef.current === deletion.export_id) {
+      return;
+    }
+    exportedDeletionIdRef.current = deletion.export_id;
+    onExportDeleted();
+  }, [exportState.analysisResultExportDeletion, onExportDeleted]);
 
   return (
     <section className="report-selected-result" aria-labelledby="report-selected-title">

@@ -14,7 +14,10 @@ const REPORT_PAGE_SIZE = 20;
 export type ReportStaleFilter = "all" | "fresh" | "stale";
 export type ReportResultFilter = "all" | "available" | "unavailable";
 
-export function useReportCenterState(currentDatasetVersionId: string | null) {
+export function useReportCenterState(
+  currentDatasetVersionId: string | null,
+  workspaceAssetRevision = 0,
+) {
   const [list, setList] = useState<AnalysisRunListResponse | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [isLoadingList, setIsLoadingList] = useState(false);
@@ -27,11 +30,14 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
   const [selectedResult, setSelectedResult] = useState<AnalysisResultEnvelope | null>(null);
   const [selectedResultError, setSelectedResultError] = useState<string | null>(null);
   const [isLoadingResult, setIsLoadingResult] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(
     initialSelectedAnalysisId,
   );
   const listRequest = useRef(createLatestRequestGuard()).current;
   const resultRequest = useRef(createLatestRequestGuard()).current;
+  const selectedAnalysisIdRef = useRef(selectedAnalysisId);
+  selectedAnalysisIdRef.current = selectedAnalysisId;
 
   const refresh = useCallback(async () => {
     const request = listRequest.begin();
@@ -47,7 +53,12 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
         limit: REPORT_PAGE_SIZE,
         offset,
       });
-      if (listRequest.isCurrent(request)) setList(response);
+      if (listRequest.isCurrent(request)) {
+        setList(response);
+        if (response.returned_count === 0 && offset > 0) {
+          setOffset(Math.max(0, offset - REPORT_PAGE_SIZE));
+        }
+      }
     } catch (error) {
       if (listRequest.isCurrent(request)) {
         setList(null);
@@ -56,9 +67,21 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
     } finally {
       if (listRequest.isCurrent(request)) setIsLoadingList(false);
     }
-  }, [currentDatasetOnly, currentDatasetVersionId, listRequest, methodId, offset, resultFilter, staleFilter, status]);
+  }, [
+    currentDatasetOnly,
+    currentDatasetVersionId,
+    listRequest,
+    methodId,
+    offset,
+    resultFilter,
+    staleFilter,
+    status,
+  ]);
 
-  const selectAnalysis = useCallback(async (analysisId: string) => {
+  const selectAnalysis = useCallback(async (
+    analysisId: string,
+    reconcileMissing = false,
+  ) => {
     const request = resultRequest.begin();
     setSelectedAnalysisId(analysisId);
     setIsLoadingResult(true);
@@ -72,17 +95,41 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
       }
     } catch (error) {
       if (resultRequest.isCurrent(request)) {
-        setSelectedResultError(error instanceof Error ? error.message : "report_center_result_failed");
+        const code =
+          error instanceof Error ? error.message : "report_center_result_failed";
+        if (reconcileMissing && code === "analysis_run_not_found") {
+          setSelectedAnalysisId(null);
+          setSelectedResult(null);
+          setSelectedResultError(null);
+          updateSelectedAnalysisQuery(null);
+          setNotice(
+            "선택했던 결과가 데이터셋 정리 과정에서 함께 삭제되어 목록을 갱신했습니다.",
+          );
+          void refresh();
+        } else {
+          setSelectedResultError(code);
+        }
       }
     } finally {
       if (resultRequest.isCurrent(request)) setIsLoadingResult(false);
     }
-  }, [resultRequest]);
+  }, [refresh, resultRequest]);
 
   useEffect(() => {
     void refresh();
     return () => listRequest.cancel();
   }, [refresh, listRequest]);
+
+  const previousWorkspaceAssetRevisionRef = useRef(workspaceAssetRevision);
+  useEffect(() => {
+    if (previousWorkspaceAssetRevisionRef.current === workspaceAssetRevision) {
+      return;
+    }
+    previousWorkspaceAssetRevisionRef.current = workspaceAssetRevision;
+    void refresh();
+    const selectedId = selectedAnalysisIdRef.current;
+    if (selectedId !== null) void selectAnalysis(selectedId, true);
+  }, [refresh, selectAnalysis, workspaceAssetRevision]);
 
   useEffect(() => {
     const analysisId = initialSelectedAnalysisId();
@@ -97,6 +144,7 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
     list,
     listError,
     methodId,
+    notice,
     offset,
     resultFilter,
     selectedAnalysisId,
@@ -111,7 +159,7 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
     onChangeStaleFilter: (value: ReportStaleFilter) => { setStaleFilter(value); setOffset(0); },
     onChangeStatus: (value: AnalysisRunState | "") => { setStatus(value); setOffset(0); },
     onRefresh: () => void refresh(),
-    onSelectAnalysis: (analysisId: string) => void selectAnalysis(analysisId),
+    onSelectAnalysis: (analysisId: string) => void selectAnalysis(analysisId, true),
     onSelectedAnalysisDeleted: () => {
       resultRequest.cancel();
       setSelectedAnalysisId(null);
@@ -121,6 +169,7 @@ export function useReportCenterState(currentDatasetVersionId: string | null) {
       updateSelectedAnalysisQuery(null);
       void refresh();
     },
+    onClearNotice: () => setNotice(null),
   };
 }
 

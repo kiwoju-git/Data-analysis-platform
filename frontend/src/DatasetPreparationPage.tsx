@@ -1,4 +1,4 @@
-import type { ChangeEvent, FormEvent } from "react";
+import { useEffect, type ChangeEvent, type FormEvent } from "react";
 
 import type {
   ConfirmedParsingOptions,
@@ -12,6 +12,7 @@ import { DatasetVersionPanel } from "./DatasetVersionPanel";
 import type { SchemaDraftPatch } from "./datasetPreparationTypes";
 import { PasteDatasetPanel } from "./PasteDatasetPanel";
 import type { SchemaDraft } from "./schemaPresets";
+import { appLocationChangeEvent } from "./browserNavigation";
 
 export interface DatasetPreparationPageProps {
   canApplyBayesianPreset: boolean;
@@ -87,9 +88,20 @@ export function DatasetPreparationPage({
   onSchemaDraftChange,
   onUpload,
 }: DatasetPreparationPageProps) {
+  useEffect(() => {
+    const reveal = () => revealDatasetSection();
+    window.addEventListener("popstate", reveal);
+    window.addEventListener(appLocationChangeEvent, reveal);
+    reveal();
+    return () => {
+      window.removeEventListener("popstate", reveal);
+      window.removeEventListener(appLocationChangeEvent, reveal);
+    };
+  }, []);
+
   return (
     <>
-      <div className="section">
+      <div className="section" id="dataset-intake" tabIndex={-1}>
         <h2 id="workspace-title">데이터셋 파싱 확정</h2>
         <p>
           Gate B0에서는 원본 업로드를 불변 데이터셋 버전으로 확정하고, 스키마와 행
@@ -162,4 +174,23 @@ export function DatasetPreparationPage({
       </div>
     </>
   );
+}
+
+function revealDatasetSection(): void {
+  if (typeof window === "undefined") return;
+  const requested = new URL(window.location.href).searchParams.get("section");
+  if (
+    requested !== "dataset-intake" &&
+    requested !== "dataset-parsing" &&
+    requested !== "dataset-version"
+  ) {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    const target =
+      document.getElementById(requested) ??
+      document.getElementById("dataset-intake");
+    target?.scrollIntoView({ block: "start" });
+    target?.focus({ preventScroll: true });
+  });
 }

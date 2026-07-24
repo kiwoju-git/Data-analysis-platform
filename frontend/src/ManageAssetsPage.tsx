@@ -4,6 +4,7 @@ import type {
   AnalysisRunDeletionPreflightResponse,
   DatasetDeletionOperationId,
   DatasetVersionCatalogItem,
+  DatasetVersionDeleteResponse,
   RegressionModelDependentPredictionDescriptor,
   RegressionModelCatalogItem,
 } from "./api";
@@ -12,16 +13,23 @@ import {
   fetchAnalysisRunDeletionPreflight,
 } from "./api";
 import type { AssetManagementError } from "./assetManagementErrors";
+import {
+  appLocationChangeEvent,
+  pushAppLocation,
+} from "./browserNavigation";
 import { formatLocalDateTime } from "./dateFormat";
 import { useAssetManagementState } from "./useAssetManagementState";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
+import type { WorkspaceMutationKind } from "./workspaceMutation";
 
 export interface ManageAssetsPageProps {
   activeDatasetVersionId: string | null;
   onActivateDataset: (versionId: string) => void;
-  onAssetsDeleted: () => void;
+  onAssetsDeleted: (response: DatasetVersionDeleteResponse) => void;
   onDatasetMetadataChanged: () => void;
+  onWorkspaceMutation?: (kind: WorkspaceMutationKind) => void;
+  workspaceAssetRevision?: number;
 }
 
 export function ManageAssetsPage({
@@ -29,9 +37,21 @@ export function ManageAssetsPage({
   onActivateDataset,
   onAssetsDeleted,
   onDatasetMetadataChanged,
+  onWorkspaceMutation = () => undefined,
+  workspaceAssetRevision = 0,
 }: ManageAssetsPageProps) {
-  const state = useAssetManagementState();
-  const [tab, setTab] = useState<"datasets" | "models">("datasets");
+  const state = useAssetManagementState(workspaceAssetRevision);
+  const [tab, setTab] = useState<"datasets" | "models">(initialManageTab);
+
+  useEffect(() => {
+    const syncTab = () => setTab(initialManageTab());
+    window.addEventListener("popstate", syncTab);
+    window.addEventListener(appLocationChangeEvent, syncTab);
+    return () => {
+      window.removeEventListener("popstate", syncTab);
+      window.removeEventListener(appLocationChangeEvent, syncTab);
+    };
+  }, []);
 
   return (
     <section className="asset-management-page" aria-labelledby="asset-management-title">
@@ -46,7 +66,7 @@ export function ManageAssetsPage({
         <button
           aria-selected={tab === "datasets"}
           className={tab === "datasets" ? "segment-active" : ""}
-          onClick={() => setTab("datasets")}
+          onClick={() => selectManageTab("datasets", setTab)}
           role="tab"
           type="button"
         >
@@ -55,7 +75,7 @@ export function ManageAssetsPage({
         <button
           aria-selected={tab === "models"}
           className={tab === "models" ? "segment-active" : ""}
-          onClick={() => setTab("models")}
+          onClick={() => selectManageTab("models", setTab)}
           role="tab"
           type="button"
         >
@@ -69,10 +89,26 @@ export function ManageAssetsPage({
           onActivateDataset={onActivateDataset}
           onAssetsDeleted={onAssetsDeleted}
           onDatasetMetadataChanged={onDatasetMetadataChanged}
+          onWorkspaceMutation={onWorkspaceMutation}
         />
       ) : (
-        <RegressionModelManagementPanel state={state} />
+        <RegressionModelManagementPanel
+          onWorkspaceMutation={onWorkspaceMutation}
+          state={state}
+        />
       )}
+      {state.notice !== null ? (
+        <div className="notice-box" role="status">
+          <span>{state.notice}</span>
+          <button
+            className="secondary-button compact-button"
+            onClick={state.onClearNotice}
+            type="button"
+          >
+            확인
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -82,12 +118,14 @@ function DatasetManagementPanel({
   onActivateDataset,
   onAssetsDeleted,
   onDatasetMetadataChanged,
+  onWorkspaceMutation,
   state,
 }: {
   activeDatasetVersionId: string | null;
   onActivateDataset: (versionId: string) => void;
-  onAssetsDeleted: () => void;
+  onAssetsDeleted: (response: DatasetVersionDeleteResponse) => void;
   onDatasetMetadataChanged: () => void;
+  onWorkspaceMutation: (kind: WorkspaceMutationKind) => void;
   state: ReturnType<typeof useAssetManagementState>;
 }) {
   return (
@@ -139,10 +177,17 @@ function DatasetManagementPanel({
             saving={state.savingId === item.version_id}
             onActivate={() => onActivateDataset(item.version_id)}
             onMetadataChanged={onDatasetMetadataChanged}
-            onDeleted={() => {
-              state.onRefreshDatasets();
-              onAssetsDeleted();
+            onVisibilityChanged={(archived) => {
+              onWorkspaceMutation(
+                archived ? "dataset_archived" : "dataset_unarchived",
+              );
             }}
+            onDeleted={(response) => {
+              state.onRefreshDatasets();
+              state.onRefreshModels();
+              onAssetsDeleted(response);
+            }}
+            onStaleAsset={state.onStaleDatasetRemoved}
             onSave={state.onSaveDatasetMetadata}
           />
         ))}
@@ -162,6 +207,8 @@ function DatasetAssetEditor({
   onActivate,
   onMetadataChanged,
   onDeleted,
+  onStaleAsset,
+  onVisibilityChanged,
   onSave,
   saved,
   saving,
@@ -170,7 +217,9 @@ function DatasetAssetEditor({
   item: DatasetVersionCatalogItem;
   onActivate: () => void;
   onMetadataChanged: () => void;
-  onDeleted: () => void;
+  onDeleted: (response: DatasetVersionDeleteResponse) => void;
+  onStaleAsset: () => void;
+  onVisibilityChanged: (archived: boolean) => void;
   onSave: ReturnType<typeof useAssetManagementState>["onSaveDatasetMetadata"];
   saved: boolean;
   saving: boolean;
@@ -182,7 +231,11 @@ function DatasetAssetEditor({
   const [metadataOnlyConfirmed, setMetadataOnlyConfirmed] = useState(false);
   const [cascadeConfirmed, setCascadeConfirmed] = useState(false);
   const [cascadeConfirmationText, setCascadeConfirmationText] = useState("");
-  const retention = useDatasetVersionRetentionState(item.version_id, onDeleted);
+  const retention = useDatasetVersionRetentionState(
+    item.version_id,
+    onDeleted,
+    onStaleAsset,
+  );
   return (
     <article className="asset-management-item">
       <div className="asset-management-summary">
@@ -237,7 +290,10 @@ function DatasetAssetEditor({
               archived: !item.archived,
               expected_metadata_updated_at: item.metadata_updated_at,
             }).then((updated) => {
-              if (updated) onMetadataChanged();
+              if (updated) {
+                onMetadataChanged();
+                onVisibilityChanged(!item.archived);
+              }
             })
           }
           type="button"
@@ -274,7 +330,7 @@ function DatasetAssetEditor({
           onDelete={(mode) => retention.onDelete(retention.preflight!, mode)}
         />
       ) : null}
-      {retention.error !== null ? (
+      {retention.error !== null && retention.error.kind !== "asset_not_found" ? (
         <AssetManagementErrorNotice error={retention.error} />
       ) : null}
     </article>
@@ -282,8 +338,10 @@ function DatasetAssetEditor({
 }
 
 function RegressionModelManagementPanel({
+  onWorkspaceMutation,
   state,
 }: {
+  onWorkspaceMutation: (kind: WorkspaceMutationKind) => void;
   state: ReturnType<typeof useAssetManagementState>;
 }) {
   return (
@@ -310,7 +368,11 @@ function RegressionModelManagementPanel({
             saved={state.savedId === item.model_id}
             saving={state.savingId === item.model_id}
             onSave={state.onSaveModelMetadata}
-            onDeleted={state.onRefreshModels}
+            onDeleted={() => {
+              state.onRefreshModels();
+              onWorkspaceMutation("model_deleted");
+            }}
+            onStaleAsset={state.onStaleModelRemoved}
           />
         ))}
       </div>
@@ -327,12 +389,14 @@ function ModelAssetEditor({
   item,
   onSave,
   onDeleted,
+  onStaleAsset,
   saved,
   saving,
 }: {
   item: RegressionModelCatalogItem;
   onSave: ReturnType<typeof useAssetManagementState>["onSaveModelMetadata"];
   onDeleted: () => void;
+  onStaleAsset: () => void;
   saved: boolean;
   saving: boolean;
 }) {
@@ -341,7 +405,10 @@ function ModelAssetEditor({
   const [pinned, setPinned] = useState(item.pinned);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [cascadeConfirmed, setCascadeConfirmed] = useState(false);
-  const retention = useRegressionModelRetentionState(item.model_id);
+  const retention = useRegressionModelRetentionState(
+    item.model_id,
+    onStaleAsset,
+  );
   const deletionNotificationRef = useRef<string | null>(null);
   useEffect(() => {
     if (
@@ -488,7 +555,8 @@ function ModelAssetEditor({
           )}
         </div>
       ) : null}
-      {retention.errorDetail !== null ? (
+      {retention.errorDetail !== null &&
+      retention.errorDetail.kind !== "asset_not_found" ? (
         <AssetManagementErrorNotice error={retention.errorDetail} />
       ) : null}
     </article>
@@ -916,6 +984,24 @@ function Pagination({ catalog, disabled, onPageChange }: {
 
 function shortId(value: string) {
   return value.length <= 12 ? value : `${value.slice(0, 8)}…`;
+}
+
+function initialManageTab(): "datasets" | "models" {
+  if (typeof window === "undefined") return "datasets";
+  return new URL(window.location.href).searchParams.get("tab") === "models"
+    ? "models"
+    : "datasets";
+}
+
+function selectManageTab(
+  tab: "datasets" | "models",
+  setTab: (value: "datasets" | "models") => void,
+): void {
+  setTab(tab);
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("tab", tab);
+  pushAppLocation(`${url.pathname}${url.search}`);
 }
 
 function availabilityLabel(value: RegressionModelCatalogItem["availability"]) {

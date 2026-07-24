@@ -22,6 +22,7 @@ export interface RegressionModelCatalogState {
 
 export function useRegressionModelCatalogState(
   initialModelId: string | null,
+  workspaceAssetRevision = 0,
 ): RegressionModelCatalogState {
   const [catalog, setCatalog] = useState<RegressionModelCatalogResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +58,17 @@ export function useRegressionModelCatalogState(
   useEffect(() => {
     void load();
     return () => requestGuard.cancel();
-  }, [load, refreshRevision, requestGuard]);
+  }, [load, refreshRevision, requestGuard, workspaceAssetRevision]);
+
+  useEffect(() => {
+    if (
+      selectedModelId !== null &&
+      catalog !== null &&
+      !catalog.models.some((item) => item.model_id === selectedModelId)
+    ) {
+      setSelectedModelId(null);
+    }
+  }, [catalog, selectedModelId]);
 
   return {
     catalog,

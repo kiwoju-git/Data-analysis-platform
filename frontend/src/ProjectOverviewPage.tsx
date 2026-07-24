@@ -8,6 +8,7 @@ export interface ProjectOverviewPageProps {
   onOpenDatasetPage: () => void;
   onOpenManage: () => void;
   onOpenReports: (analysisId?: string) => void;
+  workspaceAssetRevision?: number;
 }
 
 export function ProjectOverviewPage({
@@ -16,8 +17,9 @@ export function ProjectOverviewPage({
   onOpenDatasetPage,
   onOpenManage,
   onOpenReports,
+  workspaceAssetRevision = 0,
 }: ProjectOverviewPageProps) {
-  const state = useProjectOverviewState();
+  const state = useProjectOverviewState(workspaceAssetRevision);
   const currentCatalogItem = state.recentDatasets?.versions.find(
     (item) => item.version_id === currentDatasetVersion?.version_id,
   );

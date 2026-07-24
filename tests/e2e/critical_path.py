@@ -370,7 +370,10 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             diagnostics.step("open Workbench")
             page.goto(frontend_base_url, wait_until="networkidle")
 
-            expect(page.get_by_text("DataLab Studio")).to_be_visible()
+            expect(page.get_by_role("img", name="Samsung Bioepis")).to_be_visible()
+            expect(
+                page.get_by_role("heading", name="Statistical Twin", exact=True)
+            ).to_be_visible()
             expect(page.get_by_text("API ready")).to_be_visible(timeout=15_000)
             diagnostics.step("paste synthetic TSV and confirm schema")
 
@@ -550,8 +553,16 @@ def describe_page(page: Page | None) -> str:
 
 
 def select_method_card(page: Page, module_label: str, method_label: str) -> None:
-    page.get_by_role("button", name=re.compile(rf"^{re.escape(module_label)}")).click()
+    page.get_by_role("navigation", name="분석 모듈").get_by_role(
+        "button", name=re.compile(rf"^{re.escape(module_label)}")
+    ).click()
     page.locator(".method-item").filter(has_text=method_label).click()
+
+
+def open_primary_navigation(page: Page, label: str) -> None:
+    page.locator(".sidebar-group-control").filter(
+        has_text=re.compile(rf"^{re.escape(label)}$")
+    ).click()
 
 
 def create_exports(page: Page) -> None:
@@ -641,12 +652,14 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
         timeout=15_000
     )
 
-    expect(page.get_by_text("Statistical Twin", exact=True)).to_be_visible()
+    expect(
+        page.get_by_role("heading", name="Statistical Twin", exact=True)
+    ).to_be_visible()
     page.get_by_role("button", name="프로젝트", exact=True).click()
     expect(page).to_have_url(re.compile(r"/project(?:\?|$)"))
-    expect(page.get_by_role("button", name="프로젝트", exact=True)).to_have_attribute(
-        "aria-current", "page"
-    )
+    expect(
+        page.get_by_role("button", name="프로젝트 개요", exact=True)
+    ).to_have_attribute("aria-current", "page")
     expect(page.get_by_role("heading", name="프로젝트", exact=True)).to_be_visible(
         timeout=15_000
     )
@@ -689,7 +702,7 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
 
 
 def verify_descriptive_quick_charts_and_run_chart(page: Page) -> None:
-    page.get_by_role("button", name="데이터셋", exact=True).click()
+    open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, SAMPLE_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
@@ -794,7 +807,7 @@ def delete_one_saved_analysis_run(page: Page) -> None:
 
 
 def verify_schema_stale_behavior(page: Page) -> None:
-    page.get_by_role("button", name="데이터셋", exact=True).click()
+    open_primary_navigation(page, "데이터셋")
     expect(
         page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
     ).to_be_visible(timeout=15_000)
@@ -810,7 +823,7 @@ def verify_schema_stale_behavior(page: Page) -> None:
     )
     expect(page.locator(".compact-history-list .stale-badge")).to_have_count(0)
 
-    page.get_by_role("button", name="데이터셋", exact=True).click()
+    open_primary_navigation(page, "데이터셋")
     value_display_input = page.get_by_label("Value 표시명")
     value_display_input.fill("Measurement Value")
     page.get_by_role("button", name="스키마 저장").click()
@@ -827,7 +840,7 @@ def verify_schema_stale_behavior(page: Page) -> None:
 
 
 def verify_linear_model_fit_and_prediction(page: Page) -> None:
-    page.get_by_role("button", name="데이터셋", exact=True).click()
+    open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, REGRESSION_TARGET_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
@@ -1163,7 +1176,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
 
 
 def verify_attribute_control_chart(page: Page) -> None:
-    page.get_by_role("button", name="데이터셋", exact=True).click()
+    open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, ATTRIBUTE_CONTROL_BASELINE_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
@@ -1203,7 +1216,7 @@ def verify_attribute_control_chart(page: Page) -> None:
     if not limit_set_response.ok:
         raise AssertionError(f"limit-set creation failed: {limit_set_response.text()}")
 
-    page.get_by_role("button", name="데이터셋", exact=True).click()
+    open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, ATTRIBUTE_CONTROL_CHART_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
@@ -1398,7 +1411,7 @@ def verify_lazy_panel_error_boundary(
             "Failed to fetch dynamically imported module"
         )
         page.unroute("**/RegressionAnalysisPanels.ts*")
-        page.get_by_role("button", name=re.compile(r"실험 계획법")).click()
+        select_method_card(page, "실험 계획법", "실험 계획 생성")
         expect(
             page.get_by_role("heading", name="2-level full factorial 설계 생성")
         ).to_be_visible(timeout=15_000)
@@ -1744,7 +1757,7 @@ def verify_xlsx_file_upload(page: Page, temp_dir: Path) -> None:
         xlsx_path = temp_dir / "browser-upload-sample.xlsx"
         xlsx_path.write_bytes(minimal_xlsx_workbook_bytes())
 
-        page.get_by_role("button", name="데이터셋", exact=True).click()
+        open_primary_navigation(page, "데이터셋")
         page.get_by_label("원본 데이터 파일").set_input_files(str(xlsx_path))
         page.get_by_role("button", name="업로드").click()
         expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
@@ -1780,7 +1793,7 @@ def verify_csv_file_upload_and_error_recovery(page: Page, temp_dir: Path) -> Non
             encoding="utf-8",
         )
 
-        page.get_by_role("button", name="데이터셋", exact=True).click()
+        open_primary_navigation(page, "데이터셋")
         page.get_by_label("원본 데이터 파일").set_input_files(str(empty_csv_path))
         page.get_by_role("button", name="업로드").click()
         expect(page.get_by_role("alert")).to_contain_text("empty_file", timeout=15_000)
@@ -1819,7 +1832,7 @@ def verify_parser_option_editing(page: Page, temp_dir: Path) -> None:
             encoding="utf-8",
         )
 
-        page.get_by_role("button", name="데이터셋", exact=True).click()
+        open_primary_navigation(page, "데이터셋")
         page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
         page.get_by_role("button", name="업로드").click()
         expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
@@ -1861,7 +1874,7 @@ def verify_delimiter_option_editing(page: Page, temp_dir: Path) -> None:
             encoding="utf-8",
         )
 
-        page.get_by_role("button", name="데이터셋", exact=True).click()
+        open_primary_navigation(page, "데이터셋")
         page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
         page.get_by_role("button", name="업로드").click()
         expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
@@ -1889,7 +1902,7 @@ def verify_xlsx_sheet_selection(page: Page, temp_dir: Path) -> None:
         xlsx_path = temp_dir / "multi-sheet-upload.xlsx"
         xlsx_path.write_bytes(multi_sheet_xlsx_workbook_bytes())
 
-        page.get_by_role("button", name="데이터셋", exact=True).click()
+        open_primary_navigation(page, "데이터셋")
         page.get_by_label("원본 데이터 파일").set_input_files(str(xlsx_path))
         page.get_by_role("button", name="업로드").click()
         expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(
@@ -1928,7 +1941,7 @@ def verify_text_encoding_selection(page: Page, temp_dir: Path) -> None:
             ),
         )
 
-        page.get_by_role("button", name="데이터셋", exact=True).click()
+        open_primary_navigation(page, "데이터셋")
         page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
         page.get_by_role("button", name="업로드").click()
         expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(

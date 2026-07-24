@@ -11,6 +11,7 @@ import {
   type RegressionModelMetadataUpdateRequest,
 } from "./api";
 import { createLatestRequestGuard } from "./latestRequest";
+import { workspaceAssetAlreadyRemovedNotice } from "./workspaceMutation";
 import {
   classifyAssetManagementError,
   type AssetManagementError,
@@ -33,6 +34,10 @@ export interface AssetManagementState {
   onModelPageChange: (offset: number) => void;
   onRefreshDatasets: () => void;
   onRefreshModels: () => void;
+  notice: string | null;
+  onClearNotice: () => void;
+  onStaleDatasetRemoved: () => void;
+  onStaleModelRemoved: () => void;
   onSaveDatasetMetadata: (
     versionId: string,
     request: DatasetVersionMetadataUpdateRequest,
@@ -43,7 +48,9 @@ export interface AssetManagementState {
   ) => Promise<boolean>;
 }
 
-export function useAssetManagementState(): AssetManagementState {
+export function useAssetManagementState(
+  workspaceAssetRevision = 0,
+): AssetManagementState {
   const [datasetCatalog, setDatasetCatalog] =
     useState<DatasetVersionCatalogResponse | null>(null);
   const [modelCatalog, setModelCatalog] = useState<RegressionModelCatalogResponse | null>(null);
@@ -57,6 +64,7 @@ export function useAssetManagementState(): AssetManagementState {
   const [modelOffset, setModelOffset] = useState(0);
   const [datasetRevision, setDatasetRevision] = useState(0);
   const [modelRevision, setModelRevision] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const datasetRequest = useRef(createLatestRequestGuard()).current;
@@ -69,7 +77,11 @@ export function useAssetManagementState(): AssetManagementState {
     setDatasetError(null);
     void fetchDatasetVersions(pageSize, datasetOffset, datasetVisibility)
       .then((response) => {
-        if (datasetRequest.isCurrent(request)) setDatasetCatalog(response);
+        if (!datasetRequest.isCurrent(request)) return;
+        setDatasetCatalog(response);
+        if (response.returned === 0 && datasetOffset > 0) {
+          setDatasetOffset(Math.max(0, datasetOffset - pageSize));
+        }
       })
       .catch((error) => {
         if (!datasetRequest.isCurrent(request)) return;
@@ -80,7 +92,13 @@ export function useAssetManagementState(): AssetManagementState {
         if (datasetRequest.isCurrent(request)) setDatasetLoading(false);
       });
     return () => datasetRequest.cancel(request);
-  }, [datasetOffset, datasetRequest, datasetRevision, datasetVisibility]);
+  }, [
+    datasetOffset,
+    datasetRequest,
+    datasetRevision,
+    datasetVisibility,
+    workspaceAssetRevision,
+  ]);
 
   useEffect(() => {
     const request = modelRequest.begin();
@@ -88,7 +106,11 @@ export function useAssetManagementState(): AssetManagementState {
     setModelError(null);
     void fetchRegressionModels(modelOffset, pageSize)
       .then((response) => {
-        if (modelRequest.isCurrent(request)) setModelCatalog(response);
+        if (!modelRequest.isCurrent(request)) return;
+        setModelCatalog(response);
+        if (response.returned === 0 && modelOffset > 0) {
+          setModelOffset(Math.max(0, modelOffset - pageSize));
+        }
       })
       .catch((error) => {
         if (!modelRequest.isCurrent(request)) return;
@@ -99,7 +121,7 @@ export function useAssetManagementState(): AssetManagementState {
         if (modelRequest.isCurrent(request)) setModelLoading(false);
       });
     return () => modelRequest.cancel(request);
-  }, [modelOffset, modelRequest, modelRevision]);
+  }, [modelOffset, modelRequest, modelRevision, workspaceAssetRevision]);
 
   const saveDatasetMetadata = useCallback(
     async (versionId: string, requestBody: DatasetVersionMetadataUpdateRequest) => {
@@ -157,6 +179,7 @@ export function useAssetManagementState(): AssetManagementState {
     modelCatalog,
     modelError,
     modelLoading,
+    notice,
     savingId,
     savedId,
     onDatasetPageChange: (offset) => setDatasetOffset(Math.max(0, offset)),
@@ -167,6 +190,15 @@ export function useAssetManagementState(): AssetManagementState {
     onModelPageChange: (offset) => setModelOffset(Math.max(0, offset)),
     onRefreshDatasets: () => setDatasetRevision((revision) => revision + 1),
     onRefreshModels: () => setModelRevision((revision) => revision + 1),
+    onClearNotice: () => setNotice(null),
+    onStaleDatasetRemoved: () => {
+      setNotice(workspaceAssetAlreadyRemovedNotice);
+      setDatasetRevision((revision) => revision + 1);
+    },
+    onStaleModelRemoved: () => {
+      setNotice(workspaceAssetAlreadyRemovedNotice);
+      setModelRevision((revision) => revision + 1);
+    },
     onSaveDatasetMetadata: saveDatasetMetadata,
     onSaveModelMetadata: saveModelMetadata,
   };

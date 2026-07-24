@@ -18,6 +18,7 @@ import {
   type CapabilityResult,
   type ChiSquareAssociationResult,
   type DatasetColumnResponse,
+  type DatasetVersionDeleteResponse,
   type DescriptiveStatisticsResult,
   type EqualVariancesResult,
   type EquivalenceTostResult,
@@ -57,8 +58,13 @@ import {
   validateAnalysisFilterDrafts,
   type AnalysisFilterDraft,
 } from "./analysisFilters";
+import { buildAnalysisPath } from "./analysisNavigation";
 import { useAnalysisSelection } from "./analysisSelection";
 import { currentAppRoute } from "./appRoute";
+import {
+  appLocationChangeEvent,
+  pushAppLocation,
+} from "./browserNavigation";
 import { startRetryingRequest } from "./startupRequest";
 import { useAnalysisComparisonState } from "./useAnalysisComparisonState";
 import {
@@ -76,6 +82,8 @@ import { useRegressionPredictionState } from "./useRegressionPredictionState";
 import { WorkspaceRouter } from "./WorkspaceRouter";
 import { RuntimeCompatibilityGate } from "./RuntimeMismatchPage";
 import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
+import { createSidebarNavigationGroups } from "./sidebarNavigationModel";
+import type { WorkspaceMutationKind } from "./workspaceMutation";
 
 type HealthState =
   | { kind: "checking" }
@@ -117,6 +125,9 @@ export default function App() {
     selectedModuleId,
     selectAnalysisMethod,
   } = useAnalysisSelection(analysisCatalog);
+  const lastSelectedMethodByModuleRef = useRef(
+    new Map<AnalysisModuleId, string>(),
+  );
   const [selectedDescriptiveColumnIds, setSelectedDescriptiveColumnIds] = useState<string[]>([]);
   const [selectedGraphicalSummaryColumnIds, setSelectedGraphicalSummaryColumnIds] = useState<
     string[]
@@ -303,6 +314,7 @@ export default function App() {
   const descriptiveQuickGraphRequestIdRef = useRef(0);
   const descriptiveQuickGraphCacheRef = useRef(new Map<string, GraphicalSummaryResult>());
   const [datasetStateRevision, setDatasetStateRevision] = useState(0);
+  const [workspaceAssetRevision, setWorkspaceAssetRevision] = useState(0);
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
   const [factorialDesign, setFactorialDesign] = useState<FactorialDesignResponse | null>(null);
   const [factorialDesignError, setFactorialDesignError] = useState<string | null>(null);
@@ -568,10 +580,16 @@ export default function App() {
     restoredAnalysisResultState.restoredAnalysisResult?.analysis_id ?? null;
   const resetRestoredAnalysisResultState =
     restoredAnalysisResultState.resetRestoredAnalysisResultState;
+  const publishedAnalysisDeletionRef = useRef<string | null>(null);
+  const publishedExportDeletionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (deletedAnalysisRunId === null) {
       return;
+    }
+    if (publishedAnalysisDeletionRef.current !== deletedAnalysisRunId) {
+      publishedAnalysisDeletionRef.current = deletedAnalysisRunId;
+      setWorkspaceAssetRevision((revision) => revision + 1);
     }
     if (analysisResult?.analysis_id === deletedAnalysisRunId) {
       setAnalysisResult(null);
@@ -599,6 +617,27 @@ export default function App() {
     resetRestoredAnalysisResultState,
     restoredAnalysisRunId,
   ]);
+
+  useEffect(() => {
+    if (selectedMethod !== null) {
+      lastSelectedMethodByModuleRef.current.set(
+        selectedMethod.module_id,
+        selectedMethod.method_id,
+      );
+    }
+  }, [selectedMethod]);
+
+  useEffect(() => {
+    const deletion = analysisExportState.analysisResultExportDeletion;
+    if (
+      deletion === null ||
+      publishedExportDeletionRef.current === deletion.export_id
+    ) {
+      return;
+    }
+    publishedExportDeletionRef.current = deletion.export_id;
+    setWorkspaceAssetRevision((revision) => revision + 1);
+  }, [analysisExportState.analysisResultExportDeletion]);
 
   useEffect(() => {
     if (runtimeCompatibility.state.kind !== "compatible") {
@@ -644,9 +683,11 @@ export default function App() {
 
     window.addEventListener("popstate", handleRouteChange);
     window.addEventListener("hashchange", handleRouteChange);
+    window.addEventListener(appLocationChangeEvent, handleRouteChange);
     return () => {
       window.removeEventListener("popstate", handleRouteChange);
       window.removeEventListener("hashchange", handleRouteChange);
+      window.removeEventListener(appLocationChangeEvent, handleRouteChange);
     };
   }, []);
 
@@ -3526,16 +3567,27 @@ export default function App() {
     }
   }
 
-  function handleOpenDatasetPage() {
+  function handleOpenDatasetPage(
+    section: "dataset-intake" | "dataset-parsing" | "dataset-version" =
+      "dataset-intake",
+  ) {
     if (typeof window !== "undefined") {
-      window.history.pushState(null, "", pathWithActiveDatasetQuery("/"));
+      const url = new URL(
+        pathWithActiveDatasetQuery("/"),
+        window.location.origin,
+      );
+      url.searchParams.set("section", section);
+      pushAppLocation(`${url.pathname}${url.search}`);
     }
     setAppRoute({
       page: "dataset",
     });
   }
 
-  function handleOpenReportsPage(analysisId?: string) {
+  function handleOpenReportsPage(
+    analysisId?: string,
+    tab: "reports" | "history" = "reports",
+  ) {
     if (typeof window !== "undefined") {
       const url = new URL("/reports", window.location.origin);
       const activeVersionId = activeDatasetIdFromCurrentLocation();
@@ -3545,38 +3597,53 @@ export default function App() {
       if (analysisId !== undefined) {
         url.searchParams.set("analysis_id", analysisId);
       }
-      window.history.pushState(null, "", `${url.pathname}${url.search}`);
+      url.searchParams.set("tab", tab);
+      pushAppLocation(`${url.pathname}${url.search}`);
     }
     setAppRoute({ page: "reports" });
   }
 
   function handleOpenProjectPage() {
     if (typeof window !== "undefined") {
-      window.history.pushState(null, "", pathWithActiveDatasetQuery("/project"));
+      pushAppLocation(pathWithActiveDatasetQuery("/project"));
     }
     setAppRoute({ page: "project" });
   }
 
-  function handleAssetsDeleted() {
+  function publishWorkspaceMutation(kind: WorkspaceMutationKind) {
+    void kind;
+    setWorkspaceAssetRevision((revision) => revision + 1);
+  }
+
+  function handleAssetsDeleted(response: DatasetVersionDeleteResponse) {
+    void response;
     activeDatasetSelectorProps.catalogState.onRefresh();
     setDatasetStateRevision((revision) => revision + 1);
+    publishWorkspaceMutation("dataset_deleted");
     setAnalysisResult(null);
   }
 
-  function handleOpenManagePage() {
+  function handleOpenManagePage(tab: "datasets" | "models" = "datasets") {
     if (typeof window !== "undefined") {
-      window.history.pushState(null, "", pathWithActiveDatasetQuery("/manage"));
+      const url = new URL(
+        pathWithActiveDatasetQuery("/manage"),
+        window.location.origin,
+      );
+      url.searchParams.set("tab", tab);
+      pushAppLocation(`${url.pathname}${url.search}`);
     }
     setAppRoute({ page: "manage" });
   }
 
-  function handleOpenHelpPage(section?: "purpose" | "roles") {
+  function handleOpenHelpPage(
+    section?: "purpose" | "roles" | "methods" | "tutorial",
+  ) {
     if (typeof window !== "undefined") {
       const url = new URL("/help", window.location.origin);
       const activeVersionId = activeDatasetIdFromCurrentLocation();
       if (activeVersionId !== null) url.searchParams.set("dataset_version_id", activeVersionId);
       if (section !== undefined) url.searchParams.set("section", section);
-      window.history.pushState(null, "", `${url.pathname}${url.search}`);
+      pushAppLocation(`${url.pathname}${url.search}`);
     }
     setAppRoute({ page: "help" });
   }
@@ -3607,6 +3674,30 @@ export default function App() {
     handleSelectAnalysisMethod(method.module_id, method.method_id);
   }
 
+  function handleOpenAnalysisModule(moduleId: AnalysisModuleId) {
+    const rememberedMethodId =
+      lastSelectedMethodByModuleRef.current.get(moduleId) ?? null;
+    const method =
+      analysisCatalog?.methods.find(
+        (candidate) =>
+          candidate.module_id === moduleId &&
+          candidate.method_id === rememberedMethodId &&
+          candidate.availability === "available",
+      ) ??
+      analysisCatalog?.methods.find(
+        (candidate) =>
+          candidate.module_id === moduleId &&
+          candidate.availability === "available",
+      ) ??
+      null;
+    if (method === null) return;
+    pushAppLocation(
+      pathWithActiveDatasetQuery(
+        buildAnalysisPath(method.module_id, method.method_id),
+      ),
+    );
+  }
+
   const analysisPageProps = {
     analysisCatalog,
     analysisCatalogError,
@@ -3619,6 +3710,7 @@ export default function App() {
     workbenchExportState: analysisExportState,
     workbenchHistoryState: analysisHistoryState,
     workbenchRestoredState: restoredAnalysisResultState,
+    workspaceAssetRevision,
     attributeControlChartAnalysisResult,
     attributeControlChartConstantOpportunityConfirmed,
     attributeControlChartPhase,
@@ -4063,6 +4155,25 @@ export default function App() {
       />
     );
   }
+  const navigationQuery = new URLSearchParams(
+    typeof window === "undefined" ? "" : window.location.search,
+  );
+  const navigationGroups = createSidebarNavigationGroups({
+    activeAnalysisModuleId: selectedModuleId,
+    activePage: appRoute.page,
+    canOpenAnalysis: selectedMethod !== null || analysisCatalog !== null,
+    query: navigationQuery,
+    onOpenAnalysisModule: handleOpenAnalysisModule,
+    onOpenDatasetSection: handleOpenDatasetPage,
+    onOpenHelpSection: handleOpenHelpPage,
+    onOpenManageTab: handleOpenManagePage,
+    onOpenProject: handleOpenProjectPage,
+    onOpenReportTab: (tab) => handleOpenReportsPage(undefined, tab),
+  });
+  const activeModuleLabel =
+    analysisCatalog?.modules.find(
+      (module) => module.module_id === selectedModuleId,
+    )?.label_ko ?? null;
   return (
     <AppChrome
       activeDatasetSelectorProps={activeDatasetSelectorProps}
@@ -4070,12 +4181,18 @@ export default function App() {
       canOpenAnalysis={selectedMethod !== null || analysisCatalog !== null}
       healthClassName={statusClassName(health)}
       healthLabel={statusLabel(health)}
+      navigationGroups={navigationGroups}
       onOpenAnalysisPage={handleOpenAnalysisPage}
       onOpenDatasetPage={handleOpenDatasetPage}
       onOpenHelpPage={() => handleOpenHelpPage()}
       onOpenManagePage={handleOpenManagePage}
       onOpenProjectPage={handleOpenProjectPage}
       onOpenReportsPage={handleOpenReportsPage}
+      pageTitle={
+        appRoute.page === "analysis" && activeModuleLabel !== null
+          ? `분석 · ${activeModuleLabel}`
+          : undefined
+      }
     >
       <WorkspaceRouter
         analysisPageProps={analysisPageProps}
@@ -4095,6 +4212,8 @@ export default function App() {
         onOpenDatasetPage={handleOpenDatasetPage}
         onOpenManagePage={handleOpenManagePage}
         onOpenReportsPage={handleOpenReportsPage}
+        onWorkspaceMutation={publishWorkspaceMutation}
+        workspaceAssetRevision={workspaceAssetRevision}
       />
     </AppChrome>
   );

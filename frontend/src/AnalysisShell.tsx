@@ -136,6 +136,7 @@ export interface AnalysisShellProps {
   workbenchExportState?: AnalysisWorkbenchExportState;
   workbenchHistoryState?: AnalysisWorkbenchHistoryState;
   workbenchRestoredState?: AnalysisWorkbenchRestoredState;
+  workspaceAssetRevision?: number;
   attributeControlChartAnalysisResult?: AnalysisResultEnvelope | null;
   attributeControlChartConstantOpportunityConfirmed?: boolean;
   attributeControlChartCountColumnId?: string | null;
@@ -510,6 +511,7 @@ export function AnalysisShell({
   workbenchExportState,
   workbenchHistoryState,
   workbenchRestoredState,
+  workspaceAssetRevision = 0,
   attributeControlChartAnalysisResult = null,
   attributeControlChartConstantOpportunityConfirmed = false,
   attributeControlChartCountColumnId = null,
@@ -1450,6 +1452,7 @@ export function AnalysisShell({
                   onNavigateToLinearModel={() =>
                     onSelectMethod("regression", "regression.linear_model")
                   }
+                  workspaceAssetRevision={workspaceAssetRevision}
                 />
               );
             }

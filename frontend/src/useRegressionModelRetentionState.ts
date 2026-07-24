@@ -49,6 +49,7 @@ export interface RegressionModelRetentionState {
 
 export function useRegressionModelRetentionState(
   modelId: string | null,
+  onStaleAsset?: () => void,
 ): RegressionModelRetentionState {
   const [preflight, setPreflight] =
     useState<RegressionModelDeletionPreflightResponse | null>(null);
@@ -65,6 +66,8 @@ export function useRegressionModelRetentionState(
   const availabilityRequest = useRef(createLatestRequestGuard()).current;
   const preflightRequest = useRef(createLatestRequestGuard()).current;
   const deletionRequest = useRef(createLatestRequestGuard()).current;
+  const onStaleAssetRef = useRef(onStaleAsset);
+  onStaleAssetRef.current = onStaleAsset;
 
   const checkAvailability = useCallback(() => {
     if (modelId === null) return;
@@ -90,6 +93,7 @@ export function useRegressionModelRetentionState(
         setManifest(null);
         if (code === "regression_model_not_found") {
           setAvailability("unavailable_or_deleted");
+          onStaleAssetRef.current?.();
         } else if (integrityErrorCodes.has(code)) {
           setAvailability("integrity_error");
         }
@@ -161,6 +165,7 @@ export function useRegressionModelRetentionState(
             );
             setError(detail.code);
             setErrorDetail(detail);
+            if (detail.kind === "asset_not_found") onStaleAssetRef.current?.();
           }
         })
         .finally(() => {
@@ -201,6 +206,7 @@ export function useRegressionModelRetentionState(
             );
             setError(detail.code);
             setErrorDetail(detail);
+            if (detail.kind === "asset_not_found") onStaleAssetRef.current?.();
           }
         })
         .finally(() => {

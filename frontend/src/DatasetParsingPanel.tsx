@@ -23,7 +23,12 @@ export function ParsingConfirmationPanel({
   onParsingOptionsChange,
 }: ParsingConfirmationPanelProps) {
   return (
-    <section className="confirmation-panel" aria-labelledby="confirmation-title">
+    <section
+      className="confirmation-panel"
+      id="dataset-parsing"
+      aria-labelledby="confirmation-title"
+      tabIndex={-1}
+    >
       <div className="panel-heading">
         <div>
           <h3 id="confirmation-title">파싱 옵션</h3>

@@ -16,6 +16,7 @@ import { classifyAssetManagementError, type AssetManagementError } from "./asset
 export function useDatasetVersionRetentionState(
   versionId: string,
   onDeleted: (response: DatasetVersionDeleteResponse) => void,
+  onStaleAsset?: () => void,
 ) {
   const [preflight, setPreflight] =
     useState<DatasetVersionDeletionPreflightResponse | null>(null);
@@ -90,12 +91,12 @@ export function useDatasetVersionRetentionState(
         })
         .catch((fetchError) => {
           if (preflightRequest.isCurrent(request)) {
-            setError(
-              classifyAssetManagementError(
-                fetchError,
-                "dataset_version_deletion_preflight_failed",
-              ),
+            const detail = classifyAssetManagementError(
+              fetchError,
+              "dataset_version_deletion_preflight_failed",
             );
+            setError(detail);
+            if (detail.kind === "asset_not_found") onStaleAsset?.();
           }
         })
         .finally(() => {
@@ -124,9 +125,12 @@ export function useDatasetVersionRetentionState(
         })
         .catch((deleteError) => {
           if (deletionRequest.isCurrent(request)) {
-            setError(
-              classifyAssetManagementError(deleteError, "dataset_version_deletion_failed"),
+            const detail = classifyAssetManagementError(
+              deleteError,
+              "dataset_version_deletion_failed",
             );
+            setError(detail);
+            if (detail.kind === "asset_not_found") onStaleAsset?.();
           }
         })
         .finally(() => {
