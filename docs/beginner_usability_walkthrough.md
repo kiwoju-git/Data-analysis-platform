@@ -16,6 +16,18 @@ plain-language purpose, required roles, invalid-use cases, options, preflight,
 result focus, overinterpretation warning, and tutorial link. Required warnings
 remain visible in the execution/preflight UI even when the drawer is closed.
 
+Method selection cards use short, user-facing tags for data type, study
+design, comparison target, assumptions, and cautions. Stable method IDs,
+versions, execution modes, and dataset requirements remain in the API and
+stored-result provenance but are not repeated on those cards. The hypothesis
+and categorical modules also provide a collapsible decision guide that selects
+a candidate method without running it. The guide does not treat sample size 30
+or a normality-test p-value as an automatic switch: users must also consider
+study design, independence, outliers, distribution shape, and the parameter
+they intend to compare. In particular, Wilcoxon is not presented as an
+automatic small-sample replacement, and chi-square is valid for 2x2 as well as
+larger contingency tables when expected-count requirements are reviewed.
+
 The left `리포트` route opens Report Center. A beginner can filter successful
 stored analysis runs, restore a checksum-validated result, and create/download
 the existing JSON/CSV/HTML formats. A text capability matrix directs dedicated

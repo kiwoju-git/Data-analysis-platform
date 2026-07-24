@@ -4,8 +4,20 @@ export interface MethodRoleRequirement {
   detail: string;
 }
 
+export interface MethodCardTag {
+  category:
+    | "data_type"
+    | "design"
+    | "target"
+    | "assumption"
+    | "sample_guidance"
+    | "caution";
+  label: string;
+}
+
 export interface AnalysisMethodGuidance {
   methodId: string;
+  cardTags?: readonly MethodCardTag[];
   roleRequirements: readonly MethodRoleRequirement[];
   optionChecklist: readonly string[];
   preflightChecks: readonly string[];
@@ -25,6 +37,11 @@ function optional(label: string, detail: string): MethodRoleRequirement {
 export const analysisMethodGuidance = {
   "eda.descriptive": {
     methodId: "eda.descriptive",
+    cardTags: [
+      { category: "data_type", label: "수치형 변수" },
+      { category: "design", label: "1개 이상" },
+      { category: "target", label: "중심·산포 요약" },
+    ],
     roleRequirements: [
       required("분석 변수", "수치형 컬럼 1개 이상"),
       optional("그룹", "그룹별 요약은 다음 slice에서 확장"),
@@ -35,6 +52,11 @@ export const analysisMethodGuidance = {
   },
   "eda.graphical_summary": {
     methodId: "eda.graphical_summary",
+    cardTags: [
+      { category: "data_type", label: "수치형 변수" },
+      { category: "target", label: "분포·이상치" },
+      { category: "target", label: "Histogram·Box Plot" },
+    ],
     roleRequirements: [required("분석 변수", "수치형 또는 범주형 컬럼"), optional("그룹", "패널 또는 색상 구분")],
     optionChecklist: ["히스토그램 bin", "박스플롯 표시", "Q-Q plot 표시"],
     preflightChecks: ["표본 수", "고유값 수", "극단값 후보", "렌더링 비용"],
@@ -42,6 +64,11 @@ export const analysisMethodGuidance = {
   },
   "eda.normality": {
     methodId: "eda.normality",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "target", label: "Q-Q Plot" },
+      { category: "caution", label: "자동 검정 전환 금지" },
+    ],
     roleRequirements: [required("분석 변수", "연속형 수치 컬럼"), optional("그룹", "그룹별 정규성 점검")],
     optionChecklist: ["유의수준", "Q-Q plot", "Shapiro-Wilk/Anderson-Darling"],
     preflightChecks: ["표본 수 범위", "상수열", "비정규 자동 전환 금지", "결측 제외 수"],
@@ -49,6 +76,11 @@ export const analysisMethodGuidance = {
   },
   "eda.equal_variances": {
     methodId: "eda.equal_variances",
+    cardTags: [
+      { category: "data_type", label: "연속형 반응" },
+      { category: "design", label: "2개 이상 그룹" },
+      { category: "target", label: "산포 비교" },
+    ],
     roleRequirements: [required("반응", "연속형 수치 컬럼"), required("그룹", "2개 이상 그룹 컬럼")],
     optionChecklist: ["Brown-Forsythe/Levene", "유의수준", "결측 처리"],
     preflightChecks: ["그룹 수", "그룹별 N", "상수 그룹", "비정규성 민감도"],
@@ -56,6 +88,13 @@ export const analysisMethodGuidance = {
   },
   "hypothesis.one_sample_t": {
     methodId: "hypothesis.one_sample_t",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "한 모집단" },
+      { category: "target", label: "평균 비교" },
+      { category: "sample_guidance", label: "소표본: 분포·이상치 확인" },
+      { category: "assumption", label: "독립 관측" },
+    ],
     roleRequirements: [required("반응", "연속형 수치 컬럼"), required("기준값", "비교할 모집단 평균")],
     optionChecklist: ["대립가설", "유의수준", "신뢰수준", "결측 처리"],
     preflightChecks: ["유효 N", "상수열", "정규성은 보조 점검", "기준값 입력"],
@@ -70,6 +109,12 @@ export const analysisMethodGuidance = {
   },
   "hypothesis.paired_t": {
     methodId: "hypothesis.paired_t",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "같은 대상 전후" },
+      { category: "target", label: "차이값 평균" },
+      { category: "assumption", label: "complete pair" },
+    ],
     roleRequirements: [
       required("전/후 반응", "쌍을 이루는 수치 컬럼 2개"),
       required("쌍 ID", "long 형식에서는 subject/pair ID"),
@@ -87,6 +132,12 @@ export const analysisMethodGuidance = {
   },
   "hypothesis.two_sample_t": {
     methodId: "hypothesis.two_sample_t",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "독립 2그룹" },
+      { category: "target", label: "평균 비교" },
+      { category: "assumption", label: "Welch 기본" },
+    ],
     roleRequirements: [required("반응", "연속형 수치 컬럼"), required("그룹", "정확히 2개 그룹")],
     optionChecklist: ["Welch 기본", "대립가설", "신뢰수준", "결측 처리"],
     preflightChecks: ["그룹별 N", "빈 그룹", "상수 그룹", "독립성 설계 확인"],
@@ -101,6 +152,12 @@ export const analysisMethodGuidance = {
   },
   "hypothesis.one_way_anova": {
     methodId: "hypothesis.one_way_anova",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "독립 3개 이상 그룹" },
+      { category: "target", label: "평균 비교" },
+      { category: "assumption", label: "잔차·등분산 확인" },
+    ],
     roleRequirements: [required("반응", "연속형 수치 컬럼"), required("요인", "2개 이상 독립 그룹")],
     optionChecklist: ["표준 ANOVA", "Tukey-Kramer 사후비교", "유의한 omnibus 후 사후비교", "결측 처리"],
     preflightChecks: ["그룹별 N", "잔차 정규성 설계 확인", "등분산 가정", "상수 그룹"],
@@ -115,6 +172,12 @@ export const analysisMethodGuidance = {
   },
   "hypothesis.equivalence_tost": {
     methodId: "hypothesis.equivalence_tost",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "한 모집단" },
+      { category: "target", label: "동등성 평가" },
+      { category: "assumption", label: "사전 지정 허용한계" },
+    ],
     roleRequirements: [
       required("반응", "연속형 수치 컬럼"),
       required("기준 평균", "비교할 모집단 평균"),
@@ -133,6 +196,13 @@ export const analysisMethodGuidance = {
   },
   "hypothesis.one_sample_wilcoxon": {
     methodId: "hypothesis.one_sample_wilcoxon",
+    cardTags: [
+      { category: "data_type", label: "순서형·연속형" },
+      { category: "design", label: "한 모집단" },
+      { category: "target", label: "순위 기반 위치 비교" },
+      { category: "assumption", label: "차이 분포 대칭성" },
+      { category: "caution", label: "동률·0차이 확인" },
+    ],
     roleRequirements: [required("반응", "순서형 또는 연속형 컬럼"), required("기준값", "비교 위치")],
     optionChecklist: ["대립가설", "zero difference 처리", "결측 처리"],
     preflightChecks: ["0 차이 수", "동률", "유효 N", "중앙값 단정 금지"],
@@ -147,6 +217,12 @@ export const analysisMethodGuidance = {
   },
   "hypothesis.mann_whitney": {
     methodId: "hypothesis.mann_whitney",
+    cardTags: [
+      { category: "data_type", label: "순서형·연속형" },
+      { category: "design", label: "독립 2그룹" },
+      { category: "target", label: "순위 기반 비교" },
+      { category: "caution", label: "분포 형태 차이 주의" },
+    ],
     roleRequirements: [required("반응", "순서형 또는 연속형 컬럼"), required("그룹", "정확히 2개 독립 그룹")],
     optionChecklist: ["대립가설", "exact/asymptotic", "결측 처리"],
     preflightChecks: ["그룹별 N", "동률", "독립성 설계 확인", "분포 차이 해석"],
@@ -161,6 +237,12 @@ export const analysisMethodGuidance = {
   },
   "hypothesis.kruskal_wallis": {
     methodId: "hypothesis.kruskal_wallis",
+    cardTags: [
+      { category: "data_type", label: "순서형·연속형" },
+      { category: "design", label: "독립 3개 이상 그룹" },
+      { category: "target", label: "순위 기반 비교" },
+      { category: "assumption", label: "Dunn + Holm" },
+    ],
     roleRequirements: [required("반응", "순서형 또는 연속형 컬럼"), required("그룹", "3개 이상 독립 그룹")],
     optionChecklist: ["Dunn 사후검정", "Holm 보정", "결측 처리"],
     preflightChecks: ["그룹별 N", "동률", "빈 그룹", "사후검정 보정"],
@@ -175,6 +257,12 @@ export const analysisMethodGuidance = {
   },
   "categorical.one_proportion": {
     methodId: "categorical.one_proportion",
+    cardTags: [
+      { category: "data_type", label: "이항형 결과" },
+      { category: "design", label: "관심 사건·비사건" },
+      { category: "design", label: "한 모집단" },
+      { category: "target", label: "기준 비율 비교" },
+    ],
     roleRequirements: [required("사건/비사건", "이진 반응 컬럼과 사건 수준")],
     optionChecklist: ["기준 비율", "대립가설", "신뢰수준", "CI 방식"],
     preflightChecks: ["사건 수", "전체 N", "이진 수준 확인", "독립성 설계 확인"],
@@ -189,6 +277,12 @@ export const analysisMethodGuidance = {
   },
   "categorical.two_proportion": {
     methodId: "categorical.two_proportion",
+    cardTags: [
+      { category: "data_type", label: "이항형 결과" },
+      { category: "design", label: "독립 2그룹" },
+      { category: "target", label: "사건 비율 비교" },
+      { category: "assumption", label: "Fisher exact" },
+    ],
     roleRequirements: [required("결과", "이진 반응 컬럼"), required("그룹", "정확히 2개 그룹")],
     optionChecklist: ["사건 수준", "대립가설", "신뢰수준", "complete-case 결측 처리"],
     preflightChecks: ["그룹별 사건 수", "그룹별 N", "기대도수", "독립성 설계 확인"],
@@ -203,6 +297,12 @@ export const analysisMethodGuidance = {
   },
   "categorical.chi_square_association": {
     methodId: "categorical.chi_square_association",
+    cardTags: [
+      { category: "data_type", label: "범주형 변수 2개" },
+      { category: "design", label: "2×2 이상 분할표" },
+      { category: "assumption", label: "기대도수 확인" },
+      { category: "caution", label: "희소 2×2: Fisher 검토" },
+    ],
     roleRequirements: [required("행 변수", "범주형 컬럼"), required("열 변수", "범주형 컬럼")],
     optionChecklist: ["Pearson 카이제곱", "유의수준", "complete-case 결측 처리"],
     preflightChecks: ["분할표 크기", "기대도수", "희소 2x2 Fisher 권고", "결측 제외 수"],
@@ -312,6 +412,12 @@ export const analysisMethodGuidance = {
   },
   "quality.individuals_chart": {
     methodId: "quality.individuals_chart",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "시간·실행 순서" },
+      { category: "design", label: "개별 관측" },
+      { category: "target", label: "관리한계·특별원인" },
+    ],
     roleRequirements: [
       required("측정값", "연속형 수치 컬럼"),
       optional("순서", "비워두면 canonical row order, 선택하면 숫자형/날짜시간 컬럼 오름차순"),
@@ -372,6 +478,12 @@ export const analysisMethodGuidance = {
   },
   "quality.run_chart": {
     methodId: "quality.run_chart",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "시간·실행 순서" },
+      { category: "target", label: "무작위 패턴 점검" },
+      { category: "caution", label: "관리한계 없음" },
+    ],
     roleRequirements: [
       required("측정값", "연속형 수치 컬럼"),
       optional("순서", "비워두면 canonical row order, 선택하면 숫자형/날짜시간 컬럼 오름차순"),
@@ -524,4 +636,21 @@ const fallbackGuidance: AnalysisMethodGuidance = {
 
 export function getAnalysisMethodGuidance(methodId: string): AnalysisMethodGuidance {
   return guidanceById[methodId] ?? { ...fallbackGuidance, methodId };
+}
+
+export function getMethodCardTags(methodId: string): readonly MethodCardTag[] {
+  const guidance = getAnalysisMethodGuidance(methodId);
+  if (guidance.cardTags !== undefined) {
+    return guidance.cardTags.slice(0, 5);
+  }
+  return [
+    {
+      category: "design",
+      label: guidance.roleRequirements[0]?.label ?? "입력 역할 확인",
+    },
+    {
+      category: "target",
+      label: guidance.resultFocus[0] ?? "결과 해석",
+    },
+  ];
 }

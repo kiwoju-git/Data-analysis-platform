@@ -2,8 +2,10 @@ import { startTransition, useRef, useState, type ReactNode } from "react";
 
 import { AnalysisPanelBoundary } from "./AnalysisPanelBoundary";
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
+import { AnalysisSelectionQuickGuide } from "./AnalysisSelectionQuickGuide";
 import { CompactAnalysisHistoryPanel } from "./CompactAnalysisHistoryPanel";
 import { MethodHelpDrawer } from "./MethodHelpDrawer";
+import { getMethodCardTags } from "./analysisMethodGuidance";
 import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
@@ -243,9 +245,15 @@ export function AnalysisWorkbench({
           역할 사전
         </button>
       </div>
+      <AnalysisSelectionQuickGuide
+        selectedModuleId={selectedModuleId}
+        onSelectMethod={(moduleId, methodId) => selectMethod(moduleId, methodId)}
+      />
       <div className="method-grid" aria-label="분석 메서드">
-        {selectedMethods.map((method) => (
-          <button
+        {selectedMethods.map((method) => {
+          const cardTags = getMethodCardTags(method.method_id);
+          return (
+            <button
             aria-pressed={method.method_id === selectedMethod?.method_id}
             className={
               method.method_id === selectedMethod?.method_id
@@ -267,22 +275,19 @@ export function AnalysisWorkbench({
                 {availabilityLabel(method)}
               </span>
             </div>
-            <div className="method-meta">
-              <span>{method.method_id}</span>
-              <span>v{method.method_version}</span>
-              <span>
-                {method.execution_mode === "dedicated"
-                  ? "Source 자산 선택"
-                  : method.requires_dataset
-                    ? "데이터셋 필요"
-                    : "데이터셋 없이 가능"}
-              </span>
+            <div className="method-card-tags" aria-label="분석 선택 기준">
+              {cardTags.map((tag) => (
+                <span className={`method-card-tag method-card-tag-${tag.category}`} key={`${tag.category}-${tag.label}`}>
+                  {tag.label}
+                </span>
+              ))}
             </div>
             {method.disabled_reason !== null ? (
               <p className="method-reason">{method.disabled_reason}</p>
             ) : null}
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
       {selectedMethod !== null ? (
         <section className="analysis-workbench" aria-labelledby="workbench-title">

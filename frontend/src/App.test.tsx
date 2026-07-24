@@ -424,6 +424,13 @@ describe("App", () => {
     expect(html).toContain("공통 분석 필터");
     expect(html).toContain("분석 도움말");
     expect(html).toContain("계산 코드, 기준 데이터, 수치 검증 테스트");
+    const methodGridHtml = html.split('class="analysis-workbench"')[0] ?? "";
+    expect(methodGridHtml).not.toContain('class="method-meta"');
+    expect(methodGridHtml).not.toContain("데이터셋 필요");
+    expect(methodGridHtml).not.toContain("Source 자산 선택");
+    expect(methodGridHtml).toContain('class="method-card-tags"');
+    expect(html).toContain("검정 선택 빠른 가이드");
+    expect(html).toContain("표본 수 30과 정규성 검정 p-value는 절대적인 자동 선택 기준이 아닙니다");
   });
 
   it("moves global beginner guidance to Help Center and keeps readable preflight copy", () => {

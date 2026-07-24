@@ -965,6 +965,30 @@ textarea {
   color: #863b2d;
 }
 
+.method-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.method-card-tag {
+  border: 1px solid var(--brand-blue-border);
+  border-radius: 6px;
+  background: var(--brand-blue-soft);
+  color: var(--brand-nav-blue-hover);
+  padding: 4px 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.method-card-tag-caution,
+.method-card-tag-assumption {
+  border-color: #d6c58f;
+  background: #fff9e9;
+  color: #655016;
+}
+
 .method-meta {
   display: flex;
   flex-wrap: wrap;
@@ -980,6 +1004,69 @@ textarea {
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
   font-size: 0.78rem;
   overflow-wrap: anywhere;
+}
+
+.analysis-selection-guide {
+  border: 1px solid var(--brand-blue-border);
+  border-radius: 6px;
+  background: var(--surface-panel);
+  padding: 12px 14px;
+}
+
+.analysis-selection-guide summary {
+  color: var(--brand-nav-blue-hover);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.analysis-selection-guide > p {
+  margin: 12px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.analysis-selection-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.analysis-selection-guide-grid section {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border-top: 3px solid var(--brand-blue-accent);
+  background: var(--brand-blue-soft);
+  padding: 10px;
+}
+
+.analysis-selection-guide-grid h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.analysis-selection-guide-actions {
+  display: grid;
+  gap: 7px;
+}
+
+.analysis-selection-guide-actions-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.analysis-selection-guide-actions button {
+  min-height: 40px;
+  white-space: normal;
+}
+
+.analysis-selection-guide .analysis-selection-guide-caution {
+  border-left: 3px solid #b88919;
+  background: #fff9e9;
+  color: #5c4915;
+  padding: 9px 11px;
 }
 
 .analysis-workbench {
@@ -3528,6 +3615,8 @@ td select {
 
   .workbench-steps,
   .workbench-summary,
+  .analysis-selection-guide-grid,
+  .analysis-selection-guide-actions-row,
   .purpose-card-grid,
   .role-guide-grid,
   .preflight-explanation-grid,
