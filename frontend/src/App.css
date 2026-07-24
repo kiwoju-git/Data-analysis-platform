@@ -1,16 +1,470 @@
 :root {
-  color: #1d2430;
-  background: #f6f7f9;
+  --brand-logo-blue: #034da2;
+  --brand-nav-blue: #225aa7;
+  --brand-nav-blue-hover: #184a8b;
+  --brand-blue-accent: #3a8fde;
+  --brand-blue-soft: #eaf2ff;
+  --brand-blue-border: #b8cee9;
+  --surface-page: #ffffff;
+  --surface-app: #f4f6f9;
+  --surface-sidebar-inactive: #e2e4e8;
+  --surface-sidebar-inactive-hover: #d7dce4;
+  --surface-panel: #ffffff;
+  --text-primary: #1f2328;
+  --text-secondary: #5b6573;
+  --text-on-blue: #ffffff;
+  --text-on-blue-muted: #eaf2ff;
+  --border-default: #d4dae2;
+  --focus-ring: #86b9f1;
+  color: var(--text-primary);
+  background: var(--surface-app);
   font-family:
+    "Segoe UI",
     "Malgun Gothic",
     "Apple SD Gothic Neo",
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
     sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+/* Corporate shell and shared controls. Chart series selectors intentionally stay unchanged. */
+.app-shell {
+  grid-template-columns: minmax(260px, 282px) minmax(0, 1fr);
+  background: var(--surface-app);
+}
+
+.mobile-shell-header,
+.sidebar-scrim {
+  display: none;
+}
+
+.sidebar {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-default);
+  background: var(--surface-page);
+  padding: 0;
+}
+
+.brand {
+  display: grid;
+  gap: 13px;
+  margin: 0;
+  background: var(--surface-page);
+  padding: 24px 25px 22px;
+}
+
+.brand-logo {
+  display: block;
+  width: min(100%, 174px);
+  height: auto;
+  object-fit: contain;
+}
+
+.brand-product-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.13rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.sidebar-navigation,
+.sidebar-groups,
+.sidebar-submenu {
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar-groups,
+.sidebar-submenu {
+  list-style: none;
+}
+
+.sidebar-groups {
+  display: grid;
+  gap: 2px;
+  border-top: 1px solid #ffffff;
+}
+
+.sidebar-group {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 116px;
+  border-bottom: 1px solid #ffffff;
+  background: var(--surface-sidebar-inactive);
+  color: var(--text-primary);
+  padding: 19px 24px 18px;
+}
+
+.sidebar-group:hover {
+  background: var(--surface-sidebar-inactive-hover);
+}
+
+.sidebar-group-active {
+  background: var(--brand-nav-blue);
+  color: var(--text-on-blue);
+}
+
+.sidebar-group-active:hover {
+  background: var(--brand-nav-blue-hover);
+}
+
+.sidebar-group-active::after {
+  position: absolute;
+  top: 50%;
+  right: -1px;
+  width: 0;
+  height: 0;
+  border-top: 13px solid transparent;
+  border-right: 13px solid var(--surface-page);
+  border-bottom: 13px solid transparent;
+  content: "";
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.sidebar-group-control,
+.sidebar-submenu-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.sidebar-group-control {
+  min-height: 27px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.sidebar-submenu {
+  display: grid;
+  gap: 7px;
+}
+
+.sidebar-submenu-button {
+  position: relative;
+  min-height: 25px;
+  color: #3e4753;
+  font-size: 0.87rem;
+  line-height: 1.4;
+  padding-left: 14px;
+}
+
+.sidebar-submenu-button::before {
+  position: absolute;
+  top: 0.67em;
+  left: 1px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.sidebar-group-active .sidebar-submenu-button {
+  color: var(--text-on-blue-muted);
+}
+
+.sidebar-submenu-button.is-active,
+.sidebar-group-active .sidebar-submenu-button.is-active {
+  color: var(--text-on-blue);
+  font-weight: 700;
+}
+
+.sidebar-group:not(.sidebar-group-active) .sidebar-submenu-button.is-active {
+  color: var(--brand-logo-blue);
+}
+
+.sidebar-group-control:disabled,
+.sidebar-submenu-button:disabled {
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.sidebar-group-control:focus-visible,
+.sidebar-submenu-button:focus-visible,
+.mobile-menu-toggle:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.main {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  background: var(--surface-page);
+}
+
+.topbar {
+  border-bottom-color: var(--border-default);
+  padding: 15px 26px;
+}
+
+.topbar-title {
+  color: var(--brand-logo-blue);
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.context-bar {
+  border-bottom-color: var(--brand-blue-border);
+  background: #f7faff;
+  padding: 10px 26px;
+}
+
+.workspace {
+  min-width: 0;
+  background: var(--surface-page);
+  padding: 26px clamp(18px, 3vw, 42px) 42px;
+}
+
+.workspace h2,
+.page-heading-band h2,
+.help-section-heading h2 {
+  color: var(--brand-logo-blue);
+}
+
+.analysis-heading h2 {
+  color: var(--brand-logo-blue);
+  font-size: 1.65rem;
+}
+
+.page-heading-band {
+  border-bottom-color: var(--brand-blue-border);
+}
+
+.page-heading-band h2,
+.help-section-heading h2 {
+  font-size: 1.72rem;
+}
+
+.primary-button {
+  border-color: var(--brand-nav-blue-hover);
+  background: var(--brand-nav-blue);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--brand-nav-blue-hover);
+}
+
+.secondary-button {
+  border-color: var(--brand-blue-border);
+  color: var(--brand-logo-blue);
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: var(--brand-blue-accent);
+  background: var(--brand-blue-soft);
+}
+
+.segment-active,
+.segmented-control button[aria-selected="true"],
+.segmented-control button[aria-pressed="true"] {
+  border-color: var(--brand-nav-blue);
+  background: var(--brand-nav-blue);
+  color: var(--text-on-blue);
+}
+
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.segmented-control button {
+  min-height: 34px;
+  border: 1px solid var(--brand-blue-border);
+  border-radius: 3px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 6px 12px;
+}
+
+.segmented-control button:hover:not(:disabled) {
+  border-color: var(--brand-blue-accent);
+  background: var(--brand-blue-soft);
+}
+
+.module-button-active,
+.method-item-active,
+.selected-compact-button,
+.purpose-method-button {
+  border-color: var(--brand-nav-blue);
+  background: var(--brand-blue-soft);
+  color: var(--brand-logo-blue);
+}
+
+.method-item:hover,
+.module-button:hover,
+.help-method-row:hover,
+.report-run-row:hover {
+  border-color: var(--brand-blue-accent);
+  background: #f4f8fe;
+}
+
+.method-item:focus-visible,
+.module-button:focus-visible,
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.segmented-control button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+th {
+  background: var(--brand-blue-soft);
+  color: #24374f;
+}
+
+tbody tr:hover {
+  background: #f4f8fe;
+}
+
+.help-method-row.is-selected,
+.report-run-row.is-selected,
+.report-run-row:focus-visible {
+  border-color: var(--brand-nav-blue);
+  background: var(--brand-blue-soft);
+}
+
+.report-run-item .report-selected-result,
+.report-direct-selection .report-selected-result {
+  border-left-color: var(--brand-nav-blue);
+  background: #f7faff;
+}
+
+.help-quick-start,
+.help-method-detail,
+.report-browser,
+.report-selected-result,
+.report-capability-section,
+.asset-management-item {
+  border-color: var(--border-default);
+  border-radius: 5px;
+  background: var(--surface-panel);
+}
+
+.project-overview-band,
+.dataset-deletion-impact {
+  border-top: 4px solid var(--brand-nav-blue);
+  background: #f8fbff;
+  padding: 16px;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    display: block;
+  }
+
+  .mobile-shell-header {
+    position: sticky;
+    z-index: 30;
+    top: 0;
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--surface-page);
+    color: var(--brand-logo-blue);
+    padding: 8px 14px;
+  }
+
+  .mobile-menu-toggle {
+    width: 44px;
+    height: 42px;
+    border: 1px solid var(--brand-blue-border);
+    border-radius: 4px;
+    background: var(--surface-page);
+    color: var(--brand-logo-blue);
+    cursor: pointer;
+    font-size: 1.35rem;
+  }
+
+  .sidebar-scrim {
+    position: fixed;
+    z-index: 35;
+    inset: 0;
+    display: block;
+    border: 0;
+    background: rgb(21 34 52 / 48%);
+  }
+
+  .sidebar {
+    position: fixed;
+    z-index: 40;
+    top: 0;
+    left: 0;
+    width: min(88vw, 310px);
+    height: 100dvh;
+    border-right: 1px solid var(--border-default);
+    border-bottom: 0;
+    transform: translateX(-102%);
+    transition: transform 160ms ease-out;
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .brand {
+    padding: 18px 22px;
+  }
+
+  .brand-logo {
+    width: 155px;
+  }
+
+  .sidebar-group {
+    min-height: auto;
+    padding: 15px 21px;
+  }
+
+  .sidebar-group-active::after {
+    display: none;
+  }
+
+  .topbar {
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 16px;
+  }
+
+  .workspace {
+    padding: 20px 14px 32px;
+  }
+
+  .analysis-heading h2,
+  .page-heading-band h2,
+  .help-section-heading h2 {
+    font-size: 1.45rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
 }
 
 * {
@@ -3071,4 +3525,131 @@ td select {
   flex-wrap: wrap;
   gap: 8px 14px;
   min-width: 0;
+}
+
+/* Keep this cascade layer after legacy component rules while the shell migrates to tokens. */
+.app-shell {
+  grid-template-columns: minmax(260px, 282px) minmax(0, 1fr);
+  background: var(--surface-app);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-default);
+  background: var(--surface-page);
+  padding: 0;
+}
+
+.brand {
+  margin: 0;
+}
+
+.main {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  background: var(--surface-page);
+}
+
+.topbar {
+  border-bottom-color: var(--border-default);
+  padding: 15px 26px;
+}
+
+.context-bar {
+  border-bottom-color: var(--brand-blue-border);
+  background: #f7faff;
+  padding: 10px 26px;
+}
+
+.workspace {
+  background: var(--surface-page);
+  padding: 26px clamp(18px, 3vw, 42px) 42px;
+}
+
+.analysis-heading h2,
+.page-heading-band h2,
+.help-section-heading h2 {
+  color: var(--brand-logo-blue);
+}
+
+.primary-button {
+  border-color: var(--brand-nav-blue-hover);
+  background: var(--brand-nav-blue);
+}
+
+.secondary-button {
+  border-color: var(--brand-blue-border);
+  color: var(--brand-logo-blue);
+}
+
+.segment-active,
+.segmented-control button[aria-selected="true"],
+.segmented-control button[aria-pressed="true"] {
+  border-color: var(--brand-nav-blue);
+  background: var(--brand-nav-blue);
+  color: var(--text-on-blue);
+}
+
+.module-button-active,
+.method-item-active,
+.selected-compact-button,
+.purpose-method-button {
+  border-color: var(--brand-nav-blue);
+  background: var(--brand-blue-soft);
+  color: var(--brand-logo-blue);
+}
+
+.help-method-row.is-selected,
+.report-run-row.is-selected,
+.report-run-row:focus-visible {
+  border-color: var(--brand-nav-blue);
+  background: var(--brand-blue-soft);
+}
+
+.report-run-item .report-selected-result,
+.report-direct-selection .report-selected-result {
+  border-left-color: var(--brand-nav-blue);
+  background: #f7faff;
+}
+
+.project-overview-band,
+.dataset-deletion-impact {
+  border-top: 4px solid var(--brand-nav-blue);
+  background: #f8fbff;
+  padding: 16px;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: fixed;
+    z-index: 40;
+    top: 0;
+    left: 0;
+    width: min(88vw, 310px);
+    height: 100dvh;
+    border-right: 1px solid var(--border-default);
+    border-bottom: 0;
+    padding: 0;
+    transform: translateX(-102%);
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .topbar {
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 16px;
+  }
+
+  .workspace {
+    padding: 20px 14px 32px;
+  }
 }
