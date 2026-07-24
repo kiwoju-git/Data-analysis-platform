@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createSidebarNavigationGroups } from "./sidebarNavigationModel";
+import {
+  createSidebarNavigationGroups,
+  normalizeDatasetSidebarSection,
+  normalizedDatasetSidebarLocation,
+} from "./sidebarNavigationModel";
 
 describe("sidebar navigation model", () => {
   it("builds seven readable groups with query-synchronized active leaves", () => {
@@ -35,7 +39,6 @@ describe("sidebar navigation model", () => {
       "회귀모델",
     ]);
     expect(manage?.children.find((item) => item.active)?.id).toBe("models");
-    expect(manage?.defaultChildId).toBe("models");
     manage?.children.find((item) => item.id === "datasets")?.onActivate();
     expect(onOpenManageTab).toHaveBeenCalledWith("datasets");
   });
@@ -66,7 +69,53 @@ describe("sidebar navigation model", () => {
     ]);
     expect(analysis?.children.every((item) => item.disabled)).toBe(true);
     expect(analysis?.children.find((item) => item.active)?.id).toBe("quality");
-    expect(analysis?.defaultChildId).toBe("quality");
+  });
+
+  it("keeps only registration and preview dataset shortcuts", () => {
+    const groups = createSidebarNavigationGroups({
+      activeAnalysisModuleId: "exploration",
+      activePage: "dataset",
+      canOpenAnalysis: true,
+      query: new URLSearchParams("section=dataset-parsing"),
+      onOpenAnalysisModule: vi.fn(),
+      onOpenDatasetSection: vi.fn(),
+      onOpenHelpSection: vi.fn(),
+      onOpenGraphs: vi.fn(),
+      onOpenManageTab: vi.fn(),
+      onOpenProject: vi.fn(),
+      onOpenReportTab: vi.fn(),
+    });
+    const dataset = groups.find((group) => group.id === "dataset");
+
+    expect(dataset?.children.map((item) => item.label)).toEqual([
+      "데이터 등록",
+      "미리보기",
+    ]);
+    expect(dataset?.children.find((item) => item.active)?.id).toBe(
+      "dataset-intake",
+    );
+    expect(dataset?.children.some((item) => item.id === "dataset-parsing")).toBe(
+      false,
+    );
+    expect(normalizeDatasetSidebarSection("dataset-parsing")).toBe(
+      "dataset-intake",
+    );
+    expect(normalizeDatasetSidebarSection("unknown-section")).toBe(
+      "dataset-intake",
+    );
+    expect(normalizeDatasetSidebarSection("dataset-version")).toBe(
+      "dataset-version",
+    );
+    expect(
+      normalizedDatasetSidebarLocation(
+        "http://127.0.0.1:5173/?section=dataset-parsing&dataset_version_id=v1",
+      ),
+    ).toBe("/?section=dataset-intake&dataset_version_id=v1");
+    expect(
+      normalizedDatasetSidebarLocation(
+        "http://127.0.0.1:5173/?section=dataset-version",
+      ),
+    ).toBeNull();
   });
 
   it("marks method detail URLs as the active Help leaf", () => {

@@ -12,10 +12,11 @@ export interface SidebarNavigationItem {
 export interface SidebarNavigationGroup {
   active: boolean;
   children: SidebarNavigationItem[];
-  defaultChildId?: string;
   id: AppRoute["page"];
   label: string;
 }
+
+export type DatasetSidebarSection = "dataset-intake" | "dataset-version";
 
 interface SidebarNavigationOptions {
   activeAnalysisModuleId: AnalysisModuleId;
@@ -23,9 +24,7 @@ interface SidebarNavigationOptions {
   canOpenAnalysis: boolean;
   query: URLSearchParams;
   onOpenAnalysisModule: (moduleId: AnalysisModuleId) => void;
-  onOpenDatasetSection: (
-    section: "dataset-intake" | "dataset-parsing" | "dataset-version",
-  ) => void;
+  onOpenDatasetSection: (section: DatasetSidebarSection) => void;
   onOpenHelpSection: (
     section: "purpose" | "roles" | "methods" | "tutorial",
   ) => void;
@@ -57,7 +56,7 @@ export function createSidebarNavigationGroups({
   onOpenProject,
   onOpenReportTab,
 }: SidebarNavigationOptions): SidebarNavigationGroup[] {
-  const datasetSection = query.get("section") ?? "dataset-intake";
+  const datasetSection = normalizeDatasetSidebarSection(query.get("section"));
   const reportTab = query.get("tab") === "history" ? "history" : "reports";
   const manageTab = query.get("tab") === "models" ? "models" : "datasets";
   const helpSection =
@@ -74,7 +73,6 @@ export function createSidebarNavigationGroups({
           onActivate: onOpenProject,
         },
       ],
-      defaultChildId: "project-overview",
       id: "project",
       label: "프로젝트",
     },
@@ -82,18 +80,14 @@ export function createSidebarNavigationGroups({
       active: activePage === "dataset",
       children: [
         ["dataset-intake", "데이터 등록"],
-        ["dataset-parsing", "파싱·스키마"],
         ["dataset-version", "미리보기"],
       ].map(([id, label]) => ({
         active: activePage === "dataset" && datasetSection === id,
         id,
         label,
         onActivate: () =>
-          onOpenDatasetSection(
-            id as "dataset-intake" | "dataset-parsing" | "dataset-version",
-          ),
+          onOpenDatasetSection(id as DatasetSidebarSection),
       })),
-      defaultChildId: datasetSection,
       id: "dataset",
       label: "데이터셋",
     },
@@ -107,7 +101,6 @@ export function createSidebarNavigationGroups({
         label,
         onActivate: () => onOpenAnalysisModule(moduleId),
       })),
-      defaultChildId: activeAnalysisModuleId,
       id: "analysis",
       label: "분석",
     },
@@ -121,7 +114,6 @@ export function createSidebarNavigationGroups({
           onActivate: onOpenGraphs,
         },
       ],
-      defaultChildId: "graph-builder",
       id: "graphs",
       label: "그래프",
     },
@@ -136,7 +128,6 @@ export function createSidebarNavigationGroups({
         label,
         onActivate: () => onOpenReportTab(id as "reports" | "history"),
       })),
-      defaultChildId: reportTab,
       id: "reports",
       label: "리포트",
     },
@@ -151,7 +142,6 @@ export function createSidebarNavigationGroups({
         label,
         onActivate: () => onOpenManageTab(id as "datasets" | "models"),
       })),
-      defaultChildId: manageTab,
       id: "manage",
       label: "관리",
     },
@@ -169,9 +159,25 @@ export function createSidebarNavigationGroups({
         onActivate: () =>
           onOpenHelpSection(id as "purpose" | "roles" | "methods" | "tutorial"),
       })),
-      defaultChildId: helpSection,
       id: "help",
       label: "도움말",
     },
   ];
+}
+
+export function normalizeDatasetSidebarSection(
+  requested: string | null,
+): DatasetSidebarSection {
+  return requested === "dataset-version" ? "dataset-version" : "dataset-intake";
+}
+
+export function normalizedDatasetSidebarLocation(href: string): string | null {
+  const url = new URL(href);
+  const requested = url.searchParams.get("section");
+  const normalized = normalizeDatasetSidebarSection(requested);
+  if (requested === null || requested === normalized) {
+    return null;
+  }
+  url.searchParams.set("section", normalized);
+  return `${url.pathname}${url.search}${url.hash}`;
 }

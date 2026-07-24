@@ -94,7 +94,7 @@
   position: relative;
   display: grid;
   gap: 8px;
-  min-height: 116px;
+  min-height: 0;
   border-bottom: 1px solid #ffffff;
   background: var(--surface-sidebar-inactive);
   color: var(--text-primary);
@@ -140,14 +140,44 @@
 }
 
 .sidebar-group-control {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
   min-height: 27px;
   font-size: 1rem;
   font-weight: 700;
 }
 
+.sidebar-group-chevron {
+  fill: none;
+  flex: 0 0 auto;
+  height: 16px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: transform 140ms ease;
+  width: 16px;
+}
+
+.sidebar-group.is-collapsed {
+  gap: 0;
+  padding-bottom: 14px;
+  padding-top: 14px;
+}
+
+.sidebar-group.is-collapsed .sidebar-group-chevron {
+  transform: rotate(-90deg);
+}
+
 .sidebar-submenu {
   display: grid;
   gap: 7px;
+}
+
+.sidebar-submenu[hidden] {
+  display: none;
 }
 
 .sidebar-submenu-button {
@@ -195,6 +225,12 @@
 .mobile-menu-toggle:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-group-chevron {
+    transition: none;
+  }
 }
 
 .main {

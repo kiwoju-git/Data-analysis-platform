@@ -64,6 +64,7 @@ import { currentAppRoute } from "./appRoute";
 import {
   appLocationChangeEvent,
   pushAppLocation,
+  replaceAppLocation,
 } from "./browserNavigation";
 import { startRetryingRequest } from "./startupRequest";
 import { useAnalysisComparisonState } from "./useAnalysisComparisonState";
@@ -82,7 +83,11 @@ import { useRegressionPredictionState } from "./useRegressionPredictionState";
 import { WorkspaceRouter } from "./WorkspaceRouter";
 import { RuntimeCompatibilityGate } from "./RuntimeMismatchPage";
 import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
-import { createSidebarNavigationGroups } from "./sidebarNavigationModel";
+import {
+  createSidebarNavigationGroups,
+  normalizedDatasetSidebarLocation,
+  type DatasetSidebarSection,
+} from "./sidebarNavigationModel";
 import type { WorkspaceMutationKind } from "./workspaceMutation";
 
 type HealthState =
@@ -690,6 +695,19 @@ export default function App() {
       window.removeEventListener(appLocationChangeEvent, handleRouteChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || appRoute.page !== "dataset") {
+      return;
+    }
+    const normalizedLocation = normalizedDatasetSidebarLocation(
+      window.location.href,
+    );
+    if (normalizedLocation === null) {
+      return;
+    }
+    replaceAppLocation(normalizedLocation);
+  }, [appRoute.page]);
 
   const descriptiveColumns = useMemo(
     () => (version === null ? [] : selectableDescriptiveColumns(version.columns)),
@@ -3568,8 +3586,7 @@ export default function App() {
   }
 
   function handleOpenDatasetPage(
-    section: "dataset-intake" | "dataset-parsing" | "dataset-version" =
-      "dataset-intake",
+    section: DatasetSidebarSection = "dataset-intake",
   ) {
     if (typeof window !== "undefined") {
       const url = new URL(

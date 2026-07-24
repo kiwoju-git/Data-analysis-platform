@@ -1,5 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import {
+  createSidebarExpansionState,
+  reconcileSidebarExpansionState,
+} from "./sidebarExpansion";
 import type { SidebarNavigationGroup } from "./sidebarNavigationModel";
 
 export function SidebarNavigation({
@@ -10,6 +14,12 @@ export function SidebarNavigation({
   onNavigate?: () => void;
 }) {
   const activeItemRef = useRef<HTMLButtonElement>(null);
+  const activeGroupId = groups.find((group) => group.active)?.id ?? null;
+  const previousActiveGroupIdRef = useRef<string | null>(activeGroupId);
+  const groupIds = groups.map((group) => group.id).join("|");
+  const [expandedGroups, setExpandedGroups] = useState(() =>
+    createSidebarExpansionState(groups),
+  );
 
   useEffect(() => {
     const focusedElement = document.activeElement;
@@ -22,37 +32,60 @@ export function SidebarNavigation({
     activeItemRef.current?.focus();
   }, [groups]);
 
+  useEffect(() => {
+    setExpandedGroups((current) =>
+      reconcileSidebarExpansionState(
+        current,
+        groups,
+        previousActiveGroupIdRef.current,
+      ),
+    );
+    previousActiveGroupIdRef.current = activeGroupId;
+  }, [activeGroupId, groupIds, groups]);
+
   return (
     <nav className="sidebar-navigation" aria-label="주요 메뉴">
       <ul className="sidebar-groups">
-        {groups.map((group) => (
-          <li
-            className={
-              group.active
-                ? "sidebar-group sidebar-group-active"
-                : "sidebar-group"
-            }
-            key={group.id}
-          >
+        {groups.map((group) => {
+          const expanded = expandedGroups[group.id] ?? true;
+          const submenuId = `sidebar-submenu-${group.id}`;
+          return (
+            <li
+              className={[
+                "sidebar-group",
+                group.active ? "sidebar-group-active" : "",
+                expanded ? "" : "is-collapsed",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              key={group.id}
+            >
             <button
+              aria-controls={submenuId}
+              aria-expanded={expanded}
               className="sidebar-group-control"
-              disabled={group.children.every((item) => item.disabled)}
-              onClick={() => {
-                const target =
-                  group.children.find((item) => item.active && !item.disabled) ??
-                  group.children.find(
-                    (item) =>
-                      item.id === group.defaultChildId && !item.disabled,
-                  ) ??
-                  group.children.find((item) => !item.disabled);
-                target?.onActivate();
-                onNavigate?.();
-              }}
+              onClick={() =>
+                setExpandedGroups((current) => ({
+                  ...current,
+                  [group.id]: !(current[group.id] ?? true),
+                }))
+              }
               type="button"
             >
-              {group.label}
+              <span>{group.label}</span>
+              <svg
+                aria-hidden="true"
+                className="sidebar-group-chevron"
+                viewBox="0 0 16 16"
+              >
+                <path d="M3.5 6 8 10.5 12.5 6" />
+              </svg>
             </button>
-            <ul className="sidebar-submenu">
+            <ul
+              className="sidebar-submenu"
+              hidden={!expanded}
+              id={submenuId}
+            >
               {group.children.map((item) => (
                 <li key={item.id}>
                   <button
@@ -77,7 +110,8 @@ export function SidebarNavigation({
               ))}
             </ul>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </nav>
   );

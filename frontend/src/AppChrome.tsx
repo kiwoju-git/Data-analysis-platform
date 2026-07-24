@@ -77,7 +77,7 @@ export function AppChrome({
         sidebarRef.current?.querySelectorAll<HTMLElement>(
           'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
         ) ?? [],
-      );
+      ).filter((item) => item.closest("[hidden]") === null);
       if (focusableItems.length === 0) return;
       const first = focusableItems[0];
       const last = focusableItems[focusableItems.length - 1];
@@ -94,7 +94,18 @@ export function AppChrome({
       const activeItem = sidebarRef.current?.querySelector<HTMLButtonElement>(
         '[aria-current="page"]',
       );
-      (activeItem ?? sidebarRef.current?.querySelector<HTMLButtonElement>("button"))?.focus();
+      const activeGroupControl =
+        activeItem?.closest(".sidebar-group")?.querySelector<HTMLButtonElement>(
+          ".sidebar-group-control",
+        ) ?? null;
+      const focusTarget =
+        activeItem !== undefined &&
+        activeItem !== null &&
+        activeItem.closest("[hidden]") === null
+          ? activeItem
+          : activeGroupControl ??
+            sidebarRef.current?.querySelector<HTMLButtonElement>("button");
+      focusTarget?.focus();
     });
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [mobileMenuOpen]);
