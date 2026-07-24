@@ -1,6 +1,6 @@
 # DataLab Studio To-Do List
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 ## 1. Required Reading And Priority
 
@@ -20,6 +20,28 @@ Current source-of-truth note:
 - `to_do_list.md` tracks the current implementation state and the next allowed PR slice.
 
 Current and next development order:
+
+The current closure exposes the existing `quality.individuals_chart` as
+`I-MR 관리도` without changing its `0.1.0` method version, result schema, or
+calculation. The new route-lazy `/graphs` workflow provides validated,
+non-persisted visualization previews for Box Plot, Individual Value Plot,
+Histogram, Q-Q, ECDF, Scatter, Run Chart, and I-MR. Visualization schema 1 is
+separate from analysis results; point payloads are bounded and never silently
+sampled. API contract 4 adds `graph_builder_preview`, while SQLite remains
+schema 16. Method cards now show statistical selection tags instead of backend
+IDs/versions, and the Workbench keeps one method header followed directly by
+filters and controls. After validation and main integration:
+
+1. Run the clean Windows 11 x64/Python 3.10/Node 22/CPU-only release gate.
+2. Verify the matching hosted Windows and E2E Actions jobs on pushed main.
+3. Reduce the main bundle through reviewed route/module boundaries; do not
+   weaken runtime compatibility or direct-route behavior.
+4. Add graph artifact persistence only through a separate versioned contract;
+   previews must not be retroactively treated as stored analysis runs.
+5. Extend Graph Builder graph families only with explicit role, unit, payload,
+   and accessibility contracts.
+
+Previous closure:
 
 The dataset cleanup and project-home slice is the current closure work. SQLite
 schema 16 adds reversible dataset-version archive metadata. Dataset retention

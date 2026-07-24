@@ -6,6 +6,25 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-07-25 I-MR/Graph Builder/analysis-usability critical path additionally:
+
+- opens `/graphs`, generates a real `Value` Box Plot preview, verifies preview
+  provenance, and confirms the UI states that no analysis history/artifact is
+  created;
+- runs existing `quality.individuals_chart` under the `I-MR 관리도` label and
+  verifies the I chart, MR chart, signal summary, and non-conclusive
+  control-limit interpretation;
+- uses the selected Workbench method heading after duplicate execution-panel
+  headings were removed; and
+- verifies direct lazy routes with the current Korean user-facing labels.
+
+The final isolated Chromium run passed in 83 seconds with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-imr-graph-builder-pass
+```
+
 The browser critical path now creates a fresh numeric dataset after the
 existing upload/parser/analysis flows and verifies:
 
@@ -263,9 +282,10 @@ browser critical path.
 - `wait for backend health`
 - `wait for frontend dev server`
 - `open Workbench`
-- `paste synthetic TSV and confirm schema`
-- `run descriptive statistics`
-- `run two-sample t test`
+  - `paste synthetic TSV and confirm schema`
+  - `run descriptive statistics`
+  - `verify graph builder box plot preview`
+  - `run two-sample t test`
 - `create, download, and delete one export`
 - `verify Help Report Project and Manage routes`
 - `restore and compare saved results`

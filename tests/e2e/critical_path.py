@@ -451,7 +451,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             expect_dataset_context_counts(page, row_label="6행", column_label="2컬럼")
 
             page.get_by_role("button", name="분석", exact=True).click()
-            expect(page.get_by_role("heading", name="기술통계 실행")).to_be_visible()
+            expect(page.locator("#workbench-title")).to_have_text("기술통계")
             page.get_by_role("button", name="기술통계 실행").click()
             diagnostics.step("run descriptive statistics")
             descriptive_row = page.locator(".analysis-run-panel .result-table tbody tr")
@@ -459,10 +459,12 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             if "Value" not in descriptive_row.inner_text():
                 raise AssertionError("descriptive result row did not contain Value")
 
+            diagnostics.step("verify graph builder box plot preview")
+            verify_graph_builder_box_plot(page)
+
+            page.get_by_role("button", name="분석", exact=True).click()
             select_method_card(page, "가설 검정", "2-표본 t-검정")
-            expect(
-                page.get_by_role("heading", name="2-표본 t-검정 실행")
-            ).to_be_visible()
+            expect(page.locator("#workbench-title")).to_have_text("2-표본 t-검정")
             page.get_by_role("button", name="2-표본 t-검정 실행").click()
             diagnostics.step("run two-sample t test")
             expect(
@@ -563,6 +565,28 @@ def open_primary_navigation(page: Page, label: str) -> None:
     page.locator(".sidebar-group-control").filter(
         has_text=re.compile(rf"^{re.escape(label)}$")
     ).click()
+
+
+def verify_graph_builder_box_plot(page: Page) -> None:
+    open_primary_navigation(page, "그래프")
+    expect(page.get_by_role("heading", name="그래프 작성")).to_be_visible(
+        timeout=15_000
+    )
+    value_checkbox = page.get_by_role("checkbox", name="Value")
+    if not value_checkbox.is_checked():
+        value_checkbox.check()
+    page.get_by_role("button", name="그래프 생성", exact=True).click()
+    expect(page.get_by_role("heading", name="그래프 결과")).to_be_visible(
+        timeout=20_000
+    )
+    expect(page.get_by_label("그래프 provenance")).to_contain_text("사용 행")
+    expect(page.get_by_role("img", name="Value 박스플롯")).to_be_visible()
+    expect(
+        page.get_by_text(
+            "이 결과는 미리보기이며 저장 분석 이력, result artifact 또는 export를 만들지 않습니다.",
+            exact=True,
+        )
+    ).to_be_visible()
 
 
 def create_exports(page: Page) -> None:
@@ -759,8 +783,8 @@ def restore_and_compare_saved_results(page: Page) -> None:
     expect(history_items).to_have_count(2, timeout=20_000)
 
     history_items.nth(0).get_by_role("button", name="결과 불러오기").click()
-    expect(page.get_by_role("region", name="2-표본 t-검정 실행")).to_be_visible(
-        timeout=15_000
+    expect(page.locator("#workbench-title")).to_have_text(
+        "2-표본 t-검정", timeout=15_000
     )
 
     page.get_by_role("button", name="리포트", exact=True).click()
@@ -876,7 +900,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
         "button",
         name=re.compile(r"^회귀모형 적합"),
     ).click()
-    expect(page.get_by_role("heading", name="회귀모형 적합 실행")).to_be_visible()
+    expect(page.locator("#workbench-title")).to_have_text("회귀모형 적합")
     expect_lazy_analysis_module(page, "RegressionAnalysisPanels")
 
     page.get_by_label("반응 변수").select_option(label="y")
@@ -987,12 +1011,12 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
             f"{frontend_base_url}/analysis/regression/regression.predict",
             wait_until="networkidle",
         )
+        expect(dedicated_page.locator("#workbench-title")).to_have_text(
+            "예측", timeout=20_000
+        )
         expect(
-            dedicated_page.get_by_role("heading", name="저장된 회귀모형으로 예측")
-        ).to_be_visible(timeout=20_000)
-        expect(
-            dedicated_page.get_by_text("사용 가능 · 전용", exact=True)
-        ).to_be_visible()
+            dedicated_page.locator(".workbench-heading .availability-badge")
+        ).to_have_text("사용 가능 · 전용 워크플로")
         dedicated_model_selector = dedicated_page.get_by_label("Source 회귀모형")
         expect(
             dedicated_model_selector.locator(f'option[value="{model_id}"]')
@@ -1156,8 +1180,8 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(page.get_by_role("button", name="전체 예측 CSV 생성")).to_have_count(0)
 
     page.reload(wait_until="networkidle")
-    expect(page.get_by_role("heading", name="회귀모형 적합 실행")).to_be_visible(
-        timeout=20_000
+    expect(page.locator("#workbench-title")).to_have_text(
+        "회귀모형 적합", timeout=20_000
     )
     compact_history = page.locator(".compact-analysis-history")
     compact_history.get_by_role("button", name="최근 이력 열기").click()
@@ -1185,7 +1209,7 @@ def verify_attribute_control_chart(page: Page) -> None:
 
     page.get_by_role("button", name="분석", exact=True).click()
     select_method_card(page, "품질 관리", "계수형 관리도")
-    expect(page.get_by_role("heading", name="계수형 관리도 실행")).to_be_visible()
+    expect(page.locator("#workbench-title")).to_have_text("계수형 관리도")
     expect_lazy_analysis_module(page, "QualityAnalysisPanels")
     expect(
         page.get_by_text("Phase I은 현재 데이터에서 기준선을 추정합니다", exact=False)
@@ -1215,6 +1239,21 @@ def verify_attribute_control_chart(page: Page) -> None:
     )
     if not limit_set_response.ok:
         raise AssertionError(f"limit-set creation failed: {limit_set_response.text()}")
+
+    select_method_card(page, "품질 관리", "I-MR 관리도")
+    expect(page.locator("#workbench-title")).to_have_text("I-MR 관리도")
+    page.get_by_label("측정값").select_option(label="defectives")
+    page.get_by_role("button", name="I-MR 관리도 실행").click()
+    expect(page.get_by_label("I-MR 관리도 요약")).to_be_visible(timeout=20_000)
+    expect(page.get_by_label("I-MR 신호 요약")).to_be_visible()
+    expect(page.get_by_text("I chart", exact=True)).to_be_visible()
+    expect(page.get_by_text("MR chart", exact=True)).to_be_visible()
+    expect(page.get_by_label("I-MR 관리도 해석 안내")).to_contain_text(
+        "관리한계 안에 있다는 사실만으로"
+    )
+    expect(page.get_by_label("I-MR 관리도 해석 안내")).to_contain_text(
+        "규격한계는 사용자가 정한 허용 기준"
+    )
 
     open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, ATTRIBUTE_CONTROL_CHART_DATA)
@@ -1289,9 +1328,7 @@ def verify_attribute_control_chart(page: Page) -> None:
 def verify_doe_factorial_analysis(page: Page) -> None:
     page.get_by_role("button", name="분석", exact=True).click()
     select_method_card(page, "실험 계획법", "실험 계획 생성")
-    expect(
-        page.get_by_role("heading", name="2-level full factorial 설계 생성")
-    ).to_be_visible()
+    expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
     expect_lazy_analysis_module(page, "DoeAnalysisPanels")
 
     page.get_by_label("반복", exact=True).fill("2")
@@ -1364,28 +1401,28 @@ def verify_lazy_panel_direct_routes(page: Page, frontend_base_url: str) -> None:
     routes = [
         (
             "/analysis/regression/regression.linear_model",
-            "회귀모형 적합 실행",
+            "회귀모형 적합",
             "RegressionAnalysisPanels",
         ),
         (
             "/analysis/quality/quality.attribute_control_chart",
-            "계수형 관리도 실행",
+            "계수형 관리도",
             "QualityAnalysisPanels",
         ),
         (
             "/analysis/doe/doe.factorial_design",
-            "2-level full factorial 설계 생성",
+            "실험 계획 생성",
             "DoeAnalysisPanels",
         ),
         (
             "/analysis/doe/doe.bayesian_optimization",
-            "Bayesian 최적화",
+            "베이지안 최적화",
             "DoeAnalysisPanels",
         ),
     ]
     for route_path, heading, module_name in routes:
         page.goto(f"{frontend_base_url}{route_path}", wait_until="networkidle")
-        expect(page.get_by_role("heading", name=heading)).to_be_visible(timeout=15_000)
+        expect(page.locator("#workbench-title")).to_have_text(heading, timeout=15_000)
         expect_lazy_analysis_module(page, module_name)
         expect(page.get_by_label("분석 패널 로드 오류")).to_have_count(0)
 
@@ -1412,9 +1449,9 @@ def verify_lazy_panel_error_boundary(
         )
         page.unroute("**/RegressionAnalysisPanels.ts*")
         select_method_card(page, "실험 계획법", "실험 계획 생성")
-        expect(
-            page.get_by_role("heading", name="2-level full factorial 설계 생성")
-        ).to_be_visible(timeout=15_000)
+        expect(page.locator("#workbench-title")).to_have_text(
+            "실험 계획 생성", timeout=15_000
+        )
         expect(page.get_by_label("분석 패널 로드 오류")).to_have_count(0)
     finally:
         page.close()
@@ -1422,7 +1459,7 @@ def verify_lazy_panel_error_boundary(
 
 def verify_doe_response_surface_analysis(page: Page) -> None:
     select_method_card(page, "실험 계획법", "반응표면법")
-    expect(page.locator("#response-surface-title")).to_be_visible()
+    expect(page.locator("#workbench-title")).to_have_text("반응표면법")
 
     page.get_by_label("실행 순서 무작위화").uncheck()
     page.get_by_role("button", name="CCD 생성").click()
@@ -1504,14 +1541,12 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
             f"{frontend_base_url}/analysis/regression/regression.response_optimizer",
             wait_until="networkidle",
         )
+        expect(dedicated_page.locator("#workbench-title")).to_have_text(
+            "반응 최적화", timeout=20_000
+        )
         expect(
-            dedicated_page.get_by_role(
-                "heading", name="저장된 RSM 분석으로 반응 최적화"
-            )
-        ).to_be_visible(timeout=20_000)
-        expect(
-            dedicated_page.get_by_text("사용 가능 · 전용", exact=True)
-        ).to_be_visible()
+            dedicated_page.locator(".workbench-heading .availability-badge")
+        ).to_have_text("사용 가능 · 전용 워크플로")
         source_selector = dedicated_page.get_by_label("Source 반응표면 분석")
         source_value = f"{rsm_design_id}:{rsm_analysis_id}"
         expect(
@@ -1578,8 +1613,8 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
 
 def verify_bayesian_optimization(page: Page) -> None:
     select_method_card(page, "실험 계획법", "베이지안 최적화")
-    expect(page.get_by_role("heading", name="Bayesian 최적화")).to_be_visible(
-        timeout=15_000
+    expect(page.locator("#workbench-title")).to_have_text(
+        "베이지안 최적화", timeout=15_000
     )
     expect(
         page.get_by_text("앱은 목적함수를 실행하지 않습니다", exact=False)
@@ -1680,8 +1715,8 @@ def verify_bayesian_optimization(page: Page) -> None:
     study_selector = page.get_by_label("저장된 Bayesian study")
     study_id = study_selector.input_value()
     page.reload(wait_until="networkidle")
-    expect(page.get_by_role("heading", name="Bayesian 최적화")).to_be_visible(
-        timeout=20_000
+    expect(page.locator("#workbench-title")).to_have_text(
+        "베이지안 최적화", timeout=20_000
     )
     restored_selector = page.get_by_label("저장된 Bayesian study")
     expect(restored_selector).to_have_value(study_id, timeout=20_000)

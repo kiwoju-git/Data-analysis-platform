@@ -1,8 +1,37 @@
 # CI Status
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 ## Local Validation
+
+- The I-MR/Graph Builder/analysis-usability feature branch is based on pushed
+  main `0b88293384d66751fe97f2facebc3f393729b819`. It keeps
+  `quality.individuals_chart` at method `0.1.0` with its existing result schema
+  and calculations, exposes the method as `I-MR 관리도`, adds the non-persisted
+  `/graphs` preview workflow, replaces card-level backend metadata with
+  statistical selection guidance, and removes duplicate Workbench chrome.
+- Final development validation on 2026-07-25 passed tutorial Markdown block
+  verification 18, Ruff/format over 173 Python files, mypy over 108 source
+  files, backend pytest 845, frontend lint/typecheck and Vitest 202,
+  OpenAPI/frontend contracts, and the production build. The isolated Chromium
+  critical path passed in 83 seconds and includes Graph Builder Box Plot
+  preview/provenance, I-MR I/MR charts and interpretation, plus all retained
+  saved-result, export, Predict, Optimizer, Bayesian, quality, DOE, parser, and
+  lazy-route workflows. Diagnostics are under
+  `.tmp/e2e-diagnostics-imr-graph-builder-pass` and remain untracked.
+- The Graph Builder route uses visualization schema 1 and runtime API contract
+  4 capability `graph_builder_preview`. It does not create analysis history or
+  artifacts, does not silently sample, and caps point payloads explicitly. No
+  SQLite migration or statistical result-schema change was made.
+- The build measured main at 515.18 kB / 128.15 kB gzip, CSS at 50.54/10.02
+  kB, GraphBuilder at 23.30/7.13 kB, Project at 6.26/1.90 kB, Manage at
+  27.33/7.30 kB, Report at 40.41/9.07 kB, Regression at 58.54/13.25 kB,
+  Quality at 68.19/13.61 kB, DOE at 109.87/26.10 kB, and Help at 18.56/6.50
+  kB. Main remains above Vite's 500 kB warning threshold.
+- The measured host remains Windows 10 Home build 19045, CPython 3.10.11, and
+  Node 24.17.0. These results are development evidence, not the Windows
+  11/Python 3.10/Node 22 release gate. GitHub CLI is unavailable on this host,
+  so the matching pushed-main Actions run is not claimed here.
 
 - The workspace-invalidation/corporate-shell feature branch is based on
   pushed main `00e3b9d634fda325ea450287e0013dc99809bf9f`. The backend cascade
