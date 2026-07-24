@@ -30,6 +30,7 @@ interface SidebarNavigationOptions {
     section: "purpose" | "roles" | "methods" | "tutorial",
   ) => void;
   onOpenManageTab: (tab: "datasets" | "models") => void;
+  onOpenGraphs: () => void;
   onOpenProject: () => void;
   onOpenReportTab: (tab: "reports" | "history") => void;
 }
@@ -52,6 +53,7 @@ export function createSidebarNavigationGroups({
   onOpenDatasetSection,
   onOpenHelpSection,
   onOpenManageTab,
+  onOpenGraphs,
   onOpenProject,
   onOpenReportTab,
 }: SidebarNavigationOptions): SidebarNavigationGroup[] {
@@ -108,6 +110,20 @@ export function createSidebarNavigationGroups({
       defaultChildId: activeAnalysisModuleId,
       id: "analysis",
       label: "분석",
+    },
+    {
+      active: activePage === "graphs",
+      children: [
+        {
+          active: activePage === "graphs",
+          id: "graph-builder",
+          label: "그래프 작성",
+          onActivate: onOpenGraphs,
+        },
+      ],
+      defaultChildId: "graph-builder",
+      id: "graphs",
+      label: "그래프",
     },
     {
       active: activePage === "reports",

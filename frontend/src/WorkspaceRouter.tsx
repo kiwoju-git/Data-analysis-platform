@@ -18,6 +18,7 @@ import {
 } from "./DatasetPreparationPage";
 import {
   HelpCenterPage,
+  GraphBuilderPage,
   ManageAssetsPage,
   ProjectOverviewPage,
   ReportCenterPage,
@@ -68,7 +69,20 @@ export function WorkspaceRouter({
   onWorkspaceMutation = () => undefined,
   workspaceAssetRevision = 0,
 }: WorkspaceRouterProps) {
-  const labelledBy = routePage === "analysis" ? "analysis-modules-title" : routePage === "reports" ? "report-center-title" : routePage === "help" ? "help-quick-start-title" : routePage === "manage" ? "asset-management-title" : routePage === "project" ? "project-overview-title" : "workspace-title";
+  const labelledBy =
+    routePage === "analysis"
+      ? "analysis-modules-title"
+      : routePage === "graphs"
+        ? "graph-builder-title"
+        : routePage === "reports"
+          ? "report-center-title"
+          : routePage === "help"
+            ? "help-quick-start-title"
+            : routePage === "manage"
+              ? "asset-management-title"
+              : routePage === "project"
+                ? "project-overview-title"
+                : "workspace-title";
   return (
     <section
       className="workspace"
@@ -76,6 +90,15 @@ export function WorkspaceRouter({
     >
       {routePage === "analysis" ? <AnalysisPage {...analysisPageProps} /> : null}
       {routePage === "dataset" ? <DatasetPreparationPage {...datasetPageProps} /> : null}
+      {routePage === "graphs" ? (
+        <WorkspacePageBoundary pageKey="graphs">
+          <GraphBuilderPage
+            catalog={analysisCatalog}
+            version={currentDatasetVersion ?? null}
+            onOpenAnalysis={onOpenAnalysisMethod}
+          />
+        </WorkspacePageBoundary>
+      ) : null}
       {routePage === "project" ? (
         <WorkspacePageBoundary pageKey="project">
           <ProjectOverviewPage

@@ -17,3 +17,7 @@ export const ProjectOverviewPage = lazy(() =>
     default: module.ProjectOverviewPage,
   })),
 );
+
+export const GraphBuilderPage = lazy(() =>
+  import("./GraphBuilderPage").then((module) => ({ default: module.GraphBuilderPage })),
+);

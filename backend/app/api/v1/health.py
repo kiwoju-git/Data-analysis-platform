@@ -31,6 +31,7 @@ class RuntimeCapabilities(BaseModel):
     dedicated_predict: bool
     dedicated_response_optimizer: bool
     bayesian_optimization: bool
+    graph_builder_preview: bool
 
 
 class RuntimeInfoResponse(BaseModel):

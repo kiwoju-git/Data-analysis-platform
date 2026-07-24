@@ -37,18 +37,19 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `2`);
-- the actual metadata schema constant (currently `15`);
+- `api_contract_version` (currently `4`);
+- the actual metadata schema constant (currently `16`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
-  deletion, dedicated Predict/Response Optimizer, and Bayesian Optimization.
+  deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and
+  Graph Builder preview.
 
 The response contains no workspace path, filename, or raw data. Existing
 `GET /api/v1/health` retains its liveness/readiness meaning.
 
 ## Frontend Gate
 
-The frontend expects API contract `2`, schema 15 or later, and every required
+The frontend expects API contract `4`, schema 16 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

@@ -16,6 +16,7 @@ export interface RuntimeCapabilities {
   dedicated_predict: boolean;
   dedicated_response_optimizer: boolean;
   bayesian_optimization: boolean;
+  graph_builder_preview: boolean;
 }
 
 export interface RuntimeInfoResponse {

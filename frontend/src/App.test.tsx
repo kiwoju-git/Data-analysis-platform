@@ -220,6 +220,7 @@ describe("App", () => {
     expect(parseAppRoute("/help", "")).toEqual({ page: "help" });
     expect(parseAppRoute("/manage", "")).toEqual({ page: "manage" });
     expect(parseAppRoute("/project", "")).toEqual({ page: "project" });
+    expect(parseAppRoute("/graphs", "")).toEqual({ page: "graphs" });
   });
 
   it("rejects unknown analysis module routes", () => {
@@ -5049,6 +5050,7 @@ describe("App", () => {
         healthLabel="API ok"
         onOpenAnalysisPage={() => undefined}
         onOpenDatasetPage={() => undefined}
+        onOpenGraphsPage={() => undefined}
         onOpenHelpPage={() => undefined}
         onOpenManagePage={() => undefined}
         onOpenProjectPage={() => undefined}
@@ -5062,7 +5064,7 @@ describe("App", () => {
     expect(html).toContain("Statistical Twin");
     expect(html).not.toContain("DataLab Studio");
     expect(html).toContain('aria-label="주요 메뉴"');
-    expect(html.match(/class="sidebar-group(?: sidebar-group-active)?"/g)).toHaveLength(6);
+    expect(html.match(/class="sidebar-group(?: sidebar-group-active)?"/g)).toHaveLength(7);
     expect(html).toContain('aria-current="page"');
     expect(html).not.toContain("로컬 분석 작업대");
     expect(html).toContain("데이터셋");

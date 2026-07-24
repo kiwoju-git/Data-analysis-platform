@@ -10,6 +10,10 @@ invent points, change result schemas, or load uncapped raw rows. A chart may
 render only values already present in a validated result payload. Tooltips and
 selection details are never logged or persisted in browser storage.
 
+Graph Builder uses this layer for comparative boxplots, individual-value
+points, scatter points, Run Chart points, and I-MR points. Its raw point
+payloads are bounded server-side; overflow blocks instead of silently sampling.
+
 The shared foundation is:
 
 - `charts/InteractiveScatterChart.tsx` for axes, reference lines, points,

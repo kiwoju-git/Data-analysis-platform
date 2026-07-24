@@ -1,4 +1,4 @@
-$script:ExpectedApiContractVersion = 3
+$script:ExpectedApiContractVersion = 4
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",
     "dataset_version_metadata",
@@ -10,7 +10,8 @@ $script:RequiredRuntimeCapabilities = @(
     "regression_model_deletion",
     "dedicated_predict",
     "dedicated_response_optimizer",
-    "bayesian_optimization"
+    "bayesian_optimization",
+    "graph_builder_preview"
 )
 
 function Get-DevPortOwner {

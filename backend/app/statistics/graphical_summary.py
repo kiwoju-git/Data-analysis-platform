@@ -51,7 +51,7 @@ def summarize_numeric_graphics(
                 accumulator.n_missing += 1
                 continue
 
-            number = _parse_number(value, decimal=decimal, thousands=thousands)
+            number = parse_numeric_value(value, decimal=decimal, thousands=thousands)
             if number is None:
                 accumulator.n_non_numeric += 1
                 continue
@@ -78,7 +78,7 @@ def summarize_numeric_graphics(
     }
 
 
-def _parse_number(value: str, *, decimal: str, thousands: str | None) -> float | None:
+def parse_numeric_value(value: str, *, decimal: str, thousands: str | None) -> float | None:
     normalized = value.strip()
     if normalized == "":
         return None

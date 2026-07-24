@@ -11,6 +11,7 @@ export type AppRoute =
       page: "analysis";
       selection: AnalysisSelection;
     }
+  | { page: "graphs" }
   | { page: "reports" }
   | { page: "manage" }
   | { page: "help" };
@@ -19,6 +20,9 @@ export function parseAppRoute(pathname: string, hash: string): AppRoute {
   const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
   if (normalizedPath === "/project") {
     return { page: "project" };
+  }
+  if (normalizedPath === "/graphs") {
+    return { page: "graphs" };
   }
   if (normalizedPath === "/reports") {
     return { page: "reports" };

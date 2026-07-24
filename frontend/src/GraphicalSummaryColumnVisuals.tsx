@@ -13,14 +13,18 @@ import { paddedNumericRange } from "./charts/chartScale";
 type GraphicalSummaryColumn = GraphicalSummaryResult["columns"][number];
 
 interface GraphicalSummaryColumnVisualsProps {
+  charts?: Array<"boxplot" | "ecdf" | "histogram" | "qq">;
   column: GraphicalSummaryColumn;
   mode: "quick" | "full";
 }
 
 export function GraphicalSummaryColumnVisuals({
+  charts,
   column,
   mode,
 }: GraphicalSummaryColumnVisualsProps) {
+  const visibleCharts =
+    charts ?? (mode === "quick" ? ["histogram", "boxplot"] : ["histogram", "boxplot", "qq", "ecdf"]);
   return (
     <section
       className={`graphical-summary-card graphical-summary-card-${mode}`}
@@ -38,35 +42,39 @@ export function GraphicalSummaryColumnVisuals({
         ) : null}
       </div>
       <div className="chart-grid">
-        <ChartPanel title="히스토그램">
-          <InteractiveHistogramChart
-            bins={column.histogram.bins}
-            chartId={`graphical-histogram-${mode}-${column.column_id}`}
-            columnName={column.display_name}
-            nBasis={column.n_used}
-          />
-        </ChartPanel>
-        <ChartPanel title="박스플롯">
-          <InteractiveBoxplotChart
-            boxplot={column.boxplot}
-            chartId={`graphical-boxplot-${mode}-${column.column_id}`}
-            columnName={column.display_name}
-          />
-        </ChartPanel>
-        {mode === "full" ? (
-          <>
-            <ChartPanel title="Q-Q Plot">
-              <InteractiveQqChart
-                chartId={`graphical-qq-${column.column_id}`}
-                columnName={column.display_name}
-                nBasis={column.n_used}
-                pointCount={column.qq_plot.point_count}
-                points={column.qq_plot.points}
-                truncated={column.qq_plot.points_truncated}
-              />
-            </ChartPanel>
-            <ChartPanel title="ECDF">{renderEcdf(column)}</ChartPanel>
-          </>
+        {visibleCharts.includes("histogram") ? (
+          <ChartPanel title="히스토그램">
+            <InteractiveHistogramChart
+              bins={column.histogram.bins}
+              chartId={`graphical-histogram-${mode}-${column.column_id}`}
+              columnName={column.display_name}
+              nBasis={column.n_used}
+            />
+          </ChartPanel>
+        ) : null}
+        {visibleCharts.includes("boxplot") ? (
+          <ChartPanel title="박스플롯">
+            <InteractiveBoxplotChart
+              boxplot={column.boxplot}
+              chartId={`graphical-boxplot-${mode}-${column.column_id}`}
+              columnName={column.display_name}
+            />
+          </ChartPanel>
+        ) : null}
+        {visibleCharts.includes("qq") ? (
+          <ChartPanel title="Q-Q Plot">
+            <InteractiveQqChart
+              chartId={`graphical-qq-${column.column_id}`}
+              columnName={column.display_name}
+              nBasis={column.n_used}
+              pointCount={column.qq_plot.point_count}
+              points={column.qq_plot.points}
+              truncated={column.qq_plot.points_truncated}
+            />
+          </ChartPanel>
+        ) : null}
+        {visibleCharts.includes("ecdf") ? (
+          <ChartPanel title="ECDF">{renderEcdf(column)}</ChartPanel>
         ) : null}
       </div>
       {column.warnings.length > 0 ? (

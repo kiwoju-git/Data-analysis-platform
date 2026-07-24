@@ -467,6 +467,137 @@ tbody tr:hover {
   }
 }
 
+.graph-builder-page {
+  gap: 18px;
+}
+
+.summary-band {
+  align-items: center;
+  background: var(--brand-blue-soft);
+  border: 1px solid var(--brand-blue-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 12px 16px;
+}
+
+.surface-section {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  padding: 18px;
+}
+
+.surface-section > h3 {
+  color: var(--brand-logo-blue);
+  margin: 0 0 14px;
+}
+
+.graph-type-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.graph-type-button {
+  align-items: flex-start;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 76px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.graph-type-button:hover {
+  background: var(--brand-blue-soft);
+  border-color: var(--brand-blue-border);
+}
+
+.graph-type-button.is-selected {
+  background: var(--brand-nav-blue);
+  border-color: var(--brand-nav-blue);
+  color: var(--text-on-blue);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.graph-type-button span {
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.graph-role-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 0.6fr) minmax(260px, 1.4fr);
+}
+
+.graph-builder-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.graph-builder-select select {
+  max-width: 460px;
+}
+
+.graph-preview-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+}
+
+.graph-preview-panel {
+  border: 1px solid var(--border-default);
+  min-width: 0;
+  padding: 14px;
+}
+
+.graph-preview-panel > h4 {
+  color: var(--brand-logo-blue);
+  margin: 0 0 10px;
+}
+
+.analysis-only-links {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.analysis-only-links article {
+  border-left: 3px solid var(--brand-blue-accent);
+  padding: 4px 12px 10px;
+}
+
+.analysis-only-links h4,
+.analysis-only-links p {
+  margin-top: 0;
+}
+
+.field-help {
+  color: var(--text-secondary);
+  display: block;
+  line-height: 1.45;
+  margin-top: 5px;
+}
+
+@media (max-width: 720px) {
+  .graph-role-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-band {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

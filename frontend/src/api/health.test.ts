@@ -13,7 +13,7 @@ describe("fetchRuntimeInfo", () => {
         JSON.stringify({
           service: "datalab-studio-api",
           app_version: "0.1.0",
-          api_contract_version: 3,
+          api_contract_version: 4,
           metadata_schema_version: 16,
           build_commit: "unknown",
           capabilities: {
@@ -28,6 +28,7 @@ describe("fetchRuntimeInfo", () => {
             dedicated_predict: true,
             dedicated_response_optimizer: true,
             bayesian_optimization: true,
+            graph_builder_preview: true,
           },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },

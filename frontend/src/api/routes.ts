@@ -49,6 +49,10 @@ export const apiRoutes = {
     return apiUrl("/workspace/summary");
   },
 
+  visualizationPreview(): string {
+    return apiUrl("/visualizations/preview");
+  },
+
   datasets(): string {
     return apiUrl("/datasets");
   },

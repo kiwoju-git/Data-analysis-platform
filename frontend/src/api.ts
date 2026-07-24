@@ -43,6 +43,7 @@ export { updateDatasetSchema } from "./api/datasets";
 export { updateDatasetVersionMetadata } from "./api/datasets";
 export { uploadDataset } from "./api/datasets";
 export { fetchWorkspaceSummary } from "./api/workspace";
+export { createGraphPreview } from "./api/visualizations";
 export { createFactorialDesign } from "./api/doe";
 export { createFactorialAnalysis } from "./api/doe";
 export { fetchFactorialAnalysis } from "./api/doe";

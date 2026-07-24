@@ -12,3 +12,4 @@ export type * from "./doe";
 export type * from "./regression";
 export type * from "./bayesian";
 export type * from "./quality";
+export type * from "./visualizations";

@@ -1,5 +1,10 @@
 # DataLab Studio
 
+The `그래프 > 그래프 작성` screen creates bounded, non-persisted previews for
+Box Plot, Individual Value Plot, Histogram, Q-Q, ECDF, Scatter, Run Chart, and
+I-MR. It uses confirmed dataset versions and analysis filters, does not silently
+sample raw points, and does not add preview-only entries to analysis history.
+
 DataLab Studio is a Windows-targeted, CPU-only, local-first statistical analysis web application.
 
 데이터 업로드와 파싱 확인부터 통계 분석, 회귀 예측, 품질 관리, DOE, 결과 복원과

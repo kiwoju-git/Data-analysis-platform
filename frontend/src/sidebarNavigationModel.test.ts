@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createSidebarNavigationGroups } from "./sidebarNavigationModel";
 
 describe("sidebar navigation model", () => {
-  it("builds six readable groups with query-synchronized active leaves", () => {
+  it("builds seven readable groups with query-synchronized active leaves", () => {
     const onOpenManageTab = vi.fn();
     const groups = createSidebarNavigationGroups({
       activeAnalysisModuleId: "quality",
@@ -13,6 +13,7 @@ describe("sidebar navigation model", () => {
       onOpenAnalysisModule: vi.fn(),
       onOpenDatasetSection: vi.fn(),
       onOpenHelpSection: vi.fn(),
+      onOpenGraphs: vi.fn(),
       onOpenManageTab,
       onOpenProject: vi.fn(),
       onOpenReportTab: vi.fn(),
@@ -22,6 +23,7 @@ describe("sidebar navigation model", () => {
       "프로젝트",
       "데이터셋",
       "분석",
+      "그래프",
       "리포트",
       "관리",
       "도움말",
@@ -47,6 +49,7 @@ describe("sidebar navigation model", () => {
       onOpenAnalysisModule: vi.fn(),
       onOpenDatasetSection: vi.fn(),
       onOpenHelpSection: vi.fn(),
+      onOpenGraphs: vi.fn(),
       onOpenManageTab: vi.fn(),
       onOpenProject: vi.fn(),
       onOpenReportTab: vi.fn(),
@@ -75,6 +78,7 @@ describe("sidebar navigation model", () => {
       onOpenAnalysisModule: vi.fn(),
       onOpenDatasetSection: vi.fn(),
       onOpenHelpSection: vi.fn(),
+      onOpenGraphs: vi.fn(),
       onOpenManageTab: vi.fn(),
       onOpenProject: vi.fn(),
       onOpenReportTab: vi.fn(),
@@ -85,5 +89,30 @@ describe("sidebar navigation model", () => {
         .find((group) => group.id === "help")
         ?.children.find((item) => item.active)?.id,
     ).toBe("methods");
+  });
+
+  it("opens the graph builder from the active Graph group", () => {
+    const onOpenGraphs = vi.fn();
+    const groups = createSidebarNavigationGroups({
+      activeAnalysisModuleId: "exploration",
+      activePage: "graphs",
+      canOpenAnalysis: true,
+      query: new URLSearchParams("dataset_version_id=version-1"),
+      onOpenAnalysisModule: vi.fn(),
+      onOpenDatasetSection: vi.fn(),
+      onOpenGraphs,
+      onOpenHelpSection: vi.fn(),
+      onOpenManageTab: vi.fn(),
+      onOpenProject: vi.fn(),
+      onOpenReportTab: vi.fn(),
+    });
+    const graphs = groups.find((group) => group.id === "graphs");
+
+    expect(graphs?.active).toBe(true);
+    expect(graphs?.children[0]?.label).toBe("그래프 작성");
+    expect(graphs?.children[0]?.active).toBe(true);
+    expect(graphs?.children[0]?.id).toBe("graph-builder");
+    graphs?.children[0]?.onActivate();
+    expect(onOpenGraphs).toHaveBeenCalledTimes(1);
   });
 });

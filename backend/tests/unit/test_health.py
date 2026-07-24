@@ -45,7 +45,7 @@ def test_runtime_info_reports_current_contract_without_workspace_details(tmp_pat
     assert response.json() == {
         "service": "datalab-studio-api",
         "app_version": "0.1.0",
-        "api_contract_version": 3,
+        "api_contract_version": 4,
         "metadata_schema_version": 16,
         "build_commit": "unknown",
         "capabilities": {
@@ -60,6 +60,7 @@ def test_runtime_info_reports_current_contract_without_workspace_details(tmp_pat
             "dedicated_predict": True,
             "dedicated_response_optimizer": True,
             "bayesian_optimization": True,
+            "graph_builder_preview": True,
         },
     }
     body = response.text.lower()

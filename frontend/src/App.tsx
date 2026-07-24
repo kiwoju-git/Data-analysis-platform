@@ -3610,6 +3610,13 @@ export default function App() {
     setAppRoute({ page: "project" });
   }
 
+  function handleOpenGraphsPage() {
+    if (typeof window !== "undefined") {
+      pushAppLocation(pathWithActiveDatasetQuery("/graphs"));
+    }
+    setAppRoute({ page: "graphs" });
+  }
+
   function publishWorkspaceMutation(kind: WorkspaceMutationKind) {
     void kind;
     setWorkspaceAssetRevision((revision) => revision + 1);
@@ -4167,6 +4174,7 @@ export default function App() {
     onOpenDatasetSection: handleOpenDatasetPage,
     onOpenHelpSection: handleOpenHelpPage,
     onOpenManageTab: handleOpenManagePage,
+    onOpenGraphs: handleOpenGraphsPage,
     onOpenProject: handleOpenProjectPage,
     onOpenReportTab: (tab) => handleOpenReportsPage(undefined, tab),
   });
@@ -4185,6 +4193,7 @@ export default function App() {
       onOpenAnalysisPage={handleOpenAnalysisPage}
       onOpenDatasetPage={handleOpenDatasetPage}
       onOpenHelpPage={() => handleOpenHelpPage()}
+      onOpenGraphsPage={handleOpenGraphsPage}
       onOpenManagePage={handleOpenManagePage}
       onOpenProjectPage={handleOpenProjectPage}
       onOpenReportsPage={handleOpenReportsPage}

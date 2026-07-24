@@ -7,6 +7,11 @@ receive a method-version bump. `regression.predict` is `0.2.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
 `quality.run_chart` is `0.2.0`; the other stable IDs remain on `0.1.0`.
 
+Graph Builder uses `visualization_schema_version=1` and does not create an
+analysis run. Adding `/api/v1/visualizations/preview` does not bump a
+statistical method version or result schema. API contract version 4 prevents a
+new frontend from calling the required preview route on an older backend.
+
 ## Source Of Truth
 
 - `backend/app/analyses/registry.py` owns the `METHOD_VERSIONS` map.

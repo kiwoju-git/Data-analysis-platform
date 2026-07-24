@@ -68,6 +68,14 @@ FRONTEND_ROUTE_CONTRACTS = [
         response_schema="WorkspaceSummaryResponse",
     ),
     OperationContract(
+        route_name="visualizationPreview",
+        method="post",
+        path="/api/v1/visualizations/preview",
+        success_status="200",
+        response_schema="GraphPreviewResponse",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="datasets",
         method="post",
         path="/api/v1/datasets",
@@ -1453,6 +1461,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "dedicated_predict",
                 "dedicated_response_optimizer",
                 "bayesian_optimization",
+                "graph_builder_preview",
             }
         ),
         required_fields=frozenset(
@@ -1468,6 +1477,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "dedicated_predict",
                 "dedicated_response_optimizer",
                 "bayesian_optimization",
+                "graph_builder_preview",
             }
         ),
     ),

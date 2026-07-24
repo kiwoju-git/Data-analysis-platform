@@ -24,6 +24,7 @@ export interface AppChromeProps {
   onOpenAnalysisPage: () => void;
   onOpenDatasetPage: () => void;
   onOpenHelpPage: () => void;
+  onOpenGraphsPage: () => void;
   onOpenManagePage: () => void;
   onOpenProjectPage: () => void;
   onOpenReportsPage: () => void;
@@ -41,6 +42,7 @@ export function AppChrome({
   onOpenAnalysisPage,
   onOpenDatasetPage,
   onOpenHelpPage,
+  onOpenGraphsPage,
   onOpenManagePage,
   onOpenProjectPage,
   onOpenReportsPage,
@@ -56,6 +58,7 @@ export function AppChrome({
       onOpenAnalysisPage,
       onOpenDatasetPage,
       onOpenHelpPage,
+      onOpenGraphsPage,
       onOpenManagePage,
       onOpenProjectPage,
       onOpenReportsPage,
@@ -164,6 +167,7 @@ function pageTitleFor(page: AppRoute["page"]): string {
   const labels: Record<AppRoute["page"], string> = {
     analysis: "분석",
     dataset: "데이터셋",
+    graphs: "그래프",
     help: "도움말",
     manage: "관리",
     project: "프로젝트",
@@ -178,6 +182,7 @@ function fallbackNavigationGroups({
   onOpenAnalysisPage,
   onOpenDatasetPage,
   onOpenHelpPage,
+  onOpenGraphsPage,
   onOpenManagePage,
   onOpenProjectPage,
   onOpenReportsPage,
@@ -206,6 +211,7 @@ function fallbackNavigationGroups({
       disabled: !canOpenAnalysis,
       onActivate: onOpenAnalysisPage,
     },
+    { id: "graphs", label: "그래프", leaf: "그래프 작성", onActivate: onOpenGraphsPage },
     { id: "reports", label: "리포트", leaf: "보고서", onActivate: onOpenReportsPage },
     { id: "manage", label: "관리", leaf: "데이터셋", onActivate: onOpenManagePage },
     { id: "help", label: "도움말", leaf: "질문으로 찾기", onActivate: onOpenHelpPage },
