@@ -267,7 +267,7 @@ browser critical path.
 - `run descriptive statistics`
 - `run two-sample t test`
 - `create, download, and delete one export`
-- `verify Help Report and Manage routes`
+- `verify Help Report Project and Manage routes`
 - `restore and compare saved results`
 - `delete one stored analysis run`
 - `verify schema stale behavior`

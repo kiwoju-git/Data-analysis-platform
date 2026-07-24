@@ -40,6 +40,11 @@ Last updated: 2026-07-24
 - Current-main hosted Actions status is not inferred from local results. The
   branch must be pushed before a matching main run can exist; the most recent
   previously recorded hosted status remains in the history below.
+- Hosted push run `30055528059` for main SHA `2fa33fa72a5a1cf1f8ea2c4ba1d507f89fc0cb56`
+  completed bootstrap and 837/838 backend tests, then failed the E2E marker
+  documentation guard because the new Project step name was not yet mirrored
+  in `docs/e2e_coverage.md`; its dependent E2E job was correctly skipped. The
+  follow-up synchronizes that exact marker before starting a replacement run.
 
 - The usability/retention/run-chart/ZIP feature branch based on pushed main
   `e6f74f031daaa5208eac77f8beba35b427d44d9d` passed the final development
