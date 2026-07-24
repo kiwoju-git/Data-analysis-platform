@@ -304,7 +304,29 @@ function ScatterRoleControls({ state }: { state: BuilderState }) {
   );
 }
 
-function GraphPreviewPanels({
+export function graphPreviewGridClassName(graphType: GraphPreviewType): string {
+  const suffixByType: Record<GraphPreviewType, string> = {
+    box_plot: "box-plot",
+    individual_value_plot: "individual-value-plot",
+    histogram: "histogram",
+    qq_plot: "qq-plot",
+    ecdf: "ecdf",
+    scatter_plot: "scatter-plot",
+    run_chart: "run-chart",
+    imr_chart: "imr-chart",
+  };
+  return `graph-preview-grid graph-preview-grid-${suffixByType[graphType]}`;
+}
+
+export function graphPreviewPanelClassName(
+  kind: GraphPreviewPanel["kind"],
+): string {
+  return kind === "individual_values" || kind === "imr_chart"
+    ? "graph-preview-panel graph-preview-card-full-row"
+    : "graph-preview-panel";
+}
+
+export function GraphPreviewPanels({
   graphType,
   layout,
   panels,
@@ -318,11 +340,13 @@ function GraphPreviewPanels({
   );
   if (graphType === "box_plot" && layout === "combined" && graphical.length > 1) {
     return (
-      <ComparativeBoxplotChart chartId="graph-builder-boxplot" columns={graphical} />
+      <div className="graph-preview-combined">
+        <ComparativeBoxplotChart chartId="graph-builder-boxplot" columns={graphical} />
+      </div>
     );
   }
   return (
-    <div className="graph-preview-grid">
+    <div className={graphPreviewGridClassName(graphType)}>
       {panels.map((panel) => (
         <GraphPreviewPanelView graphType={graphType} key={panel.panel_id} panel={panel} />
       ))}
@@ -339,7 +363,7 @@ function GraphPreviewPanelView({
 }) {
   if (panel.status === "failed" || panel.result === null) {
     return (
-      <article className="graph-preview-panel">
+      <article className={graphPreviewPanelClassName(panel.kind)}>
         <h4>{panel.label}</h4>
         <div className="notice-box">{panel.error_code ?? "그래프 계산 불가"}</div>
       </article>
@@ -364,7 +388,7 @@ function GraphPreviewPanelView({
   }
   if (panel.kind === "individual_values") {
     return (
-      <article className="graph-preview-panel">
+      <article className={graphPreviewPanelClassName(panel.kind)}>
         <h4>{panel.label}</h4>
         <InteractiveIndividualValueChart
           chartId={`graph-builder-${panel.panel_id}`}
@@ -399,7 +423,7 @@ function ScatterPanel({ panel }: { panel: ScatterPreviewPanel }) {
     y: point.y,
   }));
   return (
-    <article className="graph-preview-panel">
+    <article className={graphPreviewPanelClassName(panel.kind)}>
       <h4>{panel.label}</h4>
       <InteractiveScatterChart
         annotations={[`pairwise complete ${points.length.toLocaleString()}점`, "자동 표본추출 없음"]}

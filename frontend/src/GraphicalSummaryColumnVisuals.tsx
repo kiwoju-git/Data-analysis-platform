@@ -25,6 +25,8 @@ export function GraphicalSummaryColumnVisuals({
 }: GraphicalSummaryColumnVisualsProps) {
   const visibleCharts =
     charts ?? (mode === "quick" ? ["histogram", "boxplot"] : ["histogram", "boxplot", "qq", "ecdf"]);
+  const chartGridClassName =
+    visibleCharts.length === 1 ? "chart-grid chart-grid-single" : "chart-grid";
   return (
     <section
       className={`graphical-summary-card graphical-summary-card-${mode}`}
@@ -41,7 +43,7 @@ export function GraphicalSummaryColumnVisuals({
           <span className="chart-warning-count">{column.warnings.length} warning</span>
         ) : null}
       </div>
-      <div className="chart-grid">
+      <div className={chartGridClassName}>
         {visibleCharts.includes("histogram") ? (
           <ChartPanel title="히스토그램">
             <InteractiveHistogramChart

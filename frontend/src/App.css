@@ -549,7 +549,26 @@ tbody tr:hover {
 .graph-preview-grid {
   display: grid;
   gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.graph-preview-grid-run-chart {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+}
+
+.graph-preview-grid-individual-value-plot,
+.graph-preview-grid-imr-chart {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.graph-preview-grid > *,
+.graph-preview-combined {
+  min-width: 0;
+  width: 100%;
+}
+
+.graph-preview-card-full-row {
+  grid-column: 1 / -1;
 }
 
 .graph-preview-panel {
@@ -586,9 +605,19 @@ tbody tr:hover {
   margin-top: 5px;
 }
 
+@media (max-width: 1000px) {
+  .graph-preview-grid:not(.graph-preview-grid-run-chart) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 720px) {
   .graph-role-grid {
     grid-template-columns: 1fr;
+  }
+
+  .graph-preview-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .summary-band {
