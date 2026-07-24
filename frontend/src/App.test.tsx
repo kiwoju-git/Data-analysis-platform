@@ -5087,9 +5087,10 @@ describe("App", () => {
     expect(html).toContain("API ok");
     expect(html).toContain("현재 분석 데이터셋");
     expect(html).toContain("sample.txt");
-    expect(html).toMatch(/1<\/span>/);
-    expect(html).toMatch(/3(?:<!-- -->)?행/);
-    expect(html).toMatch(/2(?:<!-- -->)?컬럼/);
+    expect(html).toContain("<dt>버전</dt>");
+    expect(html).toContain("<dd>v1</dd>");
+    expect(html).toContain("<dt>행</dt><dd>3</dd>");
+    expect(html).toContain("<dt>열</dt><dd>2</dd>");
     expect(html).toMatch(/schema (?:<!-- -->)?schema-hash/);
     expect(html).toContain("Workspace child");
     expect(html).toContain("리포트");

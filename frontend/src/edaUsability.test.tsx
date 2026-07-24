@@ -188,6 +188,16 @@ describe("EDA usability foundations", () => {
     expect(html).toContain("생성");
     expect(html).toContain("v1");
     expect(html).toContain("12345678");
+    expect(html).toContain('class="active-dataset-main"');
+    expect(html).toContain('class="active-dataset-picker"');
+    expect(html).toContain('class="active-dataset-summary"');
+    expect(html).toContain("<dt>버전</dt>");
+    expect(html).toContain("<dt>행</dt>");
+    expect(html).toContain("<dt>열</dt>");
+    expect(html).toContain("<dt>생성</dt>");
+    expect(html).toContain('aria-label="데이터셋 기술 정보"');
+    expect((html.match(/id="active-dataset-version"/g) ?? [])).toHaveLength(1);
+    expect((html.match(/id="active-dataset-help"/g) ?? [])).toHaveLength(1);
   });
 });
 

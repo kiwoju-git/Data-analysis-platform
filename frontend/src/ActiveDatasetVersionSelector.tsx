@@ -32,45 +32,72 @@ export function ActiveDatasetVersionSelector({
 
   return (
     <section className="context-bar active-dataset-selector" aria-label="데이터셋 컨텍스트">
-      <div className="active-dataset-control">
-        <label htmlFor="active-dataset-version">
-          <span>현재 분석 데이터셋</span>
-          <select
-            id="active-dataset-version"
-            disabled={disabled || catalogState.catalog === null}
-            value={selectedVersionId}
-            onChange={(event) => onSelect(event.currentTarget.value)}
-          >
-            <option value="">데이터셋 버전 선택</option>
-            {activeOffPage !== null ? (
-              <option value={activeOffPage.version_id}>{catalogItemLabel(activeOffPage)}</option>
-            ) : null}
-            {catalogState.catalog?.versions.map((item) => (
-              <option key={item.version_id} value={item.version_id}>
-                {catalogItemLabel(item)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="cell-subtle">
-          전환하면 현재 일반 분석 입력과 화면 결과가 새 버전에 맞게 초기화됩니다.
-        </span>
+      <div className="active-dataset-main">
+        <div className="active-dataset-picker">
+          <label htmlFor="active-dataset-version">현재 분석 데이터셋</label>
+          <div className="active-dataset-select-stack">
+            <select
+              aria-describedby="active-dataset-help"
+              id="active-dataset-version"
+              disabled={disabled || catalogState.catalog === null}
+              value={selectedVersionId}
+              onChange={(event) => onSelect(event.currentTarget.value)}
+            >
+              <option value="">데이터셋 버전 선택</option>
+              {activeOffPage !== null ? (
+                <option value={activeOffPage.version_id}>
+                  {catalogItemLabel(activeOffPage)}
+                </option>
+              ) : null}
+              {catalogState.catalog?.versions.map((item) => (
+                <option key={item.version_id} value={item.version_id}>
+                  {catalogItemLabel(item)}
+                </option>
+              ))}
+            </select>
+            <p className="active-dataset-help" id="active-dataset-help">
+              전환하면 현재 일반 분석 입력과 화면 결과가 새 버전에 맞게
+              초기화됩니다.
+            </p>
+          </div>
+        </div>
+        {version !== null ? (
+          <div className="active-dataset-summary-region">
+            <dl className="active-dataset-summary" aria-label="현재 데이터셋 요약">
+              <div className="active-dataset-stat">
+                <dt>버전</dt>
+                <dd>{`v${version.version_number}`}</dd>
+              </div>
+              <div className="active-dataset-stat">
+                <dt>행</dt>
+                <dd>{version.row_count.toLocaleString()}</dd>
+              </div>
+              <div className="active-dataset-stat">
+                <dt>열</dt>
+                <dd>{version.column_count.toLocaleString()}</dd>
+              </div>
+              <div className="active-dataset-stat">
+                <dt>생성</dt>
+                <dd>{formatLocalDateTime(version.created_at)}</dd>
+              </div>
+            </dl>
+            <div className="active-dataset-technical" aria-label="데이터셋 기술 정보">
+              <strong>기술 정보</strong>
+              <span className="hash-text">
+                {`schema ${shortHash(version.schema_hash)}`}
+              </span>
+              <span className="hash-text">{`ID ${shortId(version.version_id)}`}</span>
+            </div>
+          </div>
+        ) : null}
       </div>
-      {version !== null ? (
-        <div className="active-dataset-summary">
-          <span>v{version.version_number}</span>
-          <span>{version.row_count.toLocaleString()}행</span>
-          <span>{version.column_count.toLocaleString()}컬럼</span>
-          <span>생성 {formatLocalDateTime(version.created_at)}</span>
-          <span className="hash-text">schema {shortHash(version.schema_hash)}</span>
-          <span className="hash-text">ID {shortId(version.version_id)}</span>
+      {isSwitching || catalogState.isResolvingActiveItem ? (
+        <div className="active-dataset-operational-row context-status" role="status">
+          데이터셋 버전 확인 중
         </div>
       ) : null}
-      {isSwitching || catalogState.isResolvingActiveItem ? (
-        <span role="status">데이터셋 버전 확인 중</span>
-      ) : null}
       {catalogState.error !== null ? (
-        <div className="context-bar-error" role="alert">
+        <div className="active-dataset-operational-row context-bar-error" role="alert">
           데이터셋 목록 조회 실패: {catalogState.error}
           <button className="secondary-button" onClick={catalogState.onRefresh} type="button">
             목록 다시 불러오기
@@ -78,12 +105,17 @@ export function ActiveDatasetVersionSelector({
         </div>
       ) : null}
       {version === null && pendingVersionId !== null && !isSwitching ? (
-        <button className="secondary-button" onClick={onRetrySwitch} type="button">
-          선택한 데이터셋 다시 불러오기
-        </button>
+        <div className="active-dataset-operational-row">
+          <button className="secondary-button" onClick={onRetrySwitch} type="button">
+            선택한 데이터셋 다시 불러오기
+          </button>
+        </div>
       ) : null}
       {catalogState.catalog !== null && catalogState.catalog.total > catalogState.catalog.limit ? (
-        <div className="result-pagination" aria-label="분석 데이터셋 목록 페이지 이동">
+        <div
+          className="active-dataset-operational-row result-pagination"
+          aria-label="분석 데이터셋 목록 페이지 이동"
+        >
           <button
             disabled={disabled || !catalogState.catalog.has_previous}
             onClick={() =>
