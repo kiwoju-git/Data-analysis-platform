@@ -32,9 +32,13 @@ Last updated: 2026-07-24
   component or data-series palette was changed.
 - The measured host remains Windows 10 Home build 19045, CPython 3.10.11, and
   Node 24.17.0. These results are development evidence, not the Windows
-  11/Python 3.10/Node 22 release gate. A matching hosted main run cannot exist
-  until this branch is pushed; remote status is not inferred from local
-  validation.
+  11/Python 3.10/Node 22 release gate.
+- Hosted Actions run `30097092027` for main SHA
+  `763be8246ae5ff98a5360b328848d74475b9ee51` completed successfully. Its
+  `windows` job and dependent `e2e` job both passed, and the `e2e-logs`
+  artifact exists with size 5,440 bytes. The public Actions API confirmed the
+  artifact metadata; the archive contents were not downloaded or independently
+  inspected. This final status-recording commit is documentation-only.
 
 - The dataset-cleanup/project-overview feature branch is based on pushed main
   `fd7612c028e7a1067003f8fc686c3704cc2ed1dd`; feature commits
