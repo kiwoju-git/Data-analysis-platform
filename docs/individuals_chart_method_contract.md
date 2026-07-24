@@ -1,8 +1,14 @@
-# Individuals Chart Method Contract
+# Individuals and Moving Range (I-MR) Chart Method Contract
 
 Method ID: `quality.individuals_chart`
 
 Method version: `0.1.0`
+
+User-facing label: `I-MR 관리도`
+
+The user-facing label and menu order changed without creating a new method. The
+method ID, calculation, result payload, stored-result reader, and method version
+remain unchanged.
 
 Current status: available Gate D I-MR slice with explicit I-chart rule coverage
 
@@ -116,5 +122,16 @@ The first zone rules are fixed:
 The 2-of-3 and 4-of-5 zone-rule chart markers are attached only to the points in the window that actually cross the relevant sigma threshold. The within/outside pattern-rule markers are attached to every point in the qualifying pattern window. The result records the full evaluated window start and end positions.
 
 `individuals_chart_zero_moving_range` is returned when all moving ranges are zero. The app does not fabricate control limits for a constant series.
+
+## Interpretation
+
+- A point beyond a control limit or a configured sequence/zone signal is evidence
+  to investigate a possible special cause. It is not a defect verdict.
+- No signal under the active rules does not prove process stability, normality,
+  specification conformance, measurement-system adequacy, or product acceptance.
+- Control limits are estimated from observed process variation. Specification
+  limits are user-defined acceptance criteria and have a different meaning.
+- A Run Chart does not estimate control limits. I-MR estimates an I-chart and an
+  MR-chart from individual observations and adjacent moving ranges.
 
 Canonical row order is only valid when the dataset row order represents the process/run order. If a numeric or datetime order column is selected, the app sorts ascending and uses canonical row position only as a deterministic tie-breaker.

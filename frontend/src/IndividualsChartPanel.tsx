@@ -56,7 +56,7 @@ export function IndividualsChartPanel({
     <section className="analysis-run-panel" aria-labelledby="individuals-chart-title">
       <div className="panel-heading">
         <div>
-          <h3 id="individuals-chart-title">개별값 관리도 실행</h3>
+          <h3 id="individuals-chart-title">I-MR 관리도 실행</h3>
           <p>{methodId}</p>
         </div>
         <span className="status-pill status-ready">사용 가능</span>
@@ -81,6 +81,10 @@ export function IndividualsChartPanel({
                   </option>
                 ))}
               </select>
+              <small className="field-help">
+                업로드된 행 순서가 실제 시간 또는 공정 실행 순서를 의미하지 않는다면 날짜시간
+                또는 실행 순서 컬럼을 선택하세요.
+              </small>
             </label>
             <label>
               <span>순서 컬럼</span>
@@ -115,7 +119,7 @@ export function IndividualsChartPanel({
             }}
             type="button"
           >
-            {isRunningAnalysis ? "실행 중" : "개별값 관리도 실행"}
+            {isRunningAnalysis ? "실행 중" : "I-MR 관리도 실행"}
           </button>
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
@@ -126,7 +130,9 @@ export function IndividualsChartPanel({
           ) : null}
           {result !== null ? (
             <>
-              <div className="metadata-grid" aria-label="개별값 관리도 요약">
+              <div className="metadata-grid" aria-label="I-MR 관리도 요약">
+                <span>전체 상태</span>
+                <strong>{overallSignalStatus(result)}</strong>
                 <span>측정값</span>
                 <strong>{result.value.display_name}</strong>
                 <span>순서</span>
@@ -150,7 +156,8 @@ export function IndividualsChartPanel({
                   </>
                 ) : null}
               </div>
-              <div className="result-section" aria-label="개별값 관리도 결과">
+              <div className="result-section" aria-label="I-MR 관리도 결과">
+                <SignalSummary result={result} />
                 <div className="chart-grid">
                   <div className="chart-panel">
                     <div className="chart-panel-title">I chart</div>
@@ -169,6 +176,19 @@ export function IndividualsChartPanel({
                     )}
                   </div>
                 </div>
+              </div>
+              <div className="notice-box" aria-label="I-MR 관리도 해석 안내">
+                <strong>해석 기준</strong>
+                <p>
+                  관리한계 밖 점이나 연속 패턴 신호는 특별원인을 조사할 근거입니다. 관리한계
+                  안에 있다는 사실만으로 공정 안정성, 정규성, 규격 만족 또는 측정시스템
+                  적합성이 증명되지는 않습니다.
+                </p>
+                <p>
+                  관리한계는 실제 공정 변동으로 추정하며, 규격한계는 사용자가 정한 허용
+                  기준입니다. Run Chart는 관리한계를 계산하지 않지만 I-MR은 개별 측정값과
+                  연속 측정 간 변화를 사용해 관리한계를 추정합니다.
+                </p>
               </div>
               <div className="table-wrap">
                 <table className="result-table">
@@ -259,6 +279,11 @@ function renderControlChart(
   return (
     <svg className="mini-chart" role="img" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
       <title>{label}</title>
+      <desc>
+        {`${label}. LCL ${formatNumber(series.lcl)}, 중심선 ${formatNumber(
+          series.center_line,
+        )}, UCL ${formatNumber(series.ucl)}. 사각형은 관리한계 신호, 마름모는 패턴 규칙 신호입니다.`}
+      </desc>
       <rect
         x={plot.left}
         y={plot.top}
@@ -346,8 +371,11 @@ function ChartPoint({
   y: number;
 }) {
   const hasSignal = point.signal_codes.length > 0;
+  const hasLimitSignal = point.signal_codes.some(
+    (code) => code.includes("beyond_3_sigma") || code.includes("mr_beyond_ucl"),
+  );
   const sourceLabel = `canonical ${point.canonical_position.toLocaleString()}`;
-  if (hasSignal) {
+  if (hasLimitSignal) {
     return (
       <g>
         <rect
@@ -366,6 +394,19 @@ function ChartPoint({
       </g>
     );
   }
+  if (hasSignal) {
+    const diamond = `${x},${y - 6} ${x + 6},${y} ${x},${y + 6} ${x - 6},${y}`;
+    return (
+      <g>
+        <polygon points={diamond} fill="#ffffff" stroke="#b45309" strokeWidth="2.5" />
+        <title>
+          {`${chartKind} ${point.position}: ${formatNumber(point.value)} · ${sourceLabel} · ${
+            point.signal_codes.join(", ")
+          }`}
+        </title>
+      </g>
+    );
+  }
 
   return (
     <g>
@@ -375,6 +416,59 @@ function ChartPoint({
       </title>
     </g>
   );
+}
+
+function SignalSummary({ result }: { result: IndividualsChartResult }) {
+  const summary = summarizeSignals(result);
+  return (
+    <div className="metadata-grid" aria-label="I-MR 신호 요약">
+      <span>I 차트 관리한계 밖</span>
+      <strong>{summary.iLimit.toLocaleString()}점</strong>
+      <span>MR 차트 관리한계 밖</span>
+      <strong>{summary.mrLimit.toLocaleString()}점</strong>
+      <span>중심선 한쪽 연속 신호</span>
+      <strong>{summary.sameSide.toLocaleString()}건</strong>
+      <span>추세 신호</span>
+      <strong>{summary.trend.toLocaleString()}건</strong>
+      <span>교대 신호</span>
+      <strong>{summary.alternating.toLocaleString()}건</strong>
+      <span>Zone rule 신호</span>
+      <strong>{summary.zone.toLocaleString()}건</strong>
+    </div>
+  );
+}
+
+function summarizeSignals(result: IndividualsChartResult) {
+  return result.signals.reduce(
+    (summary, signal) => {
+      if (signal.code === "individuals_chart_i_beyond_3_sigma") {
+        summary.iLimit += 1;
+      } else if (signal.code === "individuals_chart_mr_beyond_ucl") {
+        summary.mrLimit += 1;
+      } else if (signal.code === "individuals_chart_i_same_side_centerline") {
+        summary.sameSide += 1;
+      } else if (signal.code === "individuals_chart_i_trend") {
+        summary.trend += 1;
+      } else if (signal.code === "individuals_chart_i_alternating") {
+        summary.alternating += 1;
+      } else if (
+        signal.code === "individuals_chart_i_two_of_three_beyond_2_sigma" ||
+        signal.code === "individuals_chart_i_four_of_five_beyond_1_sigma" ||
+        signal.code === "individuals_chart_i_fifteen_within_1_sigma" ||
+        signal.code === "individuals_chart_i_eight_outside_1_sigma"
+      ) {
+        summary.zone += 1;
+      }
+      return summary;
+    },
+    { iLimit: 0, mrLimit: 0, sameSide: 0, trend: 0, alternating: 0, zone: 0 },
+  );
+}
+
+function overallSignalStatus(result: IndividualsChartResult): string {
+  return result.signals.length > 0
+    ? "특별원인 신호 있음"
+    : "현재 활성화된 관리도 규칙에서 신호 없음";
 }
 
 function EmptyChart({ label }: { label: string }) {

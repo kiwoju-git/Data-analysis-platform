@@ -516,6 +516,8 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     )
     assert individuals_chart.availability == MethodAvailability.AVAILABLE
     assert individuals_chart.disabled_reason is None
+    assert individuals_chart.label_ko == "I-MR 관리도"
+    assert individuals_chart.label_en == "Individuals and Moving Range (I-MR) Chart"
     attribute_control_chart = next(
         method
         for method in catalog.methods
@@ -533,6 +535,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     )
     assert run_chart.availability == MethodAvailability.AVAILABLE
     assert run_chart.disabled_reason is None
+    assert subgroup_chart.order < individuals_chart.order < run_chart.order
     capability = next(
         method for method in catalog.methods if method.method_id == "quality.capability"
     )

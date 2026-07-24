@@ -177,7 +177,7 @@ created until the corrected roles pass preflight.
 User question: Is my process stable over collection order or time?
 
 Purpose helper card: check process stability over order/time,
-`quality.individuals_chart` or `quality.run_chart`.
+`quality.individuals_chart` (`I-MR 관리도`) or `quality.run_chart`.
 
 Needed roles: one numeric measurement column; optional order or timestamp column
 when row order is not the real collection order.

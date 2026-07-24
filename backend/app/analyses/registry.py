@@ -327,18 +327,18 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         order=10,
     ),
     _available(
-        method_id="quality.individuals_chart",
-        module_id=AnalysisModuleId.QUALITY,
-        label_ko="개별값 관리도",
-        label_en="Variables Charts for Individuals",
-        order=20,
-    ),
-    _available(
         method_id="quality.subgroup_chart",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="부분군 관리도",
         label_en="Variables Charts for Subgroups",
         order=30,
+    ),
+    _available(
+        method_id="quality.individuals_chart",
+        module_id=AnalysisModuleId.QUALITY,
+        label_ko="I-MR 관리도",
+        label_en="Individuals and Moving Range (I-MR) Chart",
+        order=35,
     ),
     _available(
         method_id="quality.run_chart",

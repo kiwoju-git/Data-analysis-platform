@@ -479,8 +479,8 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     action: "필터와 계수 집계를 확인하고 변동이 있는 적절한 Phase I 기간을 선택하세요.",
   },
   invalid_individuals_chart_options: {
-    title: "개별값 관리도 옵션 형식 오류",
-    message: "개별값 관리도 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
+    title: "I-MR 관리도 옵션 형식 오류",
+    message: "I-MR 관리도 실행 옵션의 필수 항목, 타입, 또는 허용되지 않은 항목이 맞지 않습니다.",
     action: "측정값 컬럼, 선택적 순서 컬럼, 규칙 길이, point limit을 다시 확인하세요.",
   },
   invalid_subgroup_chart_options: {

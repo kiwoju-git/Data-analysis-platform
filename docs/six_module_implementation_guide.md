@@ -48,7 +48,7 @@ Optimizer, RSM, Bayesian HTML을 지원한다고 표시하지 않으며 자세�
 | `hypothesis` | 가설 검정 | t-Test, 2-Sample t-Test, ANOVA, Equivalence Test, 1-Sample Wilcoxon, Mann-Whitney, Kruskal-Wallis |
 | `categorical` | 범주형 데이터 분석 | 1-Proportion, 2-Proportion, Chi-square Test for Association |
 | `regression` | 상관관계 및 회귀분석 | Pearson Correlation, X–Y Correlation, Fit Regression Model, Predict, Response Optimizer |
-| `quality` | 품질 관리 | Control Chart, Variables Charts for Individuals, Variables Charts for Subgroups, Run Chart, Capability Analysis, Gage R&R Study, Gage Run Chart |
+| `quality` | 품질 관리 | Control Chart, Variables Charts for Subgroups, Individuals and Moving Range (I-MR) Chart, Run Chart, Capability Analysis, Gage R&R Study, Gage Run Chart |
 | `doe` | 실험 계획법 | Design of Experiments (DoE), Response Surface Method (RSM) |
 
 명칭은 다음처럼 바로잡는다.

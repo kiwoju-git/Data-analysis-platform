@@ -344,7 +344,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 
 - **사용자 질문:** 관측 순서에서 비무작위 패턴이나 관리 한계 신호가 있는가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `품질 관리` > `런 차트`; 비교 학습으로 `개별값 관리도`.
+- **Menu/module/method:** `품질 관리` > `런 차트`; 비교 학습으로 `I-MR 관리도`.
 - **Column role:** Value=`yield_pct`, Order=`timestamp`.
 - **Option:** run chart median, trend 6, oscillation 14, alpha 0.05, point limit 500.
 - **클릭 순서:** 역할/규칙 > 사전점검 > 실행 > signal list.

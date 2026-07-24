@@ -3003,8 +3003,8 @@ describe("App", () => {
           method_id: "quality.individuals_chart",
           method_version: "0.1.0",
           module_id: "quality",
-          label_ko: "개별값 관리도",
-          label_en: "Variables Charts for Individuals",
+          label_ko: "I-MR 관리도",
+          label_en: "Individuals and Moving Range (I-MR) Chart",
           availability: "available",
           execution_mode: "inline",
           requires_dataset: true,
@@ -3031,7 +3031,7 @@ describe("App", () => {
     );
 
     expect(html).toContain("품질 관리");
-    expect(html).toContain("개별값 관리도 실행");
+    expect(html).toContain("I-MR 관리도 실행");
     expect(html).toContain("순서 컬럼");
     expect(html).toContain("선택 안 함");
     expect(html).toContain("canonical row order");
