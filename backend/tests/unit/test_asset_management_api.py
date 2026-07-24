@@ -144,9 +144,7 @@ def test_dataset_archive_visibility_round_trip_and_schema_15_upgrade(tmp_path) -
         archived_catalog = client.get(
             "/api/v1/dataset-versions?offset=0&limit=20&visibility=archived"
         )
-        all_catalog = client.get(
-            "/api/v1/dataset-versions?offset=0&limit=20&visibility=all"
-        )
+        all_catalog = client.get("/api/v1/dataset-versions?offset=0&limit=20&visibility=all")
         direct = client.get(f"/api/v1/dataset-versions/{archived_version}")
         restored = client.patch(
             f"/api/v1/dataset-versions/{archived_version}/metadata",
@@ -159,9 +157,7 @@ def test_dataset_archive_visibility_round_trip_and_schema_15_upgrade(tmp_path) -
     assert archived.status_code == 200
     assert archived.json()["archived"] is True
     assert archived.json()["archived_at"] is not None
-    assert [item["version_id"] for item in visible_catalog.json()["versions"]] == [
-        visible_version
-    ]
+    assert [item["version_id"] for item in visible_catalog.json()["versions"]] == [visible_version]
     assert [item["version_id"] for item in archived_catalog.json()["versions"]] == [
         archived_version
     ]

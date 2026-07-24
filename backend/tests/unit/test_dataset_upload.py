@@ -393,6 +393,8 @@ def test_dataset_version_catalog_pages_confirmed_versions_without_storage_metada
         "note": None,
         "pinned": False,
         "metadata_updated_at": None,
+        "archived": False,
+        "archived_at": None,
     }
     assert not {
         "stored_path",

@@ -470,7 +470,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
 
             diagnostics.step("create, download, and delete one export")
             create_exports(page)
-            diagnostics.step("verify Help Report and Manage routes")
+            diagnostics.step("verify Help Report Project and Manage routes")
             verify_help_report_and_manage_routes(page)
             diagnostics.step("restore and compare saved results")
             restore_and_compare_saved_results(page)
@@ -638,6 +638,27 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
     expect(page).to_have_url(re.compile(r"[?&]method_id=eda\.graphical_summary"))
     page.reload(wait_until="networkidle")
     expect(page.get_by_role("heading", name="도움말", exact=True)).to_be_visible(
+        timeout=15_000
+    )
+
+    expect(page.get_by_text("Statistical Twin", exact=True)).to_be_visible()
+    page.get_by_role("button", name="프로젝트", exact=True).click()
+    expect(page).to_have_url(re.compile(r"/project(?:\?|$)"))
+    expect(page.get_by_role("button", name="프로젝트", exact=True)).to_have_attribute(
+        "aria-current", "page"
+    )
+    expect(page.get_by_role("heading", name="프로젝트", exact=True)).to_be_visible(
+        timeout=15_000
+    )
+    expect_lazy_workspace_page(page, "ProjectOverviewPage")
+    expect(
+        page.get_by_text(
+            "현재 버전은 하나의 로컬 작업공간을 프로젝트로 관리합니다.",
+            exact=True,
+        )
+    ).to_be_visible()
+    page.reload(wait_until="networkidle")
+    expect(page.get_by_role("heading", name="프로젝트", exact=True)).to_be_visible(
         timeout=15_000
     )
 
@@ -877,8 +898,12 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(observed_chart.locator(".chart-selected-detail")).to_contain_text("실제값")
     observed_point.focus()
     expect(observed_point).to_have_attribute("data-selected", "true")
-    expect(page.locator(".chart-panel").filter(has_text="Residuals vs Fitted")).to_be_visible()
-    expect(page.locator(".chart-panel").filter(has_text="Leverage vs Cook's D")).to_be_visible()
+    expect(
+        page.locator(".chart-panel").filter(has_text="Residuals vs Fitted")
+    ).to_be_visible()
+    expect(
+        page.locator(".chart-panel").filter(has_text="Leverage vs Cook's D")
+    ).to_be_visible()
     expect(page.get_by_role("heading", name="예측 사전점검")).to_be_visible()
 
     target_selector = page.get_by_label("예측 대상 데이터셋 버전")
@@ -1104,7 +1129,9 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
 
     active_dataset_selector.select_option(target_active_version_id)
     expect_dataset_context_counts(page, row_label="4행", column_label="3컬럼")
-    expect(page).to_have_url(re.compile(f"dataset_version_id={target_active_version_id}"))
+    expect(page).to_have_url(
+        re.compile(f"dataset_version_id={target_active_version_id}")
+    )
     page.reload(wait_until="networkidle")
     expect(page.locator("#active-dataset-version")).to_have_value(
         target_active_version_id,
@@ -1121,9 +1148,9 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     )
     compact_history = page.locator(".compact-analysis-history")
     compact_history.get_by_role("button", name="최근 이력 열기").click()
-    saved_linear_model = compact_history.locator(".compact-history-list article").filter(
-        has_text="regression.linear_model"
-    )
+    saved_linear_model = compact_history.locator(
+        ".compact-history-list article"
+    ).filter(has_text="regression.linear_model")
     expect(saved_linear_model).to_have_count(1, timeout=15_000)
     saved_linear_model.get_by_role("button", name="결과 불러오기").click()
     expect(page.get_by_label("회귀모형 요약")).to_be_visible(timeout=15_000)

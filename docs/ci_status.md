@@ -5,17 +5,41 @@ Last updated: 2026-07-24
 ## Local Validation
 
 - The dataset-cleanup/project-overview feature branch is based on pushed main
-  `fd7612c028e7a1067003f8fc686c3704cc2ed1dd`. Targeted validation covers
-  schema-15-to-16 migration and archive visibility, dependency descriptor
-  pagination/redaction, verified and preserve-unverified cascade, model and
-  cross-dataset prediction closure, limit-set/Phase-II closure, quarantine
-  failure rollback, OpenAPI/frontend route contracts, `/project`, management
-  confirmation UX, and `Statistical Twin`. Full check, tutorial, browser E2E,
-  final SHA, and remote Actions evidence are recorded only after those commands
-  complete.
+  `fd7612c028e7a1067003f8fc686c3704cc2ed1dd`; feature commits
+  `c0df903` and `5a79322` contain schema-16 archive visibility, operational
+  schema-3 dependency/cascade retention, `/project`, and `Statistical Twin`.
+  Final development validation on 2026-07-24 passed tutorial Markdown block
+  verification 18, Ruff/format over 167 Python files, mypy over 104 source
+  files, backend pytest 838, frontend lint/typecheck and Vitest 187,
+  OpenAPI/frontend contracts 171, and production build. `scripts/check.ps1`
+  completed in 988.8 seconds.
+- The real-API tutorial smoke passed all 18 sections in 18.7 seconds. The final
+  Chromium critical-path E2E passed in 90.0 seconds on isolated ports. It
+  verifies `Statistical Twin`, `/project` navigation, active state, lazy chunk,
+  ID-only query preservation, reload, and the single-workspace explanation,
+  while retaining the existing upload, saved-result, export, Predict,
+  Optimizer, quality, DOE, Bayesian, management, and lazy-route paths.
+- The build measured main at 505.70 kB / 124.30 kB gzip, Project at
+  6.23/1.89 kB, Manage at 25.67/6.75 kB, Report at 38.97/8.67 kB, Regression
+  at 59.62/13.33 kB, Quality at 67.05/12.82 kB, DOE at 111.15/26.25 kB, and
+  Help at 18.40/6.47 kB. Main remains above Vite's 500 kB warning threshold;
+  no unsafe split or dependency was added to conceal it.
+- `scripts/bootstrap.ps1` completed its locked Python install but its `npm ci`
+  step could not replace the Rolldown native binding because a user-owned Vite
+  process was still using the frontend dependency tree. That process was not
+  terminated. The same lockfile was restored without source or lockfile
+  changes, and the complete check/build then passed. This bootstrap run is
+  recorded as failed, not passed.
+- The first full check collected 838 backend tests and stopped at one stale
+  exact-dictionary fixture after 837 passed; the fixture was updated for the
+  schema-16 `archived` fields and its 30-test file passed before the complete
+  838-test rerun above.
 - The measured host remains Windows 10 Home build 19045, CPython 3.10.11, and
   Node 24.17.0. Any passing result from this host is development evidence, not
   the Windows 11/Python 3.10/Node 22 release gate.
+- Current-main hosted Actions status is not inferred from local results. The
+  branch must be pushed before a matching main run can exist; the most recent
+  previously recorded hosted status remains in the history below.
 
 - The usability/retention/run-chart/ZIP feature branch based on pushed main
   `e6f74f031daaa5208eac77f8beba35b427d44d9d` passed the final development

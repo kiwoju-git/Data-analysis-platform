@@ -242,9 +242,7 @@ def update_dataset_version_metadata(
     note = body.note if "note" in fields else current.note if current else None
     pinned = body.pinned if "pinned" in fields else current.pinned if current else False
     updated_at = datetime.now(timezone.utc).isoformat()
-    archived = (
-        body.archived if "archived" in fields else current.archived if current else False
-    )
+    archived = body.archived if "archived" in fields else current.archived if current else False
     archived_at = (
         updated_at
         if archived and (current is None or not current.archived)

@@ -37,6 +37,11 @@ Last updated: 2026-07-24
 - API contract `3` advertises dataset archiving, cascade deletion, and
   preserve-unverified cleanup. No statistical calculation, method version, or
   stored analysis-result schema changed.
+- Development validation passed backend 838, frontend 187, direct
+  OpenAPI/frontend contracts 171, tutorial Markdown blocks 18, real-API
+  tutorial smoke 18/18, and Chromium E2E in 90.0 seconds. Main measured
+  505.70 kB, Project 6.23 kB, and Manage 25.67 kB. The Windows 10/Python
+  3.10/Node 24 host does not close the Windows 11/Node 22 release gate.
 
 ## Usability, Retention, Run Chart, And ZIP Support
 
