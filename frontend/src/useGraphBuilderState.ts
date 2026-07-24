@@ -13,7 +13,6 @@ import {
   serializeAnalysisFilterDrafts,
   validateAnalysisFilterDrafts,
 } from "./analysisFilters";
-import { graphBuilderDefinition } from "./graphBuilderRegistry";
 import { validateGraphBuilderSelection } from "./graphBuilderValidation";
 
 export function useGraphBuilderState(version: DatasetVersionResponse | null) {
@@ -78,9 +77,6 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
     setGroupColumnId(null);
     setOrderColumnId(null);
     setLayout(next === "box_plot" ? "combined" : "small_multiples");
-    const maximum = graphBuilderDefinition(next).maximumValues;
-    setValueColumnIds((current) => current.slice(0, maximum));
-    setYColumnIds((current) => current.slice(0, maximum));
   }
 
   async function generate() {

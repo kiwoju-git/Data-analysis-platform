@@ -10,6 +10,7 @@ import type {
 } from "./api";
 import { AnalysisFilterControls } from "./AnalysisFilterControls";
 import { GraphicalSummaryColumnVisuals } from "./GraphicalSummaryColumnVisuals";
+import { GraphVariablePicker } from "./GraphVariablePicker";
 import { ComparativeBoxplotChart } from "./charts/ComparativeBoxplotChart";
 import { InteractiveIndividualValueChart } from "./charts/InteractiveIndividualValueChart";
 import {
@@ -22,6 +23,10 @@ import {
   graphBuilderDefinition,
   graphBuilderDefinitions,
 } from "./graphBuilderRegistry";
+import {
+  graphPreviewGridClassName,
+  graphPreviewPanelClassName,
+} from "./graphBuilderLayout";
 import { graphBuilderColumns, useGraphBuilderState } from "./useGraphBuilderState";
 
 interface GraphBuilderPageProps {
@@ -101,76 +106,104 @@ export function GraphBuilderPage({
             ) : (
               <ValueRoleControls maximum={definition.maximumValues} state={state} />
             )}
-            {definition.supportsGroup ? (
-              <label className="graph-builder-select">
-                <span>그룹 변수 (선택 사항)</span>
-                <select
-                  value={state.groupColumnId ?? ""}
-                  onChange={(event) =>
-                    state.setGroupColumnId(event.currentTarget.value || null)
-                  }
-                >
-                  <option value="">선택 안 함</option>
-                  {roleColumns.group.map((column) => (
-                    <option key={column.column_id} value={column.column_id}>
-                      {column.display_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {definition.supportsOrder ? (
-              <label className="graph-builder-select">
-                <span>공통 순서 컬럼 (선택 사항)</span>
-                <select
-                  value={state.orderColumnId ?? ""}
-                  onChange={(event) =>
-                    state.setOrderColumnId(event.currentTarget.value || null)
-                  }
-                >
-                  <option value="">canonical row order</option>
-                  {roleColumns.order.map((column) => (
-                    <option key={column.column_id} value={column.column_id}>
-                      {column.display_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            {definition.supportsGroup || definition.supportsOrder ? (
+              <div className="graph-role-options-grid">
+                {definition.supportsGroup ? (
+                  <label className="graph-role-option">
+                    <strong>그룹 변수</strong>
+                    <select
+                      value={state.groupColumnId ?? ""}
+                      onChange={(event) =>
+                        state.setGroupColumnId(event.currentTarget.value || null)
+                      }
+                    >
+                      <option value="">선택 안 함</option>
+                      {roleColumns.group.map((column) => (
+                        <option key={column.column_id} value={column.column_id}>
+                          {column.display_name}
+                        </option>
+                      ))}
+                    </select>
+                    <small>선택한 수치 변수를 범주별로 나누어 표시합니다.</small>
+                  </label>
+                ) : null}
+                {definition.supportsOrder ? (
+                  <label className="graph-role-option">
+                    <strong>공통 순서 컬럼</strong>
+                    <select
+                      value={state.orderColumnId ?? ""}
+                      onChange={(event) =>
+                        state.setOrderColumnId(event.currentTarget.value || null)
+                      }
+                    >
+                      <option value="">canonical row order</option>
+                      {roleColumns.order.map((column) => (
+                        <option key={column.column_id} value={column.column_id}>
+                          {column.display_name}
+                        </option>
+                      ))}
+                    </select>
+                    <small>
+                      선택하지 않으면 현재 canonical row order를 사용합니다.
+                    </small>
+                  </label>
+                ) : null}
+              </div>
             ) : null}
             {state.graphType === "box_plot" && state.groupColumnId === null ? (
-              <fieldset className="inline-options">
+              <fieldset className="graph-layout-control">
                 <legend>배치 방식</legend>
-                <label>
-                  <input
-                    checked={state.layout === "combined"}
-                    name="graph-layout"
-                    onChange={() => state.setLayout("combined")}
-                    type="radio"
-                  />
-                  공통 축
-                </label>
-                <label>
-                  <input
-                    checked={state.layout === "small_multiples"}
-                    name="graph-layout"
-                    onChange={() => state.setLayout("small_multiples")}
-                    type="radio"
-                  />
-                  개별 패널
-                </label>
+                <div className="graph-layout-segments">
+                  <label
+                    className={
+                      state.layout === "combined"
+                        ? "graph-layout-segment is-selected"
+                        : "graph-layout-segment"
+                    }
+                  >
+                    <input
+                      checked={state.layout === "combined"}
+                      name="graph-layout"
+                      onChange={() => state.setLayout("combined")}
+                      type="radio"
+                    />
+                    <span>공통 축</span>
+                  </label>
+                  <label
+                    className={
+                      state.layout === "small_multiples"
+                        ? "graph-layout-segment is-selected"
+                        : "graph-layout-segment"
+                    }
+                  >
+                    <input
+                      checked={state.layout === "small_multiples"}
+                      name="graph-layout"
+                      onChange={() => state.setLayout("small_multiples")}
+                      type="radio"
+                    />
+                    <span>개별 패널</span>
+                  </label>
+                </div>
               </fieldset>
             ) : null}
-            {state.validationError !== null ? (
-              <div className="notice-box">{validationMessage(state.validationError)}</div>
-            ) : null}
-            <button
-              className="primary-button"
-              disabled={state.isGenerating || state.validationError !== null}
-              onClick={() => void state.generate()}
-              type="button"
-            >
-              {state.isGenerating ? "그래프 생성 중" : "그래프 생성"}
-            </button>
+            <div className="graph-builder-actions">
+              {state.validationError !== null ? (
+                <div className="notice-box">{validationMessage(state.validationError)}</div>
+              ) : (
+                <span className="field-help">
+                  선택한 역할과 필터를 확인한 뒤 그래프를 생성합니다.
+                </span>
+              )}
+              <button
+                className="primary-button"
+                disabled={state.isGenerating || state.validationError !== null}
+                onClick={() => void state.generate()}
+                type="button"
+              >
+                {state.isGenerating ? "그래프 생성 중" : "그래프 생성"}
+              </button>
+            </div>
             {state.error !== null ? (
               <div className="error-box" role="alert">
                 {graphErrorMessage(state.error)}
@@ -249,30 +282,21 @@ function ValueRoleControls({
   state: BuilderState;
 }) {
   return (
-    <fieldset className="column-checklist">
-      <legend>표시할 수치 변수 (최대 {maximum})</legend>
-      {state.numericColumns.map((column) => (
-        <label key={column.column_id}>
-          <input
-            checked={state.valueColumnIds.includes(column.column_id)}
-            onChange={() =>
-              state.setValueColumnIds(toggleId(state.valueColumnIds, column.column_id))
-            }
-            type="checkbox"
-          />
-          <span>{column.display_name}</span>
-          {column.unit ? <small>{column.unit}</small> : null}
-        </label>
-      ))}
-    </fieldset>
+    <GraphVariablePicker
+      columns={state.numericColumns}
+      label="표시할 수치 변수"
+      maximum={maximum}
+      onChange={state.setValueColumnIds}
+      selectedIds={state.valueColumnIds}
+    />
   );
 }
 
 function ScatterRoleControls({ state }: { state: BuilderState }) {
   return (
     <div className="graph-role-grid">
-      <label className="graph-builder-select">
-        <span>X 변수</span>
+      <label className="graph-role-option">
+        <strong>X 변수</strong>
         <select
           value={state.xColumnId ?? ""}
           onChange={(event) => state.setXColumnId(event.currentTarget.value || null)}
@@ -284,46 +308,17 @@ function ScatterRoleControls({ state }: { state: BuilderState }) {
             </option>
           ))}
         </select>
+        <small>모든 Y 패널이 같은 X 변수를 사용합니다.</small>
       </label>
-      <fieldset className="column-checklist">
-        <legend>Y 변수 (최대 6)</legend>
-        {state.numericColumns.map((column) => (
-          <label key={column.column_id}>
-            <input
-              checked={state.yColumnIds.includes(column.column_id)}
-              onChange={() =>
-                state.setYColumnIds(toggleId(state.yColumnIds, column.column_id))
-              }
-              type="checkbox"
-            />
-            {column.display_name}
-          </label>
-        ))}
-      </fieldset>
+      <GraphVariablePicker
+        columns={state.numericColumns}
+        label="Y 변수"
+        maximum={6}
+        onChange={state.setYColumnIds}
+        selectedIds={state.yColumnIds}
+      />
     </div>
   );
-}
-
-export function graphPreviewGridClassName(graphType: GraphPreviewType): string {
-  const suffixByType: Record<GraphPreviewType, string> = {
-    box_plot: "box-plot",
-    individual_value_plot: "individual-value-plot",
-    histogram: "histogram",
-    qq_plot: "qq-plot",
-    ecdf: "ecdf",
-    scatter_plot: "scatter-plot",
-    run_chart: "run-chart",
-    imr_chart: "imr-chart",
-  };
-  return `graph-preview-grid graph-preview-grid-${suffixByType[graphType]}`;
-}
-
-export function graphPreviewPanelClassName(
-  kind: GraphPreviewPanel["kind"],
-): string {
-  return kind === "individual_values" || kind === "imr_chart"
-    ? "graph-preview-panel graph-preview-card-full-row"
-    : "graph-preview-panel";
 }
 
 export function GraphPreviewPanels({
@@ -601,10 +596,6 @@ function AnalysisOnlyGraphLinks({
       </div>
     </section>
   );
-}
-
-function toggleId(values: string[], value: string): string[] {
-  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
 function validationMessage(code: string): string {

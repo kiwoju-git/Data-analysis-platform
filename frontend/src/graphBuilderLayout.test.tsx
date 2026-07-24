@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import { GraphicalSummaryColumnVisuals } from "./GraphicalSummaryColumnVisuals";
 import {
   GraphPreviewPanels,
+} from "./GraphBuilderPage";
+import {
   graphPreviewGridClassName,
   graphPreviewPanelClassName,
-} from "./GraphBuilderPage";
+} from "./graphBuilderLayout";
 import type { GraphicalSummaryColumn, GraphPreviewType } from "./api";
 
 describe("Graph Builder layout", () => {
