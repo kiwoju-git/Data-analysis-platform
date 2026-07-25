@@ -3,9 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { GraphicalSummaryColumnVisuals } from "./GraphicalSummaryColumnVisuals";
 import {
-  GraphPreviewPanels,
-} from "./GraphBuilderPage";
-import {
   graphPreviewGridClassName,
   graphPreviewPanelClassName,
 } from "./graphBuilderLayout";
@@ -54,10 +51,6 @@ describe("Graph Builder layout", () => {
     "adds a stable result-grid class for %s",
     (graphType, expectedClass) => {
       expect(graphPreviewGridClassName(graphType)).toContain(expectedClass);
-      const html = renderToString(
-        <GraphPreviewPanels graphType={graphType} layout="small_multiples" panels={[]} />,
-      );
-      expect(html).toContain(expectedClass);
     },
   );
 

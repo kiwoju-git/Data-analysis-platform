@@ -35,6 +35,13 @@ same fields. `Escape` clears selection. Touch pointer events are supported.
 Required assumptions and warnings remain in the result panel, not only in a
 tooltip.
 
+Chart responsiveness is container-driven. A chart keeps its calculation
+`viewBox`, coordinate scales, point positions, and aspect ratio while the SVG
+uses the available card width. Single-chart Graph Builder cards use one inner
+grid column; paired I-MR cards retain two inner columns on desktop and stack on
+narrow screens. Layout code must not use CSS transforms, fixed rendered pixel
+widths, or chart-coordinate recalculation as a responsive shortcut.
+
 ## Phase 1: Regression Diagnostics
 
 Implemented charts:

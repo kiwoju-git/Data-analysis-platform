@@ -39,3 +39,36 @@ not contain a source path, filename, full raw row, SQL, or traceback.
 
 `visualization_schema_version` is operational visualization metadata. It is not
 a statistical method version or an analysis result schema version.
+
+## Responsive Result Layout
+
+Result layout is presentation-only and does not alter preview payloads or chart
+coordinates.
+
+- A graphical-summary card that contains one chart uses a single inner grid
+  column. The full Graphical Summary keeps its two-column four-chart layout,
+  and the descriptive quick view keeps its two-chart layout.
+- Box Plot small multiples, Histogram, Q-Q Plot, ECDF, and Scatter Plot use up
+  to two outer columns on desktop. Each chart fills the available width inside
+  its card.
+- A combined Box Plot and an Individual Value Plot use the full result row.
+- Run Chart retains its existing responsive panel layout.
+- Each I-MR variable occupies a full result row. Its I and MR charts use two
+  inner columns on desktop and stack on narrow screens.
+
+SVG `viewBox` values, scales, points, interaction coordinates, and series
+colors remain unchanged. CSS supplies `width: 100%`, intrinsic aspect ratio,
+and `min-width: 0` rather than scaling chart coordinates.
+
+## Variable Selection
+
+The variable picker remains a native checkbox group with a corporate-theme
+card presentation. It shows the current selection count, maximum, available
+unit metadata, and an explicit clear action. At the graph-specific maximum,
+unchecked variables are disabled while selected variables remain available for
+removal. The client never slices, replaces, or auto-selects values silently;
+backend limits remain authoritative.
+
+Group and order roles use labeled select controls with helper text. Box Plot
+layout remains a native radio group presented as a segmented control, so
+keyboard and form semantics are preserved.

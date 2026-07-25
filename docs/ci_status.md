@@ -4,6 +4,29 @@ Last updated: 2026-07-25
 
 ## Local Validation
 
+- The graph-layout/sidebar/context-bar refinement branch is based on pushed
+  main `96d231e12924ceb45dd1ab72afd8c6c9f94dd41c`. It is frontend-only:
+  no API contract, visualization schema, statistical method/result version,
+  runtime capability, or SQLite migration changed.
+- Final development validation on 2026-07-25 passed tutorial Markdown block
+  verification 18, Ruff/format over 173 Python files, mypy over 108 source
+  files, backend pytest 845, frontend lint/typecheck and Vitest 227, and the
+  production build. `scripts/check.ps1` completed in 16 minutes 54 seconds.
+  An initial `scripts/test.ps1` run found the new E2E step marker missing from
+  `docs/e2e_coverage.md`; after synchronizing that document, the focused
+  contract check passed and the complete rerun passed backend 845 and frontend
+  227.
+- The isolated Chromium critical path passed in 109 seconds. Its bounding-box
+  assertions measured `0.942` SVG/card width ratios for Box Plot, Histogram,
+  Q-Q, and ECDF cards, and `0.971` for Individual Value Plot. It also verifies
+  the retained Run Chart layout, full-row I-MR variable cards with desktop
+  I/MR pairs, sidebar toggle semantics, and the desktop/390 px active-dataset
+  context bar without page overflow. Diagnostics remain untracked under
+  `.tmp/e2e-diagnostics-graph-layout-clean`.
+- The build measured main at 517.24 kB / 128.67 kB gzip, CSS at 55.65/10.80
+  kB, and GraphBuilder at 25.50/7.76 kB. The existing Vite 500 kB chunk warning
+  remains; no dependency or unsafe split was added to hide it.
+
 - The I-MR/Graph Builder/analysis-usability feature branch is based on pushed
   main `0b88293384d66751fe97f2facebc3f393729b819`. It keeps
   `quality.individuals_chart` at method `0.1.0` with its existing result schema

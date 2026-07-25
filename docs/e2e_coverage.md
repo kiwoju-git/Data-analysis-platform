@@ -6,6 +6,25 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-07-25 graph-layout/navigation refinement run additionally:
+
+- checks four-variable Box Plot, Histogram, Q-Q, and ECDF small multiples and
+  requires every single-chart SVG to occupy at least 85% of its result card;
+- verifies Individual Value Plot uses a full result row, Run Chart retains its
+  existing layout, and each I-MR variable uses one full row with an inner I/MR
+  pair;
+- captures the redesigned variable picker, a collapsed Analysis sidebar group,
+  and desktop/mobile active-dataset context bars;
+- verifies all sidebar groups start expanded, group controls toggle without
+  navigating or closing the mobile drawer, and the parsing shortcut is absent;
+  and
+- checks the 390 px active-dataset context for page-level horizontal overflow.
+
+The isolated Chromium run passed with diagnostics under
+`.tmp/e2e-diagnostics-graph-layout-clean`. Measured SVG/card width ratios were
+`0.942` for Box Plot, Histogram, Q-Q, and ECDF cards and `0.971` for the
+Individual Value Plot card.
+
 The 2026-07-25 I-MR/Graph Builder/analysis-usability critical path additionally:
 
 - opens `/graphs`, generates a real `Value` Box Plot preview, verifies preview
@@ -303,6 +322,7 @@ browser critical path.
 - `verify XLSX sheet selection recovery`
 - `verify CP949 encoding selection recovery`
 - `verify descriptive quick charts and run chart p-values`
+- `verify graph layout refinements`
 - `verify lazy panel direct routes`
 - `verify lazy panel error boundary`
 

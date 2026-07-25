@@ -20,6 +20,7 @@ from pathlib import Path
 
 from playwright.sync_api import (
     BrowserContext,
+    Locator,
     Page,
     TimeoutError as PlaywrightTimeoutError,
 )
@@ -59,6 +60,21 @@ REGRESSION_TARGET_DATA = """y\tx\tgroup
 
 ATTRIBUTE_CONTROL_CHART_DATA = """defectives\tsample_size
 6\t20
+"""
+
+GRAPH_LAYOUT_DATA = """temperature_c\tpressure_bar\tcycle_time_s\tcatalyst_pct
+60\t5\t30\t0.5
+62\t6\t34\t0.7
+64\t7\t39\t0.9
+66\t8\t43\t1.1
+68\t9\t47\t1.3
+70\t10\t52\t1.5
+72\t11\t56\t1.7
+74\t12\t61\t1.9
+76\t13\t65\t2.1
+78\t14\t69\t2.3
+80\t15\t74\t2.5
+82\t16\t78\t2.7
 """
 
 PASTE_GRID_REVIEW_DATA = """이름\t값\t메모\r
@@ -359,6 +375,18 @@ class E2EDiagnostics:
             print(message, file=sys.stderr)
             self.record(message)
 
+    def capture_page(self, page: Page, name: str, *, full_page: bool = True) -> Path:
+        screenshot_path = self.screenshot_root / name
+        page.screenshot(path=str(screenshot_path), full_page=full_page)
+        self.record(f"[e2e] screenshot: {self.artifact_label(screenshot_path)}")
+        return screenshot_path
+
+    def capture_locator(self, locator: Locator, name: str) -> Path:
+        screenshot_path = self.screenshot_root / name
+        locator.screenshot(path=str(screenshot_path))
+        self.record(f"[e2e] screenshot: {self.artifact_label(screenshot_path)}")
+        return screenshot_path
+
 
 def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> None:
     with sync_playwright() as playwright:
@@ -450,7 +478,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             expect(page.get_by_label("붙여넣기 원문")).to_have_value("")
             expect_dataset_context_counts(page, row_label="6행", column_label="2컬럼")
 
-            page.get_by_role("button", name="분석", exact=True).click()
+            verify_sidebar_group_toggle(page, diagnostics)
+            open_primary_navigation(page, "분석")
             expect(page.locator("#workbench-title")).to_have_text("기술통계")
             page.get_by_role("button", name="기술통계 실행").click()
             diagnostics.step("run descriptive statistics")
@@ -462,7 +491,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             diagnostics.step("verify graph builder box plot preview")
             verify_graph_builder_box_plot(page)
 
-            page.get_by_role("button", name="분석", exact=True).click()
+            open_primary_navigation(page, "분석")
             select_method_card(page, "가설 검정", "2-표본 t-검정")
             expect(page.locator("#workbench-title")).to_have_text("2-표본 t-검정")
             page.get_by_role("button", name="2-표본 t-검정 실행").click()
@@ -524,6 +553,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             )
             diagnostics.step("verify descriptive quick charts and run chart p-values")
             verify_descriptive_quick_charts_and_run_chart(page)
+            diagnostics.step("verify graph layout refinements")
+            verify_graph_layout_refinements(page, diagnostics)
             diagnostics.step("verify lazy panel direct routes")
             verify_lazy_panel_direct_routes(page, frontend_base_url)
             diagnostics.step("verify lazy panel error boundary")
@@ -562,9 +593,38 @@ def select_method_card(page: Page, module_label: str, method_label: str) -> None
 
 
 def open_primary_navigation(page: Page, label: str) -> None:
-    page.locator(".sidebar-group-control").filter(
-        has_text=re.compile(rf"^{re.escape(label)}$")
-    ).click()
+    group = page.locator(".sidebar-group").filter(
+        has=page.locator(".sidebar-group-control").filter(
+            has_text=re.compile(rf"^{re.escape(label)}$")
+        )
+    )
+    control = group.locator(".sidebar-group-control")
+    if control.get_attribute("aria-expanded") != "true":
+        control.click()
+    active_leaf = group.locator('.sidebar-submenu-button[aria-current="page"]')
+    target = (
+        active_leaf.first
+        if active_leaf.count() > 0
+        else group.locator(".sidebar-submenu-button:not(:disabled)").first
+    )
+    target.click()
+
+
+def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None:
+    group = page.locator(".sidebar-group").filter(
+        has=page.locator(".sidebar-group-control").filter(has_text=re.compile("^분석$"))
+    )
+    control = group.locator(".sidebar-group-control")
+    expect(control).to_have_attribute("aria-expanded", "true")
+    current_url = page.url
+    control.click()
+    expect(control).to_have_attribute("aria-expanded", "false")
+    expect(group.locator(".sidebar-submenu")).to_be_hidden()
+    if page.url != current_url:
+        raise AssertionError("sidebar group toggle unexpectedly navigated")
+    diagnostics.capture_page(page, "sidebar-collapsed-analysis.png")
+    control.click()
+    expect(control).to_have_attribute("aria-expanded", "true")
 
 
 def verify_graph_builder_box_plot(page: Page) -> None:
@@ -587,6 +647,146 @@ def verify_graph_builder_box_plot(page: Page) -> None:
             exact=True,
         )
     ).to_be_visible()
+
+
+def verify_graph_layout_refinements(page: Page, diagnostics: E2EDiagnostics) -> None:
+    page.set_viewport_size({"width": 1440, "height": 900})
+    open_primary_navigation(page, "데이터셋")
+    paste_plain_text(page, GRAPH_LAYOUT_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect(
+        page.get_by_role("heading", name=re.compile(r"Dataset version v1"))
+    ).to_be_visible(timeout=20_000)
+    expect_dataset_context_counts(page, row_label="12행", column_label="4열")
+
+    open_primary_navigation(page, "그래프")
+    expect(page.get_by_role("heading", name="그래프 작성")).to_be_visible(
+        timeout=15_000
+    )
+    variable_picker = page.locator(".graph-variable-picker").first
+    for column_name in (
+        "temperature_c",
+        "pressure_bar",
+        "cycle_time_s",
+        "catalyst_pct",
+    ):
+        checkbox = variable_picker.get_by_role(
+            "checkbox", name=re.compile(rf"^{re.escape(column_name)}")
+        )
+        if not checkbox.is_checked():
+            checkbox.check()
+    expect(variable_picker).to_contain_text("선택 4 / 12")
+    diagnostics.capture_locator(variable_picker, "graph-variable-picker-desktop.png")
+    page.get_by_role("radio", name="개별 패널").check()
+    page.get_by_role("button", name="그래프 생성", exact=True).click()
+    expect(page.get_by_role("heading", name="그래프 결과")).to_be_visible(
+        timeout=20_000
+    )
+    assert_single_chart_cards_fill(page, diagnostics, "graph-preview-grid-box-plot", 4)
+    diagnostics.capture_page(page, "graph-box-individual-desktop.png")
+
+    for button_label, grid_class in (
+        ("Histogram", "graph-preview-grid-histogram"),
+        ("Q-Q Plot", "graph-preview-grid-qq-plot"),
+        ("ECDF", "graph-preview-grid-ecdf"),
+    ):
+        page.locator(".graph-type-button").filter(
+            has_text=re.compile(rf"^{re.escape(button_label)}")
+        ).click()
+        page.get_by_role("button", name="그래프 생성", exact=True).click()
+        expect(page.get_by_role("heading", name="그래프 결과")).to_be_visible(
+            timeout=20_000
+        )
+        assert_single_chart_cards_fill(page, diagnostics, grid_class, 4)
+
+    page.locator(".graph-type-button").filter(
+        has_text=re.compile("^Individual Value Plot")
+    ).click()
+    page.get_by_role("button", name="그래프 생성", exact=True).click()
+    individual_card = page.locator(
+        ".graph-preview-grid-individual-value-plot > .graph-preview-card-full-row"
+    )
+    expect(individual_card).to_have_count(1, timeout=20_000)
+    assert_chart_width_ratio(individual_card, diagnostics, "individual-value")
+
+    page.locator(".graph-type-button").filter(has_text=re.compile("^Run Chart")).click()
+    page.get_by_role("button", name="그래프 생성", exact=True).click()
+    expect(page.locator(".graph-preview-grid-run-chart .chart-panel")).to_have_count(
+        4, timeout=20_000
+    )
+    diagnostics.capture_page(page, "run-chart-regression.png")
+
+    page.locator(".graph-type-button").filter(
+        has_text=re.compile("^I-MR Chart")
+    ).click()
+    page.get_by_role("button", name="그래프 생성", exact=True).click()
+    imr_cards = page.locator(
+        ".graph-preview-grid-imr-chart > .graph-preview-card-full-row"
+    )
+    expect(imr_cards).to_have_count(4, timeout=20_000)
+    for index in range(4):
+        expect(
+            imr_cards.nth(index).locator(".chart-grid > .chart-panel")
+        ).to_have_count(2)
+    diagnostics.capture_page(page, "imr-paired-layout.png")
+    diagnostics.capture_locator(
+        page.locator(".active-dataset-selector"),
+        "active-dataset-context-desktop.png",
+    )
+
+    page.set_viewport_size({"width": 390, "height": 844})
+    diagnostics.capture_locator(
+        page.locator(".active-dataset-selector"),
+        "active-dataset-context-mobile.png",
+    )
+    overflow = page.evaluate(
+        "() => document.documentElement.scrollWidth - window.innerWidth"
+    )
+    if overflow > 1:
+        raise AssertionError(f"mobile page overflowed horizontally by {overflow}px")
+    page.get_by_role("button", name="주요 메뉴 열기").click()
+    analysis_group = page.locator(".sidebar-group").filter(
+        has=page.locator(".sidebar-group-control").filter(has_text=re.compile("^분석$"))
+    )
+    analysis_control = analysis_group.locator(".sidebar-group-control")
+    analysis_control.click()
+    expect(page.locator("#application-sidebar")).to_have_class(
+        re.compile(r"\bis-open\b")
+    )
+    expect(analysis_control).to_have_attribute("aria-expanded", "false")
+    page.keyboard.press("Escape")
+    page.set_viewport_size({"width": 1440, "height": 900})
+
+
+def assert_single_chart_cards_fill(
+    page: Page,
+    diagnostics: E2EDiagnostics,
+    grid_class: str,
+    expected_count: int,
+) -> None:
+    cards = page.locator(f".{grid_class} .graphical-summary-card")
+    expect(cards).to_have_count(expected_count)
+    for index in range(expected_count):
+        assert_chart_width_ratio(
+            cards.nth(index), diagnostics, f"{grid_class}-{index + 1}"
+        )
+
+
+def assert_chart_width_ratio(
+    card: Locator, diagnostics: E2EDiagnostics, label: str
+) -> None:
+    card_box = card.bounding_box()
+    chart_box = card.locator("svg").first.bounding_box()
+    if card_box is None or chart_box is None:
+        raise AssertionError(f"{label} did not produce measurable card/chart bounds")
+    ratio = chart_box["width"] / card_box["width"]
+    diagnostics.record(f"[e2e] {label} chart/card width ratio={ratio:.3f}")
+    if ratio < 0.85:
+        raise AssertionError(
+            f"{label} chart used only {ratio:.1%} of its result card width"
+        )
 
 
 def create_exports(page: Page) -> None:
@@ -633,7 +833,7 @@ def create_exports(page: Page) -> None:
 
 
 def verify_help_report_and_manage_routes(page: Page) -> None:
-    page.get_by_role("button", name="리포트", exact=True).click()
+    open_primary_navigation(page, "리포트")
     expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible()
     expect_lazy_workspace_page(page, "ReportCenterPage")
     report_rows = page.locator(".report-run-row")
@@ -663,7 +863,7 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
         timeout=15_000
     )
 
-    page.get_by_role("button", name="도움말", exact=True).click()
+    open_primary_navigation(page, "도움말")
     expect(page.get_by_role("heading", name="도움말", exact=True)).to_be_visible()
     expect_lazy_workspace_page(page, "HelpCenterPage")
     expect(page.get_by_text("무엇을 알고 싶나요?")).to_be_visible()
@@ -679,7 +879,7 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
     expect(
         page.get_by_role("heading", name="Statistical Twin", exact=True)
     ).to_be_visible()
-    page.get_by_role("button", name="프로젝트", exact=True).click()
+    open_primary_navigation(page, "프로젝트")
     expect(page).to_have_url(re.compile(r"/project(?:\?|$)"))
     expect(
         page.get_by_role("button", name="프로젝트 개요", exact=True)
@@ -699,7 +899,7 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
         timeout=15_000
     )
 
-    page.get_by_role("button", name="관리", exact=True).click()
+    open_primary_navigation(page, "관리")
     expect(page.get_by_role("heading", name="데이터모델 관리")).to_be_visible(
         timeout=15_000
     )
@@ -710,7 +910,7 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
         timeout=15_000
     )
 
-    page.get_by_role("button", name="분석", exact=True).click()
+    open_primary_navigation(page, "분석")
     help_trigger = page.get_by_role("button", name="분석 도움말")
     expect(help_trigger).to_be_visible()
     help_trigger.click()
@@ -736,7 +936,7 @@ def verify_descriptive_quick_charts_and_run_chart(page: Page) -> None:
     ).to_be_visible(timeout=20_000)
     expect(page.locator(".active-dataset-summary")).to_contain_text("생성")
 
-    page.get_by_role("button", name="분석", exact=True).click()
+    open_primary_navigation(page, "분석")
     select_method_card(page, "탐색적 분석", "기술통계")
     page.get_by_role("button", name="기술통계 실행").click()
     expect(page.get_by_role("button", name="Value 그래프 보기")).to_be_visible(
@@ -787,7 +987,7 @@ def restore_and_compare_saved_results(page: Page) -> None:
         "2-표본 t-검정", timeout=15_000
     )
 
-    page.get_by_role("button", name="리포트", exact=True).click()
+    open_primary_navigation(page, "리포트")
     expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible(
         timeout=15_000
     )
@@ -839,7 +1039,8 @@ def verify_schema_stale_behavior(page: Page) -> None:
     page.get_by_role("button", name="스키마 저장").click()
     expect(page.get_by_role("button", name="스키마 저장")).to_be_enabled(timeout=15_000)
 
-    page.get_by_role("button", name="분석", exact=True).click()
+    open_primary_navigation(page, "분석")
+    select_method_card(page, "가설 검정", "2-표본 t-검정")
     compact_history = page.locator(".compact-analysis-history")
     compact_history.get_by_role("button", name="최근 이력 열기").click()
     expect(page.locator(".compact-history-list article")).to_have_count(
@@ -853,7 +1054,8 @@ def verify_schema_stale_behavior(page: Page) -> None:
     page.get_by_role("button", name="스키마 저장").click()
     expect(value_display_input).to_have_value("Measurement Value", timeout=15_000)
 
-    page.get_by_role("button", name="분석", exact=True).click()
+    open_primary_navigation(page, "분석")
+    select_method_card(page, "가설 검정", "2-표본 t-검정")
     compact_history = page.locator(".compact-analysis-history")
     compact_history.get_by_role("button", name="최근 이력 열기").click()
     expect(page.locator(".compact-history-list article")).to_have_count(
@@ -891,7 +1093,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     training_active_version_id = training_confirm_info.value.json()["version_id"]
     expect_dataset_context_counts(page, row_label="12행", column_label="3컬럼")
     expect(active_dataset_selector).to_have_value(training_active_version_id)
-    page.get_by_role("button", name="분석", exact=True).click()
+    open_primary_navigation(page, "분석")
     page.get_by_role(
         "button",
         name=re.compile(r"상관관계 및 회귀분석"),
@@ -1207,7 +1409,7 @@ def verify_attribute_control_chart(page: Page) -> None:
     page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
     expect_dataset_context_counts(page, row_label="20행", column_label="2컬럼")
 
-    page.get_by_role("button", name="분석", exact=True).click()
+    open_primary_navigation(page, "분석")
     select_method_card(page, "품질 관리", "계수형 관리도")
     expect(page.locator("#workbench-title")).to_have_text("계수형 관리도")
     expect_lazy_analysis_module(page, "QualityAnalysisPanels")
@@ -1261,7 +1463,7 @@ def verify_attribute_control_chart(page: Page) -> None:
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
     page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
     expect_dataset_context_counts(page, row_label="1행", column_label="2컬럼")
-    page.get_by_role("button", name="분석", exact=True).click()
+    open_primary_navigation(page, "분석")
     select_method_card(page, "품질 관리", "계수형 관리도")
     page.get_by_role("radio", name="Phase II 고정 한계 모니터링").click()
     limit_set_select = page.get_by_label("검증된 limit set")
@@ -1326,7 +1528,7 @@ def verify_attribute_control_chart(page: Page) -> None:
 
 
 def verify_doe_factorial_analysis(page: Page) -> None:
-    page.get_by_role("button", name="분석", exact=True).click()
+    open_primary_navigation(page, "분석")
     select_method_card(page, "실험 계획법", "실험 계획 생성")
     expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
     expect_lazy_analysis_module(page, "DoeAnalysisPanels")
@@ -2035,8 +2237,16 @@ def expect_dataset_context_counts(
     page: Page, *, row_label: str, column_label: str
 ) -> None:
     context_bar = page.locator('[aria-label="데이터셋 컨텍스트"]')
-    expect(context_bar.get_by_text(row_label, exact=True)).to_be_visible()
-    expect(context_bar.get_by_text(column_label, exact=True)).to_be_visible()
+    row_value = row_label.removesuffix("행")
+    column_value = column_label.removesuffix("컬럼").removesuffix("열")
+    row_stat = context_bar.locator(
+        ".active-dataset-stat", has_text=re.compile(rf"^행\s*{row_value}$")
+    )
+    column_stat = context_bar.locator(
+        ".active-dataset-stat", has_text=re.compile(rf"^열\s*{column_value}$")
+    )
+    expect(row_stat).to_be_visible()
+    expect(column_stat).to_be_visible()
 
 
 def minimal_xlsx_workbook_bytes() -> bytes:

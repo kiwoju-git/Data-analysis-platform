@@ -321,7 +321,7 @@ function ScatterRoleControls({ state }: { state: BuilderState }) {
   );
 }
 
-export function GraphPreviewPanels({
+function GraphPreviewPanels({
   graphType,
   layout,
   panels,
@@ -466,7 +466,7 @@ function ImrChartPreview({ panel }: { panel: ImrChartPreviewPanel }) {
   const result = panel.result;
   if (result === null) return null;
   return (
-    <article className="graph-preview-panel">
+    <article className={graphPreviewPanelClassName(panel.kind)}>
       <h4>{panel.label}</h4>
       <div className="chart-grid">
         <SequenceChart
