@@ -1,8 +1,40 @@
 # CI Status
 
-Last updated: 2026-07-25
+Last updated: 2026-07-29
 
 ## Local Validation
+
+- The immutable dataset-cell-correction/LHS/Bayesian-initial-design branch is
+  based on pushed main `8600cc805312eba7e7842f922d3825288d06ef77`.
+  It advances metadata schema 16 to 17, runtime API contract 4 to 5, and adds
+  the `dataset_cell_correction`, `lhs_design`, and
+  `bayesian_lhs_initial_design` capabilities. Statistical analysis result
+  schemas are unchanged; `doe.bayesian_optimization` advances to method 0.3.0
+  and study schema 2 while retaining schema-1 study restore.
+- The complete development validation passed tutorial Markdown verification
+  18, Ruff/format over 180 Python files, mypy over 111 source modules, backend
+  pytest 865, frontend lint/typecheck and Vitest 231, OpenAPI/frontend
+  contracts, and the production build. A later browser run exposed two
+  frontend-only integration defects: the newly created dataset selector could
+  momentarily fall back to its parent, and the LHS response input read a React
+  event after its lifetime. Both were fixed; the final focused rerun passed
+  frontend Vitest 232/232, TypeScript strict checking, and the full Chromium
+  critical path.
+- The final isolated Chromium path passed in 120.9 seconds. It creates dataset
+  v2 from one corrected cell, verifies v1 remains unchanged, generates a
+  standalone six-run LHS design, stores response revision 1, and exercises the
+  explicit constraint-capable Bayesian initial-design policy through
+  observation and recommendation. Existing upload, parsing, saved-result,
+  export, model, quality, DOE, graph-layout, and lazy-route paths also passed.
+  Diagnostics remain untracked under
+  `.tmp/e2e-diagnostics-cell-lhs-final3`.
+- LHS uses the pinned SciPy `qmc.LatinHypercube` implementation and records
+  generated normalized/actual coordinates, strata validation, centered
+  discrepancy, minimum distance, seed, and package provenance. No dependency
+  was added. Standalone LHS is intentionally limited to rectangular continuous
+  factor spaces; importing an existing LHS response revision or dataset into a
+  Bayesian study remains a documented future atomic contract rather than a
+  frontend-only handoff.
 
 - The graph-layout/sidebar/context-bar refinement branch is based on pushed
   main `96d231e12924ceb45dd1ab72afd8c6c9f94dd41c`. It is frontend-only:

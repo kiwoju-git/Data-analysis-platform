@@ -1,4 +1,5 @@
 export type WorkspaceMutationKind =
+  | "dataset_created"
   | "dataset_archived"
   | "dataset_unarchived"
   | "dataset_deleted"

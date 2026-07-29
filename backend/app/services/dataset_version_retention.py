@@ -39,6 +39,7 @@ from app.storage.metadata import (
     DatasetVersionDeletionSnapshot,
     DatasetVersionStorageConflict,
     _dataset_deletion_dependency_descriptors,
+    count_dataset_version_child_records,
     delete_dataset_version_cascade_records,
     delete_dataset_version_records,
     get_dataset_version_cascade_snapshot,
@@ -320,6 +321,8 @@ def _cascade_context(
     preserved = 0
     issues: set[str] = set(dataset_context.integrity_issue_codes)
     blockers: set[str] = set()
+    if count_dataset_version_child_records(settings.workspace_root, str(version_id)):
+        blockers.add("dataset_version_deletion_child_version_dependency")
     if dataset_context.integrity_state == "verified":
         for dataset_file in dataset_context.files:
             files.append(
@@ -622,7 +625,7 @@ def _deletion_context(settings: Settings, version_id: UUID) -> _DeletionContext:
                 message="요청한 데이터셋 버전을 찾을 수 없습니다.",
                 status_code=status.HTTP_404_NOT_FOUND,
             ) from exc
-        blockers, counts, scope = _snapshot_deletion_summary(snapshot)
+        blockers, counts, scope = _snapshot_deletion_summary(settings, snapshot)
         issue_codes = (exc.code,)
         preserved_file_count = len(snapshot.artifacts) + (
             1 if snapshot.sibling_version_count == 0 else 0
@@ -660,10 +663,17 @@ def _deletion_context(settings: Settings, version_id: UUID) -> _DeletionContext:
 
 
 def _snapshot_deletion_summary(
+    settings: Settings,
     snapshot: DatasetVersionDeletionSnapshot,
 ) -> tuple[list[str], DatasetVersionDeletionCounts, Literal["version_only", "dataset_root"]]:
     dependencies = snapshot.dependencies
     blockers: list[str] = []
+    child_version_count = count_dataset_version_child_records(
+        settings.workspace_root,
+        snapshot.version.version_id,
+    )
+    if child_version_count:
+        blockers.append("dataset_version_deletion_child_version_dependency")
     if dependencies.analysis_run_count or dependencies.analysis_export_count:
         blockers.append("dataset_version_deletion_analysis_dependency")
     if dependencies.regression_model_count:
@@ -685,6 +695,7 @@ def _snapshot_deletion_summary(
         raw_upload_file_count=1 if last_version else 0,
         raw_upload_file_bytes=snapshot.dataset.size_bytes if last_version else 0,
         sibling_version_count=snapshot.sibling_version_count,
+        child_version_count=child_version_count,
         **dependencies.__dict__,
     )
     scope: Literal["version_only", "dataset_root"] = (
@@ -785,6 +796,12 @@ def _verified_deletion_context(settings: Settings, version_id: UUID) -> _Deletio
 
     dependencies = snapshot.dependencies
     blockers: list[str] = []
+    child_version_count = count_dataset_version_child_records(
+        settings.workspace_root,
+        snapshot.version.version_id,
+    )
+    if child_version_count:
+        blockers.append("dataset_version_deletion_child_version_dependency")
     if dependencies.analysis_run_count or dependencies.analysis_export_count:
         blockers.append("dataset_version_deletion_analysis_dependency")
     if dependencies.regression_model_count:
@@ -805,6 +822,7 @@ def _verified_deletion_context(settings: Settings, version_id: UUID) -> _Deletio
         raw_upload_file_count=1 if last_version else 0,
         raw_upload_file_bytes=raw_bytes,
         sibling_version_count=snapshot.sibling_version_count,
+        child_version_count=child_version_count,
         **dependencies.__dict__,
     )
     scope: Literal["version_only", "dataset_root"] = (

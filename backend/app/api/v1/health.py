@@ -32,6 +32,9 @@ class RuntimeCapabilities(BaseModel):
     dedicated_response_optimizer: bool
     bayesian_optimization: bool
     graph_builder_preview: bool
+    dataset_cell_correction: bool
+    lhs_design: bool
+    bayesian_lhs_initial_design: bool
 
 
 class RuntimeInfoResponse(BaseModel):

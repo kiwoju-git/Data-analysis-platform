@@ -578,6 +578,39 @@ export const analysisMethodGuidance = {
     plainLanguage:
       "전용 DOE API에서 2-level full factorial 설계표와 반응값을 저장하고 -1/+1 coding 효과 추정, hierarchy 고정 OLS/ANOVA, pure error/lack-of-fit, 잔차 진단을 실행합니다. 반응표면 분석은 별도 RSM 화면에서 제공합니다.",
   },
+  "doe.latin_hypercube": {
+    methodId: "doe.latin_hypercube",
+    roleRequirements: [
+      required("연속형 요인", "1~6개 요인의 이름, low, high"),
+      optional("단위", "각 요인의 실제 측정 단위"),
+    ],
+    cardTags: [
+      { category: "data_type", label: "연속형 요인" },
+      { category: "design", label: "공간충전 설계" },
+      { category: "target", label: "초기 탐색" },
+      { category: "sample_guidance", label: "순차 최적화 전 초기점" },
+    ],
+    optionChecklist: ["실험 수", "seed", "discrepancy 개선", "run order"],
+    preflightChecks: [
+      "요인별 low < high",
+      "사각형 설계영역",
+      "층별 점유 검증",
+      "실험 예산",
+    ],
+    resultFocus: [
+      "실제 및 normalized 좌표",
+      "centered discrepancy",
+      "최소 점간 거리",
+      "stratum 점유",
+    ],
+    plainLanguage:
+      "각 연속형 요인의 범위를 층화하여 전체 설계영역을 고르게 탐색하는 실험점을 만듭니다. 주효과와 상호작용을 직교 대비로 추정하는 2수준 요인배치와 목적이 다릅니다.",
+    commonErrors: [
+      "서로 다른 목적의 factorial effect 설계로 해석하는 경우",
+      "선형 제약이 있는 영역에서 단순히 infeasible 점을 제거하는 경우",
+      "설계 품질 지표를 최적 설계 보장으로 해석하는 경우",
+    ],
+  },
   "doe.response_surface": {
     methodId: "doe.response_surface",
     roleRequirements: [required("요인", "2~5개 연속 요인과 실제 안전 경계"), required("반응", "각 CCD run의 숫자 반응")],

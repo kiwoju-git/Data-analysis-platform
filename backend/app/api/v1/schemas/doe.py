@@ -165,6 +165,78 @@ class FactorialDesignResponse(BaseModel):
     runs: list[FactorialDesignRunResponse]
 
 
+class LatinHypercubeDesignCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(default="LHS space-filling design", min_length=1, max_length=120)
+    factors: list[DoeFactorRequest] = Field(min_length=1, max_length=6)
+    run_count: int = Field(ge=2, le=200)
+    seed: int = Field(ge=0, le=2_147_483_647)
+    randomize_run_order: bool = True
+    run_order_seed: int = Field(ge=0, le=2_147_483_647)
+    optimization: Literal["random_cd", "none"] = "random_cd"
+
+
+class LatinHypercubeDesignOptionsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    policy: Literal["scipy_latin_hypercube_random_cd_v1"]
+    run_count: int = Field(ge=2, le=200)
+    seed: int = Field(ge=0)
+    scramble: Literal[True]
+    strength: Literal[1]
+    optimization: Literal["random_cd", "none"]
+    randomize_run_order: bool
+    run_order_seed: int = Field(ge=0)
+    numpy_version: str
+    scipy_version: str
+
+
+class LatinHypercubeDesignQualityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    centered_discrepancy: float
+    minimum_pairwise_distance: float
+    maximum_absolute_factor_correlation: float
+    per_factor_strata_occupancy: list[list[int]]
+    strata_valid: bool
+
+
+class LatinHypercubeRunResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    standard_order: int = Field(ge=1)
+    run_order: int = Field(ge=1)
+    replicate_index: Literal[1]
+    center_point: Literal[False]
+    block_index: None
+    factor_levels: dict[str, float]
+    normalized_levels: dict[str, float]
+
+
+class LatinHypercubeDesignResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    design_schema_version: Literal[1]
+    design_id: UUID
+    design_version_id: UUID
+    version_number: Literal[1]
+    method_id: Literal["doe.latin_hypercube"]
+    method_version: Literal["0.1.0"]
+    family: Literal["latin_hypercube_space_filling"]
+    name: str
+    status: str
+    created_at: str
+    updated_at: str
+    app_version: str
+    factors: list[DoeFactorResponse]
+    options: LatinHypercubeDesignOptionsResponse
+    quality: LatinHypercubeDesignQualityResponse
+    run_count: int = Field(ge=2, le=200)
+    design_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    runs: list[LatinHypercubeRunResponse]
+
+
 class DoeFactorialAnalysisCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

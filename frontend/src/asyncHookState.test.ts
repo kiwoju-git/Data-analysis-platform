@@ -550,8 +550,8 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 4,
-    metadata_schema_version: 16,
+    api_contract_version: 5,
+    metadata_schema_version: 17,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
@@ -566,6 +566,9 @@ function runtimeInfo(
       dedicated_response_optimizer: true,
       bayesian_optimization: true,
       graph_builder_preview: true,
+      dataset_cell_correction: true,
+      lhs_design: true,
+      bayesian_lhs_initial_design: true,
     },
     ...overrides,
   };

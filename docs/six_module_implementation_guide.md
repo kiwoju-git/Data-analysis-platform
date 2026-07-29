@@ -257,6 +257,7 @@ Gate B0 storage/run foundation 후에도 다음 기능은 아직 공통 플랫�
 | 품질 | `quality.gage_rr` | Gage R&R Study |
 | 품질 | `quality.gage_run_chart` | Gage Run Chart |
 | DOE | `doe.factorial_design` | Design of Experiments |
+| DOE | `doe.latin_hypercube` | Latin Hypercube Sampling |
 | DOE | `doe.response_surface` | Response Surface Method |
 | DOE | `doe.bayesian_optimization` | Bayesian Optimization |
 
@@ -1909,5 +1910,17 @@ AGENTS.md, docs/six_module_implementation_guide.md, to_do_list.md, data_prd_adde
 - statsmodels `ttost_paired`: https://www.statsmodels.org/stable/generated/statsmodels.stats.weightstats.ttost_paired.html
 - NIST/SEMATECH Engineering Statistics Handbook: https://www.itl.nist.gov/div898/handbook/
 - pyDOE3 documentation: https://pydoe3.readthedocs.io/
+
+## 2026-07-29 DOE And Dataset Addendum
+
+- `doe.latin_hypercube` `0.1.0` is a dedicated SciPy QMC space-filling
+  design for rectangular continuous-factor bounds. It is not a factorial ANOVA
+  design; see `docs/lhs_design_contract.md`.
+- `doe.bayesian_optimization` `0.3.0` creates study schema `2` with explicit
+  LHS or constrained-uniform initial-design policy. Schema `1` and method
+  `0.1.0` through `0.2.2` remain readable.
+- Metadata schema `17` records immutable parent-child dataset version lineage
+  for single-cell correction. The raw upload and parent artifacts remain
+  unchanged; see `docs/dataset_cell_correction_contract.md`.
 
 참고 자료의 계산 정책을 그대로 복사하지 말고 제품의 method version, 옵션, reference test와 연결한다.

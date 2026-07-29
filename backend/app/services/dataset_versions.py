@@ -50,11 +50,13 @@ from app.storage.metadata import (
     DatasetArtifactRecord,
     DatasetColumnRecord,
     DatasetRecord,
+    DatasetVersionLineageRecord,
     DatasetVersionRecord,
     WorkspaceAssetStorageConflict,
     count_dataset_version_catalog_records,
     get_dataset_artifact_record,
     get_dataset_record,
+    get_dataset_version_lineage_record,
     get_dataset_version_record,
     get_dataset_version_user_metadata,
     insert_dataset_version_record,
@@ -290,7 +292,13 @@ def get_dataset_version(
         str(version_id),
         CANONICAL_ROWS_KIND,
     )
-    return dataset_version_response_from_records(version, columns, canonical_artifact)
+    lineage = get_dataset_version_lineage_record(settings.workspace_root, str(version_id))
+    return dataset_version_response_from_records(
+        version,
+        columns,
+        canonical_artifact,
+        lineage=lineage,
+    )
 
 
 def get_dataset_schema(
@@ -376,6 +384,8 @@ def dataset_version_response_from_records(
     version: DatasetVersionRecord,
     columns: list[DatasetColumnRecord],
     canonical_artifact: DatasetArtifactRecord | None = None,
+    *,
+    lineage: DatasetVersionLineageRecord | None = None,
 ) -> DatasetVersionResponse:
     summary = dataset_version_summary_from_record(version)
     parsing = ConfirmedParsingOptions.model_validate(json.loads(version.parsing_options_json))
@@ -385,6 +395,9 @@ def dataset_version_response_from_records(
         parsing=parsing,
         columns=dataset_column_responses(columns),
         canonical_artifact=dataset_artifact_response_from_record(canonical_artifact),
+        parent_version_id=None if lineage is None else UUID(lineage.parent_version_id),
+        lineage_operation_kind=(None if lineage is None else "cell_correction"),
+        lineage_affected_cell_count=(None if lineage is None else lineage.affected_cell_count),
     )
 
 

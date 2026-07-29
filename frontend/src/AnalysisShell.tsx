@@ -30,6 +30,7 @@ import {
   BayesianOptimizationPanel,
   CapabilityPanel,
   FactorialDesignPanel,
+  LatinHypercubePanel,
   GageRrPreflightPanel,
   GageRunChartPanel,
   IndividualsChartPanel,
@@ -1672,6 +1673,12 @@ export function AnalysisShell({
                   responses={factorialDesignResponses}
                 />
               );
+            }
+            if (
+              method.method_id === "doe.latin_hypercube" &&
+              method.availability === "available"
+            ) {
+              return <LatinHypercubePanel />;
             }
             if (
               method.method_id === "doe.response_surface" &&

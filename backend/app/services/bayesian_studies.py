@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Final, Literal, cast
 from uuid import UUID, uuid4
 
+import numpy as np
 from fastapi import status
 from pydantic import ValidationError
 
@@ -53,6 +54,13 @@ from app.services.analysis_run_execution import (
 from app.services.bayesian_recommendation_consistency import (
     validate_bayesian_recommendation_record,
 )
+from app.statistics.latin_hypercube import (
+    LatinHypercubeError,
+    LatinHypercubeFactor,
+    LatinHypercubeOptions,
+    calculate_latin_hypercube_quality,
+    generate_latin_hypercube_design,
+)
 from app.storage.bayesian_studies import (
     BayesianHistoryRevisionRecord,
     BayesianRecommendationRecord,
@@ -85,15 +93,20 @@ from app.storage.bayesian_studies import (
 )
 
 BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
-BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[1]] = 1
+BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[2]] = 2
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
-SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset({"0.1.0", "0.2.0", "0.2.1", "0.2.2"})
+SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
+    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0"}
+)
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
 BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[1]] = 1
 BAYESIAN_DELETION_PREFLIGHT_SCHEMA_VERSION: Final[Literal[1]] = 1
 BAYESIAN_DELETION_SCHEMA_VERSION: Final[Literal[1]] = 1
 INITIAL_DESIGN_POLICY: Final[Literal["sha256_counter_uniform_feasible_v1"]] = (
     "sha256_counter_uniform_feasible_v1"
+)
+LHS_INITIAL_DESIGN_POLICY: Final[Literal["latin_hypercube_random_cd_v1"]] = (
+    "latin_hypercube_random_cd_v1"
 )
 MAX_GENERATION_ATTEMPTS_PER_TRIAL: Final = 1_000
 
@@ -155,26 +168,79 @@ def create_bayesian_study(
         )
     objective = _validated_objective_payload(body)
     constraints = _validated_constraint_payload(body, factors)
-    actual_points, normalized_points, attempts_consumed = _generate_initial_design(
-        factors=factors,
-        constraints=constraints,
-        seed=body.initial_design_seed,
-        size=body.initial_design_size,
-    )
-    initial_design = BayesianInitialDesignResponse(
-        policy=INITIAL_DESIGN_POLICY,
-        seed=body.initial_design_seed,
-        requested_size=body.initial_design_size,
-        generated_size=len(actual_points),
-        attempt_limit=body.initial_design_size * MAX_GENERATION_ATTEMPTS_PER_TRIAL,
-        attempts_consumed=attempts_consumed,
-    )
+    initial_design_policy = body.initial_design_policy
+    if initial_design_policy is None:
+        initial_design_policy = INITIAL_DESIGN_POLICY if constraints else LHS_INITIAL_DESIGN_POLICY
+    if initial_design_policy == LHS_INITIAL_DESIGN_POLICY:
+        if constraints:
+            raise ApiError(
+                code="bayesian_lhs_constraints_unsupported",
+                message=(
+                    "현재 LHS 초기설계는 사각형 요인 범위에서만 지원됩니다. "
+                    "제약형 균등 초기설계를 선택하거나 선형 제약을 제거하세요."
+                ),
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        generated_lhs = generate_latin_hypercube_design(
+            [
+                LatinHypercubeFactor(
+                    name=item.factor_id,
+                    low=item.low,
+                    high=item.high,
+                    unit=item.unit,
+                )
+                for item in factors
+            ],
+            LatinHypercubeOptions(
+                run_count=body.initial_design_size,
+                seed=body.initial_design_seed,
+                randomize_run_order=False,
+                run_order_seed=body.initial_design_seed,
+                optimization="random_cd",
+            ),
+        )
+        ordered_lhs = sorted(generated_lhs.runs, key=lambda item: item.standard_order)
+        actual_points = [item.factor_levels for item in ordered_lhs]
+        normalized_points = [item.normalized_levels for item in ordered_lhs]
+        initial_design = BayesianInitialDesignResponse(
+            policy=LHS_INITIAL_DESIGN_POLICY,
+            seed=body.initial_design_seed,
+            requested_size=body.initial_design_size,
+            generated_size=len(actual_points),
+            scramble=True,
+            strength=1,
+            optimization="random_cd",
+            centered_discrepancy=generated_lhs.quality.centered_discrepancy,
+            minimum_pairwise_distance=generated_lhs.quality.minimum_pairwise_distance,
+            maximum_absolute_factor_correlation=(
+                generated_lhs.quality.maximum_absolute_factor_correlation
+            ),
+            strata_valid=generated_lhs.quality.strata_valid,
+            numpy_version=generated_lhs.numpy_version,
+            scipy_version=generated_lhs.scipy_version,
+        )
+    else:
+        actual_points, normalized_points, attempts_consumed = _generate_initial_design(
+            factors=factors,
+            constraints=constraints,
+            seed=body.initial_design_seed,
+            size=body.initial_design_size,
+        )
+        initial_design = BayesianInitialDesignResponse(
+            policy=INITIAL_DESIGN_POLICY,
+            seed=body.initial_design_seed,
+            requested_size=body.initial_design_size,
+            generated_size=len(actual_points),
+            attempt_limit=body.initial_design_size * MAX_GENERATION_ATTEMPTS_PER_TRIAL,
+            attempts_consumed=attempts_consumed,
+        )
     definition_payload = _definition_payload(
         method_version=method_version,
         factors=factors,
         objective=objective,
         constraints=constraints,
         initial_design=initial_design,
+        study_schema_version=BAYESIAN_STUDY_SCHEMA_VERSION,
     )
     definition_sha256 = _sha256(definition_payload)
     now = utc_now()
@@ -731,7 +797,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         version is None
         or version.study_id != study.study_id
         or version.version_number != study.current_version
-        or version.schema_version != BAYESIAN_STUDY_SCHEMA_VERSION
+        or version.schema_version not in {1, 2}
     ):
         raise _metadata_error()
     try:
@@ -756,30 +822,13 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
                 objective=objective,
                 constraints=constraints,
                 initial_design=initial_design,
+                study_schema_version=version.schema_version,
             )
         )
         != version.definition_sha256
     ):
         raise _artifact_error()
     _validate_factor_and_constraint_metadata(factors, constraints)
-    try:
-        expected_actual, expected_normalized, expected_attempts = _generate_initial_design(
-            factors=factors,
-            constraints=constraints,
-            seed=initial_design.seed,
-            size=initial_design.requested_size,
-        )
-    except ApiError as exc:
-        raise _artifact_error() from exc
-    if (
-        initial_design.policy != INITIAL_DESIGN_POLICY
-        or initial_design.generated_size != initial_design.requested_size
-        or initial_design.generated_size != len(expected_actual)
-        or initial_design.attempt_limit
-        != initial_design.requested_size * MAX_GENERATION_ATTEMPTS_PER_TRIAL
-        or initial_design.attempts_consumed != expected_attempts
-    ):
-        raise _artifact_error()
     trials = list_bayesian_trial_records(
         settings.workspace_root,
         version.study_version_id,
@@ -790,6 +839,34 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         != len(trials)
         or not initial_design.generated_size <= len(trials) <= MAX_BAYESIAN_TRIALS
     ):
+        raise _artifact_error()
+    if initial_design.policy == INITIAL_DESIGN_POLICY:
+        try:
+            expected_actual, expected_normalized, expected_attempts = _generate_initial_design(
+                factors=factors,
+                constraints=constraints,
+                seed=initial_design.seed,
+                size=initial_design.requested_size,
+            )
+        except ApiError as exc:
+            raise _artifact_error() from exc
+        if (
+            initial_design.generated_size != initial_design.requested_size
+            or initial_design.generated_size != len(expected_actual)
+            or initial_design.attempt_limit
+            != initial_design.requested_size * MAX_GENERATION_ATTEMPTS_PER_TRIAL
+            or initial_design.attempts_consumed != expected_attempts
+        ):
+            raise _artifact_error()
+    elif initial_design.policy == LHS_INITIAL_DESIGN_POLICY:
+        if version.schema_version != 2 or constraints:
+            raise _artifact_error()
+        expected_actual, expected_normalized = _validate_stored_lhs_initial_design(
+            factors=factors,
+            initial_design=initial_design,
+            trials=trials,
+        )
+    else:
         raise _artifact_error()
     _validate_trials(
         version,
@@ -1067,6 +1144,69 @@ def _validate_factor_and_constraint_metadata(
             or all(term.coefficient == 0.0 for term in constraint.terms)
         ):
             raise _metadata_error()
+
+
+def _validate_stored_lhs_initial_design(
+    *,
+    factors: list[BayesianFactorResponse],
+    initial_design: BayesianInitialDesignResponse,
+    trials: list[BayesianTrialRecord],
+) -> tuple[list[dict[str, float]], list[dict[str, float]]]:
+    if (
+        initial_design.generated_size != initial_design.requested_size
+        or initial_design.generated_size > len(trials)
+        or initial_design.scramble is not True
+        or initial_design.strength != 1
+        or initial_design.optimization != "random_cd"
+        or initial_design.centered_discrepancy is None
+        or initial_design.minimum_pairwise_distance is None
+        or initial_design.maximum_absolute_factor_correlation is None
+        or initial_design.strata_valid is not True
+        or not initial_design.numpy_version
+        or not initial_design.scipy_version
+    ):
+        raise _artifact_error()
+    actual_points: list[dict[str, float]] = []
+    normalized_points: list[dict[str, float]] = []
+    for trial in trials[: initial_design.generated_size]:
+        if trial.origin != "initial_design":
+            raise _artifact_error()
+        try:
+            actual_points.append(_numeric_json_dict(trial.actual_coordinates_json))
+            normalized_points.append(_numeric_json_dict(trial.normalized_coordinates_json))
+        except (TypeError, ValueError) as exc:
+            raise _artifact_error() from exc
+    matrix = np.asarray(
+        [[point[factor.factor_id] for factor in factors] for point in normalized_points],
+        dtype=float,
+    )
+    try:
+        quality = calculate_latin_hypercube_quality(matrix)
+    except (LatinHypercubeError, ValueError) as exc:
+        raise _artifact_error() from exc
+    if (
+        not quality.strata_valid
+        or not math.isclose(
+            quality.centered_discrepancy,
+            initial_design.centered_discrepancy,
+            rel_tol=1e-10,
+            abs_tol=1e-12,
+        )
+        or not math.isclose(
+            quality.minimum_pairwise_distance,
+            initial_design.minimum_pairwise_distance,
+            rel_tol=1e-10,
+            abs_tol=1e-12,
+        )
+        or not math.isclose(
+            quality.maximum_absolute_factor_correlation,
+            initial_design.maximum_absolute_factor_correlation,
+            rel_tol=1e-10,
+            abs_tol=1e-12,
+        )
+    ):
+        raise _artifact_error()
+    return actual_points, normalized_points
 
 
 def _validate_trials(
@@ -1439,7 +1579,7 @@ def _study_response(bundle: _ValidatedStudy) -> BayesianStudyResponse:
         study_id=UUID(bundle.study.study_id),
         study_version_id=UUID(bundle.version.study_version_id),
         version_number=bundle.version.version_number,
-        study_schema_version=cast(Literal[1], bundle.version.schema_version),
+        study_schema_version=cast(Literal[1, 2], bundle.version.schema_version),
         method_id=BAYESIAN_METHOD_ID,
         method_version=bundle.study.method_version,
         name=bundle.study.name,
@@ -1595,15 +1735,16 @@ def _definition_payload(
     objective: BayesianObjectiveResponse,
     constraints: list[BayesianLinearConstraintResponse],
     initial_design: BayesianInitialDesignResponse,
+    study_schema_version: int,
 ) -> dict[str, Any]:
     return {
-        "study_schema_version": BAYESIAN_STUDY_SCHEMA_VERSION,
+        "study_schema_version": study_schema_version,
         "method_id": BAYESIAN_METHOD_ID,
         "method_version": method_version,
         "factors": [item.model_dump(mode="json") for item in factors],
         "objective": objective.model_dump(mode="json"),
         "constraints": [item.model_dump(mode="json") for item in constraints],
-        "initial_design": initial_design.model_dump(mode="json"),
+        "initial_design": initial_design.model_dump(mode="json", exclude_none=True),
     }
 
 

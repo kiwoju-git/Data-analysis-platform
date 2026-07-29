@@ -3,6 +3,8 @@ import { useEffect, type ChangeEvent, type FormEvent } from "react";
 import type {
   ConfirmedParsingOptions,
   DatasetProfileResponse,
+  DatasetCellCorrectionRequest,
+  DatasetCellCorrectionResponse,
   DatasetRowsPreviewResponse,
   DatasetUploadResponse,
   DatasetVersionResponse,
@@ -36,6 +38,10 @@ export interface DatasetPreparationPageProps {
   upload: DatasetUploadResponse | null;
   version: DatasetVersionResponse | null;
   onApplyBayesianPreset: () => void;
+  onCreateCellCorrection?: (
+    request: DatasetCellCorrectionRequest,
+  ) => Promise<DatasetCellCorrectionResponse>;
+  onCellEditDirtyChange?: (dirty: boolean) => void;
   onConfirmParsing: () => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onLoadDatasetProfile: (versionId: string) => void;
@@ -47,13 +53,6 @@ export interface DatasetPreparationPageProps {
   onSchemaDraftChange: (columnId: string, patch: SchemaDraftPatch) => void;
   onUpload: (event: FormEvent<HTMLFormElement>) => void;
 }
-
-const workflowSteps = [
-  ["업로드", "CSV, TSV, XLSX 원본을 보존하고 해시와 파싱 옵션을 기록합니다."],
-  ["파싱 확정", "인코딩, 구분자, 헤더 유무, 데이터 시작 행, 결측 토큰을 명시적으로 저장합니다."],
-  ["스키마 확인", "표시명, 측정 수준, 역할, 단위를 명시적으로 저장합니다."],
-  ["미리보기", "서버 페이지네이션으로 현재 행 범위만 불러옵니다."],
-] as const;
 
 export function DatasetPreparationPage({
   canApplyBayesianPreset,
@@ -77,6 +76,8 @@ export function DatasetPreparationPage({
   upload,
   version,
   onApplyBayesianPreset,
+  onCreateCellCorrection = unavailableCellCorrection,
+  onCellEditDirtyChange = () => undefined,
   onConfirmParsing,
   onFileChange,
   onLoadDatasetProfile,
@@ -102,10 +103,10 @@ export function DatasetPreparationPage({
   return (
     <>
       <div className="section" id="dataset-intake" tabIndex={-1}>
-        <h2 id="workspace-title">데이터셋 파싱 확정</h2>
+        <h2 id="workspace-title">데이터셋 등록</h2>
         <p>
-          Gate B0에서는 원본 업로드를 불변 데이터셋 버전으로 확정하고, 스키마와 행
-          미리보기를 서버 페이지 단위로 확인합니다.
+          파일을 업로드하거나 표를 붙여넣고, 파싱과 변수 역할을 확인한 뒤 분석용
+          데이터셋 버전을 생성합니다.
         </p>
       </div>
       <form
@@ -157,6 +158,8 @@ export function DatasetPreparationPage({
           schemaDrafts={schemaDrafts}
           version={version}
           onApplyBayesianPreset={onApplyBayesianPreset}
+          onCreateCellCorrection={onCreateCellCorrection}
+          onCellEditDirtyChange={onCellEditDirtyChange}
           onLoadDatasetProfile={onLoadDatasetProfile}
           onLoadRowsPreview={onLoadRowsPreview}
           onPreviewLimitChange={onPreviewLimitChange}
@@ -164,16 +167,15 @@ export function DatasetPreparationPage({
           onSchemaDraftChange={onSchemaDraftChange}
         />
       ) : null}
-      <div className="workflow-grid" aria-label="작업 흐름">
-        {workflowSteps.map(([title, description]) => (
-          <div className="workflow-step" key={title}>
-            <strong>{title}</strong>
-            <span>{description}</span>
-          </div>
-        ))}
-      </div>
     </>
   );
+}
+
+function unavailableCellCorrection(
+  request: DatasetCellCorrectionRequest,
+): Promise<DatasetCellCorrectionResponse> {
+  void request;
+  return Promise.reject(new Error("dataset_cell_correction_unavailable"));
 }
 
 function revealDatasetSection(): void {

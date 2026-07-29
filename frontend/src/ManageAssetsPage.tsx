@@ -715,7 +715,8 @@ export function DatasetDeletionImpact({
     counts.analysis_export_count +
     counts.attribute_control_limit_set_count +
     counts.phase_2_analysis_count +
-    counts.job_count;
+    counts.job_count +
+    (counts.child_version_count ?? 0);
   const operation = (id: DatasetDeletionOperationId) =>
     preflight.available_operations.find((candidate) => candidate.operation_id === id);
   const verified = operation("delete_dataset_verified");
@@ -745,6 +746,9 @@ export function DatasetDeletionImpact({
         <span>Phase II {counts.phase_2_analysis_count.toLocaleString()}건</span>
         <span>job {counts.job_count.toLocaleString()}건</span>
         <span>다른 버전 {counts.sibling_version_count.toLocaleString()}개</span>
+        {(counts.child_version_count ?? 0) > 0 ? (
+          <span>파생 버전 {(counts.child_version_count ?? 0).toLocaleString()}개</span>
+        ) : null}
       </div>
       {preflight.integrity_issue_codes.length > 0 ? (
         <div className="warning-box">

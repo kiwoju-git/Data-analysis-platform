@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 
 import {
   confirmDatasetParsing,
+  createDatasetCellCorrection,
   createDatasetFromPastedText,
   fetchDatasetProfile,
   fetchDatasetVersion,
@@ -9,6 +10,7 @@ import {
   uploadDataset,
   updateDatasetSchema,
   type ConfirmedParsingOptions,
+  type DatasetCellCorrectionRequest,
   type DatasetColumnResponse,
   type DatasetProfileResponse,
   type DatasetRowsPreviewResponse,
@@ -64,6 +66,7 @@ function storeDatasetVersionId(versionId: string | null): void {
 export interface DatasetWorkflowCallbacks {
   onDatasetReset: () => void;
   onDatasetColumnsChanged: (columns: DatasetColumnResponse[]) => void;
+  onDatasetVersionCreated?: () => void;
   onSchemaChanged: (columns: DatasetColumnResponse[]) => void;
 }
 
@@ -79,6 +82,7 @@ export interface DatasetWorkflow {
 export function useDatasetWorkflow({
   onDatasetColumnsChanged,
   onDatasetReset,
+  onDatasetVersionCreated = () => undefined,
   onSchemaChanged,
 }: DatasetWorkflowCallbacks): DatasetWorkflow {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -103,8 +107,17 @@ export function useDatasetWorkflow({
   const restoreRequestRef = useRef(0);
   const previewRequestRef = useRef(0);
   const profileRequestRef = useRef(0);
-  const callbacksRef = useRef({ onDatasetColumnsChanged, onDatasetReset });
-  callbacksRef.current = { onDatasetColumnsChanged, onDatasetReset };
+  const callbacksRef = useRef({
+    onDatasetColumnsChanged,
+    onDatasetReset,
+    onDatasetVersionCreated,
+  });
+  const cellEditDirtyRef = useRef(false);
+  callbacksRef.current = {
+    onDatasetColumnsChanged,
+    onDatasetReset,
+    onDatasetVersionCreated,
+  };
 
   useEffect(() => {
     const versionId = readDatasetVersionIdFromUrl() ?? readStoredDatasetVersionId();
@@ -284,6 +297,7 @@ export function useDatasetWorkflow({
         loadDatasetProfile(response.version_id),
       ]);
       datasetVersionCatalogState.onRefresh();
+      callbacksRef.current.onDatasetVersionCreated();
     } catch (error) {
       setFlowError(error instanceof Error ? error.message : "parsing_confirmation_failed");
     } finally {
@@ -369,6 +383,13 @@ export function useDatasetWorkflow({
     if (versionId === "" || (version?.version_id === versionId && pendingVersionId === null)) {
       return;
     }
+    if (
+      cellEditDirtyRef.current &&
+      !window.confirm("저장하지 않은 셀 수정이 있습니다. 변경을 버리고 이동하시겠습니까?")
+    ) {
+      return;
+    }
+    cellEditDirtyRef.current = false;
     const request = restoreRequestRef.current + 1;
     restoreRequestRef.current = request;
     previewRequestRef.current += 1;
@@ -455,6 +476,31 @@ export function useDatasetWorkflow({
     upload,
     version,
     onApplyBayesianPreset: handleApplyBayesianPreset,
+    onCellEditDirtyChange: (dirty: boolean) => {
+      cellEditDirtyRef.current = dirty;
+    },
+    onCreateCellCorrection: async (request: DatasetCellCorrectionRequest) => {
+      if (version === null) throw new Error("dataset_version_not_found");
+      setFlowError(null);
+      const response = await createDatasetCellCorrection(version.version_id, request);
+      const nextVersion = response.new_version;
+      cellEditDirtyRef.current = false;
+      callbacksRef.current.onDatasetReset();
+      setVersion(nextVersion);
+      setSchemaDrafts(schemaDraftsFromColumns(nextVersion.columns));
+      setPreviewOffset(0);
+      setPreviewLimit(defaultPreviewLimit);
+      storeDatasetVersionId(nextVersion.version_id);
+      updateActiveDatasetVersionQuery(nextVersion.version_id);
+      callbacksRef.current.onDatasetColumnsChanged(nextVersion.columns);
+      await Promise.all([
+        loadRowsPreview(nextVersion.version_id, 0, defaultPreviewLimit),
+        loadDatasetProfile(nextVersion.version_id),
+      ]);
+      datasetVersionCatalogState.onRefresh();
+      callbacksRef.current.onDatasetVersionCreated();
+      return response;
+    },
     onConfirmParsing: () => {
       void handleConfirmParsing();
     },

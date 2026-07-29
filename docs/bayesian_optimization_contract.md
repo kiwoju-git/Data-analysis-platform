@@ -1,11 +1,13 @@
 # Bayesian Optimization Contract
 
-Last updated: 2026-07-19
+Last updated: 2026-07-29
 
 ## Current Status
 
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
-`0.2.2`. The application stores an immutable bounded study and observation
+`0.3.0`. New studies use study schema `2`; readers retain study schema `1` and
+method `0.1.0` through `0.2.2`. The application stores an immutable bounded
+study and observation
 history, fits a Matérn 5/2 Gaussian Process to explicit completed trials, and
 uses analytic Expected Improvement to create one pending confirmation-trial
 candidate. It never runs the user's objective.
@@ -76,20 +78,40 @@ and reset their loading flags when selection changes.
 1. Create one immutable study with one to six continuous factors, finite actual
    low/high bounds, one numeric minimize/maximize objective, and up to 16 known
    actual-unit linear inequalities.
-2. Generate deterministic bounded initial trials with
-   `sha256_counter_uniform_feasible_v1` and an explicit seed.
-   `initial_design_size` must be at least `max(2, factor_count + 1)` in both the
-   API and frontend. The stable rejection code is
+2. Select an explicit initial design policy. An unconstrained study defaults
+   to `latin_hypercube_random_cd_v1`; a constrained study uses
+   `sha256_counter_uniform_feasible_v1`. LHS plus linear constraints is rejected
+   rather than silently changing policy. `initial_design_size` must be at least
+   `max(2, factor_count + 1)`; the stable rejection code is
    `bayesian_study_initial_design_too_small`.
-3. Record one finite user-observed value for each pending trial or explicitly
+3. Generate pending initial trials. A trial has coordinates but no objective
+   value until the user performs the real experiment and records it.
+4. Complete or explicitly abandon every required initial trial. GP/EI remains
+   unavailable while a required initial trial is pending or while fewer than
+   `max(2, factor_count + 1)` completed observations exist.
+5. Fit the GP and create one Expected Improvement recommendation only after the
+   above conditions, budget, active-study, current-history, and no-pending-
+   recommendation checks pass.
+
+The UI presents this as initial conditions, real experiment, response input,
+GP availability, one next-condition recommendation, another real experiment,
+and GP update. A GP surrogate does not require the raw response column to pass
+a normality test as a gate. Its predicted standard deviation is not a
+specification limit or a confidence interval, and a recommendation is never
+stored as an observation.
+
+Standalone LHS is not automatically imported into a Bayesian Study. The
+future atomic import contract is documented in
+`docs/bayesian_initial_observation_import_contract.md`.
+6. Record one finite user-observed value for each pending trial or explicitly
    abandon it. Completed and abandoned trials are terminal.
-4. Append an immutable ordered observation-history revision. No completed trial
+7. Append an immutable ordered observation-history revision. No completed trial
    or history revision is overwritten.
-5. After all initial trials are closed and at least `max(2, factor_count + 1)`
+8. After all initial trials are closed and at least `max(2, factor_count + 1)`
    observations are completed, fit the versioned GP and optimize EI.
-6. Persist one recommendation and its pending `origin=recommendation` trial.
+9. Persist one recommendation and its pending `origin=recommendation` trial.
    Only one pending recommendation is allowed.
-7. The user performs the experiment and records the actual response, or
+10. The user performs the experiment and records the actual response, or
    abandons the trial. Completion appends a new history revision before another
    recommendation is permitted.
 

@@ -61,6 +61,6 @@ describe("lazy analysis panels", () => {
       "ResponseOptimizerWorkspace",
       "ResponseSurfacePanel",
     ]);
-    expect(Object.keys(lazyPanels)).toHaveLength(15);
+    expect(Object.keys(lazyPanels)).toHaveLength(16);
   });
 });

@@ -76,6 +76,26 @@ describe("ActiveDatasetVersionSelector", () => {
     expect((html.match(/id="active-dataset-version"/g) ?? [])).toHaveLength(1);
     expect((html.match(/id="active-dataset-help"/g) ?? [])).toHaveLength(1);
   });
+
+  it("keeps a newly created active version selected before catalog refresh", () => {
+    const child = version({
+      version_id: "child-version-2",
+      version_number: 2,
+    });
+    const html = renderToString(
+      <ActiveDatasetVersionSelector
+        catalogState={catalogState()}
+        isSwitching={false}
+        pendingVersionId={null}
+        version={child}
+        onRetrySwitch={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('value="child-version-2" selected');
+    expect(html).toContain("데이터셋 v2");
+  });
 });
 
 function catalogState(
@@ -122,7 +142,9 @@ function catalogItem(
   };
 }
 
-function version(): DatasetVersionResponse {
+function version(
+  overrides: Partial<DatasetVersionResponse> = {},
+): DatasetVersionResponse {
   return {
     version_id: "bad30e2e12345678",
     dataset_id: "dataset-1",
@@ -147,5 +169,6 @@ function version(): DatasetVersionResponse {
     },
     columns: [],
     canonical_artifact: null,
+    ...overrides,
   };
 }

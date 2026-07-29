@@ -179,6 +179,9 @@ class DatasetVersionResponse(DatasetVersionSummary):
     parsing: ConfirmedParsingOptions
     columns: list[DatasetColumnResponse]
     canonical_artifact: DatasetArtifactResponse | None
+    parent_version_id: UUID | None = None
+    lineage_operation_kind: Literal["cell_correction"] | None = None
+    lineage_affected_cell_count: int | None = Field(default=None, ge=1)
 
 
 class DatasetVersionListResponse(BaseModel):
@@ -258,6 +261,48 @@ class DatasetVersionDeletionCounts(BaseModel):
     job_count: int = Field(ge=0)
     attribute_control_limit_set_count: int = Field(ge=0)
     phase_2_analysis_count: int = Field(ge=0)
+    child_version_count: int = Field(default=0, ge=0)
+
+
+class DatasetCellCorrectionEdit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row_index: int = Field(ge=0)
+    column_id: UUID
+    operation: Literal["set_value", "set_missing"]
+    value: str | None = Field(default=None, max_length=100_000)
+
+
+class DatasetCellCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_parent_version_id: UUID
+    expected_parent_schema_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_parent_canonical_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    edits: list[DatasetCellCorrectionEdit] = Field(min_length=1, max_length=1)
+
+    @field_validator("edits")
+    @classmethod
+    def validate_edits(
+        cls, edits: list[DatasetCellCorrectionEdit]
+    ) -> list[DatasetCellCorrectionEdit]:
+        edit = edits[0]
+        if edit.operation == "set_value" and edit.value is None:
+            raise ValueError("set_value requires value")
+        if edit.operation == "set_missing" and edit.value is not None:
+            raise ValueError("set_missing requires null value")
+        return edits
+
+
+class DatasetCellCorrectionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    correction_schema_version: Literal[1]
+    parent_version_id: UUID
+    new_version: DatasetVersionResponse
+    changed_cell_count: Literal[1]
+    lineage_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    created_at: str
 
 
 DatasetDeletionDependencyAssetType = Literal[

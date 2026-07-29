@@ -302,6 +302,7 @@ browser critical path.
 - `wait for frontend dev server`
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
+  - `create an immutable version from one cell correction`
   - `run descriptive statistics`
   - `verify graph builder box plot preview`
   - `run two-sample t test`
@@ -314,6 +315,7 @@ browser critical path.
 - `verify attribute control chart`
 - `verify DOE factorial analysis`
 - `verify DOE response surface analysis and optimization`
+- `verify standalone LHS design and response revision`
 - `verify Bayesian study observations and recommendation`
 - `verify XLSX browser upload`
 - `verify CSV upload and upload error recovery`

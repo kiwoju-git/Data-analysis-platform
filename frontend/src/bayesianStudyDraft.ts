@@ -109,7 +109,12 @@ export function buildBayesianStudyRequest(input: {
   direction: "minimize" | "maximize";
   initialDesignSize: string;
   initialDesignSeed: string;
+  initialDesignPolicy?:
+    | "latin_hypercube_random_cd_v1"
+    | "sha256_counter_uniform_feasible_v1";
 }): BayesianStudyCreateRequest | string {
+  const initialDesignPolicy =
+    input.initialDesignPolicy ?? "sha256_counter_uniform_feasible_v1";
   const factorIds = input.factors.map((factor) => factor.factorId.trim());
   const parsedFactors: BayesianFactorRequest[] = input.factors.map((factor) => ({
     factor_id: factor.factorId.trim(),
@@ -179,6 +184,12 @@ export function buildBayesianStudyRequest(input: {
   ) {
     return "bayesian_study_input_invalid";
   }
+  if (
+    initialDesignPolicy === "latin_hypercube_random_cd_v1" &&
+    parsedConstraints.length > 0
+  ) {
+    return "bayesian_lhs_constraints_unsupported";
+  }
   return {
     name: input.studyName.trim(),
     factors: parsedFactors,
@@ -191,5 +202,6 @@ export function buildBayesianStudyRequest(input: {
     constraints: parsedConstraints,
     initial_design_seed: seed,
     initial_design_size: size,
+    initial_design_policy: initialDesignPolicy,
   };
 }

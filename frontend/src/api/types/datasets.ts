@@ -121,6 +121,30 @@ export interface DatasetVersionResponse {
   parsing: ConfirmedParsingOptions;
   columns: DatasetColumnResponse[];
   canonical_artifact: DatasetArtifactResponse | null;
+  parent_version_id?: string | null;
+  lineage_operation_kind?: "cell_correction" | null;
+  lineage_affected_cell_count?: number | null;
+}
+
+export interface DatasetCellCorrectionRequest {
+  confirmation_parent_version_id: string;
+  expected_parent_schema_hash: string;
+  expected_parent_canonical_sha256: string;
+  edits: Array<{
+    row_index: number;
+    column_id: string;
+    operation: "set_value" | "set_missing";
+    value: string | null;
+  }>;
+}
+
+export interface DatasetCellCorrectionResponse {
+  correction_schema_version: 1;
+  parent_version_id: string;
+  new_version: DatasetVersionResponse;
+  changed_cell_count: 1;
+  lineage_sha256: string;
+  created_at: string;
 }
 
 export interface DatasetVersionCatalogItem {
@@ -175,6 +199,7 @@ export interface DatasetVersionDeletionCounts {
   job_count: number;
   attribute_control_limit_set_count: number;
   phase_2_analysis_count: number;
+  child_version_count?: number;
 }
 
 export type DatasetDeletionDependencyAssetType =

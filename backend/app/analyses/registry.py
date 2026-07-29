@@ -38,8 +38,9 @@ METHOD_VERSIONS: dict[str, str] = {
     "quality.gage_rr": METHOD_VERSION,
     "quality.gage_run_chart": METHOD_VERSION,
     "doe.factorial_design": "0.3.0",
+    "doe.latin_hypercube": "0.1.0",
     "doe.response_surface": "0.2.0",
-    "doe.bayesian_optimization": "0.2.2",
+    "doe.bayesian_optimization": "0.3.0",
 }
 
 MODULES: tuple[AnalysisModuleDescriptor, ...] = (
@@ -378,11 +379,20 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         execution_mode=AnalysisExecutionMode.DEDICATED,
     ),
     _available(
+        method_id="doe.latin_hypercube",
+        module_id=AnalysisModuleId.DOE,
+        label_ko="LHS 공간충전 설계",
+        label_en="Latin Hypercube Sampling",
+        requires_dataset=False,
+        order=20,
+        execution_mode=AnalysisExecutionMode.DEDICATED,
+    ),
+    _available(
         method_id="doe.response_surface",
         module_id=AnalysisModuleId.DOE,
         label_ko="반응표면법",
         label_en="Response Surface Method",
-        order=20,
+        order=30,
         requires_dataset=False,
         execution_mode=AnalysisExecutionMode.DEDICATED,
     ),
@@ -391,7 +401,7 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         module_id=AnalysisModuleId.DOE,
         label_ko="베이지안 최적화",
         label_en="Bayesian Optimization",
-        order=30,
+        order=40,
         requires_dataset=False,
         execution_mode=AnalysisExecutionMode.DEDICATED,
     ),

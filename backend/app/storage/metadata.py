@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 16
+SCHEMA_VERSION: Final = 17
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -70,6 +70,17 @@ class DatasetVersionRecord:
     row_count: int
     column_count: int
     schema_hash: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class DatasetVersionLineageRecord:
+    child_version_id: str
+    parent_version_id: str
+    operation_kind: str
+    operation_schema_version: int
+    affected_cell_count: int
+    operation_sha256: str
     created_at: str
 
 
@@ -1113,6 +1124,26 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         );
         """,
     ),
+    Migration(
+        version=17,
+        name="create_dataset_version_lineage",
+        sql="""
+        CREATE TABLE dataset_version_lineage (
+            child_version_id TEXT PRIMARY KEY
+                REFERENCES dataset_versions(version_id) ON DELETE CASCADE,
+            parent_version_id TEXT NOT NULL
+                REFERENCES dataset_versions(version_id) ON DELETE RESTRICT,
+            operation_kind TEXT NOT NULL CHECK (operation_kind = 'cell_correction'),
+            operation_schema_version INTEGER NOT NULL CHECK (operation_schema_version >= 1),
+            affected_cell_count INTEGER NOT NULL CHECK (affected_cell_count >= 1),
+            operation_sha256 TEXT NOT NULL CHECK (length(operation_sha256) = 64),
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_dataset_version_lineage_parent
+        ON dataset_version_lineage(parent_version_id, created_at, child_version_id);
+        """,
+    ),
 )
 
 
@@ -1504,6 +1535,209 @@ def insert_dataset_version_record(
                         for artifact in artifacts
                     ],
                 )
+
+
+def insert_dataset_cell_correction_version_records(
+    workspace_root: Path,
+    *,
+    parent_version_id: str,
+    expected_parent_schema_hash: str,
+    expected_parent_canonical_sha256: str,
+    child_version_id: str,
+    source_sha256: str,
+    parsing_options_json: str,
+    row_count: int,
+    column_count: int,
+    schema_hash: str,
+    created_at: str,
+    columns: list[DatasetColumnRecord],
+    artifacts: list[DatasetArtifactRecord],
+    lineage: DatasetVersionLineageRecord,
+) -> DatasetVersionRecord:
+    with sqlite3.connect(metadata_db_path(workspace_root), timeout=5.0) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        try:
+            connection.execute("BEGIN IMMEDIATE;")
+            parent = connection.execute(
+                """
+                SELECT dataset_id, schema_hash
+                FROM dataset_versions
+                WHERE version_id = ?;
+                """,
+                (parent_version_id,),
+            ).fetchone()
+            if parent is None:
+                raise DatasetVersionStorageConflict("dataset_cell_correction_parent_not_found")
+            canonical = connection.execute(
+                """
+                SELECT sha256
+                FROM dataset_artifacts
+                WHERE version_id = ? AND kind = 'canonical_rows';
+                """,
+                (parent_version_id,),
+            ).fetchone()
+            if (
+                str(parent[1]) != expected_parent_schema_hash
+                or canonical is None
+                or str(canonical[0]) != expected_parent_canonical_sha256
+            ):
+                raise DatasetVersionStorageConflict("dataset_cell_correction_source_changed")
+            dataset_id = str(parent[0])
+            next_number_row = connection.execute(
+                """
+                SELECT COALESCE(MAX(version_number), 0) + 1
+                FROM dataset_versions
+                WHERE dataset_id = ?;
+                """,
+                (dataset_id,),
+            ).fetchone()
+            version_number = 1 if next_number_row is None else _row_int(next_number_row[0])
+            child = DatasetVersionRecord(
+                version_id=child_version_id,
+                dataset_id=dataset_id,
+                version_number=version_number,
+                source_sha256=source_sha256,
+                parsing_options_json=parsing_options_json,
+                row_count=row_count,
+                column_count=column_count,
+                schema_hash=schema_hash,
+                created_at=created_at,
+            )
+            connection.execute(
+                """
+                INSERT INTO dataset_versions (
+                    version_id, dataset_id, version_number, source_sha256,
+                    parsing_options_json, row_count, column_count, schema_hash, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    child.version_id,
+                    child.dataset_id,
+                    child.version_number,
+                    child.source_sha256,
+                    child.parsing_options_json,
+                    child.row_count,
+                    child.column_count,
+                    child.schema_hash,
+                    child.created_at,
+                ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO dataset_columns (
+                    column_id, version_id, column_index, original_name, display_name,
+                    data_type, measurement_level, role, unit
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                [
+                    (
+                        item.column_id,
+                        item.version_id,
+                        item.column_index,
+                        item.original_name,
+                        item.display_name,
+                        item.data_type,
+                        item.measurement_level,
+                        item.role,
+                        item.unit,
+                    )
+                    for item in columns
+                ],
+            )
+            connection.executemany(
+                """
+                INSERT INTO dataset_artifacts (
+                    artifact_id, version_id, kind, path, sha256,
+                    media_type, size_bytes, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                [
+                    (
+                        item.artifact_id,
+                        item.version_id,
+                        item.kind,
+                        item.path,
+                        item.sha256,
+                        item.media_type,
+                        item.size_bytes,
+                        item.created_at,
+                    )
+                    for item in artifacts
+                ],
+            )
+            connection.execute(
+                """
+                INSERT INTO dataset_version_lineage (
+                    child_version_id, parent_version_id, operation_kind,
+                    operation_schema_version, affected_cell_count,
+                    operation_sha256, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    lineage.child_version_id,
+                    lineage.parent_version_id,
+                    lineage.operation_kind,
+                    lineage.operation_schema_version,
+                    lineage.affected_cell_count,
+                    lineage.operation_sha256,
+                    lineage.created_at,
+                ),
+            )
+            connection.commit()
+            return child
+        except DatasetVersionStorageConflict:
+            connection.rollback()
+            raise
+        except sqlite3.IntegrityError as exc:
+            connection.rollback()
+            raise DatasetVersionStorageConflict("dataset_cell_correction_conflict") from exc
+        except Exception:
+            connection.rollback()
+            raise
+
+
+def get_dataset_version_lineage_record(
+    workspace_root: Path,
+    child_version_id: str,
+) -> DatasetVersionLineageRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT child_version_id, parent_version_id, operation_kind,
+                   operation_schema_version, affected_cell_count,
+                   operation_sha256, created_at
+            FROM dataset_version_lineage
+            WHERE child_version_id = ?;
+            """,
+            (child_version_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return DatasetVersionLineageRecord(
+        child_version_id=str(row[0]),
+        parent_version_id=str(row[1]),
+        operation_kind=str(row[2]),
+        operation_schema_version=_row_int(row[3]),
+        affected_cell_count=_row_int(row[4]),
+        operation_sha256=str(row[5]),
+        created_at=str(row[6]),
+    )
+
+
+def count_dataset_version_child_records(
+    workspace_root: Path,
+    parent_version_id: str,
+) -> int:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM dataset_version_lineage
+            WHERE parent_version_id = ?;
+            """,
+            (parent_version_id,),
+        ).fetchone()
+    return 0 if row is None else _row_int(row[0])
 
 
 def list_dataset_version_records(

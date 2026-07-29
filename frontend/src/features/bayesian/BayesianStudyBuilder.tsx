@@ -71,7 +71,37 @@ export function BayesianStudyBuilder({
             onChange={(event) => draft.setInitialDesignSeed(event.currentTarget.value)}
           />
         </label>
+        <label>
+          <span>초기 설계 방식</span>
+          <select
+            value={draft.initialDesignPolicy}
+            onChange={(event) =>
+              draft.setInitialDesignPolicy(
+                event.currentTarget.value as
+                  | "latin_hypercube_random_cd_v1"
+                  | "sha256_counter_uniform_feasible_v1",
+              )
+            }
+          >
+            <option value="latin_hypercube_random_cd_v1">
+              LHS 공간충전 초기설계
+            </option>
+            <option value="sha256_counter_uniform_feasible_v1">
+              선형 제약 대응 균등 초기설계
+            </option>
+          </select>
+          <span className="cell-subtext">
+            LHS는 사각형 요인 범위를 층화해 초기 실험 조건을 고르게 배치합니다.
+          </span>
+        </label>
       </div>
+      {draft.initialDesignPolicy === "latin_hypercube_random_cd_v1" &&
+      draft.constraints.length > 0 ? (
+        <div className="warning-box" role="status">
+          현재 LHS 초기설계는 사각형 요인 범위에서만 지원됩니다. 제약형 균등
+          초기설계로 변경하거나 선형 제약을 제거하세요.
+        </div>
+      ) : null}
       {draft.predecessorStudyId !== null ? (
         <BayesianSuccessorSeedNotice
           sameSeed={draft.sameSeedAsPredecessor}
@@ -81,7 +111,16 @@ export function BayesianStudyBuilder({
       <BayesianFactorTable draft={draft} />
       <BayesianConstraintTable draft={draft} />
       <div className="button-row">
-        <button type="button" className="primary-button" disabled={disabled} onClick={onCreate}>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={
+            disabled ||
+            (draft.initialDesignPolicy === "latin_hypercube_random_cd_v1" &&
+              draft.constraints.length > 0)
+          }
+          onClick={onCreate}
+        >
           {isCreating
             ? "생성 중"
             : draft.predecessorStudyId === null

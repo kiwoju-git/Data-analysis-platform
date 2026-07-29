@@ -100,6 +100,7 @@ def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
         pass
     db_path = metadata_db_path(settings.workspace_root)
     with sqlite3.connect(db_path) as connection:
+        connection.execute("DROP TABLE dataset_version_lineage")
         connection.execute("DROP TABLE regression_model_user_metadata")
         connection.execute("DROP TABLE dataset_version_user_metadata")
         connection.execute("DELETE FROM schema_migrations WHERE version >= 15")
@@ -118,7 +119,8 @@ def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
         user_version = connection.execute("PRAGMA user_version").fetchone()[0]
     assert "dataset_version_user_metadata" in tables
     assert "regression_model_user_metadata" in tables
-    assert user_version == 16
+    assert "dataset_version_lineage" in tables
+    assert user_version == 17
 
 
 def test_dataset_archive_visibility_round_trip_and_schema_15_upgrade(tmp_path) -> None:

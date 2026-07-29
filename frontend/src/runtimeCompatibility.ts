@@ -1,7 +1,7 @@
 import type { RuntimeCapabilities, RuntimeInfoResponse } from "./api";
 
-export const EXPECTED_API_CONTRACT_VERSION = 4;
-export const MINIMUM_METADATA_SCHEMA_VERSION = 16;
+export const EXPECTED_API_CONTRACT_VERSION = 5;
+export const MINIMUM_METADATA_SCHEMA_VERSION = 17;
 
 export const REQUIRED_RUNTIME_CAPABILITIES = [
   "asset_management",
@@ -16,6 +16,9 @@ export const REQUIRED_RUNTIME_CAPABILITIES = [
   "dedicated_response_optimizer",
   "bayesian_optimization",
   "graph_builder_preview",
+  "dataset_cell_correction",
+  "lhs_design",
+  "bayesian_lhs_initial_design",
 ] as const satisfies readonly (keyof RuntimeCapabilities)[];
 
 export const FRONTEND_BUILD_COMMIT = normalizeBuildCommit(import.meta.env.VITE_GIT_COMMIT);

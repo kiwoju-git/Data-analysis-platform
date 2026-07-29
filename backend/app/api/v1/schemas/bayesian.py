@@ -60,6 +60,13 @@ class BayesianStudyCreateRequest(BaseModel):
     constraints: list[BayesianLinearConstraintRequest] = Field(default_factory=list, max_length=16)
     initial_design_seed: int = Field(ge=0, le=2_147_483_647)
     initial_design_size: int = Field(ge=1, le=64)
+    initial_design_policy: (
+        Literal[
+            "latin_hypercube_random_cd_v1",
+            "sha256_counter_uniform_feasible_v1",
+        ]
+        | None
+    ) = None
     predecessor_study_id: UUID | None = None
 
 
@@ -104,12 +111,24 @@ class BayesianLinearConstraintResponse(BaseModel):
 class BayesianInitialDesignResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    policy: Literal["sha256_counter_uniform_feasible_v1"]
+    policy: Literal[
+        "latin_hypercube_random_cd_v1",
+        "sha256_counter_uniform_feasible_v1",
+    ]
     seed: int = Field(ge=0)
     requested_size: int = Field(ge=1, le=64)
     generated_size: int = Field(ge=1, le=64)
-    attempt_limit: int = Field(ge=1)
-    attempts_consumed: int = Field(ge=1)
+    attempt_limit: int | None = Field(default=None, ge=1)
+    attempts_consumed: int | None = Field(default=None, ge=1)
+    scramble: bool | None = None
+    strength: int | None = Field(default=None, ge=1)
+    optimization: Literal["random_cd"] | None = None
+    centered_discrepancy: float | None = Field(default=None, ge=0)
+    minimum_pairwise_distance: float | None = Field(default=None, gt=0)
+    maximum_absolute_factor_correlation: float | None = Field(default=None, ge=0)
+    strata_valid: bool | None = None
+    numpy_version: str | None = None
+    scipy_version: str | None = None
 
 
 class BayesianTrialResponse(BaseModel):
@@ -230,7 +249,7 @@ class BayesianStudyResponse(BaseModel):
     study_id: UUID
     study_version_id: UUID
     version_number: int = Field(ge=1)
-    study_schema_version: Literal[1]
+    study_schema_version: Literal[1, 2]
     method_id: Literal["doe.bayesian_optimization"]
     method_version: str
     name: str

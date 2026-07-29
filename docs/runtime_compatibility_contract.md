@@ -1,6 +1,6 @@
 # Runtime Compatibility Contract
 
-Last updated: 2026-07-23
+Last updated: 2026-07-29
 
 ## Purpose
 
@@ -37,19 +37,20 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `4`);
-- the actual metadata schema constant (currently `16`);
+- `api_contract_version` (currently `5`);
+- the actual metadata schema constant (currently `17`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
   deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and
-  Graph Builder preview.
+  Graph Builder preview, immutable dataset cell correction, standalone LHS
+  design, and Bayesian LHS initial design.
 
 The response contains no workspace path, filename, or raw data. Existing
 `GET /api/v1/health` retains its liveness/readiness meaning.
 
 ## Frontend Gate
 
-The frontend expects API contract `4`, schema 16 or later, and every required
+The frontend expects API contract `5`, schema 17 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

@@ -13,11 +13,42 @@ import type {
   DoeResponseRevisionResponse,
   FactorialDesignCreateRequest,
   FactorialDesignResponse,
+  LatinHypercubeDesignCreateRequest,
+  LatinHypercubeDesignResponse,
   ResponseSurfaceDesignCreateRequest,
   ResponseSurfaceDesignResponse,
   ResponseOptimizerCreateRequest,
   ResponseOptimizerResponse,
 } from "./types";
+
+export async function createLatinHypercubeDesign(
+  request: LatinHypercubeDesignCreateRequest,
+): Promise<LatinHypercubeDesignResponse> {
+  const response = await fetchApi(apiRoutes.doeLatinHypercubeDesign(), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "lhs_design_failed"));
+  }
+  return (await response.json()) as LatinHypercubeDesignResponse;
+}
+
+export async function saveLatinHypercubeResponses(
+  designId: string,
+  request: DoeDesignResponsesUpsertRequest,
+): Promise<DoeDesignResponsesResponse> {
+  const response = await fetchApi(apiRoutes.doeLatinHypercubeResponses(designId), {
+    method: "PUT",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "lhs_responses_failed"));
+  }
+  return (await response.json()) as DoeDesignResponsesResponse;
+}
 
 export async function fetchResponseSurfaceAnalysisCatalog(
   offset = 0,

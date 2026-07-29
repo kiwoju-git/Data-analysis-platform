@@ -457,9 +457,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             expect(page.get_by_label("붙여넣기 원문")).to_have_value("")
 
             page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-            expect(
-                page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-            ).to_be_visible(timeout=20_000)
+            expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
             expect_dataset_context_counts(page, row_label="6행", column_label="2컬럼")
             page.get_by_label("미리보기 페이지 크기").select_option("25")
             expect(page.get_by_label("미리보기 페이지 크기")).to_have_value("25")
@@ -471,10 +469,10 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
                     has_text="10"
                 )
             ).to_be_visible()
+            diagnostics.step("create an immutable version from one cell correction")
+            verify_dataset_cell_correction(page)
             page.reload(wait_until="networkidle")
-            expect(
-                page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-            ).to_be_visible(timeout=20_000)
+            expect(page.locator("#version-title")).to_contain_text("v2", timeout=20_000)
             expect(page.get_by_label("붙여넣기 원문")).to_have_value("")
             expect_dataset_context_counts(page, row_label="6행", column_label="2컬럼")
 
@@ -520,6 +518,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_doe_factorial_analysis(page)
             diagnostics.step("verify DOE response surface analysis and optimization")
             verify_doe_response_surface_analysis(page)
+            diagnostics.step("verify standalone LHS design and response revision")
+            verify_latin_hypercube_design(page)
             diagnostics.step("verify Bayesian study observations and recommendation")
             verify_bayesian_optimization(page)
             diagnostics.step("verify XLSX browser upload")
@@ -656,9 +656,7 @@ def verify_graph_layout_refinements(page: Page, diagnostics: E2EDiagnostics) -> 
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
     page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-    expect(
-        page.get_by_role("heading", name=re.compile(r"Dataset version v1"))
-    ).to_be_visible(timeout=20_000)
+    expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
     expect_dataset_context_counts(page, row_label="12행", column_label="4열")
 
     open_primary_navigation(page, "그래프")
@@ -931,9 +929,7 @@ def verify_descriptive_quick_charts_and_run_chart(page: Page) -> None:
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
     page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-    expect(
-        page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-    ).to_be_visible(timeout=20_000)
+    expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
     expect(page.locator(".active-dataset-summary")).to_contain_text("생성")
 
     open_primary_navigation(page, "분석")
@@ -1032,9 +1028,7 @@ def delete_one_saved_analysis_run(page: Page) -> None:
 
 def verify_schema_stale_behavior(page: Page) -> None:
     open_primary_navigation(page, "데이터셋")
-    expect(
-        page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-    ).to_be_visible(timeout=15_000)
+    expect(page.locator("#version-title")).to_contain_text("v2", timeout=15_000)
 
     page.get_by_role("button", name="스키마 저장").click()
     expect(page.get_by_role("button", name="스키마 저장")).to_be_enabled(timeout=15_000)
@@ -1813,6 +1807,67 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
     expect(history).to_contain_text("r1")
 
 
+def verify_dataset_cell_correction(page: Page) -> None:
+    selector = page.locator("#active-dataset-version")
+    parent_version_id = selector.input_value()
+
+    page.locator(".canonical-preview-section .cell-edit-button").click()
+    editor = page.locator(".canonical-preview-section .cell-editor textarea")
+    editor.fill("18")
+    page.locator(".canonical-preview-section .cell-editor .primary-button").click()
+    dialog = page.locator('.confirmation-dialog[role="dialog"]')
+    expect(dialog).to_be_visible()
+    dialog.locator(".primary-button").click()
+
+    expect(page.locator("#version-title")).to_contain_text("v2", timeout=20_000)
+    child_version_id = selector.input_value()
+    if child_version_id == parent_version_id:
+        raise AssertionError("cell correction did not activate a child dataset version")
+
+    page.locator(".canonical-preview-grid tbody tr").first.locator("td").nth(1).click()
+    expect(page.locator(".cell-inspector-value")).to_contain_text("18")
+
+    selector.select_option(parent_version_id)
+    expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
+    page.locator(".canonical-preview-grid tbody tr").first.locator("td").nth(1).click()
+    expect(page.locator(".cell-inspector-value")).to_contain_text("10")
+
+    selector.select_option(child_version_id)
+    expect(page.locator("#version-title")).to_contain_text("v2", timeout=20_000)
+
+
+def verify_latin_hypercube_design(page: Page) -> None:
+    origin = page.evaluate("window.location.origin")
+    active_version_id = page.locator("#active-dataset-version").input_value()
+    page.goto(
+        f"{origin}/analysis/doe/doe.latin_hypercube"
+        f"?dataset_version_id={active_version_id}",
+        wait_until="networkidle",
+    )
+    workspace = page.locator(".lhs-workspace")
+    expect(workspace).to_be_visible(timeout=20_000)
+
+    option_inputs = workspace.locator(".option-grid").first.locator("input")
+    option_inputs.nth(1).fill("6")
+    workspace.locator(":scope > .primary-button").click()
+    expect(workspace.locator("#lhs-quality-title")).to_be_visible(timeout=20_000)
+    expect(workspace.locator(".lhs-run-table tbody tr")).to_have_count(6)
+    expect(workspace.locator('a[download][href$="/export.csv"]')).to_be_visible()
+
+    response_inputs = workspace.locator(".lhs-response-grid input")
+    expect(response_inputs).to_have_count(6)
+    for index in range(6):
+        response_inputs.nth(index).fill(str(index + 1))
+    response_section = workspace.locator(
+        'section[aria-labelledby="lhs-response-title"]'
+    )
+    response_section.locator(".primary-button").click()
+    expect(response_section.locator(".status-pill")).to_contain_text(
+        "revision 1",
+        timeout=20_000,
+    )
+
+
 def verify_bayesian_optimization(page: Page) -> None:
     select_method_card(page, "실험 계획법", "베이지안 최적화")
     expect(page.locator("#workbench-title")).to_have_text(
@@ -1822,6 +1877,9 @@ def verify_bayesian_optimization(page: Page) -> None:
         page.get_by_text("앱은 목적함수를 실행하지 않습니다", exact=False)
     ).to_be_visible()
 
+    page.get_by_label("초기 설계 방식").select_option(
+        "sha256_counter_uniform_feasible_v1"
+    )
     page.get_by_role("button", name="제약 추가").click()
     page.get_by_label("제약 1 x 계수").fill("1")
     page.get_by_label("제약 1 우변").fill("0.75")
@@ -2003,9 +2061,7 @@ def verify_xlsx_file_upload(page: Page, temp_dir: Path) -> None:
         expect(page.get_by_text("browser-upload-sample.xlsx")).to_be_visible()
 
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-        expect(
-            page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-        ).to_be_visible(timeout=20_000)
+        expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
         expect_dataset_context_counts(page, row_label="2행", column_label="3컬럼")
         expect(page.get_by_role("columnheader", name="alpha")).to_be_visible()
         expect(page.get_by_role("columnheader", name="flag")).to_be_visible()
@@ -2044,9 +2100,7 @@ def verify_csv_file_upload_and_error_recovery(page: Page, temp_dir: Path) -> Non
         expect(page.get_by_text("브라우저-csv-upload.csv")).to_be_visible()
 
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-        expect(
-            page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-        ).to_be_visible(timeout=20_000)
+        expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
         expect_dataset_context_counts(page, row_label="3행", column_label="2컬럼")
         expect(page.get_by_role("columnheader", name="Batch")).to_be_visible()
         expect(page.get_by_role("columnheader", name="Measurement")).to_be_visible()
@@ -2082,9 +2136,7 @@ def verify_parser_option_editing(page: Page, temp_dir: Path) -> None:
         page.get_by_label("결측 토큰").fill(",NA,N/A,null,N/T,MISSING")
 
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-        expect(
-            page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-        ).to_be_visible(timeout=20_000)
+        expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
         expect_dataset_context_counts(page, row_label="2행", column_label="2컬럼")
         expect(page.get_by_role("columnheader", name="Alpha")).to_be_visible()
         expect(page.get_by_role("columnheader", name="Beta")).to_be_visible()
@@ -2122,9 +2174,7 @@ def verify_delimiter_option_editing(page: Page, temp_dir: Path) -> None:
         page.get_by_label("구분자").select_option(";")
 
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-        expect(
-            page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-        ).to_be_visible(timeout=20_000)
+        expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
         expect_dataset_context_counts(page, row_label="2행", column_label="2컬럼")
         expect(page.get_by_role("columnheader", name="Category")).to_be_visible()
         expect(page.get_by_role("columnheader", name="Value")).to_be_visible()
@@ -2157,9 +2207,7 @@ def verify_xlsx_sheet_selection(page: Page, temp_dir: Path) -> None:
         page.get_by_label("시트명").fill("Measurements")
 
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-        expect(
-            page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-        ).to_be_visible(timeout=20_000)
+        expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
         expect_dataset_context_counts(page, row_label="2행", column_label="2컬럼")
         expect(page.get_by_role("columnheader", name="Station")).to_be_visible()
         expect(page.get_by_role("columnheader", name="Reading")).to_be_visible()
@@ -2199,9 +2247,7 @@ def verify_text_encoding_selection(page: Page, temp_dir: Path) -> None:
         page.get_by_label("인코딩").select_option("cp949")
 
         page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
-        expect(
-            page.get_by_role("heading", name=re.compile(r"Dataset version v1")),
-        ).to_be_visible(timeout=20_000)
+        expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
         expect_dataset_context_counts(page, row_label="2행", column_label="2컬럼")
         expect(
             page.get_by_role("columnheader", name="이름", exact=True)

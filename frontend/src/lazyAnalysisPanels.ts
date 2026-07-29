@@ -72,6 +72,12 @@ export const FactorialDesignPanel = lazy(() =>
   })),
 );
 
+export const LatinHypercubePanel = lazy(() =>
+  import("./LatinHypercubePanel").then((module) => ({
+    default: module.LatinHypercubePanel,
+  })),
+);
+
 export const ResponseSurfacePanel = lazy(() =>
   import("./DoeAnalysisPanels").then((module) => ({
     default: module.ResponseSurfacePanel,

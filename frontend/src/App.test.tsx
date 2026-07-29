@@ -262,8 +262,8 @@ describe("App", () => {
     });
   });
 
-  it("defines guidance for all 30 documented six-module methods", () => {
-    expect(analysisMethodGuidanceIds).toHaveLength(30);
+  it("defines guidance for all 31 documented six-module methods", () => {
+    expect(analysisMethodGuidanceIds).toHaveLength(31);
     expect(getAnalysisMethodGuidance("eda.descriptive").roleRequirements[0]).toMatchObject({
       label: "분석 변수",
       required: true,
@@ -4854,13 +4854,13 @@ describe("App", () => {
   it("renders the DatasetPreparationPage intake workflow", () => {
     const html = renderToString(<DatasetPreparationPage {...datasetPageTestProps()} />);
 
-    expect(html).toContain("데이터셋 파싱 확정");
+    expect(html).toContain("데이터셋 등록");
     expect(html).toContain("원본 데이터 파일");
     expect(html).toContain("복사한 표 붙여넣기");
     expect(html).toContain("여기를 클릭하고 Ctrl+V");
     expect(html).toContain("표 보기");
     expect(html).toContain("원문 보기");
-    expect(html).toContain("작업 흐름");
+    expect(html).not.toContain("작업 흐름");
   });
 
   it("renders a safe spreadsheet staging grid with ragged and empty-cell cues", () => {
@@ -4988,7 +4988,7 @@ describe("App", () => {
       />,
     );
 
-    expect(datasetHtml).toContain("데이터셋 파싱 확정");
+    expect(datasetHtml).toContain("데이터셋 등록");
     expect(datasetHtml).not.toContain("분석 모듈");
     expect(analysisHtml).toContain("분석 모듈");
     expect(analysisHtml).toContain("2개 그룹 필요");

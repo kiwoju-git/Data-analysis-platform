@@ -69,6 +69,10 @@ export const apiRoutes = {
     return apiUrl(`/dataset-versions/${pathId(versionId)}`);
   },
 
+  datasetVersionCellCorrections(versionId: string): string {
+    return apiUrl(`/dataset-versions/${pathId(versionId)}/cell-corrections`);
+  },
+
   datasetVersionSchema(versionId: string): string {
     return apiUrl(`/dataset-versions/${pathId(versionId)}/schema`);
   },
@@ -325,6 +329,22 @@ export const apiRoutes = {
 
   doeFactorialDesign(): string {
     return apiUrl("/doe-designs/factorial");
+  },
+
+  doeLatinHypercubeDesign(): string {
+    return apiUrl("/doe-designs/latin-hypercube");
+  },
+
+  doeLatinHypercubeDesignById(designId: string): string {
+    return apiUrl(`/doe-designs/latin-hypercube/${pathId(designId)}`);
+  },
+
+  doeLatinHypercubeResponses(designId: string): string {
+    return apiUrl(`/doe-designs/latin-hypercube/${pathId(designId)}/responses`);
+  },
+
+  doeLatinHypercubeExport(designId: string): string {
+    return apiUrl(`/doe-designs/latin-hypercube/${pathId(designId)}/export.csv`);
   },
 
   analysisRunExportDeletionPreflight(analysisId: string, exportId: string): string {

@@ -59,6 +59,62 @@ export interface FactorialDesignResponse {
   runs: FactorialDesignRunResponse[];
 }
 
+export interface LatinHypercubeDesignCreateRequest {
+  name: string;
+  factors: DoeFactorRequest[];
+  run_count: number;
+  seed: number;
+  randomize_run_order: boolean;
+  run_order_seed: number;
+  optimization: "random_cd" | "none";
+}
+
+export interface LatinHypercubeDesignResponse {
+  design_schema_version: 1;
+  design_id: string;
+  design_version_id: string;
+  version_number: 1;
+  method_id: "doe.latin_hypercube";
+  method_version: "0.1.0";
+  family: "latin_hypercube_space_filling";
+  name: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  app_version: string;
+  factors: DoeFactorRequest[];
+  options: {
+    policy: "scipy_latin_hypercube_random_cd_v1";
+    run_count: number;
+    seed: number;
+    scramble: true;
+    strength: 1;
+    optimization: "random_cd" | "none";
+    randomize_run_order: boolean;
+    run_order_seed: number;
+    numpy_version: string;
+    scipy_version: string;
+  };
+  quality: {
+    centered_discrepancy: number;
+    minimum_pairwise_distance: number;
+    maximum_absolute_factor_correlation: number;
+    per_factor_strata_occupancy: number[][];
+    strata_valid: boolean;
+  };
+  run_count: number;
+  design_sha256: string;
+  runs: Array<{
+    standard_order: number;
+    run_order: number;
+    replicate_index: 1;
+    center_point: false;
+    block_index: null;
+    factor_levels: Record<string, number>;
+    normalized_levels: Record<string, number>;
+  }>;
+}
+
 export interface DoeResponseValueRequest {
   run_order: number;
   value: number;

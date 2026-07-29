@@ -15,6 +15,8 @@ from app.api.v1.schemas.doe import (
     DoeResponseSurfaceAnalysisResponse,
     FactorialDesignCreateRequest,
     FactorialDesignResponse,
+    LatinHypercubeDesignCreateRequest,
+    LatinHypercubeDesignResponse,
     ResponseOptimizerCreateRequest,
     ResponseOptimizerResponse,
     ResponseSurfaceDesignCreateRequest,
@@ -38,6 +40,13 @@ from app.services.doe_response_surface_analysis import (
     create_response_surface_analysis,
     get_response_surface_analysis,
 )
+from app.services.lhs_designs import (
+    create_latin_hypercube_design,
+    get_latin_hypercube_design,
+    latin_hypercube_csv,
+    list_latin_hypercube_responses,
+    save_latin_hypercube_responses,
+)
 from app.services.response_optimizer import (
     create_response_optimizer,
     get_response_optimizer,
@@ -51,6 +60,65 @@ from app.services.response_surface_designs import (
 )
 
 router = APIRouter(prefix="/doe-designs", tags=["doe-designs"])
+
+
+@router.post(
+    "/latin-hypercube",
+    response_model=LatinHypercubeDesignResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_latin_hypercube_design_route(
+    request: Request,
+    body: LatinHypercubeDesignCreateRequest,
+) -> LatinHypercubeDesignResponse:
+    return create_latin_hypercube_design(request.app.state.settings, body)
+
+
+@router.get(
+    "/latin-hypercube/{design_id}",
+    response_model=LatinHypercubeDesignResponse,
+)
+def get_latin_hypercube_design_route(
+    request: Request,
+    design_id: UUID,
+) -> LatinHypercubeDesignResponse:
+    return get_latin_hypercube_design(request.app.state.settings, design_id)
+
+
+@router.put(
+    "/latin-hypercube/{design_id}/responses",
+    response_model=DoeDesignResponsesResponse,
+)
+def save_latin_hypercube_responses_route(
+    request: Request,
+    design_id: UUID,
+    body: DoeDesignResponsesUpsertRequest,
+) -> DoeDesignResponsesResponse:
+    return save_latin_hypercube_responses(request.app.state.settings, design_id, body)
+
+
+@router.get(
+    "/latin-hypercube/{design_id}/responses",
+    response_model=DoeDesignResponsesResponse,
+)
+def list_latin_hypercube_responses_route(
+    request: Request,
+    design_id: UUID,
+) -> DoeDesignResponsesResponse:
+    return list_latin_hypercube_responses(request.app.state.settings, design_id)
+
+
+@router.get("/latin-hypercube/{design_id}/export.csv")
+def export_latin_hypercube_design_route(request: Request, design_id: UUID) -> Response:
+    content, filename = latin_hypercube_csv(request.app.state.settings, design_id)
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get(

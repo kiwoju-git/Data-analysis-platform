@@ -79,10 +79,13 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "Get-DevRepositoryBuildId" in dev_text
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
-    assert "$script:ExpectedApiContractVersion = 4" in helper_text
+    assert "$script:ExpectedApiContractVersion = 5" in helper_text
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
     assert '"graph_builder_preview"' in helper_text
+    assert '"dataset_cell_correction"' in helper_text
+    assert '"lhs_design"' in helper_text
+    assert '"bayesian_lhs_initial_design"' in helper_text
     assert "/api/v1/runtime-info" in diagnostics_text
     assert "/api/v1/analysis-methods" in diagnostics_text
 
@@ -102,7 +105,14 @@ def test_dev_runtime_helper_returns_the_repository_commit() -> None:
     )
 
     result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-Command", command],
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ],
         cwd=repo_root,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -261,7 +271,14 @@ def _run_build_id(
     environment = os.environ.copy()
     environment["TEST_REPO_ROOT"] = str(source_root)
     return subprocess.run(
-        ["powershell.exe", "-NoProfile", "-Command", command],
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ],
         cwd=helper_repo_root,
         env=environment,
         stdout=subprocess.PIPE,

@@ -18,6 +18,9 @@ export function useBayesianStudyDraftState() {
   const [direction, setDirection] = useState<"minimize" | "maximize">("maximize");
   const [initialDesignSize, setInitialDesignSize] = useState("2");
   const [initialDesignSeed, setInitialDesignSeed] = useState("20260715");
+  const [initialDesignPolicy, setInitialDesignPolicy] = useState<
+    "latin_hypercube_random_cd_v1" | "sha256_counter_uniform_feasible_v1"
+  >("latin_hypercube_random_cd_v1");
   const [constraints, setConstraints] = useState<ConstraintDraft[]>([]);
   const [predecessorStudyId, setPredecessorStudyId] = useState<string | null>(null);
   const [predecessorSeed, setPredecessorSeed] = useState<number | null>(null);
@@ -108,6 +111,7 @@ export function useBayesianStudyDraftState() {
       direction,
       initialDesignSize,
       initialDesignSeed,
+      initialDesignPolicy,
     });
     return typeof request === "string"
       ? request
@@ -131,6 +135,7 @@ export function useBayesianStudyDraftState() {
     setDirection(study.objective.direction);
     setInitialDesignSize(String(study.initial_design.requested_size));
     setInitialDesignSeed(String(study.initial_design.seed));
+    setInitialDesignPolicy(study.initial_design.policy);
     setConstraints(
       study.constraints.map((constraint, index) => ({
         key: index + 1,
@@ -173,6 +178,7 @@ export function useBayesianStudyDraftState() {
     factors,
     generateNewSeed,
     initialDesignSeed,
+    initialDesignPolicy,
     initialDesignSize,
     minimumInitialDesignSize: minimumBayesianInitialDesignSize(factors.length),
     objectiveName,
@@ -186,6 +192,7 @@ export function useBayesianStudyDraftState() {
       predecessorSeed !== null && Number(initialDesignSeed) === predecessorSeed,
     setDirection,
     setInitialDesignSeed,
+    setInitialDesignPolicy,
     setInitialDesignSize,
     setObjectiveName,
     setObjectiveUnit,

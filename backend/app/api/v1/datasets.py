@@ -4,6 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, File, Query, Request, UploadFile, status
 
 from app.api.v1.schemas.datasets import (
+    DatasetCellCorrectionRequest,
+    DatasetCellCorrectionResponse,
     DatasetDeletionDependencyPage,
     DatasetParsingConfirmationRequest,
     DatasetProfileResponse,
@@ -21,6 +23,7 @@ from app.api.v1.schemas.datasets import (
     DatasetVersionResponse,
     PastedDatasetRequest,
 )
+from app.services.dataset_cell_corrections import create_dataset_cell_correction
 from app.services.dataset_profiles import get_dataset_profile
 from app.services.dataset_upload import create_dataset_from_pasted_text, create_dataset_from_upload
 from app.services.dataset_version_retention import (
@@ -130,6 +133,23 @@ def get_dataset_version_route(
     return get_dataset_version(
         settings=request.app.state.settings,
         version_id=version_id,
+    )
+
+
+@version_router.post(
+    "/{version_id}/cell-corrections",
+    response_model=DatasetCellCorrectionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_dataset_cell_correction_route(
+    request: Request,
+    version_id: UUID,
+    body: DatasetCellCorrectionRequest,
+) -> DatasetCellCorrectionResponse:
+    return create_dataset_cell_correction(
+        settings=request.app.state.settings,
+        parent_version_id=version_id,
+        body=body,
     )
 
 

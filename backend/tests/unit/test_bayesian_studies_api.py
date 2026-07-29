@@ -116,11 +116,11 @@ def test_bayesian_study_create_restore_and_list_are_typed_and_deterministic(
             f"/api/v1/bayesian-studies/{first['study_id']}/trials?offset=1&limit=2"
         )
 
-    assert restored_response.status_code == 200
+    assert restored_response.status_code == 200, restored_response.json()
     assert restored_response.json() == first
     assert first["method_id"] == "doe.bayesian_optimization"
     assert first["method_version"] == METHOD_VERSIONS["doe.bayesian_optimization"]
-    assert first["study_schema_version"] == 1
+    assert first["study_schema_version"] == 2
     assert first["initial_design"]["policy"] == ("sha256_counter_uniform_feasible_v1")
     assert first["initial_design"]["seed"] == 20260715
     assert first["trial_count"] == 4
@@ -175,7 +175,9 @@ def test_bayesian_v01_study_restores_without_relabeling_or_hash_reinterpretation
             "factors": study["factors"],
             "objective": study["objective"],
             "constraints": study["constraints"],
-            "initial_design": study["initial_design"],
+            "initial_design": {
+                key: value for key, value in study["initial_design"].items() if value is not None
+            },
         }
         definition_sha256 = _canonical_sha256(definition_payload)
         history_sha256 = _canonical_sha256(
@@ -192,7 +194,8 @@ def test_bayesian_v01_study_restores_without_relabeling_or_hash_reinterpretation
             )
             connection.execute(
                 """
-                UPDATE bayesian_study_versions SET definition_sha256 = ?
+                UPDATE bayesian_study_versions
+                SET schema_version = 1, definition_sha256 = ?
                 WHERE study_version_id = ?
                 """,
                 (definition_sha256, study["study_version_id"]),
@@ -225,7 +228,7 @@ def test_bayesian_v01_study_restores_without_relabeling_or_hash_reinterpretation
 
         restored_response = client.get(f"/api/v1/bayesian-studies/{study['study_id']}")
 
-    assert restored_response.status_code == 200
+    assert restored_response.status_code == 200, restored_response.json()
     restored = restored_response.json()
     assert restored["method_version"] == "0.1.0"
     assert restored["definition_sha256"] == definition_sha256

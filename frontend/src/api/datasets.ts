@@ -2,6 +2,8 @@ import { apiErrorCode, apiRequestError, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type {
   DatasetParsingConfirmationRequest,
+  DatasetCellCorrectionRequest,
+  DatasetCellCorrectionResponse,
   DatasetDeletionDependencyAssetType,
   DatasetDeletionDependencyPage,
   DatasetDeletionOperationId,
@@ -18,6 +20,21 @@ import type {
   DatasetVersionResponse,
   PastedDatasetRequest,
 } from "./types";
+
+export async function createDatasetCellCorrection(
+  versionId: string,
+  request: DatasetCellCorrectionRequest,
+): Promise<DatasetCellCorrectionResponse> {
+  const response = await fetchApi(apiRoutes.datasetVersionCellCorrections(versionId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "dataset_cell_correction_failed");
+  }
+  return (await response.json()) as DatasetCellCorrectionResponse;
+}
 
 export async function uploadDataset(file: File): Promise<DatasetUploadResponse> {
   const body = new FormData();

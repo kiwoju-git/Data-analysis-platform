@@ -153,7 +153,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
     ]
 
     method_ids = [method.method_id for method in METHODS]
-    assert len(method_ids) == 30
+    assert len(method_ids) == 31
     assert len(set(method_ids)) == len(method_ids)
     assert method_ids[:4] == [
         "eda.descriptive",
@@ -162,6 +162,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "eda.equal_variances",
     ]
     assert "regression.response_optimizer" in method_ids
+    assert "doe.latin_hypercube" in method_ids
     assert "doe.response_surface" in method_ids
     assert "doe.bayesian_optimization" in method_ids
     available_methods = [
@@ -198,6 +199,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "quality.gage_rr",
         "quality.gage_run_chart",
         "doe.factorial_design",
+        "doe.latin_hypercube",
         "doe.response_surface",
         "doe.bayesian_optimization",
     ]
@@ -407,7 +409,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     catalog = analysis_method_catalog()
 
     assert len(catalog.modules) == 6
-    assert len(catalog.methods) == 30
+    assert len(catalog.methods) == 31
     assert {method.availability.value for method in catalog.methods} == {"available"}
     assert catalog.methods[0].method_id == "eda.descriptive"
     assert catalog.methods[0].availability == MethodAvailability.AVAILABLE
@@ -579,7 +581,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
     assert response.status_code == 200
     payload = response.json()
     assert len(payload["modules"]) == 6
-    assert len(payload["methods"]) == 30
+    assert len(payload["methods"]) == 31
     assert {method["availability"] for method in payload["methods"]} == {"available"}
     available = [
         method["method_id"]
@@ -615,6 +617,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "quality.gage_rr",
         "quality.gage_run_chart",
         "doe.factorial_design",
+        "doe.latin_hypercube",
         "doe.response_surface",
         "doe.bayesian_optimization",
     ]
@@ -632,6 +635,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "regression.predict",
         "regression.response_optimizer",
         "doe.factorial_design",
+        "doe.latin_hypercube",
         "doe.response_surface",
         "doe.bayesian_optimization",
     }

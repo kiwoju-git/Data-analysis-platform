@@ -109,6 +109,15 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("version_id", "path")}),
     ),
     OperationContract(
+        route_name="datasetVersionCellCorrections",
+        method="post",
+        path="/api/v1/dataset-versions/{version_id}/cell-corrections",
+        success_status="201",
+        response_schema="DatasetCellCorrectionResponse",
+        parameters=frozenset({("version_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="datasetVersionSchema",
         method="patch",
         path="/api/v1/dataset-versions/{version_id}/schema",
@@ -465,6 +474,47 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema="DoeFactorialAnalysisResponse",
         parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="doeLatinHypercubeDesign",
+        method="post",
+        path="/api/v1/doe-designs/latin-hypercube",
+        success_status="201",
+        response_schema="LatinHypercubeDesignResponse",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="doeLatinHypercubeDesignById",
+        method="get",
+        path="/api/v1/doe-designs/latin-hypercube/{design_id}",
+        success_status="200",
+        response_schema="LatinHypercubeDesignResponse",
+        parameters=frozenset({("design_id", "path")}),
+    ),
+    OperationContract(
+        route_name="doeLatinHypercubeResponses",
+        method="put",
+        path="/api/v1/doe-designs/latin-hypercube/{design_id}/responses",
+        success_status="200",
+        response_schema="DoeDesignResponsesResponse",
+        parameters=frozenset({("design_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="doeLatinHypercubeResponses",
+        method="get",
+        path="/api/v1/doe-designs/latin-hypercube/{design_id}/responses",
+        success_status="200",
+        response_schema="DoeDesignResponsesResponse",
+        parameters=frozenset({("design_id", "path")}),
+    ),
+    OperationContract(
+        route_name="doeLatinHypercubeExport",
+        method="get",
+        path="/api/v1/doe-designs/latin-hypercube/{design_id}/export.csv",
+        success_status="200",
+        response_schema=None,
+        parameters=frozenset({("design_id", "path")}),
     ),
     OperationContract(
         route_name="bayesianStudies",
@@ -996,6 +1046,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "constraints",
                 "initial_design_seed",
                 "initial_design_size",
+                "initial_design_policy",
                 "predecessor_study_id",
             }
         ),
@@ -1075,10 +1126,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("constraints", "BayesianLinearConstraintResponse"),
             ("trials", "BayesianTrialResponse"),
         ),
-        property_consts=(
-            ("study_schema_version", 1),
-            ("method_id", "doe.bayesian_optimization"),
-        ),
+        property_consts=(("method_id", "doe.bayesian_optimization"),),
     ),
     SchemaComponentContract(
         name="BayesianStudyLifecycleEventResponse",
@@ -1462,6 +1510,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "dedicated_response_optimizer",
                 "bayesian_optimization",
                 "graph_builder_preview",
+                "dataset_cell_correction",
+                "lhs_design",
+                "bayesian_lhs_initial_design",
             }
         ),
         required_fields=frozenset(
@@ -1478,6 +1529,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "dedicated_response_optimizer",
                 "bayesian_optimization",
                 "graph_builder_preview",
+                "dataset_cell_correction",
+                "lhs_design",
+                "bayesian_lhs_initial_design",
             }
         ),
     ),

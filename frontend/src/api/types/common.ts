@@ -17,6 +17,9 @@ export interface RuntimeCapabilities {
   dedicated_response_optimizer: boolean;
   bayesian_optimization: boolean;
   graph_builder_preview: boolean;
+  dataset_cell_correction?: boolean;
+  lhs_design?: boolean;
+  bayesian_lhs_initial_design?: boolean;
 }
 
 export interface RuntimeInfoResponse {

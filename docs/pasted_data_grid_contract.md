@@ -23,12 +23,18 @@ response, size limit, raw-byte preservation, or parsing-confirmation behavior.
 - Successful registration clears the raw ref, textarea, preview cells, and
   selection. A failed request keeps the draft in the current page so the user
   can review or retry it. Reload never restores that raw draft.
-- The grid is view-only. It starts at A1, displays spreadsheet column letters,
+- The pre-registration staging grid is view-only. It starts at A1, displays spreadsheet column letters,
   row numbers, empty cells, structural gaps, ragged-row markers, and a selected
   cell inspector. Formula-like strings are rendered as text and never run.
 - The first-row-as-header toggle affects staging presentation only. The server
   suggestion is shown after registration, and the parsing-confirmation panel is
   the final authoritative control.
+
+After parsing confirmation, the canonical preview remains bounded but its
+selected-cell inspector can request one correction. It never mutates the
+confirmed version or original paste. The correction creates a new version under
+`docs/dataset_cell_correction_contract.md`, with explicit empty-string versus
+missing semantics and no formula execution.
 
 ## Parser And Rendering Limits
 

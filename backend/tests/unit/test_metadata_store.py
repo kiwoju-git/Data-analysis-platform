@@ -87,6 +87,7 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (14, "create_bayesian_study_lifecycle_events"),
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
+        (17, "create_dataset_version_lineage"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -158,6 +159,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (14, "create_bayesian_study_lifecycle_events"),
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
+        (17, "create_dataset_version_lineage"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -241,6 +243,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (14, "create_bayesian_study_lifecycle_events"),
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
+        (17, "create_dataset_version_lineage"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -356,6 +359,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (14, "create_bayesian_study_lifecycle_events"),
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
+        (17, "create_dataset_version_lineage"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -525,6 +529,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (14, "create_bayesian_study_lifecycle_events"),
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
+        (17, "create_dataset_version_lineage"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -581,6 +586,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (14, "create_bayesian_study_lifecycle_events"),
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
+        (17, "create_dataset_version_lineage"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -645,6 +651,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (14, "create_bayesian_study_lifecycle_events"),
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
+        (17, "create_dataset_version_lineage"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -705,6 +712,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (14, "create_bayesian_study_lifecycle_events"),
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
+        (17, "create_dataset_version_lineage"),
     ]
     assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION
@@ -1062,6 +1070,40 @@ def test_initialize_metadata_store_upgrades_v13_without_inventing_lifecycle_even
     assert study == ("active", None)
     assert event_count == 0
     assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_v16_with_empty_dataset_lineage(
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspace with spaces" / "한글 경로"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 16:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 16")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        table = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'dataset_version_lineage';
+            """
+        ).fetchone()
+        count = connection.execute("SELECT COUNT(*) FROM dataset_version_lineage;").fetchone()[0]
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert table == ("dataset_version_lineage",)
+    assert count == 0
+    assert user_version == 17
 
 
 def test_attribute_control_limit_set_metadata_round_trip_and_filters(tmp_path) -> None:

@@ -253,8 +253,8 @@ Gate D2 now includes the dedicated response-surface and bounded response-optimiz
 
 Current stabilization update:
 
-- Current catalog count: 30 stable catalog IDs, 30 available IDs, and 25
-  generic `MethodExecutionHandler` entries. The remaining five are dedicated
+- Current catalog count: 31 stable catalog IDs, 31 available IDs, and 25
+  generic `MethodExecutionHandler` entries. The remaining six are dedicated
   workflows and are rejected by generic analysis-run.
 
 - `regression.predict` preflight now rejects missing, wrong-method,

@@ -137,6 +137,37 @@ const categoricalItems: readonly GuideItem[] = [
   },
 ];
 
+const doeItems: readonly (GuideItem & { description: string })[] = [
+  {
+    label: "중요 요인과 상호작용 선별",
+    methodLabel: "2-level factorial",
+    moduleId: "doe",
+    methodId: "doe.factorial_design",
+    description: "low/high 수준의 주효과와 상호작용을 추정합니다.",
+  },
+  {
+    label: "연속 요인 범위 전체 탐색",
+    methodLabel: "LHS",
+    moduleId: "doe",
+    methodId: "doe.latin_hypercube",
+    description: "공간충전 초기점을 만들며 고전적 factorial 대비 설계는 아닙니다.",
+  },
+  {
+    label: "관심영역 주변 곡률 확인",
+    methodLabel: "Response Surface",
+    moduleId: "doe",
+    methodId: "doe.response_surface",
+    description: "CCD 기반 2차 모형으로 국소 영역을 검토합니다.",
+  },
+  {
+    label: "비용이 큰 실험의 순차 최적화",
+    methodLabel: "Bayesian Optimization",
+    moduleId: "doe",
+    methodId: "doe.bayesian_optimization",
+    description: "초기 관측 후 GP와 EI로 다음 실험을 한 번씩 추천합니다.",
+  },
+];
+
 export function AnalysisSelectionQuickGuide({
   selectedModuleId,
   onSelectMethod,
@@ -195,6 +226,32 @@ export function AnalysisSelectionQuickGuide({
         </div>
         <p className="analysis-selection-guide-caution">
           희소한 2×2 분할표에서는 기대도수를 확인하고 Fisher exact를 검토하세요.
+        </p>
+      </details>
+    );
+  }
+
+  if (selectedModuleId === "doe") {
+    return (
+      <details className="analysis-selection-guide">
+        <summary>실험계획법 선택 가이드</summary>
+        <div className="analysis-selection-guide-grid">
+          {doeItems.map((item) => (
+            <section key={item.methodId}>
+              <button
+                className="secondary-button compact-button"
+                onClick={() => onSelectMethod(item.moduleId, item.methodId)}
+                type="button"
+              >
+                {item.label} → {item.methodLabel}
+              </button>
+              <p className="muted-copy">{item.description}</p>
+            </section>
+          ))}
+        </div>
+        <p className="analysis-selection-guide-caution">
+          설계 목적, 요인 범위, 실험 비용과 필요한 효과 추정을 함께 확인하세요.
+          어떤 방법도 전역 최적점을 보장하지 않습니다.
         </p>
       </details>
     );

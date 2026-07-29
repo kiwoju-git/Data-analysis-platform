@@ -1,6 +1,16 @@
 # Dataset Notes
 
-Gate B currently covers upload, parsing confirmation, canonical JSONL materialization, schema metadata update, paginated row preview, a profile/preflight scan with persisted profile artifacts, saved-version reactivation, optional user metadata, and dependency-blocked physical deletion for delimited text and basic XLSX datasets.
+Gate B currently covers upload, parsing confirmation, canonical JSONL materialization, schema metadata update, paginated row preview, a profile/preflight scan with persisted profile artifacts, immutable single-cell correction into a derived version, saved-version reactivation, optional user metadata, and dependency-blocked physical deletion for delimited text and basic XLSX datasets.
+
+The default dataset-version screen shows version, row/column counts, creation
+state/time, and a short lineage summary. Full IDs, schema/source/canonical
+hashes, artifact sizes, and profile memory estimates remain available in a
+closed native `details` disclosure. The data-quality section keeps missing,
+unique, constant, ID-candidate, duplicate-row, and warning information without
+mixing artifact diagnostics into the primary workflow.
+
+Confirmed preview cells can be corrected only by creating a new immutable
+version. See `docs/dataset_cell_correction_contract.md`.
 
 The current React data-preparation surface is rendered through `frontend/src/DatasetPreparationPage.tsx`, `frontend/src/PasteDatasetPanel.tsx`, `frontend/src/PastePreviewGrid.tsx`, `frontend/src/DatasetParsingPanel.tsx`, `frontend/src/DatasetVersionPanel.tsx`, profile/schema/preview section components, and shared formatting and label helpers. `usePastedDatasetDraft` owns only the transient raw-ref/limited-preview staging state, while `useDatasetWorkflow` owns upload registration, parsing, schema, canonical preview, profile, and active-version switching. `App.tsx` still owns API bootstrap, route state, and analysis orchestration, so this split does not change backend dataset behavior.
 `frontend/src/WorkspaceRouter.tsx` chooses between this data-preparation surface on root/dataset routes and the analysis page on `/analysis/{module_id}/{method_id}` routes against the same in-memory dataset state.

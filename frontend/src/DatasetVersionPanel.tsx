@@ -1,5 +1,7 @@
 import type {
   DatasetProfileResponse,
+  DatasetCellCorrectionRequest,
+  DatasetCellCorrectionResponse,
   DatasetRowsPreviewResponse,
   DatasetVersionResponse,
 } from "./api";
@@ -22,6 +24,10 @@ interface DatasetVersionPanelProps {
   schemaDrafts: SchemaDraft[];
   version: DatasetVersionResponse;
   onApplyBayesianPreset: () => void;
+  onCreateCellCorrection: (
+    request: DatasetCellCorrectionRequest,
+  ) => Promise<DatasetCellCorrectionResponse>;
+  onCellEditDirtyChange: (dirty: boolean) => void;
   onLoadDatasetProfile: (versionId: string) => void;
   onLoadRowsPreview: (versionId: string, offset: number) => void;
   onPreviewLimitChange: (limit: number) => void;
@@ -41,12 +47,16 @@ export function DatasetVersionPanel({
   schemaDrafts,
   version,
   onApplyBayesianPreset,
+  onCreateCellCorrection,
+  onCellEditDirtyChange,
   onLoadDatasetProfile,
   onLoadRowsPreview,
   onPreviewLimitChange,
   onSaveSchema,
   onSchemaDraftChange,
 }: DatasetVersionPanelProps) {
+  const createdAt = formatCreatedAt(version.created_at);
+
   return (
     <section
       className="version-panel"
@@ -56,27 +66,66 @@ export function DatasetVersionPanel({
     >
       <div className="panel-heading">
         <div>
-          <h3 id="version-title">Dataset version v{version.version_number}</h3>
-          <p>{version.version_id}</p>
+          <h3 id="version-title">데이터셋 v{version.version_number}</h3>
+          <p>
+            {version.row_count.toLocaleString()}행 · {version.column_count.toLocaleString()}열
+            {createdAt === null ? "" : ` · 생성 ${createdAt}`}
+          </p>
+          {version.parent_version_id !== null ? (
+            <p>
+              v{Math.max(1, version.version_number - 1)}에서 셀{" "}
+              {version.lineage_affected_cell_count ?? 1}건을 수정해 생성됨
+            </p>
+          ) : null}
         </div>
         <span className="status-pill status-ready">버전 생성됨</span>
       </div>
-      <div className="metadata-grid">
-        <span>행</span>
-        <strong>{version.row_count.toLocaleString()}</strong>
-        <span>컬럼</span>
-        <strong>{version.column_count.toLocaleString()}</strong>
-        <span>Schema hash</span>
-        <strong className="hash-text">{version.schema_hash}</strong>
-        <span>Canonical</span>
-        <strong className="hash-text">
-          {version.canonical_artifact === null
-            ? "대기"
-            : `${shortHash(version.canonical_artifact.sha256)} · ${formatBytes(
-                version.canonical_artifact.size_bytes,
-              )}`}
-        </strong>
-      </div>
+      <details className="dataset-technical-details">
+        <summary>기술 정보 펼치기</summary>
+        <dl className="dataset-technical-list">
+          <div>
+            <dt>Version ID</dt>
+            <dd className="hash-text">{version.version_id}</dd>
+          </div>
+          <div>
+            <dt>Dataset ID</dt>
+            <dd className="hash-text">{version.dataset_id}</dd>
+          </div>
+          <div>
+            <dt>Schema hash</dt>
+            <dd className="hash-text">{version.schema_hash}</dd>
+          </div>
+          <div>
+            <dt>Source SHA-256</dt>
+            <dd className="hash-text">{version.source_sha256}</dd>
+          </div>
+          <div>
+            <dt>Canonical artifact</dt>
+            <dd className="hash-text">
+              {version.canonical_artifact === null
+                ? "없음"
+                : `${shortHash(version.canonical_artifact.sha256)} · ${formatBytes(
+                    version.canonical_artifact.size_bytes,
+                  )}`}
+            </dd>
+          </div>
+          {profile?.profile_artifact !== null && profile !== null ? (
+            <div>
+              <dt>Profile artifact</dt>
+              <dd className="hash-text">
+                {shortHash(profile.profile_artifact.sha256)} ·{" "}
+                {formatBytes(profile.profile_artifact.size_bytes)}
+              </dd>
+            </div>
+          ) : null}
+          {profile !== null ? (
+            <div>
+              <dt>예상 메모리</dt>
+              <dd>{formatBytes(profile.preflight.estimated_memory_bytes)}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </details>
       <DatasetProfileSection
         isLoadingProfile={isLoadingProfile}
         profile={profile}
@@ -100,7 +149,18 @@ export function DatasetVersionPanel({
         version={version}
         onLoadRowsPreview={onLoadRowsPreview}
         onPreviewLimitChange={onPreviewLimitChange}
+        onCreateCellCorrection={onCreateCellCorrection}
+        onDirtyChange={onCellEditDirtyChange}
       />
     </section>
   );
+}
+
+function formatCreatedAt(value: string): string | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }

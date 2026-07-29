@@ -1,11 +1,9 @@
 import type { DatasetProfileResponse } from "./api";
 import {
-  formatBytes,
   formatPercent,
   formatProfileSummary,
   measurementLevelLabel,
   roleLabel,
-  shortHash,
 } from "./datasetDisplay";
 
 interface DatasetProfileSectionProps {
@@ -21,10 +19,29 @@ export function DatasetProfileSection({
   versionId,
   onLoadDatasetProfile,
 }: DatasetProfileSectionProps) {
+  const missingCellCount =
+    profile?.columns.reduce((total, column) => total + column.n_missing, 0) ?? 0;
+  const missingColumnCount =
+    profile?.columns.filter((column) => column.n_missing > 0).length ?? 0;
+  const warningColumnCount =
+    profile?.columns.filter((column) => column.warnings.length > 0).length ?? 0;
+  const constantColumnCount =
+    profile?.columns.filter((column) => column.constant).length ?? 0;
+  const idCandidateCount =
+    profile?.columns.filter(
+      (column) =>
+        column.role === "id" ||
+        column.measurement_level === "id" ||
+        column.warnings.some((warning) => warning.code.includes("id")),
+    ).length ?? 0;
+
   return (
     <>
       <div className="schema-actions">
-        <span>프로파일 / 사전점검</span>
+        <div>
+          <strong>데이터 품질 점검</strong>
+          <p>결측, 고유값, 상수열, ID 후보와 타입 문제를 분석 전에 확인합니다.</p>
+        </div>
         <button
           className="secondary-button"
           disabled={isLoadingProfile}
@@ -33,7 +50,7 @@ export function DatasetProfileSection({
           }}
           type="button"
         >
-          {isLoadingProfile ? "계산 중" : "다시 계산"}
+          {isLoadingProfile ? "점검 중" : profile === null ? "품질 점검 실행" : "새로고침"}
         </button>
       </div>
       {profile?.warnings.length ? (
@@ -44,39 +61,39 @@ export function DatasetProfileSection({
         </ul>
       ) : null}
       {profile !== null ? (
-        <div className="metadata-grid" aria-label="프로파일 사전점검">
-          <span>Canonical artifact</span>
-          <strong className="hash-text">
-            {profile.canonical_artifact === null
-              ? "없음"
-              : `${shortHash(profile.canonical_artifact.sha256)} · ${formatBytes(
-                  profile.canonical_artifact.size_bytes,
-                )}`}
-          </strong>
-          <span>Profile artifact</span>
-          <strong className="hash-text">
-            {profile.profile_artifact === null
-              ? "없음"
-              : `${shortHash(profile.profile_artifact.sha256)} · ${formatBytes(
-                  profile.profile_artifact.size_bytes,
-                )}`}
-          </strong>
-          <span>메모리 추정</span>
-          <strong>{formatBytes(profile.preflight.estimated_memory_bytes)}</strong>
-          <span>중복 행</span>
-          <strong>
-            {profile.preflight.duplicate_row_count.toLocaleString()}
-            {profile.preflight.duplicate_row_count_capped ? "+" : ""}
-          </strong>
-        </div>
+        <dl className="profile-quality-summary" aria-label="데이터 품질 요약">
+          <QualityStat label="전체 행" value={profile.row_count.toLocaleString()} />
+          <QualityStat label="전체 열" value={profile.column_count.toLocaleString()} />
+          <QualityStat
+            label="결측 셀"
+            value={`${missingCellCount.toLocaleString()} · ${missingColumnCount.toLocaleString()}개 열`}
+          />
+          <QualityStat
+            label="중복 행"
+            value={`${profile.preflight.duplicate_row_count.toLocaleString()}${
+              profile.preflight.duplicate_row_count_capped ? "+" : ""
+            }`}
+          />
+          <QualityStat label="경고 열" value={warningColumnCount.toLocaleString()} />
+          <QualityStat label="상수열" value={constantColumnCount.toLocaleString()} />
+          <QualityStat label="ID 후보" value={idCandidateCount.toLocaleString()} />
+        </dl>
       ) : null}
       {profile !== null ? (
         <div className="table-wrap">
           <table className="profile-table">
+            <colgroup>
+              <col className="profile-column-variable" />
+              <col className="profile-column-role" />
+              <col className="profile-column-missing" />
+              <col className="profile-column-unique" />
+              <col className="profile-column-summary" />
+              <col className="profile-column-check" />
+            </colgroup>
             <thead>
               <tr>
-                <th>컬럼</th>
-                <th>역할</th>
+                <th>변수</th>
+                <th>역할 · 수준</th>
                 <th>결측</th>
                 <th>고유값</th>
                 <th>요약</th>
@@ -90,17 +107,24 @@ export function DatasetProfileSection({
                     <strong>{column.display_name}</strong>
                     <span className="cell-subtle">{column.data_type}</span>
                   </td>
-                  <td>
-                    {roleLabel(column.role)}
-                    <span className="cell-subtle">
-                      {measurementLevelLabel(column.measurement_level)}
+                  <td className="profile-nowrap">
+                    <span
+                      aria-label={`역할 ${roleLabel(column.role)}, 측정 수준 ${measurementLevelLabel(
+                        column.measurement_level,
+                      )}`}
+                      className="profile-role-level"
+                    >
+                      <span>{roleLabel(column.role)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{measurementLevelLabel(column.measurement_level)}</span>
                     </span>
                   </td>
-                  <td>
+                  <td className="profile-numeric-cell">
                     {column.n_missing.toLocaleString()} / {column.n_total.toLocaleString()}
-                    <span className="cell-subtle">{formatPercent(column.missing_rate)}</span>
+                    <span aria-hidden="true"> · </span>
+                    {formatPercent(column.missing_rate)}
                   </td>
-                  <td>
+                  <td className="profile-numeric-cell">
                     {column.unique_count_capped
                       ? `${profile.unique_count_limit}+`
                       : column.unique_count.toLocaleString()}
@@ -128,5 +152,14 @@ export function DatasetProfileSection({
         </div>
       )}
     </>
+  );
+}
+
+function QualityStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
   );
 }

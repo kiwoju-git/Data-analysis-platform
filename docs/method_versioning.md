@@ -3,14 +3,21 @@
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
 `doe.factorial_design` and `regression.response_optimizer` are `0.3.0`, and
-`doe.response_surface` is `0.2.0`. `doe.bayesian_optimization` is `0.2.2`,
+`doe.response_surface` is `0.2.0`. `doe.bayesian_optimization` is `0.3.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
-`quality.run_chart` is `0.2.0`; the other stable IDs remain on `0.1.0`.
+`quality.run_chart` is `0.2.0`; `doe.latin_hypercube` enters at `0.1.0` and
+the other stable IDs remain on `0.1.0`.
 
 Graph Builder uses `visualization_schema_version=1` and does not create an
 analysis run. Adding `/api/v1/visualizations/preview` does not bump a
-statistical method version or result schema. API contract version 4 prevents a
+statistical method version or result schema. API contract version 5 prevents a
 new frontend from calling the required preview route on an older backend.
+
+Dataset cell correction is a dataset transformation contract, and standalone
+LHS has its own design schema, so neither changes an existing analysis result
+schema. Bayesian `0.3.0` introduces study schema `2` and an explicit initial
+design policy union. Readers continue to restore study schema `1` and method
+versions `0.1.0`, `0.2.0`, `0.2.1`, and `0.2.2` without rewriting them.
 
 ## Source Of Truth
 

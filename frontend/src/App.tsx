@@ -344,6 +344,9 @@ export default function App() {
     setFlowError,
     version,
   } = useDatasetWorkflow({
+    onDatasetVersionCreated: () => {
+      publishWorkspaceMutation("dataset_created");
+    },
     onDatasetReset: () => {
       setDatasetStateRevision((revision) => revision + 1);
       setSelectedDescriptiveColumnIds([]);

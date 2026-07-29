@@ -25,8 +25,17 @@ export function ActiveDatasetVersionSelector({
     (candidate) => candidate.version_id === selectedVersionId,
   );
   const activeOffPage =
-    catalogState.activeItem !== null && !activeOnCurrentPage
+    catalogState.activeItem !== null &&
+    catalogState.activeItem.version_id === selectedVersionId &&
+    !activeOnCurrentPage
       ? catalogState.activeItem
+      : null;
+  const currentVersionFallback =
+    version !== null &&
+    version.version_id === selectedVersionId &&
+    !activeOnCurrentPage &&
+    activeOffPage === null
+      ? version
       : null;
   const disabled = isSwitching || catalogState.isLoading;
 
@@ -47,6 +56,11 @@ export function ActiveDatasetVersionSelector({
               {activeOffPage !== null ? (
                 <option value={activeOffPage.version_id}>
                   {catalogItemLabel(activeOffPage)}
+                </option>
+              ) : null}
+              {currentVersionFallback !== null ? (
+                <option value={currentVersionFallback.version_id}>
+                  {currentVersionLabel(currentVersionFallback)}
                 </option>
               ) : null}
               {catalogState.catalog?.versions.map((item) => (
@@ -153,6 +167,10 @@ function catalogItemLabel(item: NonNullable<DatasetVersionCatalogState["activeIt
   const label = item.user_label ?? item.original_filename;
   const original = item.user_label === null ? "" : ` · ${item.original_filename}`;
   return `${label}${original} · ${item.row_count.toLocaleString()}행 · ${item.column_count.toLocaleString()}열 · 생성 ${formatLocalDateTime(item.created_at)} · v${item.version_number} · ${shortId(item.version_id)}`;
+}
+
+function currentVersionLabel(version: DatasetVersionResponse) {
+  return `데이터셋 v${version.version_number} · ${version.row_count.toLocaleString()}행 · ${version.column_count.toLocaleString()}열 · 생성 ${formatLocalDateTime(version.created_at)}`;
 }
 
 function shortId(value: string) {

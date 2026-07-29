@@ -33,6 +33,9 @@ export interface BayesianStudyCreateRequest {
   constraints: BayesianLinearConstraintRequest[];
   initial_design_seed: number;
   initial_design_size: number;
+  initial_design_policy:
+    | "latin_hypercube_random_cd_v1"
+    | "sha256_counter_uniform_feasible_v1";
   predecessor_study_id?: string | null;
 }
 
@@ -57,12 +60,22 @@ export interface BayesianLinearConstraintResponse {
 }
 
 export interface BayesianInitialDesignResponse {
-  policy: "sha256_counter_uniform_feasible_v1";
+  policy:
+    | "latin_hypercube_random_cd_v1"
+    | "sha256_counter_uniform_feasible_v1";
   seed: number;
   requested_size: number;
   generated_size: number;
-  attempt_limit: number;
-  attempts_consumed: number;
+  attempt_limit?: number | null;
+  attempts_consumed?: number | null;
+  scramble?: boolean | null;
+  strength?: number | null;
+  optimization?: "random_cd" | null;
+  centered_discrepancy?: number | null;
+  minimum_pairwise_distance?: number | null;
+  strata_valid?: boolean | null;
+  numpy_version?: string | null;
+  scipy_version?: string | null;
 }
 
 export interface BayesianTrialResponse {
@@ -145,7 +158,7 @@ export interface BayesianStudyResponse {
   study_id: string;
   study_version_id: string;
   version_number: number;
-  study_schema_version: 1;
+  study_schema_version: 1 | 2;
   method_id: "doe.bayesian_optimization";
   method_version: string;
   name: string;
