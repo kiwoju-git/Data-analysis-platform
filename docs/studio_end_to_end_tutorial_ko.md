@@ -518,7 +518,7 @@ URL의 `design_id`, `analysis_id`, `optimization_id`는 reload 후 checksum-vali
 - **클릭 순서:** study 생성 > trial number/coordinates 대조 > 각 objective 저장 확인 > 추천 요청.
 - **실행 전 확인:** objective value와 coordinates, 저장 후 수정 불가, pending trial 없음 확인.
 <!-- TUTORIAL_RESULT:doe.bayesian_optimization:start -->
-- **검증 source:** `doe.bayesian_optimization` v0.3.0 · input SHA-256 `a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91`
+- **검증 source:** `doe.bayesian_optimization` v0.4.0 · input SHA-256 `a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91`
 - **예상 실제 결과 (표시 반올림):**
   - completed observations=5, recommended temperature=61.2818, pressure=11.4636
   - predicted mean=83.9666, posterior SD=4.2736, EI=0.2677, trial `pending`

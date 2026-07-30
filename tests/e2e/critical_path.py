@@ -499,6 +499,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             ).to_be_visible(
                 timeout=20_000,
             )
+            capture_hypothesis_method_cards(page, diagnostics)
 
             diagnostics.step("create, download, and delete one export")
             create_exports(page)
@@ -519,9 +520,9 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             diagnostics.step("verify DOE response surface analysis and optimization")
             verify_doe_response_surface_analysis(page)
             diagnostics.step("verify standalone LHS design and response revision")
-            verify_latin_hypercube_design(page)
+            verify_latin_hypercube_design(page, diagnostics)
             diagnostics.step("verify Bayesian study observations and recommendation")
-            verify_bayesian_optimization(page)
+            verify_bayesian_optimization(page, diagnostics)
             diagnostics.step("verify XLSX browser upload")
             verify_xlsx_file_upload(
                 page, Path(tempfile.mkdtemp(prefix="datalab-e2e-upload-"))
@@ -590,6 +591,49 @@ def select_method_card(page: Page, module_label: str, method_label: str) -> None
         "button", name=re.compile(rf"^{re.escape(module_label)}")
     ).click()
     page.locator(".method-item").filter(has_text=method_label).click()
+
+
+def capture_hypothesis_method_cards(
+    page: Page, diagnostics: E2EDiagnostics
+) -> None:
+    equivalence = page.locator(".method-item").filter(
+        has_text="동등성 검정"
+    )
+    wilcoxon = page.locator(".method-item").filter(
+        has_text="1-표본 Wilcoxon"
+    )
+    expect(equivalence).to_have_count(1)
+    expect(wilcoxon).to_have_count(1)
+    for card in (equivalence, wilcoxon):
+        expect(card.locator(".method-card-tag")).to_have_count(4)
+        wrapped = card.locator(".method-card-tag").evaluate_all(
+            """elements => elements.some(element => {
+                const style = getComputedStyle(element);
+                return element.scrollHeight > parseFloat(style.lineHeight) * 1.25;
+            })"""
+        )
+        if wrapped:
+            raise AssertionError("hypothesis method card tag wrapped internally")
+    equivalence_box = equivalence.bounding_box()
+    wilcoxon_box = wilcoxon.bounding_box()
+    if equivalence_box is None or wilcoxon_box is None:
+        raise AssertionError("hypothesis method card bounding box unavailable")
+    grid_alignment = page.locator(".method-grid").evaluate(
+        "element => getComputedStyle(element).alignItems"
+    )
+    if grid_alignment != "start":
+        raise AssertionError(
+            f"hypothesis method grid align-items was {grid_alignment}, not start"
+        )
+    diagnostics.record(
+        "[e2e] hypothesis card heights "
+        f"equivalence={equivalence_box['height']:.2f}px "
+        f"wilcoxon={wilcoxon_box['height']:.2f}px"
+    )
+    diagnostics.capture_locator(
+        page.locator(".method-grid"),
+        "hypothesis-equivalence-wilcoxon-cards.png",
+    )
 
 
 def open_primary_navigation(page: Page, label: str) -> None:
@@ -1836,7 +1880,9 @@ def verify_dataset_cell_correction(page: Page) -> None:
     expect(page.locator("#version-title")).to_contain_text("v2", timeout=20_000)
 
 
-def verify_latin_hypercube_design(page: Page) -> None:
+def verify_latin_hypercube_design(
+    page: Page, diagnostics: E2EDiagnostics
+) -> None:
     origin = page.evaluate("window.location.origin")
     active_version_id = page.locator("#active-dataset-version").input_value()
     page.goto(
@@ -1847,7 +1893,14 @@ def verify_latin_hypercube_design(page: Page) -> None:
     workspace = page.locator(".lhs-workspace")
     expect(workspace).to_be_visible(timeout=20_000)
 
-    option_inputs = workspace.locator(".option-grid").first.locator("input")
+    option_inputs = workspace.locator(".lhs-core-settings-grid input")
+    control_tops = [
+        box["y"]
+        for index in range(option_inputs.count())
+        if (box := option_inputs.nth(index).bounding_box()) is not None
+    ]
+    assert control_tops and max(control_tops) - min(control_tops) <= 2
+    diagnostics.capture_page(page, "lhs-settings-aligned.png")
     option_inputs.nth(1).fill("6")
     workspace.locator(":scope > .primary-button").click()
     expect(workspace.locator("#lhs-quality-title")).to_be_visible(timeout=20_000)
@@ -1868,7 +1921,9 @@ def verify_latin_hypercube_design(page: Page) -> None:
     )
 
 
-def verify_bayesian_optimization(page: Page) -> None:
+def verify_bayesian_optimization(
+    page: Page, diagnostics: E2EDiagnostics
+) -> None:
     select_method_card(page, "실험 계획법", "베이지안 최적화")
     expect(page.locator("#workbench-title")).to_have_text(
         "베이지안 최적화", timeout=15_000
@@ -1883,6 +1938,29 @@ def verify_bayesian_optimization(page: Page) -> None:
     page.get_by_role("button", name="제약 추가").click()
     page.get_by_label("제약 1 x 계수").fill("1")
     page.get_by_label("제약 1 우변").fill("0.75")
+    core_controls = page.locator(".bayesian-study-core-grid input, .bayesian-study-core-grid select")
+    control_tops = [
+        box["y"]
+        for index in range(core_controls.count())
+        if (box := core_controls.nth(index).bounding_box()) is not None
+    ]
+    assert control_tops and max(control_tops) - min(control_tops) <= 2
+    diagnostics.capture_page(page, "bayesian-study-builder-aligned.png")
+    page.get_by_label("최적화 목표").select_option("match_target")
+    page.get_by_label("목표값", exact=True).fill("0.5")
+    page.get_by_label("허용 오차 (선택)").fill("0.1")
+    diagnostics.capture_page(page, "bayesian-target-goal.png")
+    page.set_viewport_size({"width": 390, "height": 844})
+    mobile_overflow = page.evaluate(
+        "() => document.documentElement.scrollWidth - window.innerWidth"
+    )
+    if mobile_overflow > 1:
+        raise AssertionError(
+            f"Bayesian mobile page overflowed horizontally by {mobile_overflow}px"
+        )
+    diagnostics.capture_page(page, "bayesian-mobile.png")
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.get_by_label("최적화 목표").select_option("maximize")
     page.get_by_role("button", name="Study 생성").click()
     summary = page.get_by_label("Bayesian study 상태")
     expect(summary).to_be_visible(timeout=20_000)
@@ -1890,7 +1968,7 @@ def verify_bayesian_optimization(page: Page) -> None:
     stored_constraints = page.get_by_label("Bayesian stored constraints")
     expect(stored_constraints).to_contain_text("constraint_1")
     expect(stored_constraints).to_contain_text("0.750000")
-    page.get_by_label("Bayesian 전체 trial 예산").fill("5")
+    page.get_by_label("전체 trial 예산").fill("5")
 
     page.get_by_label("Trial 1 관측값").fill("0.8")
     observation_buttons = page.get_by_role("button", name="관측 저장")
@@ -1905,32 +1983,31 @@ def verify_bayesian_optimization(page: Page) -> None:
     page.get_by_label("Trial 2 terminal action 확인").get_by_role(
         "button", name="관측 저장 확인"
     ).click()
-    recommendation_button = page.get_by_role("button", name="다음 실험 추천")
+    recommendation_button = page.get_by_role("button", name="추천 batch 생성")
     expect(recommendation_button).to_be_enabled(timeout=20_000)
+    page.get_by_role(
+        "radio", name="여러 실험을 동시에 수행"
+    ).check()
+    page.get_by_label("한 번에 추천할 실험 수").fill("2")
+    diagnostics.capture_page(page, "bayesian-parallel-batch-settings.png")
+    page.get_by_role("radio", name="결과를 하나씩 반영").check()
+    diagnostics.capture_page(page, "bayesian-sequential-settings.png")
     recommendation_button.click()
 
-    expect(page.get_by_role("heading", name="추천 결과")).to_be_visible(timeout=45_000)
+    expect(page.get_by_role("heading", name="추천 batch 결과")).to_be_visible(
+        timeout=45_000
+    )
     expect(page).to_have_url(re.compile(r"study_id=[0-9a-f-]+"))
-    expect(page).to_have_url(re.compile(r"recommendation_id=[0-9a-f-]+"))
+    expect(page).to_have_url(re.compile(r"batch_id=[0-9a-f-]+"))
     result_section = page.locator(
-        'section[aria-labelledby="bayesian-recommendation-result-title"]'
+        'section[aria-labelledby="bayesian-batch-result-title"]'
     )
-    expect(result_section.get_by_text("확인 대기", exact=True)).to_be_visible()
-    expect(
-        result_section.get_by_text("관측값이 아닌 다음 확인 실험 후보입니다.")
-    ).to_be_visible()
+    diagnostics.capture_page(page, "bayesian-batch-result.png")
+    expect(result_section.get_by_text("실험 대기", exact=True)).to_be_visible()
     expect(page.get_by_text("추천", exact=True)).to_be_visible()
-    expect(
-        result_section.get_by_text("bayesian_optimization_confirmation_required")
-    ).to_be_visible()
-    expect(
-        result_section.get_by_text("bayesian_optimization_no_global_optimum_guarantee")
-    ).to_be_visible()
-    recommendation_constraints = page.get_by_label(
-        "Bayesian recommendation constraints"
-    )
-    expect(recommendation_constraints).to_contain_text("constraint_1")
-    expect(recommendation_constraints).to_contain_text("충족")
+    result_section.get_by_text("왜 이 조건?", exact=True).click()
+    expect(result_section).to_contain_text("constraint_1")
+    expect(result_section).to_contain_text("충족")
     expect(
         result_section.get_by_text("전역 최적을 보장하지 않습니다", exact=False)
     ).to_be_visible()
@@ -1941,11 +2018,9 @@ def verify_bayesian_optimization(page: Page) -> None:
     page.get_by_label("Trial 3 terminal action 확인").get_by_role(
         "button", name="관측 저장 확인"
     ).click()
-    expect(result_section.get_by_text("관측 완료", exact=True)).to_be_visible(
+    expect(result_section.get_by_text("전체 완료", exact=True)).to_be_visible(
         timeout=20_000
     )
-    expect(result_section).to_contain_text("실제 관측값")
-    expect(result_section).to_contain_text("0.970000")
 
     expect(recommendation_button).to_be_enabled(timeout=20_000)
     recommendation_button.click()
@@ -1957,7 +2032,7 @@ def verify_bayesian_optimization(page: Page) -> None:
     abandon_confirmation = page.get_by_label("Trial 4 terminal action 확인")
     expect(abandon_confirmation).to_contain_text("향후 추천에서 제외")
     abandon_confirmation.get_by_role("button", name="Abandon 확인").click()
-    expect(result_section.get_by_text("중단됨", exact=True)).to_be_visible(
+    expect(result_section.get_by_text("전체 포기", exact=True)).to_be_visible(
         timeout=20_000
     )
 
@@ -1968,9 +2043,9 @@ def verify_bayesian_optimization(page: Page) -> None:
     trial_five_row = trial_five_input.locator("xpath=ancestor::tr")
     next_coordinates = trial_five_row.locator("td").nth(2).inner_text()
     assert next_coordinates != abandoned_coordinates
-    expect(result_section.get_by_text("확인 대기", exact=True)).to_be_visible()
+    expect(result_section.get_by_text("실험 대기", exact=True)).to_be_visible()
     expect(recommendation_button).to_be_disabled()
-    expect(page.get_by_text("전체 trial 예산 5개에 도달", exact=False)).to_be_visible()
+    expect(page.get_by_text("남은 trial 예산보다 batch 수가 큽니다", exact=False)).to_be_visible()
 
     study_selector = page.get_by_label("저장된 Bayesian study")
     study_id = study_selector.input_value()
@@ -1981,11 +2056,11 @@ def verify_bayesian_optimization(page: Page) -> None:
     restored_selector = page.get_by_label("저장된 Bayesian study")
     expect(restored_selector).to_have_value(study_id, timeout=20_000)
     expect(page.get_by_label("Trial 5 관측값")).to_be_visible(timeout=20_000)
-    expect(page.get_by_text("전체 trial 예산 5개에 도달", exact=False)).to_be_visible()
+    expect(page.get_by_text("남은 trial 예산보다 batch 수가 큽니다", exact=False)).to_be_visible()
     expect(
         page.locator(
-            'section[aria-labelledby="bayesian-recommendation-result-title"]'
-        ).get_by_text("확인 대기", exact=True)
+            'section[aria-labelledby="bayesian-batch-result-title"]'
+        ).get_by_text("실험 대기", exact=True)
     ).to_be_visible()
 
     page.get_by_label("Trial 5 관측값").fill("0.96")
@@ -2010,8 +2085,8 @@ def verify_bayesian_optimization(page: Page) -> None:
     expect(lifecycle).to_be_visible(timeout=20_000)
     expect(lifecycle).to_contain_text("completed")
     expect(lifecycle).to_contain_text("confirmation_complete")
-    expect(page.get_by_label("Bayesian 전체 trial 예산")).to_be_disabled()
-    expect(page.get_by_role("button", name="다음 실험 추천")).to_be_disabled()
+    expect(page.get_by_label("전체 trial 예산")).to_be_disabled()
+    expect(page.get_by_role("button", name="추천 batch 생성")).to_be_disabled()
 
     page.reload(wait_until="networkidle")
     restored_selector = page.get_by_label("저장된 Bayesian study")
@@ -2034,7 +2109,7 @@ def verify_bayesian_optimization(page: Page) -> None:
     deletion_impact = page.get_by_label("Bayesian study 삭제 영향")
     expect(deletion_impact).to_be_visible(timeout=20_000)
     expect(deletion_impact).to_contain_text("파일 0개")
-    expect(deletion_impact).to_contain_text("recommendation 3건")
+    expect(deletion_impact).to_contain_text("batch 3건 / item 3건")
     deletion_impact.get_by_role("button", name="불가역 삭제 확인").click()
     deletion_confirmation = page.get_by_label(
         "Bayesian study irreversible deletion 확인"

@@ -317,6 +317,18 @@ browser critical path.
 - `verify DOE response surface analysis and optimization`
 - `verify standalone LHS design and response revision`
 - `verify Bayesian study observations and recommendation`
+  now uses the schema-3 sequential batch API, verifies `batch_id` restore,
+  structured reason/constraint detail, terminal batch lifecycle, target-goal
+  controls, parallel batch sizing, and a 390 px no-overflow layout. It writes
+  `bayesian-sequential-settings.png`,
+  `bayesian-parallel-batch-settings.png`, `bayesian-batch-result.png`,
+  `bayesian-target-goal.png`, `bayesian-study-builder-aligned.png`, and
+  `bayesian-mobile.png`.
+- The two-sample hypothesis step verifies four one-line tags and non-stretched
+  Equivalence/Wilcoxon cards, then writes
+  `hypothesis-equivalence-wilcoxon-cards.png`.
+- The standalone LHS step verifies aligned core controls and writes
+  `lhs-settings-aligned.png`.
 - `verify XLSX browser upload`
 - `verify CSV upload and upload error recovery`
 - `verify parser option editing`

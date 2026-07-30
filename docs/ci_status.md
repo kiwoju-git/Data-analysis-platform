@@ -1,8 +1,30 @@
 # CI Status
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ## Local Validation
+
+- The Bayesian objective-goal and synchronous batch-recommendation work is
+  based on pushed main `fb6593e18bfedf301e63e5703835b1d44a1af1a3`.
+  It advances API contract 5 to 6, metadata schema 17 to 18,
+  `doe.bayesian_optimization` 0.3.0 to 0.4.0, and new-study schema 2 to 3.
+  Legacy study schemas 1/2 and legacy single recommendations remain readable.
+- Final full validation passed tutorial Markdown verification 18,
+  Ruff/format over 183 Python files, mypy over 113 source modules, backend
+  pytest 883, frontend lint/typecheck and Vitest 237, and the production build.
+  The existing Vite chunk-size warning remains informational.
+- The final isolated Chromium critical path passed and wrote diagnostics under
+  `.tmp/e2e-diagnostics-bayesian-batch-final`. It verifies target-goal study
+  fields, sequential and parallel batch settings, structured recommendation
+  reasons, LHS/Bayesian form alignment, one-line hypothesis tags, and a 390 px
+  Bayesian builder without page overflow. An earlier run exposed the linear
+  constraint table expanding the page to 1032 px; the table wrapper and
+  analysis grid items now shrink to the viewport while retaining internal
+  horizontal scrolling.
+- Browser measurements recorded equal 108.55 px Equivalence/Wilcoxon card
+  heights. Existing Graph Builder regression measurements remained 0.942
+  chart/card width ratios for Box Plot, Histogram, Q-Q, and ECDF, and 0.971
+  for Individual Value Plot.
 
 - The immutable dataset-cell-correction/LHS/Bayesian-initial-design branch is
   based on pushed main `8600cc805312eba7e7842f922d3825288d06ef77`.

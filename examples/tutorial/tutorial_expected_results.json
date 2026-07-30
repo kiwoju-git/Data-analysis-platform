@@ -54,7 +54,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91",
       "method_id": "doe.bayesian_optimization",
-      "method_version": "0.3.0",
+      "method_version": "0.4.0",
       "relative_tolerance": 1e-08,
       "result": {
         "actual_coordinates": {

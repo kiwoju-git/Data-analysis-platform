@@ -1,11 +1,11 @@
 # Bayesian Study Lifecycle Contract
 
-Last updated: 2026-07-16
+Last updated: 2026-07-30
 
 ## Scope And Current State
 
 This contract defines the implemented bounded lifecycle for closing an
-immutable Bayesian Optimization study. Method `0.2.2` provides an explicit
+immutable Bayesian Optimization study. Method `0.4.0` retains the explicit
 status-transition API and read-only restore UI. Trial completion and trial
 abandonment remain separate terminal trial transitions; close never changes a
 trial implicitly.
@@ -34,7 +34,8 @@ relabeled.
 1. The client supplies the current `study_version` and current history revision
    ID/SHA for optimistic locking.
 2. The service reloads and checksum-validates the complete study, trials,
-   histories, and recommendations before the transition. The storage
+   histories, legacy recommendations, and recommendation batches before the
+   transition. The storage
    transaction then reacquires a write lock and rechecks active status, current
    version/history ID/SHA, final counts, and latest recommendation before it
    writes the event.
@@ -60,7 +61,8 @@ SQLite schema 14 stores:
 - close reason code and optional bounded note;
 - `closed_at` and audit `created_at` timestamps in UTC;
 - final study version, history revision ID/SHA, trial count, completed count,
-  abandoned count, and latest recommendation ID when present;
+  abandoned count, latest legacy recommendation ID, and latest batch ID when
+  present;
 - definition SHA and a canonical lifecycle-event SHA;
 - app version and build commit;
 - request correlation ID or idempotency key, without raw objective values,
@@ -146,10 +148,16 @@ reasons. Required tests cover:
   graph removal, rollback on graph change, redaction, frontend impact review,
   and browser removal after reload.
 
-Method `0.2.2` is a patch release because it adds lifecycle orchestration and
+Method `0.2.2` was the patch release that added lifecycle orchestration and
 immutable audit metadata without changing the GP kernel, EI calculation,
 duplicate policy, numerical defaults, or the meaning/checksum of existing
 study, history, recommendation config/result, and model schema-1 artifacts.
 Lifecycle event schema starts at 1 and SQLite advances from 13 to 14. Existing
 `0.1.0`, `0.2.0`, and `0.2.1` assets retain their recorded versions; no close
 event is invented for a legacy active study.
+
+Method `0.4.0` adds synchronous recommendation batches without rewriting those
+events. New close events use lifecycle schema 2 and can reference the latest
+batch; schema-1 events retain their original canonical hash. SQLite schema 18
+adds batch/item ownership and deletion counts while legacy recommendation rows
+remain unchanged.

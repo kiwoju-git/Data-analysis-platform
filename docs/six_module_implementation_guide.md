@@ -1919,6 +1919,10 @@ AGENTS.md, docs/six_module_implementation_guide.md, to_do_list.md, data_prd_adde
 - `doe.bayesian_optimization` `0.3.0` creates study schema `2` with explicit
   LHS or constrained-uniform initial-design policy. Schema `1` and method
   `0.1.0` through `0.2.2` remain readable.
+- `doe.bayesian_optimization` `0.4.0` creates study schema `3` with typed
+  maximize/minimize/match-target objectives, analytic Target EI, and atomic
+  synchronous recommendation batches of 1 through 8. Schema `1`/`2` Studies
+  and legacy single recommendations remain readable without rewriting.
 - Metadata schema `17` records immutable parent-child dataset version lineage
   for single-cell correction. The raw upload and parent artifacts remain
   unchanged; see `docs/dataset_cell_correction_contract.md`.

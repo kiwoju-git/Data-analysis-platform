@@ -963,6 +963,7 @@ def _collect_bayesian_result(
                 "constraints": [],
                 "initial_design_seed": 20260718,
                 "initial_design_size": 5,
+                "initial_design_policy": "sha256_counter_uniform_feasible_v1",
             },
         ),
         201,

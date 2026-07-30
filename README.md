@@ -24,7 +24,7 @@ synthetic critical-path 검증은 구현되어 있고 최신 main push의 hosted
 - 상관관계, 선형 회귀, 저장 모형 기반 Predict, Response Optimizer
 - Run/Individuals/Subgroup Chart, Capability, Gage R&R, P/NP/C/U 관리도
   - Run Chart는 기존 exact/연속 패턴과 구분된 군집·혼합·추세·진동 근사 p-value를 함께 표시합니다.
-- Factorial DOE, RSM, Bayesian Optimization study/관측/추천 lifecycle
+- Factorial DOE, LHS, RSM, Bayesian Optimization study/관측/batch 추천 lifecycle
 - immutable dataset version, 분석 저장/복원/비교, checksum 검증
 - 저장된 dataset version을 다시 활성화하는 paged 상단 selector
 - `관리` 화면의 dataset/model 사용자 이름·메모·고정, dependency-safe dataset-version 삭제
@@ -39,9 +39,10 @@ synthetic critical-path 검증은 구현되어 있고 최신 main push의 hosted
 - 한국어 Help Center, method context help, end-to-end 튜토리얼
 - pointer/touch/keyboard로 확인하는 정규성·그래프 요약·회귀 진단 SVG chart
 
-Bayesian 지원 범위는 bounded continuous, single-objective, sequential P0입니다. 실제
-목적함수를 자동 실행하지 않으며 추천은 확인 실험 후보입니다. multiobjective/batch,
-categorical/integer factor, nonlinear constraint와 전역 최적 보장은 현재 범위가 아닙니다.
+Bayesian 지원 범위는 bounded continuous, single-response, synchronous
+sequential/batch(1~8) P0입니다. 실제 목적함수를 자동 실행하지 않으며 추천은
+확인 실험 후보입니다. multiobjective, asynchronous refill, categorical/integer
+factor, nonlinear constraint와 전역 최적 보장은 현재 범위가 아닙니다.
 상세 상태는 [Bayesian P0 release checklist](docs/bayesian_p0_release_checklist.md)에 있습니다.
 
 ## 지원 환경
@@ -195,6 +196,7 @@ tests/e2e/            Chromium critical path
 - [CI와 validation 상태](docs/ci_status.md)
 - [Frontend module loading](docs/frontend_module_loading.md)
 - [Bayesian Optimization 계약](docs/bayesian_optimization_contract.md)
+- [Bayesian batch recommendation 계약](docs/bayesian_batch_recommendation_contract.md)
 - [Bayesian lifecycle 계약](docs/bayesian_study_lifecycle_contract.md)
 - [Bayesian P0 release checklist](docs/bayesian_p0_release_checklist.md)
 - [Dataset cell correction contract](docs/dataset_cell_correction_contract.md)
@@ -214,7 +216,7 @@ tests/e2e/            Chromium critical path
 - Clean Windows 11/Python 3.10/Node 22 release evidence와 remote required checks는
   [CI 상태](docs/ci_status.md)에 따라 별도 gate로 남아 있습니다.
 - WECO/Nelson, Laney, non-normal capability 등 advanced quality 기능은 backlog입니다.
-- Bayesian multiobjective, batch recommendation, categorical/integer factor, nonlinear
+- Bayesian multiobjective, asynchronous batch refill, categorical/integer factor, nonlinear
   constraint와 objective 자동 실행은 현재 P0 범위가 아닙니다.
 
 ## 실행 버전 불일치 해결

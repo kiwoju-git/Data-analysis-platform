@@ -34,6 +34,11 @@ heuristic, not a statistical guarantee. `d+1` is only a bare GP fitting
 minimum; a roughly `10d` computer-experiment rule is shown only as context and
 is not imposed on wet-lab work.
 
+The corporate form uses a four-column core settings grid for name, run count,
+design seed, and run-order seed. Optimization and a full labeled run-order
+randomization card form the secondary grid. Disabling randomization disables
+the run-order seed and states that standard and run order are identical.
+
 ## Stored Result And Validation
 
 The design stores actual and normalized coordinates, standard order, run

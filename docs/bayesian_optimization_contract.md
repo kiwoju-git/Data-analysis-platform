@@ -1,16 +1,17 @@
 # Bayesian Optimization Contract
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ## Current Status
 
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
-`0.3.0`. New studies use study schema `2`; readers retain study schema `1` and
-method `0.1.0` through `0.2.2`. The application stores an immutable bounded
-study and observation
-history, fits a Matérn 5/2 Gaussian Process to explicit completed trials, and
-uses analytic Expected Improvement to create one pending confirmation-trial
-candidate. It never runs the user's objective.
+`0.4.0`. New studies use study schema `3`; readers retain study schemas `1` and
+`2`, methods `0.1.0` through `0.3.0`, and legacy single recommendations without
+rewriting them. The application stores an immutable bounded study and
+observation history, fits a Matérn 5/2 Gaussian Process to explicit completed
+trials, and creates either one sequential candidate or a synchronous batch of
+two through eight pending confirmation trials. It never runs the user's
+objective.
 
 No generic analysis-run execution API is provided. `POST /api/v1/analysis-runs`
 returns `analysis_method_uses_dedicated_api` with
@@ -37,6 +38,9 @@ Current routes are:
 - `POST/GET .../{study_id}/recommendations`;
 - `GET .../{study_id}/recommendations/latest`;
 - `GET .../{study_id}/recommendations/{recommendation_id}`.
+- `POST/GET .../{study_id}/recommendation-batches`;
+- `GET .../{study_id}/recommendation-batches/latest`;
+- `GET .../{study_id}/recommendation-batches/{batch_id}`.
 
 The frontend route uses the DOE module's dynamically loaded thin
 `BayesianOptimizationPanel` compatibility export over
@@ -57,12 +61,13 @@ fetch. An exact Study outside the current page remains selectable through
 query values:
 
 ```text
-/analysis/doe/doe.bayesian_optimization?study_id={uuid}&recommendation_id={uuid}
+/analysis/doe/doe.bayesian_optimization?study_id={uuid}&batch_id={uuid}
 ```
 
-Reload uses the existing exact Study/recommendation GET routes and rejects a
-Study/recommendation relationship mismatch. Selecting a different Study clears
-the prior recommendation ID. Successor preparation preserves the predecessor
+Legacy `recommendation_id` direct links remain readable. `batch_id` and
+`recommendation_id` together are rejected rather than assigned an ambiguous
+precedence. Reload uses exact relationship-checked routes. Selecting a
+different Study clears both IDs. Successor preparation preserves the predecessor
 seed only visibly: the UI warns that reuse may regenerate the same initial
 conditions and offers an explicit new-seed action. It never silently changes a
 seed or copies observations, history, or recommendations.
@@ -76,7 +81,8 @@ and reset their loading flags when selection changes.
 ## Lifecycle And Inputs
 
 1. Create one immutable study with one to six continuous factors, finite actual
-   low/high bounds, one numeric minimize/maximize objective, and up to 16 known
+   low/high bounds, one numeric maximize, minimize, or match-target objective,
+   and up to 16 known
    actual-unit linear inequalities.
 2. Select an explicit initial design policy. An unconstrained study defaults
    to `latin_hypercube_random_cd_v1`; a constrained study uses
@@ -89,9 +95,9 @@ and reset their loading flags when selection changes.
 4. Complete or explicitly abandon every required initial trial. GP/EI remains
    unavailable while a required initial trial is pending or while fewer than
    `max(2, factor_count + 1)` completed observations exist.
-5. Fit the GP and create one Expected Improvement recommendation only after the
-   above conditions, budget, active-study, current-history, and no-pending-
-   recommendation checks pass.
+5. Fit the GP and create one sequential recommendation or one synchronous
+   batch only after the above conditions, exact remaining budget, active-study,
+   current-history, and no-pending-recommendation checks pass.
 
 The UI presents this as initial conditions, real experiment, response input,
 GP availability, one next-condition recommendation, another real experiment,
@@ -109,11 +115,11 @@ future atomic import contract is documented in
    or history revision is overwritten.
 8. After all initial trials are closed and at least `max(2, factor_count + 1)`
    observations are completed, fit the versioned GP and optimize EI.
-9. Persist one recommendation and its pending `origin=recommendation` trial.
-   Only one pending recommendation is allowed.
-10. The user performs the experiment and records the actual response, or
-   abandons the trial. Completion appends a new history revision before another
-   recommendation is permitted.
+9. Persist exactly `batch_size` pending `origin=recommendation` trials in one
+   transaction. A partial batch is never committed.
+10. The user records or abandons each real experiment. Every completion appends
+   a history revision, but another batch remains blocked until every item in
+   the current batch is completed or abandoned.
 
 An initial-design trial cannot be abandoned when the remaining completable
 initial trials would be fewer than `max(2, factor_count + 1)`. That transition
@@ -173,7 +179,7 @@ incumbent completed observation `best`, and exploration `xi >= 0`:
 ```text
 I = mu - best - xi
 EI = I * Phi(I / sigma) + sigma * phi(I / sigma), when sigma > 0
-EI = 0, when sigma <= 0
+EI = max(I, 0), when sigma <= 0
 ```
 
 The incumbent is the best completed trial, never a predicted value. A seeded
@@ -191,6 +197,21 @@ evaluations, model artifact, requested/consumed budgets, termination reason,
 warnings, and limitations. Every result retains
 `bayesian_optimization_confirmation_required` and
 `bayesian_optimization_no_global_optimum_guarantee`.
+
+For `match_target`, classic directional EI is not reused. The implementation
+uses analytic Expected Target Improvement over
+`max(d_best - xi - |Y - target|, 0)` for a normal GP posterior. It stores the
+target, current closest observed distance, predicted target distance, and ETI
+separately from directional EI. The optional target tolerance is explanatory
+and never auto-closes a Study.
+
+Exploration profiles resolve to standardized, dimensionless `xi` values:
+exploitation `0.0`, balanced `0.01`, exploration `0.1`, or an explicit custom
+value from `0` through `10`. A larger value generally raises exploration
+pressure but does not guarantee a farther candidate for every dataset.
+
+The synchronous batch calculation and lifecycle are specified in
+`docs/bayesian_batch_recommendation_contract.md`. It is not exact joint qEI.
 
 ## Budgets And Failures
 
