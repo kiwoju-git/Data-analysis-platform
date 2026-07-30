@@ -9,7 +9,10 @@ export interface BayesianFactorRequest {
 export interface BayesianObjectiveRequest {
   name: string;
   unit?: string | null;
-  direction: "minimize" | "maximize";
+  goal_type: "minimize" | "maximize" | "match_target";
+  target_value?: number | null;
+  target_tolerance?: number | null;
+  direction?: "minimize" | "maximize" | null;
   observation_policy: "manual_single_observation";
 }
 
@@ -47,6 +50,9 @@ export interface BayesianFactorResponse extends BayesianFactorRequest {
 
 export interface BayesianObjectiveResponse extends BayesianObjectiveRequest {
   unit: string | null;
+  target_value: number | null;
+  target_tolerance: number | null;
+  direction: "minimize" | "maximize" | null;
 }
 
 export type BayesianConstraintTermResponse = BayesianConstraintTermRequest;
@@ -96,7 +102,7 @@ export interface BayesianHistoryRevisionResponse {
   history_revision_id: string;
   study_version_id: string;
   revision_number: number;
-  schema_version: 1;
+  schema_version: 1 | 2;
   completed_trial_ids: string[];
   completed_trial_count: number;
   observation_history_sha256: string;
@@ -131,6 +137,7 @@ export interface BayesianStudyLifecycleEventResponse {
   final_completed_trial_count: number;
   final_abandoned_trial_count: number;
   latest_recommendation_id: string | null;
+  latest_recommendation_batch_id: string | null;
   definition_sha256: string;
   event_sha256: string;
   closed_at: string;
@@ -158,7 +165,7 @@ export interface BayesianStudyResponse {
   study_id: string;
   study_version_id: string;
   version_number: number;
-  study_schema_version: 1 | 2;
+  study_schema_version: 1 | 2 | 3;
   method_id: "doe.bayesian_optimization";
   method_version: string;
   name: string;
@@ -203,6 +210,8 @@ export interface BayesianStudyDeletionCounts {
   history_revision_count: number;
   history_head_count: number;
   recommendation_count: number;
+  recommendation_batch_count: number;
+  recommendation_batch_item_count: number;
   lifecycle_event_count: number;
   metadata_record_count: number;
   file_count: 0;
@@ -434,4 +443,178 @@ export interface BayesianLatestRecommendationResponse {
   study_id: string;
   study_version_id: string;
   item: BayesianRecommendationResponse | null;
+}
+
+export type BayesianExecutionMode = "sequential_single" | "parallel_batch";
+export type BayesianExplorationProfile =
+  | "exploitation"
+  | "balanced"
+  | "exploration"
+  | "custom";
+export type BayesianAcquisitionKind =
+  | "expected_improvement"
+  | "expected_target_improvement";
+
+export interface BayesianBatchAcquisitionRequest {
+  kind: BayesianAcquisitionKind;
+  exploration_profile: BayesianExplorationProfile;
+  xi_standardized: number;
+}
+
+export interface BayesianBatchSearchRequest {
+  random_seed: number;
+  candidate_count_per_step: number;
+  local_start_count_per_step: number;
+  max_iterations_per_step: number;
+  max_evaluations_total: number;
+  model_max_iterations: number;
+  model_max_evaluations: number;
+  hyperparameter_restart_count: number;
+  time_budget_ms: number;
+  jitter: number;
+  duplicate_tolerance: number;
+  total_trial_budget: number;
+  batch_policy: "greedy_posterior_mean_fantasy_ei_v1";
+}
+
+export interface BayesianRecommendationBatchCreateRequest {
+  expected_history_revision_id: string;
+  execution_mode: BayesianExecutionMode;
+  batch_size: number;
+  acquisition: BayesianBatchAcquisitionRequest;
+  search: BayesianBatchSearchRequest;
+}
+
+export interface BayesianAcquisitionBreakdownResponse {
+  xi_standardized: number;
+  standardized_margin: number;
+  z_value: number | null;
+  normal_cdf: number | null;
+  normal_density: number | null;
+  mean_improvement_term: number;
+  uncertainty_term: number;
+}
+
+export interface BayesianRecommendationBatchItemResponse {
+  item_id: string;
+  batch_id: string;
+  rank: number;
+  trial: BayesianTrialResponse;
+  current_trial: BayesianRecommendationCurrentTrialResponse;
+  actual_coordinates: Record<string, number>;
+  normalized_coordinates: Record<string, number>;
+  predicted_objective_mean: number;
+  posterior_standard_deviation: number;
+  incumbent_objective: number;
+  acquisition_kind: BayesianAcquisitionKind;
+  acquisition_value: number;
+  predicted_improvement_margin: number;
+  probability_of_improvement: number | null;
+  target_value: number | null;
+  predicted_target_distance: number | null;
+  incumbent_target_distance: number | null;
+  nearest_completed_distance: number | null;
+  nearest_existing_trial_distance: number | null;
+  nearest_earlier_batch_item_distance: number | null;
+  constraint_evaluations: BayesianConstraintEvaluationResponse[];
+  fantasy_step: number;
+  conditioned_on_item_ids: string[];
+  reason_code:
+    | "predicted_improvement_driven"
+    | "uncertainty_driven"
+    | "balanced_improvement_uncertainty"
+    | "target_distance_reduction"
+    | "batch_diversity_adjusted";
+  acquisition_breakdown: BayesianAcquisitionBreakdownResponse;
+}
+
+export interface BayesianBatchSharedModelResponse {
+  schema_version: 2;
+  kernel_policy: "constant_times_matern_5_2_ard_v1";
+  fitted_kernel: string;
+  constant_value: number;
+  length_scales: number[];
+  log_marginal_likelihood: number;
+  objective_goal_type: "minimize" | "maximize" | "match_target";
+  objective_normalization_mean: number;
+  objective_normalization_scale: number;
+  target_value_standardized: number | null;
+  jitter: number;
+  completed_observation_count: number;
+  hyperparameter_restart_count: number;
+  model_evaluations: number;
+  fit_elapsed_ms: number;
+  package_versions: Record<string, string>;
+}
+
+export interface BayesianRecommendationBatchResponse {
+  batch_id: string;
+  study_id: string;
+  study_version_id: string;
+  source_history_revision_id: string;
+  source_observation_history_sha256: string;
+  definition_sha256: string;
+  method_id: "doe.bayesian_optimization";
+  method_version: string;
+  config_schema_version: 1;
+  result_schema_version: 1;
+  model_schema_version: 2;
+  item_schema_version: 1;
+  batch_policy: "greedy_posterior_mean_fantasy_ei_v1";
+  execution_mode: BayesianExecutionMode;
+  batch_size: number;
+  acquisition: BayesianBatchAcquisitionRequest;
+  shared_model: BayesianBatchSharedModelResponse;
+  search_budget: {
+    candidate_count_per_step: number;
+    local_start_count_per_step: number;
+    max_evaluations_total: number;
+    evaluations_consumed: number;
+    model_max_iterations: number;
+    model_max_evaluations: number;
+    model_evaluations_consumed: number;
+    time_budget_ms: number;
+    elapsed_ms: number;
+    termination_reason: "search_completed";
+  };
+  items: BayesianRecommendationBatchItemResponse[];
+  warnings: string[];
+  limitations: string[];
+  config_sha256: string;
+  result_sha256: string;
+  provenance: {
+    study_id: string;
+    study_version_id: string;
+    batch_id: string;
+    source_history_revision_id: string;
+    source_observation_history_sha256: string;
+    definition_sha256: string;
+    method_id: "doe.bayesian_optimization";
+    method_version: string;
+    config_schema_version: 1;
+    result_schema_version: 1;
+    model_schema_version: 2;
+    item_schema_version: 1;
+    app_version: string;
+    python_version: string;
+    platform: string;
+    build_commit: string | null;
+    package_versions: Record<string, string>;
+    created_at: string;
+  };
+  created_at: string;
+  is_latest: boolean;
+  batch_state:
+    | "pending"
+    | "partially_completed"
+    | "completed"
+    | "abandoned"
+    | "closed_mixed";
+  requested_total_trial_budget: number;
+}
+
+export interface BayesianLatestRecommendationBatchResponse {
+  study_id: string;
+  study_version_id: string;
+  item: BayesianRecommendationBatchResponse | null;
 }

@@ -5,8 +5,12 @@ from fastapi import APIRouter, Query, Request, status
 from app.api.v1.schemas.bayesian import (
     BayesianHistoryListResponse,
     BayesianHistoryRevisionResponse,
+    BayesianLatestRecommendationBatchResponse,
     BayesianLatestRecommendationResponse,
     BayesianObservationCreateRequest,
+    BayesianRecommendationBatchCreateRequest,
+    BayesianRecommendationBatchListResponse,
+    BayesianRecommendationBatchResponse,
     BayesianRecommendationCreateRequest,
     BayesianRecommendationListResponse,
     BayesianRecommendationResponse,
@@ -21,6 +25,12 @@ from app.api.v1.schemas.bayesian import (
     BayesianTrialAbandonRequest,
     BayesianTrialListResponse,
     BayesianTrialTransitionResponse,
+)
+from app.services.bayesian_recommendation_batches import (
+    create_bayesian_recommendation_batch,
+    get_bayesian_recommendation_batch,
+    get_latest_bayesian_recommendation_batch,
+    list_bayesian_recommendation_batches,
 )
 from app.services.bayesian_recommendations import (
     create_bayesian_recommendation,
@@ -223,4 +233,69 @@ def get_bayesian_recommendation_route(
         request.app.state.settings,
         study_id,
         recommendation_id,
+    )
+
+
+@router.post(
+    "/{study_id}/recommendation-batches",
+    response_model=BayesianRecommendationBatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_bayesian_recommendation_batch_route(
+    request: Request,
+    study_id: UUID,
+    body: BayesianRecommendationBatchCreateRequest,
+) -> BayesianRecommendationBatchResponse:
+    return create_bayesian_recommendation_batch(
+        request.app.state.settings,
+        study_id,
+        body,
+    )
+
+
+@router.get(
+    "/{study_id}/recommendation-batches",
+    response_model=BayesianRecommendationBatchListResponse,
+)
+def list_bayesian_recommendation_batches_route(
+    request: Request,
+    study_id: UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> BayesianRecommendationBatchListResponse:
+    return list_bayesian_recommendation_batches(
+        request.app.state.settings,
+        study_id,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/{study_id}/recommendation-batches/latest",
+    response_model=BayesianLatestRecommendationBatchResponse,
+)
+def get_latest_bayesian_recommendation_batch_route(
+    request: Request,
+    study_id: UUID,
+) -> BayesianLatestRecommendationBatchResponse:
+    return get_latest_bayesian_recommendation_batch(
+        request.app.state.settings,
+        study_id,
+    )
+
+
+@router.get(
+    "/{study_id}/recommendation-batches/{batch_id}",
+    response_model=BayesianRecommendationBatchResponse,
+)
+def get_bayesian_recommendation_batch_route(
+    request: Request,
+    study_id: UUID,
+    batch_id: UUID,
+) -> BayesianRecommendationBatchResponse:
+    return get_bayesian_recommendation_batch(
+        request.app.state.settings,
+        study_id,
+        batch_id,
     )

@@ -14,6 +14,8 @@ import type {
   AttributeControlLimitSetDeletionPreflightResponse,
   AttributeControlLimitSetResponse,
   BayesianRecommendationResponse,
+  BayesianRecommendationBatchCreateRequest,
+  BayesianRecommendationBatchResponse,
   BayesianStudyDeletionPreflightResponse,
   BayesianStudyListResponse,
   BayesianStudyResponse,
@@ -61,6 +63,7 @@ const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
   closeBayesianStudy: vi.fn(),
   createBayesianRecommendation: vi.fn(),
+  createBayesianRecommendationBatch: vi.fn(),
   createBayesianStudy: vi.fn(),
   createAnalysisResultCsvExport: vi.fn(),
   createAnalysisResultHtmlReport: vi.fn(),
@@ -83,10 +86,12 @@ const apiMocks = vi.hoisted(() => ({
   fetchAttributeControlLimitSetDeletionPreflight: vi.fn(),
   fetchAttributeControlMonitoringPreflight: vi.fn(),
   fetchBayesianRecommendation: vi.fn(),
+  fetchBayesianRecommendationBatch: vi.fn(),
   fetchBayesianStudy: vi.fn(),
   fetchBayesianStudyDeletionPreflight: vi.fn(),
   fetchBayesianStudies: vi.fn(),
   fetchLatestBayesianRecommendation: vi.fn(),
+  fetchLatestBayesianRecommendationBatch: vi.fn(),
   fetchDatasetProfile: vi.fn(),
   fetchDatasetVersion: vi.fn(),
   fetchDatasetVersionDeletionPreflight: vi.fn(),
@@ -437,6 +442,9 @@ function bayesianStudy(
     objective: {
       name: "Y",
       unit: null,
+      goal_type: "maximize",
+      target_value: null,
+      target_tolerance: null,
       direction: "maximize",
       observation_policy: "manual_single_observation",
     },
@@ -498,6 +506,24 @@ function bayesianRecommendation(
   } as BayesianRecommendationResponse;
 }
 
+function bayesianRecommendationBatch(
+  studyId: string,
+  batchId: string,
+): BayesianRecommendationBatchResponse {
+  return {
+    batch_id: batchId,
+    study_id: studyId,
+    execution_mode: "parallel_batch",
+    batch_size: 4,
+    acquisition: {
+      kind: "expected_improvement",
+      exploration_profile: "exploration",
+      xi_standardized: 0.1,
+    },
+    requested_total_trial_budget: 50,
+  } as BayesianRecommendationBatchResponse;
+}
+
 function bayesianDeletionPreflight(
   studyId: string,
   blockers: BayesianStudyDeletionPreflightResponse["blockers"] = [],
@@ -517,6 +543,8 @@ function bayesianDeletionPreflight(
       history_revision_count: 1,
       history_head_count: 1,
       recommendation_count: 0,
+      recommendation_batch_count: 0,
+      recommendation_batch_item_count: 0,
       lifecycle_event_count: 1,
       metadata_record_count: 7,
       file_count: 0,
@@ -550,8 +578,8 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 5,
-    metadata_schema_version: 17,
+    api_contract_version: 6,
+    metadata_schema_version: 18,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
@@ -569,6 +597,8 @@ function runtimeInfo(
       dataset_cell_correction: true,
       lhs_design: true,
       bayesian_lhs_initial_design: true,
+      bayesian_batch_recommendation: true,
+      bayesian_objective_goal_modes: true,
     },
     ...overrides,
   };
@@ -579,6 +609,11 @@ beforeEach(() => {
     mock.mockReset();
   }
   apiMocks.fetchRegressionModelManifest.mockResolvedValue({});
+  apiMocks.fetchLatestBayesianRecommendationBatch.mockResolvedValue({
+    study_id: "default-study",
+    study_version_id: "default-study-version",
+    item: null,
+  });
   apiMocks.fetchDatasetVersions.mockResolvedValue({
     total: 0,
     offset: 0,
@@ -1962,13 +1997,13 @@ describe("async workbench hooks", () => {
   });
 
   it("ignores recommendation creation after a Study change and clears loading", async () => {
-    const created = deferred<BayesianRecommendationResponse>();
+    const created = deferred<BayesianRecommendationBatchResponse>();
     apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({
       study_id: "study-a",
       study_version_id: "study-a-version",
       item: null,
     });
-    apiMocks.createBayesianRecommendation.mockReturnValueOnce(created.promise);
+    apiMocks.createBayesianRecommendationBatch.mockReturnValueOnce(created.promise);
     const selected = vi.fn();
     const runner = new HookRunner<
       Parameters<typeof useBayesianRecommendationState>[0],
@@ -1994,11 +2029,74 @@ describe("async workbench hooks", () => {
       onRecommendationSelected: selected,
     });
     expect(runner.output.isRecommending).toBe(false);
-    created.resolve(bayesianRecommendation("study-a", "recommendation-a"));
+    created.resolve(bayesianRecommendationBatch("study-a", "batch-a"));
     await runner.flush();
 
     expect(runner.output.recommendation).toBeNull();
     expect(selected).not.toHaveBeenCalledWith("recommendation-a");
+    runner.unmount();
+  });
+
+  it("creates one atomic batch request with a distinct batch size and candidate pool", async () => {
+    const selectedBatch = vi.fn();
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({
+      study_id: "study-a",
+      study_version_id: "study-a-version",
+      item: null,
+    });
+    apiMocks.createBayesianRecommendationBatch.mockResolvedValue(
+      bayesianRecommendationBatch("study-a", "batch-a"),
+    );
+    const runner = new HookRunner<
+      Parameters<typeof useBayesianRecommendationState>[0],
+      ReturnType<typeof useBayesianRecommendationState>
+    >(useBayesianRecommendationState, {
+      selectedStudyId: "study-a",
+      requestedBatchId: null,
+      requestedRecommendationId: null,
+      onBatchSelected: selectedBatch,
+      onRecommendationSelected: vi.fn(),
+    });
+    await runner.flush();
+
+    await runner.act(() => {
+      runner.output.onExecutionModeChange("parallel_batch");
+      runner.output.setBatchSize("4");
+      runner.output.setExplorationProfile("exploration");
+    });
+    const recommendationPromise = runner.output.onRecommend({
+      ...bayesianStudy("study-a"),
+      trial_count: 2,
+      recommendation_hard_trial_limit: 200,
+    });
+    await runner.flush();
+    await recommendationPromise;
+    await runner.flush();
+
+    expect(apiMocks.createBayesianRecommendationBatch).toHaveBeenCalledTimes(1);
+    const request = apiMocks.createBayesianRecommendationBatch.mock.calls[0]?.[1] as
+      | BayesianRecommendationBatchCreateRequest
+      | undefined;
+    if (request === undefined) {
+      throw new Error("expected_batch_request");
+    }
+    expect(request).toMatchObject({
+      execution_mode: "parallel_batch",
+      batch_size: 4,
+      acquisition: {
+        kind: "expected_improvement",
+        exploration_profile: "exploration",
+        xi_standardized: 0.1,
+      },
+      search: {
+        candidate_count_per_step: 256,
+        total_trial_budget: 50,
+      },
+    });
+    expect(request.batch_size).not.toBe(
+      request.search.candidate_count_per_step,
+    );
+    expect(selectedBatch).toHaveBeenCalledWith("batch-a");
     runner.unmount();
   });
 

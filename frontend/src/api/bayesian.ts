@@ -4,10 +4,13 @@ import type {
   BayesianHistoryListResponse,
   BayesianHistoryRevisionResponse,
   BayesianLatestRecommendationResponse,
+  BayesianLatestRecommendationBatchResponse,
   BayesianObservationCreateRequest,
   BayesianRecommendationCreateRequest,
   BayesianRecommendationListResponse,
   BayesianRecommendationResponse,
+  BayesianRecommendationBatchCreateRequest,
+  BayesianRecommendationBatchResponse,
   BayesianStudyCreateRequest,
   BayesianStudyCloseRequest,
   BayesianStudyCloseResponse,
@@ -20,6 +23,54 @@ import type {
   BayesianTrialAbandonRequest,
   BayesianTrialTransitionResponse,
 } from "./types";
+
+export async function createBayesianRecommendationBatch(
+  studyId: string,
+  request: BayesianRecommendationBatchCreateRequest,
+): Promise<BayesianRecommendationBatchResponse> {
+  const response = await fetchApi(apiRoutes.bayesianRecommendationBatches(studyId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(
+      await apiErrorCode(response, "bayesian_recommendation_batch_failed"),
+    );
+  }
+  return (await response.json()) as BayesianRecommendationBatchResponse;
+}
+
+export async function fetchBayesianRecommendationBatch(
+  studyId: string,
+  batchId: string,
+): Promise<BayesianRecommendationBatchResponse> {
+  const response = await fetchApi(
+    apiRoutes.bayesianRecommendationBatch(studyId, batchId),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw new Error(
+      await apiErrorCode(response, "bayesian_recommendation_batch_fetch_failed"),
+    );
+  }
+  return (await response.json()) as BayesianRecommendationBatchResponse;
+}
+
+export async function fetchLatestBayesianRecommendationBatch(
+  studyId: string,
+): Promise<BayesianLatestRecommendationBatchResponse> {
+  const response = await fetchApi(
+    apiRoutes.bayesianLatestRecommendationBatch(studyId),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw new Error(
+      await apiErrorCode(response, "bayesian_recommendation_batch_latest_failed"),
+    );
+  }
+  return (await response.json()) as BayesianLatestRecommendationBatchResponse;
+}
 
 export async function createBayesianStudy(
   request: BayesianStudyCreateRequest,

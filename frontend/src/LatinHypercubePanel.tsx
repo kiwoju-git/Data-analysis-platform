@@ -73,7 +73,7 @@ export function LatinHypercubePanel() {
           있으므로 같은 설계표를 중복 생성할 필요는 없습니다.
         </p>
       </div>
-      <div className="option-grid">
+      <div className="lhs-core-settings-grid">
         <label>
           <span>설계 이름</span>
           <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
@@ -103,9 +103,12 @@ export function LatinHypercubePanel() {
           <input
             inputMode="numeric"
             value={runOrderSeed}
+            disabled={!randomizeRunOrder}
             onChange={(event) => setRunOrderSeed(event.currentTarget.value)}
           />
         </label>
+      </div>
+      <div className="lhs-secondary-settings-grid">
         <label>
           <span>품질 최적화</span>
           <select
@@ -121,13 +124,26 @@ export function LatinHypercubePanel() {
             random-cd는 여러 좌표 순열 중 centered discrepancy가 작은 설계를 찾습니다.
           </span>
         </label>
-        <label className="inline-check-control">
-          <input
-            checked={randomizeRunOrder}
-            type="checkbox"
-            onChange={(event) => setRandomizeRunOrder(event.currentTarget.checked)}
-          />
-          실행 순서 별도 무작위화
+        <label
+          className={`lhs-randomization-card${
+            randomizeRunOrder ? " is-selected" : ""
+          }`}
+        >
+          <span>
+            <input
+              checked={randomizeRunOrder}
+              type="checkbox"
+              onChange={(event) =>
+                setRandomizeRunOrder(event.currentTarget.checked)
+              }
+            />
+            <strong>실행 순서 무작위화</strong>
+          </span>
+          <small>
+            {randomizeRunOrder
+              ? "공간충전 좌표는 유지하고 실제 실행 순서만 seed로 섞습니다."
+              : "Standard order와 Run order가 동일합니다."}
+          </small>
         </label>
       </div>
       <div className="schema-actions">
@@ -193,14 +209,14 @@ export function LatinHypercubePanel() {
             </label>
             <button
               aria-label={`${factor.name || `요인 ${index + 1}`} 제거`}
-              className="secondary-button"
+              className="secondary-button compact-button"
               disabled={factors.length <= 1}
               type="button"
               onClick={() =>
                 setFactors((current) => current.filter((item) => item.key !== factor.key))
               }
             >
-              제거
+              삭제
             </button>
           </div>
         ))}

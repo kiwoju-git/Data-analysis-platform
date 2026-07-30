@@ -30,8 +30,29 @@ class BayesianObjectiveRequest(BaseModel):
 
     name: str = Field(min_length=1, max_length=80)
     unit: str | None = Field(default=None, max_length=40)
-    direction: Literal["minimize", "maximize"]
+    goal_type: Literal["minimize", "maximize", "match_target"] | None = None
+    target_value: FiniteFloat | None = None
+    target_tolerance: FiniteFloat | None = Field(default=None, gt=0.0)
+    direction: Literal["minimize", "maximize"] | None = None
     observation_policy: Literal["manual_single_observation"] = "manual_single_observation"
+
+    @model_validator(mode="after")
+    def validate_goal(self) -> BayesianObjectiveRequest:
+        goal_type = self.goal_type or self.direction
+        if goal_type is None:
+            raise ValueError("goal_type is required")
+        if self.goal_type is not None and self.direction is not None:
+            if self.goal_type != self.direction:
+                raise ValueError("goal_type and direction do not match")
+        if self.direction is None and goal_type in {"minimize", "maximize"}:
+            self.direction = "minimize" if goal_type == "minimize" else "maximize"
+        self.goal_type = goal_type
+        if goal_type == "match_target":
+            if self.target_value is None:
+                raise ValueError("match_target requires target_value")
+        elif self.target_value is not None or self.target_tolerance is not None:
+            raise ValueError("target fields require match_target")
+        return self
 
 
 class BayesianConstraintTermRequest(BaseModel):
@@ -87,8 +108,35 @@ class BayesianObjectiveResponse(BaseModel):
 
     name: str
     unit: str | None
-    direction: Literal["minimize", "maximize"]
+    goal_type: Literal["minimize", "maximize", "match_target"]
+    target_value: float | None = None
+    target_tolerance: float | None = Field(default=None, gt=0.0)
+    direction: Literal["minimize", "maximize"] | None = None
     observation_policy: Literal["manual_single_observation"]
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_direction(cls, value: object) -> object:
+        if isinstance(value, dict) and value.get("goal_type") is None:
+            direction = value.get("direction")
+            if direction in {"minimize", "maximize"}:
+                return {**value, "goal_type": direction}
+        return value
+
+    @model_validator(mode="after")
+    def validate_goal(self) -> BayesianObjectiveResponse:
+        goal_type = self.goal_type
+        if self.goal_type is not None and self.direction is not None:
+            if self.goal_type != self.direction:
+                raise ValueError("goal_type and direction do not match")
+        if self.direction is None and goal_type in {"minimize", "maximize"}:
+            self.direction = "minimize" if goal_type == "minimize" else "maximize"
+        if goal_type == "match_target":
+            if self.target_value is None:
+                raise ValueError("match_target requires target_value")
+        elif self.target_value is not None or self.target_tolerance is not None:
+            raise ValueError("target fields require match_target")
+        return self
 
 
 class BayesianConstraintTermResponse(BaseModel):
@@ -175,7 +223,7 @@ BayesianStudyCloseReason = Literal[
 class BayesianStudyLifecycleEventResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     lifecycle_event_id: UUID
     study_id: UUID
     study_version_id: UUID
@@ -191,6 +239,7 @@ class BayesianStudyLifecycleEventResponse(BaseModel):
     final_completed_trial_count: int = Field(ge=0, le=MAX_COMPLETED_OBSERVATIONS)
     final_abandoned_trial_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
     latest_recommendation_id: UUID | None
+    latest_recommendation_batch_id: UUID | None = None
     definition_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     event_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     closed_at: str
@@ -249,7 +298,7 @@ class BayesianStudyResponse(BaseModel):
     study_id: UUID
     study_version_id: UUID
     version_number: int = Field(ge=1)
-    study_schema_version: Literal[1, 2]
+    study_schema_version: Literal[1, 2, 3]
     method_id: Literal["doe.bayesian_optimization"]
     method_version: str
     name: str
@@ -300,6 +349,8 @@ class BayesianStudyDeletionCounts(BaseModel):
     history_revision_count: int = Field(ge=1, le=MAX_HISTORY_REVISIONS)
     history_head_count: int = Field(ge=1)
     recommendation_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
+    recommendation_batch_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
+    recommendation_batch_item_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
     lifecycle_event_count: int = Field(ge=0, le=1)
     metadata_record_count: int = Field(ge=4)
     file_count: Literal[0]
@@ -590,3 +641,246 @@ class BayesianLatestRecommendationResponse(BaseModel):
     study_id: UUID
     study_version_id: UUID
     item: BayesianRecommendationResponse | None
+
+
+BayesianExecutionMode = Literal["sequential_single", "parallel_batch"]
+BayesianExplorationProfile = Literal[
+    "exploitation",
+    "balanced",
+    "exploration",
+    "custom",
+]
+BayesianAcquisitionKind = Literal[
+    "expected_improvement",
+    "expected_target_improvement",
+]
+
+
+class BayesianBatchAcquisitionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: BayesianAcquisitionKind
+    exploration_profile: BayesianExplorationProfile = "balanced"
+    xi_standardized: FiniteFloat = Field(default=0.01, ge=0.0, le=10.0)
+
+    @model_validator(mode="after")
+    def validate_profile(self) -> BayesianBatchAcquisitionRequest:
+        preset = {
+            "exploitation": 0.0,
+            "balanced": 0.01,
+            "exploration": 0.1,
+        }
+        expected = preset.get(self.exploration_profile)
+        if expected is not None and abs(float(self.xi_standardized) - expected) > 1e-15:
+            raise ValueError("preset exploration profile requires its fixed xi")
+        return self
+
+
+class BayesianBatchSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    random_seed: int = Field(default=20260715, ge=0, le=2_147_483_647)
+    candidate_count_per_step: int = Field(default=256, ge=32, le=4096)
+    local_start_count_per_step: int = Field(default=4, ge=0, le=16)
+    max_iterations_per_step: int = Field(default=100, ge=1, le=500)
+    max_evaluations_total: int = Field(default=4096, ge=32, le=160_000)
+    model_max_iterations: int = Field(default=50, ge=1, le=200)
+    model_max_evaluations: int = Field(default=200, ge=2, le=2000)
+    hyperparameter_restart_count: int = Field(default=0, ge=0, le=3)
+    time_budget_ms: int = Field(default=15_000, ge=1000, le=60_000)
+    jitter: FiniteFloat = Field(default=1e-8, ge=1e-12, le=1e-3)
+    duplicate_tolerance: FiniteFloat = Field(default=1e-6, ge=1e-12, le=0.1)
+    total_trial_budget: int = Field(
+        default=DEFAULT_TOTAL_TRIAL_BUDGET,
+        ge=2,
+        le=MAX_BAYESIAN_TRIALS,
+    )
+    batch_policy: Literal["greedy_posterior_mean_fantasy_ei_v1"] = (
+        "greedy_posterior_mean_fantasy_ei_v1"
+    )
+
+
+class BayesianRecommendationBatchCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_history_revision_id: UUID
+    execution_mode: BayesianExecutionMode = "sequential_single"
+    batch_size: int = Field(default=1, ge=1, le=8)
+    acquisition: BayesianBatchAcquisitionRequest
+    search: BayesianBatchSearchRequest = Field(default_factory=BayesianBatchSearchRequest)
+
+    @model_validator(mode="after")
+    def validate_batch(self) -> BayesianRecommendationBatchCreateRequest:
+        if self.execution_mode == "sequential_single" and self.batch_size != 1:
+            raise ValueError("sequential_single requires batch_size 1")
+        if self.execution_mode == "parallel_batch" and self.batch_size < 2:
+            raise ValueError("parallel_batch requires batch_size 2 through 8")
+        required = self.search.candidate_count_per_step * self.batch_size
+        if self.search.max_evaluations_total < required:
+            raise ValueError("max_evaluations_total must cover every batch candidate pool")
+        return self
+
+
+class BayesianAcquisitionBreakdownResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    xi_standardized: float = Field(ge=0.0)
+    standardized_margin: float
+    z_value: float | None
+    normal_cdf: float | None = Field(default=None, ge=0.0, le=1.0)
+    normal_density: float | None = Field(default=None, ge=0.0)
+    mean_improvement_term: float
+    uncertainty_term: float = Field(ge=0.0)
+
+
+class BayesianRecommendationBatchItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: UUID
+    batch_id: UUID
+    rank: int = Field(ge=1, le=8)
+    trial: BayesianTrialResponse
+    current_trial: BayesianRecommendationCurrentTrialResponse
+    actual_coordinates: dict[str, float]
+    normalized_coordinates: dict[str, float]
+    predicted_objective_mean: float
+    posterior_standard_deviation: float = Field(ge=0.0)
+    incumbent_objective: float
+    acquisition_kind: BayesianAcquisitionKind
+    acquisition_value: float = Field(ge=0.0)
+    predicted_improvement_margin: float
+    probability_of_improvement: float | None = Field(default=None, ge=0.0, le=1.0)
+    target_value: float | None = None
+    predicted_target_distance: float | None = Field(default=None, ge=0.0)
+    incumbent_target_distance: float | None = Field(default=None, ge=0.0)
+    nearest_completed_distance: float | None = Field(default=None, ge=0.0)
+    nearest_existing_trial_distance: float | None = Field(default=None, ge=0.0)
+    nearest_earlier_batch_item_distance: float | None = Field(default=None, ge=0.0)
+    constraint_evaluations: list[BayesianConstraintEvaluationResponse]
+    fantasy_step: int = Field(ge=0, le=7)
+    conditioned_on_item_ids: list[UUID]
+    reason_code: Literal[
+        "predicted_improvement_driven",
+        "uncertainty_driven",
+        "balanced_improvement_uncertainty",
+        "target_distance_reduction",
+        "batch_diversity_adjusted",
+    ]
+    acquisition_breakdown: BayesianAcquisitionBreakdownResponse
+
+
+class BayesianBatchSharedModelResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[2]
+    kernel_policy: Literal["constant_times_matern_5_2_ard_v1"]
+    fitted_kernel: str
+    constant_value: float
+    length_scales: list[float]
+    log_marginal_likelihood: float
+    objective_goal_type: Literal["minimize", "maximize", "match_target"]
+    objective_normalization_mean: float
+    objective_normalization_scale: float = Field(gt=0.0)
+    target_value_standardized: float | None = None
+    jitter: float = Field(gt=0.0)
+    completed_observation_count: int = Field(ge=2, le=MAX_COMPLETED_OBSERVATIONS)
+    hyperparameter_restart_count: int = Field(ge=0, le=3)
+    model_evaluations: int = Field(ge=0)
+    fit_elapsed_ms: float = Field(ge=0.0)
+    package_versions: dict[str, str]
+
+
+class BayesianBatchSearchBudgetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_count_per_step: int = Field(ge=32, le=4096)
+    local_start_count_per_step: int = Field(ge=0, le=16)
+    max_evaluations_total: int = Field(ge=32, le=160_000)
+    evaluations_consumed: int = Field(ge=0, le=160_000)
+    model_max_iterations: int = Field(ge=1, le=200)
+    model_max_evaluations: int = Field(ge=2, le=2000)
+    model_evaluations_consumed: int = Field(ge=0)
+    time_budget_ms: int = Field(ge=1000, le=60_000)
+    elapsed_ms: float = Field(ge=0.0)
+    termination_reason: Literal["search_completed"]
+
+
+class BayesianRecommendationBatchProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    study_id: UUID
+    study_version_id: UUID
+    batch_id: UUID
+    source_history_revision_id: UUID
+    source_observation_history_sha256: str
+    definition_sha256: str
+    method_id: Literal["doe.bayesian_optimization"]
+    method_version: str
+    config_schema_version: Literal[1]
+    result_schema_version: Literal[1]
+    model_schema_version: Literal[2]
+    item_schema_version: Literal[1]
+    app_version: str
+    python_version: str
+    platform: str
+    build_commit: str | None
+    package_versions: dict[str, str]
+    created_at: str
+
+
+class BayesianRecommendationBatchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    batch_id: UUID
+    study_id: UUID
+    study_version_id: UUID
+    source_history_revision_id: UUID
+    source_observation_history_sha256: str
+    definition_sha256: str
+    method_id: Literal["doe.bayesian_optimization"]
+    method_version: str
+    config_schema_version: Literal[1]
+    result_schema_version: Literal[1]
+    model_schema_version: Literal[2]
+    item_schema_version: Literal[1]
+    batch_policy: Literal["greedy_posterior_mean_fantasy_ei_v1"]
+    execution_mode: BayesianExecutionMode
+    batch_size: int = Field(ge=1, le=8)
+    acquisition: BayesianBatchAcquisitionRequest
+    shared_model: BayesianBatchSharedModelResponse
+    search_budget: BayesianBatchSearchBudgetResponse
+    items: list[BayesianRecommendationBatchItemResponse]
+    warnings: list[str]
+    limitations: list[str]
+    config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    provenance: BayesianRecommendationBatchProvenance
+    created_at: str
+    is_latest: bool = False
+    batch_state: Literal[
+        "pending",
+        "partially_completed",
+        "completed",
+        "abandoned",
+        "closed_mixed",
+    ] = "pending"
+    requested_total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+
+
+class BayesianRecommendationBatchListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    study_id: UUID
+    study_version_id: UUID
+    total: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    items: list[BayesianRecommendationBatchResponse]
+
+
+class BayesianLatestRecommendationBatchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    study_id: UUID
+    study_version_id: UUID
+    item: BayesianRecommendationBatchResponse | None

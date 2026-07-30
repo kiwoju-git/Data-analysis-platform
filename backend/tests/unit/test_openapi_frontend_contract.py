@@ -642,6 +642,39 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("study_id", "path")}),
     ),
     OperationContract(
+        route_name="bayesianRecommendationBatches",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/recommendation-batches",
+        success_status="201",
+        response_schema="BayesianRecommendationBatchResponse",
+        parameters=frozenset({("study_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="bayesianRecommendationBatches",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/recommendation-batches",
+        success_status="200",
+        response_schema="BayesianRecommendationBatchListResponse",
+        parameters=frozenset({("study_id", "path"), ("offset", "query"), ("limit", "query")}),
+    ),
+    OperationContract(
+        route_name="bayesianLatestRecommendationBatch",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/recommendation-batches/latest",
+        success_status="200",
+        response_schema="BayesianLatestRecommendationBatchResponse",
+        parameters=frozenset({("study_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianRecommendationBatch",
+        method="get",
+        path=("/api/v1/bayesian-studies/{study_id}/recommendation-batches/" "{batch_id}"),
+        success_status="200",
+        response_schema="BayesianRecommendationBatchResponse",
+        parameters=frozenset({("study_id", "path"), ("batch_id", "path")}),
+    ),
+    OperationContract(
         route_name="regressionModel",
         method="delete",
         path="/api/v1/regression-models/{model_id}",
@@ -1148,6 +1181,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "final_completed_trial_count",
                 "final_abandoned_trial_count",
                 "latest_recommendation_id",
+                "latest_recommendation_batch_id",
                 "definition_sha256",
                 "event_sha256",
                 "closed_at",
@@ -1182,7 +1216,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "build_commit",
             }
         ),
-        property_consts=(("schema_version", 1), ("lifecycle_revision", 1)),
+        property_consts=(("lifecycle_revision", 1),),
     ),
     SchemaComponentContract(
         name="BayesianStudyCloseRequest",
@@ -1513,6 +1547,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "dataset_cell_correction",
                 "lhs_design",
                 "bayesian_lhs_initial_design",
+                "bayesian_batch_recommendation",
+                "bayesian_objective_goal_modes",
             }
         ),
         required_fields=frozenset(
@@ -1532,6 +1568,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "dataset_cell_correction",
                 "lhs_design",
                 "bayesian_lhs_initial_design",
+                "bayesian_batch_recommendation",
+                "bayesian_objective_goal_modes",
             }
         ),
     ),

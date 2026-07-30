@@ -120,7 +120,9 @@ def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
     assert "dataset_version_user_metadata" in tables
     assert "regression_model_user_metadata" in tables
     assert "dataset_version_lineage" in tables
-    assert user_version == 17
+    assert "bayesian_recommendation_batches" in tables
+    assert "bayesian_recommendation_batch_items" in tables
+    assert user_version == 18
 
 
 def test_dataset_archive_visibility_round_trip_and_schema_15_upgrade(tmp_path) -> None:

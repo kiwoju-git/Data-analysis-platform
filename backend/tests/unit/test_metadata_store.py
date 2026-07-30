@@ -88,6 +88,7 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
         (17, "create_dataset_version_lineage"),
+        (18, "create_bayesian_recommendation_batches"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -160,6 +161,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
         (17, "create_dataset_version_lineage"),
+        (18, "create_bayesian_recommendation_batches"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -244,6 +246,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
         (17, "create_dataset_version_lineage"),
+        (18, "create_bayesian_recommendation_batches"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -360,6 +363,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
         (17, "create_dataset_version_lineage"),
+        (18, "create_bayesian_recommendation_batches"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -530,6 +534,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
         (17, "create_dataset_version_lineage"),
+        (18, "create_bayesian_recommendation_batches"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -587,6 +592,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
         (17, "create_dataset_version_lineage"),
+        (18, "create_bayesian_recommendation_batches"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -652,6 +658,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
         (17, "create_dataset_version_lineage"),
+        (18, "create_bayesian_recommendation_batches"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -713,6 +720,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (15, "create_asset_user_metadata"),
         (16, "add_dataset_version_archive_metadata"),
         (17, "create_dataset_version_lineage"),
+        (18, "create_bayesian_recommendation_batches"),
     ]
     assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION
@@ -898,10 +906,59 @@ def test_initialize_metadata_store_upgrades_v10_with_empty_bayesian_foundation(
         "bayesian_observation_history_revisions",
         "bayesian_observation_history_heads",
         "bayesian_recommendations",
+        "bayesian_recommendation_batches",
+        "bayesian_recommendation_batch_items",
         "bayesian_study_lifecycle_events",
     }
     assert study_count == 0
     assert user_version == SCHEMA_VERSION
+
+
+def test_initialize_metadata_store_upgrades_v17_with_batch_tables(
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspace schema 17"
+    db_path = metadata_db_path(workspace_root)
+    db_path.parent.mkdir(parents=True)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 17:
+                continue
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version = 17")
+
+    initialize_metadata_store(workspace_root)
+
+    with sqlite3.connect(db_path) as connection:
+        user_version = connection.execute("PRAGMA user_version").fetchone()[0]
+        batch_table = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'bayesian_recommendation_batches';
+            """
+        ).fetchone()
+        item_table = connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'bayesian_recommendation_batch_items';
+            """
+        ).fetchone()
+        lifecycle_columns = {
+            str(row[1])
+            for row in connection.execute(
+                "PRAGMA table_info(bayesian_study_lifecycle_events);"
+            ).fetchall()
+        }
+
+    assert user_version == 18
+    assert batch_table == ("bayesian_recommendation_batches",)
+    assert item_table == ("bayesian_recommendation_batch_items",)
+    assert "latest_recommendation_batch_id" in lifecycle_columns
 
 
 def test_initialize_metadata_store_upgrades_v11_and_preserves_bayesian_trials(
@@ -1103,7 +1160,7 @@ def test_initialize_metadata_store_upgrades_v16_with_empty_dataset_lineage(
 
     assert table == ("dataset_version_lineage",)
     assert count == 0
-    assert user_version == 17
+    assert user_version == 18
 
 
 def test_attribute_control_limit_set_metadata_round_trip_and_filters(tmp_path) -> None:

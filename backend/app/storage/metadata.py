@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 17
+SCHEMA_VERSION: Final = 18
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -1142,6 +1142,139 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
 
         CREATE INDEX idx_dataset_version_lineage_parent
         ON dataset_version_lineage(parent_version_id, created_at, child_version_id);
+        """,
+    ),
+    Migration(
+        version=18,
+        name="create_bayesian_recommendation_batches",
+        sql="""
+        CREATE TABLE IF NOT EXISTS bayesian_recommendation_batches (
+            batch_id TEXT PRIMARY KEY,
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE CASCADE,
+            source_history_revision_id TEXT NOT NULL
+                REFERENCES bayesian_observation_history_revisions(history_revision_id)
+                ON DELETE RESTRICT,
+            source_observation_history_sha256 TEXT NOT NULL CHECK (
+                length(source_observation_history_sha256) = 64
+            ),
+            method_id TEXT NOT NULL,
+            method_version TEXT NOT NULL,
+            batch_size INTEGER NOT NULL CHECK (batch_size BETWEEN 1 AND 8),
+            batch_policy TEXT NOT NULL CHECK (
+                batch_policy = 'greedy_posterior_mean_fantasy_ei_v1'
+            ),
+            config_schema_version INTEGER NOT NULL CHECK (config_schema_version = 1),
+            result_schema_version INTEGER NOT NULL CHECK (result_schema_version = 1),
+            model_schema_version INTEGER NOT NULL CHECK (model_schema_version = 2),
+            item_schema_version INTEGER NOT NULL CHECK (item_schema_version = 1),
+            config_json TEXT NOT NULL,
+            config_sha256 TEXT NOT NULL CHECK (length(config_sha256) = 64),
+            result_json TEXT NOT NULL,
+            result_sha256 TEXT NOT NULL CHECK (length(result_sha256) = 64),
+            created_at TEXT NOT NULL,
+            app_version TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_bayesian_recommendation_batches_version_created
+        ON bayesian_recommendation_batches(
+            study_version_id, created_at, batch_id
+        );
+
+        CREATE TABLE IF NOT EXISTS bayesian_recommendation_batch_items (
+            item_id TEXT PRIMARY KEY,
+            batch_id TEXT NOT NULL
+                REFERENCES bayesian_recommendation_batches(batch_id) ON DELETE CASCADE,
+            trial_id TEXT NOT NULL UNIQUE
+                REFERENCES bayesian_trials(trial_id) ON DELETE RESTRICT,
+            rank INTEGER NOT NULL CHECK (rank BETWEEN 1 AND 8),
+            item_schema_version INTEGER NOT NULL CHECK (item_schema_version = 1),
+            item_result_json TEXT NOT NULL,
+            item_result_sha256 TEXT NOT NULL CHECK (length(item_result_sha256) = 64),
+            created_at TEXT NOT NULL,
+            UNIQUE(batch_id, rank)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_bayesian_recommendation_batch_items_batch_rank
+        ON bayesian_recommendation_batch_items(batch_id, rank);
+
+        ALTER TABLE bayesian_study_lifecycle_events
+        RENAME TO bayesian_study_lifecycle_events_v17;
+
+        CREATE TABLE bayesian_study_lifecycle_events (
+            lifecycle_event_id TEXT PRIMARY KEY,
+            study_id TEXT NOT NULL UNIQUE
+                REFERENCES bayesian_studies(study_id) ON DELETE RESTRICT,
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE RESTRICT,
+            schema_version INTEGER NOT NULL CHECK (schema_version IN (1, 2)),
+            lifecycle_revision INTEGER NOT NULL CHECK (lifecycle_revision = 1),
+            previous_status TEXT NOT NULL CHECK (previous_status = 'active'),
+            resulting_status TEXT NOT NULL CHECK (
+                resulting_status IN ('completed', 'abandoned')
+            ),
+            reason_code TEXT NOT NULL CHECK (reason_code IN (
+                'objective_satisfied', 'budget_reached', 'confirmation_complete',
+                'unsafe_or_infeasible', 'resources_unavailable', 'study_cancelled'
+            )),
+            note TEXT CHECK (note IS NULL OR length(note) <= 500),
+            request_id TEXT NOT NULL,
+            final_history_revision_id TEXT NOT NULL
+                REFERENCES bayesian_observation_history_revisions(history_revision_id)
+                ON DELETE RESTRICT,
+            final_observation_history_sha256 TEXT NOT NULL CHECK (
+                length(final_observation_history_sha256) = 64
+            ),
+            final_trial_count INTEGER NOT NULL CHECK (
+                final_trial_count >= 1 AND final_trial_count <= 200
+            ),
+            final_completed_trial_count INTEGER NOT NULL CHECK (
+                final_completed_trial_count >= 0 AND
+                final_completed_trial_count <= 200
+            ),
+            final_abandoned_trial_count INTEGER NOT NULL CHECK (
+                final_abandoned_trial_count >= 0 AND
+                final_abandoned_trial_count <= 200
+            ),
+            latest_recommendation_id TEXT
+                REFERENCES bayesian_recommendations(recommendation_id) ON DELETE RESTRICT,
+            latest_recommendation_batch_id TEXT
+                REFERENCES bayesian_recommendation_batches(batch_id) ON DELETE RESTRICT,
+            definition_sha256 TEXT NOT NULL CHECK (length(definition_sha256) = 64),
+            event_sha256 TEXT NOT NULL CHECK (length(event_sha256) = 64),
+            closed_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            app_version TEXT NOT NULL,
+            build_commit TEXT,
+            UNIQUE(study_id, lifecycle_revision),
+            UNIQUE(study_id, request_id)
+        );
+
+        INSERT INTO bayesian_study_lifecycle_events (
+            lifecycle_event_id, study_id, study_version_id, schema_version,
+            lifecycle_revision, previous_status, resulting_status, reason_code,
+            note, request_id, final_history_revision_id,
+            final_observation_history_sha256, final_trial_count,
+            final_completed_trial_count, final_abandoned_trial_count,
+            latest_recommendation_id, latest_recommendation_batch_id,
+            definition_sha256, event_sha256, closed_at, created_at,
+            app_version, build_commit
+        )
+        SELECT
+            lifecycle_event_id, study_id, study_version_id, schema_version,
+            lifecycle_revision, previous_status, resulting_status, reason_code,
+            note, request_id, final_history_revision_id,
+            final_observation_history_sha256, final_trial_count,
+            final_completed_trial_count, final_abandoned_trial_count,
+            latest_recommendation_id, NULL,
+            definition_sha256, event_sha256, closed_at, created_at,
+            app_version, build_commit
+        FROM bayesian_study_lifecycle_events_v17;
+
+        DROP TABLE bayesian_study_lifecycle_events_v17;
+
+        CREATE INDEX idx_bayesian_lifecycle_version
+        ON bayesian_study_lifecycle_events(study_version_id, closed_at);
         """,
     ),
 )

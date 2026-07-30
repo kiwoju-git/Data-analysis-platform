@@ -1,4 +1,4 @@
-$script:ExpectedApiContractVersion = 5
+$script:ExpectedApiContractVersion = 6
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",
     "dataset_version_metadata",
@@ -14,7 +14,9 @@ $script:RequiredRuntimeCapabilities = @(
     "graph_builder_preview",
     "dataset_cell_correction",
     "lhs_design",
-    "bayesian_lhs_initial_design"
+    "bayesian_lhs_initial_design",
+    "bayesian_batch_recommendation",
+    "bayesian_objective_goal_modes"
 )
 
 function Get-DevPortOwner {
@@ -67,7 +69,7 @@ function Test-DevRuntimeCompatibility {
     if ([int]$RuntimeInfo.api_contract_version -ne $script:ExpectedApiContractVersion) {
         return $false
     }
-    if ([int]$RuntimeInfo.metadata_schema_version -lt 17) { return $false }
+    if ([int]$RuntimeInfo.metadata_schema_version -lt 18) { return $false }
     foreach ($capability in $script:RequiredRuntimeCapabilities) {
         $property = $RuntimeInfo.capabilities.PSObject.Properties[$capability]
         if ($null -eq $property -or $property.Value -ne $true) { return $false }

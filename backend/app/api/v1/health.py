@@ -35,6 +35,8 @@ class RuntimeCapabilities(BaseModel):
     dataset_cell_correction: bool
     lhs_design: bool
     bayesian_lhs_initial_design: bool
+    bayesian_batch_recommendation: bool
+    bayesian_objective_goal_modes: bool
 
 
 class RuntimeInfoResponse(BaseModel):

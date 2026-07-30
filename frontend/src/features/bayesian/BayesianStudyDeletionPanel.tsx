@@ -15,7 +15,7 @@ export function BayesianStudyDeletionPanel({ study, state, disabled, onDeleted }
       {preflight !== null ? (
         <div className="info-box" aria-label="Bayesian study 삭제 영향">
           <strong>삭제 대상 metadata {preflight.counts.metadata_record_count}건 · 파일 {preflight.counts.file_count}개</strong>
-          <p>Trial {preflight.counts.trial_count}건, history revision {preflight.counts.history_revision_count}건, recommendation {preflight.counts.recommendation_count}건을 함께 삭제합니다.</p>
+          <p>Trial {preflight.counts.trial_count}건, history revision {preflight.counts.history_revision_count}건, 기존 단일 추천 {preflight.counts.recommendation_count}건, batch {preflight.counts.recommendation_batch_count}건 / item {preflight.counts.recommendation_batch_item_count}건을 함께 삭제합니다.</p>
           {preflight.successor_study_count > 0 ? <p>Successor study {preflight.successor_study_count}개가 참조하여 삭제할 수 없습니다.</p> : null}
           {preflight.blockers.length > 0 ? <p>삭제 차단 사유: {preflight.blockers.join(", ")}</p> : <button type="button" className="secondary-button" disabled={state.isDeleting} onClick={() => state.setPendingDeletion(true)}>불가역 삭제 확인</button>}
         </div>

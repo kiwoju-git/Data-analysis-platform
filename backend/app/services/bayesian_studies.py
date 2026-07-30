@@ -26,6 +26,8 @@ from app.api.v1.schemas.bayesian import (
     BayesianLinearConstraintResponse,
     BayesianObjectiveResponse,
     BayesianObservationCreateRequest,
+    BayesianRecommendationBatchCreateRequest,
+    BayesianRecommendationBatchResponse,
     BayesianStudyCloseRequest,
     BayesianStudyCloseResponse,
     BayesianStudyCreateRequest,
@@ -63,6 +65,7 @@ from app.statistics.latin_hypercube import (
 )
 from app.storage.bayesian_studies import (
     BayesianHistoryRevisionRecord,
+    BayesianRecommendationBatchRecord,
     BayesianRecommendationRecord,
     BayesianStorageConflict,
     BayesianStudyDeletionGraphRecord,
@@ -74,11 +77,14 @@ from app.storage.bayesian_studies import (
     close_bayesian_study_record,
     complete_bayesian_trial_record,
     count_bayesian_history_revision_records,
+    count_bayesian_recommendation_batch_item_records,
+    count_bayesian_recommendation_batch_records,
     count_bayesian_recommendation_records,
     count_bayesian_study_records,
     count_bayesian_trial_records,
     delete_bayesian_study_graph_record,
     get_bayesian_history_revision_record,
+    get_bayesian_recommendation_batch_for_trial,
     get_bayesian_recommendation_record_for_trial,
     get_bayesian_study_deletion_graph_record,
     get_bayesian_study_lifecycle_event_record,
@@ -87,19 +93,21 @@ from app.storage.bayesian_studies import (
     get_current_bayesian_history_revision_record,
     insert_bayesian_study_bundle,
     list_bayesian_history_revision_records,
+    list_bayesian_recommendation_batch_item_records,
+    list_bayesian_recommendation_batch_records,
     list_bayesian_recommendation_records,
     list_bayesian_study_records,
     list_bayesian_trial_records,
 )
 
 BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
-BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[2]] = 2
+BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[3]] = 3
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
 SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
-    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0"}
+    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0"}
 )
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
-BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[1]] = 1
+BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[2]] = 2
 BAYESIAN_DELETION_PREFLIGHT_SCHEMA_VERSION: Final[Literal[1]] = 1
 BAYESIAN_DELETION_SCHEMA_VERSION: Final[Literal[1]] = 1
 INITIAL_DESIGN_POLICY: Final[Literal["sha256_counter_uniform_feasible_v1"]] = (
@@ -123,6 +131,7 @@ class _ValidatedStudy:
     histories: list[BayesianHistoryRevisionRecord]
     current_history: BayesianHistoryRevisionRecord
     recommendations: list[BayesianRecommendationRecord]
+    recommendation_batches: list[BayesianRecommendationBatchRecord]
     lifecycle_event: BayesianStudyLifecycleEventRecord | None
 
 
@@ -264,7 +273,12 @@ def create_bayesian_study(
         version_number=1,
         schema_version=BAYESIAN_STUDY_SCHEMA_VERSION,
         factors_json=_json_dumps([item.model_dump(mode="json") for item in factors]),
-        objective_json=_json_dumps(objective.model_dump(mode="json")),
+        objective_json=_json_dumps(
+            _objective_payload(
+                objective,
+                study_schema_version=BAYESIAN_STUDY_SCHEMA_VERSION,
+            )
+        ),
         constraints_json=_json_dumps([item.model_dump(mode="json") for item in constraints]),
         initial_design_json=_json_dumps(initial_design.model_dump(mode="json")),
         definition_sha256=definition_sha256,
@@ -310,6 +324,7 @@ def create_bayesian_study(
             histories=[initial_history],
             current_history=initial_history,
             recommendations=[],
+            recommendation_batches=[],
             lifecycle_event=None,
         )
     )
@@ -375,11 +390,41 @@ def complete_bayesian_trial(
         recommendation = get_bayesian_recommendation_record_for_trial(
             settings.workspace_root, trial.trial_id
         )
-        if (
-            recommendation is None
-            or recommendation.source_observation_history_sha256
-            != bundle.current_history.observation_history_sha256
-        ):
+        batch_bundle = get_bayesian_recommendation_batch_for_trial(
+            settings.workspace_root,
+            trial.trial_id,
+        )
+        legacy_matches = (
+            recommendation is not None
+            and recommendation.source_observation_history_sha256
+            == bundle.current_history.observation_history_sha256
+        )
+        batch_matches = False
+        if batch_bundle is not None:
+            batch, _ = batch_bundle
+            source_history = get_bayesian_history_revision_record(
+                settings.workspace_root,
+                batch.source_history_revision_id,
+            )
+            batch_trial_ids = {
+                item.trial_id
+                for item in list_bayesian_recommendation_batch_item_records(
+                    settings.workspace_root,
+                    batch.batch_id,
+                )
+            }
+            if source_history is not None:
+                source_ids = set(_json_string_list(source_history.completed_trial_ids_json))
+                current_ids = set(
+                    _json_string_list(bundle.current_history.completed_trial_ids_json)
+                )
+                batch_matches = (
+                    source_history.observation_history_sha256
+                    == batch.source_observation_history_sha256
+                    and source_ids.issubset(current_ids)
+                    and current_ids - source_ids <= batch_trial_ids
+                )
+        if not legacy_matches and not batch_matches:
             raise ApiError(
                 code="bayesian_optimization_history_stale",
                 message="Recommendation 생성 이후 관측 이력이 변경되어 새 추천이 필요합니다.",
@@ -539,7 +584,7 @@ def close_bayesian_study(
         )
     if body.target_status == "completed" and (
         counts["completed"] < minimum_bayesian_initial_design_size(len(bundle.factors))
-        or not bundle.recommendations
+        or (not bundle.recommendations and not bundle.recommendation_batches)
     ):
         raise ApiError(
             code="bayesian_study_completion_requirements_not_met",
@@ -550,6 +595,9 @@ def close_bayesian_study(
     runtime = runtime_build_provenance(settings)
     latest_recommendation_id = (
         None if not bundle.recommendations else bundle.recommendations[-1].recommendation_id
+    )
+    latest_recommendation_batch_id = (
+        None if not bundle.recommendation_batches else bundle.recommendation_batches[-1].batch_id
     )
     event = BayesianStudyLifecycleEventRecord(
         lifecycle_event_id=str(uuid4()),
@@ -568,6 +616,7 @@ def close_bayesian_study(
         final_completed_trial_count=counts["completed"],
         final_abandoned_trial_count=counts["abandoned"],
         latest_recommendation_id=latest_recommendation_id,
+        latest_recommendation_batch_id=latest_recommendation_batch_id,
         definition_sha256=bundle.version.definition_sha256,
         event_sha256="",
         closed_at=now,
@@ -597,31 +646,32 @@ def close_bayesian_study(
 def canonical_bayesian_lifecycle_event_sha256(
     event: BayesianStudyLifecycleEventRecord,
 ) -> str:
-    return _sha256(
-        {
-            "schema_version": event.schema_version,
-            "lifecycle_event_id": event.lifecycle_event_id,
-            "study_id": event.study_id,
-            "study_version_id": event.study_version_id,
-            "lifecycle_revision": event.lifecycle_revision,
-            "previous_status": event.previous_status,
-            "resulting_status": event.resulting_status,
-            "reason_code": event.reason_code,
-            "note": event.note,
-            "request_id": event.request_id,
-            "final_history_revision_id": event.final_history_revision_id,
-            "final_observation_history_sha256": (event.final_observation_history_sha256),
-            "final_trial_count": event.final_trial_count,
-            "final_completed_trial_count": event.final_completed_trial_count,
-            "final_abandoned_trial_count": event.final_abandoned_trial_count,
-            "latest_recommendation_id": event.latest_recommendation_id,
-            "definition_sha256": event.definition_sha256,
-            "closed_at": event.closed_at,
-            "created_at": event.created_at,
-            "app_version": event.app_version,
-            "build_commit": event.build_commit,
-        }
-    )
+    payload = {
+        "schema_version": event.schema_version,
+        "lifecycle_event_id": event.lifecycle_event_id,
+        "study_id": event.study_id,
+        "study_version_id": event.study_version_id,
+        "lifecycle_revision": event.lifecycle_revision,
+        "previous_status": event.previous_status,
+        "resulting_status": event.resulting_status,
+        "reason_code": event.reason_code,
+        "note": event.note,
+        "request_id": event.request_id,
+        "final_history_revision_id": event.final_history_revision_id,
+        "final_observation_history_sha256": event.final_observation_history_sha256,
+        "final_trial_count": event.final_trial_count,
+        "final_completed_trial_count": event.final_completed_trial_count,
+        "final_abandoned_trial_count": event.final_abandoned_trial_count,
+        "latest_recommendation_id": event.latest_recommendation_id,
+        "definition_sha256": event.definition_sha256,
+        "closed_at": event.closed_at,
+        "created_at": event.created_at,
+        "app_version": event.app_version,
+        "build_commit": event.build_commit,
+    }
+    if event.schema_version >= 2:
+        payload["latest_recommendation_batch_id"] = event.latest_recommendation_batch_id
+    return _sha256(payload)
 
 
 def get_bayesian_study_deletion_preflight(
@@ -797,7 +847,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         version is None
         or version.study_id != study.study_id
         or version.version_number != study.current_version
-        or version.schema_version not in {1, 2}
+        or version.schema_version not in {1, 2, 3}
     ):
         raise _metadata_error()
     try:
@@ -859,7 +909,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         ):
             raise _artifact_error()
     elif initial_design.policy == LHS_INITIAL_DESIGN_POLICY:
-        if version.schema_version != 2 or constraints:
+        if version.schema_version not in {2, 3} or constraints:
             raise _artifact_error()
         expected_actual, expected_normalized = _validate_stored_lhs_initial_design(
             factors=factors,
@@ -904,6 +954,34 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         histories,
         recommendations,
     )
+    recommendation_batches = list_bayesian_recommendation_batch_records(
+        settings.workspace_root,
+        version.study_version_id,
+        limit=MAX_BAYESIAN_TRIALS,
+    )
+    if count_bayesian_recommendation_batch_records(
+        settings.workspace_root,
+        version.study_version_id,
+    ) != len(recommendation_batches):
+        raise _artifact_error()
+    batch_trial_ids = _validate_recommendation_batches(
+        settings,
+        version=version,
+        method_version=study.method_version,
+        factors=factors,
+        objective=objective,
+        constraints=constraints,
+        trials=trials,
+        histories=histories,
+        batches=recommendation_batches,
+    )
+    legacy_trial_ids = {item.trial_id for item in recommendations}
+    recommendation_trial_ids = {item.trial_id for item in trials if item.origin == "recommendation"}
+    if (
+        legacy_trial_ids & batch_trial_ids
+        or legacy_trial_ids | batch_trial_ids != recommendation_trial_ids
+    ):
+        raise _artifact_error()
     lifecycle_event = get_bayesian_study_lifecycle_event_record(
         settings.workspace_root, study.study_id
     )
@@ -913,6 +991,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         trials=trials,
         current_history=current_history,
         recommendations=recommendations,
+        recommendation_batches=recommendation_batches,
         event=lifecycle_event,
     )
     return _ValidatedStudy(
@@ -926,6 +1005,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         histories=histories,
         current_history=current_history,
         recommendations=recommendations,
+        recommendation_batches=recommendation_batches,
         lifecycle_event=lifecycle_event,
     )
 
@@ -970,10 +1050,32 @@ def _validated_objective_payload(
             message="Bayesian study의 수동 관측 objective 이름이 필요합니다.",
             status_code=status.HTTP_409_CONFLICT,
         )
+    goal_type = body.objective.goal_type or body.objective.direction
+    if goal_type is None:
+        raise ApiError(
+            code="bayesian_study_objective_invalid",
+            message="Bayesian Study의 최적화 목표가 필요합니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
     return BayesianObjectiveResponse(
         name=name,
         unit=None if body.objective.unit is None else body.objective.unit.strip() or None,
-        direction=body.objective.direction,
+        goal_type=goal_type,
+        target_value=(
+            None if body.objective.target_value is None else float(body.objective.target_value)
+        ),
+        target_tolerance=(
+            None
+            if body.objective.target_tolerance is None
+            else float(body.objective.target_tolerance)
+        ),
+        direction=(
+            "minimize"
+            if goal_type == "minimize"
+            else "maximize"
+            if goal_type == "maximize"
+            else body.objective.direction
+        ),
         observation_policy=body.objective.observation_policy,
     )
 
@@ -1360,14 +1462,13 @@ def _validate_recommendations(
     histories: list[BayesianHistoryRevisionRecord],
     recommendations: list[BayesianRecommendationRecord],
 ) -> None:
+    if recommendations and (objective.goal_type or objective.direction) == "match_target":
+        raise _artifact_error()
     recommendation_trials = {
         item.trial_id: item for item in trials if item.origin == "recommendation"
     }
     trial_by_id = {item.trial_id: item for item in trials}
     history_by_id = {item.history_revision_id: item for item in histories}
-    if len(recommendations) != len(recommendation_trials):
-        raise _artifact_error()
-    pending_count = 0
     for record in recommendations:
         trial = recommendation_trials.get(record.trial_id)
         history = history_by_id.get(record.source_history_revision_id)
@@ -1383,8 +1484,6 @@ def _validate_recommendations(
             if source_trial is None or source_trial.objective_value is None:
                 raise _artifact_error()
             source_observation_values.append(float(source_trial.objective_value))
-        if trial.state == "pending":
-            pending_count += 1
         try:
             validate_bayesian_recommendation_record(
                 record=record,
@@ -1396,13 +1495,139 @@ def _validate_recommendations(
                 source_observation_values=source_observation_values,
                 factors=factors,
                 constraints=constraints,
-                objective_direction=objective.direction,
+                objective_direction=cast(
+                    Literal["minimize", "maximize"],
+                    objective.direction or objective.goal_type,
+                ),
                 current_trial=_trial_response(trial),
             )
         except ValueError as exc:
             raise _artifact_error() from exc
-    if pending_count > 1:
+
+
+def _validate_recommendation_batches(
+    settings: Settings,
+    *,
+    version: BayesianStudyVersionRecord,
+    method_version: str,
+    factors: list[BayesianFactorResponse],
+    objective: BayesianObjectiveResponse,
+    constraints: list[BayesianLinearConstraintResponse],
+    trials: list[BayesianTrialRecord],
+    histories: list[BayesianHistoryRevisionRecord],
+    batches: list[BayesianRecommendationBatchRecord],
+) -> set[str]:
+    trial_by_id = {item.trial_id: item for item in trials}
+    history_by_id = {item.history_revision_id: item for item in histories}
+    factor_ids = {item.factor_id for item in factors}
+    mapped_trial_ids: set[str] = set()
+    pending_batch_count = 0
+    total_items = 0
+    for batch in batches:
+        if (
+            batch.study_version_id != version.study_version_id
+            or batch.method_id != BAYESIAN_METHOD_ID
+            or batch.method_version != method_version
+            or batch.batch_policy != "greedy_posterior_mean_fantasy_ei_v1"
+            or batch.config_schema_version != 1
+            or batch.result_schema_version != 1
+            or batch.model_schema_version != 2
+            or batch.item_schema_version != 1
+            or hashlib.sha256(batch.config_json.encode("utf-8")).hexdigest() != batch.config_sha256
+            or hashlib.sha256(batch.result_json.encode("utf-8")).hexdigest() != batch.result_sha256
+        ):
+            raise _artifact_error()
+        history = history_by_id.get(batch.source_history_revision_id)
+        if (
+            history is None
+            or history.observation_history_sha256 != batch.source_observation_history_sha256
+        ):
+            raise _artifact_error()
+        try:
+            config = _json_dict(batch.config_json)
+            request = BayesianRecommendationBatchCreateRequest.model_validate(config["request"])
+            response = BayesianRecommendationBatchResponse.model_validate(
+                _json_dict(batch.result_json)
+            )
+        except (KeyError, TypeError, ValueError, ValidationError) as exc:
+            raise _artifact_error() from exc
+        immutable = response.model_dump(
+            mode="json",
+            exclude={"is_latest", "batch_state"},
+        )
+        stored_result_sha = immutable.pop("result_sha256", None)
+        immutable["result_sha256"] = "0" * 64
+        goal_type = objective.goal_type or objective.direction
+        expected_acquisition = (
+            "expected_target_improvement" if goal_type == "match_target" else "expected_improvement"
+        )
+        if (
+            stored_result_sha != response.result_sha256
+            or _sha256(immutable) != response.result_sha256
+            or response.batch_id != UUID(batch.batch_id)
+            or response.study_id != UUID(version.study_id)
+            or response.study_version_id != UUID(version.study_version_id)
+            or response.source_history_revision_id != UUID(batch.source_history_revision_id)
+            or response.source_observation_history_sha256 != batch.source_observation_history_sha256
+            or response.definition_sha256 != version.definition_sha256
+            or response.method_version != batch.method_version
+            or response.config_sha256 != batch.config_sha256
+            or response.batch_size != batch.batch_size
+            or len(response.items) != batch.batch_size
+            or response.acquisition.kind != expected_acquisition
+            or request.batch_size != batch.batch_size
+            or request.acquisition != response.acquisition
+        ):
+            raise _artifact_error()
+        item_records = list_bayesian_recommendation_batch_item_records(
+            settings.workspace_root,
+            batch.batch_id,
+        )
+        if len(item_records) != batch.batch_size:
+            raise _artifact_error()
+        total_items += len(item_records)
+        batch_has_pending = False
+        for rank, (record, item) in enumerate(
+            zip(item_records, response.items, strict=True),
+            start=1,
+        ):
+            trial = trial_by_id.get(record.trial_id)
+            item_json = _json_dumps(item.model_dump(mode="json"))
+            if (
+                record.rank != rank
+                or item.rank != rank
+                or record.item_id != str(item.item_id)
+                or record.batch_id != batch.batch_id
+                or record.item_schema_version != 1
+                or record.item_result_json != item_json
+                or hashlib.sha256(item_json.encode("utf-8")).hexdigest()
+                != record.item_result_sha256
+                or trial is None
+                or trial.origin != "recommendation"
+                or item.trial.trial_id != UUID(trial.trial_id)
+                or item.trial.coordinates_sha256 != trial.coordinates_sha256
+                or item.actual_coordinates != _numeric_json_dict(trial.actual_coordinates_json)
+                or item.normalized_coordinates
+                != _numeric_json_dict(trial.normalized_coordinates_json)
+                or set(item.actual_coordinates) != factor_ids
+                or not _constraints_satisfied(item.actual_coordinates, constraints)
+                or record.trial_id in mapped_trial_ids
+            ):
+                raise _artifact_error()
+            mapped_trial_ids.add(record.trial_id)
+            batch_has_pending = batch_has_pending or trial.state == "pending"
+        if batch_has_pending:
+            pending_batch_count += 1
+    if (
+        pending_batch_count > 1
+        or count_bayesian_recommendation_batch_item_records(
+            settings.workspace_root,
+            version.study_version_id,
+        )
+        != total_items
+    ):
         raise _artifact_error()
+    return mapped_trial_ids
 
 
 def _validate_lifecycle_event(
@@ -1412,6 +1637,7 @@ def _validate_lifecycle_event(
     trials: list[BayesianTrialRecord],
     current_history: BayesianHistoryRevisionRecord,
     recommendations: list[BayesianRecommendationRecord],
+    recommendation_batches: list[BayesianRecommendationBatchRecord],
     event: BayesianStudyLifecycleEventRecord | None,
 ) -> None:
     if study.status == "active":
@@ -1424,8 +1650,10 @@ def _validate_lifecycle_event(
     latest_recommendation_id = (
         None if not recommendations else recommendations[-1].recommendation_id
     )
+    latest_batch_id = None if not recommendation_batches else recommendation_batches[-1].batch_id
     if (
-        event.schema_version != BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION
+        event.schema_version not in {1, 2}
+        or (event.schema_version == 1 and event.latest_recommendation_batch_id is not None)
         or event.lifecycle_revision != 1
         or event.study_id != study.study_id
         or event.study_version_id != version.study_version_id
@@ -1448,6 +1676,7 @@ def _validate_lifecycle_event(
         or event.final_abandoned_trial_count != counts["abandoned"]
         or counts["pending"] != 0
         or event.latest_recommendation_id != latest_recommendation_id
+        or event.latest_recommendation_batch_id != latest_batch_id
         or event.definition_sha256 != version.definition_sha256
         or event.closed_at != event.created_at
         or study.updated_at != event.closed_at
@@ -1499,6 +1728,17 @@ def _build_bayesian_study_deletion_preflight(
         or graph.history_revision_count != len(bundle.histories)
         or graph.history_head_count != 1
         or graph.recommendation_count != len(bundle.recommendations)
+        or graph.recommendation_batch_count != len(bundle.recommendation_batches)
+        or graph.recommendation_batch_item_count
+        != sum(
+            len(
+                list_bayesian_recommendation_batch_item_records(
+                    settings.workspace_root,
+                    item.batch_id,
+                )
+            )
+            for item in bundle.recommendation_batches
+        )
         or graph.lifecycle_event_count != lifecycle_event_count
     ):
         raise _artifact_error()
@@ -1509,6 +1749,8 @@ def _build_bayesian_study_deletion_preflight(
         history_revision_count=graph.history_revision_count,
         history_head_count=graph.history_head_count,
         recommendation_count=graph.recommendation_count,
+        recommendation_batch_count=graph.recommendation_batch_count,
+        recommendation_batch_item_count=graph.recommendation_batch_item_count,
         lifecycle_event_count=graph.lifecycle_event_count,
         metadata_record_count=(
             1
@@ -1517,6 +1759,8 @@ def _build_bayesian_study_deletion_preflight(
             + graph.history_revision_count
             + graph.history_head_count
             + graph.recommendation_count
+            + graph.recommendation_batch_count
+            + graph.recommendation_batch_item_count
             + graph.lifecycle_event_count
         ),
         file_count=0,
@@ -1579,7 +1823,7 @@ def _study_response(bundle: _ValidatedStudy) -> BayesianStudyResponse:
         study_id=UUID(bundle.study.study_id),
         study_version_id=UUID(bundle.version.study_version_id),
         version_number=bundle.version.version_number,
-        study_schema_version=cast(Literal[1, 2], bundle.version.schema_version),
+        study_schema_version=cast(Literal[1, 2, 3], bundle.version.schema_version),
         method_id=BAYESIAN_METHOD_ID,
         method_version=bundle.study.method_version,
         name=bundle.study.name,
@@ -1677,7 +1921,7 @@ def _lifecycle_event_response(
     event: BayesianStudyLifecycleEventRecord,
 ) -> BayesianStudyLifecycleEventResponse:
     return BayesianStudyLifecycleEventResponse(
-        schema_version=cast(Literal[1], event.schema_version),
+        schema_version=cast(Literal[1, 2], event.schema_version),
         lifecycle_event_id=UUID(event.lifecycle_event_id),
         study_id=UUID(event.study_id),
         study_version_id=UUID(event.study_version_id),
@@ -1694,6 +1938,11 @@ def _lifecycle_event_response(
         final_abandoned_trial_count=event.final_abandoned_trial_count,
         latest_recommendation_id=(
             None if event.latest_recommendation_id is None else UUID(event.latest_recommendation_id)
+        ),
+        latest_recommendation_batch_id=(
+            None
+            if event.latest_recommendation_batch_id is None
+            else UUID(event.latest_recommendation_batch_id)
         ),
         definition_sha256=event.definition_sha256,
         event_sha256=event.event_sha256,
@@ -1742,9 +1991,40 @@ def _definition_payload(
         "method_id": BAYESIAN_METHOD_ID,
         "method_version": method_version,
         "factors": [item.model_dump(mode="json") for item in factors],
-        "objective": objective.model_dump(mode="json"),
+        "objective": _objective_payload(
+            objective,
+            study_schema_version=study_schema_version,
+        ),
         "constraints": [item.model_dump(mode="json") for item in constraints],
         "initial_design": initial_design.model_dump(mode="json", exclude_none=True),
+    }
+
+
+def _objective_payload(
+    objective: BayesianObjectiveResponse,
+    *,
+    study_schema_version: int,
+) -> dict[str, Any]:
+    if study_schema_version <= 2:
+        direction = objective.direction or objective.goal_type
+        if direction not in {"minimize", "maximize"}:
+            raise ValueError("legacy Bayesian objective requires direction")
+        return {
+            "name": objective.name,
+            "unit": objective.unit,
+            "direction": direction,
+            "observation_policy": objective.observation_policy,
+        }
+    goal_type = objective.goal_type or objective.direction
+    if goal_type not in {"minimize", "maximize", "match_target"}:
+        raise ValueError("Bayesian objective goal is invalid")
+    return {
+        "name": objective.name,
+        "unit": objective.unit,
+        "goal_type": goal_type,
+        "target_value": objective.target_value,
+        "target_tolerance": objective.target_tolerance,
+        "observation_policy": objective.observation_policy,
     }
 
 

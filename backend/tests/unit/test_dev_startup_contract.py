@@ -79,13 +79,15 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "Get-DevRepositoryBuildId" in dev_text
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
-    assert "$script:ExpectedApiContractVersion = 5" in helper_text
+    assert "$script:ExpectedApiContractVersion = 6" in helper_text
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
     assert '"graph_builder_preview"' in helper_text
     assert '"dataset_cell_correction"' in helper_text
     assert '"lhs_design"' in helper_text
     assert '"bayesian_lhs_initial_design"' in helper_text
+    assert '"bayesian_batch_recommendation"' in helper_text
+    assert '"bayesian_objective_goal_modes"' in helper_text
     assert "/api/v1/runtime-info" in diagnostics_text
     assert "/api/v1/analysis-methods" in diagnostics_text
 

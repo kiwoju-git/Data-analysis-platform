@@ -45,8 +45,8 @@ def test_runtime_info_reports_current_contract_without_workspace_details(tmp_pat
     assert response.json() == {
         "service": "datalab-studio-api",
         "app_version": "0.1.0",
-        "api_contract_version": 5,
-        "metadata_schema_version": 17,
+        "api_contract_version": 6,
+        "metadata_schema_version": 18,
         "build_commit": "unknown",
         "capabilities": {
             "asset_management": True,
@@ -64,6 +64,8 @@ def test_runtime_info_reports_current_contract_without_workspace_details(tmp_pat
             "dataset_cell_correction": True,
             "lhs_design": True,
             "bayesian_lhs_initial_design": True,
+            "bayesian_batch_recommendation": True,
+            "bayesian_objective_goal_modes": True,
         },
     }
     body = response.text.lower()

@@ -39,6 +39,18 @@ export function BayesianStudySummary({ study }: { study: BayesianStudyResponse }
       <div className="metadata-grid" aria-label="Bayesian study 상태">
         <span>Study 상태</span><strong>{study.status}</strong>
         <span>Method version</span><strong>{study.method_version}</strong>
+        <span>최적화 목표</span>
+        <strong>
+          {study.objective.goal_type === "match_target"
+            ? `${study.objective.name} 목표 ${study.objective.target_value}${
+                study.objective.target_tolerance === null
+                  ? ""
+                  : ` ± ${study.objective.target_tolerance}`
+              }`
+            : `${study.objective.name} ${
+                study.objective.goal_type === "maximize" ? "최대화" : "최소화"
+              }`}
+        </strong>
         <span>초기 설계</span>
         <strong>
           {study.initial_design.policy === "latin_hypercube_random_cd_v1"

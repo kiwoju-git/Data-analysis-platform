@@ -250,6 +250,22 @@ export const apiRoutes = {
     return apiUrl(`/bayesian-studies/${pathId(studyId)}/recommendations/latest`);
   },
 
+  bayesianRecommendationBatches(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/recommendation-batches`);
+  },
+
+  bayesianRecommendationBatch(studyId: string, batchId: string): string {
+    return apiUrl(
+      `/bayesian-studies/${pathId(studyId)}/recommendation-batches/${pathId(batchId)}`,
+    );
+  },
+
+  bayesianLatestRecommendationBatch(studyId: string): string {
+    return apiUrl(
+      `/bayesian-studies/${pathId(studyId)}/recommendation-batches/latest`,
+    );
+  },
+
   analysisRunsBase(): string {
     return apiUrl("/analysis-runs");
   },

@@ -40,7 +40,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "doe.factorial_design": "0.3.0",
     "doe.latin_hypercube": "0.1.0",
     "doe.response_surface": "0.2.0",
-    "doe.bayesian_optimization": "0.3.0",
+    "doe.bayesian_optimization": "0.4.0",
 }
 
 MODULES: tuple[AnalysisModuleDescriptor, ...] = (

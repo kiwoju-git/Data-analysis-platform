@@ -25,7 +25,7 @@ def _load_fixture() -> dict[str, object]:
 
 def _expected_improvement(mean: float, std: float, incumbent: float, xi: float) -> float:
     if std <= 0.0:
-        return 0.0
+        return max(mean - incumbent - xi, 0.0)
     improvement = mean - incumbent - xi
     z_value = improvement / std
     standard_normal = NormalDist()
@@ -37,7 +37,7 @@ def test_bayesian_optimization_uses_dedicated_api_without_generic_handler() -> N
     method = get_analysis_method("doe.bayesian_optimization")
 
     assert method is not None
-    assert method.method_version == METHOD_VERSIONS[method.method_id] == "0.3.0"
+    assert method.method_version == METHOD_VERSIONS[method.method_id] == "0.4.0"
     assert method.availability == MethodAvailability.AVAILABLE
     assert method.requires_dataset is False
     assert method.method_id not in _METHOD_EXECUTION_HANDLERS

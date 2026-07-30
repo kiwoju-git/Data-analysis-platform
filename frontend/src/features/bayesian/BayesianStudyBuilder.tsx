@@ -27,13 +27,13 @@ export function BayesianStudyBuilder({
           <p>Factor bounds, objective, 초기 설계와 실제 단위 제약을 고정합니다.</p>
         </div>
       </div>
-      <div className="option-grid">
+      <div className="bayesian-study-core-grid">
         <label>
           <span>Study 이름</span>
           <input value={draft.studyName} onChange={(event) => draft.setStudyName(event.currentTarget.value)} />
         </label>
         <label>
-          <span>목적 반응</span>
+          <span>최적화 반응</span>
           <input value={draft.objectiveName} onChange={(event) => draft.setObjectiveName(event.currentTarget.value)} />
         </label>
         <label>
@@ -41,17 +41,52 @@ export function BayesianStudyBuilder({
           <input value={draft.objectiveUnit} onChange={(event) => draft.setObjectiveUnit(event.currentTarget.value)} />
         </label>
         <label>
-          <span>방향</span>
+          <span>최적화 목표</span>
           <select
-            value={draft.direction}
+            value={draft.goalType}
             onChange={(event) =>
-              draft.setDirection(event.currentTarget.value as "minimize" | "maximize")
+              draft.setGoalType(
+                event.currentTarget.value as
+                  | "minimize"
+                  | "maximize"
+                  | "match_target",
+              )
             }
           >
             <option value="maximize">최대화</option>
             <option value="minimize">최소화</option>
+            <option value="match_target">목표값 맞추기</option>
           </select>
         </label>
+      </div>
+      {draft.goalType === "match_target" ? (
+        <div className="bayesian-target-grid">
+          <label>
+            <span>목표값</span>
+            <input
+              inputMode="decimal"
+              value={draft.targetValue}
+              onChange={(event) =>
+                draft.setTargetValue(event.currentTarget.value)
+              }
+            />
+          </label>
+          <label>
+            <span>허용 오차 (선택)</span>
+            <input
+              inputMode="decimal"
+              value={draft.targetTolerance}
+              onChange={(event) =>
+                draft.setTargetTolerance(event.currentTarget.value)
+              }
+            />
+            <span className="cell-subtext">
+              목표 도달 여부를 설명하는 기준이며 Study를 자동 종료하지 않습니다.
+            </span>
+          </label>
+        </div>
+      ) : null}
+      <div className="bayesian-initial-design-grid">
         <label>
           <span>초기 trial 수</span>
           <input

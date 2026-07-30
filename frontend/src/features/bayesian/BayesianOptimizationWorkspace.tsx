@@ -22,18 +22,39 @@ export function BayesianOptimizationWorkspace() {
   );
   const initialStudyId = validBayesianId(initialQuery.get("study_id"));
   const initialRecommendationId = validBayesianId(initialQuery.get("recommendation_id"));
+  const initialBatchId = validBayesianId(initialQuery.get("batch_id"));
+  const recommendationQueryConflict =
+    initialRecommendationId !== null && initialBatchId !== null;
   const [requestedRecommendationId, setRequestedRecommendationId] =
-    useState(initialRecommendationId);
+    useState(recommendationQueryConflict ? null : initialRecommendationId);
+  const [requestedBatchId, setRequestedBatchId] = useState(
+    recommendationQueryConflict ? null : initialBatchId,
+  );
   const [builderOpen, setBuilderOpen] = useState(initialStudyId === null);
   const catalog = useBayesianStudyCatalogState(initialStudyId);
   const draft = useBayesianStudyDraftState();
   const lifecycle = useBayesianStudyLifecycleState(catalog.selectedStudyId);
   const selectRecommendation = useCallback((recommendationId: string | null) => {
-    replaceBayesianQuery({ recommendation_id: recommendationId });
+    setRequestedRecommendationId(recommendationId);
+    setRequestedBatchId(null);
+    replaceBayesianQuery({
+      batch_id: null,
+      recommendation_id: recommendationId,
+    });
+  }, []);
+  const selectBatch = useCallback((batchId: string | null) => {
+    setRequestedBatchId(batchId);
+    setRequestedRecommendationId(null);
+    replaceBayesianQuery({
+      batch_id: batchId,
+      recommendation_id: null,
+    });
   }, []);
   const recommendation = useBayesianRecommendationState({
     selectedStudyId: catalog.selectedStudyId,
+    requestedBatchId,
     requestedRecommendationId,
+    onBatchSelected: selectBatch,
     onRecommendationSelected: selectRecommendation,
   });
   const study =
@@ -41,6 +62,10 @@ export function BayesianOptimizationWorkspace() {
   const selectedRecommendation =
     recommendation.recommendation?.study_id === catalog.selectedStudyId
       ? recommendation.recommendation
+      : null;
+  const selectedBatch =
+    recommendation.batch?.study_id === catalog.selectedStudyId
+      ? recommendation.batch
       : null;
   const retention = useBayesianRetentionState(study);
   const requestInFlight =
@@ -60,13 +85,24 @@ export function BayesianOptimizationWorkspace() {
     lifecycle.pendingTransition !== null ||
     lifecycle.pendingStudyClose;
   const error =
-    lifecycle.error ?? recommendation.error ?? retention.error ?? catalog.error;
+    (recommendationQueryConflict
+      ? "bayesian_recommendation_query_conflict"
+      : null) ??
+    lifecycle.error ??
+    recommendation.error ??
+    retention.error ??
+    catalog.error;
 
   function selectStudy(studyId: string | null) {
     catalog.onSelect(studyId);
     setRequestedRecommendationId(null);
+    setRequestedBatchId(null);
     setBuilderOpen(studyId === null);
-    replaceBayesianQuery({ study_id: studyId, recommendation_id: null });
+    replaceBayesianQuery({
+      study_id: studyId,
+      batch_id: null,
+      recommendation_id: null,
+    });
   }
 
   async function createStudy() {
@@ -82,8 +118,13 @@ export function BayesianOptimizationWorkspace() {
     draft.cancelSuccessor();
     setBuilderOpen(false);
     setRequestedRecommendationId(null);
+    setRequestedBatchId(null);
     recommendation.clearRecommendation();
-    replaceBayesianQuery({ study_id: created.study_id, recommendation_id: null });
+    replaceBayesianQuery({
+      study_id: created.study_id,
+      batch_id: null,
+      recommendation_id: null,
+    });
   }
 
   async function confirmTrialTransition() {
@@ -114,8 +155,13 @@ export function BayesianOptimizationWorkspace() {
     catalog.onSelect(null);
     catalog.onRefresh();
     setRequestedRecommendationId(null);
+    setRequestedBatchId(null);
     setBuilderOpen(true);
-    replaceBayesianQuery({ study_id: null, recommendation_id: null });
+    replaceBayesianQuery({
+      study_id: null,
+      batch_id: null,
+      recommendation_id: null,
+    });
   }
 
   return (
@@ -171,16 +217,29 @@ export function BayesianOptimizationWorkspace() {
           />
           <BayesianRecommendationPanel
             study={study}
+            batch={selectedBatch}
             recommendation={selectedRecommendation}
+            executionMode={recommendation.executionMode}
+            batchSize={recommendation.batchSize}
+            explorationProfile={recommendation.explorationProfile}
+            customXi={recommendation.customXi}
             totalTrialBudget={recommendation.totalTrialBudget}
             isRecommending={recommendation.isRecommending}
             actionsDisabled={studyActionDisabled}
+            onExecutionModeChange={recommendation.onExecutionModeChange}
+            onBatchSizeChange={recommendation.setBatchSize}
+            onExplorationProfileChange={
+              recommendation.setExplorationProfile
+            }
+            onCustomXiChange={recommendation.setCustomXi}
             onBudgetChange={recommendation.setTotalTrialBudget}
             onRecommend={() => void createRecommendation()}
           />
           <BayesianStudyClosePanel
             study={study}
-            recommendation={selectedRecommendation}
+            hasRecommendation={
+              selectedRecommendation !== null || selectedBatch !== null
+            }
             target={lifecycle.closeTarget}
             reason={lifecycle.closeReason}
             note={lifecycle.closeNote}

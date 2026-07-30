@@ -4,12 +4,16 @@ import queue
 import numpy as np
 import pytest
 
+from app.statistics.bayesian_batch import (
+    calculate_bayesian_recommendation_batch,
+)
 from app.statistics.bayesian_optimization import (
     BayesianOptimizationError,
     _novel,
     _SearchBudget,
     bayesian_worker_entry,
     calculate_bayesian_recommendation,
+    expected_target_improvement,
 )
 
 
@@ -46,6 +50,58 @@ def _matern_five_halves(distance: np.ndarray) -> np.ndarray:
     return (1.0 + scaled + scaled**2 / 3.0) * np.exp(-scaled)
 
 
+@pytest.mark.parametrize(
+    ("mean", "sigma", "target", "best_distance", "xi"),
+    [
+        (0.0, 1.0, 0.0, 1.0, 0.0),
+        (0.7, 0.2, 0.0, 1.0, 0.01),
+        (-0.8, 0.5, 0.25, 1.5, 0.1),
+        (0.1, 1e-4, 0.0, 0.5, 0.0),
+    ],
+)
+def test_expected_target_improvement_matches_numerical_quadrature(
+    mean: float,
+    sigma: float,
+    target: float,
+    best_distance: float,
+    xi: float,
+) -> None:
+    from scipy.integrate import quad
+    from scipy.stats import norm
+
+    radius = max(best_distance - xi, 0.0)
+    lower = max(target - radius, mean - 10.0 * sigma)
+    upper = min(target + radius, mean + 10.0 * sigma)
+    expected = quad(
+        lambda value: max(radius - abs(value - target), 0.0)
+        * norm.pdf(value, loc=mean, scale=sigma),
+        lower,
+        upper,
+        epsabs=1e-12,
+    )[0]
+    actual = expected_target_improvement(
+        [mean],
+        [sigma],
+        target,
+        best_distance,
+        xi,
+    )[0]
+    assert actual == pytest.approx(expected, rel=1e-10, abs=1e-12)
+
+
+def test_expected_target_improvement_handles_deterministic_and_exhausted_radius() -> None:
+    deterministic = expected_target_improvement(
+        [0.1],
+        [0.0],
+        0.0,
+        0.5,
+        0.0,
+    )[0]
+    exhausted = expected_target_improvement([0.0], [1.0], 0.0, 0.5, 0.5)[0]
+    assert deterministic == pytest.approx(0.4)
+    assert exhausted == 0.0
+
+
 def test_gp_recommendation_is_seeded_bounded_and_requires_confirmation() -> None:
     first = calculate_bayesian_recommendation(_payload())
     second = calculate_bayesian_recommendation(_payload())
@@ -63,6 +119,61 @@ def test_gp_recommendation_is_seeded_bounded_and_requires_confirmation() -> None
     assert first["model"]["package_versions"]["scikit-learn"] == "1.7.2"
     assert "bayesian_optimization_confirmation_required" in first["warnings"]
     assert "bayesian_optimization_no_global_optimum_guarantee" in first["warnings"]
+
+
+def test_batch_size_one_preserves_single_recommendation_numerics() -> None:
+    single_payload = _payload()
+    single = calculate_bayesian_recommendation(single_payload)
+    batch = calculate_bayesian_recommendation_batch(
+        {
+            "factors": single_payload["factors"],
+            "constraints": single_payload["constraints"],
+            "observations": single_payload["observations"],
+            "excluded_normalized": single_payload["excluded_normalized"],
+            "objective": {
+                "goal_type": "maximize",
+                "target_value": None,
+            },
+            "batch_size": 1,
+            "acquisition": {
+                "kind": "expected_improvement",
+                "exploration_profile": "balanced",
+                "xi_standardized": 0.01,
+            },
+            "search": {
+                "random_seed": 7,
+                "candidate_count_per_step": 64,
+                "local_start_count_per_step": 2,
+                "max_iterations_per_step": 40,
+                "max_evaluations_total": 512,
+                "model_max_iterations": 30,
+                "model_max_evaluations": 100,
+                "hyperparameter_restart_count": 0,
+                "time_budget_ms": 10_000,
+                "jitter": 1e-8,
+                "duplicate_tolerance": 1e-6,
+                "batch_policy": "greedy_posterior_mean_fantasy_ei_v1",
+            },
+        }
+    )
+    item = batch["items"][0]
+
+    assert item["actual_coordinates"] == pytest.approx(
+        single["recommended_actual_coordinates"],
+        abs=1e-12,
+    )
+    assert item["predicted_objective_mean"] == pytest.approx(
+        single["predicted_objective_mean"],
+        abs=1e-12,
+    )
+    assert item["posterior_standard_deviation"] == pytest.approx(
+        single["posterior_standard_deviation"],
+        abs=1e-12,
+    )
+    assert item["acquisition_value"] == pytest.approx(
+        single["expected_improvement"],
+        abs=1e-12,
+    )
 
 
 def test_gp_posterior_matches_direct_matern_linear_algebra() -> None:

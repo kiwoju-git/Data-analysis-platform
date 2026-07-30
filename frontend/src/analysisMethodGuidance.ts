@@ -92,7 +92,6 @@ export const analysisMethodGuidance = {
       { category: "data_type", label: "연속형 수치" },
       { category: "design", label: "한 모집단" },
       { category: "target", label: "평균 비교" },
-      { category: "sample_guidance", label: "소표본: 분포·이상치 확인" },
       { category: "assumption", label: "독립 관측" },
     ],
     roleRequirements: [required("반응", "연속형 수치 컬럼"), required("기준값", "비교할 모집단 평균")],
@@ -176,7 +175,7 @@ export const analysisMethodGuidance = {
       { category: "data_type", label: "연속형 수치" },
       { category: "design", label: "한 모집단" },
       { category: "target", label: "동등성 평가" },
-      { category: "assumption", label: "사전 지정 허용한계" },
+      { category: "assumption", label: "허용한계 사전 지정" },
     ],
     roleRequirements: [
       required("반응", "연속형 수치 컬럼"),
@@ -199,9 +198,8 @@ export const analysisMethodGuidance = {
     cardTags: [
       { category: "data_type", label: "순서형·연속형" },
       { category: "design", label: "한 모집단" },
-      { category: "target", label: "순위 기반 위치 비교" },
-      { category: "assumption", label: "차이 분포 대칭성" },
-      { category: "caution", label: "동률·0차이 확인" },
+      { category: "target", label: "순위 기반 비교" },
+      { category: "assumption", label: "대칭성·동률 확인" },
     ],
     roleRequirements: [required("반응", "순서형 또는 연속형 컬럼"), required("기준값", "비교 위치")],
     optionChecklist: ["대립가설", "zero difference 처리", "결측 처리"],
@@ -674,7 +672,7 @@ export function getAnalysisMethodGuidance(methodId: string): AnalysisMethodGuida
 export function getMethodCardTags(methodId: string): readonly MethodCardTag[] {
   const guidance = getAnalysisMethodGuidance(methodId);
   if (guidance.cardTags !== undefined) {
-    return guidance.cardTags.slice(0, 5);
+    return guidance.cardTags.slice(0, 4);
   }
   return [
     {

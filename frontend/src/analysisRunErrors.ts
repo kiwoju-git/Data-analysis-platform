@@ -80,6 +80,31 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     message: "전체 trial 수, 계산 시간, 또는 계산 평가 예산에 도달했습니다.",
     action: "화면의 trial 예산과 저장된 종료 사유를 확인하세요. 오류를 surrogate 적합 실패로 해석하지 마세요.",
   },
+  bayesian_optimization_batch_budget_exceeded: {
+    title: "Batch 수가 남은 예산보다 큼",
+    message: "요청한 추천 조건 수를 모두 저장할 trial 예산이 남아 있지 않습니다.",
+    action: "batch 수를 남은 예산 이하로 줄이세요. 일부 조건만 자동 저장되지는 않습니다.",
+  },
+  bayesian_optimization_batch_incomplete: {
+    title: "완전한 Batch 생성 실패",
+    message: "제약과 중복 제외를 만족하는 고유 조건을 요청한 수만큼 찾지 못했습니다.",
+    action: "batch 수, factor 범위, 선형 제약 또는 고급 탐색 예산을 검토하세요.",
+  },
+  bayesian_optimization_batch_size_invalid: {
+    title: "Batch 수 오류",
+    message: "순차 방식은 1개, 병렬 방식은 2~8개를 선택해야 합니다.",
+    action: "실제로 동시에 수행할 수 있는 실험 수로 조정하세요.",
+  },
+  bayesian_optimization_xi_invalid: {
+    title: "탐색 설정 오류",
+    message: "직접 설정한 표준화 ξ는 0~10 사이의 유한한 값이어야 합니다.",
+    action: "preset을 선택하거나 ξ 값을 범위 안에서 입력하세요.",
+  },
+  bayesian_recommendation_query_conflict: {
+    title: "추천 링크 충돌",
+    message: "batch_id와 기존 recommendation_id가 한 URL에 함께 지정되었습니다.",
+    action: "둘 중 하나만 남긴 직접 링크로 다시 여세요.",
+  },
   bayesian_observation_invalid: {
     title: "관측값 오류",
     message: "저장할 objective 관측값은 유한한 숫자여야 합니다.",

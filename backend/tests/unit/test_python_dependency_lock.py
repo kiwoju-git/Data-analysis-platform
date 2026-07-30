@@ -73,7 +73,10 @@ def test_only_bayesian_worker_module_references_sklearn_and_startup_does_not_imp
         path for path in app_root.rglob("*.py") if "sklearn" in path.read_text(encoding="utf-8")
     ]
 
-    assert matches == [app_root / "statistics" / "bayesian_optimization.py"]
+    assert matches == [
+        app_root / "statistics" / "bayesian_batch.py",
+        app_root / "statistics" / "bayesian_optimization.py",
+    ]
 
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(REPO_ROOT / "backend")

@@ -20,6 +20,8 @@ export interface RuntimeCapabilities {
   dataset_cell_correction?: boolean;
   lhs_design?: boolean;
   bayesian_lhs_initial_design?: boolean;
+  bayesian_batch_recommendation?: boolean;
+  bayesian_objective_goal_modes?: boolean;
 }
 
 export interface RuntimeInfoResponse {

@@ -7,6 +7,22 @@ from pathlib import Path
 from app.api.v1.schemas.bayesian import MAX_BAYESIAN_TRIALS, MAX_HISTORY_REVISIONS
 from app.storage.metadata import metadata_db_path
 
+_BATCH_COLUMNS = """
+batch_id, study_version_id, source_history_revision_id,
+source_observation_history_sha256, method_id, method_version,
+batch_size, batch_policy, config_schema_version, result_schema_version,
+model_schema_version, item_schema_version, config_json, config_sha256,
+result_json, result_sha256, created_at, app_version
+"""
+_QUALIFIED_BATCH_COLUMNS = """
+batch.batch_id, batch.study_version_id, batch.source_history_revision_id,
+batch.source_observation_history_sha256, batch.method_id, batch.method_version,
+batch.batch_size, batch.batch_policy, batch.config_schema_version,
+batch.result_schema_version, batch.model_schema_version,
+batch.item_schema_version, batch.config_json, batch.config_sha256,
+batch.result_json, batch.result_sha256, batch.created_at, batch.app_version
+"""
+
 
 class BayesianStorageConflict(RuntimeError):
     def __init__(self, code: str) -> None:
@@ -92,6 +108,40 @@ class BayesianRecommendationRecord:
 
 
 @dataclass(frozen=True)
+class BayesianRecommendationBatchRecord:
+    batch_id: str
+    study_version_id: str
+    source_history_revision_id: str
+    source_observation_history_sha256: str
+    method_id: str
+    method_version: str
+    batch_size: int
+    batch_policy: str
+    config_schema_version: int
+    result_schema_version: int
+    model_schema_version: int
+    item_schema_version: int
+    config_json: str
+    config_sha256: str
+    result_json: str
+    result_sha256: str
+    created_at: str
+    app_version: str
+
+
+@dataclass(frozen=True)
+class BayesianRecommendationBatchItemRecord:
+    item_id: str
+    batch_id: str
+    trial_id: str
+    rank: int
+    item_schema_version: int
+    item_result_json: str
+    item_result_sha256: str
+    created_at: str
+
+
+@dataclass(frozen=True)
 class BayesianStudyLifecycleEventRecord:
     lifecycle_event_id: str
     study_id: str
@@ -115,6 +165,7 @@ class BayesianStudyLifecycleEventRecord:
     created_at: str
     app_version: str
     build_commit: str | None
+    latest_recommendation_batch_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -133,6 +184,8 @@ class BayesianStudyDeletionGraphRecord:
     recommendation_count: int
     lifecycle_event_count: int
     successor_study_ids: tuple[str, ...]
+    recommendation_batch_count: int = 0
+    recommendation_batch_item_count: int = 0
 
 
 def insert_bayesian_study_bundle(
@@ -284,6 +337,29 @@ def delete_bayesian_study_graph_record(
             "DELETE FROM bayesian_study_lifecycle_events WHERE study_id = ?;",
             (expected.study_id,),
         )
+        batch_items = connection.execute(
+            """
+            DELETE FROM bayesian_recommendation_batch_items
+            WHERE batch_id IN (
+                SELECT batch_id FROM bayesian_recommendation_batches
+                WHERE study_version_id IN (
+                    SELECT study_version_id FROM bayesian_study_versions
+                    WHERE study_id = ?
+                )
+            );
+            """,
+            (expected.study_id,),
+        )
+        batches = connection.execute(
+            """
+            DELETE FROM bayesian_recommendation_batches
+            WHERE study_version_id IN (
+                SELECT study_version_id FROM bayesian_study_versions
+                WHERE study_id = ?
+            );
+            """,
+            (expected.study_id,),
+        )
         recommendations = connection.execute(
             """
             DELETE FROM bayesian_recommendations
@@ -306,6 +382,8 @@ def delete_bayesian_study_graph_record(
         )
         if (
             lifecycle.rowcount != expected.lifecycle_event_count
+            or batch_items.rowcount != expected.recommendation_batch_item_count
+            or batches.rowcount != expected.recommendation_batch_count
             or recommendations.rowcount != expected.recommendation_count
             or history_heads.rowcount != expected.history_head_count
         ):
@@ -584,6 +662,270 @@ def count_bayesian_recommendation_records(workspace_root: Path, study_version_id
     return 0 if row is None else _row_int(row[0])
 
 
+def insert_bayesian_recommendation_batch_bundle(
+    workspace_root: Path,
+    *,
+    trials: list[BayesianTrialRecord],
+    batch: BayesianRecommendationBatchRecord,
+    items: list[BayesianRecommendationBatchItemRecord],
+    expected_history_revision_id: str,
+    expected_history_sha256: str,
+    total_trial_budget: int,
+) -> None:
+    connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        if not _study_is_active(connection, batch.study_version_id):
+            raise BayesianStorageConflict("bayesian_study_closed")
+        head = connection.execute(
+            """
+            SELECT revision.history_revision_id,
+                   revision.observation_history_sha256
+            FROM bayesian_observation_history_heads AS head
+            INNER JOIN bayesian_observation_history_revisions AS revision
+                ON revision.history_revision_id = head.history_revision_id
+            WHERE head.study_version_id = ?;
+            """,
+            (batch.study_version_id,),
+        ).fetchone()
+        if head is None or (
+            str(head[0]) != expected_history_revision_id or str(head[1]) != expected_history_sha256
+        ):
+            raise BayesianStorageConflict("bayesian_optimization_history_stale")
+        pending = connection.execute(
+            """
+            SELECT 1 FROM bayesian_trials
+            WHERE study_version_id = ?
+              AND origin = 'recommendation'
+              AND state = 'pending'
+            LIMIT 1;
+            """,
+            (batch.study_version_id,),
+        ).fetchone()
+        if pending is not None:
+            raise BayesianStorageConflict("bayesian_optimization_pending_recommendation_exists")
+        if (
+            not 1 <= batch.batch_size <= 8
+            or len(trials) != batch.batch_size
+            or len(items) != batch.batch_size
+            or [item.rank for item in items] != list(range(1, batch.batch_size + 1))
+            or [item.trial_id for item in items] != [trial.trial_id for trial in trials]
+            or any(trial.study_version_id != batch.study_version_id for trial in trials)
+        ):
+            raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
+        row = connection.execute(
+            """
+            SELECT COUNT(*), COALESCE(MAX(trial_number), 0)
+            FROM bayesian_trials
+            WHERE study_version_id = ?;
+            """,
+            (batch.study_version_id,),
+        ).fetchone()
+        if row is None:
+            raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
+        current_count = _row_int(row[0])
+        current_max = _row_int(row[1])
+        if current_count != current_max:
+            raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
+        if (
+            current_count + batch.batch_size > total_trial_budget
+            or current_count + batch.batch_size > MAX_BAYESIAN_TRIALS
+        ):
+            raise BayesianStorageConflict("bayesian_optimization_budget_exhausted")
+        if [trial.trial_number for trial in trials] != list(
+            range(current_count + 1, current_count + batch.batch_size + 1)
+        ):
+            raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
+        connection.executemany(
+            """
+            INSERT INTO bayesian_trials (
+                trial_id, study_version_id, trial_number, origin, state,
+                actual_coordinates_json, normalized_coordinates_json,
+                coordinates_sha256, objective_value, created_at, closed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            [_trial_values(trial) for trial in trials],
+        )
+        connection.execute(
+            """
+            INSERT INTO bayesian_recommendation_batches (
+                batch_id, study_version_id, source_history_revision_id,
+                source_observation_history_sha256, method_id, method_version,
+                batch_size, batch_policy, config_schema_version,
+                result_schema_version, model_schema_version, item_schema_version,
+                config_json, config_sha256, result_json, result_sha256,
+                created_at, app_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            _batch_values(batch),
+        )
+        connection.executemany(
+            """
+            INSERT INTO bayesian_recommendation_batch_items (
+                item_id, batch_id, trial_id, rank, item_schema_version,
+                item_result_json, item_result_sha256, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            [_batch_item_values(item) for item in items],
+        )
+        item_count = connection.execute(
+            """
+            SELECT COUNT(*) FROM bayesian_recommendation_batch_items
+            WHERE batch_id = ?;
+            """,
+            (batch.batch_id,),
+        ).fetchone()
+        if item_count is None or _row_int(item_count[0]) != batch.batch_size:
+            raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
+        connection.execute(
+            """
+            UPDATE bayesian_studies
+            SET updated_at = ?
+            WHERE study_id = (
+                SELECT study_id FROM bayesian_study_versions
+                WHERE study_version_id = ?
+            );
+            """,
+            (batch.created_at, batch.study_version_id),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def get_bayesian_recommendation_batch_record(
+    workspace_root: Path,
+    batch_id: str,
+) -> BayesianRecommendationBatchRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            f"""
+            SELECT {_BATCH_COLUMNS}
+            FROM bayesian_recommendation_batches
+            WHERE batch_id = ?;
+            """,
+            (batch_id,),
+        ).fetchone()
+    return None if row is None else _batch_from_row(row)
+
+
+def list_bayesian_recommendation_batch_records(
+    workspace_root: Path,
+    study_version_id: str,
+    *,
+    offset: int = 0,
+    limit: int = MAX_BAYESIAN_TRIALS,
+) -> list[BayesianRecommendationBatchRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            f"""
+            SELECT {_BATCH_COLUMNS}
+            FROM bayesian_recommendation_batches
+            WHERE study_version_id = ?
+            ORDER BY created_at, batch_id
+            LIMIT ? OFFSET ?;
+            """,
+            (study_version_id, limit, offset),
+        ).fetchall()
+    return [_batch_from_row(row) for row in rows]
+
+
+def get_latest_bayesian_recommendation_batch_record(
+    workspace_root: Path,
+    study_version_id: str,
+) -> BayesianRecommendationBatchRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            f"""
+            SELECT {_BATCH_COLUMNS}
+            FROM bayesian_recommendation_batches
+            WHERE study_version_id = ?
+            ORDER BY rowid DESC
+            LIMIT 1;
+            """,
+            (study_version_id,),
+        ).fetchone()
+    return None if row is None else _batch_from_row(row)
+
+
+def count_bayesian_recommendation_batch_records(
+    workspace_root: Path,
+    study_version_id: str,
+) -> int:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*) FROM bayesian_recommendation_batches
+            WHERE study_version_id = ?;
+            """,
+            (study_version_id,),
+        ).fetchone()
+    return 0 if row is None else _row_int(row[0])
+
+
+def list_bayesian_recommendation_batch_item_records(
+    workspace_root: Path,
+    batch_id: str,
+) -> list[BayesianRecommendationBatchItemRecord]:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        rows = connection.execute(
+            """
+            SELECT item_id, batch_id, trial_id, rank, item_schema_version,
+                   item_result_json, item_result_sha256, created_at
+            FROM bayesian_recommendation_batch_items
+            WHERE batch_id = ?
+            ORDER BY rank;
+            """,
+            (batch_id,),
+        ).fetchall()
+    return [_batch_item_from_row(row) for row in rows]
+
+
+def get_bayesian_recommendation_batch_for_trial(
+    workspace_root: Path,
+    trial_id: str,
+) -> tuple[BayesianRecommendationBatchRecord, BayesianRecommendationBatchItemRecord] | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            f"""
+            SELECT {_QUALIFIED_BATCH_COLUMNS},
+                   item.item_id, item.batch_id, item.trial_id, item.rank,
+                   item.item_schema_version, item.item_result_json,
+                   item.item_result_sha256, item.created_at
+            FROM bayesian_recommendation_batch_items AS item
+            INNER JOIN bayesian_recommendation_batches AS batch
+                ON batch.batch_id = item.batch_id
+            WHERE item.trial_id = ?;
+            """,
+            (trial_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _batch_from_row(row[:18]), _batch_item_from_row(row[18:])
+
+
+def count_bayesian_recommendation_batch_item_records(
+    workspace_root: Path,
+    study_version_id: str,
+) -> int:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM bayesian_recommendation_batch_items AS item
+            INNER JOIN bayesian_recommendation_batches AS batch
+                ON batch.batch_id = item.batch_id
+            WHERE batch.study_version_id = ?;
+            """,
+            (study_version_id,),
+        ).fetchone()
+    return 0 if row is None else _row_int(row[0])
+
+
 def get_bayesian_study_lifecycle_event_record(
     workspace_root: Path, study_id: str
 ) -> BayesianStudyLifecycleEventRecord | None:
@@ -596,7 +938,8 @@ def get_bayesian_study_lifecycle_event_record(
                    final_history_revision_id,
                    final_observation_history_sha256, final_trial_count,
                    final_completed_trial_count, final_abandoned_trial_count,
-                   latest_recommendation_id, definition_sha256, event_sha256,
+                   latest_recommendation_id, latest_recommendation_batch_id,
+                   definition_sha256, event_sha256,
                    closed_at, created_at, app_version, build_commit
             FROM bayesian_study_lifecycle_events
             WHERE study_id = ?;
@@ -624,7 +967,8 @@ def close_bayesian_study_record(
                    final_history_revision_id,
                    final_observation_history_sha256, final_trial_count,
                    final_completed_trial_count, final_abandoned_trial_count,
-                   latest_recommendation_id, definition_sha256, event_sha256,
+                   latest_recommendation_id, latest_recommendation_batch_id,
+                   definition_sha256, event_sha256,
                    closed_at, created_at, app_version, build_commit
             FROM bayesian_study_lifecycle_events
             WHERE study_id = ?;
@@ -690,12 +1034,24 @@ def close_bayesian_study_record(
             (event.study_version_id,),
         ).fetchone()
         latest_id = None if latest is None else str(latest[0])
+        latest_batch = connection.execute(
+            """
+            SELECT batch_id
+            FROM bayesian_recommendation_batches
+            WHERE study_version_id = ?
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT 1;
+            """,
+            (event.study_version_id,),
+        ).fetchone()
+        latest_batch_id = None if latest_batch is None else str(latest_batch[0])
         if (
             pending_count != 0
             or trial_count != event.final_trial_count
             or completed_count != event.final_completed_trial_count
             or abandoned_count != event.final_abandoned_trial_count
             or latest_id != event.latest_recommendation_id
+            or latest_batch_id != event.latest_recommendation_batch_id
         ):
             raise BayesianStorageConflict("bayesian_study_close_conflict")
         cursor = connection.execute(
@@ -722,9 +1078,10 @@ def close_bayesian_study_record(
                 final_history_revision_id,
                 final_observation_history_sha256, final_trial_count,
                 final_completed_trial_count, final_abandoned_trial_count,
-                latest_recommendation_id, definition_sha256, event_sha256,
+                latest_recommendation_id, latest_recommendation_batch_id,
+                definition_sha256, event_sha256,
                 closed_at, created_at, app_version, build_commit
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             _lifecycle_event_values(event),
         )
@@ -1029,6 +1386,44 @@ def _recommendation_values(
     )
 
 
+def _batch_values(batch: BayesianRecommendationBatchRecord) -> tuple[object, ...]:
+    return (
+        batch.batch_id,
+        batch.study_version_id,
+        batch.source_history_revision_id,
+        batch.source_observation_history_sha256,
+        batch.method_id,
+        batch.method_version,
+        batch.batch_size,
+        batch.batch_policy,
+        batch.config_schema_version,
+        batch.result_schema_version,
+        batch.model_schema_version,
+        batch.item_schema_version,
+        batch.config_json,
+        batch.config_sha256,
+        batch.result_json,
+        batch.result_sha256,
+        batch.created_at,
+        batch.app_version,
+    )
+
+
+def _batch_item_values(
+    item: BayesianRecommendationBatchItemRecord,
+) -> tuple[object, ...]:
+    return (
+        item.item_id,
+        item.batch_id,
+        item.trial_id,
+        item.rank,
+        item.item_schema_version,
+        item.item_result_json,
+        item.item_result_sha256,
+        item.created_at,
+    )
+
+
 def _lifecycle_event_values(
     event: BayesianStudyLifecycleEventRecord,
 ) -> tuple[object, ...]:
@@ -1049,6 +1444,7 @@ def _lifecycle_event_values(
         event.final_completed_trial_count,
         event.final_abandoned_trial_count,
         event.latest_recommendation_id,
+        event.latest_recommendation_batch_id,
         event.definition_sha256,
         event.event_sha256,
         event.closed_at,
@@ -1135,9 +1531,28 @@ def _deletion_graph_from_connection(
              INNER JOIN bayesian_study_versions AS version
                 ON version.study_version_id = recommendation.study_version_id
              WHERE version.study_id = ?),
+            (SELECT COUNT(*) FROM bayesian_recommendation_batches AS batch
+             INNER JOIN bayesian_study_versions AS version
+                ON version.study_version_id = batch.study_version_id
+             WHERE version.study_id = ?),
+            (SELECT COUNT(*) FROM bayesian_recommendation_batch_items AS item
+             INNER JOIN bayesian_recommendation_batches AS batch
+                ON batch.batch_id = item.batch_id
+             INNER JOIN bayesian_study_versions AS version
+                ON version.study_version_id = batch.study_version_id
+             WHERE version.study_id = ?),
             (SELECT COUNT(*) FROM bayesian_study_lifecycle_events WHERE study_id = ?);
         """,
-        (study_id, study_id, study_id, study_id, study_id, study_id),
+        (
+            study_id,
+            study_id,
+            study_id,
+            study_id,
+            study_id,
+            study_id,
+            study_id,
+            study_id,
+        ),
     ).fetchone()
     if counts is None:
         raise BayesianStorageConflict("bayesian_study_deletion_conflict")
@@ -1162,7 +1577,9 @@ def _deletion_graph_from_connection(
         history_revision_count=_row_int(counts[2]),
         history_head_count=_row_int(counts[3]),
         recommendation_count=_row_int(counts[4]),
-        lifecycle_event_count=_row_int(counts[5]),
+        recommendation_batch_count=_row_int(counts[5]),
+        recommendation_batch_item_count=_row_int(counts[6]),
+        lifecycle_event_count=_row_int(counts[7]),
         successor_study_ids=tuple(str(row[0]) for row in successors),
     )
 
@@ -1249,6 +1666,44 @@ def _recommendation_from_row(row: tuple[object, ...]) -> BayesianRecommendationR
     )
 
 
+def _batch_from_row(row: tuple[object, ...]) -> BayesianRecommendationBatchRecord:
+    return BayesianRecommendationBatchRecord(
+        batch_id=str(row[0]),
+        study_version_id=str(row[1]),
+        source_history_revision_id=str(row[2]),
+        source_observation_history_sha256=str(row[3]),
+        method_id=str(row[4]),
+        method_version=str(row[5]),
+        batch_size=_row_int(row[6]),
+        batch_policy=str(row[7]),
+        config_schema_version=_row_int(row[8]),
+        result_schema_version=_row_int(row[9]),
+        model_schema_version=_row_int(row[10]),
+        item_schema_version=_row_int(row[11]),
+        config_json=str(row[12]),
+        config_sha256=str(row[13]),
+        result_json=str(row[14]),
+        result_sha256=str(row[15]),
+        created_at=str(row[16]),
+        app_version=str(row[17]),
+    )
+
+
+def _batch_item_from_row(
+    row: tuple[object, ...],
+) -> BayesianRecommendationBatchItemRecord:
+    return BayesianRecommendationBatchItemRecord(
+        item_id=str(row[0]),
+        batch_id=str(row[1]),
+        trial_id=str(row[2]),
+        rank=_row_int(row[3]),
+        item_schema_version=_row_int(row[4]),
+        item_result_json=str(row[5]),
+        item_result_sha256=str(row[6]),
+        created_at=str(row[7]),
+    )
+
+
 def _lifecycle_event_from_row(
     row: tuple[object, ...],
 ) -> BayesianStudyLifecycleEventRecord:
@@ -1269,12 +1724,13 @@ def _lifecycle_event_from_row(
         final_completed_trial_count=_row_int(row[13]),
         final_abandoned_trial_count=_row_int(row[14]),
         latest_recommendation_id=None if row[15] is None else str(row[15]),
-        definition_sha256=str(row[16]),
-        event_sha256=str(row[17]),
-        closed_at=str(row[18]),
-        created_at=str(row[19]),
-        app_version=str(row[20]),
-        build_commit=None if row[21] is None else str(row[21]),
+        latest_recommendation_batch_id=None if row[16] is None else str(row[16]),
+        definition_sha256=str(row[17]),
+        event_sha256=str(row[18]),
+        closed_at=str(row[19]),
+        created_at=str(row[20]),
+        app_version=str(row[21]),
+        build_commit=None if row[22] is None else str(row[22]),
     )
 
 

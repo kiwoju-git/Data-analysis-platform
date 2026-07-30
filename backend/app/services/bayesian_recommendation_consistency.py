@@ -19,7 +19,13 @@ from app.storage.bayesian_studies import BayesianRecommendationRecord
 
 BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
 SUPPORTED_BAYESIAN_RECOMMENDATION_METHOD_VERSIONS: Final = frozenset(
-    {"0.2.0", "0.2.1", METHOD_VERSIONS[BAYESIAN_METHOD_ID]}
+    {
+        "0.2.0",
+        "0.2.1",
+        "0.2.2",
+        "0.3.0",
+        METHOD_VERSIONS[BAYESIAN_METHOD_ID],
+    }
 )
 
 

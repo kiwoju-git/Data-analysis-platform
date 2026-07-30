@@ -26,7 +26,7 @@ export function BayesianStudyCatalog({
           새 Study 만들기
         </button>
       </div>
-      <label>
+      <label className="bayesian-study-catalog-select">
         <span>저장된 study</span>
         <select
           aria-label="저장된 Bayesian study"

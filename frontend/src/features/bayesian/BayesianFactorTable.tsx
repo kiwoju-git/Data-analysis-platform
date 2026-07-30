@@ -6,7 +6,15 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
   return (
     <>
       <div className="table-wrap">
-        <table className="result-table">
+        <table className="result-table bayesian-factor-table">
+          <colgroup>
+            <col className="bayesian-factor-id-column" />
+            <col className="bayesian-factor-name-column" />
+            <col className="bayesian-factor-bound-column" />
+            <col className="bayesian-factor-bound-column" />
+            <col className="bayesian-factor-unit-column" />
+            <col className="bayesian-factor-action-column" />
+          </colgroup>
           <thead>
             <tr>
               <th>Factor ID</th>
@@ -14,7 +22,7 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
               <th>하한</th>
               <th>상한</th>
               <th>단위</th>
-              <th>제거</th>
+              <th className="bayesian-factor-action-cell">작업</th>
             </tr>
           </thead>
           <tbody>
@@ -67,14 +75,15 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
                     }
                   />
                 </td>
-                <td>
+                <td className="bayesian-factor-action-cell">
                   <button
                     type="button"
-                    className="secondary-button"
+                    className="secondary-button compact-button"
+                    aria-label={`${factor.name} 요인 삭제`}
                     disabled={draft.factors.length === 1}
                     onClick={() => draft.removeFactor(factor.key)}
                   >
-                    제거
+                    삭제
                   </button>
                 </td>
               </tr>

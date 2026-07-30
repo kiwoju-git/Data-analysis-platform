@@ -20,7 +20,7 @@
   },
   "expected_improvement_reference": {
     "direction_normalization": "all_objectives_are_transformed_to_maximize",
-    "formula": "I*Phi(I/sigma)+sigma*phi(I/sigma), I=mu-best-xi; zero when sigma<=0",
+    "formula": "I*Phi(I/sigma)+sigma*phi(I/sigma), I=mu-best-xi; max(I,0) when sigma<=0",
     "absolute_tolerance": 1e-12,
     "cases": [
       {
@@ -42,7 +42,7 @@
         "posterior_std": 0.0,
         "incumbent": 0.0,
         "xi": 0.0,
-        "expected_improvement": 0.0
+        "expected_improvement": 2.0
       }
     ]
   },

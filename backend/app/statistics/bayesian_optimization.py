@@ -53,11 +53,62 @@ def expected_improvement(
     std_values = np.asarray(standard_deviation, dtype=float)
     result = np.zeros_like(mean_values, dtype=float)
     positive = std_values > 0.0
+    improvement_all = mean_values - incumbent - xi
     if np.any(positive):
-        improvement = mean_values[positive] - incumbent - xi
+        improvement = improvement_all[positive]
         z_value = improvement / std_values[positive]
         density = np.exp(-0.5 * z_value**2) / math.sqrt(2.0 * math.pi)
         result[positive] = improvement * ndtr(z_value) + std_values[positive] * density
+    result[~positive] = np.maximum(improvement_all[~positive], 0.0)
+    return result
+
+
+def expected_target_improvement(
+    mean: Any,
+    standard_deviation: Any,
+    target: float,
+    incumbent_distance: float,
+    xi: float,
+) -> Any:
+    import numpy as np
+    from scipy.special import ndtr  # type: ignore[import-untyped]
+
+    mean_values = np.asarray(mean, dtype=float)
+    std_values = np.asarray(standard_deviation, dtype=float)
+    result = np.zeros_like(mean_values, dtype=float)
+    radius = incumbent_distance - xi
+    if radius <= 0.0:
+        return result
+    positive = std_values > 0.0
+    if np.any(positive):
+        mu = mean_values[positive]
+        sigma = std_values[positive]
+        lower = target - radius
+        upper = target + radius
+        z_lower = (lower - mu) / sigma
+        z_target = (target - mu) / sigma
+        z_upper = (upper - mu) / sigma
+        cdf_lower = ndtr(z_lower)
+        cdf_target = ndtr(z_target)
+        cdf_upper = ndtr(z_upper)
+        density_lower = np.exp(-0.5 * z_lower**2) / math.sqrt(2.0 * math.pi)
+        density_target = np.exp(-0.5 * z_target**2) / math.sqrt(2.0 * math.pi)
+        density_upper = np.exp(-0.5 * z_upper**2) / math.sqrt(2.0 * math.pi)
+        probability_left = cdf_target - cdf_lower
+        probability_right = cdf_upper - cdf_target
+        first_moment_left = mu * probability_left + sigma * (density_lower - density_target)
+        first_moment_right = mu * probability_right + sigma * (density_target - density_upper)
+        result[positive] = (
+            (radius - target) * probability_left
+            + first_moment_left
+            + (radius + target) * probability_right
+            - first_moment_right
+        )
+        result[positive] = np.maximum(result[positive], 0.0)
+    result[~positive] = np.maximum(
+        radius - np.abs(mean_values[~positive] - target),
+        0.0,
+    )
     return result
 
 

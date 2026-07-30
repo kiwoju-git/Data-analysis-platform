@@ -15,7 +15,11 @@ export function useBayesianStudyDraftState() {
   ]);
   const [objectiveName, setObjectiveName] = useState("Response");
   const [objectiveUnit, setObjectiveUnit] = useState("");
-  const [direction, setDirection] = useState<"minimize" | "maximize">("maximize");
+  const [goalType, setGoalType] = useState<
+    "minimize" | "maximize" | "match_target"
+  >("maximize");
+  const [targetValue, setTargetValue] = useState("");
+  const [targetTolerance, setTargetTolerance] = useState("");
   const [initialDesignSize, setInitialDesignSize] = useState("2");
   const [initialDesignSeed, setInitialDesignSeed] = useState("20260715");
   const [initialDesignPolicy, setInitialDesignPolicy] = useState<
@@ -108,7 +112,9 @@ export function useBayesianStudyDraftState() {
       constraints,
       objectiveName,
       objectiveUnit,
-      direction,
+      goalType,
+      targetValue,
+      targetTolerance,
       initialDesignSize,
       initialDesignSeed,
       initialDesignPolicy,
@@ -132,7 +138,17 @@ export function useBayesianStudyDraftState() {
     setFactors(nextFactors);
     setObjectiveName(study.objective.name);
     setObjectiveUnit(study.objective.unit ?? "");
-    setDirection(study.objective.direction);
+    setGoalType(study.objective.goal_type);
+    setTargetValue(
+      study.objective.target_value === null
+        ? ""
+        : String(study.objective.target_value),
+    );
+    setTargetTolerance(
+      study.objective.target_tolerance === null
+        ? ""
+        : String(study.objective.target_tolerance),
+    );
     setInitialDesignSize(String(study.initial_design.requested_size));
     setInitialDesignSeed(String(study.initial_design.seed));
     setInitialDesignPolicy(study.initial_design.policy);
@@ -174,7 +190,7 @@ export function useBayesianStudyDraftState() {
     buildRequest,
     cancelSuccessor,
     constraints,
-    direction,
+    goalType,
     factors,
     generateNewSeed,
     initialDesignSeed,
@@ -190,14 +206,18 @@ export function useBayesianStudyDraftState() {
     removeFactor,
     sameSeedAsPredecessor:
       predecessorSeed !== null && Number(initialDesignSeed) === predecessorSeed,
-    setDirection,
+    setGoalType,
     setInitialDesignSeed,
     setInitialDesignPolicy,
     setInitialDesignSize,
     setObjectiveName,
     setObjectiveUnit,
+    setTargetTolerance,
+    setTargetValue,
     setStudyName,
     studyName,
+    targetTolerance,
+    targetValue,
     updateConstraint,
     updateConstraintCoefficient,
     updateFactor,

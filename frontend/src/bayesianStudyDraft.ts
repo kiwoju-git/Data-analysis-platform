@@ -32,6 +32,7 @@ export function bayesianRecommendationBudgetBlocker(
   trialCount: number,
   totalTrialBudget: number,
   hardTrialLimit: number,
+  batchSize = 1,
 ): "bayesian_optimization_trial_budget_invalid" | "bayesian_optimization_budget_exhausted" | null {
   if (
     !Number.isInteger(totalTrialBudget) ||
@@ -40,7 +41,7 @@ export function bayesianRecommendationBudgetBlocker(
   ) {
     return "bayesian_optimization_trial_budget_invalid";
   }
-  return trialCount >= Math.min(totalTrialBudget, hardTrialLimit)
+  return trialCount + batchSize > Math.min(totalTrialBudget, hardTrialLimit)
     ? "bayesian_optimization_budget_exhausted"
     : null;
 }
@@ -106,7 +107,10 @@ export function buildBayesianStudyRequest(input: {
   constraints: ConstraintDraft[];
   objectiveName: string;
   objectiveUnit: string;
-  direction: "minimize" | "maximize";
+  goalType?: "minimize" | "maximize" | "match_target";
+  targetValue?: string;
+  targetTolerance?: string;
+  direction?: "minimize" | "maximize";
   initialDesignSize: string;
   initialDesignSeed: string;
   initialDesignPolicy?:
@@ -125,6 +129,14 @@ export function buildBayesianStudyRequest(input: {
   }));
   const size = Number(input.initialDesignSize);
   const seed = Number(input.initialDesignSeed);
+  const goalType = input.goalType ?? input.direction ?? "maximize";
+  const targetValue =
+    goalType === "match_target" ? Number(input.targetValue ?? "") : null;
+  const targetTolerance =
+    goalType === "match_target" &&
+    (input.targetTolerance ?? "").trim().length > 0
+      ? Number(input.targetTolerance)
+      : null;
   const constraintIds = input.constraints.map((constraint) => constraint.constraintId.trim());
   const parsedConstraints: BayesianLinearConstraintRequest[] = input.constraints.map(
     (constraint) => ({
@@ -170,6 +182,11 @@ export function buildBayesianStudyRequest(input: {
     size > 64 ||
     !Number.isInteger(seed) ||
     seed < 0 ||
+    (goalType === "match_target" &&
+      (targetValue === null ||
+        !Number.isFinite(targetValue) ||
+        (targetTolerance !== null &&
+          (!Number.isFinite(targetTolerance) || targetTolerance <= 0)))) ||
     input.constraints.length > 16 ||
     new Set(constraintIds).size !== constraintIds.length ||
     invalidConstraintCoefficient ||
@@ -196,7 +213,9 @@ export function buildBayesianStudyRequest(input: {
     objective: {
       name: input.objectiveName.trim(),
       unit: input.objectiveUnit.trim() || null,
-      direction: input.direction,
+      goal_type: goalType,
+      target_value: targetValue,
+      target_tolerance: targetTolerance,
       observation_policy: "manual_single_observation",
     },
     constraints: parsedConstraints,

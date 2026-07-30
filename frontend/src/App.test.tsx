@@ -1073,6 +1073,8 @@ describe("App", () => {
         history_revision_count: 2,
         history_head_count: 1,
         recommendation_count: 1,
+        recommendation_batch_count: 0,
+        recommendation_batch_item_count: 0,
         lifecycle_event_count: 1,
         metadata_record_count: 10,
         file_count: 0,
