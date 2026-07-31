@@ -75,11 +75,12 @@ describe("Bayesian batch and DOE presentation", () => {
   it("renders aligned LHS setting groups and a randomization card", () => {
     const html = renderToStaticMarkup(<LatinHypercubePanel />);
 
-    expect(html).toContain('class="doe-form-section"');
-    expect(html).toContain('class="doe-field-grid"');
+    expect(html).toContain('class="doe-compact-section"');
+    expect(html).toContain('class="doe-settings-matrix"');
     expect(html).toContain('class="doe-advanced-settings"');
-    expect(html).toContain('class="doe-factor-editor"');
+    expect(html).toContain("doe-factor-editor");
     expect(html).toContain('class="doe-action-bar"');
+    expect(html).not.toContain('class="doe-form-section"');
     expect(html).toContain("lhs-randomization-card is-selected");
     expect(html).toContain("실행 순서 무작위화");
     expect(html).toContain("compact-button");

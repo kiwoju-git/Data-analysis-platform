@@ -917,10 +917,11 @@ describe("App", () => {
     expect(html).toContain("초기 실험 수");
     expect(html).toContain("실제 단위 선형 제약");
     expect(html).toContain("제약 추가");
-    expect(html).toContain('class="doe-form-section"');
-    expect(html).toContain('class="doe-field-grid"');
-    expect(html).toContain('class="doe-factor-editor"');
+    expect(html).toContain('class="doe-compact-section"');
+    expect(html).toContain('class="doe-settings-matrix"');
+    expect(html).toContain("doe-factor-editor");
     expect(html).toContain('class="doe-action-bar"');
+    expect(html).not.toContain('class="doe-form-section"');
   });
 
   it("builds actual-unit Bayesian linear constraints and rejects invalid drafts", () => {
@@ -1205,10 +1206,11 @@ describe("App", () => {
     expect(html).toContain("Face-centered CCD");
     expect(html).toContain("CCD 생성");
     expect(html).toContain("Full quadratic, no automatic selection");
-    expect(html).toContain('class="doe-form-section"');
-    expect(html).toContain('class="doe-field-grid"');
-    expect(html).toContain('class="doe-factor-editor"');
+    expect(html).toContain('class="doe-compact-section"');
+    expect(html).toContain('class="doe-settings-matrix"');
+    expect(html).toContain("doe-factor-editor");
     expect(html).toContain('class="doe-action-bar"');
+    expect(html).not.toContain('class="doe-form-section"');
   });
 
   it("renders factorial inputs with the shared DOE form structure", () => {
@@ -1230,10 +1232,11 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain('class="doe-form-section"');
-    expect(html).toContain('class="doe-field-grid"');
-    expect(html).toContain('class="doe-factor-editor"');
+    expect(html).toContain('class="doe-compact-section"');
+    expect(html).toContain('class="doe-settings-matrix"');
+    expect(html).toContain("doe-factor-editor");
     expect(html).toContain('class="doe-action-bar"');
+    expect(html).not.toContain('class="doe-form-section"');
   });
 
   it("renders bounded response optimizer objectives, constraints, and budgets", () => {

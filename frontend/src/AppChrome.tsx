@@ -193,7 +193,9 @@ export function AppChrome({
             {healthLabel}
           </span>
         </header>
-        <ActiveDatasetVersionSelector {...activeDatasetSelectorProps} />
+        <div className="active-dataset-region">
+          <ActiveDatasetVersionSelector {...activeDatasetSelectorProps} />
+        </div>
         {children}
       </main>
     </div>

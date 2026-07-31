@@ -4,6 +4,24 @@ Last updated: 2026-07-31
 
 ## Local Validation
 
+- The dataset-context/DOE-compact correction is based on pushed main
+  `582be068cfe8407d55e352a3846e37255b8b9e30`. It changes only frontend
+  DOM/CSS/component structure and browser assertions; API contract 7,
+  metadata schema 18, all method versions, calculations, and stored-result
+  contracts remain unchanged.
+- Final `scripts/check.ps1` completed in 1086.8 seconds: tutorial Markdown
+  verification 18, Ruff/format over 183 Python files, mypy over 113 source
+  modules, backend pytest 884, frontend lint/typecheck and Vitest 241, and the
+  production build all passed. The existing Vite main-chunk warning remains
+  informational.
+- The final isolated Chromium critical path passed in 130.7 seconds with
+  diagnostics under `.tmp/e2e-diagnostics-doe-compact-alignment-final`.
+  Outer-card measurements were 0.00 px on both edges against the project grid
+  at desktop/mobile widths and against the analysis shell. Factorial, RSM,
+  LHS, Response Optimizer, and Bayesian compact screenshots were captured
+  while the complete design, response, optimization, recommendation, restore,
+  upload, graph, export, and recovery paths remained successful.
+
 - The project-dashboard/DOE-navigation work is based on pushed main
   `f77c5b05dfc0950e653b1b99125dbb84a1c907f3`. It advances API contract 6 to
   7 so the visible optimizer catalog uses canonical

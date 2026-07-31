@@ -988,12 +988,20 @@ textarea {
   line-height: 1.4;
 }
 
-.context-bar {
+.active-dataset-region {
+  background: var(--surface-page);
+  padding: 12px var(--app-content-gutter) 0;
+}
+
+.active-dataset-card {
   display: grid;
   gap: 10px;
-  border-bottom: 1px solid var(--brand-blue-border);
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--brand-blue-border);
+  border-radius: 8px;
   background: #f7faff;
-  padding: 10px var(--app-content-gutter);
+  padding: 12px 14px;
   color: #384457;
   font-size: 0.9rem;
 }
@@ -3129,54 +3137,84 @@ table {
   gap: 18px;
 }
 
-.doe-form-section,
-.doe-factor-editor {
+.doe-compact-section {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   border: 1px solid var(--border-default);
   border-radius: 6px;
   background: var(--surface-panel);
-  padding: 18px;
+  padding: 14px;
 }
 
-.doe-form-section-heading {
+.doe-compact-section-heading {
   display: flex;
-  align-items: start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
 }
 
-.doe-form-section-heading h4,
-.doe-form-section-heading p {
+.doe-compact-section-heading h4,
+.doe-compact-section-heading p {
   margin: 0;
 }
 
-.doe-form-section-heading p {
+.doe-compact-section-heading p {
   margin-top: 4px;
   color: var(--text-secondary);
   font-size: 0.84rem;
 }
 
-.doe-field-grid {
+.doe-settings-matrix {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: start;
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--border-default);
 }
 
-.doe-field-grid > label {
+.doe-settings-matrix > label {
   display: grid;
   align-content: start;
-  gap: 7px;
+  grid-template-rows: auto auto 1fr;
+  gap: 8px;
   min-width: 0;
+  margin: 0;
+  padding: 0 10px 10px;
+  background: #ffffff;
 }
 
-.doe-field-grid input:not([type="checkbox"]),
-.doe-field-grid select {
+.doe-settings-matrix > label > span:first-child {
+  margin: 0 -10px;
+  padding: 8px 10px;
+  background: #eaf2ff;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.doe-settings-matrix input:not([type="checkbox"]),
+.doe-settings-matrix select {
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: 38px;
+}
+
+.doe-settings-matrix input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  align-self: center;
+  margin: 2px 0;
+}
+
+.doe-settings-matrix .cell-subtext {
+  align-self: start;
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
 }
 
 .doe-factor-table {
@@ -3212,9 +3250,24 @@ table {
   vertical-align: middle;
 }
 
+.doe-compact-table {
+  min-width: 760px;
+}
+
+.doe-compact-table input,
+.doe-compact-table select {
+  width: 100%;
+  min-width: 0;
+}
+
+.response-optimizer-factor-table th,
+.response-optimizer-factor-table td {
+  white-space: nowrap;
+}
+
 .doe-advanced-settings {
   border: 1px solid var(--border-default);
-  border-radius: 5px;
+  border-radius: 4px;
   background: #f8fafc;
 }
 
@@ -3224,7 +3277,7 @@ table {
   flex-wrap: wrap;
   gap: 8px;
   cursor: pointer;
-  padding: 11px 14px;
+  padding: 9px 12px;
   color: var(--brand-logo-blue);
   font-weight: 700;
 }
@@ -3237,7 +3290,7 @@ table {
 
 .doe-advanced-settings-body {
   border-top: 1px solid var(--border-default);
-  padding: 14px;
+  padding: 10px;
 }
 
 .doe-action-bar {
@@ -3254,7 +3307,7 @@ table {
 }
 
 .bayesian-initial-design-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .bayesian-target-grid {
@@ -3275,17 +3328,13 @@ table {
 
 .lhs-randomization-card {
   display: grid;
-  align-content: center;
-  gap: 9px;
+  align-content: start;
+  gap: 8px;
   min-height: 100%;
-  border: 1px solid var(--border-default);
-  background: var(--surface-panel);
-  padding: 14px;
   cursor: pointer;
 }
 
 .lhs-randomization-card.is-selected {
-  border-color: var(--brand-nav-blue);
   background: var(--brand-blue-soft);
 }
 
@@ -3293,6 +3342,7 @@ table {
   display: flex;
   align-items: center;
   gap: 9px;
+  background: #eaf2ff;
 }
 
 .lhs-randomization-card small {
@@ -3548,7 +3598,7 @@ table {
 }
 
 @media (max-width: 900px) {
-  .doe-field-grid {
+  .doe-settings-matrix {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3567,12 +3617,12 @@ table {
 }
 
 @media (max-width: 600px) {
-  .doe-field-grid {
+  .doe-settings-matrix {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .doe-action-bar,
-  .doe-form-section-heading {
+  .doe-compact-section-heading {
     align-items: stretch;
     flex-direction: column;
   }
@@ -4591,8 +4641,12 @@ td select {
     padding: 20px var(--app-content-gutter-mobile) 32px;
   }
 
-  .context-bar {
-    padding: 10px var(--app-content-gutter-mobile);
+  .active-dataset-region {
+    padding: 10px var(--app-content-gutter-mobile) 0;
+  }
+
+  .active-dataset-card {
+    padding: 12px;
   }
 
   .active-dataset-picker {

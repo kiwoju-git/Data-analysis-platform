@@ -480,6 +480,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_project_dashboard(page, diagnostics)
             verify_sidebar_group_toggle(page, diagnostics)
             open_primary_navigation(page, "분석")
+            verify_active_dataset_analysis_alignment(page, diagnostics)
             expect(page.locator("#workbench-title")).to_have_text("기술통계")
             page.get_by_role("button", name="기술통계 실행").click()
             diagnostics.step("run descriptive statistics")
@@ -518,9 +519,9 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             diagnostics.step("verify attribute control chart")
             verify_attribute_control_chart(page)
             diagnostics.step("verify DOE factorial analysis")
-            verify_doe_factorial_analysis(page)
+            verify_doe_factorial_analysis(page, diagnostics)
             diagnostics.step("verify DOE response surface analysis and optimization")
-            verify_doe_response_surface_analysis(page)
+            verify_doe_response_surface_analysis(page, diagnostics)
             diagnostics.step("verify standalone LHS design and response revision")
             verify_latin_hypercube_design(page, diagnostics)
             diagnostics.step("verify Bayesian study observations and recommendation")
@@ -680,51 +681,19 @@ def verify_project_dashboard(page: Page, diagnostics: E2EDiagnostics) -> None:
     expect(page.get_by_role("img", name=re.compile(r"수치형 .*개"))).to_be_visible()
     expect(page.locator(".active-dataset-technical")).to_have_count(0)
 
-    left_locators = (
-        page.locator(".topbar-title"),
-        page.locator(".active-dataset-picker > label"),
-        page.locator("#project-overview-title"),
-        page.locator(".project-dashboard-card").first,
-    )
-    left_edges = [
-        box["x"]
-        for locator in left_locators
-        if (box := locator.bounding_box()) is not None
-    ]
-    if len(left_edges) != len(left_locators):
-        raise AssertionError("project dashboard left alignment bounds unavailable")
-    left_delta = max(left_edges) - min(left_edges)
-    diagnostics.record(f"[e2e] project dashboard left-edge delta={left_delta:.2f}px")
-    if left_delta > 2:
-        raise AssertionError(
-            f"project dashboard left edges differed by {left_delta:.2f}px"
-        )
-
-    right_locators = (
-        page.locator(".topbar .status-pill"),
-        page.locator(".active-dataset-summary"),
-        page.locator(".project-overview-heading .secondary-button"),
+    assert_active_dataset_outer_alignment(
+        page,
         page.locator(".project-dashboard-grid"),
+        diagnostics,
+        "project dashboard",
     )
-    right_edges = [
-        box["x"] + box["width"]
-        for locator in right_locators
-        if (box := locator.bounding_box()) is not None
-    ]
-    if len(right_edges) != len(right_locators):
-        raise AssertionError("project dashboard right alignment bounds unavailable")
-    right_delta = max(right_edges) - min(right_edges)
-    diagnostics.record(f"[e2e] project dashboard right-edge delta={right_delta:.2f}px")
-    if right_delta > 2:
-        raise AssertionError(
-            f"project dashboard right edges differed by {right_delta:.2f}px"
-        )
 
     diagnostics.capture_page(page, "project-dashboard-desktop.png")
     diagnostics.capture_locator(
         page.locator(".main"),
         "project-context-alignment.png",
     )
+    diagnostics.capture_page(page, "active-dataset-aligned-project.png")
     diagnostics.capture_locator(
         page.locator(".brand-home-link"),
         "project-brand-home-link.png",
@@ -740,8 +709,65 @@ def verify_project_dashboard(page: Page, diagnostics: E2EDiagnostics) -> None:
         raise AssertionError(
             f"project dashboard overflowed mobile viewport by {mobile_overflow}px"
         )
+    assert_active_dataset_outer_alignment(
+        page,
+        page.locator(".project-dashboard-grid"),
+        diagnostics,
+        "mobile project dashboard",
+    )
     diagnostics.capture_page(page, "project-dashboard-mobile.png")
+    diagnostics.capture_page(page, "active-dataset-aligned-mobile.png")
     page.set_viewport_size({"width": 1440, "height": 900})
+
+
+def assert_active_dataset_outer_alignment(
+    page: Page,
+    content: Locator,
+    diagnostics: E2EDiagnostics,
+    label: str,
+) -> None:
+    dataset_card = page.locator(".active-dataset-card")
+    main = page.locator(".main")
+    card_box = dataset_card.bounding_box()
+    content_box = content.bounding_box()
+    main_box = main.bounding_box()
+    if card_box is None or content_box is None or main_box is None:
+        raise AssertionError(f"{label} outer alignment bounds unavailable")
+    left_delta = abs(card_box["x"] - content_box["x"])
+    right_delta = abs(
+        card_box["x"]
+        + card_box["width"]
+        - content_box["x"]
+        - content_box["width"]
+    )
+    diagnostics.record(
+        f"[e2e] {label} dataset-card edges: left={left_delta:.2f}px "
+        f"right={right_delta:.2f}px"
+    )
+    if left_delta > 2 or right_delta > 2:
+        raise AssertionError(
+            f"{label} dataset card differed from content by "
+            f"left={left_delta:.2f}px right={right_delta:.2f}px"
+        )
+    if card_box["width"] >= main_box["width"] - 2:
+        raise AssertionError(f"{label} dataset card still spans the full main width")
+    if card_box["x"] <= main_box["x"] + 2:
+        raise AssertionError(f"{label} dataset card has no outer content gutter")
+
+
+def verify_active_dataset_analysis_alignment(
+    page: Page,
+    diagnostics: E2EDiagnostics,
+) -> None:
+    analysis_shell = page.locator(".analysis-shell")
+    expect(analysis_shell).to_be_visible()
+    assert_active_dataset_outer_alignment(
+        page,
+        analysis_shell,
+        diagnostics,
+        "analysis shell",
+    )
+    diagnostics.capture_page(page, "active-dataset-aligned-analysis.png")
 
 
 def verify_graph_builder_box_plot(page: Page) -> None:
@@ -1638,11 +1664,14 @@ def verify_attribute_control_chart(page: Page) -> None:
     ).to_be_disabled()
 
 
-def verify_doe_factorial_analysis(page: Page) -> None:
+def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> None:
     open_primary_navigation(page, "분석")
     select_method_card(page, "실험 계획법", "실험 계획 생성")
     expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
     expect_lazy_analysis_module(page, "DoeAnalysisPanels")
+    expect(page.locator(".doe-form-section")).to_have_count(0)
+    expect(page.locator(".doe-settings-matrix").first).to_be_visible()
+    diagnostics.capture_page(page, "doe-factorial-compact.png")
 
     page.get_by_label("반복", exact=True).fill("2")
     page.get_by_label("센터점", exact=True).fill("1")
@@ -1771,9 +1800,15 @@ def verify_lazy_panel_error_boundary(
         page.close()
 
 
-def verify_doe_response_surface_analysis(page: Page) -> None:
+def verify_doe_response_surface_analysis(
+    page: Page,
+    diagnostics: E2EDiagnostics,
+) -> None:
     select_method_card(page, "실험 계획법", "반응표면법")
     expect(page.locator("#workbench-title")).to_have_text("반응표면법")
+    expect(page.locator(".doe-form-section")).to_have_count(0)
+    expect(page.locator(".doe-settings-matrix").first).to_be_visible()
+    diagnostics.capture_page(page, "doe-rsm-compact.png")
 
     page.locator("details.doe-advanced-settings > summary").click()
     page.get_by_label("실행 순서 무작위화").uncheck()
@@ -1874,6 +1909,9 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
             timeout=20_000,
         )
         source_selector.select_option(source_value)
+        expect(dedicated_page.locator(".doe-form-section")).to_have_count(0)
+        expect(dedicated_page.locator(".doe-settings-matrix").first).to_be_visible()
+        diagnostics.capture_page(dedicated_page, "doe-optimizer-compact.png")
         expect(dedicated_page.get_by_label("선택한 RSM source metadata")).to_be_visible(
             timeout=20_000
         )
@@ -1969,7 +2007,10 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
     workspace = page.locator(".lhs-workspace")
     expect(workspace).to_be_visible(timeout=20_000)
 
-    option_inputs = workspace.locator(".doe-form-section > .doe-field-grid input")
+    expect(workspace.locator(".doe-form-section")).to_have_count(0)
+    option_inputs = workspace.locator(
+        ".doe-compact-section > .doe-settings-matrix input"
+    )
     control_tops = [
         box["y"]
         for index in range(option_inputs.count())
@@ -1977,6 +2018,7 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
     ]
     assert control_tops and max(control_tops) - min(control_tops) <= 2
     diagnostics.capture_page(page, "lhs-settings-aligned.png")
+    diagnostics.capture_page(page, "doe-lhs-compact.png")
     option_inputs.nth(1).fill("6")
     workspace.locator(":scope > .doe-action-bar .primary-button").click()
     expect(workspace.locator("#lhs-quality-title")).to_be_visible(timeout=20_000)
@@ -2012,9 +2054,10 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     page.get_by_role("button", name="제약 추가").click()
     page.get_by_label("제약 1 x 계수").fill("1")
     page.get_by_label("제약 1 우변").fill("0.75")
+    expect(page.locator(".doe-form-section")).to_have_count(0)
     core_controls = (
-        page.locator(".doe-form-section")
-        .first.locator(".doe-field-grid")
+        page.locator(".doe-compact-section")
+        .first.locator(".doe-settings-matrix")
         .first.locator("input, select")
     )
     control_tops = [
@@ -2024,6 +2067,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     ]
     assert control_tops and max(control_tops) - min(control_tops) <= 2
     diagnostics.capture_page(page, "bayesian-study-builder-aligned.png")
+    diagnostics.capture_page(page, "doe-bayesian-compact.png")
     page.get_by_label("최적화 목표").select_option("match_target")
     page.get_by_label("목표값", exact=True).fill("0.5")
     page.get_by_label("허용 오차 (선택)").fill("0.1")

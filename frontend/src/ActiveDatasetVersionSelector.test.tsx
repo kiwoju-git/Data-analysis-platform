@@ -24,6 +24,10 @@ describe("ActiveDatasetVersionSelector", () => {
       />,
     );
 
+    expect(html).toContain(
+      'class="active-dataset-card active-dataset-selector"',
+    );
+    expect(html).not.toContain('class="context-bar');
     expect(html).toContain('class="active-dataset-picker"');
     expect(html).toContain('class="active-dataset-inline-help"');
     expect(html).toContain('aria-describedby="active-dataset-help"');

@@ -6,6 +6,26 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-07-31 dataset-context/DOE-compact correction run additionally:
+
+- measures the outer `.active-dataset-card` rather than its internal label,
+  and requires both edges to match the project grid and analysis shell within
+  2 px while remaining narrower than the full main region;
+- records 0.00 px left and right differences for the desktop project, mobile
+  project, and desktop analysis views;
+- verifies the obsolete large `doe-form-section` class is absent from
+  Factorial, RSM, LHS, Response Optimizer, and Bayesian builders;
+- captures each method's compact settings matrix and retained factor/constraint
+  tables while still completing design creation, response revisions, RSM
+  analysis/optimization, and the Bayesian recommendation lifecycle; and
+- retains the existing immutable dataset correction, graph, analysis, export,
+  model, quality, route, and recovery paths.
+
+The final isolated Chromium run passed with diagnostics under
+`.tmp/e2e-diagnostics-doe-compact-alignment-final`. Relevant screenshots include
+`active-dataset-aligned-analysis.png`, `active-dataset-aligned-project.png`,
+`active-dataset-aligned-mobile.png`, and `doe-{factorial,lhs,rsm,optimizer,bayesian}-compact.png`.
+
 The 2026-07-31 project-dashboard/DOE-navigation run additionally:
 
 - verifies the top bar, active-dataset context, and project dashboard share a

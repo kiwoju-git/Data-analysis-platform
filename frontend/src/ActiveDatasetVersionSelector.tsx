@@ -39,7 +39,10 @@ export function ActiveDatasetVersionSelector({
   const disabled = isSwitching || catalogState.isLoading;
 
   return (
-    <section className="context-bar active-dataset-selector" aria-label="데이터셋 컨텍스트">
+    <section
+      className="active-dataset-card active-dataset-selector"
+      aria-label="데이터셋 컨텍스트"
+    >
       <div className="active-dataset-main">
         <div className="active-dataset-picker">
           <label htmlFor="active-dataset-version">현재 분석 데이터셋</label>

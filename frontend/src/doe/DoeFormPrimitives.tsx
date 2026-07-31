@@ -11,8 +11,8 @@ export function DoeFormSection({
 }) {
   const headingId = useId();
   return (
-    <section className="doe-form-section" aria-labelledby={headingId}>
-      <div className="doe-form-section-heading">
+    <section className="doe-compact-section" aria-labelledby={headingId}>
+      <div className="doe-compact-section-heading">
         <div>
           <h4 id={headingId}>{title}</h4>
           {description ? <p>{description}</p> : null}
@@ -30,7 +30,9 @@ export function DoeFieldGrid({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={`doe-field-grid ${className}`.trim()}>{children}</div>;
+  return (
+    <div className={`doe-settings-matrix ${className}`.trim()}>{children}</div>
+  );
 }
 
 export function DoeFactorEditor({
@@ -46,8 +48,11 @@ export function DoeFactorEditor({
 }) {
   const headingId = useId();
   return (
-    <section className="doe-factor-editor" aria-labelledby={headingId}>
-      <div className="doe-form-section-heading">
+    <section
+      className="doe-compact-section doe-factor-editor"
+      aria-labelledby={headingId}
+    >
+      <div className="doe-compact-section-heading">
         <div>
           <h4 id={headingId}>{title}</h4>
           {description ? <p>{description}</p> : null}

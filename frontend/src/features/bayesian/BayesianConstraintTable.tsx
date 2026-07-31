@@ -1,16 +1,15 @@
 import type { ConstraintDraft } from "../../bayesianStudyDraft";
+import { DoeFactorEditor } from "../../doe/DoeFormPrimitives";
 import type { useBayesianStudyDraftState } from "./hooks/useBayesianStudyDraftState";
 
 type DraftState = ReturnType<typeof useBayesianStudyDraftState>;
 
 export function BayesianConstraintTable({ draft }: { draft: DraftState }) {
   return (
-    <>
-      <div className="panel-heading">
-        <div>
-          <h4>실제 단위 선형 제약</h4>
-          <p>각 제약은 입력한 factor 단위에서 계산되며 0이 아닌 계수가 필요합니다.</p>
-        </div>
+    <DoeFactorEditor
+      title="실제 단위 선형 제약"
+      description="각 제약은 입력한 요인 단위에서 계산되며 0이 아닌 계수가 필요합니다."
+      action={
         <button
           type="button"
           className="secondary-button"
@@ -19,12 +18,13 @@ export function BayesianConstraintTable({ draft }: { draft: DraftState }) {
         >
           제약 추가
         </button>
-      </div>
+      }
+    >
       {draft.constraints.length === 0 ? (
-        <p className="cell-subtext">선형 제약이 없으면 선언한 factor bounds만 적용됩니다.</p>
+        <p className="cell-subtext">선형 제약이 없으면 선언한 요인 범위만 적용됩니다.</p>
       ) : (
         <div className="table-wrap">
-          <table className="result-table">
+          <table className="result-table doe-compact-table bayesian-constraint-table">
             <thead>
               <tr>
                 <th>제약 ID</th>
@@ -34,7 +34,7 @@ export function BayesianConstraintTable({ draft }: { draft: DraftState }) {
                 ))}
                 <th>관계</th>
                 <th>우변</th>
-                <th>제거</th>
+                <th>작업</th>
               </tr>
             </thead>
             <tbody>
@@ -113,10 +113,10 @@ export function BayesianConstraintTable({ draft }: { draft: DraftState }) {
                       }
                     />
                   </td>
-                  <td>
+                  <td className="doe-factor-action-cell">
                     <button
                       type="button"
-                      className="secondary-button"
+                      className="secondary-button compact-button"
                       aria-label={`제약 ${index + 1} 제거`}
                       onClick={() => draft.removeConstraint(constraint.key)}
                     >
@@ -129,6 +129,6 @@ export function BayesianConstraintTable({ draft }: { draft: DraftState }) {
           </table>
         </div>
       )}
-    </>
+    </DoeFactorEditor>
   );
 }

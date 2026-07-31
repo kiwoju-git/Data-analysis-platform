@@ -13,6 +13,7 @@ import { restoredOptimizationMatchesSelection } from "./dedicatedResultRestore";
 import { createLatestRequestGuard } from "./latestRequest";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 import { useResponseSurfaceAnalysisCatalogState } from "./useResponseSurfaceAnalysisCatalogState";
+import { DoeFieldGrid, DoeFormSection } from "./doe/DoeFormPrimitives";
 
 export function ResponseOptimizerWorkspace({
   onNavigateToResponseSurface,
@@ -132,32 +133,37 @@ export function ResponseOptimizerWorkspace({
         저장된 full quadratic RSM 분석을 선택합니다. Source dependency와 checksum을 다시
         검증하며, blocking model은 최적화를 실행할 수 없습니다.
       </div>
-      <div className="option-grid option-grid-wide">
-        <label>
-          <span>Source 반응표면 분석</span>
-          <select
-            aria-label="Source 반응표면 분석"
-            disabled={catalogState.isLoading || isRestoring}
-            value={selectedValue}
-            onChange={(event) => selectSource(event.target.value)}
-          >
-            <option value="">반응표면 분석 선택</option>
-            {selectedValue !== "" && catalogState.selectedSource === null ? (
-              <option value={selectedValue}>
-                저장된 선택 · {shortId(catalogState.selectedAnalysisId ?? "")}
-              </option>
-            ) : null}
-            {catalogState.catalog?.analyses.map((item) => (
-              <option
-                key={item.analysis_id}
-                value={`${item.design_id}:${item.analysis_id}`}
-              >
-                {sourceLabel(item)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <DoeFormSection
+        title="Source RSM 선택"
+        description="저장된 full quadratic 분석과 연결 무결성을 확인합니다."
+      >
+        <DoeFieldGrid>
+          <label>
+            <span>Source 반응표면 분석</span>
+            <select
+              aria-label="Source 반응표면 분석"
+              disabled={catalogState.isLoading || isRestoring}
+              value={selectedValue}
+              onChange={(event) => selectSource(event.target.value)}
+            >
+              <option value="">반응표면 분석 선택</option>
+              {selectedValue !== "" && catalogState.selectedSource === null ? (
+                <option value={selectedValue}>
+                  저장된 선택 · {shortId(catalogState.selectedAnalysisId ?? "")}
+                </option>
+              ) : null}
+              {catalogState.catalog?.analyses.map((item) => (
+                <option
+                  key={item.analysis_id}
+                  value={`${item.design_id}:${item.analysis_id}`}
+                >
+                  {sourceLabel(item)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </DoeFieldGrid>
+      </DoeFormSection>
       {catalogState.catalog?.total === 0 && catalogState.selectedAnalysisId === null ? (
         <div className="notice-box">
           <p>

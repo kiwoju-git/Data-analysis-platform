@@ -160,6 +160,7 @@ export function FactorialDesignPanel({
           />
         </label>
         <label className="inline-option">
+          <span>실행 순서 무작위화</span>
           <input
             checked={randomize}
             type="checkbox"
@@ -167,7 +168,6 @@ export function FactorialDesignPanel({
               setRandomize(event.currentTarget.checked);
             }}
           />
-          <span>실행 순서 무작위화</span>
         </label>
       </DoeFieldGrid>
       </DoeAdvancedSettings>
