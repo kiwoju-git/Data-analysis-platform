@@ -1,8 +1,29 @@
 # CI Status
 
-Last updated: 2026-07-30
+Last updated: 2026-07-31
 
 ## Local Validation
+
+- The project-dashboard/DOE-navigation work is based on pushed main
+  `f77c5b05dfc0950e653b1b99125dbb84a1c907f3`. It advances API contract 6 to
+  7 so the visible optimizer catalog uses canonical
+  `doe.response_optimizer`; metadata schema remains 18 and optimizer method
+  0.3.0 plus config/result/source-bundle schema 2 remain unchanged. Stored
+  `regression.response_optimizer` records and checksums are restored without
+  rewriting.
+- Final full validation passed tutorial Markdown verification 18, Ruff and
+  format over 183 Python files, mypy over 113 source modules, backend pytest
+  884, frontend lint/typecheck and Vitest 241, and the production build. The
+  existing Vite main-chunk warning remains informational.
+- The isolated Chromium critical path passed and wrote diagnostics under
+  `.tmp/e2e-diagnostics-project-doe`. It verifies the compact dataset context,
+  desktop 2x2/mobile one-column project dashboard, project brand links,
+  Factorial/RSM/LHS/Bayesian shared form structure, legacy optimizer route
+  replacement with query preservation, canonical optimizer execution and
+  restore, and the retained upload-to-export workflows. Project shell
+  measurements recorded a 0.00 px left-edge delta and 0.02 px right-edge
+  delta; the 390 px project and Bayesian pages had no page-level horizontal
+  overflow.
 
 - The Bayesian objective-goal and synchronous batch-recommendation work is
   based on pushed main `fb6593e18bfedf301e63e5703835b1d44a1af1a3`.

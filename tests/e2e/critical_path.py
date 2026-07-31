@@ -476,6 +476,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             expect(page.get_by_label("붙여넣기 원문")).to_have_value("")
             expect_dataset_context_counts(page, row_label="6행", column_label="2컬럼")
 
+            diagnostics.step("verify project dashboard alignment and brand links")
+            verify_project_dashboard(page, diagnostics)
             verify_sidebar_group_toggle(page, diagnostics)
             open_primary_navigation(page, "분석")
             expect(page.locator("#workbench-title")).to_have_text("기술통계")
@@ -593,15 +595,9 @@ def select_method_card(page: Page, module_label: str, method_label: str) -> None
     page.locator(".method-item").filter(has_text=method_label).click()
 
 
-def capture_hypothesis_method_cards(
-    page: Page, diagnostics: E2EDiagnostics
-) -> None:
-    equivalence = page.locator(".method-item").filter(
-        has_text="동등성 검정"
-    )
-    wilcoxon = page.locator(".method-item").filter(
-        has_text="1-표본 Wilcoxon"
-    )
+def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> None:
+    equivalence = page.locator(".method-item").filter(has_text="동등성 검정")
+    wilcoxon = page.locator(".method-item").filter(has_text="1-표본 Wilcoxon")
     expect(equivalence).to_have_count(1)
     expect(wilcoxon).to_have_count(1)
     for card in (equivalence, wilcoxon):
@@ -669,6 +665,83 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     diagnostics.capture_page(page, "sidebar-collapsed-analysis.png")
     control.click()
     expect(control).to_have_attribute("aria-expanded", "true")
+
+
+def verify_project_dashboard(page: Page, diagnostics: E2EDiagnostics) -> None:
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.locator(".brand-home-link").click()
+    expect(page).to_have_url(re.compile(r"/project(?:\?|$)"))
+    expect(page.locator("#project-overview-title")).to_have_text("프로젝트 개요")
+    expect(page.locator(".project-dashboard-card")).to_have_count(4)
+    expect(page.get_by_role("heading", name="현재 분석 데이터셋")).to_be_visible()
+    expect(page.get_by_role("heading", name="데이터셋 현황")).to_be_visible()
+    expect(page.get_by_role("heading", name="최근 분석")).to_be_visible()
+    expect(page.get_by_role("heading", name="모델 및 리포트")).to_be_visible()
+    expect(page.get_by_role("img", name=re.compile(r"수치형 .*개"))).to_be_visible()
+    expect(page.locator(".active-dataset-technical")).to_have_count(0)
+
+    left_locators = (
+        page.locator(".topbar-title"),
+        page.locator(".active-dataset-picker > label"),
+        page.locator("#project-overview-title"),
+        page.locator(".project-dashboard-card").first,
+    )
+    left_edges = [
+        box["x"]
+        for locator in left_locators
+        if (box := locator.bounding_box()) is not None
+    ]
+    if len(left_edges) != len(left_locators):
+        raise AssertionError("project dashboard left alignment bounds unavailable")
+    left_delta = max(left_edges) - min(left_edges)
+    diagnostics.record(f"[e2e] project dashboard left-edge delta={left_delta:.2f}px")
+    if left_delta > 2:
+        raise AssertionError(
+            f"project dashboard left edges differed by {left_delta:.2f}px"
+        )
+
+    right_locators = (
+        page.locator(".topbar .status-pill"),
+        page.locator(".active-dataset-summary"),
+        page.locator(".project-overview-heading .secondary-button"),
+        page.locator(".project-dashboard-grid"),
+    )
+    right_edges = [
+        box["x"] + box["width"]
+        for locator in right_locators
+        if (box := locator.bounding_box()) is not None
+    ]
+    if len(right_edges) != len(right_locators):
+        raise AssertionError("project dashboard right alignment bounds unavailable")
+    right_delta = max(right_edges) - min(right_edges)
+    diagnostics.record(f"[e2e] project dashboard right-edge delta={right_delta:.2f}px")
+    if right_delta > 2:
+        raise AssertionError(
+            f"project dashboard right edges differed by {right_delta:.2f}px"
+        )
+
+    diagnostics.capture_page(page, "project-dashboard-desktop.png")
+    diagnostics.capture_locator(
+        page.locator(".main"),
+        "project-context-alignment.png",
+    )
+    diagnostics.capture_locator(
+        page.locator(".brand-home-link"),
+        "project-brand-home-link.png",
+    )
+
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.locator(".mobile-brand-home-link").click()
+    expect(page).to_have_url(re.compile(r"/project(?:\?|$)"))
+    mobile_overflow = page.evaluate(
+        "() => document.documentElement.scrollWidth - window.innerWidth"
+    )
+    if mobile_overflow > 1:
+        raise AssertionError(
+            f"project dashboard overflowed mobile viewport by {mobile_overflow}px"
+        )
+    diagnostics.capture_page(page, "project-dashboard-mobile.png")
+    page.set_viewport_size({"width": 1440, "height": 900})
 
 
 def verify_graph_builder_box_plot(page: Page) -> None:
@@ -926,18 +999,18 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
     expect(
         page.get_by_role("button", name="프로젝트 개요", exact=True)
     ).to_have_attribute("aria-current", "page")
-    expect(page.get_by_role("heading", name="프로젝트", exact=True)).to_be_visible(
+    expect(page.get_by_role("heading", name="프로젝트 개요", exact=True)).to_be_visible(
         timeout=15_000
     )
     expect_lazy_workspace_page(page, "ProjectOverviewPage")
     expect(
         page.get_by_text(
-            "현재 버전은 하나의 로컬 작업공간을 프로젝트로 관리합니다.",
+            "현재 로컬 작업공간의 데이터와 분석 자산을 한눈에 확인합니다.",
             exact=True,
         )
     ).to_be_visible()
     page.reload(wait_until="networkidle")
-    expect(page.get_by_role("heading", name="프로젝트", exact=True)).to_be_visible(
+    expect(page.get_by_role("heading", name="프로젝트 개요", exact=True)).to_be_visible(
         timeout=15_000
     )
 
@@ -1573,7 +1646,8 @@ def verify_doe_factorial_analysis(page: Page) -> None:
 
     page.get_by_label("반복", exact=True).fill("2")
     page.get_by_label("센터점", exact=True).fill("1")
-    page.get_by_label("랜덤화", exact=True).uncheck()
+    page.locator("details.doe-advanced-settings > summary").click()
+    page.get_by_label("실행 순서 무작위화", exact=True).uncheck()
     page.get_by_role("button", name="DOE 설계 생성").click()
     expect(page.get_by_text("2-level screening design", exact=True)).to_be_visible(
         timeout=20_000
@@ -1701,6 +1775,7 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
     select_method_card(page, "실험 계획법", "반응표면법")
     expect(page.locator("#workbench-title")).to_have_text("반응표면법")
 
+    page.locator("details.doe-advanced-settings > summary").click()
     page.get_by_label("실행 순서 무작위화").uncheck()
     page.get_by_role("button", name="CCD 생성").click()
     expect(page.get_by_role("heading", name="CCD 실행표와 반응 입력")).to_be_visible(
@@ -1780,6 +1855,9 @@ def verify_doe_response_surface_analysis(page: Page) -> None:
         dedicated_page.goto(
             f"{frontend_base_url}/analysis/regression/regression.response_optimizer",
             wait_until="networkidle",
+        )
+        expect(dedicated_page).to_have_url(
+            re.compile(r"/analysis/doe/doe\.response_optimizer")
         )
         expect(dedicated_page.locator("#workbench-title")).to_have_text(
             "반응 최적화", timeout=20_000
@@ -1880,9 +1958,7 @@ def verify_dataset_cell_correction(page: Page) -> None:
     expect(page.locator("#version-title")).to_contain_text("v2", timeout=20_000)
 
 
-def verify_latin_hypercube_design(
-    page: Page, diagnostics: E2EDiagnostics
-) -> None:
+def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> None:
     origin = page.evaluate("window.location.origin")
     active_version_id = page.locator("#active-dataset-version").input_value()
     page.goto(
@@ -1893,7 +1969,7 @@ def verify_latin_hypercube_design(
     workspace = page.locator(".lhs-workspace")
     expect(workspace).to_be_visible(timeout=20_000)
 
-    option_inputs = workspace.locator(".lhs-core-settings-grid input")
+    option_inputs = workspace.locator(".doe-form-section > .doe-field-grid input")
     control_tops = [
         box["y"]
         for index in range(option_inputs.count())
@@ -1902,7 +1978,7 @@ def verify_latin_hypercube_design(
     assert control_tops and max(control_tops) - min(control_tops) <= 2
     diagnostics.capture_page(page, "lhs-settings-aligned.png")
     option_inputs.nth(1).fill("6")
-    workspace.locator(":scope > .primary-button").click()
+    workspace.locator(":scope > .doe-action-bar .primary-button").click()
     expect(workspace.locator("#lhs-quality-title")).to_be_visible(timeout=20_000)
     expect(workspace.locator(".lhs-run-table tbody tr")).to_have_count(6)
     expect(workspace.locator('a[download][href$="/export.csv"]')).to_be_visible()
@@ -1921,9 +1997,7 @@ def verify_latin_hypercube_design(
     )
 
 
-def verify_bayesian_optimization(
-    page: Page, diagnostics: E2EDiagnostics
-) -> None:
+def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> None:
     select_method_card(page, "실험 계획법", "베이지안 최적화")
     expect(page.locator("#workbench-title")).to_have_text(
         "베이지안 최적화", timeout=15_000
@@ -1938,7 +2012,11 @@ def verify_bayesian_optimization(
     page.get_by_role("button", name="제약 추가").click()
     page.get_by_label("제약 1 x 계수").fill("1")
     page.get_by_label("제약 1 우변").fill("0.75")
-    core_controls = page.locator(".bayesian-study-core-grid input, .bayesian-study-core-grid select")
+    core_controls = (
+        page.locator(".doe-form-section")
+        .first.locator(".doe-field-grid")
+        .first.locator("input, select")
+    )
     control_tops = [
         box["y"]
         for index in range(core_controls.count())
@@ -1961,7 +2039,7 @@ def verify_bayesian_optimization(
     diagnostics.capture_page(page, "bayesian-mobile.png")
     page.set_viewport_size({"width": 1440, "height": 900})
     page.get_by_label("최적화 목표").select_option("maximize")
-    page.get_by_role("button", name="Study 생성").click()
+    page.get_by_role("button", name="스터디 생성").click()
     summary = page.get_by_label("Bayesian study 상태")
     expect(summary).to_be_visible(timeout=20_000)
     expect(summary).to_contain_text("0 / 2")
@@ -1985,9 +2063,7 @@ def verify_bayesian_optimization(
     ).click()
     recommendation_button = page.get_by_role("button", name="추천 batch 생성")
     expect(recommendation_button).to_be_enabled(timeout=20_000)
-    page.get_by_role(
-        "radio", name="여러 실험을 동시에 수행"
-    ).check()
+    page.get_by_role("radio", name="여러 실험을 동시에 수행").check()
     page.get_by_label("한 번에 추천할 실험 수").fill("2")
     diagnostics.capture_page(page, "bayesian-parallel-batch-settings.png")
     page.get_by_role("radio", name="결과를 하나씩 반영").check()
@@ -2045,7 +2121,9 @@ def verify_bayesian_optimization(
     assert next_coordinates != abandoned_coordinates
     expect(result_section.get_by_text("실험 대기", exact=True)).to_be_visible()
     expect(recommendation_button).to_be_disabled()
-    expect(page.get_by_text("남은 trial 예산보다 batch 수가 큽니다", exact=False)).to_be_visible()
+    expect(
+        page.get_by_text("남은 trial 예산보다 batch 수가 큽니다", exact=False)
+    ).to_be_visible()
 
     study_selector = page.get_by_label("저장된 Bayesian study")
     study_id = study_selector.input_value()
@@ -2056,7 +2134,9 @@ def verify_bayesian_optimization(
     restored_selector = page.get_by_label("저장된 Bayesian study")
     expect(restored_selector).to_have_value(study_id, timeout=20_000)
     expect(page.get_by_label("Trial 5 관측값")).to_be_visible(timeout=20_000)
-    expect(page.get_by_text("남은 trial 예산보다 batch 수가 큽니다", exact=False)).to_be_visible()
+    expect(
+        page.get_by_text("남은 trial 예산보다 batch 수가 큽니다", exact=False)
+    ).to_be_visible()
     expect(
         page.locator(
             'section[aria-labelledby="bayesian-batch-result-title"]'
@@ -2102,7 +2182,7 @@ def verify_bayesian_optimization(
         )
     ).to_be_visible()
     expect(page.get_by_role("button", name="새 random seed 생성")).to_be_visible()
-    page.get_by_role("button", name="Successor 생성 취소").click()
+    page.get_by_role("button", name="후속 스터디 생성 취소").click()
     page.get_by_label("Bayesian 최적화").get_by_role(
         "button", name="삭제 영향 확인"
     ).click()

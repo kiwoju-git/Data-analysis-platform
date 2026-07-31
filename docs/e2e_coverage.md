@@ -6,6 +6,26 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-07-31 project-dashboard/DOE-navigation run additionally:
+
+- verifies the top bar, active-dataset context, and project dashboard share a
+  common content gutter, with measured desktop edge deltas of 0.00 px left and
+  0.02 px right;
+- checks the desktop 2x2 and mobile one-column project dashboard, variable
+  composition legend, compact dataset selector, and desktop/mobile project
+  brand links without page reload;
+- confirms the old regression Response Optimizer URL is replaced by the
+  canonical DOE route, then executes and restores the same RSM optimizer
+  workflow;
+- exercises the shared Factorial, RSM, LHS, and Bayesian DOE form structure,
+  including advanced settings, factor editors, response revisions, and
+  recommendation lifecycle; and
+- retains the complete upload, parsing, immutable correction, analysis,
+  export, model, quality, graph-layout, and lazy-route paths.
+
+The isolated Chromium run passed with diagnostics under
+`.tmp/e2e-diagnostics-project-doe`.
+
 The 2026-07-25 graph-layout/navigation refinement run additionally:
 
 - checks four-variable Box Plot, Histogram, Q-Q, and ECDF small multiples and
@@ -234,11 +254,13 @@ The current smoke test is `tests/e2e/critical_path.py`.
   the recommended factor settings, point prediction, individual/composite
   desirability, constraint status, search termination, confirmation-run
   warning, and explicit absence of a global-optimum guarantee.
-- Opens the top-level `regression.response_optimizer` route, selects the stored
-  RSM analysis, runs the shared optimizer panel, records `optimization_id`, and
+- Opens the legacy top-level `regression.response_optimizer` route, verifies an
+  in-place redirect to `doe.response_optimizer`, selects the stored RSM
+  analysis, runs the shared optimizer panel, records `optimization_id`, and
   reloads the ID-only deep link to verify source, eligibility, and stored
-  recommendation/desirability restore. Both dedicated routes assert that
-  unrelated generic analysis history/export headings are absent.
+  recommendation/desirability restore. Query fields are preserved and both
+  dedicated routes assert that unrelated generic analysis history/export
+  headings are absent.
 - Creates RSM response revision 2 through the explicit correction flow after
   analysis and verifies that newest-first revision history retains revision 1.
 - Creates a one-factor Bayesian study with an actual-unit upper-bound linear
@@ -303,6 +325,7 @@ browser critical path.
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`
+  - `verify project dashboard alignment and brand links`
   - `run descriptive statistics`
   - `verify graph builder box plot preview`
   - `run two-sample t test`
