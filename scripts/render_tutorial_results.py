@@ -507,7 +507,7 @@ RENDERERS: dict[str, Callable[[dict[str, Any]], RenderedResult]] = {
     "quality.gage_rr": _gage,
     "doe.factorial_design": _factorial,
     "doe.response_surface": _rsm,
-    "regression.response_optimizer": _optimizer,
+    "doe.response_optimizer": _optimizer,
     "doe.bayesian_optimization": _bayesian,
 }
 

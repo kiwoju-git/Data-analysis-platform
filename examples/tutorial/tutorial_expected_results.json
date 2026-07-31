@@ -658,10 +658,10 @@
         ]
       }
     },
-    "regression.response_optimizer": {
+    "doe.response_optimizer": {
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2",
-      "method_id": "regression.response_optimizer",
+      "method_id": "doe.response_optimizer",
       "method_version": "0.3.0",
       "relative_tolerance": 1e-08,
       "result": {

@@ -248,7 +248,6 @@ Gate B0 storage/run foundation 후에도 다음 기능은 아직 공통 플랫�
 | 회귀 | `regression.xy_correlation` | X–Y Correlation |
 | 회귀 | `regression.linear_model` | Fit Regression Model |
 | 회귀 | `regression.predict` | Predict |
-| 회귀 | `regression.response_optimizer` | Response Optimizer |
 | 품질 | `quality.attribute_control_chart` | Control Chart |
 | 품질 | `quality.individuals_chart` | Variables Charts for Individuals |
 | 품질 | `quality.subgroup_chart` | Variables Charts for Subgroups |
@@ -259,6 +258,7 @@ Gate B0 storage/run foundation 후에도 다음 기능은 아직 공통 플랫�
 | DOE | `doe.factorial_design` | Design of Experiments |
 | DOE | `doe.latin_hypercube` | Latin Hypercube Sampling |
 | DOE | `doe.response_surface` | Response Surface Method |
+| DOE | `doe.response_optimizer` | Response Optimizer |
 | DOE | `doe.bayesian_optimization` | Bayesian Optimization |
 
 메서드의 계산 방식이 바뀌면 ID를 재사용하면서 결과 의미를 바꾸지 말고 `method_version`을 올린다.
@@ -1049,9 +1049,9 @@ pairwise deletion은 셀마다 N이 달라질 수 있음을 결과에 강조한�
 
 Prediction target selection, independent reference fixture, browser cross-dataset fit/preflight/predict, paged result retrieval, 그리고 전체 prediction row의 checksum-validated wide CSV export는 현재 구현되어 있다. 다음 prediction 확장은 별도 계약에서 manual single-row input 범위를 먼저 정의해야 한다.
 
-## 12.5 Response Optimizer (`regression.response_optimizer`)
+## 12.5 Response Optimizer (`doe.response_optimizer`)
 
-현재 구현 상태: `regression.response_optimizer`는 catalog에서
+현재 구현 상태: `doe.response_optimizer`는 DOE catalog에서
 available/dedicated로 표시되고 top-level Workbench와 `ResponseSurfacePanel`
 embedded entry에서 같은 `ResponseOptimizerPanel`을 사용한다. Paged metadata-only
 RSM analysis catalog는 source ID, revision, method, eligibility count만 반환하고,
@@ -1069,6 +1069,9 @@ issue는 recommendation 없이 거부한다. low residual df와 influence/levera
 normality advisory는 typed warning code를 사용자가 명시적으로 확인해야 하고 그
 목록을 config/result에 저장한다. 상세 계약은
 `docs/response_optimizer_contract.md`를 따른다.
+
+기존 `regression.response_optimizer` v0.3.0 저장 결과와 direct URL은
+checksum을 다시 쓰지 않고 복원한다. 새 결과만 canonical DOE ID로 저장한다.
 
 ### 선행 조건
 
@@ -1391,7 +1394,7 @@ draft → designed → randomized → responses_in_progress → completed → an
 
 ## 14.3 Response Surface Method (`doe.response_surface`)
 
-현재 구현 상태: Gate D2의 RSM 및 bounded optimizer slice가 구현되어 있다. `doe.response_surface` v0.2.0 전용 API에서 2-5개 연속 factor의 CCD를 생성하며 새 design schema 2는 family를 `central_composite`로 저장하고 rotatable/face-centered geometry는 `alpha_mode`로 구분한다. 기존 schema-1 `central_composite_inscribed` payload는 원래 family/mode/SHA를 유지해 복원한다. Response revision schema 1과 analysis envelope/config schema 2는 exact historical response revision을 고정하며 calculation result schema는 1을 유지한다. 분석 후 참조 revision은 API/UI 모두 read-only이고 잘못 입력한 값을 고칠 때는 current revision을 supersede하는 새 revision을 생성한다. coefficient inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, Hessian stationary-point 분류와 axial/factorial 영역 판정, 첫 두 factor의 21x21 contour payload, Workbench current/history/correction UI, SQLite schema-10 checksum/dependency 저장을 지원한다. 적합 후 같은 화면에서 source-model eligibility gate를 통과한 경우에만 maximize/minimize/target/range desirability, 좁힌 factor bounds, 선형 부등식 제약, deterministic search budget을 사용하는 `regression.response_optimizer` v0.3.0을 실행하고 검증된 결과를 복원할 수 있다. 상세 revision/분석/optimizer 계약은 `docs/doe_response_revision_contract.md`, `docs/response_surface_method_contract.md`, `docs/response_optimizer_contract.md`를 따른다.
+현재 구현 상태: Gate D2의 RSM 및 bounded optimizer slice가 구현되어 있다. `doe.response_surface` v0.2.0 전용 API에서 2-5개 연속 factor의 CCD를 생성하며 새 design schema 2는 family를 `central_composite`로 저장하고 rotatable/face-centered geometry는 `alpha_mode`로 구분한다. 기존 schema-1 `central_composite_inscribed` payload는 원래 family/mode/SHA를 유지해 복원한다. Response revision schema 1과 analysis envelope/config schema 2는 exact historical response revision을 고정하며 calculation result schema는 1을 유지한다. 분석 후 참조 revision은 API/UI 모두 read-only이고 잘못 입력한 값을 고칠 때는 current revision을 supersede하는 새 revision을 생성한다. coefficient inference, partial drop-one ANOVA, pure error/lack-of-fit, residual/influence diagnostics, Hessian stationary-point 분류와 axial/factorial 영역 판정, 첫 두 factor의 21x21 contour payload, Workbench current/history/correction UI, SQLite schema-10 checksum/dependency 저장을 지원한다. 적합 후 같은 화면에서 source-model eligibility gate를 통과한 경우에만 maximize/minimize/target/range desirability, 좁힌 factor bounds, 선형 부등식 제약, deterministic search budget을 사용하는 `doe.response_optimizer` v0.3.0을 실행하고 검증된 결과를 복원할 수 있다. 상세 revision/분석/optimizer 계약은 `docs/doe_response_revision_contract.md`, `docs/response_surface_method_contract.md`, `docs/response_optimizer_contract.md`를 따른다.
 
 ### P0
 

@@ -490,12 +490,12 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
   candidates 256, multi-start 8, max evaluations 5000, time 5000ms.
 - **클릭 순서:** source 선택 > eligibility 확인/필요 warning 승인 > goal/bounds > 실행.
 - **실행 전 확인:** blocker 없음, advisory는 code별 명시 승인, constraints와 bounds를 검토한다.
-<!-- TUTORIAL_RESULT:regression.response_optimizer:start -->
-- **검증 source:** `regression.response_optimizer` v0.3.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
+<!-- TUTORIAL_RESULT:doe.response_optimizer:start -->
+- **검증 source:** `doe.response_optimizer` v0.3.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
 - **예상 실제 결과 (표시 반올림):**
   - goal `maximize`, temperature=76.5545, pressure=9.6828, predicted=90.9982
   - composite desirability=1.0000, termination `search_completed`, global optimum guaranteed=false
-<!-- TUTORIAL_RESULT:regression.response_optimizer:end -->
+<!-- TUTORIAL_RESULT:doe.response_optimizer:end -->
 - **먼저 읽을 값:** source model, goal/threshold, coordinates, predicted response, desirability,
   constraint slack, termination reason.
 - **해석 예시:** fitted model과 선언한 region/goal 아래의 확인 실험 후보다.

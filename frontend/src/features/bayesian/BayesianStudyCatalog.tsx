@@ -20,10 +20,10 @@ export function BayesianStudyCatalog({
       <div className="panel-heading">
         <div>
           <h4 id="bayesian-study-catalog-title">Study 선택</h4>
-          <p>저장된 metadata catalog를 페이지 단위로 탐색하거나 새 Study를 만듭니다.</p>
+          <p>저장된 스터디 목록을 페이지 단위로 탐색하거나 새 스터디를 만듭니다.</p>
         </div>
         <button type="button" className="primary-button" disabled={disabled} onClick={onCreateNew}>
-          새 Study 만들기
+          새 스터디 만들기
         </button>
       </div>
       <label className="bayesian-study-catalog-select">

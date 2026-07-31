@@ -1,14 +1,21 @@
 # Response Optimizer Contract
 
-Last updated: 2026-07-18
+Last updated: 2026-07-31
 
 ## Scope
 
-`regression.response_optimizer` v0.3.0 optimizes one or more checksum-validated
+`doe.response_optimizer` v0.3.0 optimizes one or more checksum-validated
 `doe.response_surface` full-quadratic models over their shared declared factor
 region. It is catalog-available with `execution_mode=dedicated` through both
-the RSM panel and `/analysis/regression/regression.response_optimizer`. It does
+the RSM panel and `/analysis/doe/doe.response_optimizer`. It does
 not execute through generic `POST /api/v1/analysis-runs`.
+
+The previous `regression.response_optimizer` ID remains a legacy read contract.
+Existing records keep that exact method ID, version, config/result hashes, and
+source-bundle hash. Direct legacy URLs are replaced in place with the canonical
+DOE route while preserving `design_id`, `analysis_id`, `optimization_id`, and
+`dataset_version_id` query fields. The legacy ID is not returned as a second
+visible method card and is never used for a new write.
 
 Implemented:
 
@@ -51,8 +58,9 @@ Not implemented:
 | source bundle | `2` |
 | SQLite metadata | `10` |
 
-`METHOD_VERSIONS["regression.response_optimizer"]` is the only method-version
-source. The first persisted contract was v0.1.0/schema 1. Typed eligibility and
+`METHOD_VERSIONS["doe.response_optimizer"]` is the current write-version source;
+the legacy key remains registered only for exact historical restore. The first
+persisted contract was v0.1.0/schema 1. Typed eligibility and
 acknowledgment fields change persisted semantics, so the current contract is
 v0.2.0 with config/result schema 2. Version 0.3.0 keeps those optimizer schemas
 and calculations, but source bundle schema 2 now includes each RSM analysis's
@@ -73,9 +81,11 @@ exclude response/run values and paths; selecting one uses the existing full
 design/analysis GETs before rendering `ResponseOptimizerPanel`. ID-only
 `design_id` and `analysis_id` query fields restore source selection.
 
-This entrypoint/catalog-only change keeps method `0.3.0`, config/result schema
-`2`, and source-bundle schema `2`; optimizer calculation and stored semantics
-are unchanged.
+Moving the canonical catalog entry from Regression to DOE keeps method `0.3.0`,
+config/result schema `2`, and source-bundle schema `2`; optimizer calculation
+and stored semantics are unchanged. API contract 7 prevents a new frontend
+from assuming the canonical DOE catalog entry when paired with an older
+backend. SQLite remains schema 18 because no stored method ID is rewritten.
 
 ## Source Validation
 

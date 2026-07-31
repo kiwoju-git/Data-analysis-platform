@@ -68,9 +68,9 @@ describe("dataset correction and LHS usability", () => {
 
     expect(html).toContain("LHS 공간충전 설계");
     expect(html).toContain("Discrepancy 개선");
-    expect(html).toContain("GP 계산 bare minimum");
+    expect(html).toContain("GP 계산 최소");
     expect(html).toContain("LHS 설계 생성");
-    expect(html).toContain("별도 Bayesian Study가 LHS 초기점을 생성");
+    expect(html).toContain("별도 베이지안 스터디가 LHS 초기점을 생성");
   });
 
   it("offers DOE methods by design purpose", () => {

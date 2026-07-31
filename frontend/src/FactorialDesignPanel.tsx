@@ -11,6 +11,13 @@ import type {
   FactorialDesignCreateRequest,
   FactorialDesignResponse,
 } from "./api";
+import {
+  DoeActionBar,
+  DoeAdvancedSettings,
+  DoeFactorEditor,
+  DoeFieldGrid,
+  DoeFormSection,
+} from "./doe/DoeFormPrimitives";
 
 interface FactorDraft {
   id: string;
@@ -93,7 +100,11 @@ export function FactorialDesignPanel({
 
   return (
     <section className="analysis-run-panel" data-analysis-execution={methodId}>
-      <div className="option-grid">
+      <DoeFormSection
+        title="설계 기본 설정"
+        description="2수준 요인배치의 반복과 센터점 수를 정합니다."
+      >
+      <DoeFieldGrid>
         <label>
           <span>설계 이름</span>
           <input
@@ -123,8 +134,13 @@ export function FactorialDesignPanel({
             }}
           />
         </label>
+      </DoeFieldGrid>
+      <DoeAdvancedSettings
+        summaryText={`seed ${randomizationSeed} · ${randomize ? "실행 순서 무작위화" : "표준 순서"}`}
+      >
+      <DoeFieldGrid>
         <label>
-          <span>Seed</span>
+          <span>무작위화 seed</span>
           <input
             inputMode="numeric"
             value={randomizationSeed}
@@ -134,7 +150,7 @@ export function FactorialDesignPanel({
           />
         </label>
         <label>
-          <span>Block</span>
+          <span>블록 수</span>
           <input
             inputMode="numeric"
             value={blockCount}
@@ -151,18 +167,50 @@ export function FactorialDesignPanel({
               setRandomize(event.currentTarget.checked);
             }}
           />
-          <span>랜덤화</span>
+          <span>실행 순서 무작위화</span>
         </label>
-      </div>
+      </DoeFieldGrid>
+      </DoeAdvancedSettings>
+      </DoeFormSection>
+      <DoeFactorEditor
+        action={
+          <button
+            className="secondary-button"
+            disabled={factors.length >= maxFactorCount}
+            onClick={() => {
+              setFactors((current) => [
+                ...current,
+                {
+                  id: `factor-${Date.now()}`,
+                  name: `Factor ${current.length + 1}`,
+                  low: "0",
+                  high: "1",
+                  unit: "",
+                },
+              ]);
+            }}
+            type="button"
+          >
+            요인 추가
+          </button>
+        }
+      >
       <div className="table-wrap">
-        <table className="result-table">
+        <table className="result-table doe-factor-table">
+          <colgroup>
+            <col className="doe-factor-name-column" />
+            <col className="doe-factor-bound-column" />
+            <col className="doe-factor-bound-column" />
+            <col className="doe-factor-unit-column" />
+            <col className="doe-factor-action-column" />
+          </colgroup>
           <thead>
             <tr>
               <th>요인</th>
-              <th>Low</th>
-              <th>High</th>
-              <th>Unit</th>
-              <th>Action</th>
+              <th>하한</th>
+              <th>상한</th>
+              <th>단위</th>
+              <th className="doe-factor-action-cell">작업</th>
             </tr>
           </thead>
           <tbody>
@@ -206,8 +254,9 @@ export function FactorialDesignPanel({
                     }}
                   />
                 </td>
-                <td>
+                <td className="doe-factor-action-cell">
                   <button
+                    className="secondary-button compact-button"
                     disabled={factors.length <= 2}
                     onClick={() => {
                       setFactors((current) => current.filter((item) => item.id !== factor.id));
@@ -222,25 +271,11 @@ export function FactorialDesignPanel({
           </tbody>
         </table>
       </div>
-      <div className="button-row">
-        <button
-          disabled={factors.length >= maxFactorCount}
-          onClick={() => {
-            setFactors((current) => [
-              ...current,
-              {
-                id: `factor-${Date.now()}`,
-                name: `Factor ${current.length + 1}`,
-                low: "0",
-                high: "1",
-                unit: "",
-              },
-            ]);
-          }}
-          type="button"
-        >
-          요인 추가
-        </button>
+      </DoeFactorEditor>
+      {validation.message !== null ? (
+        <div className="notice-box notice-warning">{validation.message}</div>
+      ) : null}
+      <DoeActionBar summary={`예상 실험 ${validation.runCount.toLocaleString()}개`}>
         <button
           className="primary-button"
           disabled={isCreating || validation.kind === "error"}
@@ -253,7 +288,7 @@ export function FactorialDesignPanel({
         >
           {isCreating ? "생성 중" : "DOE 설계 생성"}
         </button>
-      </div>
+      </DoeActionBar>
       <div className="metadata-grid" aria-label="DOE 설계 입력 요약">
         <span>예상 run</span>
         <strong>{validation.runCount.toLocaleString()}</strong>
@@ -264,9 +299,6 @@ export function FactorialDesignPanel({
         <span>Analysis</span>
         <strong>효과·OLS/ANOVA 지원</strong>
       </div>
-      {validation.message !== null ? (
-        <div className="notice-box notice-warning">{validation.message}</div>
-      ) : null}
       {error !== null ? <div className="error-box">오류 코드: {error}</div> : null}
       {design !== null ? (
         <FactorialDesignPreview

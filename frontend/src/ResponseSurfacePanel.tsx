@@ -11,6 +11,13 @@ import {
   type ResponseSurfaceDesignCreateRequest,
   type ResponseSurfaceDesignResponse,
 } from "./api";
+import {
+  DoeActionBar,
+  DoeAdvancedSettings,
+  DoeFactorEditor,
+  DoeFieldGrid,
+  DoeFormSection,
+} from "./doe/DoeFormPrimitives";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 
 interface FactorDraft {
@@ -182,7 +189,11 @@ export function ResponseSurfacePanel() {
 
   return (
     <section className="analysis-run-panel" aria-label="반응표면법 설계와 분석 입력">
-      <div className="option-grid">
+      <DoeFormSection
+        title="설계 기본 설정"
+        description="반응표면 설계 방식과 센터점 수를 정합니다."
+      >
+      <DoeFieldGrid>
         <label>
           <span>설계 이름</span>
           <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
@@ -207,8 +218,13 @@ export function ResponseSurfacePanel() {
             onChange={(event) => setCenterPoints(event.currentTarget.value)}
           />
         </label>
+      </DoeFieldGrid>
+      <DoeAdvancedSettings
+        summaryText={`seed ${randomizationSeed} · ${randomize ? "실행 순서 무작위화" : "표준 순서"}`}
+      >
+      <DoeFieldGrid>
         <label>
-          <span>Randomization seed</span>
+          <span>무작위화 seed</span>
           <input
             inputMode="numeric"
             value={randomizationSeed}
@@ -223,17 +239,44 @@ export function ResponseSurfacePanel() {
             onChange={(event) => setRandomize(event.currentTarget.checked)}
           />
         </label>
-      </div>
+      </DoeFieldGrid>
+      </DoeAdvancedSettings>
+      </DoeFormSection>
 
+      <DoeFactorEditor
+        action={
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={factors.length >= maxFactorCount}
+            onClick={() => {
+              const id = nextFactorId.current++;
+              setFactors((current) => [
+                ...current,
+                { id, name: `Factor ${id}`, low: "-1", high: "1", unit: "" },
+              ]);
+            }}
+          >
+            요인 추가
+          </button>
+        }
+      >
       <div className="table-wrap">
-        <table className="result-table">
+        <table className="result-table doe-factor-table">
+          <colgroup>
+            <col className="doe-factor-name-column" />
+            <col className="doe-factor-bound-column" />
+            <col className="doe-factor-bound-column" />
+            <col className="doe-factor-unit-column" />
+            <col className="doe-factor-action-column" />
+          </colgroup>
           <thead>
             <tr>
               <th>요인</th>
               <th>설계 하한</th>
               <th>설계 상한</th>
               <th>단위</th>
-              <th>제거</th>
+              <th className="doe-factor-action-cell">작업</th>
             </tr>
           </thead>
           <tbody>
@@ -277,10 +320,10 @@ export function ResponseSurfacePanel() {
                     }
                   />
                 </td>
-                <td>
+                <td className="doe-factor-action-cell">
                   <button
                     type="button"
-                    className="secondary-button"
+                    className="secondary-button compact-button"
                     disabled={factors.length <= 2}
                     onClick={() => setFactors((current) => current.filter((item) => item.id !== factor.id))}
                   >
@@ -292,21 +335,8 @@ export function ResponseSurfacePanel() {
           </tbody>
         </table>
       </div>
-      <div className="button-row">
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={factors.length >= maxFactorCount}
-          onClick={() => {
-            const id = nextFactorId.current++;
-            setFactors((current) => [
-              ...current,
-              { id, name: `Factor ${id}`, low: "-1", high: "1", unit: "" },
-            ]);
-          }}
-        >
-          요인 추가
-        </button>
+      </DoeFactorEditor>
+      <DoeActionBar summary={`예상 실험 ${estimatedRunCount}개`}>
         <button
           type="button"
           className="primary-button"
@@ -315,7 +345,7 @@ export function ResponseSurfacePanel() {
         >
           {isCreating ? "생성 중" : "CCD 생성"}
         </button>
-      </div>
+      </DoeActionBar>
       <div className="metadata-grid" aria-label="반응표면 설계 입력 요약">
         <span>예상 run</span>
         <strong>{estimatedRunCount}</strong>

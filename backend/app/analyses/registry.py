@@ -40,7 +40,12 @@ METHOD_VERSIONS: dict[str, str] = {
     "doe.factorial_design": "0.3.0",
     "doe.latin_hypercube": "0.1.0",
     "doe.response_surface": "0.2.0",
+    "doe.response_optimizer": "0.3.0",
     "doe.bayesian_optimization": "0.4.0",
+}
+
+LEGACY_METHOD_ID_ALIASES: dict[str, str] = {
+    "regression.response_optimizer": "doe.response_optimizer",
 }
 
 MODULES: tuple[AnalysisModuleDescriptor, ...] = (
@@ -92,7 +97,7 @@ def analysis_method_catalog() -> AnalysisMethodListResponse:
 
 
 def get_analysis_method(method_id: str) -> AnalysisMethodDescriptor | None:
-    return METHOD_BY_ID.get(method_id)
+    return METHOD_BY_ID.get(LEGACY_METHOD_ID_ALIASES.get(method_id, method_id))
 
 
 def get_method_version(method_id: str) -> str:
@@ -311,16 +316,6 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         source_prerequisite=AnalysisSourcePrerequisite.REGRESSION_MODEL,
     ),
     _available(
-        method_id="regression.response_optimizer",
-        module_id=AnalysisModuleId.REGRESSION,
-        label_ko="반응 최적화",
-        label_en="Response Optimizer",
-        order=50,
-        requires_dataset=False,
-        execution_mode=AnalysisExecutionMode.DEDICATED,
-        source_prerequisite=AnalysisSourcePrerequisite.RESPONSE_SURFACE_ANALYSIS,
-    ),
-    _available(
         method_id="quality.attribute_control_chart",
         module_id=AnalysisModuleId.QUALITY,
         label_ko="계수형 관리도",
@@ -397,11 +392,21 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         execution_mode=AnalysisExecutionMode.DEDICATED,
     ),
     _available(
+        method_id="doe.response_optimizer",
+        module_id=AnalysisModuleId.DOE,
+        label_ko="반응 최적화",
+        label_en="Response Optimizer",
+        order=40,
+        requires_dataset=False,
+        execution_mode=AnalysisExecutionMode.DEDICATED,
+        source_prerequisite=AnalysisSourcePrerequisite.RESPONSE_SURFACE_ANALYSIS,
+    ),
+    _available(
         method_id="doe.bayesian_optimization",
         module_id=AnalysisModuleId.DOE,
         label_ko="베이지안 최적화",
         label_en="Bayesian Optimization",
-        order=40,
+        order=50,
         requires_dataset=False,
         execution_mode=AnalysisExecutionMode.DEDICATED,
     ),

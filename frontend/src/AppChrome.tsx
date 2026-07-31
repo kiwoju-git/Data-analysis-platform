@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 
 import {
   ActiveDatasetVersionSelector,
@@ -113,11 +119,24 @@ export function AppChrome({
   const closeMobileMenu = () => {
     setMobileMenuOpen(false);
   };
+  const openProjectHome = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    closeMobileMenu();
+    onOpenProjectPage();
+  };
 
   return (
     <div className="app-shell">
       <header className="mobile-shell-header">
-        <strong lang="en">Statistical Twin</strong>
+        <a
+          aria-label="Statistical Twin 프로젝트 개요로 이동"
+          className="mobile-brand-home-link"
+          href="/project"
+          lang="en"
+          onClick={openProjectHome}
+        >
+          Statistical Twin
+        </a>
         <button
           aria-controls="application-sidebar"
           aria-expanded={mobileMenuOpen}
@@ -147,16 +166,23 @@ export function AppChrome({
         ref={sidebarRef}
       >
         <div className="brand">
-          <img
-            alt="Samsung Bioepis"
-            className="brand-logo"
-            height="199"
-            src={samsungBioepisLogo}
-            width="499"
-          />
-          <h1 className="brand-product-title" lang="en">
-            Statistical Twin
-          </h1>
+          <a
+            aria-label="Statistical Twin 프로젝트 개요로 이동"
+            className="brand-home-link"
+            href="/project"
+            onClick={openProjectHome}
+          >
+            <img
+              alt="Samsung Bioepis"
+              className="brand-logo"
+              height="199"
+              src={samsungBioepisLogo}
+              width="499"
+            />
+            <h1 className="brand-product-title" lang="en">
+              Statistical Twin
+            </h1>
+          </a>
         </div>
         <SidebarNavigation groups={groups} onNavigate={closeMobileMenu} />
       </aside>

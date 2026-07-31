@@ -161,7 +161,8 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "eda.normality",
         "eda.equal_variances",
     ]
-    assert "regression.response_optimizer" in method_ids
+    assert "regression.response_optimizer" not in method_ids
+    assert "doe.response_optimizer" in method_ids
     assert "doe.latin_hypercube" in method_ids
     assert "doe.response_surface" in method_ids
     assert "doe.bayesian_optimization" in method_ids
@@ -190,7 +191,6 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "regression.xy_correlation",
         "regression.linear_model",
         "regression.predict",
-        "regression.response_optimizer",
         "quality.attribute_control_chart",
         "quality.subgroup_chart",
         "quality.individuals_chart",
@@ -201,9 +201,10 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "doe.factorial_design",
         "doe.latin_hypercube",
         "doe.response_surface",
+        "doe.response_optimizer",
         "doe.bayesian_optimization",
     ]
-    assert set(METHOD_VERSIONS) == set(method_ids)
+    assert set(METHOD_VERSIONS) == set(method_ids) | {"regression.response_optimizer"}
     assert all(METHOD_VERSIONS[method.method_id] == method.method_version for method in METHODS)
 
 
@@ -506,7 +507,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     assert prediction.source_prerequisite.value == "regression_model"
     assert prediction.disabled_reason is None
     response_optimizer = next(
-        method for method in catalog.methods if method.method_id == "regression.response_optimizer"
+        method for method in catalog.methods if method.method_id == "doe.response_optimizer"
     )
     assert response_optimizer.availability == MethodAvailability.AVAILABLE
     assert response_optimizer.execution_mode == AnalysisExecutionMode.DEDICATED
@@ -569,7 +570,16 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     assert bayesian_optimization.availability == MethodAvailability.AVAILABLE
     assert bayesian_optimization.requires_dataset is False
     assert bayesian_optimization.disabled_reason is None
-    assert [method.module_id.value for method in catalog.methods[-3:]] == ["doe", "doe", "doe"]
+    doe_methods = [
+        method.method_id for method in catalog.methods if method.module_id.value == "doe"
+    ]
+    assert doe_methods == [
+        "doe.factorial_design",
+        "doe.latin_hypercube",
+        "doe.response_surface",
+        "doe.response_optimizer",
+        "doe.bayesian_optimization",
+    ]
 
 
 def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_results(
@@ -608,7 +618,6 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "regression.xy_correlation",
         "regression.linear_model",
         "regression.predict",
-        "regression.response_optimizer",
         "quality.attribute_control_chart",
         "quality.subgroup_chart",
         "quality.individuals_chart",
@@ -619,6 +628,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "doe.factorial_design",
         "doe.latin_hypercube",
         "doe.response_surface",
+        "doe.response_optimizer",
         "doe.bayesian_optimization",
     ]
     normality = next(
@@ -633,7 +643,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
     }
     assert set(dedicated) == {
         "regression.predict",
-        "regression.response_optimizer",
+        "doe.response_optimizer",
         "doe.factorial_design",
         "doe.latin_hypercube",
         "doe.response_surface",
@@ -673,8 +683,8 @@ def test_analysis_run_rejects_response_optimizer_generic_page_without_fake_resul
         response = client.post(
             "/api/v1/analysis-runs",
             json={
-                "method_id": "regression.response_optimizer",
-                "method_version": METHOD_VERSIONS["regression.response_optimizer"],
+                "method_id": "doe.response_optimizer",
+                "method_version": METHOD_VERSIONS["doe.response_optimizer"],
                 "dataset_version_id": None,
                 "filter_snapshot": {"expression_version": 1, "conditions": []},
                 "roles": {},

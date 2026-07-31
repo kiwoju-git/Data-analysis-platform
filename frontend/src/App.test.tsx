@@ -17,7 +17,10 @@ import {
   BayesianSuccessorSeedNotice,
   BayesianTrialTransitionConfirmation,
 } from "./BayesianOptimizationPanel";
-import { FactorialDesignPreview } from "./FactorialDesignPanel";
+import {
+  FactorialDesignPanel,
+  FactorialDesignPreview,
+} from "./FactorialDesignPanel";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 import { RegressionPredictionWorkspace } from "./RegressionPredictionWorkspace";
 import { ResponseOptimizerWorkspace } from "./ResponseOptimizerWorkspace";
@@ -39,7 +42,10 @@ import {
   fetchAnalysisRunResult,
   fetchAnalysisRuns,
 } from "./api";
-import { andersonPValueLabel } from "./normalityDisplay";
+import {
+  andersonDecisionDisplay,
+  andersonPValueLabel,
+} from "./normalityDisplay";
 import type {
   AnalysisMethodListResponse,
   AnalysisRunComparisonResponse,
@@ -116,8 +122,10 @@ import {
   type AnalysisFilterDraft,
 } from "./analysisFilters";
 import {
+  analysisMethodDisplayLabel,
   buildAnalysisHash,
   buildAnalysisPath,
+  legacyResponseOptimizerRedirectLocation,
   parseAnalysisHash,
   parseAnalysisLocation,
   parseAnalysisPath,
@@ -221,6 +229,56 @@ describe("App", () => {
     expect(parseAppRoute("/manage", "")).toEqual({ page: "manage" });
     expect(parseAppRoute("/project", "")).toEqual({ page: "project" });
     expect(parseAppRoute("/graphs", "")).toEqual({ page: "graphs" });
+    expect(
+      parseAnalysisPath(
+        "/analysis/regression/regression.response_optimizer",
+      ),
+    ).toEqual({
+      moduleId: "doe",
+      methodId: "doe.response_optimizer",
+    });
+    expect(
+      legacyResponseOptimizerRedirectLocation(
+        "/analysis/regression/regression.response_optimizer",
+        "?design_id=design-1&dataset_version_id=version-1",
+        "",
+      ),
+    ).toBe(
+      "/analysis/doe/doe.response_optimizer?design_id=design-1&dataset_version_id=version-1",
+    );
+    expect(
+      legacyResponseOptimizerRedirectLocation(
+        "/",
+        "?analysis_id=analysis-1",
+        "#analysis/regression/regression.response_optimizer",
+      ),
+    ).toBe(
+      "/analysis/doe/doe.response_optimizer?analysis_id=analysis-1",
+    );
+    expect(
+      analysisMethodDisplayLabel(
+        "regression.response_optimizer",
+        {
+          ...analysisTestCatalog(),
+          methods: [
+            ...analysisTestCatalog().methods,
+            {
+              method_id: "doe.response_optimizer",
+              method_version: "0.3.0",
+              module_id: "doe",
+              label_ko: "반응 최적화",
+              label_en: "Response Optimizer",
+              availability: "available",
+              execution_mode: "dedicated",
+              requires_dataset: false,
+              order: 40,
+              disabled_reason: null,
+              source_prerequisite: "response_surface_analysis",
+            },
+          ],
+        },
+      ),
+    ).toBe("반응 최적화");
   });
 
   it("rejects unknown analysis module routes", () => {
@@ -269,7 +327,7 @@ describe("App", () => {
       required: true,
     });
     expect(
-      getAnalysisMethodGuidance("regression.response_optimizer").preflightChecks,
+      getAnalysisMethodGuidance("doe.response_optimizer").preflightChecks,
     ).toContain("설계영역");
     expect(getAnalysisMethodGuidance("eda.normality").preflightChecks).toContain("표본 수 범위");
     expect(getAnalysisMethodGuidance("doe.factorial_design").optionChecklist).toContain(
@@ -641,6 +699,12 @@ describe("App", () => {
           label_en: "Regression",
           order: 4,
         },
+        {
+          module_id: "doe",
+          label_ko: "실험 계획법",
+          label_en: "DOE",
+          order: 6,
+        },
       ],
       methods: [
         {
@@ -657,16 +721,16 @@ describe("App", () => {
           disabled_reason: null,
         },
         {
-          method_id: "regression.response_optimizer",
+          method_id: "doe.response_optimizer",
           method_version: "0.3.0",
-          module_id: "regression",
+          module_id: "doe",
           label_ko: "반응 최적화",
           label_en: "Response Optimizer",
           availability: "available",
           execution_mode: "dedicated",
           requires_dataset: false,
           source_prerequisite: "response_surface_analysis",
-          order: 50,
+          order: 40,
           disabled_reason: null,
         },
       ],
@@ -847,12 +911,16 @@ describe("App", () => {
     const html = renderToString(<BayesianOptimizationPanel />);
 
     expect(html).toContain("Bayesian 최적화");
-    expect(html).toContain("Study 생성");
+    expect(html).toContain("스터디 생성");
     expect(html).toContain("앱은 목적함수를 실행하지 않습니다");
     expect(html).toContain("저장된 study");
-    expect(html).toContain("초기 trial 수");
+    expect(html).toContain("초기 실험 수");
     expect(html).toContain("실제 단위 선형 제약");
     expect(html).toContain("제약 추가");
+    expect(html).toContain('class="doe-form-section"');
+    expect(html).toContain('class="doe-field-grid"');
+    expect(html).toContain('class="doe-factor-editor"');
+    expect(html).toContain('class="doe-action-bar"');
   });
 
   it("builds actual-unit Bayesian linear constraints and rejects invalid drafts", () => {
@@ -1137,6 +1205,35 @@ describe("App", () => {
     expect(html).toContain("Face-centered CCD");
     expect(html).toContain("CCD 생성");
     expect(html).toContain("Full quadratic, no automatic selection");
+    expect(html).toContain('class="doe-form-section"');
+    expect(html).toContain('class="doe-field-grid"');
+    expect(html).toContain('class="doe-factor-editor"');
+    expect(html).toContain('class="doe-action-bar"');
+  });
+
+  it("renders factorial inputs with the shared DOE form structure", () => {
+    const html = renderToString(
+      <FactorialDesignPanel
+        analysis={null}
+        analysisError={null}
+        design={null}
+        error={null}
+        isCreating={false}
+        isRunningAnalysis={false}
+        isSavingResponses={false}
+        methodId="doe.factorial_design"
+        onCreateDesign={() => undefined}
+        onRunAnalysis={() => undefined}
+        onSaveResponses={() => undefined}
+        responseError={null}
+        responses={null}
+      />,
+    );
+
+    expect(html).toContain('class="doe-form-section"');
+    expect(html).toContain('class="doe-field-grid"');
+    expect(html).toContain('class="doe-factor-editor"');
+    expect(html).toContain('class="doe-action-bar"');
   });
 
   it("renders bounded response optimizer objectives, constraints, and budgets", () => {
@@ -3626,6 +3723,8 @@ describe("App", () => {
     expect(html).toContain("분석 필터");
     expect(html).toContain("기술통계 실행");
     expect(html).toContain("A");
+    expect(html).not.toContain("Gate B0");
+    expect(html).not.toContain('<span class="status-pill">');
   });
 
   it("renders the graphical summary execution panel for the second real exploration method", () => {
@@ -3885,6 +3984,11 @@ describe("App", () => {
     expect(html).toContain("Shapiro p");
     expect(html).toContain("A");
     expect(html).toContain("AD p (근사)");
+    expect(html).toContain("AD 해석");
+    expect(html).toContain("정규성 가정 유지 가능");
+    expect(html).toContain("정규분포임을 증명한 것은 아니므로");
+    expect(html).not.toContain("AD 기각 안 함");
+    expect(html).not.toContain(">AD 기각<");
     expect(html).toContain("Stephens 정규성 근사값");
     expect(html).toContain('tabindex="0"');
     expect(html).toContain('tabindex="-1"');
@@ -3897,6 +4001,26 @@ describe("App", () => {
     expect(andersonPValueLabel(legacyResult.columns[0].anderson_darling)).toBe(
       "제공되지 않음 (legacy result)",
     );
+  });
+
+  it("maps Anderson-Darling decisions to qualified interpretation text", () => {
+    const result = normalityTestResult();
+    const decision = result.columns[0].anderson_darling.decision_at_alpha;
+    expect(andersonDecisionDisplay(decision)).toMatchObject({
+      code: "assumption_maintainable",
+      shortLabel: "정규성 가정 유지 가능",
+      tone: "neutral",
+    });
+    expect(
+      andersonDecisionDisplay(
+        decision === null ? null : { ...decision, reject_normality: true },
+      ),
+    ).toMatchObject({
+      code: "normality_violation_signal",
+      shortLabel: "정규성 위배 신호",
+      tone: "warning",
+    });
+    expect(andersonDecisionDisplay(null).shortLabel).toBe("판정 불가");
   });
 
   it("renders the equal variances execution panel for the fourth real exploration method", () => {
@@ -5093,7 +5217,9 @@ describe("App", () => {
     expect(html).toContain("<dd>v1</dd>");
     expect(html).toContain("<dt>행</dt><dd>3</dd>");
     expect(html).toContain("<dt>열</dt><dd>2</dd>");
-    expect(html).toMatch(/schema (?:<!-- -->)?schema-hash/);
+    expect(html).not.toContain("schema-hash");
+    expect(html).toContain(">sample.txt · 3행 · 2열 · v1 · 2026. 06. 27. 09:00</option>");
+    expect(html.match(/href="\/project"/g)).toHaveLength(2);
     expect(html).toContain("Workspace child");
     expect(html).toContain("리포트");
     expect(html).toContain("관리");
@@ -5237,6 +5363,21 @@ describe("App", () => {
   it("renders the single-workspace project overview surface", () => {
     const html = renderToString(
       <ProjectOverviewPage
+        activeDatasetCatalogItem={{
+          version_id: "version-1",
+          dataset_id: "dataset-1",
+          original_filename: "source-data.csv",
+          version_number: 1,
+          row_count: 3,
+          column_count: 2,
+          created_at: "2026-06-27T00:00:00Z",
+          user_label: "장기 보관 공정 데이터",
+          note: null,
+          pinned: false,
+          metadata_updated_at: null,
+          archived: false,
+          archived_at: null,
+        }}
         currentDatasetVersion={datasetVersionTestResponse()}
         onOpenAnalysis={() => undefined}
         onOpenDatasetPage={() => undefined}
@@ -5246,8 +5387,13 @@ describe("App", () => {
     );
 
     expect(html).toContain("프로젝트");
-    expect(html).toContain("하나의 로컬 작업공간");
+    expect(html).toContain("현재 로컬 작업공간의 데이터와 분석 자산");
     expect(html).toContain("현재 분석 데이터셋");
+    expect(html).toContain("장기 보관 공정 데이터");
+    expect(html).toContain("source-data.csv");
+    expect(html).toContain('class="project-dashboard-grid"');
+    expect((html.match(/class="project-dashboard-card"/g) ?? [])).toHaveLength(4);
+    expect(html).toContain("변수 구성");
     expect(html).toContain("모델 및 리포트");
     expect(html).not.toContain("프로젝트 생성");
   });

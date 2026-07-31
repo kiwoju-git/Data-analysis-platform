@@ -11,53 +11,76 @@ import {
   type WorkspaceSummaryResponse,
 } from "./api";
 
+export interface ProjectResourceState<T> {
+  data: T | null;
+  error: string | null;
+  isLoading: boolean;
+}
+
+function loadingResource<T>(): ProjectResourceState<T> {
+  return { data: null, error: null, isLoading: true };
+}
+
+function resolvedResource<T>(
+  result: PromiseSettledResult<T>,
+  fallbackError: string,
+): ProjectResourceState<T> {
+  if (result.status === "fulfilled") {
+    return { data: result.value, error: null, isLoading: false };
+  }
+  return {
+    data: null,
+    error: result.reason instanceof Error ? result.reason.message : fallbackError,
+    isLoading: false,
+  };
+}
+
 export function useProjectOverviewState(workspaceAssetRevision = 0) {
-  const [summary, setSummary] = useState<WorkspaceSummaryResponse | null>(null);
+  const [summary, setSummary] =
+    useState<ProjectResourceState<WorkspaceSummaryResponse>>(loadingResource);
   const [recentDatasets, setRecentDatasets] =
-    useState<DatasetVersionCatalogResponse | null>(null);
+    useState<ProjectResourceState<DatasetVersionCatalogResponse>>(loadingResource);
   const [recentAnalyses, setRecentAnalyses] =
-    useState<AnalysisRunListResponse | null>(null);
+    useState<ProjectResourceState<AnalysisRunListResponse>>(loadingResource);
   const [recentModels, setRecentModels] =
-    useState<RegressionModelCatalogResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+    useState<ProjectResourceState<RegressionModelCatalogResponse>>(loadingResource);
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
-    setError(null);
-    void Promise.all([
+    setSummary(loadingResource());
+    setRecentDatasets(loadingResource());
+    setRecentAnalyses(loadingResource());
+    setRecentModels(loadingResource());
+    void Promise.allSettled([
       fetchWorkspaceSummary(),
-      fetchDatasetVersions(5, 0, "visible"),
+      fetchDatasetVersions(3, 0, "visible"),
       fetchAnalysisRuns({
         resultAvailable: true,
         status: "succeeded",
-        limit: 5,
+        limit: 3,
         offset: 0,
       }),
-      fetchRegressionModels(0, 5),
-    ])
-      .then(([nextSummary, datasets, analyses, models]) => {
-        if (!active) return;
-        setSummary(nextSummary);
-        setRecentDatasets(datasets);
-        setRecentAnalyses(analyses);
-        setRecentModels(models);
-      })
-      .catch((loadError) => {
-        if (!active) return;
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "workspace_summary_fetch_failed",
-        );
-      });
+      fetchRegressionModels(0, 3),
+    ]).then(([summaryResult, datasetsResult, analysesResult, modelsResult]) => {
+      if (!active) return;
+      setSummary(resolvedResource(summaryResult, "workspace_summary_fetch_failed"));
+      setRecentDatasets(
+        resolvedResource(datasetsResult, "dataset_catalog_fetch_failed"),
+      );
+      setRecentAnalyses(
+        resolvedResource(analysesResult, "analysis_catalog_fetch_failed"),
+      );
+      setRecentModels(
+        resolvedResource(modelsResult, "regression_model_catalog_fetch_failed"),
+      );
+    });
     return () => {
       active = false;
     };
   }, [revision, workspaceAssetRevision]);
 
   return {
-    error,
     recentAnalyses,
     recentDatasets,
     recentModels,

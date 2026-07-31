@@ -1,6 +1,12 @@
 import { BayesianConstraintTable } from "./BayesianConstraintTable";
 import { BayesianFactorTable } from "./BayesianFactorTable";
 import type { useBayesianStudyDraftState } from "./hooks/useBayesianStudyDraftState";
+import {
+  DoeActionBar,
+  DoeAdvancedSettings,
+  DoeFieldGrid,
+  DoeFormSection,
+} from "../../doe/DoeFormPrimitives";
 
 type DraftState = ReturnType<typeof useBayesianStudyDraftState>;
 
@@ -22,14 +28,20 @@ export function BayesianStudyBuilder({
       <div className="panel-heading">
         <div>
           <h4 id="bayesian-study-builder-title">
-            {draft.predecessorStudyId === null ? "새 Study 정의" : "Successor Study 정의"}
+            {draft.predecessorStudyId === null
+              ? "새 스터디 정의"
+              : "후속 스터디 정의"}
           </h4>
-          <p>Factor bounds, objective, 초기 설계와 실제 단위 제약을 고정합니다.</p>
+          <p>요인 범위, 최적화 반응, 초기 설계와 실제 단위 제약을 고정합니다.</p>
         </div>
       </div>
-      <div className="bayesian-study-core-grid">
+      <DoeFormSection
+        title="설계 기본 설정"
+        description="스터디와 실제로 측정할 최적화 반응을 정의합니다."
+      >
+      <DoeFieldGrid>
         <label>
-          <span>Study 이름</span>
+          <span>스터디 이름</span>
           <input value={draft.studyName} onChange={(event) => draft.setStudyName(event.currentTarget.value)} />
         </label>
         <label>
@@ -58,9 +70,9 @@ export function BayesianStudyBuilder({
             <option value="match_target">목표값 맞추기</option>
           </select>
         </label>
-      </div>
+      </DoeFieldGrid>
       {draft.goalType === "match_target" ? (
-        <div className="bayesian-target-grid">
+        <DoeFieldGrid className="bayesian-target-grid">
           <label>
             <span>목표값</span>
             <input
@@ -84,11 +96,16 @@ export function BayesianStudyBuilder({
               목표 도달 여부를 설명하는 기준이며 Study를 자동 종료하지 않습니다.
             </span>
           </label>
-        </div>
+        </DoeFieldGrid>
       ) : null}
-      <div className="bayesian-initial-design-grid">
+      </DoeFormSection>
+      <DoeFormSection
+        title="초기 실험"
+        description="Gaussian Process 학습 전에 수행할 초기 실험 수와 생성 방식을 정합니다."
+      >
+      <DoeFieldGrid className="bayesian-initial-design-grid">
         <label>
-          <span>초기 trial 수</span>
+          <span>초기 실험 수</span>
           <input
             inputMode="numeric"
             value={draft.initialDesignSize}
@@ -97,14 +114,6 @@ export function BayesianStudyBuilder({
           <span className="cell-subtext">
             현재 요인 {draft.factors.length}개에는 최소 {draft.minimumInitialDesignSize}개가 필요합니다.
           </span>
-        </label>
-        <label>
-          <span>초기 설계 seed</span>
-          <input
-            inputMode="numeric"
-            value={draft.initialDesignSeed}
-            onChange={(event) => draft.setInitialDesignSeed(event.currentTarget.value)}
-          />
         </label>
         <label>
           <span>초기 설계 방식</span>
@@ -129,7 +138,21 @@ export function BayesianStudyBuilder({
             LHS는 사각형 요인 범위를 층화해 초기 실험 조건을 고르게 배치합니다.
           </span>
         </label>
-      </div>
+      </DoeFieldGrid>
+      <DoeAdvancedSettings summaryText={`seed ${draft.initialDesignSeed}`}>
+        <DoeFieldGrid>
+          <label>
+            <span>초기 설계 seed</span>
+            <input
+              inputMode="numeric"
+              value={draft.initialDesignSeed}
+              onChange={(event) =>
+                draft.setInitialDesignSeed(event.currentTarget.value)
+              }
+            />
+          </label>
+        </DoeFieldGrid>
+      </DoeAdvancedSettings>
       {draft.initialDesignPolicy === "latin_hypercube_random_cd_v1" &&
       draft.constraints.length > 0 ? (
         <div className="warning-box" role="status">
@@ -137,6 +160,7 @@ export function BayesianStudyBuilder({
           초기설계로 변경하거나 선형 제약을 제거하세요.
         </div>
       ) : null}
+      </DoeFormSection>
       {draft.predecessorStudyId !== null ? (
         <BayesianSuccessorSeedNotice
           sameSeed={draft.sameSeedAsPredecessor}
@@ -145,7 +169,7 @@ export function BayesianStudyBuilder({
       ) : null}
       <BayesianFactorTable draft={draft} />
       <BayesianConstraintTable draft={draft} />
-      <div className="button-row">
+      <DoeActionBar summary={`예상 초기 실험 ${draft.initialDesignSize || "-"}개`}>
         <button
           type="button"
           className="primary-button"
@@ -159,13 +183,13 @@ export function BayesianStudyBuilder({
           {isCreating
             ? "생성 중"
             : draft.predecessorStudyId === null
-              ? "Study 생성"
-              : "Successor study 생성"}
+              ? "스터디 생성"
+              : "후속 스터디 생성"}
         </button>
         <button type="button" className="secondary-button" disabled={isCreating} onClick={onCancel}>
-          {draft.predecessorStudyId === null ? "새 Study 만들기 닫기" : "Successor 생성 취소"}
+          {draft.predecessorStudyId === null ? "새 스터디 만들기 닫기" : "후속 스터디 생성 취소"}
         </button>
-      </div>
+      </DoeActionBar>
     </section>
   );
 }

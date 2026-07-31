@@ -976,7 +976,10 @@ class ResponseOptimizerResponse(BaseModel):
     design_id: UUID
     design_version_id: UUID
     design_version_number: int
-    method_id: Literal["regression.response_optimizer"]
+    method_id: Literal[
+        "doe.response_optimizer",
+        "regression.response_optimizer",
+    ]
     method_version: str
     config_schema_version: Literal[2]
     result_schema_version: Literal[2]

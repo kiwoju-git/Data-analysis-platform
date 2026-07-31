@@ -162,7 +162,7 @@ export function ResponseOptimizerPanel({
       <div className="panel-heading compact-heading">
         <div>
           <h4 id="response-optimizer-title">Response Optimizer</h4>
-          <p>regression.response_optimizer · source {analysis.response_name}</p>
+          <p>doe.response_optimizer · source {analysis.response_name}</p>
         </div>
         <span className="status-pill status-ready">설계영역 제한</span>
       </div>

@@ -120,6 +120,7 @@ def create_analysis_run(
     dedicated_routes = {
         "regression.predict": "/api/v1/regression-models",
         "regression.response_optimizer": "/api/v1/doe-designs/response-surface-analyses",
+        "doe.response_optimizer": "/api/v1/doe-designs/response-surface-analyses",
         "doe.factorial_design": "/api/v1/doe-designs/factorial",
         "doe.response_surface": "/api/v1/doe-designs/response-surface",
         "doe.bayesian_optimization": "/api/v1/bayesian-studies",

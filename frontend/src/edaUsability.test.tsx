@@ -182,12 +182,14 @@ describe("EDA usability foundations", () => {
     );
 
     expect(html).toContain("공정 데이터");
-    expect(html).toContain("pasted-data.txt");
+    expect(html).not.toContain("pasted-data.txt");
     expect(html).toContain("240행");
     expect(html).toContain("15열");
     expect(html).toContain("생성");
     expect(html).toContain("v1");
-    expect(html).toContain("12345678");
+    expect(html).toContain(
+      ">공정 데이터 · 240행 · 15열 · v1 · 2026. 07. 23. 14:32</option>",
+    );
     expect(html).toContain('class="active-dataset-main"');
     expect(html).toContain('class="active-dataset-picker"');
     expect(html).toContain('class="active-dataset-summary"');
@@ -195,7 +197,7 @@ describe("EDA usability foundations", () => {
     expect(html).toContain("<dt>행</dt>");
     expect(html).toContain("<dt>열</dt>");
     expect(html).toContain("<dt>생성</dt>");
-    expect(html).toContain('aria-label="데이터셋 기술 정보"');
+    expect(html).not.toContain('aria-label="데이터셋 기술 정보"');
     expect((html.match(/id="active-dataset-version"/g) ?? [])).toHaveLength(1);
     expect((html.match(/id="active-dataset-help"/g) ?? [])).toHaveLength(1);
   });

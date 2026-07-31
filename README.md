@@ -1,5 +1,18 @@
 # DataLab Studio
 
+프로젝트 홈은 현재 데이터셋, 데이터셋 현황, 최근 분석, 모델 및 리포트를
+2x2 대시보드로 요약합니다. 상단 데이터셋 선택기는 사용자 이름, 행/열,
+버전과 생성 시각만 표시하며 schema hash와 UUID는 데이터셋 상세의 접힌
+기술 정보에서 확인합니다. Samsung Bioepis 로고와 `Statistical Twin` 제목은
+프로젝트 홈 링크입니다.
+
+정규성 결과는 Anderson-Darling 검정의 기각 여부를 각각
+`정규성 가정 유지 가능` 또는 `정규성 위배 신호`로 설명합니다. 기각하지
+않았다는 결과는 정규분포를 증명하지 않으며 Q-Q Plot, 이상치, 표본 수를
+함께 검토해야 합니다. Response Optimizer는 저장된 RSM full-quadratic
+모델을 사용하는 DOE 후속 기능이므로 DOE의 RSM 다음에 표시됩니다. 기존
+`regression.response_optimizer` 저장 결과와 URL은 변경 없이 복원됩니다.
+
 The `그래프 > 그래프 작성` screen creates bounded, non-persisted previews for
 Box Plot, Individual Value Plot, Histogram, Q-Q, ECDF, Scatter, Run Chart, and
 I-MR. It uses confirmed dataset versions and analysis filters, does not silently

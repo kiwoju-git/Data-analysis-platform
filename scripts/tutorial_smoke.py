@@ -901,8 +901,8 @@ def _collect_doe_results(
                 "warning_count": len(rsm_result["warnings"]),
             },
         },
-        "regression.response_optimizer": {
-            "method_id": "regression.response_optimizer",
+        "doe.response_optimizer": {
+            "method_id": "doe.response_optimizer",
             "method_version": optimizer["method_version"],
             "input_file_sha256": _sha256(TUTORIAL_ROOT / "studio_rsm_responses.csv"),
             "absolute_tolerance": ABSOLUTE_TOLERANCE,

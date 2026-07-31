@@ -159,11 +159,16 @@ three or more factors, all remaining coded factors are fixed at zero and a
 persistent warning records that slice policy.
 
 After a verified RSM fit, the same panel can run
-`regression.response_optimizer` with maximize/minimize/target/range
+`doe.response_optimizer` with maximize/minimize/target/range
 desirability, narrower factor bounds, optional linear constraints, and explicit
 search budgets. The optimizer is a separate method/result contract documented
 in `docs/response_optimizer_contract.md`; it does not change RSM v0.2.0
 coefficients or reinterpret its stored result.
+
+The top-level optimizer is listed directly after RSM in the DOE module. The
+same `ResponseOptimizerPanel` and typed DOE API are used from both entrypoints.
+Stored `regression.response_optimizer` v0.3.0 results remain restorable without
+changing their method ID or checksum.
 
 ## Persistence And Provenance
 

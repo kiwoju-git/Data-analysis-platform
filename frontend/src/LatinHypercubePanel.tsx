@@ -12,6 +12,13 @@ import {
   type LatinHypercubeDesignResponse,
 } from "./api";
 import { apiRoutes } from "./api/routes";
+import {
+  DoeActionBar,
+  DoeAdvancedSettings,
+  DoeFactorEditor,
+  DoeFieldGrid,
+  DoeFormSection,
+} from "./doe/DoeFormPrimitives";
 
 interface FactorDraft {
   key: number;
@@ -69,182 +76,222 @@ export function LatinHypercubePanel() {
         <strong>연속형 요인의 사각형 범위를 고르게 탐색하는 설계입니다.</strong>
         <p>
           2수준 요인배치의 직교 효과 추정과 목적이 다르며, 범주형·정수형·선형 제약은
-          현재 지원하지 않습니다. 별도 Bayesian Study가 LHS 초기점을 생성할 수
+          현재 지원하지 않습니다. 별도 베이지안 스터디가 LHS 초기점을 생성할 수
           있으므로 같은 설계표를 중복 생성할 필요는 없습니다.
         </p>
       </div>
-      <div className="lhs-core-settings-grid">
-        <label>
-          <span>설계 이름</span>
-          <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
-        </label>
-        <label>
-          <span>실험 수</span>
-          <input
-            inputMode="numeric"
-            value={runCount}
-            onChange={(event) => setRunCount(event.currentTarget.value)}
-          />
-          <span className="cell-subtext">
-            GP 계산 bare minimum {factors.length + 1} · 제품 시작값 {suggestedBalanced} ·
-            공간충전 참고값 약 {referenceSpaceFilling}
-          </span>
-        </label>
-        <label>
-          <span>설계 seed</span>
-          <input
-            inputMode="numeric"
-            value={seed}
-            onChange={(event) => setSeed(event.currentTarget.value)}
-          />
-        </label>
-        <label>
-          <span>실행 순서 seed</span>
-          <input
-            inputMode="numeric"
-            value={runOrderSeed}
-            disabled={!randomizeRunOrder}
-            onChange={(event) => setRunOrderSeed(event.currentTarget.value)}
-          />
-        </label>
-      </div>
-      <div className="lhs-secondary-settings-grid">
-        <label>
-          <span>품질 최적화</span>
-          <select
-            value={optimization}
-            onChange={(event) =>
-              setOptimization(event.currentTarget.value as "random_cd" | "none")
+      <DoeFormSection
+        title="설계 기본 설정"
+        description="실험 수와 요인 범위를 먼저 정하고 생성 정책은 고급 설정에서 확인합니다."
+      >
+        <DoeFieldGrid>
+          <label>
+            <span>설계 이름</span>
+            <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
+          </label>
+          <label>
+            <span>실험 수</span>
+            <input
+              inputMode="numeric"
+              value={runCount}
+              onChange={(event) => setRunCount(event.currentTarget.value)}
+            />
+            <span className="cell-subtext">
+              GP 계산 최소 {factors.length + 1}개 · 권장 시작 {suggestedBalanced}개 ·
+              공간충전 참고 약 {referenceSpaceFilling}개
+            </span>
+          </label>
+        </DoeFieldGrid>
+        <DoeAdvancedSettings
+          summaryText={`seed ${seed} · ${randomizeRunOrder ? "실행 순서 무작위화" : "표준 순서"}`}
+        >
+          <DoeFieldGrid>
+            <label>
+              <span>설계 seed</span>
+              <input
+                inputMode="numeric"
+                value={seed}
+                onChange={(event) => setSeed(event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>실행 순서 seed</span>
+              <input
+                inputMode="numeric"
+                value={runOrderSeed}
+                disabled={!randomizeRunOrder}
+                onChange={(event) => setRunOrderSeed(event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>품질 최적화</span>
+              <select
+                value={optimization}
+                onChange={(event) =>
+                  setOptimization(event.currentTarget.value as "random_cd" | "none")
+                }
+              >
+                <option value="random_cd">Discrepancy 개선 (random-cd)</option>
+                <option value="none">기본 LHS</option>
+              </select>
+              <span className="cell-subtext">
+                여러 좌표 순열 중 centered discrepancy가 작은 설계를 찾습니다.
+              </span>
+            </label>
+            <label
+              className={`lhs-randomization-card${
+                randomizeRunOrder ? " is-selected" : ""
+              }`}
+            >
+              <span>
+                <input
+                  checked={randomizeRunOrder}
+                  type="checkbox"
+                  onChange={(event) =>
+                    setRandomizeRunOrder(event.currentTarget.checked)
+                  }
+                />
+                <strong>실행 순서 무작위화</strong>
+              </span>
+              <small>
+                {randomizeRunOrder
+                  ? "공간충전 좌표는 유지하고 실제 실행 순서만 seed로 섞습니다."
+                  : "표준 순서와 실행 순서가 동일합니다."}
+              </small>
+            </label>
+          </DoeFieldGrid>
+        </DoeAdvancedSettings>
+      </DoeFormSection>
+      <DoeFactorEditor
+        title="연속형 요인 범위"
+        action={
+          <button
+            className="secondary-button"
+            disabled={factors.length >= 6}
+            type="button"
+            onClick={() =>
+              setFactors((current) => [
+                ...current,
+                {
+                  key: Math.max(...current.map((item) => item.key)) + 1,
+                  name: `factor_${current.length + 1}`,
+                  low: "0",
+                  high: "1",
+                  unit: "",
+                },
+              ])
             }
           >
-            <option value="random_cd">Discrepancy 개선 (random-cd)</option>
-            <option value="none">기본 LHS</option>
-          </select>
-          <span className="cell-subtext">
-            random-cd는 여러 좌표 순열 중 centered discrepancy가 작은 설계를 찾습니다.
-          </span>
-        </label>
-        <label
-          className={`lhs-randomization-card${
-            randomizeRunOrder ? " is-selected" : ""
-          }`}
-        >
-          <span>
-            <input
-              checked={randomizeRunOrder}
-              type="checkbox"
-              onChange={(event) =>
-                setRandomizeRunOrder(event.currentTarget.checked)
-              }
-            />
-            <strong>실행 순서 무작위화</strong>
-          </span>
-          <small>
-            {randomizeRunOrder
-              ? "공간충전 좌표는 유지하고 실제 실행 순서만 seed로 섞습니다."
-              : "Standard order와 Run order가 동일합니다."}
-          </small>
-        </label>
-      </div>
-      <div className="schema-actions">
-        <strong>연속형 요인 범위</strong>
-        <button
-          className="secondary-button"
-          disabled={factors.length >= 6}
-          type="button"
-          onClick={() =>
-            setFactors((current) => [
-              ...current,
-              {
-                key: Math.max(...current.map((item) => item.key)) + 1,
-                name: `factor_${current.length + 1}`,
-                low: "0",
-                high: "1",
-                unit: "",
-              },
-            ])
-          }
-        >
-          요인 추가
-        </button>
-      </div>
-      <div className="lhs-factor-grid">
-        {factors.map((factor, index) => (
-          <div className="lhs-factor-row" key={factor.key}>
-            <label>
-              <span>요인 {index + 1}</span>
-              <input
-                value={factor.name}
-                onChange={(event) =>
-                  updateFactor(setFactors, factor.key, "name", event.currentTarget.value)
-                }
-              />
-            </label>
-            <label>
-              <span>Low</span>
-              <input
-                value={factor.low}
-                onChange={(event) =>
-                  updateFactor(setFactors, factor.key, "low", event.currentTarget.value)
-                }
-              />
-            </label>
-            <label>
-              <span>High</span>
-              <input
-                value={factor.high}
-                onChange={(event) =>
-                  updateFactor(setFactors, factor.key, "high", event.currentTarget.value)
-                }
-              />
-            </label>
-            <label>
-              <span>단위</span>
-              <input
-                value={factor.unit}
-                onChange={(event) =>
-                  updateFactor(setFactors, factor.key, "unit", event.currentTarget.value)
-                }
-              />
-            </label>
-            <button
-              aria-label={`${factor.name || `요인 ${index + 1}`} 제거`}
-              className="secondary-button compact-button"
-              disabled={factors.length <= 1}
-              type="button"
-              onClick={() =>
-                setFactors((current) => current.filter((item) => item.key !== factor.key))
-              }
-            >
-              삭제
-            </button>
-          </div>
-        ))}
-      </div>
-      {error !== null ? <div className="error-box" role="alert">오류 코드: {error}</div> : null}
-      <button
-        className="primary-button"
-        disabled={request === null || isCreating}
-        type="button"
-        onClick={() => {
-          if (request === null) return;
-          setIsCreating(true);
-          setError(null);
-          setDesign(null);
-          void createLatinHypercubeDesign(request)
-            .then((next) => {
-              setDesign(next);
-              setResponseDrafts({});
-              setResponseRevision(null);
-            })
-            .catch((reason) =>
-              setError(reason instanceof Error ? reason.message : "lhs_design_failed"),
-            )
-            .finally(() => setIsCreating(false));
-        }}
+            요인 추가
+          </button>
+        }
       >
-        {isCreating ? "LHS 설계 생성 중" : "LHS 설계 생성"}
-      </button>
+        <div className="table-wrap">
+          <table className="result-table doe-factor-table">
+            <colgroup>
+              <col className="doe-factor-name-column" />
+              <col className="doe-factor-bound-column" />
+              <col className="doe-factor-bound-column" />
+              <col className="doe-factor-unit-column" />
+              <col className="doe-factor-action-column" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>요인</th>
+                <th>하한</th>
+                <th>상한</th>
+                <th>단위</th>
+                <th className="doe-factor-action-cell">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {factors.map((factor, index) => (
+                <tr key={factor.key}>
+                  <td>
+                    <input
+                      aria-label={`요인 ${index + 1} 이름`}
+                      value={factor.name}
+                      onChange={(event) =>
+                        updateFactor(setFactors, factor.key, "name", event.currentTarget.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      aria-label={`${factor.name || `요인 ${index + 1}`} 하한`}
+                      inputMode="decimal"
+                      value={factor.low}
+                      onChange={(event) =>
+                        updateFactor(setFactors, factor.key, "low", event.currentTarget.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      aria-label={`${factor.name || `요인 ${index + 1}`} 상한`}
+                      inputMode="decimal"
+                      value={factor.high}
+                      onChange={(event) =>
+                        updateFactor(setFactors, factor.key, "high", event.currentTarget.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      aria-label={`${factor.name || `요인 ${index + 1}`} 단위`}
+                      value={factor.unit}
+                      onChange={(event) =>
+                        updateFactor(setFactors, factor.key, "unit", event.currentTarget.value)
+                      }
+                    />
+                  </td>
+                  <td className="doe-factor-action-cell">
+                    <button
+                      aria-label={`${factor.name || `요인 ${index + 1}`} 삭제`}
+                      className="secondary-button compact-button"
+                      disabled={factors.length <= 1}
+                      type="button"
+                      onClick={() =>
+                        setFactors((current) =>
+                          current.filter((item) => item.key !== factor.key),
+                        )
+                      }
+                    >
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </DoeFactorEditor>
+      {error !== null ? <div className="error-box" role="alert">오류 코드: {error}</div> : null}
+      <DoeActionBar summary={`예상 실험 ${runCount || "-"}개`}>
+        <button
+          className="primary-button"
+          disabled={request === null || isCreating}
+          type="button"
+          onClick={() => {
+            if (request === null) return;
+            setIsCreating(true);
+            setError(null);
+            setDesign(null);
+            void createLatinHypercubeDesign(request)
+              .then((next) => {
+                setDesign(next);
+                setResponseDrafts({});
+                setResponseRevision(null);
+              })
+              .catch((reason) =>
+                setError(reason instanceof Error ? reason.message : "lhs_design_failed"),
+              )
+              .finally(() => setIsCreating(false));
+          }}
+        >
+          {isCreating ? "LHS 설계 생성 중" : "LHS 설계 생성"}
+        </button>
+      </DoeActionBar>
       {design !== null ? (
         <>
           <section className="result-section" aria-labelledby="lhs-quality-title">

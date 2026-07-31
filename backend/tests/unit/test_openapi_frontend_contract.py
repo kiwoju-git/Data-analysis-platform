@@ -32,6 +32,7 @@ class SchemaComponentContract:
     property_any_of_refs: tuple[tuple[str, frozenset[str]], ...] = ()
     array_item_refs: tuple[tuple[str, str], ...] = ()
     property_consts: tuple[tuple[str, object], ...] = ()
+    property_enums: tuple[tuple[str, frozenset[str]], ...] = ()
     additional_properties: bool | None = False
 
 
@@ -2386,7 +2387,17 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             }
         ),
         property_refs=(("result", "ResponseOptimizerResult"),),
-        property_consts=(("method_id", "regression.response_optimizer"),),
+        property_enums=(
+            (
+                "method_id",
+                frozenset(
+                    {
+                        "doe.response_optimizer",
+                        "regression.response_optimizer",
+                    }
+                ),
+            ),
+        ),
     ),
     SchemaComponentContract(
         name="ResponseOptimizerResult",
@@ -3650,6 +3661,9 @@ def test_frontend_schema_component_contract_is_present_in_openapi(
 
     for field_name, const_value in contract.property_consts:
         assert properties[field_name].get("const") == const_value
+
+    for field_name, enum_values in contract.property_enums:
+        assert frozenset(properties[field_name].get("enum", [])) == enum_values
 
 
 @pytest.mark.parametrize(

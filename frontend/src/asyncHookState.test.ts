@@ -58,6 +58,7 @@ import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionSta
 import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
 import { useReportCenterState } from "./useReportCenterState";
 import { useAssetManagementState } from "./useAssetManagementState";
+import { useProjectOverviewState } from "./useProjectOverviewState";
 
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
@@ -98,6 +99,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchDatasetVersions: vi.fn(),
   fetchRowsPreview: vi.fn(),
   fetchRuntimeInfo: vi.fn(),
+  fetchWorkspaceSummary: vi.fn(),
   fetchRegressionPredictionPreflight: vi.fn(),
   fetchRegressionPredictions: vi.fn(),
   fetchRegressionPredictionRows: vi.fn(),
@@ -578,7 +580,7 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 6,
+    api_contract_version: 7,
     metadata_schema_version: 18,
     build_commit: "unknown",
     capabilities: {
@@ -639,6 +641,34 @@ afterEach(() => {
 });
 
 describe("async workbench hooks", () => {
+  it("keeps successful project cards when one overview request fails", async () => {
+    apiMocks.fetchWorkspaceSummary.mockRejectedValueOnce(
+      new Error("workspace_summary_fetch_failed"),
+    );
+    apiMocks.fetchDatasetVersions.mockResolvedValueOnce({
+      total: 1,
+      offset: 0,
+      limit: 3,
+      returned: 1,
+      has_previous: false,
+      has_next: false,
+      versions: [datasetCatalogItem(1)],
+    });
+    apiMocks.fetchAnalysisRuns.mockResolvedValueOnce(historyResponse("version-1"));
+
+    const runner = new HookRunner<
+      number,
+      ReturnType<typeof useProjectOverviewState>
+    >(useProjectOverviewState, 0);
+    await runner.flush();
+
+    expect(runner.output.summary.error).toBe("workspace_summary_fetch_failed");
+    expect(runner.output.recentDatasets.data?.versions).toHaveLength(1);
+    expect(runner.output.recentAnalyses.data?.runs).toEqual([]);
+    expect(runner.output.recentModels.data?.models).toEqual([]);
+    runner.unmount();
+  });
+
   it("refreshes both management catalogs after a workspace mutation", async () => {
     const runner = new HookRunner<
       number,

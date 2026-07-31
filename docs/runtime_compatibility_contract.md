@@ -1,6 +1,6 @@
 # Runtime Compatibility Contract
 
-Last updated: 2026-07-30
+Last updated: 2026-07-31
 
 ## Purpose
 
@@ -37,7 +37,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `6`);
+- `api_contract_version` (currently `7`);
 - the actual metadata schema constant (currently `18`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
@@ -51,12 +51,17 @@ The response contains no workspace path, filename, or raw data. Existing
 
 ## Frontend Gate
 
-The frontend expects API contract `6`, schema 18 or later, and every required
+The frontend expects API contract `7`, schema 18 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management
 PATCH/DELETE requests therefore cannot be sent through the normal UI while the
 gate is blocked.
+
+Contract 7 makes `doe.response_optimizer` the sole visible canonical optimizer
+entry while retaining legacy record and route reads for
+`regression.response_optimizer`. No runtime capability or metadata migration is
+added because the typed optimizer API and its persisted schemas are unchanged.
 
 Build commit `unknown` is not treated as proof of a mismatch. When both commits
 are known, they must match for this strict local runtime.

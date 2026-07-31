@@ -690,7 +690,7 @@ export interface ResponseOptimizerResponse {
   design_id: string;
   design_version_id: string;
   design_version_number: number;
-  method_id: "regression.response_optimizer";
+  method_id: "doe.response_optimizer" | "regression.response_optimizer";
   method_version: string;
   config_schema_version: 2;
   result_schema_version: 2;

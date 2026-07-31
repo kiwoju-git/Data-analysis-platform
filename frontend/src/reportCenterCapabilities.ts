@@ -17,6 +17,7 @@ export interface ReportWorkflowCapability {
 const dedicatedMethodIds = new Set([
   "regression.predict",
   "regression.response_optimizer",
+  "doe.response_optimizer",
   "doe.factorial_design",
   "doe.response_surface",
   "doe.bayesian_optimization",
@@ -47,13 +48,13 @@ export const reportWorkflowCapabilities: readonly ReportWorkflowCapability[] = [
     workflowPath: "/analysis/regression/regression.predict",
   },
   {
-    methodId: "regression.response_optimizer",
+    methodId: "doe.response_optimizer",
     label: "Response Optimizer",
     storedResult: "전용 화면에서 지원",
     json: "현재 지원되지 않음",
     csv: "현재 지원되지 않음",
     html: "현재 지원되지 않음",
-    workflowPath: "/analysis/regression/regression.response_optimizer",
+    workflowPath: "/analysis/doe/doe.response_optimizer",
   },
   {
     methodId: "doe.factorial_design",

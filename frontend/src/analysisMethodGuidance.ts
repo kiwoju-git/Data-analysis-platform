@@ -374,8 +374,8 @@ export const analysisMethodGuidance = {
       "새 범주 수준 또는 결측·비숫자 값 때문에 일부 행이 제외되거나 usable row가 0인 경우",
     ],
   },
-  "regression.response_optimizer": {
-    methodId: "regression.response_optimizer",
+  "doe.response_optimizer": {
+    methodId: "doe.response_optimizer",
     roleRequirements: [required("검증된 모델", "저장된 DOE 반응표면 모델"), required("목표", "최대/최소/목표값/허용 범위")],
     optionChecklist: ["요인 탐색 범위", "desirability shape/importance", "선형 제약", "seed/평가/시간 budget"],
     preflightChecks: ["source checksum", "동일 factor 공간", "설계영역", "제약 feasible 여부"],

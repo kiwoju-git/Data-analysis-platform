@@ -51,8 +51,12 @@ from app.storage.metadata import (
     list_response_surface_analysis_catalog_records,
 )
 
-RESPONSE_OPTIMIZER_METHOD_ID: Final[Literal["regression.response_optimizer"]] = (
-    "regression.response_optimizer"
+RESPONSE_OPTIMIZER_METHOD_ID: Final[Literal["doe.response_optimizer"]] = "doe.response_optimizer"
+LEGACY_RESPONSE_OPTIMIZER_METHOD_IDS: Final[frozenset[str]] = frozenset(
+    {"regression.response_optimizer"}
+)
+SUPPORTED_RESPONSE_OPTIMIZER_METHOD_IDS: Final[frozenset[str]] = frozenset(
+    {RESPONSE_OPTIMIZER_METHOD_ID, *LEGACY_RESPONSE_OPTIMIZER_METHOD_IDS}
 )
 RESPONSE_OPTIMIZER_CONFIG_SCHEMA_VERSION: Final[Literal[2]] = 2
 RESPONSE_OPTIMIZER_RECORD_RESPONSE_NAME = "response_optimizer"
@@ -270,8 +274,8 @@ def _validated_optimizer_response(
 ) -> ResponseOptimizerResponse:
     design = get_response_surface_design(settings, design_id)
     if (
-        record.method_id != RESPONSE_OPTIMIZER_METHOD_ID
-        or record.method_version != METHOD_VERSIONS[RESPONSE_OPTIMIZER_METHOD_ID]
+        record.method_id not in SUPPORTED_RESPONSE_OPTIMIZER_METHOD_IDS
+        or record.method_version != METHOD_VERSIONS[record.method_id]
         or record.response_name != RESPONSE_OPTIMIZER_RECORD_RESPONSE_NAME
     ):
         raise _metadata_error("response_optimizer_method_mismatch")

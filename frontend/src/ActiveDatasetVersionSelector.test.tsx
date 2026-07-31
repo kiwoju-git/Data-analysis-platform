@@ -9,7 +9,7 @@ import type {
 import type { DatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 
 describe("ActiveDatasetVersionSelector", () => {
-  it("separates picker, summary, technical metadata, and operational rows", () => {
+  it("keeps the picker and user summary compact while preserving operational rows", () => {
     const html = renderToString(
       <ActiveDatasetVersionSelector
         catalogState={catalogState({
@@ -25,15 +25,17 @@ describe("ActiveDatasetVersionSelector", () => {
     );
 
     expect(html).toContain('class="active-dataset-picker"');
-    expect(html).toContain('class="active-dataset-select-stack"');
+    expect(html).toContain('class="active-dataset-inline-help"');
     expect(html).toContain('aria-describedby="active-dataset-help"');
     expect(html).toContain("<dt>버전</dt><dd>v1</dd>");
     expect(html).toContain("<dt>행</dt><dd>240</dd>");
     expect(html).toContain("<dt>열</dt><dd>15</dd>");
     expect(html).toContain("<dt>생성</dt>");
-    expect(html).toContain('aria-label="데이터셋 기술 정보"');
-    expect(html).toContain("schema 57cdd88e");
-    expect(html).toContain("ID bad30e2e");
+    expect(html).not.toContain('aria-label="데이터셋 기술 정보"');
+    expect(html).not.toContain("57cdd88e");
+    expect(html).toContain(
+      ">studio_process_training.csv · 240행 · 15열 · v1 · 2026. 07. 22. 21:43</option>",
+    );
     expect(html).toContain("데이터셋 버전 확인 중");
     expect(html).toContain("데이터셋 목록 조회 실패");
     expect(html).toContain("분석 데이터셋 목록 페이지 이동");
@@ -70,11 +72,14 @@ describe("ActiveDatasetVersionSelector", () => {
     );
 
     expect(html).toContain("사용자 지정 공정 데이터");
-    expect(html).toContain("매우_긴_공정_데이터셋_파일명_with_long_english_suffix.csv");
+    expect(html).not.toContain("매우_긴_공정_데이터셋_파일명_with_long_english_suffix.csv");
     expect(html).toContain("날짜 확인 불가");
     expect(html).toContain("선택한 데이터셋 다시 불러오기");
     expect((html.match(/id="active-dataset-version"/g) ?? [])).toHaveLength(1);
     expect((html.match(/id="active-dataset-help"/g) ?? [])).toHaveLength(1);
+    expect(html).toContain(
+      ">사용자 지정 공정 데이터 · 240행 · 15열 · v1 · 날짜 확인 불가</option>",
+    );
   });
 
   it("keeps a newly created active version selected before catalog refresh", () => {

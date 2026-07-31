@@ -1,12 +1,26 @@
 import type { useBayesianStudyDraftState } from "./hooks/useBayesianStudyDraftState";
+import { DoeFactorEditor } from "../../doe/DoeFormPrimitives";
 
 type DraftState = ReturnType<typeof useBayesianStudyDraftState>;
 
 export function BayesianFactorTable({ draft }: { draft: DraftState }) {
   return (
-    <>
+    <DoeFactorEditor
+      title="요인 범위"
+      description="최적화할 연속형 요인의 식별자, 표시 이름과 실제 단위 범위를 입력합니다."
+      action={
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={draft.factors.length >= 6}
+          onClick={draft.addFactor}
+        >
+          요인 추가
+        </button>
+      }
+    >
       <div className="table-wrap">
-        <table className="result-table bayesian-factor-table">
+        <table className="result-table doe-factor-table bayesian-factor-table">
           <colgroup>
             <col className="bayesian-factor-id-column" />
             <col className="bayesian-factor-name-column" />
@@ -17,7 +31,7 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
           </colgroup>
           <thead>
             <tr>
-              <th>Factor ID</th>
+              <th>요인 ID</th>
               <th>표시 이름</th>
               <th>하한</th>
               <th>상한</th>
@@ -91,16 +105,6 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
           </tbody>
         </table>
       </div>
-      <div className="button-row">
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={draft.factors.length >= 6}
-          onClick={draft.addFactor}
-        >
-          요인 추가
-        </button>
-      </div>
-    </>
+    </DoeFactorEditor>
   );
 }

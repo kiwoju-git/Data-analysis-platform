@@ -58,7 +58,10 @@ import {
   validateAnalysisFilterDrafts,
   type AnalysisFilterDraft,
 } from "./analysisFilters";
-import { buildAnalysisPath } from "./analysisNavigation";
+import {
+  buildAnalysisPath,
+  legacyResponseOptimizerRedirectLocation,
+} from "./analysisNavigation";
 import { useAnalysisSelection } from "./analysisSelection";
 import { currentAppRoute } from "./appRoute";
 import {
@@ -698,6 +701,16 @@ export default function App() {
       window.removeEventListener(appLocationChangeEvent, handleRouteChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const redirect = legacyResponseOptimizerRedirectLocation(
+      window.location.pathname,
+      window.location.search,
+      window.location.hash,
+    );
+    if (redirect !== null) replaceAppLocation(redirect);
+  }, [appRoute]);
 
   useEffect(() => {
     if (typeof window === "undefined" || appRoute.page !== "dataset") {
@@ -4229,6 +4242,7 @@ export default function App() {
         analysisComparisonState={analysisComparisonState}
         analysisHistoryState={analysisHistoryState}
         analysisRestoredState={restoredAnalysisResultState}
+        activeDatasetCatalogItem={activeDatasetSelectorProps.catalogState.activeItem}
         currentDatasetVersionId={version?.version_id ?? null}
         currentDatasetVersion={version}
         datasetPageProps={datasetPageProps}

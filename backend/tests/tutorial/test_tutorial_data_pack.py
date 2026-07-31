@@ -97,7 +97,7 @@ def test_tutorial_expected_results_are_api_normalized_and_identifier_free() -> N
         "quality.gage_rr",
         "doe.factorial_design",
         "doe.response_surface",
-        "regression.response_optimizer",
+        "doe.response_optimizer",
         "doe.bayesian_optimization",
     }
     assert payload["generated_by"] == "DataLab Studio API tutorial smoke"

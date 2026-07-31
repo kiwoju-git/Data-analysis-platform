@@ -100,7 +100,7 @@ const purposeGuideItems = [
   },
   {
     question: "저장된 반응표면 모형으로 반응을 최적화하고 싶다",
-    methods: ["regression.response_optimizer"],
+    methods: ["doe.response_optimizer"],
     reason: "저장된 RSM 분석을 선택하고 eligibility를 확인한 뒤 bounded desirability 최적화를 실행합니다.",
     roles: "RSM source analysis, factor bounds, response goal",
     caution: "권장점은 전역 최적을 보장하지 않으며 별도의 확인 실험이 필요합니다.",

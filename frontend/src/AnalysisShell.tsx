@@ -931,7 +931,6 @@ export function AnalysisShell({
             </p>
           ) : null}
         </div>
-        <span className="status-pill">Gate B0</span>
       </div>
       {analysisCatalogError !== null ? (
         <div className="notice-box">분석 메서드 registry를 불러오지 못했습니다.</div>
@@ -1458,7 +1457,7 @@ export function AnalysisShell({
               );
             }
             if (
-              method.method_id === "regression.response_optimizer" &&
+              method.method_id === "doe.response_optimizer" &&
               method.availability === "available"
             ) {
               return (

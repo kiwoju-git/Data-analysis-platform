@@ -5,7 +5,10 @@ import type {
   NormalityResult,
 } from "./api";
 import { InteractiveQqChart } from "./charts/InteractiveQqChart";
-import { andersonPValueLabel } from "./normalityDisplay";
+import {
+  andersonDecisionDisplay,
+  andersonPValueLabel,
+} from "./normalityDisplay";
 
 interface NormalityAnalysisPanelProps {
   alpha: number;
@@ -143,7 +146,7 @@ export function NormalityAnalysisPanel({
                       <th>Shapiro p</th>
                       <th>AD</th>
                       <th>AD p (근사)</th>
-                      <th>AD 결정</th>
+                      <th>AD 해석</th>
                       <th>Q-Q</th>
                     </tr>
                   </thead>
@@ -160,9 +163,9 @@ export function NormalityAnalysisPanel({
                         <td>{formatAnalysisNumber(column.anderson_darling.statistic)}</td>
                         <td>{andersonPValueLabel(column.anderson_darling)}</td>
                         <td>
-                          {andersonDecisionLabel(
-                            column.anderson_darling.decision_at_alpha,
-                          )}
+                          <NormalityDecision
+                            decision={column.anderson_darling.decision_at_alpha}
+                          />
                         </td>
                         <td>{column.qq_plot.point_count}</td>
                       </tr>
@@ -185,6 +188,9 @@ function NormalityQqCard({
   alpha: number;
   column: NormalityResult["columns"][number];
 }) {
+  const decision = andersonDecisionDisplay(
+    column.anderson_darling.decision_at_alpha,
+  );
   return (
     <section className="graphical-summary-card" aria-label={`${column.display_name} 정규성 Q-Q Plot`}>
       <div className="graphical-card-heading">
@@ -197,8 +203,9 @@ function NormalityQqCard({
             {formatAnalysisNumber(alpha)}
           </p>
         </div>
-        <span className="chart-warning-count">
-          AD {andersonDecisionLabel(column.anderson_darling.decision_at_alpha)}
+        <span className={`normality-decision-badge is-${decision.tone}`}>
+          <small>AD</small>
+          <strong>{decision.shortLabel}</strong>
         </span>
       </div>
       <div className="chart-grid chart-grid-single">
@@ -215,8 +222,8 @@ function NormalityQqCard({
         </div>
       </div>
       <p className="analysis-note">
-        AD p는 Stephens 정규성 근사값입니다. p가 alpha보다 크더라도 정규성을 증명하지
-        않으며, 두 검정 중 유리한 결과로 후속 분석을 자동 전환하지 않습니다.
+        {decision.detail} AD p는 Stephens 정규성 근사값입니다. Shapiro와 AD 중
+        유리한 결과만 골라 후속 분석을 자동 전환하지 않습니다.
       </p>
       {column.warnings.length > 0 ? (
         <ul className="inline-warning-list" aria-label={`${column.display_name} 정규성 경고`}>
@@ -229,13 +236,20 @@ function NormalityQqCard({
   );
 }
 
-function andersonDecisionLabel(
-  decision: NormalityResult["columns"][number]["anderson_darling"]["decision_at_alpha"],
-): string {
-  if (decision === null || decision.reject_normality === null) {
-    return "-";
-  }
-  return decision.reject_normality ? "기각" : "기각 안 함";
+function NormalityDecision({
+  decision,
+}: {
+  decision: NormalityResult["columns"][number]["anderson_darling"]["decision_at_alpha"];
+}) {
+  const display = andersonDecisionDisplay(decision);
+  return (
+    <span
+      className={`normality-decision-label is-${display.tone}`}
+      title={display.detail}
+    >
+      {display.shortLabel}
+    </span>
+  );
 }
 
 function formatAnalysisNumber(value: number | null): string {

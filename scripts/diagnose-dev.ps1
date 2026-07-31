@@ -51,7 +51,7 @@ try {
     }
     $catalog = Invoke-RestMethod -Uri "http://127.0.0.1:$BackendPort/api/v1/analysis-methods" -TimeoutSec 3
     $catalog.methods |
-        Where-Object { $_.method_id -in @("regression.predict", "regression.response_optimizer", "doe.bayesian_optimization") } |
+        Where-Object { $_.method_id -in @("regression.predict", "doe.response_optimizer", "doe.bayesian_optimization") } |
         Select-Object method_id, availability, execution_mode |
         Format-Table -AutoSize
 }

@@ -9,6 +9,7 @@ import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
   DatasetVersionDeleteResponse,
+  DatasetVersionCatalogItem,
   DatasetVersionResponse,
 } from "./api";
 import type { AppRoute } from "./appRoute";
@@ -32,6 +33,7 @@ export interface WorkspaceRouterProps {
   analysisComparisonState?: AnalysisWorkbenchComparisonState;
   analysisHistoryState?: AnalysisWorkbenchHistoryState;
   analysisRestoredState?: AnalysisWorkbenchRestoredState;
+  activeDatasetCatalogItem?: DatasetVersionCatalogItem | null;
   currentDatasetVersion?: DatasetVersionResponse | null;
   currentDatasetVersionId: string | null;
   datasetPageProps: DatasetPreparationPageProps;
@@ -54,6 +56,7 @@ export function WorkspaceRouter({
   analysisComparisonState,
   analysisHistoryState,
   analysisRestoredState,
+  activeDatasetCatalogItem,
   currentDatasetVersion,
   currentDatasetVersionId,
   datasetPageProps,
@@ -102,6 +105,8 @@ export function WorkspaceRouter({
       {routePage === "project" ? (
         <WorkspacePageBoundary pageKey="project">
           <ProjectOverviewPage
+            activeDatasetCatalogItem={activeDatasetCatalogItem}
+            analysisCatalog={analysisCatalog}
             currentDatasetVersion={currentDatasetVersion ?? null}
             onOpenAnalysis={onOpenAnalysisPage}
             onOpenDatasetPage={onOpenDatasetPage}

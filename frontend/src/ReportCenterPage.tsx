@@ -22,6 +22,7 @@ import {
   reportCreationCapabilities,
   reportWorkflowCapabilities,
 } from "./reportCenterCapabilities";
+import { analysisMethodDisplayLabel } from "./analysisNavigation";
 import { useAnalysisExportState } from "./useAnalysisExportState";
 import { useAnalysisRunDeletionState } from "./useAnalysisRunDeletionState";
 import { useReportCenterState } from "./useReportCenterState";
@@ -206,9 +207,7 @@ function ReportBrowser({
                 >
                   <span>
                     <strong>
-                      {catalog?.methods.find(
-                        (method) => method.method_id === run.method_id,
-                      )?.label_ko ?? run.method_id}
+                      {analysisMethodDisplayLabel(run.method_id, catalog)}
                     </strong>
                     <code>{run.method_id} · v{run.method_version}</code>
                   </span>

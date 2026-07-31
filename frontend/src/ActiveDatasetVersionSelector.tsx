@@ -1,6 +1,5 @@
 import type { DatasetVersionResponse } from "./api";
 import { formatLocalDateTime } from "./dateFormat";
-import { shortHash } from "./datasetDisplay";
 import type { DatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 
 export interface ActiveDatasetVersionSelectorProps {
@@ -44,36 +43,37 @@ export function ActiveDatasetVersionSelector({
       <div className="active-dataset-main">
         <div className="active-dataset-picker">
           <label htmlFor="active-dataset-version">현재 분석 데이터셋</label>
-          <div className="active-dataset-select-stack">
-            <select
-              aria-describedby="active-dataset-help"
-              id="active-dataset-version"
-              disabled={disabled || catalogState.catalog === null}
-              value={selectedVersionId}
-              onChange={(event) => onSelect(event.currentTarget.value)}
-            >
-              <option value="">데이터셋 버전 선택</option>
-              {activeOffPage !== null ? (
-                <option value={activeOffPage.version_id}>
-                  {catalogItemLabel(activeOffPage)}
-                </option>
-              ) : null}
-              {currentVersionFallback !== null ? (
-                <option value={currentVersionFallback.version_id}>
-                  {currentVersionLabel(currentVersionFallback)}
-                </option>
-              ) : null}
-              {catalogState.catalog?.versions.map((item) => (
-                <option key={item.version_id} value={item.version_id}>
-                  {catalogItemLabel(item)}
-                </option>
-              ))}
-            </select>
-            <p className="active-dataset-help" id="active-dataset-help">
-              전환하면 현재 일반 분석 입력과 화면 결과가 새 버전에 맞게
-              초기화됩니다.
-            </p>
-          </div>
+          <select
+            aria-describedby="active-dataset-help"
+            id="active-dataset-version"
+            disabled={disabled || catalogState.catalog === null}
+            value={selectedVersionId}
+            onChange={(event) => onSelect(event.currentTarget.value)}
+          >
+            <option value="">데이터셋 버전 선택</option>
+            {activeOffPage !== null ? (
+              <option value={activeOffPage.version_id}>
+                {catalogItemLabel(activeOffPage)}
+              </option>
+            ) : null}
+            {currentVersionFallback !== null ? (
+              <option value={currentVersionFallback.version_id}>
+                {currentVersionLabel(currentVersionFallback)}
+              </option>
+            ) : null}
+            {catalogState.catalog?.versions.map((item) => (
+              <option key={item.version_id} value={item.version_id}>
+                {catalogItemLabel(item)}
+              </option>
+            ))}
+          </select>
+          <span className="active-dataset-inline-help" aria-hidden="true">
+            전환 시 미저장 입력과 현재 결과가 초기화됩니다.
+          </span>
+          <span className="visually-hidden" id="active-dataset-help">
+            데이터셋을 전환하면 현재 일반 분석 입력과 화면 결과가 새 버전에 맞게
+            초기화됩니다.
+          </span>
         </div>
         {version !== null ? (
           <div className="active-dataset-summary-region">
@@ -95,13 +95,6 @@ export function ActiveDatasetVersionSelector({
                 <dd>{formatLocalDateTime(version.created_at)}</dd>
               </div>
             </dl>
-            <div className="active-dataset-technical" aria-label="데이터셋 기술 정보">
-              <strong>기술 정보</strong>
-              <span className="hash-text">
-                {`schema ${shortHash(version.schema_hash)}`}
-              </span>
-              <span className="hash-text">{`ID ${shortId(version.version_id)}`}</span>
-            </div>
           </div>
         ) : null}
       </div>
@@ -165,14 +158,9 @@ export function ActiveDatasetVersionSelector({
 
 function catalogItemLabel(item: NonNullable<DatasetVersionCatalogState["activeItem"]>) {
   const label = item.user_label ?? item.original_filename;
-  const original = item.user_label === null ? "" : ` · ${item.original_filename}`;
-  return `${label}${original} · ${item.row_count.toLocaleString()}행 · ${item.column_count.toLocaleString()}열 · 생성 ${formatLocalDateTime(item.created_at)} · v${item.version_number} · ${shortId(item.version_id)}`;
+  return `${label} · ${item.row_count.toLocaleString()}행 · ${item.column_count.toLocaleString()}열 · v${item.version_number} · ${formatLocalDateTime(item.created_at)}`;
 }
 
 function currentVersionLabel(version: DatasetVersionResponse) {
-  return `데이터셋 v${version.version_number} · ${version.row_count.toLocaleString()}행 · ${version.column_count.toLocaleString()}열 · 생성 ${formatLocalDateTime(version.created_at)}`;
-}
-
-function shortId(value: string) {
-  return value.length <= 12 ? value : `${value.slice(0, 8)}…`;
+  return `데이터셋 v${version.version_number} · ${version.row_count.toLocaleString()}행 · ${version.column_count.toLocaleString()}열 · ${formatLocalDateTime(version.created_at)}`;
 }

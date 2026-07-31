@@ -203,8 +203,8 @@ def test_response_optimizer_api_creates_and_restores_bounded_auditable_result(
     assert restored_response.status_code == 200
     restored = restored_response.json()
     assert restored == created
-    assert created["method_id"] == "regression.response_optimizer"
-    assert created["method_version"] == METHOD_VERSIONS["regression.response_optimizer"]
+    assert created["method_id"] == "doe.response_optimizer"
+    assert created["method_version"] == METHOD_VERSIONS["doe.response_optimizer"]
     assert created["config_schema_version"] == 2
     assert created["result_schema_version"] == 2
     assert created["source_analysis_ids"] == [analysis["analysis_id"]]
@@ -229,6 +229,63 @@ def test_response_optimizer_api_creates_and_restores_bounded_auditable_result(
     assert result["search"]["global_optimum_guaranteed"] is False
     assert "response_optimizer_confirmation_run_required" in result["warnings"]
     assert str(tmp_path) not in created_response.text
+
+
+def test_response_optimizer_restores_legacy_method_id_without_rewriting_record(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        design, analysis = _create_source_analysis(client)
+        created = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
+            json=_optimizer_request(analysis["analysis_id"]),
+        ).json()
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            result_json = connection.execute(
+                "SELECT result_json FROM experiment_design_analyses WHERE analysis_id = ?",
+                (created["optimization_id"],),
+            ).fetchone()[0]
+            legacy_result = json.loads(result_json)
+            legacy_result["method_id"] = "regression.response_optimizer"
+            legacy_result_json = json.dumps(
+                legacy_result,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            legacy_result_sha256 = hashlib.sha256(legacy_result_json.encode("utf-8")).hexdigest()
+            connection.execute(
+                "UPDATE experiment_design_analyses "
+                "SET method_id = ?, result_json = ?, result_sha256 = ? "
+                "WHERE analysis_id = ?",
+                (
+                    "regression.response_optimizer",
+                    legacy_result_json,
+                    legacy_result_sha256,
+                    created["optimization_id"],
+                ),
+            )
+            connection.commit()
+
+        restored = client.get(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}"
+            f"/optimizations/{created['optimization_id']}"
+        )
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            stored = connection.execute(
+                "SELECT method_id, result_json, result_sha256 "
+                "FROM experiment_design_analyses WHERE analysis_id = ?",
+                (created["optimization_id"],),
+            ).fetchone()
+
+    assert restored.status_code == 200
+    assert restored.json()["method_id"] == "regression.response_optimizer"
+    assert stored == (
+        "regression.response_optimizer",
+        legacy_result_json,
+        legacy_result_sha256,
+    )
 
 
 def test_response_optimizer_restore_stays_pinned_after_new_response_revision(tmp_path) -> None:
