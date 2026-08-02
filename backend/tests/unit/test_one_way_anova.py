@@ -84,6 +84,7 @@ def test_one_way_anova_matches_reference_fixture_and_scipy_f_oneway() -> None:
             _group_column(),
             alpha=case["alpha"],
             confidence_level=case["confidence_level"],
+            posthoc_policy="after_significant",
         )
         grouped_values: dict[str, list[float]] = {}
         for response, group in case["rows"]:
@@ -183,7 +184,12 @@ def test_one_way_anova_reports_exclusions_and_skips_posthoc_when_not_significant
         ["3.2", ""],
     ]
 
-    result = calculate_one_way_anova(rows, _response_column(), _group_column())
+    result = calculate_one_way_anova(
+        rows,
+        _response_column(),
+        _group_column(),
+        posthoc_policy="after_significant",
+    )
 
     assert result["n_total"] == 9
     assert result["n_used"] == 6
@@ -207,7 +213,12 @@ def test_one_way_anova_keeps_negative_omega_squared_and_skips_posthoc() -> None:
         ["2.2", "C"],
     ]
 
-    result = calculate_one_way_anova(rows, _response_column(), _group_column())
+    result = calculate_one_way_anova(
+        rows,
+        _response_column(),
+        _group_column(),
+        posthoc_policy="after_significant",
+    )
 
     assert result["test"]["p_value"] == pytest.approx(1.0, abs=1e-12)
     effect_size = result["test"]["effect_size"]
@@ -255,7 +266,7 @@ def test_one_way_anova_rejects_invalid_inputs_without_fallback_statistic() -> No
             [["1", "A"], ["2", "A"], ["3", "B"], ["4", "B"]],
             _response_column(),
             _group_column(),
-            anova_type="welch",
+            anova_type="not-supported",
         )
 
     with pytest.raises(
@@ -287,6 +298,132 @@ def test_one_way_anova_rejects_invalid_inputs_without_fallback_statistic() -> No
             [["1", "A"], ["1", "A"], ["2", "B"], ["2", "B"]],
             _response_column(),
             _group_column(),
+        )
+
+
+def test_welch_anova_matches_hand_formula_and_games_howell_reference() -> None:
+    rows = [
+        *[[str(value), "A"] for value in [1, 2, 3, 4]],
+        *[[str(value), "B"] for value in [2, 4, 8, 10, 12]],
+        *[[str(value), "C"] for value in [7, 8, 9, 10, 11, 12]],
+    ]
+
+    result = calculate_one_way_anova(
+        rows,
+        _response_column(),
+        _group_column(),
+        anova_type="welch",
+        posthoc_method="games_howell",
+    )
+
+    groups = [[1, 2, 3, 4], [2, 4, 8, 10, 12], [7, 8, 9, 10, 11, 12]]
+    ns = [len(group) for group in groups]
+    means = [sum(group) / len(group) for group in groups]
+    variances = [stats.tvar(group) for group in groups]
+    weights = [n / variance for n, variance in zip(ns, variances, strict=True)]
+    weight_sum = sum(weights)
+    weighted_mean = sum(
+        weight * mean for weight, mean in zip(weights, means, strict=True)
+    ) / weight_sum
+    adjustment = sum(
+        ((1 - (weight / weight_sum)) ** 2) / (n - 1)
+        for weight, n in zip(weights, ns, strict=True)
+    )
+    expected_f = (
+        sum(
+            weight * ((mean - weighted_mean) ** 2)
+            for weight, mean in zip(weights, means, strict=True)
+        )
+        / 2
+    ) / (1 + (2 * (3 - 2) / ((3**2) - 1)) * adjustment)
+    expected_df = ((3**2) - 1) / (3 * adjustment)
+
+    assert result["schema_version"] == 2
+    assert result["anova_table"] is None
+    assert result["test"]["f_statistic"] == pytest.approx(expected_f, abs=1e-12)
+    assert result["test"]["df_numerator"] == 2
+    assert result["test"]["df_denominator"] == pytest.approx(expected_df, abs=1e-12)
+    assert result["test"]["p_value"] == pytest.approx(
+        stats.f.sf(expected_f, 2, expected_df),
+        abs=1e-12,
+    )
+    assert result["test"]["effect_size"] is None
+    comparisons = result["posthoc"]["comparisons"]
+    assert len(comparisons) == 3
+    first = comparisons[0]
+    variance_term = (variances[0] / ns[0]) + (variances[1] / ns[1])
+    expected_comparison_df = (variance_term**2) / (
+        ((variances[0] / ns[0]) ** 2) / (ns[0] - 1)
+        + ((variances[1] / ns[1]) ** 2) / (ns[1] - 1)
+    )
+    expected_q = abs(means[0] - means[1]) / ((variance_term / 2) ** 0.5)
+    assert first["df"] == pytest.approx(expected_comparison_df, abs=1e-12)
+    assert first["q_statistic"] == pytest.approx(expected_q, abs=1e-12)
+    assert first["adjusted_p_value"] == pytest.approx(
+        stats.studentized_range.sf(expected_q, 3, expected_comparison_df),
+        abs=1e-12,
+    )
+
+
+def test_dunnett_compares_only_treatments_to_selected_control_reproducibly() -> None:
+    rows = [
+        *[[str(value), "A"] for value in [1, 2, 3, 4]],
+        *[[str(value), "B"] for value in [4, 5, 6, 7]],
+        *[[str(value), "C"] for value in [5, 6, 7, 8]],
+    ]
+    kwargs = {
+        "posthoc_method": "dunnett",
+        "control_group_label": "A",
+        "dunnett_rng_seed": 4242,
+    }
+
+    first = calculate_one_way_anova(rows, _response_column(), _group_column(), **kwargs)
+    second = calculate_one_way_anova(rows, _response_column(), _group_column(), **kwargs)
+
+    comparisons = first["posthoc"]["comparisons"]
+    assert len(comparisons) == 2
+    assert [(item["group_1_label"], item["group_2_label"]) for item in comparisons] == [
+        ("B", "A"),
+        ("C", "A"),
+    ]
+    assert all(item["control_group_label"] == "A" for item in comparisons)
+    assert first["posthoc"] == second["posthoc"]
+
+
+@pytest.mark.parametrize(
+    ("anova_type", "posthoc_method"),
+    [
+        ("standard", "games_howell"),
+        ("welch", "tukey_kramer"),
+        ("welch", "dunnett"),
+    ],
+)
+def test_anova_rejects_incompatible_comparison_methods(
+    anova_type: str,
+    posthoc_method: str,
+) -> None:
+    with pytest.raises(OneWayAnovaError, match="one_way_anova_posthoc_incompatible"):
+        calculate_one_way_anova(
+            [["1", "A"], ["2", "A"], ["3", "B"], ["5", "B"]],
+            _response_column(),
+            _group_column(),
+            anova_type=anova_type,
+            posthoc_method=posthoc_method,
+            control_group_label="A" if posthoc_method == "dunnett" else None,
+        )
+
+
+def test_welch_rejects_zero_group_variance() -> None:
+    with pytest.raises(
+        OneWayAnovaError,
+        match="one_way_anova_welch_zero_group_variance",
+    ):
+        calculate_one_way_anova(
+            [["1", "A"], ["1", "A"], ["2", "B"], ["4", "B"]],
+            _response_column(),
+            _group_column(),
+            anova_type="welch",
+            posthoc_method="none",
         )
 
 

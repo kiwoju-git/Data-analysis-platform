@@ -2101,6 +2101,8 @@ def run_one_way_anova_analysis(
     anova_type = _one_way_anova_type(options)
     posthoc_method = _one_way_anova_posthoc_method(options)
     posthoc_policy = _one_way_anova_posthoc_policy(options)
+    control_group_label = _one_way_anova_control_group_label(options)
+    dunnett_rng_seed = _one_way_anova_dunnett_rng_seed(options)
     _one_way_anova_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
@@ -2124,6 +2126,8 @@ def run_one_way_anova_analysis(
                 anova_type=anova_type,
                 posthoc_method=posthoc_method,
                 posthoc_policy=posthoc_policy,
+                control_group_label=control_group_label,
+                dunnett_rng_seed=dunnett_rng_seed,
             )
         except OneWayAnovaError as exc:
             raise _one_way_anova_api_error(exc.code) from exc
@@ -2269,7 +2273,7 @@ def _one_way_anova_confidence_level(options: dict[str, Any]) -> float:
 
 def _one_way_anova_type(options: dict[str, Any]) -> str:
     raw_value = options.get("anova_type", "standard")
-    if raw_value != "standard":
+    if raw_value not in {"standard", "welch"}:
         raise ApiError(
             code="invalid_one_way_anova_type",
             message="이번 slice는 표준 일원분산분석만 지원합니다.",
@@ -2279,7 +2283,7 @@ def _one_way_anova_type(options: dict[str, Any]) -> str:
 
 def _one_way_anova_posthoc_method(options: dict[str, Any]) -> str:
     raw_value = options.get("posthoc_method", "tukey_kramer")
-    if raw_value not in {"tukey_kramer", "none"}:
+    if raw_value not in {"tukey_kramer", "dunnett", "games_howell", "none"}:
         raise ApiError(
             code="invalid_one_way_anova_posthoc_method",
             message="일원분산분석 사후검정 방식이 올바르지 않습니다.",
@@ -2288,13 +2292,35 @@ def _one_way_anova_posthoc_method(options: dict[str, Any]) -> str:
 
 
 def _one_way_anova_posthoc_policy(options: dict[str, Any]) -> str:
-    raw_value = options.get("posthoc_policy", "after_significant")
-    if raw_value != "after_significant":
+    raw_value = options.get("posthoc_policy", "when_requested")
+    if raw_value not in {"when_requested", "after_significant"}:
         raise ApiError(
             code="invalid_one_way_anova_posthoc_policy",
             message="일원분산분석 사후검정 정책이 올바르지 않습니다.",
         )
     return str(raw_value)
+
+
+def _one_way_anova_control_group_label(options: dict[str, Any]) -> str | None:
+    raw_value = options.get("control_group_label")
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, str) or not raw_value:
+        raise ApiError(
+            code="one_way_anova_dunnett_control_required",
+            message="Dunnett 비교에는 기준 그룹을 선택해야 합니다.",
+        )
+    return raw_value
+
+
+def _one_way_anova_dunnett_rng_seed(options: dict[str, Any]) -> int:
+    raw_value = options.get("dunnett_rng_seed", 20260802)
+    if isinstance(raw_value, bool) or not isinstance(raw_value, int):
+        raise ApiError(
+            code="invalid_one_way_anova_dunnett_rng_seed",
+            message="Dunnett 난수 seed가 올바르지 않습니다.",
+        )
+    return raw_value
 
 
 def _one_way_anova_missing_policy(options: dict[str, Any]) -> str:
@@ -2317,6 +2343,14 @@ def _one_way_anova_api_error(code: str) -> ApiError:
         ),
         "invalid_one_way_anova_posthoc_method": ("일원분산분석 사후검정 방식이 올바르지 않습니다."),
         "invalid_one_way_anova_posthoc_policy": ("일원분산분석 사후검정 정책이 올바르지 않습니다."),
+        "one_way_anova_posthoc_incompatible": (
+            "선택한 분산 가정과 사후비교 방법을 함께 사용할 수 없습니다."
+        ),
+        "one_way_anova_dunnett_control_required": "Dunnett 비교에는 기준 그룹이 필요합니다.",
+        "one_way_anova_dunnett_control_not_found": (
+            "선택한 기준 그룹이 현재 데이터와 필터 결과에 없습니다."
+        ),
+        "invalid_one_way_anova_dunnett_rng_seed": "Dunnett 난수 seed가 올바르지 않습니다.",
         "one_way_anova_requires_at_least_two_groups": (
             "일원분산분석에는 사용 가능한 그룹이 최소 2개 필요합니다."
         ),
@@ -2329,6 +2363,12 @@ def _one_way_anova_api_error(code: str) -> ApiError:
         "one_way_anova_degrees_of_freedom_invalid": ("일원분산분석 자유도가 유효하지 않습니다."),
         "one_way_anova_zero_residual_variance": (
             "잔차 분산이 0이어서 일원분산분석 F 통계량을 계산할 수 없습니다."
+        ),
+        "one_way_anova_welch_zero_group_variance": (
+            "Welch ANOVA는 분산이 0인 그룹이 있으면 계산할 수 없습니다."
+        ),
+        "one_way_anova_welch_statistic_not_finite": (
+            "Welch ANOVA 통계량 또는 자유도가 유한하지 않습니다."
         ),
         "one_way_anova_statistic_not_finite": (
             "일원분산분석 통계량 또는 p-value가 유한하지 않습니다."
@@ -2374,6 +2414,14 @@ def _one_way_anova_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
                 message="표준 일원분산분석은 등분산 가정을 사용합니다.",
             ),
         )
+    if "one_way_anova_unequal_variance_selected" in result_warning_codes:
+        warnings.append(
+            AnalysisWarning(
+                code="one_way_anova_unequal_variance_selected",
+                severity="info",
+                message="그룹별 분산이 다를 수 있는 Welch 일원분산분석을 사용했습니다.",
+            ),
+        )
     if "one_way_anova_not_auto_switched" in result_warning_codes:
         warnings.append(
             AnalysisWarning(
@@ -2387,9 +2435,22 @@ def _one_way_anova_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
             AnalysisWarning(
                 code="tukey_kramer_after_standard_anova",
                 severity="info",
-                message="표준 ANOVA가 유의한 경우 Tukey-Kramer 사후비교를 수행했습니다.",
+                message="등분산 표준 ANOVA와 Tukey-Kramer 비교를 수행했습니다.",
             ),
         )
+    for code, message in (
+        ("dunnett_comparison_performed", "선택한 기준 그룹에 대한 Dunnett 비교를 수행했습니다."),
+        (
+            "games_howell_comparison_performed",
+            "이분산 Welch ANOVA와 Games-Howell 비교를 수행했습니다.",
+        ),
+        (
+            "welch_effect_size_not_supported",
+            "현재 Welch 결과에는 pooled ANOVA 효과크기를 표시하지 않습니다.",
+        ),
+    ):
+        if code in result_warning_codes:
+            warnings.append(AnalysisWarning(code=code, severity="info", message=message))
     if "posthoc_skipped_overall_not_significant" in result_warning_codes:
         warnings.append(
             AnalysisWarning(

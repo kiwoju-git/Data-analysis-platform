@@ -2338,7 +2338,7 @@ def test_analysis_run_executes_one_way_anova_from_dataset_version(tmp_path) -> N
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.one_way_anova",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.one_way_anova"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -2416,6 +2416,34 @@ def test_analysis_run_executes_one_way_anova_from_dataset_version(tmp_path) -> N
     assert row_snapshot["kind"] == "analysis_row_snapshot"
     assert row_snapshot["row_count_total"] == 12
     assert row_snapshot["row_count_included"] == 12
+
+
+def test_group_level_preflight_preserves_first_occurrence_and_counts_missing(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n1,B\n2,A\n3,B\n4,\n5,C\n",
+            filename="anova-groups.csv",
+        )
+        response = client.post(
+            f"/api/v1/dataset-versions/{version['version_id']}/group-levels",
+            json={
+                "group_column_id": version["columns"][1]["column_id"],
+                "filter_snapshot": {"expression_version": 1, "conditions": []},
+                "maximum_levels": 20,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [(item["value"], item["n_used"]) for item in payload["levels"]] == [
+        ("B", 2),
+        ("A", 1),
+        ("C", 1),
+    ]
+    assert payload["missing_count"] == 1
+    assert payload["truncated"] is False
 
 
 def test_analysis_run_executes_mann_whitney_from_dataset_version(tmp_path) -> None:
@@ -9919,7 +9947,7 @@ def test_analysis_run_comparison_api_returns_one_way_anova_stored_metrics(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.one_way_anova",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.one_way_anova"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -9941,7 +9969,7 @@ def test_analysis_run_comparison_api_returns_one_way_anova_stored_metrics(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.one_way_anova",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.one_way_anova"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,

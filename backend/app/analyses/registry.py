@@ -17,7 +17,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "hypothesis.one_sample_t": METHOD_VERSION,
     "hypothesis.paired_t": METHOD_VERSION,
     "hypothesis.two_sample_t": METHOD_VERSION,
-    "hypothesis.one_way_anova": METHOD_VERSION,
+    "hypothesis.one_way_anova": "0.2.0",
     "hypothesis.equivalence_tost": METHOD_VERSION,
     "hypothesis.one_sample_wilcoxon": METHOD_VERSION,
     "hypothesis.mann_whitney": METHOD_VERSION,

@@ -3,6 +3,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, File, Query, Request, UploadFile, status
 
+from app.api.v1.schemas.analyses import (
+    GroupLevelPreflightRequest,
+    GroupLevelPreflightResponse,
+)
 from app.api.v1.schemas.datasets import (
     DatasetCellCorrectionRequest,
     DatasetCellCorrectionResponse,
@@ -41,6 +45,7 @@ from app.services.dataset_versions import (
     update_dataset_schema,
     update_dataset_version_metadata,
 )
+from app.services.group_level_preflights import get_group_level_preflight
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 version_router = APIRouter(prefix="/dataset-versions", tags=["dataset-versions"])
@@ -133,6 +138,22 @@ def get_dataset_version_route(
     return get_dataset_version(
         settings=request.app.state.settings,
         version_id=version_id,
+    )
+
+
+@version_router.post(
+    "/{version_id}/group-levels",
+    response_model=GroupLevelPreflightResponse,
+)
+def get_group_level_preflight_route(
+    request: Request,
+    version_id: UUID,
+    body: GroupLevelPreflightRequest,
+) -> GroupLevelPreflightResponse:
+    return get_group_level_preflight(
+        settings=request.app.state.settings,
+        dataset_version_id=version_id,
+        body=body,
     )
 
 

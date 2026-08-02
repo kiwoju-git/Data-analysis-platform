@@ -91,6 +91,35 @@ class AnalysisRunRequest(BaseModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
+class GroupLevelPreflightRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    group_column_id: str = Field(min_length=1)
+    filter_snapshot: AnalysisFilterSnapshot = Field(default_factory=AnalysisFilterSnapshot)
+    maximum_levels: int = Field(default=20, ge=2, le=100)
+
+
+class GroupLevelPreflightItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: str
+    display_label: str
+    n_used: int = Field(ge=1)
+
+
+class GroupLevelPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preflight_schema_version: Literal[1] = 1
+    dataset_version_id: UUID
+    source_schema_hash: str
+    filter_snapshot_sha256: str
+    group_column_id: str
+    levels: list[GroupLevelPreflightItem]
+    missing_count: int = Field(ge=0)
+    truncated: bool
+
+
 class DescriptiveOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -691,9 +720,13 @@ class OneWayAnovaOptions(BaseModel):
     group_column_id: str = Field(min_length=1)
     alpha: float = 0.05
     confidence_level: float = 0.95
-    anova_type: str = "standard"
-    posthoc_method: str = "tukey_kramer"
-    posthoc_policy: str = "after_significant"
+    anova_type: Literal["standard", "welch"] = "standard"
+    posthoc_method: Literal["tukey_kramer", "dunnett", "games_howell", "none"] = (
+        "tukey_kramer"
+    )
+    posthoc_policy: Literal["when_requested", "after_significant"] = "when_requested"
+    control_group_label: str | None = Field(default=None, min_length=1, max_length=120)
+    dunnett_rng_seed: int = 20260802
     missing_policy: str = "complete_case"
 
     @field_validator("alpha", "confidence_level", mode="before")
@@ -704,6 +737,26 @@ class OneWayAnovaOptions(BaseModel):
         if not isfinite(float(value)):
             raise ValueError("must be a finite number")
         return value
+
+    @field_validator("dunnett_rng_seed", mode="before")
+    @classmethod
+    def require_integer_seed(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("must be an integer")
+        return value
+
+    @model_validator(mode="after")
+    def validate_comparison_compatibility(self) -> "OneWayAnovaOptions":
+        allowed = (
+            {"none", "tukey_kramer", "dunnett"}
+            if self.anova_type == "standard"
+            else {"none", "games_howell"}
+        )
+        if self.posthoc_method not in allowed:
+            raise ValueError("posthoc method is incompatible with variance model")
+        if self.posthoc_method == "dunnett" and not self.control_group_label:
+            raise ValueError("Dunnett requires control_group_label")
+        return self
 
 
 class KruskalWallisOptions(BaseModel):

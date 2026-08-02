@@ -1,20 +1,23 @@
 from __future__ import annotations
 
 import importlib.metadata
+import itertools
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from math import fsum, isfinite, sqrt
 from statistics import median
-from typing import cast
+from typing import Any, cast
 
+import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
-ANOVA_TYPES = {"standard"}
+ANOVA_TYPES = {"standard", "welch"}
+DUNNETT_DEFAULT_RNG_SEED = 20260802
 GROUP_LABEL_MAX_LENGTH = 120
 MIN_GROUP_N = 2
-POSTHOC_METHODS = {"tukey_kramer", "none"}
-POSTHOC_POLICIES = {"after_significant"}
+POSTHOC_METHODS = {"tukey_kramer", "dunnett", "games_howell", "none"}
+POSTHOC_POLICIES = {"when_requested", "after_significant"}
 
 
 class OneWayAnovaError(ValueError):
@@ -47,6 +50,7 @@ class OneWayAnovaGroupColumn:
 
 @dataclass
 class _GroupAccumulator:
+    group_value: str
     group_label: str
     group_index: int
     values: list[float] = field(default_factory=list)
@@ -63,7 +67,9 @@ def calculate_one_way_anova(
     confidence_level: float = 0.95,
     anova_type: str = "standard",
     posthoc_method: str = "tukey_kramer",
-    posthoc_policy: str = "after_significant",
+    posthoc_policy: str = "when_requested",
+    control_group_label: str | None = None,
+    dunnett_rng_seed: int = DUNNETT_DEFAULT_RNG_SEED,
 ) -> dict[str, object]:
     if anova_type not in ANOVA_TYPES:
         raise OneWayAnovaError("invalid_one_way_anova_type")
@@ -71,6 +77,11 @@ def calculate_one_way_anova(
         raise OneWayAnovaError("invalid_one_way_anova_posthoc_method")
     if posthoc_policy not in POSTHOC_POLICIES:
         raise OneWayAnovaError("invalid_one_way_anova_posthoc_policy")
+    _validate_posthoc_compatibility(anova_type, posthoc_method)
+    if isinstance(dunnett_rng_seed, bool) or not isinstance(dunnett_rng_seed, int):
+        raise OneWayAnovaError("invalid_one_way_anova_dunnett_rng_seed")
+    if posthoc_method == "dunnett" and not control_group_label:
+        raise OneWayAnovaError("one_way_anova_dunnett_control_required")
     if alpha <= 0.0 or alpha >= 1.0 or not isfinite(alpha):
         raise OneWayAnovaError("invalid_one_way_anova_alpha")
     if confidence_level <= 0.0 or confidence_level >= 1.0 or not isfinite(confidence_level):
@@ -102,14 +113,15 @@ def calculate_one_way_anova(
             n_excluded_non_numeric_response += 1
             continue
 
-        group_label = _safe_group_label(group_value)
-        group = groups.get(group_label)
+        group_key = group_value.strip()
+        group = groups.get(group_key)
         if group is None:
             group = _GroupAccumulator(
-                group_label=group_label,
+                group_value=group_key,
+                group_label=_safe_group_label(group_key),
                 group_index=len(groups),
             )
-            groups[group_label] = group
+            groups[group_key] = group
         group.values.append(response_number)
 
     group_list = list(groups.values())
@@ -118,8 +130,17 @@ def calculate_one_way_anova(
     if any(len(group.values) < MIN_GROUP_N for group in group_list):
         raise OneWayAnovaError("one_way_anova_group_n_too_small")
 
-    anova_table = _anova_table(group_list)
-    test = _test_result(anova_table, alpha=alpha)
+    anova_table: dict[str, object] | None
+    if anova_type == "standard":
+        anova_table = _anova_table(group_list)
+        test = _standard_test_result(anova_table, alpha=alpha)
+        method = "standard_one_way_anova"
+        variance_model = "equal"
+    else:
+        anova_table = None
+        test = _welch_test_result(group_list, alpha=alpha)
+        method = "welch_one_way_anova"
+        variance_model = "unequal"
     posthoc = _posthoc_result(
         group_list,
         anova_table,
@@ -128,18 +149,23 @@ def calculate_one_way_anova(
         posthoc_method=posthoc_method,
         posthoc_policy=posthoc_policy,
         overall_reject=bool(test["reject_null"]),
+        control_group_label=control_group_label,
+        dunnett_rng_seed=dunnett_rng_seed,
     )
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "one_way_anova",
-        "method": "standard_one_way_anova",
+        "method": method,
         "anova_type": anova_type,
+        "variance_model": variance_model,
         "missing_policy": "complete_case",
         "alpha": alpha,
         "confidence_level": confidence_level,
         "posthoc_method": posthoc_method,
         "posthoc_policy": posthoc_policy,
+        "control_group_label": control_group_label,
+        "dunnett_rng_seed": dunnett_rng_seed if posthoc_method == "dunnett" else None,
         "package_versions": {
             "numpy": importlib.metadata.version("numpy"),
             "scipy": importlib.metadata.version("scipy"),
@@ -165,6 +191,16 @@ def calculate_one_way_anova(
         "test": test,
         "posthoc": posthoc,
     }
+
+
+def _validate_posthoc_compatibility(anova_type: str, posthoc_method: str) -> None:
+    allowed = (
+        {"none", "tukey_kramer", "dunnett"}
+        if anova_type == "standard"
+        else {"none", "games_howell"}
+    )
+    if posthoc_method not in allowed:
+        raise OneWayAnovaError("one_way_anova_posthoc_incompatible")
 
 
 def _row_value(row: Sequence[str | None], column_index: int) -> str | None:
@@ -346,14 +382,18 @@ def _anova_table(group_list: Sequence[_GroupAccumulator]) -> dict[str, object]:
     }
 
 
-def _test_result(
+def _standard_test_result(
     anova_table: dict[str, object],
     *,
     alpha: float,
 ) -> dict[str, object]:
     p_value = cast(float, anova_table["p_value"])
     return {
+        "method": "standard_one_way_anova",
+        "variance_model": "equal",
         "f_statistic": cast(float, anova_table["f_statistic"]),
+        "df_numerator": cast(int, anova_table["df_between"]),
+        "df_denominator": cast(int, anova_table["df_within"]),
         "df_between": cast(int, anova_table["df_between"]),
         "df_within": cast(int, anova_table["df_within"]),
         "p_value": p_value,
@@ -362,15 +402,69 @@ def _test_result(
     }
 
 
+def _welch_test_result(
+    group_list: Sequence[_GroupAccumulator],
+    *,
+    alpha: float,
+) -> dict[str, object]:
+    group_count = len(group_list)
+    variances = [_sample_variance(group.values) for group in group_list]
+    if any(variance <= 0.0 or not isfinite(variance) for variance in variances):
+        raise OneWayAnovaError("one_way_anova_welch_zero_group_variance")
+    weights = [
+        len(group.values) / variance
+        for group, variance in zip(group_list, variances, strict=False)
+    ]
+    weight_sum = fsum(weights)
+    if weight_sum <= 0.0 or not isfinite(weight_sum):
+        raise OneWayAnovaError("one_way_anova_welch_statistic_not_finite")
+    weighted_mean = fsum(
+        weight * _mean(group.values) for weight, group in zip(weights, group_list, strict=False)
+    ) / weight_sum
+    numerator = fsum(
+        weight * ((_mean(group.values) - weighted_mean) ** 2)
+        for weight, group in zip(weights, group_list, strict=False)
+    ) / (group_count - 1)
+    adjustment_sum = fsum(
+        ((1.0 - (weight / weight_sum)) ** 2) / (len(group.values) - 1)
+        for weight, group in zip(weights, group_list, strict=False)
+    )
+    correction = 1.0 + (
+        (2.0 * (group_count - 2.0) / ((group_count**2) - 1.0)) * adjustment_sum
+    )
+    df_numerator = float(group_count - 1)
+    df_denominator = float(((group_count**2) - 1.0) / (3.0 * adjustment_sum))
+    f_statistic = float(numerator / correction)
+    p_value = float(stats.f.sf(f_statistic, df_numerator, df_denominator))
+    if not all(isfinite(value) for value in [weighted_mean, f_statistic, df_denominator, p_value]):
+        raise OneWayAnovaError("one_way_anova_welch_statistic_not_finite")
+    return {
+        "method": "welch_one_way_anova",
+        "variance_model": "unequal",
+        "weighted_mean": weighted_mean,
+        "f_statistic": f_statistic,
+        "df_numerator": df_numerator,
+        "df_denominator": df_denominator,
+        "df_between": df_numerator,
+        "df_within": df_denominator,
+        "p_value": p_value,
+        "reject_null": p_value < alpha,
+        "effect_size": None,
+        "effect_size_reason": "welch_effect_size_not_supported",
+    }
+
+
 def _posthoc_result(
     group_list: Sequence[_GroupAccumulator],
-    anova_table: dict[str, object],
+    anova_table: dict[str, object] | None,
     *,
     alpha: float,
     confidence_level: float,
     posthoc_method: str,
     posthoc_policy: str,
     overall_reject: bool,
+    control_group_label: str | None,
+    dunnett_rng_seed: int,
 ) -> dict[str, object]:
     if posthoc_method == "none":
         return {
@@ -381,45 +475,74 @@ def _posthoc_result(
             "reason": "not_requested",
             "comparisons": [],
         }
-    if not overall_reject:
+    if posthoc_policy == "after_significant" and not overall_reject:
         return {
-            "method": "tukey_kramer",
-            "multiplicity_method": "tukey_familywise",
+            "method": posthoc_method,
+            "multiplicity_method": _multiplicity_method(posthoc_method),
             "policy": posthoc_policy,
             "performed": False,
             "reason": "overall_not_significant",
             "comparisons": [],
         }
 
-    df_within = cast(int, anova_table["df_within"])
-    ms_within = cast(float, anova_table["ms_within"])
-    group_count = len(group_list)
-    q_critical = float(stats.studentized_range.ppf(confidence_level, group_count, df_within))
-    comparisons: list[dict[str, object]] = []
-    for first_index, group_1 in enumerate(group_list):
-        for group_2 in group_list[first_index + 1 :]:
-            comparisons.append(
-                _tukey_comparison(
-                    group_1,
-                    group_2,
-                    ms_within=ms_within,
-                    df_within=df_within,
-                    group_count=group_count,
-                    q_critical=q_critical,
-                    alpha=alpha,
-                    confidence_level=confidence_level,
-                ),
+    if posthoc_method == "tukey_kramer":
+        assert anova_table is not None
+        df_within = cast(int, anova_table["df_within"])
+        ms_within = cast(float, anova_table["ms_within"])
+        group_count = len(group_list)
+        q_critical = float(stats.studentized_range.ppf(confidence_level, group_count, df_within))
+        comparisons = [
+            _tukey_comparison(
+                group_1,
+                group_2,
+                ms_within=ms_within,
+                df_within=df_within,
+                group_count=group_count,
+                q_critical=q_critical,
+                alpha=alpha,
+                confidence_level=confidence_level,
             )
+            for group_1, group_2 in itertools.combinations(group_list, 2)
+        ]
+        details: dict[str, Any] = {"q_critical": q_critical}
+    elif posthoc_method == "dunnett":
+        assert control_group_label is not None
+        comparisons = _dunnett_comparisons(
+            group_list,
+            control_group_label=control_group_label,
+            alpha=alpha,
+            confidence_level=confidence_level,
+            rng_seed=dunnett_rng_seed,
+        )
+        details = {
+            "control_group_label": control_group_label,
+            "rng_seed": dunnett_rng_seed,
+        }
+    else:
+        comparisons = _games_howell_comparisons(
+            group_list,
+            alpha=alpha,
+            confidence_level=confidence_level,
+        )
+        details = {}
     return {
-        "method": "tukey_kramer",
-        "multiplicity_method": "tukey_familywise",
+        "method": posthoc_method,
+        "multiplicity_method": _multiplicity_method(posthoc_method),
         "policy": posthoc_policy,
         "performed": True,
         "reason": None,
         "confidence_level": confidence_level,
-        "q_critical": q_critical,
         "comparisons": comparisons,
+        **details,
     }
+
+
+def _multiplicity_method(posthoc_method: str) -> str | None:
+    return {
+        "tukey_kramer": "tukey_familywise",
+        "dunnett": "dunnett_familywise",
+        "games_howell": "games_howell_familywise",
+    }.get(posthoc_method)
 
 
 def _tukey_comparison(
@@ -452,12 +575,19 @@ def _tukey_comparison(
     if not all(isfinite(value) for value in [q_statistic, adjusted_p_value, raw_p_value, margin]):
         raise OneWayAnovaError("one_way_anova_posthoc_not_finite")
     return {
+        "comparison_id": f"{group_1.group_index}:{group_2.group_index}",
+        "method": "tukey_kramer",
         "group_1_label": group_1.group_label,
         "group_2_label": group_2.group_label,
+        "control_group_label": None,
         "mean_1": mean_1,
         "mean_2": mean_2,
         "mean_difference": difference,
         "standard_error": standard_error_tukey,
+        "mean_difference_standard_error": standard_error_mean_difference,
+        "statistic": q_statistic,
+        "statistic_kind": "studentized_range_q",
+        "df": float(df_within),
         "q_statistic": q_statistic,
         "raw_p_value": raw_p_value,
         "adjusted_p_value": adjusted_p_value,
@@ -469,6 +599,154 @@ def _tukey_comparison(
             "upper": difference + margin,
         },
     }
+
+
+def _dunnett_comparisons(
+    group_list: Sequence[_GroupAccumulator],
+    *,
+    control_group_label: str,
+    alpha: float,
+    confidence_level: float,
+    rng_seed: int,
+) -> list[dict[str, object]]:
+    control = next(
+        (group for group in group_list if group.group_value == control_group_label),
+        None,
+    )
+    if control is None:
+        raise OneWayAnovaError("one_way_anova_dunnett_control_not_found")
+    treatments = [group for group in group_list if group is not control]
+    rng = np.random.default_rng(rng_seed)
+    result = stats.dunnett(
+        *(np.asarray(group.values, dtype=float) for group in treatments),
+        control=np.asarray(control.values, dtype=float),
+        alternative="two-sided",
+        rng=rng,
+    )
+    interval = result.confidence_interval(confidence_level=confidence_level)
+    statistics = np.atleast_1d(result.statistic)
+    p_values = np.atleast_1d(result.pvalue)
+    lower_bounds = np.atleast_1d(interval.low)
+    upper_bounds = np.atleast_1d(interval.high)
+    pooled_df = sum(len(group.values) for group in group_list) - len(group_list)
+    pooled_ss = fsum(
+        (len(group.values) - 1) * _sample_variance(group.values) for group in group_list
+    )
+    pooled_variance = pooled_ss / pooled_df
+    comparisons: list[dict[str, object]] = []
+    for treatment, statistic, p_value, ci_lower, ci_upper in zip(
+        treatments,
+        statistics,
+        p_values,
+        lower_bounds,
+        upper_bounds,
+        strict=True,
+    ):
+        mean_treatment = _mean(treatment.values)
+        mean_control = _mean(control.values)
+        difference = mean_treatment - mean_control
+        standard_error = sqrt(
+            pooled_variance * ((1.0 / len(treatment.values)) + (1.0 / len(control.values)))
+        )
+        values = [
+            float(statistic),
+            float(p_value),
+            float(ci_lower),
+            float(ci_upper),
+            standard_error,
+        ]
+        if not all(isfinite(value) for value in values):
+            raise OneWayAnovaError("one_way_anova_posthoc_not_finite")
+        comparisons.append(
+            {
+                "comparison_id": f"{treatment.group_index}:{control.group_index}",
+                "method": "dunnett",
+                "group_1_label": treatment.group_label,
+                "group_2_label": control.group_label,
+                "control_group_label": control.group_label,
+                "mean_1": mean_treatment,
+                "mean_2": mean_control,
+                "mean_difference": difference,
+                "standard_error": standard_error,
+                "mean_difference_standard_error": standard_error,
+                "statistic": float(statistic),
+                "statistic_kind": "dunnett_t",
+                "df": float(pooled_df),
+                "q_statistic": None,
+                "raw_p_value": None,
+                "adjusted_p_value": float(p_value),
+                "reject_adjusted": float(p_value) < alpha,
+                "confidence_interval": {
+                    "method": "dunnett",
+                    "level": confidence_level,
+                    "lower": float(ci_lower),
+                    "upper": float(ci_upper),
+                },
+            },
+        )
+    return comparisons
+
+
+def _games_howell_comparisons(
+    group_list: Sequence[_GroupAccumulator],
+    *,
+    alpha: float,
+    confidence_level: float,
+) -> list[dict[str, object]]:
+    comparisons: list[dict[str, object]] = []
+    group_count = len(group_list)
+    for group_1, group_2 in itertools.combinations(group_list, 2):
+        mean_1 = _mean(group_1.values)
+        mean_2 = _mean(group_2.values)
+        difference = mean_1 - mean_2
+        variance_1 = _sample_variance(group_1.values)
+        variance_2 = _sample_variance(group_2.values)
+        scaled_variance_1 = variance_1 / len(group_1.values)
+        scaled_variance_2 = variance_2 / len(group_2.values)
+        variance_term = scaled_variance_1 + scaled_variance_2
+        if variance_term <= 0.0:
+            raise OneWayAnovaError("one_way_anova_posthoc_standard_error_zero")
+        df = (variance_term**2) / (
+            ((scaled_variance_1**2) / (len(group_1.values) - 1))
+            + ((scaled_variance_2**2) / (len(group_2.values) - 1))
+        )
+        mean_difference_standard_error = sqrt(variance_term)
+        q_standard_error = sqrt(variance_term / 2.0)
+        q_statistic = abs(difference) / q_standard_error
+        adjusted_p_value = float(stats.studentized_range.sf(q_statistic, group_count, df))
+        q_critical = float(stats.studentized_range.ppf(confidence_level, group_count, df))
+        margin = q_critical * q_standard_error
+        values = [df, q_statistic, adjusted_p_value, q_critical, margin]
+        if not all(isfinite(value) for value in values):
+            raise OneWayAnovaError("one_way_anova_posthoc_not_finite")
+        comparisons.append(
+            {
+                "comparison_id": f"{group_1.group_index}:{group_2.group_index}",
+                "method": "games_howell",
+                "group_1_label": group_1.group_label,
+                "group_2_label": group_2.group_label,
+                "control_group_label": None,
+                "mean_1": mean_1,
+                "mean_2": mean_2,
+                "mean_difference": difference,
+                "standard_error": q_standard_error,
+                "mean_difference_standard_error": mean_difference_standard_error,
+                "statistic": q_statistic,
+                "statistic_kind": "studentized_range_q",
+                "df": df,
+                "q_statistic": q_statistic,
+                "raw_p_value": None,
+                "adjusted_p_value": adjusted_p_value,
+                "reject_adjusted": adjusted_p_value < alpha,
+                "confidence_interval": {
+                    "method": "games_howell",
+                    "level": confidence_level,
+                    "lower": difference - margin,
+                    "upper": difference + margin,
+                },
+            },
+        )
+    return comparisons
 
 
 def _result_warnings(
@@ -483,9 +761,12 @@ def _result_warnings(
     warnings = [
         "one_way_anova_independence_assumption",
         "one_way_anova_normality_assumption",
-        "one_way_anova_equal_variance_assumption",
         "one_way_anova_not_auto_switched",
     ]
+    if test.get("variance_model") == "equal":
+        warnings.append("one_way_anova_equal_variance_assumption")
+    else:
+        warnings.append("one_way_anova_unequal_variance_selected")
     if len(groups) == 2:
         warnings.append("two_group_anova_equivalent_to_t_test")
     if n_excluded_missing_response > 0 or n_excluded_missing_group > 0:
@@ -502,7 +783,11 @@ def _result_warnings(
     if posthoc.get("reason") == "overall_not_significant":
         warnings.append("posthoc_skipped_overall_not_significant")
     if posthoc.get("performed") is True:
-        warnings.append("tukey_kramer_after_standard_anova")
+        warnings.append(f"{posthoc.get('method')}_comparison_performed")
+        if posthoc.get("method") == "tukey_kramer":
+            warnings.append("tukey_kramer_after_standard_anova")
+    if test.get("effect_size_reason") == "welch_effect_size_not_supported":
+        warnings.append("welch_effect_size_not_supported")
     if bool(test["reject_null"]) is False:
         warnings.append("overall_not_significant")
     return warnings
