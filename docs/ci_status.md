@@ -1,8 +1,32 @@
 # CI Status
 
-Last updated: 2026-07-31
+Last updated: 2026-08-02
 
 ## Local Validation
+
+- The ANOVA, grouped-visualization, and equivalence-design work is based on
+  pushed main `487cc7fb54e14db55020c7f38cc99079b8fdb787`. It advances the API
+  contract from 7 to 8 and the Graph Preview visualization schema from 1 to
+  2. Metadata schema remains 18, so no SQLite migration is required.
+  `hypothesis.one_way_anova` advances from 0.1.0 to 0.2.0 with result schema
+  2. New one-sample equivalence writes use 0.2.0/schema 2, while independent
+  and paired equivalence use new method IDs at 0.1.0/schema 2. Existing ANOVA
+  and one-sample equivalence results remain readable without checksum rewrite.
+- Final `scripts/test.ps1` completed in 1029.9 seconds: backend pytest passed
+  897/897 and frontend Vitest passed 244/244 across 25 files. Final
+  `scripts/check.ps1` completed in 1076.3 seconds: tutorial rendering, Ruff,
+  format over 184 Python files, mypy over 114 source modules, backend pytest,
+  frontend lint/typecheck/Vitest, and the production build all passed. The
+  existing Vite main-chunk size warning remains informational.
+- The isolated Chromium critical path passed in 104.9 seconds with diagnostics
+  under `.tmp/e2e-diagnostics-hypothesis-grouped-plots`. It verifies standard
+  ANOVA plus Tukey-Kramer, Dunnett with an explicit control, Welch ANOVA plus
+  Games-Howell, combined grouped Box and Individual Value plots, independently
+  calculated grouped I-MR cards, and independent/paired equivalence workflows.
+  Screenshots include `grouped-box-plot.png`,
+  `grouped-individual-value-plot.png`, `grouped-imr.png`, `anova-dunnett.png`,
+  `anova-welch-games-howell.png`, `equivalence-two-sample.png`, and
+  `equivalence-paired.png`.
 
 - The dataset-context/DOE-compact correction is based on pushed main
   `582be068cfe8407d55e352a3846e37255b8b9e30`. It changes only frontend

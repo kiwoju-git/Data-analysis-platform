@@ -110,6 +110,15 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("version_id", "path")}),
     ),
     OperationContract(
+        route_name="datasetVersionGroupLevels",
+        method="post",
+        path="/api/v1/dataset-versions/{version_id}/group-levels",
+        success_status="200",
+        response_schema="GroupLevelPreflightResponse",
+        parameters=frozenset({("version_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="datasetVersionCellCorrections",
         method="post",
         path="/api/v1/dataset-versions/{version_id}/cell-corrections",

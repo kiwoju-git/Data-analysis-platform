@@ -237,7 +237,9 @@ Gate B0 storage/run foundation 후에도 다음 기능은 아직 공통 플랫�
 | 가설 | `hypothesis.paired_t` | Paired t-Test |
 | 가설 | `hypothesis.two_sample_t` | 2-Sample t-Test |
 | 가설 | `hypothesis.one_way_anova` | One-Way ANOVA |
-| 가설 | `hypothesis.equivalence_tost` | Equivalence Test (TOST) |
+| 가설 | `hypothesis.equivalence_tost` | 1-Sample Equivalence Test (TOST) |
+| 가설 | `hypothesis.two_sample_equivalence_tost` | 2-Sample Equivalence Test (TOST) |
+| 가설 | `hypothesis.paired_equivalence_tost` | Paired Equivalence Test (TOST) |
 | 가설 | `hypothesis.one_sample_wilcoxon` | 1-Sample Wilcoxon Signed-Rank |
 | 가설 | `hypothesis.mann_whitney` | Mann-Whitney U |
 | 가설 | `hypothesis.kruskal_wallis` | Kruskal-Wallis |
@@ -779,13 +781,14 @@ Levene/Brown-Forsythe smoke calculation도 `scripts/check-stat-deps.ps1`의 일�
 
 ## 10.4 One-Way ANOVA (`hypothesis.one_way_anova`)
 
-현재 구현 상태: `hypothesis.one_way_anova`는 available 상태다. SciPy 1.15.3 F distribution과 studentized range distribution을 사용해 canonical rows에서 표준 고정효과 일원배치 ANOVA를 계산한다. 결과는 complete-case 제외 수, 그룹별 N/평균/분산/CI, ANOVA table, F statistic, p-value, eta squared, omega squared, 유의한 omnibus 후 Tukey-Kramer 사후비교, `analysis_row_snapshot` provenance, result SHA-256 persistence를 포함한다. Welch ANOVA, Games-Howell, 이원/반복/ANCOVA, summary-statistic 입력, 진단 결과 기반 자동 전환은 아직 구현하지 않는다. 상세 계약은 `docs/one_way_anova_method_contract.md`를 따른다.
+현재 구현 상태: `hypothesis.one_way_anova` v0.2.0은 available 상태다. 사용자가 등분산 표준 ANOVA 또는 이분산 Welch ANOVA를 명시적으로 선택한다. 표준 모형은 Tukey-Kramer 또는 명시적 기준군 Dunnett, Welch 모형은 Games-Howell과만 결합된다. 요청한 비교는 기본적으로 omnibus 유의성과 별개로 계산되며 legacy `after_significant` 정책도 복원한다. 표준 결과는 기존 ANOVA table과 eta/omega squared를 보존하고, Welch 결과는 실제 분자/분모 df와 그룹 요약을 표시하되 pooled SS/MS/effect size를 만들지 않는다. 진단 결과로 모형을 자동 전환하지 않는다. 상세 계약은 `docs/one_way_anova_method_contract.md`를 따른다.
 
 ### P0 범위
 
 - 고정효과 일원배치 ANOVA
-- 표준 ANOVA 후 Tukey-Kramer
-- 전체 검정과 사후검정의 일관성 보장
+- 표준 ANOVA 후 Tukey-Kramer 또는 명시적 기준군 Dunnett
+- Welch ANOVA 후 Games-Howell
+- 요청 시 비교 또는 legacy `after_significant` 실행 정책
 
 ### 출력
 
@@ -798,26 +801,26 @@ Levene/Brown-Forsythe smoke calculation도 `scripts/check-stat-deps.ps1`의 일�
 ### 후순위
 
 - 이원배치/공변량/반복측정은 별도 P1/P2 메서드로 추가한다. 하나의 ANOVA 폼에 무리하게 숨기지 않는다.
-- Welch ANOVA와 Games-Howell은 별도 검증 slice에서 추가한다.
+- Fisher LSD, Hsu MCB, 다중 요인과 계획 대비는 별도 versioned slice로 둔다.
 
-## 10.5 Equivalence Test – TOST (`hypothesis.equivalence_tost`)
+## 10.5 Equivalence Tests – TOST
 
-현재 구현 상태: `hypothesis.equivalence_tost`는 available 상태다. SciPy 1.15.3 t distribution을 사용해 canonical rows에서 하나의 수치 반응 컬럼을 명시적 기준 평균과 비교하는 1표본 평균 TOST를 계산한다. 결과는 complete-case 제외 수, 표본 요약, 평균 차이, lower/upper one-sided test statistic과 p-value, TOST p-value, `1 - 2 * alpha` CI, Cohen dz, Hedges-corrected standardized effect, `analysis_row_snapshot` provenance, result SHA-256 persistence를 포함한다. 동등성 한계는 제품이 제안하지 않으며 사용자가 사전에 지정한 raw-unit lower/upper bound만 받는다. paired mean-difference TOST, 독립 2표본 TOST, standardized margin 입력, 비모수 동등성 검정, 진단 결과 기반 자동 전환은 아직 구현하지 않는다. 상세 계약은 `docs/equivalence_tost_method_contract.md`를 따른다.
+현재 구현 상태: `hypothesis.equivalence_tost`, `hypothesis.two_sample_equivalence_tost`, `hypothesis.paired_equivalence_tost`가 각각 1-표본 평균-기준 차이, 독립 시험군-기준군 평균 차이, wide complete-pair 시험-기준 측정 차이 TOST를 실행한다. 독립 2-표본은 Welch를 기본으로 하고 pooled를 명시적으로 선택할 수 있다. 모든 설계는 사용자가 사전에 지정한 raw-unit 하한/상한, 두 단측검정, `1 - 2 * alpha` CI, 표본/제외 수, 방향 정의, row snapshot provenance를 저장하며, 일반 차이검정의 비유의성을 동등성으로 바꾸지 않는다. ratio/log-ratio, power/sample-size, crossover, summarized input, long pair ID는 P1이다. 상세 계약은 `docs/equivalence_test_contract.md`를 따른다.
 
 ### 지원 설계
 
-- 현재 P0: 1표본 평균
-- 후순위: paired mean difference
-- 후순위: 독립 2표본 평균 차이, Welch 기본
+- 1표본 평균과 기준 평균의 차이
+- 독립 2표본 시험군-기준군 평균 차이: Welch 기본, pooled 명시 선택
+- wide complete-pair 시험 측정-기준 측정 평균 차이
 
 ### 필수 입력
 
-- numeric response column
-- reference mean
+- 설계에 맞는 numeric response 또는 시험/기준 측정 columns
+- 1표본의 reference mean 또는 2표본의 명시적 시험/기준 그룹
 - lower equivalence bound
 - upper equivalence bound
 - alpha
-- 설계 유형: 현재 `one_sample_mean`만 허용
+- 독립 2표본은 variance assumption, paired는 complete-pair 정책
 
 동등성 경계는 제품이 임의 기본값을 제공하지 않는다. 사용자가 연구/공정 의미에 따라 사전에 지정해야 한다.
 

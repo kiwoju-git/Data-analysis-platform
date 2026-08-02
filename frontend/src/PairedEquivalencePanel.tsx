@@ -46,7 +46,7 @@ export function PairedEquivalencePanel(props: Props) {
 }
 
 function ColumnField({ label, value, columns, onChange }: { label: string; value: string; columns: DatasetColumnResponse[]; onChange: (value: string) => void }) {
-  return <label><span>{label}</span><select value={value} onChange={(event) => onChange(event.currentTarget.value)}><option value="">선택</option>{columns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}</select></label>;
+  return <label><span>{label}</span><select aria-label={label} value={value} onChange={(event) => onChange(event.currentTarget.value)}><option value="">선택</option>{columns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}</select></label>;
 }
 function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return <label><span>{label}</span><input step="any" type="number" value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} /></label>;

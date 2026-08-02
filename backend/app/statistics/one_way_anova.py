@@ -412,15 +412,17 @@ def _welch_test_result(
     if any(variance <= 0.0 or not isfinite(variance) for variance in variances):
         raise OneWayAnovaError("one_way_anova_welch_zero_group_variance")
     weights = [
-        len(group.values) / variance
-        for group, variance in zip(group_list, variances, strict=False)
+        len(group.values) / variance for group, variance in zip(group_list, variances, strict=False)
     ]
     weight_sum = fsum(weights)
     if weight_sum <= 0.0 or not isfinite(weight_sum):
         raise OneWayAnovaError("one_way_anova_welch_statistic_not_finite")
-    weighted_mean = fsum(
-        weight * _mean(group.values) for weight, group in zip(weights, group_list, strict=False)
-    ) / weight_sum
+    weighted_mean = (
+        fsum(
+            weight * _mean(group.values) for weight, group in zip(weights, group_list, strict=False)
+        )
+        / weight_sum
+    )
     numerator = fsum(
         weight * ((_mean(group.values) - weighted_mean) ** 2)
         for weight, group in zip(weights, group_list, strict=False)
@@ -429,9 +431,7 @@ def _welch_test_result(
         ((1.0 - (weight / weight_sum)) ** 2) / (len(group.values) - 1)
         for weight, group in zip(weights, group_list, strict=False)
     )
-    correction = 1.0 + (
-        (2.0 * (group_count - 2.0) / ((group_count**2) - 1.0)) * adjustment_sum
-    )
+    correction = 1.0 + ((2.0 * (group_count - 2.0) / ((group_count**2) - 1.0)) * adjustment_sum)
     df_numerator = float(group_count - 1)
     df_denominator = float(((group_count**2) - 1.0) / (3.0 * adjustment_sum))
     f_statistic = float(numerator / correction)

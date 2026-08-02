@@ -323,6 +323,7 @@ def test_paired_equivalence_uses_only_complete_test_minus_reference_pairs() -> N
     assert result["estimate"]["df"] == 2.0
     assert result["tost"]["equivalent"] is True
 
+
 def _response_column() -> EquivalenceTostColumn:
     return EquivalenceTostColumn(
         column_id="response",

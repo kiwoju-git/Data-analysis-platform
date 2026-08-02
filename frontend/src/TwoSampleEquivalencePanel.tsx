@@ -92,9 +92,9 @@ export function TwoSampleEquivalencePanel(props: Props) {
         <div className="option-grid">
           <SelectField label="반응 변수" value={props.responseColumnId ?? ""} columns={props.responseColumns} onChange={props.onResponseColumnChange} />
           <SelectField label="그룹 변수" value={props.groupColumnId ?? ""} columns={props.groupColumns} onChange={props.onGroupColumnChange} />
-          <label><span>시험 그룹</span><select disabled={loading || levels.length !== 2} value={testGroup} onChange={(event) => setTestGroup(event.currentTarget.value)}><option value="">선택</option>{levels.map((level) => <option key={level.value} value={level.value}>{level.display_label} (N {level.n_used})</option>)}</select></label>
-          <label><span>기준 그룹</span><select disabled={loading || levels.length !== 2} value={referenceGroup} onChange={(event) => setReferenceGroup(event.currentTarget.value)}><option value="">선택</option>{levels.map((level) => <option key={level.value} value={level.value}>{level.display_label} (N {level.n_used})</option>)}</select></label>
-          <label><span>분산 가정</span><select value={variance} onChange={(event) => props.onVarianceAssumptionChange(event.currentTarget.value)}><option value="welch">등분산 가정 안 함 (Welch)</option><option value="pooled">등분산 가정 (pooled)</option></select></label>
+          <label><span>시험 그룹</span><select aria-label="시험 그룹" disabled={loading || levels.length !== 2} value={testGroup} onChange={(event) => setTestGroup(event.currentTarget.value)}><option value="">선택</option>{levels.map((level) => <option key={level.value} value={level.value}>{level.display_label} (N {level.n_used})</option>)}</select></label>
+          <label><span>기준 그룹</span><select aria-label="기준 그룹" disabled={loading || levels.length !== 2} value={referenceGroup} onChange={(event) => setReferenceGroup(event.currentTarget.value)}><option value="">선택</option>{levels.map((level) => <option key={level.value} value={level.value}>{level.display_label} (N {level.n_used})</option>)}</select></label>
+          <label><span>분산 가정</span><select aria-label="분산 가정" value={variance} onChange={(event) => props.onVarianceAssumptionChange(event.currentTarget.value)}><option value="welch">등분산 가정 안 함 (Welch)</option><option value="pooled">등분산 가정 (pooled)</option></select></label>
           <NumberField label="동등성 하한" value={props.lowerBound} onChange={props.onLowerBoundChange} />
           <NumberField label="동등성 상한" value={props.upperBound} onChange={props.onUpperBoundChange} />
           <NumberField label="유의수준 alpha" value={props.alpha} onChange={props.onAlphaChange} />
@@ -110,7 +110,7 @@ export function TwoSampleEquivalencePanel(props: Props) {
 }
 
 function SelectField({ label, value, columns, onChange }: { label: string; value: string; columns: DatasetColumnResponse[]; onChange: (value: string) => void }) {
-  return <label><span>{label}</span><select value={value} onChange={(event) => onChange(event.currentTarget.value)}><option value="">선택</option>{columns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}</select></label>;
+  return <label><span>{label}</span><select aria-label={label} value={value} onChange={(event) => onChange(event.currentTarget.value)}><option value="">선택</option>{columns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}</select></label>;
 }
 function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return <label><span>{label}</span><input step="any" type="number" value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} /></label>;

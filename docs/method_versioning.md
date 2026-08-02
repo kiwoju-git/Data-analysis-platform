@@ -390,6 +390,22 @@ Stored analysis result envelopes keep their original `method_version`. A catalog
 version bump must not rewrite existing result files. If the UI compares old and
 new results, it must show the version difference.
 
+## ANOVA, Grouped Preview, And Equivalence Decision
+
+The selectable variance model, new comparison families, and comparison timing
+change the meaning and shape of one-way ANOVA results. New
+`hypothesis.one_way_anova` writes therefore use method `0.2.0` and result schema
+`2`; schema `1` assets remain immutable.
+
+The existing one-sample TOST calculation keeps numerical parity but joins a
+shared multi-design result contract, so new `hypothesis.equivalence_tost`
+writes use `0.2.0`/schema `2`. Independent and paired TOST start at `0.1.0`
+with result schema `2`. Existing one-sample `0.1.0` assets are read as recorded.
+
+Grouped I-MR changes the non-persisted Graph Preview wire contract only.
+Visualization schema `2` and API contract `8` do not require a method-version
+change or SQLite migration.
+
 ## PR Checklist
 
 - Update `METHOD_VERSIONS` when the policy requires it.

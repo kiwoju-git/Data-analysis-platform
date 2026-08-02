@@ -721,9 +721,7 @@ class OneWayAnovaOptions(BaseModel):
     alpha: float = 0.05
     confidence_level: float = 0.95
     anova_type: Literal["standard", "welch"] = "standard"
-    posthoc_method: Literal["tukey_kramer", "dunnett", "games_howell", "none"] = (
-        "tukey_kramer"
-    )
+    posthoc_method: Literal["tukey_kramer", "dunnett", "games_howell", "none"] = "tukey_kramer"
     posthoc_policy: Literal["when_requested", "after_significant"] = "when_requested"
     control_group_label: str | None = Field(default=None, min_length=1, max_length=120)
     dunnett_rng_seed: int = 20260802

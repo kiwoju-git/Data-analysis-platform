@@ -51,14 +51,14 @@ from app.services.analysis_runners_eda import (
 )
 from app.services.analysis_runners_hypothesis import (
     run_equivalence_tost_analysis,
-    run_paired_equivalence_tost_analysis,
-    run_two_sample_equivalence_tost_analysis,
     run_kruskal_wallis_analysis,
     run_mann_whitney_analysis,
     run_one_sample_t_analysis,
     run_one_sample_wilcoxon_analysis,
     run_one_way_anova_analysis,
+    run_paired_equivalence_tost_analysis,
     run_paired_t_analysis,
+    run_two_sample_equivalence_tost_analysis,
     run_two_sample_t_analysis,
 )
 from app.services.analysis_runners_quality import (

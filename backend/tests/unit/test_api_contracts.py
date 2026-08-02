@@ -67,14 +67,14 @@ from app.services.analysis_runners_eda import (
 )
 from app.services.analysis_runners_hypothesis import (
     run_equivalence_tost_analysis,
-    run_paired_equivalence_tost_analysis,
-    run_two_sample_equivalence_tost_analysis,
     run_kruskal_wallis_analysis,
     run_mann_whitney_analysis,
     run_one_sample_t_analysis,
     run_one_sample_wilcoxon_analysis,
     run_one_way_anova_analysis,
+    run_paired_equivalence_tost_analysis,
     run_paired_t_analysis,
+    run_two_sample_equivalence_tost_analysis,
     run_two_sample_t_analysis,
 )
 from app.services.analysis_runners_quality import (
@@ -155,7 +155,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
     ]
 
     method_ids = [method.method_id for method in METHODS]
-    assert len(method_ids) == 31
+    assert len(method_ids) == 33
     assert len(set(method_ids)) == len(method_ids)
     assert method_ids[:4] == [
         "eda.descriptive",
@@ -424,7 +424,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     catalog = analysis_method_catalog()
 
     assert len(catalog.modules) == 6
-    assert len(catalog.methods) == 31
+    assert len(catalog.methods) == 33
     assert {method.availability.value for method in catalog.methods} == {"available"}
     assert catalog.methods[0].method_id == "eda.descriptive"
     assert catalog.methods[0].availability == MethodAvailability.AVAILABLE
@@ -467,14 +467,22 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     )
     assert equivalence_tost.availability == MethodAvailability.AVAILABLE
     assert equivalence_tost.disabled_reason is None
-    assert next(
-        method for method in catalog.methods
-        if method.method_id == "hypothesis.two_sample_equivalence_tost"
-    ).availability == MethodAvailability.AVAILABLE
-    assert next(
-        method for method in catalog.methods
-        if method.method_id == "hypothesis.paired_equivalence_tost"
-    ).availability == MethodAvailability.AVAILABLE
+    assert (
+        next(
+            method
+            for method in catalog.methods
+            if method.method_id == "hypothesis.two_sample_equivalence_tost"
+        ).availability
+        == MethodAvailability.AVAILABLE
+    )
+    assert (
+        next(
+            method
+            for method in catalog.methods
+            if method.method_id == "hypothesis.paired_equivalence_tost"
+        ).availability
+        == MethodAvailability.AVAILABLE
+    )
     one_sample_wilcoxon = next(
         method for method in catalog.methods if method.method_id == "hypothesis.one_sample_wilcoxon"
     )
@@ -613,7 +621,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
     assert response.status_code == 200
     payload = response.json()
     assert len(payload["modules"]) == 6
-    assert len(payload["methods"]) == 31
+    assert len(payload["methods"]) == 33
     assert {method["availability"] for method in payload["methods"]} == {"available"}
     available = [
         method["method_id"]
@@ -630,6 +638,8 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "hypothesis.two_sample_t",
         "hypothesis.one_way_anova",
         "hypothesis.equivalence_tost",
+        "hypothesis.two_sample_equivalence_tost",
+        "hypothesis.paired_equivalence_tost",
         "hypothesis.one_sample_wilcoxon",
         "hypothesis.mann_whitney",
         "hypothesis.kruskal_wallis",
@@ -1626,7 +1636,7 @@ def test_analysis_provenance_includes_runtime_metadata_without_paths_or_values(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": METHOD_VERSIONS["hypothesis.equivalence_tost"],
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -2949,7 +2959,7 @@ def test_analysis_run_executes_equivalence_tost_from_dataset_version(tmp_path) -
         {
             "code": "equivalence_tost_design_assumption",
             "severity": "info",
-                "message": "독립성 및 1-표본 평균 설계는 사용자가 확인해야 하는 설계 가정입니다.",
+            "message": "독립성 및 1-표본 평균 설계는 사용자가 확인해야 하는 설계 가정입니다.",
         },
         {
             "code": "equivalence_bounds_user_defined",

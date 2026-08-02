@@ -6,6 +6,25 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-08-02 hypothesis/grouped-visualization run additionally:
+
+- creates one combined grouped Box Plot and one grouped Individual Value Plot
+  for `yield_pct` by `production_line`, preserving roving keyboard focus;
+- creates three grouped I-MR cards and verifies every group has its own I/MR
+  pair, so no moving range crosses a group boundary;
+- executes standard ANOVA with Tukey-Kramer, standard ANOVA with an explicit
+  Dunnett control, and Welch ANOVA with Games-Howell;
+- executes independent two-sample and wide paired TOST workflows and checks
+  their explicit difference direction and accessible equivalence plots; and
+- retains the existing upload, immutable correction, export, model, quality,
+  DOE, Bayesian, graph-layout, and lazy-route paths.
+
+The isolated Chromium run passed in 104.9 seconds with diagnostics under
+`.tmp/e2e-diagnostics-hypothesis-grouped-plots`. New screenshots include
+`grouped-box-plot.png`, `grouped-individual-value-plot.png`, `grouped-imr.png`,
+`anova-dunnett.png`, `anova-welch-games-howell.png`,
+`equivalence-two-sample.png`, and `equivalence-paired.png`.
+
 The 2026-07-31 dataset-context/DOE-compact correction run additionally:
 
 - measures the outer `.active-dataset-card` rather than its internal label,
@@ -380,6 +399,7 @@ browser critical path.
 - `verify CP949 encoding selection recovery`
 - `verify descriptive quick charts and run chart p-values`
 - `verify graph layout refinements`
+- `verify grouped graphs and hypothesis extensions`
 - `verify lazy panel direct routes`
 - `verify lazy panel error boundary`
 

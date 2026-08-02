@@ -156,14 +156,14 @@ export function OneWayAnovaPanel({
           <div className="option-grid">
             <label>
               <span>반응 변수</span>
-              <select value={responseColumnId ?? ""} onChange={(event) => onResponseColumnChange(event.currentTarget.value)}>
+              <select aria-label="반응 변수" value={responseColumnId ?? ""} onChange={(event) => onResponseColumnChange(event.currentTarget.value)}>
                 <option value="">선택</option>
                 {responseColumns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}
               </select>
             </label>
             <label>
               <span>그룹 변수</span>
-              <select value={groupColumnId ?? ""} onChange={(event) => onGroupColumnChange(event.currentTarget.value)}>
+              <select aria-label="그룹 변수" value={groupColumnId ?? ""} onChange={(event) => onGroupColumnChange(event.currentTarget.value)}>
                 <option value="">선택</option>
                 {groupColumns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}
               </select>
@@ -192,7 +192,7 @@ export function OneWayAnovaPanel({
           <div className="option-grid">
             <label>
               <span>사후비교</span>
-              <select value={posthocMethod} onChange={(event) => setPosthocMethod(event.currentTarget.value as typeof posthocMethod)}>
+              <select aria-label="사후비교" value={posthocMethod} onChange={(event) => setPosthocMethod(event.currentTarget.value as typeof posthocMethod)}>
                 <option value="none">사후비교 안 함</option>
                 {anovaType === "standard" ? <>
                   <option value="tukey_kramer">Tukey-Kramer - 모든 그룹 쌍</option>
@@ -204,7 +204,7 @@ export function OneWayAnovaPanel({
             {posthocMethod === "dunnett" ? (
               <label>
                 <span>기준 그룹</span>
-                <select disabled={isLoadingGroupLevels || groupLevelsError !== null} value={controlGroupLabel ?? ""} onChange={(event) => setControlGroupLabel(event.currentTarget.value || null)}>
+                <select aria-label="기준 그룹" disabled={isLoadingGroupLevels || groupLevelsError !== null} value={controlGroupLabel ?? ""} onChange={(event) => setControlGroupLabel(event.currentTarget.value || null)}>
                   <option value="">{isLoadingGroupLevels ? "그룹 수준 확인 중" : "선택"}</option>
                   {groupLevels.map((level) => <option key={level.value} value={level.value}>{level.display_label} (N {level.n_used.toLocaleString()})</option>)}
                 </select>

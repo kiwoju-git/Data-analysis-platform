@@ -325,6 +325,8 @@ def calculate_paired_equivalence_tost(
             n_missing_test += int(missing_test)
             n_missing_reference += int(missing_reference)
             continue
+        assert raw_test is not None
+        assert raw_reference is not None
         test_value = _parse_number(raw_test, decimal=decimal, thousands=thousands)
         reference_value = _parse_number(
             raw_reference,
@@ -443,9 +445,7 @@ def _tost_core(
             "p_value": max(cast(float, lower_test["p_value"]), cast(float, upper_test["p_value"])),
             "equivalent": bool(lower_test["reject_null"] and upper_test["reject_null"]),
             "decision_rule": "both_one_sided_tests_reject_at_alpha",
-            "ci_inside_equivalence_bounds": confidence_interval[
-                "inside_equivalence_bounds"
-            ],
+            "ci_inside_equivalence_bounds": confidence_interval["inside_equivalence_bounds"],
         },
         "confidence_interval": confidence_interval,
     }

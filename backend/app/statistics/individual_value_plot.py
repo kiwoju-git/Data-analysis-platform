@@ -62,9 +62,7 @@ def calculate_individual_value_points(
             if len(points) >= point_limit:
                 raise GraphPointError("individual_value_point_limit_exceeded")
             series_key = (
-                column.column_id
-                if group is None
-                else f"{column.column_id}:group:{groups[group]}"
+                column.column_id if group is None else f"{column.column_id}:group:{groups[group]}"
             )
             series_counts[series_key] = series_counts.get(series_key, 0) + 1
             points.append(

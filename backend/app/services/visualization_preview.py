@@ -115,9 +115,7 @@ def _graphical_summary_panels(
 
     group = _optional_group_column(columns_by_id, request.group_column_id)
     if group is not None:
-        grouped_rows, missing_group_row_count = _rows_by_group(
-            context, included_indices, group
-        )
+        grouped_rows, missing_group_row_count = _rows_by_group(context, included_indices, group)
         panels: list[GraphPreviewPanel] = []
         selected_column = selected[0]
         for index, (group_label, rows) in enumerate(grouped_rows.items()):
@@ -264,9 +262,7 @@ def _sequence_panels(
     panels: list[GraphPreviewPanel] = []
     group = _optional_group_column(columns_by_id, request.group_column_id)
     if group is not None:
-        grouped_rows, missing_group_row_count = _rows_by_group(
-            context, included_indices, group
-        )
+        grouped_rows, missing_group_row_count = _rows_by_group(context, included_indices, group)
         column = selected[0]
         for group_index, (group_label, rows) in enumerate(grouped_rows.items()):
             try:

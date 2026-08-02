@@ -182,7 +182,7 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 - **클릭 순서:** 역할/option > 사전점검 > 실행 > post-hoc table 확인.
 - **실행 전 확인:** group 독립성, extreme imbalance, 분산과 residual 진단을 확인한다.
 <!-- TUTORIAL_RESULT:hypothesis.one_way_anova:start -->
-- **검증 source:** `hypothesis.one_way_anova` v0.1.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
+- **검증 source:** `hypothesis.one_way_anova` v0.2.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
 - **예상 실제 결과 (표시 반올림):**
   - N=240; group N=Line-A 81, Line-B 81, Line-C 78
   - F(2, 237)=7.7342, p=0.000557, eta-squared=0.06127, omega-squared=0.05314, post-hoc=수행됨

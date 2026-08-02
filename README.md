@@ -17,6 +17,9 @@ The `그래프 > 그래프 작성` screen creates bounded, non-persisted preview
 Box Plot, Individual Value Plot, Histogram, Q-Q, ECDF, Scatter, Run Chart, and
 I-MR. It uses confirmed dataset versions and analysis filters, does not silently
 sample raw points, and does not add preview-only entries to analysis history.
+Box Plot과 Individual Value Plot은 여러 수치 변수 비교 또는 한 수치 변수의
+그룹별 통합 비교를 명시적으로 선택하며, grouped I-MR은 각 그룹 안에서만
+moving range와 관리한계를 독립 계산합니다.
 
 DataLab Studio is a Windows-targeted, CPU-only, local-first statistical analysis web application.
 
@@ -34,6 +37,9 @@ synthetic critical-path 검증은 구현되어 있고 최신 main push의 hosted
 ## 주요 기능
 
 - 탐색적 분석, 근사 AD p-value를 포함한 정규성 진단, 가설 검정, 범주형 데이터 분석
+  - 일원분산분석은 표준/Welch 모형과 호환되는 Tukey-Kramer, Dunnett,
+    Games-Howell 비교를 명시적으로 선택합니다.
+  - 동등성 검정은 1-표본, 독립 2-표본, 대응표본 평균 차이 TOST를 구분합니다.
 - 상관관계, 선형 회귀, 저장 모형 기반 Predict, Response Optimizer
 - Run/Individuals/Subgroup Chart, Capability, Gage R&R, P/NP/C/U 관리도
   - Run Chart는 기존 exact/연속 패턴과 구분된 군집·혼합·추세·진동 근사 p-value를 함께 표시합니다.

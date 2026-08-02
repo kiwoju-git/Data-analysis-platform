@@ -2,7 +2,7 @@
 
 Route: `POST /api/v1/visualizations/preview`
 
-Visualization schema: `1`
+Visualization schema: `2`
 
 Runtime capability: `graph_builder_preview`
 
@@ -14,14 +14,14 @@ history item, report, or export.
 
 | Graph type | Input | Layout |
 | --- | --- | --- |
-| `box_plot` | 1-12 numeric columns, or one numeric column plus group | common axis or small multiples |
-| `individual_value_plot` | 1-8 numeric columns, or one plus group | point strips |
+| `box_plot` | 1-12 numeric columns, or one numeric column plus group | combined boxes by variable/group or small multiples |
+| `individual_value_plot` | 1-8 numeric columns, or one plus group | one combined point strip chart |
 | `histogram` | 1-8 numeric columns | small multiples |
 | `qq_plot` | 1-8 numeric columns | small multiples |
 | `ecdf` | 1-6 numeric columns | small multiples |
 | `scatter_plot` | one X and 1-6 Y numeric columns | one panel per Y |
 | `run_chart` | 1-6 numeric columns and optional common order | one panel per value |
-| `imr_chart` | 1-6 numeric columns and optional common order | an I/MR pair per value |
+| `imr_chart` | 1-6 numeric columns, or one numeric column plus group, and optional order | an I/MR pair per value/group |
 
 The graphical summary calculation remains the source for Tukey 1.5 IQR
 boxplots, histogram bins, Q-Q points, and ECDF points. Run Chart and I-MR call
@@ -30,6 +30,13 @@ their existing statistical functions.
 - Point-limit overflow is a blocking error. The service does not silently
   sample, truncate, or fabricate raw points.
 - Group labels are bounded to 20 levels.
+- `comparison_mode="one_value_by_group"` requires exactly one numeric value and
+  one group. Group order is canonical first occurrence and missing group rows
+  are excluded with an explicit count/warning.
+- Grouped I-MR subsets and orders each group before calling the existing I-MR
+  statistic. Centers, limits, moving ranges, and signals are independent per
+  group; no moving range crosses a group boundary. A group can fail locally
+  while valid groups remain in the response with a partial-result warning.
 - A combined original-scale boxplot rejects conflicting explicit units.
 - Missing units produce a user warning; no automatic standardization occurs.
 

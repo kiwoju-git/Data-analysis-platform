@@ -619,9 +619,7 @@ def run_two_sample_equivalence_tost_analysis(
             message="2-표본 동등성 검정 실행에는 데이터셋 버전이 필요합니다.",
         )
     try:
-        options = TwoSampleEquivalenceTostOptions.model_validate(
-            request.options
-        ).model_dump()
+        options = TwoSampleEquivalenceTostOptions.model_validate(request.options).model_dump()
     except ValidationError as exc:
         raise ApiError(
             code="invalid_two_sample_equivalence_tost_options",
@@ -666,9 +664,7 @@ def run_paired_equivalence_tost_analysis(
             message="대응표본 동등성 검정 실행에는 데이터셋 버전이 필요합니다.",
         )
     try:
-        options = PairedEquivalenceTostOptions.model_validate(
-            request.options
-        ).model_dump()
+        options = PairedEquivalenceTostOptions.model_validate(request.options).model_dump()
     except ValidationError as exc:
         raise ApiError(
             code="invalid_paired_equivalence_tost_options",

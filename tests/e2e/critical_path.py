@@ -77,6 +77,32 @@ GRAPH_LAYOUT_DATA = """temperature_c\tpressure_bar\tcycle_time_s\tcatalyst_pct
 82\t16\t78\t2.7
 """
 
+GROUPED_HYPOTHESIS_DATA = """production_line\tyield_pct\ttimestamp\ttest_measure\treference_measure
+A\t91.0\t2026-01-01T00:00:00\t10.1\t10.0
+A\t92.0\t2026-01-01T01:00:00\t10.2\t10.1
+A\t90.5\t2026-01-01T02:00:00\t9.9\t10.0
+A\t91.5\t2026-01-01T03:00:00\t10.1\t10.0
+B\t94.0\t2026-01-01T00:00:00\t10.2\t10.1
+B\t95.0\t2026-01-01T01:00:00\t10.3\t10.2
+B\t93.5\t2026-01-01T02:00:00\t10.0\t10.1
+B\t94.5\t2026-01-01T03:00:00\t10.2\t10.1
+C\t97.0\t2026-01-01T00:00:00\t10.1\t10.0
+C\t98.0\t2026-01-01T01:00:00\t10.2\t10.1
+C\t96.5\t2026-01-01T02:00:00\t10.0\t10.1
+C\t97.5\t2026-01-01T03:00:00\t10.3\t10.2
+"""
+
+EQUIVALENCE_DESIGN_DATA = """production_line\tyield_pct\ttest_measure\treference_measure
+A\t100.0\t10.1\t10.0
+A\t100.2\t10.2\t10.1
+A\t99.9\t9.9\t10.0
+A\t100.1\t10.1\t10.0
+B\t100.1\t10.2\t10.1
+B\t100.0\t10.3\t10.2
+B\t100.2\t10.0\t10.1
+B\t99.9\t10.2\t10.1
+"""
+
 PASTE_GRID_REVIEW_DATA = """이름\t값\t메모\r
 검토 A\t1\t긴 값 전체 확인\r
 검토 B\t2\t\r
@@ -559,6 +585,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_descriptive_quick_charts_and_run_chart(page)
             diagnostics.step("verify graph layout refinements")
             verify_graph_layout_refinements(page, diagnostics)
+            diagnostics.step("verify grouped graphs and hypothesis extensions")
+            verify_grouped_graphs_and_hypothesis_extensions(page, diagnostics)
             diagnostics.step("verify lazy panel direct routes")
             verify_lazy_panel_direct_routes(page, frontend_base_url)
             diagnostics.step("verify lazy panel error boundary")
@@ -597,7 +625,9 @@ def select_method_card(page: Page, module_label: str, method_label: str) -> None
 
 
 def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> None:
-    equivalence = page.locator(".method-item").filter(has_text="동등성 검정")
+    equivalence = page.locator(".method-item").filter(
+        has_text="1-표본 동등성 검정"
+    )
     wilcoxon = page.locator(".method-item").filter(has_text="1-표본 Wilcoxon")
     expect(equivalence).to_have_count(1)
     expect(wilcoxon).to_have_count(1)
@@ -783,7 +813,7 @@ def verify_graph_builder_box_plot(page: Page) -> None:
         timeout=20_000
     )
     expect(page.get_by_label("그래프 provenance")).to_contain_text("사용 행")
-    expect(page.get_by_role("img", name="Value 박스플롯")).to_be_visible()
+    expect(page.get_by_role("img", name=re.compile(r"Box Plot"))).to_be_visible()
     expect(
         page.get_by_text(
             "이 결과는 미리보기이며 저장 분석 이력, result artifact 또는 export를 만들지 않습니다.",
@@ -794,6 +824,105 @@ def verify_graph_builder_box_plot(page: Page) -> None:
 
 def verify_graph_layout_refinements(page: Page, diagnostics: E2EDiagnostics) -> None:
     page.set_viewport_size({"width": 1440, "height": 900})
+
+
+def verify_grouped_graphs_and_hypothesis_extensions(
+    page: Page,
+    diagnostics: E2EDiagnostics,
+) -> None:
+    open_primary_navigation(page, "데이터셋")
+    paste_plain_text(page, GROUPED_HYPOTHESIS_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
+    expect_dataset_context_counts(page, row_label="12행", column_label="5열")
+
+    open_primary_navigation(page, "그래프")
+    page.get_by_role("radio", name="수치 변수 1개를 그룹별 비교").check()
+    response = page.get_by_role("checkbox", name=re.compile(r"^yield_pct"))
+    if not response.is_checked():
+        response.check()
+    page.locator(".graph-role-option").filter(has_text="그룹 변수").locator("select").select_option(
+        label="production_line"
+    )
+    page.get_by_role("button", name="그래프 생성", exact=True).click()
+    grouped_box = page.get_by_role("img", name="변수 비교 Box Plot")
+    expect(grouped_box).to_be_visible(timeout=20_000)
+    expect(grouped_box.locator("[role='img']")).to_have_count(3)
+    expect(grouped_box.locator("[tabindex='0']")).to_have_count(1)
+    diagnostics.capture_page(page, "grouped-box-plot.png")
+
+    page.locator(".graph-type-button").filter(has_text=re.compile("^Individual Value Plot")).click()
+    page.get_by_role("button", name="그래프 생성", exact=True).click()
+    grouped_individual = page.locator(".graph-preview-grid-individual-value-plot svg")
+    expect(grouped_individual).to_have_count(1, timeout=20_000)
+    expect(grouped_individual.locator(".individual-value-point")).to_have_count(12)
+    diagnostics.capture_page(page, "grouped-individual-value-plot.png")
+
+    page.locator(".graph-type-button").filter(has_text=re.compile("^I-MR Chart")).click()
+    page.get_by_role("radio", name="수치 변수 1개를 그룹별 비교").check()
+    page.locator(".graph-role-option").filter(has_text="그룹 변수").locator(
+        "select"
+    ).select_option(label="production_line")
+    page.get_by_role("button", name="그래프 생성", exact=True).click()
+    grouped_imr_cards = page.locator(
+        ".graph-preview-grid-imr-chart > .graph-preview-card-full-row"
+    )
+    expect(grouped_imr_cards).to_have_count(3, timeout=20_000)
+    for index in range(3):
+        expect(grouped_imr_cards.nth(index).locator(".chart-grid > .chart-panel")).to_have_count(2)
+    diagnostics.capture_page(page, "grouped-imr.png")
+
+    open_primary_navigation(page, "분석")
+    select_method_card(page, "가설 검정", "일원분산분석")
+    expect(page.locator("#workbench-title")).to_have_text("일원분산분석")
+    page.get_by_label("반응 변수", exact=True).select_option(label="yield_pct")
+    page.get_by_label("그룹 변수", exact=True).select_option(label="production_line")
+    page.get_by_label("사후비교", exact=True).select_option("tukey_kramer")
+    page.get_by_role("button", name="일원분산분석 실행").click()
+    expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Tukey-Kramer", timeout=20_000)
+
+    page.get_by_label("사후비교", exact=True).select_option("dunnett")
+    page.get_by_label("기준 그룹", exact=True).select_option(label="A (N 4)")
+    page.get_by_role("button", name="일원분산분석 실행").click()
+    expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Dunnett", timeout=20_000)
+    expect(page.get_by_label("일원분산분석 요약")).to_contain_text("A")
+    diagnostics.capture_page(page, "anova-dunnett.png")
+
+    page.get_by_role("radio", name="등분산 가정 안 함").check()
+    page.get_by_role("button", name="일원분산분석 실행").click()
+    expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Welch", timeout=20_000)
+    expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Games-Howell")
+    diagnostics.capture_page(page, "anova-welch-games-howell.png")
+
+    open_primary_navigation(page, "데이터셋")
+    paste_plain_text(page, EQUIVALENCE_DESIGN_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
+
+    open_primary_navigation(page, "분석")
+    select_method_card(page, "가설 검정", "2-표본 동등성 검정")
+    expect(page.locator("#workbench-title")).to_have_text("2-표본 동등성 검정")
+    page.get_by_label("반응 변수", exact=True).select_option(label="yield_pct")
+    page.get_by_label("그룹 변수", exact=True).select_option(label="production_line")
+    page.get_by_label("시험 그룹", exact=True).select_option(label="B (N 4)")
+    page.get_by_label("기준 그룹", exact=True).select_option(label="A (N 4)")
+    page.get_by_role("button", name="2-표본 동등성 검정 실행").click()
+    expect(page.get_by_label("동등성 검정 요약")).to_contain_text("독립 2-표본 평균 차이", timeout=20_000)
+    expect(page.get_by_label("동등성 검정 요약")).to_contain_text("B - A")
+    diagnostics.capture_page(page, "equivalence-two-sample.png")
+
+    select_method_card(page, "가설 검정", "대응표본 동등성 검정")
+    expect(page.locator("#workbench-title")).to_have_text("대응표본 동등성 검정")
+    page.get_by_label("시험 측정", exact=True).select_option(label="test_measure")
+    page.get_by_label("기준 측정", exact=True).select_option(label="reference_measure")
+    page.get_by_role("button", name="대응표본 동등성 검정 실행").click()
+    expect(page.get_by_label("동등성 검정 요약")).to_contain_text("대응표본 평균 차이", timeout=20_000)
+    expect(page.get_by_role("img", name=re.compile("시험 측정 - 기준 측정"))).to_be_visible()
+    diagnostics.capture_page(page, "equivalence-paired.png")
     open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, GRAPH_LAYOUT_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()

@@ -322,12 +322,11 @@ def test_welch_anova_matches_hand_formula_and_games_howell_reference() -> None:
     variances = [stats.tvar(group) for group in groups]
     weights = [n / variance for n, variance in zip(ns, variances, strict=True)]
     weight_sum = sum(weights)
-    weighted_mean = sum(
-        weight * mean for weight, mean in zip(weights, means, strict=True)
-    ) / weight_sum
+    weighted_mean = (
+        sum(weight * mean for weight, mean in zip(weights, means, strict=True)) / weight_sum
+    )
     adjustment = sum(
-        ((1 - (weight / weight_sum)) ** 2) / (n - 1)
-        for weight, n in zip(weights, ns, strict=True)
+        ((1 - (weight / weight_sum)) ** 2) / (n - 1) for weight, n in zip(weights, ns, strict=True)
     )
     expected_f = (
         sum(
@@ -353,8 +352,7 @@ def test_welch_anova_matches_hand_formula_and_games_howell_reference() -> None:
     first = comparisons[0]
     variance_term = (variances[0] / ns[0]) + (variances[1] / ns[1])
     expected_comparison_df = (variance_term**2) / (
-        ((variances[0] / ns[0]) ** 2) / (ns[0] - 1)
-        + ((variances[1] / ns[1]) ** 2) / (ns[1] - 1)
+        ((variances[0] / ns[0]) ** 2) / (ns[0] - 1) + ((variances[1] / ns[1]) ** 2) / (ns[1] - 1)
     )
     expected_q = abs(means[0] - means[1]) / ((variance_term / 2) ** 0.5)
     assert first["df"] == pytest.approx(expected_comparison_df, abs=1e-12)
