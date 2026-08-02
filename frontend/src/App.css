@@ -3992,6 +3992,50 @@ td {
   touch-action: manipulation;
 }
 
+.equivalence-axis,
+.equivalence-zero,
+.equivalence-bound,
+.equivalence-ci,
+.equivalence-ci-cap {
+  vector-effect: non-scaling-stroke;
+}
+
+.equivalence-axis {
+  stroke: #7b8798;
+}
+
+.equivalence-zero {
+  stroke: #7b8798;
+  stroke-dasharray: 4 3;
+}
+
+.equivalence-bound {
+  stroke: #9a6b17;
+  stroke-width: 2;
+}
+
+.equivalence-ci,
+.equivalence-ci-cap {
+  stroke: #0b5cad;
+  stroke-width: 3;
+}
+
+.equivalence-estimate {
+  fill: #ffffff;
+  stroke: #0b5cad;
+  stroke-width: 3;
+}
+
+.equivalence-estimate:focus {
+  outline: none;
+  stroke: #111827;
+}
+
+.equivalence-plot text {
+  fill: #344054;
+  font-size: 11px;
+}
+
 .interactive-chart-square .interactive-chart-svg {
   aspect-ratio: 1;
   max-height: 440px;

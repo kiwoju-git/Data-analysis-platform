@@ -158,9 +158,9 @@ export const analysisMethodGuidance = {
       { category: "assumption", label: "잔차·등분산 확인" },
     ],
     roleRequirements: [required("반응", "연속형 수치 컬럼"), required("요인", "2개 이상 독립 그룹")],
-    optionChecklist: ["표준 ANOVA", "Tukey-Kramer 사후비교", "유의한 omnibus 후 사후비교", "결측 처리"],
+    optionChecklist: ["등분산 또는 Welch", "호환되는 사후비교", "Dunnett 기준군", "결측 처리"],
     preflightChecks: ["그룹별 N", "잔차 정규성 설계 확인", "등분산 가정", "상수 그룹"],
-    resultFocus: ["ANOVA table", "F 통계량/p-value", "eta/omega squared", "Tukey-Kramer 비교"],
+    resultFocus: ["실제 분산 모형", "F 통계량/p-value", "효과크기 지원 여부", "요청한 사후비교"],
     plainLanguage:
       "세 개 이상 그룹의 평균이 모두 같다고 보기 어려운지 먼저 확인합니다. 전체 검정이 유의할 때만 어떤 그룹끼리 다른지 사후비교를 보여줍니다.",
     commonErrors: [
@@ -174,8 +174,8 @@ export const analysisMethodGuidance = {
     cardTags: [
       { category: "data_type", label: "연속형 수치" },
       { category: "design", label: "한 모집단" },
-      { category: "target", label: "동등성 평가" },
-      { category: "assumption", label: "허용한계 사전 지정" },
+      { category: "target", label: "평균과 기준값 비교" },
+      { category: "assumption", label: "동등성 한계 사전 지정" },
     ],
     roleRequirements: [
       required("반응", "연속형 수치 컬럼"),
@@ -575,6 +575,36 @@ export const analysisMethodGuidance = {
     resultFocus: ["효과 순위", "OLS/ANOVA", "pure error/lack-of-fit", "잔차 진단"],
     plainLanguage:
       "전용 DOE API에서 2-level full factorial 설계표와 반응값을 저장하고 -1/+1 coding 효과 추정, hierarchy 고정 OLS/ANOVA, pure error/lack-of-fit, 잔차 진단을 실행합니다. 반응표면 분석은 별도 RSM 화면에서 제공합니다.",
+  },
+  "hypothesis.two_sample_equivalence_tost": {
+    methodId: "hypothesis.two_sample_equivalence_tost",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "독립 2그룹" },
+      { category: "target", label: "시험군과 기준군 비교" },
+      { category: "assumption", label: "동등성 한계 사전 지정" },
+    ],
+    roleRequirements: [required("반응", "연속형 수치 컬럼"), required("그룹", "정확히 2개 독립 그룹"), required("시험/기준", "방향을 명시할 그룹")],
+    optionChecklist: ["시험군과 기준군", "Welch 또는 pooled", "동등성 한계", "유의수준"],
+    preflightChecks: ["정확히 2개 그룹", "그룹별 유효 N", "분산", "사전 지정 한계"],
+    resultFocus: ["시험군-기준군 평균 차이", "두 단측검정", "TOST CI", "동등성 판정"],
+    plainLanguage: "독립된 시험군과 기준군의 평균 차이가 사전에 정한 허용 범위 안에 있다고 볼 근거를 확인합니다.",
+    commonErrors: ["시험군과 기준군을 같은 그룹으로 선택한 경우", "그룹이 정확히 2개가 아닌 경우", "결과를 본 뒤 한계를 정한 경우"],
+  },
+  "hypothesis.paired_equivalence_tost": {
+    methodId: "hypothesis.paired_equivalence_tost",
+    cardTags: [
+      { category: "data_type", label: "연속형 수치" },
+      { category: "design", label: "같은 대상의 두 측정" },
+      { category: "target", label: "쌍별 차이 평가" },
+      { category: "assumption", label: "동등성 한계 사전 지정" },
+    ],
+    roleRequirements: [required("시험 측정", "시험 조건의 수치 컬럼"), required("기준 측정", "같은 행의 기준 수치 컬럼")],
+    optionChecklist: ["시험-기준 방향", "동등성 한계", "유의수준", "complete pair"],
+    preflightChecks: ["같은 컬럼 중복 선택", "완전한 쌍 수", "차이값 분산", "사전 지정 한계"],
+    resultFocus: ["쌍별 평균 차이", "완전/불완전 쌍", "TOST CI", "동등성 판정"],
+    plainLanguage: "같은 대상에서 얻은 시험 측정과 기준 측정의 쌍별 차이가 사전에 정한 허용 범위 안에 있다고 볼 근거를 확인합니다.",
+    commonErrors: ["시험과 기준에 같은 컬럼을 선택한 경우", "불완전한 쌍이 많은 경우", "차이가 유의하지 않다는 결과를 동등성으로 해석한 경우"],
   },
   "doe.latin_hypercube": {
     methodId: "doe.latin_hypercube",

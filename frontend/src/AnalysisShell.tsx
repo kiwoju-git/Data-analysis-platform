@@ -26,7 +26,12 @@ import {
 import { OneSampleTPanel } from "./OneSampleTPanel";
 import { OneSampleWilcoxonPanel } from "./OneSampleWilcoxonPanel";
 import { PairedTPanel } from "./PairedTPanel";
+import { PairedEquivalencePanel } from "./PairedEquivalencePanel";
 import { TwoSampleTPanel } from "./TwoSampleTPanel";
+import {
+  TwoSampleEquivalencePanel,
+  type TwoSampleEquivalenceExecutionOptions,
+} from "./TwoSampleEquivalencePanel";
 import { TwoProportionPanel } from "./TwoProportionPanel";
 import {
   AttributeControlChartPanel,
@@ -391,6 +396,8 @@ export interface AnalysisShellProps {
   onRetryDescriptiveQuickGraph?: () => void;
   onRunEqualVariancesAnalysis: () => void;
   onRunEquivalenceTostAnalysis: () => void;
+  onRunTwoSampleEquivalenceAnalysis?: (options: TwoSampleEquivalenceExecutionOptions) => void;
+  onRunPairedEquivalenceAnalysis?: () => void;
   onRunGraphicalSummaryAnalysis: () => void;
   onRunGageRrAnalysis?: () => void;
   onRunGageRrPreflight?: () => void;
@@ -780,6 +787,8 @@ export function AnalysisShell({
   onRetryDescriptiveQuickGraph = () => undefined,
   onRunEqualVariancesAnalysis,
   onRunEquivalenceTostAnalysis,
+  onRunTwoSampleEquivalenceAnalysis = () => undefined,
+  onRunPairedEquivalenceAnalysis = () => undefined,
   onRunGraphicalSummaryAnalysis,
   onRunGageRrAnalysis = () => undefined,
   onRunGageRrPreflight = () => undefined,
@@ -1678,6 +1687,64 @@ export function AnalysisShell({
               );
             }
             if (
+              method.method_id === "hypothesis.two_sample_equivalence_tost" &&
+              method.availability === "available"
+            ) {
+              return (
+                <TwoSampleEquivalencePanel
+                  alpha={equivalenceTostAlpha}
+                  analysisResult={equivalenceTostAnalysisResult}
+                  filterDrafts={analysisFilterDrafts}
+                  filterValidationError={analysisFilterValidationError}
+                  groupColumnId={twoSampleTGroupColumnId}
+                  groupColumns={twoSampleTGroupColumns}
+                  isRunningAnalysis={isRunningAnalysis}
+                  lowerBound={equivalenceTostLowerBound}
+                  methodId={method.method_id}
+                  responseColumnId={twoSampleTResponseColumnId}
+                  responseColumns={twoSampleTResponseColumns}
+                  result={equivalenceTostResult}
+                  upperBound={equivalenceTostUpperBound}
+                  varianceAssumption={twoSampleTVarianceAssumption}
+                  version={version}
+                  onAlphaChange={onEquivalenceTostAlphaChange}
+                  onGroupColumnChange={onTwoSampleTGroupColumnChange}
+                  onLowerBoundChange={onEquivalenceTostLowerBoundChange}
+                  onResponseColumnChange={onTwoSampleTResponseColumnChange}
+                  onRun={onRunTwoSampleEquivalenceAnalysis}
+                  onUpperBoundChange={onEquivalenceTostUpperBoundChange}
+                  onVarianceAssumptionChange={onTwoSampleTVarianceAssumptionChange}
+                />
+              );
+            }
+            if (
+              method.method_id === "hypothesis.paired_equivalence_tost" &&
+              method.availability === "available"
+            ) {
+              return (
+                <PairedEquivalencePanel
+                  alpha={equivalenceTostAlpha}
+                  analysisResult={equivalenceTostAnalysisResult}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  lowerBound={equivalenceTostLowerBound}
+                  methodId={method.method_id}
+                  referenceColumnId={pairedTBeforeColumnId}
+                  responseColumns={pairedTBeforeColumns}
+                  result={equivalenceTostResult}
+                  testColumnId={pairedTAfterColumnId}
+                  upperBound={equivalenceTostUpperBound}
+                  version={version}
+                  onAlphaChange={onEquivalenceTostAlphaChange}
+                  onLowerBoundChange={onEquivalenceTostLowerBoundChange}
+                  onReferenceColumnChange={onPairedTBeforeColumnChange}
+                  onRun={onRunPairedEquivalenceAnalysis}
+                  onTestColumnChange={onPairedTAfterColumnChange}
+                  onUpperBoundChange={onEquivalenceTostUpperBoundChange}
+                />
+              );
+            }
+            if (
               method.method_id === "doe.latin_hypercube" &&
               method.availability === "available"
             ) {
@@ -1719,6 +1786,8 @@ function selectedAnalysisResultForMethod(
     case "hypothesis.one_sample_t":
       return results.oneSampleTAnalysisResult;
     case "hypothesis.equivalence_tost":
+    case "hypothesis.two_sample_equivalence_tost":
+    case "hypothesis.paired_equivalence_tost":
       return results.equivalenceTostAnalysisResult;
     case "hypothesis.paired_t":
       return results.pairedTAnalysisResult;

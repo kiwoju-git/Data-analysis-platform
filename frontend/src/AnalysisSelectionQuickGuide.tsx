@@ -33,8 +33,8 @@ const hypothesisGroups: ReadonlyArray<{
         methodId: "hypothesis.one_sample_wilcoxon",
       },
       {
-        label: "동등성 평가",
-        methodLabel: "TOST",
+        label: "평균이 기준값과 충분히 가까운가",
+        methodLabel: "1-표본 동등성",
         moduleId: "hypothesis",
         methodId: "hypothesis.equivalence_tost",
       },
@@ -55,6 +55,12 @@ const hypothesisGroups: ReadonlyArray<{
         moduleId: "hypothesis",
         methodId: "hypothesis.mann_whitney",
       },
+      {
+        label: "두 그룹 평균이 충분히 가까운가",
+        methodLabel: "2-표본 동등성",
+        moduleId: "hypothesis",
+        methodId: "hypothesis.two_sample_equivalence_tost",
+      },
     ],
   },
   {
@@ -65,6 +71,12 @@ const hypothesisGroups: ReadonlyArray<{
         methodLabel: "Paired t",
         moduleId: "hypothesis",
         methodId: "hypothesis.paired_t",
+      },
+      {
+        label: "두 측정이 충분히 가까운가",
+        methodLabel: "대응표본 동등성",
+        moduleId: "hypothesis",
+        methodId: "hypothesis.paired_equivalence_tost",
       },
     ],
     note: "대응표본 비모수 검정은 현재 별도 method로 지원하지 않습니다.",

@@ -85,6 +85,16 @@ METHOD_EXECUTION_HANDLER_SPECS: tuple[MethodExecutionHandlerSpec, ...] = (
         result_summary_type="equivalence_tost",
     ),
     MethodExecutionHandlerSpec(
+        method_id="hypothesis.two_sample_equivalence_tost",
+        method_version=METHOD_VERSIONS["hypothesis.two_sample_equivalence_tost"],
+        result_summary_type="equivalence_tost",
+    ),
+    MethodExecutionHandlerSpec(
+        method_id="hypothesis.paired_equivalence_tost",
+        method_version=METHOD_VERSIONS["hypothesis.paired_equivalence_tost"],
+        result_summary_type="equivalence_tost",
+    ),
+    MethodExecutionHandlerSpec(
         method_id="categorical.one_proportion",
         method_version=METHOD_VERSIONS["categorical.one_proportion"],
         result_summary_type="one_proportion_test",

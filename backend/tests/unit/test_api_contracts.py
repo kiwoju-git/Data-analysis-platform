@@ -67,6 +67,8 @@ from app.services.analysis_runners_eda import (
 )
 from app.services.analysis_runners_hypothesis import (
     run_equivalence_tost_analysis,
+    run_paired_equivalence_tost_analysis,
+    run_two_sample_equivalence_tost_analysis,
     run_kruskal_wallis_analysis,
     run_mann_whitney_analysis,
     run_one_sample_t_analysis,
@@ -181,6 +183,8 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "hypothesis.two_sample_t",
         "hypothesis.one_way_anova",
         "hypothesis.equivalence_tost",
+        "hypothesis.two_sample_equivalence_tost",
+        "hypothesis.paired_equivalence_tost",
         "hypothesis.one_sample_wilcoxon",
         "hypothesis.mann_whitney",
         "hypothesis.kruskal_wallis",
@@ -229,6 +233,8 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         "hypothesis.kruskal_wallis": "kruskal_wallis_test",
         "hypothesis.one_way_anova": "one_way_anova",
         "hypothesis.equivalence_tost": "equivalence_tost",
+        "hypothesis.two_sample_equivalence_tost": "equivalence_tost",
+        "hypothesis.paired_equivalence_tost": "equivalence_tost",
         "categorical.one_proportion": "one_proportion_test",
         "categorical.two_proportion": "two_proportion_test",
         "categorical.chi_square_association": "chi_square_association",
@@ -278,6 +284,14 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
     assert (
         _METHOD_EXECUTION_HANDLERS["hypothesis.equivalence_tost"].run
         is run_equivalence_tost_analysis
+    )
+    assert (
+        _METHOD_EXECUTION_HANDLERS["hypothesis.two_sample_equivalence_tost"].run
+        is run_two_sample_equivalence_tost_analysis
+    )
+    assert (
+        _METHOD_EXECUTION_HANDLERS["hypothesis.paired_equivalence_tost"].run
+        is run_paired_equivalence_tost_analysis
     )
     assert (
         _METHOD_EXECUTION_HANDLERS["categorical.one_proportion"].run is run_one_proportion_analysis
@@ -453,6 +467,14 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     )
     assert equivalence_tost.availability == MethodAvailability.AVAILABLE
     assert equivalence_tost.disabled_reason is None
+    assert next(
+        method for method in catalog.methods
+        if method.method_id == "hypothesis.two_sample_equivalence_tost"
+    ).availability == MethodAvailability.AVAILABLE
+    assert next(
+        method for method in catalog.methods
+        if method.method_id == "hypothesis.paired_equivalence_tost"
+    ).availability == MethodAvailability.AVAILABLE
     one_sample_wilcoxon = next(
         method for method in catalog.methods if method.method_id == "hypothesis.one_sample_wilcoxon"
     )
@@ -1604,7 +1626,7 @@ def test_analysis_provenance_includes_runtime_metadata_without_paths_or_values(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.equivalence_tost"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -2741,6 +2763,70 @@ def test_analysis_run_executes_one_sample_t_from_dataset_version(tmp_path) -> No
     assert row_snapshot["row_count_included"] == 6
 
 
+def test_analysis_runs_execute_two_sample_and_paired_equivalence_designs(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=(
+                b"response,group,test,reference\n"
+                b"10.0,A,5.1,5.0\n10.2,A,5.2,5.1\n9.9,A,4.9,5.0\n"
+                b"10.1,B,5.3,5.2\n10.0,B,5.0,5.1\n10.2,B,5.2,5.1\n"
+            ),
+            filename="equivalence-designs.csv",
+        )
+        columns = {column["display_name"]: column["column_id"] for column in version["columns"]}
+        two_sample = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.two_sample_equivalence_tost",
+                "method_version": METHOD_VERSIONS["hypothesis.two_sample_equivalence_tost"],
+                "dataset_version_id": version["version_id"],
+                "roles": {"response": columns["response"], "group": columns["group"]},
+                "options": {
+                    "response_column_id": columns["response"],
+                    "group_column_id": columns["group"],
+                    "test_group_label": "B",
+                    "reference_group_label": "A",
+                    "lower_bound": -0.5,
+                    "upper_bound": 0.5,
+                    "alpha": 0.05,
+                    "variance_assumption": "welch",
+                    "missing_policy": "complete_case",
+                },
+            },
+        )
+        paired = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.paired_equivalence_tost",
+                "method_version": METHOD_VERSIONS["hypothesis.paired_equivalence_tost"],
+                "dataset_version_id": version["version_id"],
+                "roles": {"test": columns["test"], "reference": columns["reference"]},
+                "options": {
+                    "test_column_id": columns["test"],
+                    "reference_column_id": columns["reference"],
+                    "lower_bound": -0.5,
+                    "upper_bound": 0.5,
+                    "alpha": 0.05,
+                    "missing_policy": "complete_pair",
+                },
+            },
+        )
+
+    assert two_sample.status_code == 201, two_sample.text
+    assert paired.status_code == 201, paired.text
+    two_result = two_sample.json()["result"]
+    paired_result = paired.json()["result"]
+    assert two_result["design"] == "two_sample_independent_mean_difference"
+    assert two_result["test_group_label"] == "B"
+    assert two_result["reference_group_label"] == "A"
+    assert two_result["variance_assumption"] == "welch"
+    assert paired_result["design"] == "paired_mean_difference"
+    assert paired_result["n_complete_pairs"] == 6
+    assert paired_result["difference_definition"] == "test_minus_reference"
+
+
 @pytest.mark.parametrize(
     ("option_patch", "forbidden_text"),
     [
@@ -2828,7 +2914,7 @@ def test_analysis_run_executes_equivalence_tost_from_dataset_version(tmp_path) -
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.equivalence_tost",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.equivalence_tost"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -2863,7 +2949,7 @@ def test_analysis_run_executes_equivalence_tost_from_dataset_version(tmp_path) -
         {
             "code": "equivalence_tost_design_assumption",
             "severity": "info",
-            "message": "독립성 및 1표본 평균 설계는 사용자가 확인해야 하는 설계 가정입니다.",
+                "message": "독립성 및 1-표본 평균 설계는 사용자가 확인해야 하는 설계 가정입니다.",
         },
         {
             "code": "equivalence_bounds_user_defined",
@@ -9824,7 +9910,7 @@ def test_analysis_run_comparison_api_returns_equivalence_tost_stored_metrics(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.equivalence_tost",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.equivalence_tost"],
                 "dataset_version_id": version["version_id"],
                 "roles": {"response": response_column_id},
                 "options": {
@@ -9842,7 +9928,7 @@ def test_analysis_run_comparison_api_returns_equivalence_tost_stored_metrics(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.equivalence_tost",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.equivalence_tost"],
                 "dataset_version_id": version["version_id"],
                 "roles": {"response": response_column_id},
                 "options": {

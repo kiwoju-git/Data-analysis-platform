@@ -7,6 +7,8 @@ from app.statistics.equivalence_tost import (
     EquivalenceTostColumn,
     EquivalenceTostError,
     calculate_equivalence_tost,
+    calculate_paired_equivalence_tost,
+    calculate_two_sample_equivalence_tost,
 )
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/equivalence_tost_input.json")
@@ -248,11 +250,108 @@ def test_equivalence_tost_rejects_invalid_inputs_without_fake_statistic() -> Non
         )
 
 
+def test_two_sample_equivalence_welch_and_pooled_use_test_minus_reference() -> None:
+    rows = [
+        *[[str(value), "Test"] for value in [9.7, 10.0, 10.2, 10.1]],
+        *[[str(value), "Reference"] for value in [9.8, 9.9, 10.0, 10.1, 10.2]],
+    ]
+    welch = calculate_two_sample_equivalence_tost(
+        rows,
+        _response_column(),
+        _group_column(),
+        test_group_label="Test",
+        reference_group_label="Reference",
+        lower_bound=-0.5,
+        upper_bound=0.5,
+        variance_assumption="welch",
+    )
+    pooled = calculate_two_sample_equivalence_tost(
+        rows,
+        _response_column(),
+        _group_column(),
+        test_group_label="Test",
+        reference_group_label="Reference",
+        lower_bound=-0.5,
+        upper_bound=0.5,
+        variance_assumption="pooled",
+    )
+
+    assert welch["design"] == "two_sample_independent_mean_difference"
+    assert welch["estimate_definition"] == "mean_test_minus_mean_reference"
+    assert welch["estimate"]["value"] == pytest.approx(0.0, abs=1e-12)
+    test_variance = 0.04666666666666664
+    reference_variance = 0.025
+    variance_term = (test_variance / 4) + (reference_variance / 5)
+    expected_df = variance_term**2 / (
+        ((test_variance / 4) ** 2) / 3 + ((reference_variance / 5) ** 2) / 4
+    )
+    assert welch["estimate"]["standard_error"] == pytest.approx(
+        variance_term**0.5,
+        abs=1e-12,
+    )
+    assert welch["estimate"]["df"] == pytest.approx(expected_df, abs=1e-12)
+    assert welch["tost"]["equivalent"] is True
+    assert pooled["estimate"]["df"] == 7.0
+    assert pooled["estimate"]["standard_error"] != pytest.approx(
+        welch["estimate"]["standard_error"],
+        abs=1e-15,
+    )
+
+
+def test_paired_equivalence_uses_only_complete_test_minus_reference_pairs() -> None:
+    result = calculate_paired_equivalence_tost(
+        [
+            ["10.1", "10.0"],
+            ["10.2", "10.0"],
+            ["", "10.0"],
+            ["10.0", ""],
+            ["9.9", "10.0"],
+        ],
+        _response_column(),
+        _paired_reference_column(),
+        lower_bound=-0.5,
+        upper_bound=0.5,
+    )
+
+    assert result["design"] == "paired_mean_difference"
+    assert result["n_total"] == 5
+    assert result["n_complete_pairs"] == 3
+    assert result["n_incomplete_pairs"] == 2
+    assert result["n_missing_test"] == 1
+    assert result["n_missing_reference"] == 1
+    assert result["estimate"]["value"] == pytest.approx(0.06666666666666643, abs=1e-12)
+    assert result["estimate"]["df"] == 2.0
+    assert result["tost"]["equivalent"] is True
+
 def _response_column() -> EquivalenceTostColumn:
     return EquivalenceTostColumn(
         column_id="response",
         column_index=0,
         display_name="response",
+        data_type="decimal",
+        measurement_level="continuous",
+        role="response",
+        unit=None,
+    )
+
+
+def _group_column() -> EquivalenceTostColumn:
+    return EquivalenceTostColumn(
+        column_id="group",
+        column_index=1,
+        display_name="group",
+        data_type="text",
+        measurement_level="nominal",
+        role="group",
+        unit=None,
+    )
+
+
+def _paired_reference_column() -> EquivalenceTostColumn:
+    return EquivalenceTostColumn(
+        column_id="reference",
+        column_index=1,
+        display_name="reference",
         data_type="decimal",
         measurement_level="continuous",
         role="response",

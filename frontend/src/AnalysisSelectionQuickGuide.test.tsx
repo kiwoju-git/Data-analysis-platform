@@ -18,6 +18,9 @@ describe("AnalysisSelectionQuickGuide", () => {
     expect(html).toContain("Paired t");
     expect(html).toContain("One-Way ANOVA");
     expect(html).toContain("Kruskal-Wallis");
+    expect(html).toContain("1-표본 동등성");
+    expect(html).toContain("2-표본 동등성");
+    expect(html).toContain("대응표본 동등성");
     expect(html).toContain("대응표본 비모수 검정은 현재 별도 method로 지원하지 않습니다");
     expect(html).toContain(
       "표본 수 30과 정규성 검정 p-value는 절대적인 자동 선택 기준이 아닙니다",

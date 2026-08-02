@@ -51,6 +51,8 @@ from app.services.analysis_runners_eda import (
 )
 from app.services.analysis_runners_hypothesis import (
     run_equivalence_tost_analysis,
+    run_paired_equivalence_tost_analysis,
+    run_two_sample_equivalence_tost_analysis,
     run_kruskal_wallis_analysis,
     run_mann_whitney_analysis,
     run_one_sample_t_analysis,
@@ -159,6 +161,8 @@ _METHOD_EXECUTION_HANDLERS: dict[str, MethodExecutionHandler] = build_method_exe
         "hypothesis.kruskal_wallis": run_kruskal_wallis_analysis,
         "hypothesis.one_way_anova": run_one_way_anova_analysis,
         "hypothesis.equivalence_tost": run_equivalence_tost_analysis,
+        "hypothesis.two_sample_equivalence_tost": run_two_sample_equivalence_tost_analysis,
+        "hypothesis.paired_equivalence_tost": run_paired_equivalence_tost_analysis,
         "categorical.one_proportion": run_one_proportion_analysis,
         "categorical.two_proportion": run_two_proportion_analysis,
         "categorical.chi_square_association": run_chi_square_association_analysis,

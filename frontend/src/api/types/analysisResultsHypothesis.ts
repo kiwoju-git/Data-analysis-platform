@@ -500,11 +500,19 @@ export interface EquivalenceTostResult {
   summary_type: "equivalence_tost";
   method: string;
   input_mode: string;
-  design: "one_sample_mean";
+  design:
+    | "one_sample_mean"
+    | "two_sample_independent_mean_difference"
+    | "paired_mean_difference";
+  estimate_definition?: string;
+  difference_definition?: string;
   missing_policy: string;
   alpha: number;
   confidence_level: number;
-  reference_mean: number;
+  reference_mean: number | null;
+  variance_assumption?: "welch" | "pooled";
+  test_group_label?: string;
+  reference_group_label?: string;
   equivalence_bounds: EquivalenceTostBounds;
   package_versions: {
     numpy: string;
@@ -512,10 +520,17 @@ export interface EquivalenceTostResult {
   };
   warnings: string[];
   response: OneSampleTColumnRef;
+  group?: OneSampleTColumnRef;
+  test_column?: OneSampleTColumnRef;
+  reference_column?: OneSampleTColumnRef;
   n_total: number;
   n_used: number;
   n_missing: number;
   n_non_numeric: number;
+  n_complete_pairs?: number;
+  n_incomplete_pairs?: number;
+  n_missing_test?: number;
+  n_missing_reference?: number;
   sample: OneSampleTSampleSummary;
   estimate: EquivalenceTostEstimate;
   tests: {
@@ -524,7 +539,7 @@ export interface EquivalenceTostResult {
   };
   tost: EquivalenceTostDecision;
   confidence_interval: EquivalenceTostConfidenceInterval;
-  effect_size: EquivalenceTostEffectSize;
+  effect_size: EquivalenceTostEffectSize | null;
 }
 
 export interface PairedTColumnRef {

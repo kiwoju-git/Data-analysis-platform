@@ -4,6 +4,7 @@ import type {
   DatasetVersionResponse,
   EquivalenceTostResult,
 } from "./api";
+import { EquivalenceResultView } from "./EquivalenceResultView";
 
 interface EquivalenceTostPanelProps {
   alpha: number;
@@ -142,77 +143,7 @@ export function EquivalenceTostPanel({
           >
             {isRunningAnalysis ? "실행 중" : "동등성 검정 실행"}
           </button>
-          {analysisResult?.warnings.length ? (
-            <ul className="warning-list" aria-label="분석 경고">
-              {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
-              ))}
-            </ul>
-          ) : null}
-          {result !== null ? (
-            <>
-              <div className="metadata-grid" aria-label="동등성 검정 요약">
-                <span>반응 변수</span>
-                <strong>{result.response.display_name}</strong>
-                <span>사용 N</span>
-                <strong>
-                  {result.n_used.toLocaleString()} / {result.n_total.toLocaleString()}
-                </strong>
-                <span>평균 차이</span>
-                <strong>{formatAnalysisNumber(result.estimate.value)}</strong>
-                <span>동등성 판정</span>
-                <strong>{result.tost.equivalent ? "동등성 근거 있음" : "동등성 근거 부족"}</strong>
-              </div>
-              <div className="table-wrap">
-                <table className="result-table">
-                  <thead>
-                    <tr>
-                      <th>검정</th>
-                      <th>한계</th>
-                      <th>t</th>
-                      <th>df</th>
-                      <th>p-value</th>
-                      <th>결정</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>하한 단측</td>
-                      <td>{formatAnalysisNumber(result.tests.lower.bound)}</td>
-                      <td>{formatAnalysisNumber(result.tests.lower.statistic)}</td>
-                      <td>{formatAnalysisNumber(result.tests.lower.df)}</td>
-                      <td>{formatAnalysisNumber(result.tests.lower.p_value)}</td>
-                      <td>{result.tests.lower.reject_null ? "기각" : "기각 안 함"}</td>
-                    </tr>
-                    <tr>
-                      <td>상한 단측</td>
-                      <td>{formatAnalysisNumber(result.tests.upper.bound)}</td>
-                      <td>{formatAnalysisNumber(result.tests.upper.statistic)}</td>
-                      <td>{formatAnalysisNumber(result.tests.upper.df)}</td>
-                      <td>{formatAnalysisNumber(result.tests.upper.p_value)}</td>
-                      <td>{result.tests.upper.reject_null ? "기각" : "기각 안 함"}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="metadata-grid" aria-label="동등성 한계와 신뢰구간">
-                <span>동등성 구간</span>
-                <strong>
-                  {formatAnalysisNumber(result.equivalence_bounds.lower)} ~{" "}
-                  {formatAnalysisNumber(result.equivalence_bounds.upper)}
-                </strong>
-                <span>{formatPercent(result.confidence_interval.level)} CI</span>
-                <strong>
-                  {formatAnalysisNumber(result.confidence_interval.lower)} ~{" "}
-                  {formatAnalysisNumber(result.confidence_interval.upper)}
-                </strong>
-                <span>TOST p-value</span>
-                <strong>{formatAnalysisNumber(result.tost.p_value)}</strong>
-                <span>Cohen dz</span>
-                <strong>{formatAnalysisNumber(result.effect_size.cohen_dz)}</strong>
-              </div>
-            </>
-          ) : null}
+          <EquivalenceResultView analysisResult={analysisResult} result={result} />
         </>
       )}
     </section>
@@ -226,14 +157,5 @@ function formatPercent(value: number): string {
   return new Intl.NumberFormat("ko-KR", {
     maximumFractionDigits: 1,
     style: "percent",
-  }).format(value);
-}
-
-function formatAnalysisNumber(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) {
-    return "-";
-  }
-  return new Intl.NumberFormat("ko-KR", {
-    maximumFractionDigits: 6,
   }).format(value);
 }

@@ -93,9 +93,11 @@ describe("Bayesian batch and DOE presentation", () => {
     expect(equivalence.map((tag) => tag.label)).toEqual([
       "연속형 수치",
       "한 모집단",
-      "동등성 평가",
-      "허용한계 사전 지정",
+      "평균과 기준값 비교",
+      "동등성 한계 사전 지정",
     ]);
+    expect(getMethodCardTags("hypothesis.two_sample_equivalence_tost")).toHaveLength(4);
+    expect(getMethodCardTags("hypothesis.paired_equivalence_tost")).toHaveLength(4);
     expect(wilcoxon.map((tag) => tag.label)).toEqual([
       "순서형·연속형",
       "한 모집단",

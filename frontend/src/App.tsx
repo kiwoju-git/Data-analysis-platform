@@ -54,6 +54,7 @@ import { AppChrome } from "./AppChrome";
 import type { AnalysisShellProps } from "./AnalysisShell";
 import type { DescriptiveQuickGraphState } from "./DescriptiveAnalysisPanel";
 import type { OneWayAnovaExecutionOptions } from "./OneWayAnovaPanel";
+import type { TwoSampleEquivalenceExecutionOptions } from "./TwoSampleEquivalencePanel";
 import {
   serializeAnalysisFilterDrafts,
   validateAnalysisFilterDrafts,
@@ -964,7 +965,9 @@ export default function App() {
   const oneSampleTAnalysisResult =
     displayedAnalysisResult?.method_id === "hypothesis.one_sample_t" ? displayedAnalysisResult : null;
   const equivalenceTostAnalysisResult =
-    displayedAnalysisResult?.method_id === "hypothesis.equivalence_tost" ? displayedAnalysisResult : null;
+    displayedAnalysisResult !== null && isEquivalenceMethodId(displayedAnalysisResult.method_id)
+      ? displayedAnalysisResult
+      : null;
   const pairedTAnalysisResult =
     displayedAnalysisResult?.method_id === "hypothesis.paired_t" ? displayedAnalysisResult : null;
   const oneSampleWilcoxonAnalysisResult =
@@ -2210,6 +2213,102 @@ export default function App() {
           upper_bound: equivalenceTostUpperBound,
           alpha: equivalenceTostAlpha,
           missing_policy: "complete_case",
+        },
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
+  async function handleRunTwoSampleEquivalenceAnalysis(
+    options: TwoSampleEquivalenceExecutionOptions,
+  ) {
+    if (
+      version === null ||
+      selectedMethod?.method_id !== "hypothesis.two_sample_equivalence_tost" ||
+      selectedTwoSampleTResponseColumnId === null ||
+      selectedTwoSampleTGroupColumnId === null
+    ) {
+      setFlowError("equivalence_tost_columns_required");
+      return;
+    }
+    if (!validEquivalenceSettings(equivalenceTostLowerBound, equivalenceTostUpperBound, equivalenceTostAlpha)) {
+      setFlowError("invalid_equivalence_tost_bounds");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(analysisFilterDrafts, version.columns);
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: { expression_version: 1, conditions: filterConditions },
+        roles: { response: selectedTwoSampleTResponseColumnId, group: selectedTwoSampleTGroupColumnId },
+        options: {
+          response_column_id: selectedTwoSampleTResponseColumnId,
+          group_column_id: selectedTwoSampleTGroupColumnId,
+          test_group_label: options.testGroupLabel,
+          reference_group_label: options.referenceGroupLabel,
+          lower_bound: equivalenceTostLowerBound,
+          upper_bound: equivalenceTostUpperBound,
+          alpha: equivalenceTostAlpha,
+          variance_assumption: options.varianceAssumption,
+          missing_policy: "complete_case",
+        },
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
+  async function handleRunPairedEquivalenceAnalysis() {
+    if (
+      version === null ||
+      selectedMethod?.method_id !== "hypothesis.paired_equivalence_tost" ||
+      selectedPairedTAfterColumnId === null ||
+      selectedPairedTBeforeColumnId === null ||
+      selectedPairedTAfterColumnId === selectedPairedTBeforeColumnId
+    ) {
+      setFlowError("equivalence_tost_columns_required");
+      return;
+    }
+    if (!validEquivalenceSettings(equivalenceTostLowerBound, equivalenceTostUpperBound, equivalenceTostAlpha)) {
+      setFlowError("invalid_equivalence_tost_bounds");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(analysisFilterDrafts, version.columns);
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: { expression_version: 1, conditions: filterConditions },
+        roles: { test: selectedPairedTAfterColumnId, reference: selectedPairedTBeforeColumnId },
+        options: {
+          test_column_id: selectedPairedTAfterColumnId,
+          reference_column_id: selectedPairedTBeforeColumnId,
+          lower_bound: equivalenceTostLowerBound,
+          upper_bound: equivalenceTostUpperBound,
+          alpha: equivalenceTostAlpha,
+          missing_policy: "complete_pair",
         },
       });
       setAnalysisResult(response);
@@ -4031,6 +4130,12 @@ export default function App() {
     onRunEquivalenceTostAnalysis: () => {
       void handleRunEquivalenceTostAnalysis();
     },
+    onRunTwoSampleEquivalenceAnalysis: (options) => {
+      void handleRunTwoSampleEquivalenceAnalysis(options);
+    },
+    onRunPairedEquivalenceAnalysis: () => {
+      void handleRunPairedEquivalenceAnalysis();
+    },
     onRunGraphicalSummaryAnalysis: () => {
       void handleRunGraphicalSummaryAnalysis();
     },
@@ -5118,6 +5223,16 @@ function isEquivalenceTostResult(
     typeof candidate.tost === "object" &&
     candidate.tost !== null
   );
+}
+
+function isEquivalenceMethodId(methodId: string): boolean {
+  return methodId === "hypothesis.equivalence_tost" ||
+    methodId === "hypothesis.two_sample_equivalence_tost" ||
+    methodId === "hypothesis.paired_equivalence_tost";
+}
+
+function validEquivalenceSettings(lower: number, upper: number, alpha: number): boolean {
+  return Number.isFinite(lower) && Number.isFinite(upper) && lower < upper && alpha > 0 && alpha < 0.5;
 }
 
 function isPairedTResult(

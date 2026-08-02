@@ -205,6 +205,31 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
     message: "사용된 값이 모두 같으면 표준오차가 0이어서 TOST 통계량을 계산할 수 없습니다.",
     action: "상수 컬럼이 아닌 반응 변수를 선택하거나 필터 조건을 완화하세요.",
   },
+  equivalence_tost_columns_required: {
+    title: "동등성 검정 변수 선택 필요",
+    message: "선택한 설계에 필요한 반응, 그룹 또는 측정 컬럼을 모두 선택해야 합니다.",
+    action: "시험/기준 방향을 확인하고 서로 다른 유효 컬럼을 선택하세요.",
+  },
+  equivalence_tost_requires_two_groups: {
+    title: "그룹 수 오류",
+    message: "독립 2-표본 동등성 검정은 필터 적용 후 정확히 2개 그룹이 필요합니다.",
+    action: "그룹 변수와 필터를 확인하세요.",
+  },
+  equivalence_tost_group_not_found: {
+    title: "그룹 선택 만료",
+    message: "선택한 시험 또는 기준 그룹이 현재 데이터와 필터에서 더 이상 존재하지 않습니다.",
+    action: "그룹 수준을 다시 불러와 시험 그룹과 기준 그룹을 선택하세요.",
+  },
+  equivalence_tost_groups_must_differ: {
+    title: "같은 그룹 중복 선택",
+    message: "시험 그룹과 기준 그룹은 서로 달라야 합니다.",
+    action: "두 개의 서로 다른 그룹을 선택하세요.",
+  },
+  equivalence_tost_same_paired_column: {
+    title: "같은 측정 컬럼 중복 선택",
+    message: "시험 측정과 기준 측정은 서로 다른 컬럼이어야 합니다.",
+    action: "같은 대상의 서로 다른 두 측정 컬럼을 선택하세요.",
+  },
   pearson_same_x_and_y_column: {
     title: "같은 컬럼 중복 선택",
     message: "Pearson 상관은 서로 다른 두 수치 컬럼의 관계를 봅니다.",

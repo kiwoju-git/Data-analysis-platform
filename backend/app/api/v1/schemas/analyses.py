@@ -759,6 +759,65 @@ class OneWayAnovaOptions(BaseModel):
         return self
 
 
+class TwoSampleEquivalenceTostOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    test_group_label: str = Field(min_length=1, max_length=120)
+    reference_group_label: str = Field(min_length=1, max_length=120)
+    lower_bound: float
+    upper_bound: float
+    alpha: float = 0.05
+    variance_assumption: Literal["welch", "pooled"] = "welch"
+    missing_policy: Literal["complete_case"] = "complete_case"
+
+    @field_validator("lower_bound", "upper_bound", "alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+    @model_validator(mode="after")
+    def validate_groups_and_bounds(self) -> "TwoSampleEquivalenceTostOptions":
+        if self.test_group_label == self.reference_group_label:
+            raise ValueError("test and reference groups must differ")
+        if self.lower_bound >= self.upper_bound:
+            raise ValueError("lower bound must be less than upper bound")
+        return self
+
+
+class PairedEquivalenceTostOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    test_column_id: str = Field(min_length=1)
+    reference_column_id: str = Field(min_length=1)
+    lower_bound: float
+    upper_bound: float
+    alpha: float = 0.05
+    missing_policy: Literal["complete_pair"] = "complete_pair"
+
+    @field_validator("lower_bound", "upper_bound", "alpha", mode="before")
+    @classmethod
+    def require_finite_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)):
+            raise ValueError("must be a finite number")
+        return value
+
+    @model_validator(mode="after")
+    def validate_columns_and_bounds(self) -> "PairedEquivalenceTostOptions":
+        if self.test_column_id == self.reference_column_id:
+            raise ValueError("test and reference columns must differ")
+        if self.lower_bound >= self.upper_bound:
+            raise ValueError("lower bound must be less than upper bound")
+        return self
+
+
 class KruskalWallisOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

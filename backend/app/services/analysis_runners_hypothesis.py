@@ -15,7 +15,9 @@ from app.api.v1.schemas.analyses import (
     OneSampleTOptions,
     OneSampleWilcoxonOptions,
     OneWayAnovaOptions,
+    PairedEquivalenceTostOptions,
     PairedTOptions,
+    TwoSampleEquivalenceTostOptions,
     TwoSampleTOptions,
 )
 from app.core.config import Settings
@@ -43,6 +45,8 @@ from app.statistics.equivalence_tost import (
     EquivalenceTostColumn,
     EquivalenceTostError,
     calculate_equivalence_tost,
+    calculate_paired_equivalence_tost,
+    calculate_two_sample_equivalence_tost,
 )
 from app.statistics.kruskal_wallis import (
     KruskalWallisError,
@@ -302,11 +306,18 @@ def _one_sample_t_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
             ),
         )
     if "missing_values_excluded" in result_warning_codes:
+        design = result.get("design")
+        if design == "paired_mean_difference":
+            missing_message = "한쪽 측정이 결측인 행은 complete-pair 정책으로 제외했습니다."
+        elif design == "two_sample_independent_mean_difference":
+            missing_message = "반응 또는 그룹 결측 행은 complete-case 정책으로 제외했습니다."
+        else:
+            missing_message = "반응 결측 행은 complete-case 정책으로 제외했습니다."
         warnings.append(
             AnalysisWarning(
                 code="missing_values_excluded",
                 severity="warning",
-                message="반응 결측 행은 complete-case 정책으로 제외했습니다.",
+                message=missing_message,
             ),
         )
     if "non_numeric_values_excluded" in result_warning_codes:
@@ -527,6 +538,14 @@ def _equivalence_tost_api_error(code: str) -> ApiError:
         "equivalence_tost_standard_error_zero": (
             "평균 차이의 표준오차가 0이어서 동등성 검정을 계산할 수 없습니다."
         ),
+        "equivalence_tost_variance_assumption_invalid": "분산 가정이 올바르지 않습니다.",
+        "equivalence_tost_groups_required": "시험 그룹과 기준 그룹을 선택해야 합니다.",
+        "equivalence_tost_groups_must_differ": "시험 그룹과 기준 그룹은 달라야 합니다.",
+        "equivalence_tost_requires_two_groups": (
+            "2-표본 동등성 검정에는 정확히 두 그룹이 필요합니다."
+        ),
+        "equivalence_tost_group_not_found": "선택한 시험 또는 기준 그룹을 찾을 수 없습니다.",
+        "equivalence_tost_same_paired_column": "시험 측정과 기준 측정 컬럼은 달라야 합니다.",
     }
     return ApiError(
         code=code,
@@ -541,11 +560,18 @@ def _equivalence_tost_warnings(result: dict[str, object]) -> list[AnalysisWarnin
     if not isinstance(result_warning_codes, list):
         return warnings
     if "equivalence_tost_design_assumption" in result_warning_codes:
+        design = result.get("design")
+        if design == "two_sample_independent_mean_difference":
+            design_message = "독립 2그룹 설계와 선택한 분산 가정은 사용자가 확인해야 합니다."
+        elif design == "paired_mean_difference":
+            design_message = "각 행이 같은 대상의 올바른 측정 쌍인지 사용자가 확인해야 합니다."
+        else:
+            design_message = "독립성 및 1-표본 평균 설계는 사용자가 확인해야 하는 설계 가정입니다."
         warnings.append(
             AnalysisWarning(
                 code="equivalence_tost_design_assumption",
                 severity="info",
-                message="독립성 및 1표본 평균 설계는 사용자가 확인해야 하는 설계 가정입니다.",
+                message=design_message,
             ),
         )
     if "equivalence_bounds_user_defined" in result_warning_codes:
@@ -581,6 +607,186 @@ def _equivalence_tost_warnings(result: dict[str, object]) -> list[AnalysisWarnin
             ),
         )
     return warnings
+
+
+def run_two_sample_equivalence_tost_analysis(
+    settings: Settings,
+    request: AnalysisRunRequest,
+) -> AnalysisResultEnvelope:
+    if request.dataset_version_id is None:
+        raise ApiError(
+            code="dataset_version_required",
+            message="2-표본 동등성 검정 실행에는 데이터셋 버전이 필요합니다.",
+        )
+    try:
+        options = TwoSampleEquivalenceTostOptions.model_validate(
+            request.options
+        ).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_two_sample_equivalence_tost_options",
+            message="2-표본 동등성 검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
+    context = get_dataset_rows_context(settings, request.dataset_version_id)
+    response_column = _equivalence_column(context, options["response_column_id"])
+    group_column = _equivalence_group_column(context, options["group_column_id"])
+    if response_column.column_id == group_column.column_id:
+        raise ApiError(
+            code="equivalence_tost_same_response_and_group",
+            message="반응 변수와 그룹 변수는 달라야 합니다.",
+        )
+    return _run_equivalence_with_snapshot(
+        settings,
+        request,
+        context,
+        lambda rows: calculate_two_sample_equivalence_tost(
+            rows,
+            response_column,
+            group_column,
+            test_group_label=options["test_group_label"],
+            reference_group_label=options["reference_group_label"],
+            lower_bound=options["lower_bound"],
+            upper_bound=options["upper_bound"],
+            alpha=options["alpha"],
+            variance_assumption=options["variance_assumption"],
+            decimal=context.parsing.decimal,
+            thousands=context.parsing.thousands,
+        ),
+    )
+
+
+def run_paired_equivalence_tost_analysis(
+    settings: Settings,
+    request: AnalysisRunRequest,
+) -> AnalysisResultEnvelope:
+    if request.dataset_version_id is None:
+        raise ApiError(
+            code="dataset_version_required",
+            message="대응표본 동등성 검정 실행에는 데이터셋 버전이 필요합니다.",
+        )
+    try:
+        options = PairedEquivalenceTostOptions.model_validate(
+            request.options
+        ).model_dump()
+    except ValidationError as exc:
+        raise ApiError(
+            code="invalid_paired_equivalence_tost_options",
+            message="대응표본 동등성 검정 옵션 계약이 올바르지 않습니다.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
+    context = get_dataset_rows_context(settings, request.dataset_version_id)
+    test_column = _equivalence_column(context, options["test_column_id"])
+    reference_column = _equivalence_column(context, options["reference_column_id"])
+    if test_column.column_id == reference_column.column_id:
+        raise ApiError(
+            code="equivalence_tost_same_paired_column",
+            message="시험 측정과 기준 측정 컬럼은 달라야 합니다.",
+        )
+    return _run_equivalence_with_snapshot(
+        settings,
+        request,
+        context,
+        lambda rows: calculate_paired_equivalence_tost(
+            rows,
+            test_column,
+            reference_column,
+            lower_bound=options["lower_bound"],
+            upper_bound=options["upper_bound"],
+            alpha=options["alpha"],
+            decimal=context.parsing.decimal,
+            thousands=context.parsing.thousands,
+        ),
+    )
+
+
+def _run_equivalence_with_snapshot(
+    settings: Settings,
+    request: AnalysisRunRequest,
+    context: DatasetRowsContext,
+    calculate: Any,
+) -> AnalysisResultEnvelope:
+    analysis_id = uuid4()
+    completed_at = _utc_now()
+    row_snapshot = _create_row_snapshot_artifact(
+        settings=settings,
+        analysis_id=str(analysis_id),
+        context=context,
+        filter_snapshot=request.filter_snapshot,
+        created_at=completed_at,
+    )
+    try:
+        try:
+            result = calculate(_iter_rows_for_snapshot(context, row_snapshot))
+        except EquivalenceTostError as exc:
+            raise _equivalence_tost_api_error(exc.code) from exc
+        return _store_succeeded_analysis_result(
+            settings=settings,
+            request=request,
+            context=context,
+            analysis_id=analysis_id,
+            completed_at=completed_at,
+            row_snapshot=row_snapshot,
+            result=result,
+            warnings=_equivalence_tost_warnings(result),
+        )
+    except Exception:
+        _remove_file_if_exists(settings.workspace_root / row_snapshot.relative_path)
+        raise
+
+
+def _equivalence_column(
+    context: DatasetRowsContext,
+    column_id: str,
+) -> EquivalenceTostColumn:
+    column = next(
+        (candidate for candidate in context.columns if candidate.column_id == column_id),
+        None,
+    )
+    if column is None:
+        raise ApiError(
+            code="equivalence_tost_response_column_not_found",
+            message="요청한 동등성 검정 수치 컬럼을 찾을 수 없습니다.",
+        )
+    _validate_equivalence_tost_response_column(column)
+    return EquivalenceTostColumn(
+        column_id=column.column_id,
+        column_index=column.column_index,
+        display_name=column.display_name,
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+        unit=column.unit,
+    )
+
+
+def _equivalence_group_column(
+    context: DatasetRowsContext,
+    column_id: str,
+) -> EquivalenceTostColumn:
+    column = next(
+        (candidate for candidate in context.columns if candidate.column_id == column_id),
+        None,
+    )
+    if column is None:
+        raise ApiError(
+            code="equivalence_tost_group_column_not_found",
+            message="요청한 동등성 검정 그룹 컬럼을 찾을 수 없습니다.",
+        )
+    if column.role == "id" or column.measurement_level == "id":
+        raise ApiError(
+            code="equivalence_tost_group_column_is_id",
+            message="ID 컬럼은 동등성 검정 그룹 변수로 사용할 수 없습니다.",
+        )
+    return EquivalenceTostColumn(
+        column_id=column.column_id,
+        column_index=column.column_index,
+        display_name=column.display_name,
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+        unit=column.unit,
+    )
 
 
 def run_paired_t_analysis(
