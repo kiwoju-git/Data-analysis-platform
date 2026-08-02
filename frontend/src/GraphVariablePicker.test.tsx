@@ -68,7 +68,9 @@ describe("GraphVariablePicker", () => {
     expect(html).toContain('class="graph-variable-picker"');
     expect(html).toContain('type="checkbox"');
     expect(html).toContain('class="graph-layout-control"');
-    expect((html.match(/type="radio"/g) ?? [])).toHaveLength(2);
+    expect((html.match(/type="radio"/g) ?? [])).toHaveLength(4);
+    expect(html).toContain("비교 방식");
+    expect(html).toContain("수치 변수 1개를 그룹별 비교");
     expect(html).toContain("공통 축");
     expect(html).toContain("개별 패널");
   });

@@ -69,9 +69,9 @@ export const graphBuilderDefinitions: readonly GraphBuilderDefinition[] = [
   {
     graphType: "imr_chart",
     label: "I-MR Chart",
-    description: "변수별 I chart와 MR chart 관리한계를 독립적으로 계산합니다.",
+    description: "변수별 또는 그룹별 I chart와 MR chart 관리한계를 독립 계산합니다.",
     maximumValues: 6,
-    supportsGroup: false,
+    supportsGroup: true,
     supportsOrder: true,
   },
 ] as const;

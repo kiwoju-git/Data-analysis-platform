@@ -4,6 +4,7 @@ import {
   createGraphPreview,
   type DatasetColumnResponse,
   type DatasetVersionResponse,
+  type GraphComparisonMode,
   type GraphPreviewLayout,
   type GraphPreviewResponse,
   type GraphPreviewType,
@@ -28,6 +29,9 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
   );
   const [graphType, setGraphType] = useState<GraphPreviewType>("box_plot");
   const [valueColumnIds, setValueColumnIds] = useState<string[]>([]);
+  const [groupValueColumnId, setGroupValueColumnId] = useState<string | null>(null);
+  const [comparisonMode, setComparisonMode] =
+    useState<GraphComparisonMode>("multiple_values");
   const [xColumnId, setXColumnId] = useState<string | null>(null);
   const [yColumnIds, setYColumnIds] = useState<string[]>([]);
   const [groupColumnId, setGroupColumnId] = useState<string | null>(null);
@@ -43,6 +47,8 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
     const first = numericColumns[0]?.column_id ?? null;
     const second = numericColumns[1]?.column_id ?? first;
     setValueColumnIds(first === null ? [] : [first]);
+    setGroupValueColumnId(first);
+    setComparisonMode("multiple_values");
     setXColumnId(first);
     setYColumnIds(second === null ? [] : [second]);
     setGroupColumnId(null);
@@ -57,7 +63,19 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
     version === null
       ? "dataset_version_required"
       : validateGraphBuilderSelection(
-          { graphType, valueColumnIds, xColumnId, yColumnIds, groupColumnId },
+          {
+            graphType,
+            valueColumnIds:
+              comparisonMode === "one_value_by_group"
+                ? groupValueColumnId === null
+                  ? []
+                  : [groupValueColumnId]
+                : valueColumnIds,
+            xColumnId,
+            yColumnIds,
+            groupColumnId,
+            comparisonMode,
+          },
           version.columns,
         );
   const filterError =
@@ -74,6 +92,7 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
   function changeGraphType(next: GraphPreviewType) {
     invalidate();
     setGraphType(next);
+    setComparisonMode("multiple_values");
     setGroupColumnId(null);
     setOrderColumnId(null);
     setLayout(next === "box_plot" ? "combined" : "small_multiples");
@@ -93,13 +112,23 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
           conditions: serializeAnalysisFilterDrafts(filterDrafts, version.columns),
         },
         graph_type: graphType,
-        value_column_ids: graphType === "scatter_plot" ? [] : valueColumnIds,
+        value_column_ids:
+          graphType === "scatter_plot"
+            ? []
+            : comparisonMode === "one_value_by_group"
+              ? groupValueColumnId === null
+                ? []
+                : [groupValueColumnId]
+              : valueColumnIds,
         x_column_id: graphType === "scatter_plot" ? xColumnId : null,
         y_column_ids: graphType === "scatter_plot" ? yColumnIds : [],
         group_column_id: groupColumnId,
         order_column_id: orderColumnId,
         point_limit: graphType === "individual_value_plot" ? 2000 : 1000,
         layout,
+        comparison_mode: comparisonMode,
+        group_order_policy: "first_occurrence",
+        missing_group_policy: "exclude",
       });
       if (requestIdRef.current === requestId) {
         setResult(response);
@@ -122,6 +151,7 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
 
   return {
     error,
+    comparisonMode,
     filterDrafts,
     graphType,
     groupColumnId,
@@ -131,20 +161,37 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
     orderColumnId,
     result,
     validationError,
-    valueColumnIds,
+    valueColumnIds:
+      comparisonMode === "one_value_by_group"
+        ? groupValueColumnId === null
+          ? []
+          : [groupValueColumnId]
+        : valueColumnIds,
     xColumnId,
     yColumnIds,
     generate,
     setFilterDrafts: (drafts: AnalysisFilterDraft[]) =>
       updateAndInvalidate(setFilterDrafts, drafts),
     setGraphType: changeGraphType,
+    setComparisonMode: (value: GraphComparisonMode) => {
+      invalidate();
+      setComparisonMode(value);
+      setGroupColumnId(null);
+      if (value === "one_value_by_group") setLayout("combined");
+    },
     setGroupColumnId: (value: string | null) =>
       updateAndInvalidate(setGroupColumnId, value),
     setLayout: (value: GraphPreviewLayout) => updateAndInvalidate(setLayout, value),
     setOrderColumnId: (value: string | null) =>
       updateAndInvalidate(setOrderColumnId, value),
-    setValueColumnIds: (value: string[]) =>
-      updateAndInvalidate(setValueColumnIds, value),
+    setValueColumnIds: (value: string[]) => {
+      invalidate();
+      if (comparisonMode === "one_value_by_group") {
+        setGroupValueColumnId(value[0] ?? null);
+      } else {
+        setValueColumnIds(value);
+      }
+    },
     setXColumnId: (value: string | null) => updateAndInvalidate(setXColumnId, value),
     setYColumnIds: (value: string[]) => updateAndInvalidate(setYColumnIds, value),
   };

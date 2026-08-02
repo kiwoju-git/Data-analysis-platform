@@ -1,4 +1,8 @@
-import type { DatasetColumnResponse, GraphPreviewType } from "./api";
+import type {
+  DatasetColumnResponse,
+  GraphComparisonMode,
+  GraphPreviewType,
+} from "./api";
 import { graphBuilderDefinition } from "./graphBuilderRegistry";
 
 export interface GraphBuilderSelection {
@@ -7,6 +11,7 @@ export interface GraphBuilderSelection {
   xColumnId: string | null;
   yColumnIds: string[];
   groupColumnId: string | null;
+  comparisonMode: GraphComparisonMode;
 }
 
 export function validateGraphBuilderSelection(
@@ -47,8 +52,18 @@ export function validateGraphBuilderSelection(
   if (selection.valueColumnIds.length > definition.maximumValues) {
     return "graph_builder_too_many_values";
   }
-  if (selection.groupColumnId !== null && selection.valueColumnIds.length !== 1) {
-    return "graph_builder_group_requires_one_value";
+  if (selection.comparisonMode === "one_value_by_group") {
+    if (!definition.supportsGroup) {
+      return "graph_builder_group_comparison_unsupported";
+    }
+    if (selection.valueColumnIds.length !== 1) {
+      return "graph_builder_group_requires_one_value";
+    }
+    if (selection.groupColumnId === null) {
+      return "graph_builder_group_required";
+    }
+  } else if (selection.groupColumnId !== null) {
+    return "graph_builder_group_not_allowed_in_multiple_mode";
   }
   return null;
 }

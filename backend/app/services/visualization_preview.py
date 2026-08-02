@@ -51,20 +51,29 @@ def create_graph_preview(
     columns_by_id = {column.column_id: column for column in context.columns}
     warnings: list[str] = []
 
+    missing_group_row_count = 0
     if request.graph_type == "scatter_plot":
         panels = _scatter_panels(context, request, columns_by_id, included_indices)
     elif request.graph_type == "individual_value_plot":
-        panels = _individual_value_panels(context, request, columns_by_id, included_indices)
+        panels, missing_group_row_count = _individual_value_panels(
+            context, request, columns_by_id, included_indices
+        )
     elif request.graph_type in {"run_chart", "imr_chart"}:
-        panels = _sequence_panels(context, request, columns_by_id, included_indices)
+        panels, missing_group_row_count = _sequence_panels(
+            context, request, columns_by_id, included_indices
+        )
     else:
-        panels, graphical_warnings = _graphical_summary_panels(
+        panels, graphical_warnings, missing_group_row_count = _graphical_summary_panels(
             context,
             request,
             columns_by_id,
             included_indices,
         )
         warnings.extend(graphical_warnings)
+    if missing_group_row_count > 0:
+        warnings.append("graph_preview_missing_group_rows_excluded")
+    if any(panel.status == "failed" for panel in panels):
+        warnings.append("graph_preview_partial_panel_failure")
 
     filter_payload = request.filter_snapshot.model_dump(mode="json")
     config_payload = request.model_dump(mode="json")
@@ -78,6 +87,10 @@ def create_graph_preview(
         row_count_included=included_count,
         warnings=warnings,
         layout=request.layout,
+        comparison_mode=request.comparison_mode,
+        group_order_policy=request.group_order_policy,
+        missing_group_policy=request.missing_group_policy,
+        missing_group_row_count=missing_group_row_count,
         panels=panels,
     )
 
@@ -87,7 +100,7 @@ def _graphical_summary_panels(
     request: GraphPreviewRequest,
     columns_by_id: dict[str, DatasetColumnRecord],
     included_indices: tuple[int, ...] | None,
-) -> tuple[list[GraphPreviewPanel], list[str]]:
+) -> tuple[list[GraphPreviewPanel], list[str], int]:
     selected = _numeric_columns(columns_by_id, request.value_column_ids)
     warnings: list[str] = []
     if request.layout in {"combined", "overlay"} and len(selected) > 1:
@@ -102,7 +115,9 @@ def _graphical_summary_panels(
 
     group = _optional_group_column(columns_by_id, request.group_column_id)
     if group is not None:
-        grouped_rows = _rows_by_group(context, included_indices, group)
+        grouped_rows, missing_group_row_count = _rows_by_group(
+            context, included_indices, group
+        )
         panels: list[GraphPreviewPanel] = []
         selected_column = selected[0]
         for index, (group_label, rows) in enumerate(grouped_rows.items()):
@@ -115,6 +130,13 @@ def _graphical_summary_panels(
                 point_limit=request.point_limit,
             )
             column_result = _only_summary_column(result)
+            column_result = {
+                **column_result,
+                "column_id": f"{selected_column.column_id}:group:{index}",
+                "display_name": group_label,
+                "group_label": group_label,
+                "response_display_name": selected_column.display_name,
+            }
             panels.append(
                 GraphPreviewPanel(
                     panel_id=f"group-{index + 1}",
@@ -125,7 +147,7 @@ def _graphical_summary_panels(
                     result=column_result,
                 )
             )
-        return panels, warnings
+        return panels, warnings, missing_group_row_count
 
     result = summarize_numeric_graphics(
         _iter_filtered_rows(context, included_indices),
@@ -149,7 +171,7 @@ def _graphical_summary_panels(
         for index, (column, column_result) in enumerate(zip(selected, columns, strict=True))
         if isinstance(column_result, dict)
     ]
-    return panels, warnings
+    return panels, warnings, 0
 
 
 def _individual_value_panels(
@@ -157,7 +179,7 @@ def _individual_value_panels(
     request: GraphPreviewRequest,
     columns_by_id: dict[str, DatasetColumnRecord],
     included_indices: tuple[int, ...] | None,
-) -> list[GraphPreviewPanel]:
+) -> tuple[list[GraphPreviewPanel], int]:
     selected = _numeric_columns(columns_by_id, request.value_column_ids)
     group = _optional_group_column(columns_by_id, request.group_column_id)
     try:
@@ -171,7 +193,7 @@ def _individual_value_panels(
         )
     except GraphPointError as exc:
         raise ApiError(code=exc.code, message=_point_error_message(exc.code)) from exc
-    return [
+    panels = [
         GraphPreviewPanel(
             panel_id="individual-values",
             kind="individual_values",
@@ -181,6 +203,8 @@ def _individual_value_panels(
             result=result,
         )
     ]
+    missing_group = result.get("n_missing_group", 0)
+    return panels, int(missing_group) if isinstance(missing_group, int) else 0
 
 
 def _scatter_panels(
@@ -234,10 +258,54 @@ def _sequence_panels(
     request: GraphPreviewRequest,
     columns_by_id: dict[str, DatasetColumnRecord],
     included_indices: tuple[int, ...] | None,
-) -> list[GraphPreviewPanel]:
+) -> tuple[list[GraphPreviewPanel], int]:
     selected = _numeric_columns(columns_by_id, request.value_column_ids)
     order = _optional_order_column(columns_by_id, request.order_column_id)
     panels: list[GraphPreviewPanel] = []
+    group = _optional_group_column(columns_by_id, request.group_column_id)
+    if group is not None:
+        grouped_rows, missing_group_row_count = _rows_by_group(
+            context, included_indices, group
+        )
+        column = selected[0]
+        for group_index, (group_label, rows) in enumerate(grouped_rows.items()):
+            try:
+                result = calculate_individuals_chart(
+                    rows,
+                    _individuals_column(column),
+                    order_column=None if order is None else _individuals_column(order),
+                    decimal=context.parsing.decimal,
+                    thousands=context.parsing.thousands,
+                    point_limit=request.point_limit,
+                )
+                result = {
+                    **result,
+                    "group_label": group_label,
+                    "group_order": group_index,
+                    "group_boundary_policy": "independent_within_group",
+                }
+                panels.append(
+                    GraphPreviewPanel(
+                        panel_id=f"sequence-group-{group_index + 1}",
+                        kind="imr_chart",
+                        label=f"{column.display_name} · {group_label}",
+                        unit=column.unit,
+                        status="succeeded",
+                        result=result,
+                    )
+                )
+            except IndividualsChartError as exc:
+                panels.append(
+                    GraphPreviewPanel(
+                        panel_id=f"sequence-group-{group_index + 1}",
+                        kind="imr_chart",
+                        label=f"{column.display_name} · {group_label}",
+                        unit=column.unit,
+                        status="failed",
+                        error_code=exc.code,
+                    )
+                )
+        return panels, missing_group_row_count
     for index, column in enumerate(selected):
         try:
             if request.graph_type == "run_chart":
@@ -281,7 +349,7 @@ def _sequence_panels(
                     error_code=exc.code,
                 )
             )
-    return panels
+    return panels, 0
 
 
 def _numeric_columns(
@@ -354,18 +422,22 @@ def _rows_by_group(
     context: DatasetRowsContext,
     included_indices: tuple[int, ...] | None,
     group: DatasetColumnRecord,
-) -> dict[str, list[list[str | None]]]:
+) -> tuple[dict[str, list[list[str | None]]], int]:
     grouped: dict[str, list[list[str | None]]] = defaultdict(list)
+    missing_group_row_count = 0
     for row in _iter_filtered_rows(context, included_indices):
         raw_value = row[group.column_index] if group.column_index < len(row) else None
-        label = "(결측)" if raw_value is None or raw_value.strip() == "" else raw_value
+        if raw_value is None or raw_value.strip() == "":
+            missing_group_row_count += 1
+            continue
+        label = raw_value.strip()
         grouped[label].append(row)
         if len(grouped) > MAX_GROUP_LEVELS:
             raise ApiError(
                 code="graph_preview_group_level_limit_exceeded",
                 message="그룹 수준은 최대 20개까지 표시할 수 있습니다.",
             )
-    return dict(grouped)
+    return dict(grouped), missing_group_row_count
 
 
 def _iter_filtered_rows(

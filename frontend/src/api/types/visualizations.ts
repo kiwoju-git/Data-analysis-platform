@@ -13,6 +13,7 @@ export type GraphPreviewType =
   | "imr_chart";
 
 export type GraphPreviewLayout = "combined" | "overlay" | "small_multiples";
+export type GraphComparisonMode = "multiple_values" | "one_value_by_group";
 
 export interface GraphPreviewRequest {
   dataset_version_id: string;
@@ -29,12 +30,16 @@ export interface GraphPreviewRequest {
   point_limit?: number;
   histogram_bin_count?: number | null;
   layout: GraphPreviewLayout;
+  comparison_mode: GraphComparisonMode;
+  group_order_policy?: "first_occurrence";
+  missing_group_policy?: "exclude";
 }
 
 export interface IndividualValuePreviewPoint {
   series_id: string;
   series_label: string;
   source_column_label: string;
+  group: string | null;
   point_index: number;
   canonical_position: number;
   value: number;
@@ -47,6 +52,8 @@ export interface IndividualValuePreviewResult {
   n_total: number;
   n_missing: number;
   n_non_numeric: number;
+  n_missing_group: number;
+  groups: Array<{ label: string; n: number }>;
   points: IndividualValuePreviewPoint[];
 }
 
@@ -117,7 +124,7 @@ export type GraphPreviewPanel =
   | ImrChartPreviewPanel;
 
 export interface GraphPreviewResponse {
-  visualization_schema_version: 1;
+  visualization_schema_version: 2;
   graph_type: GraphPreviewType;
   dataset_version_id: string;
   source_schema_hash: string;
@@ -127,5 +134,9 @@ export interface GraphPreviewResponse {
   row_count_included: number;
   warnings: string[];
   layout: GraphPreviewLayout;
+  comparison_mode: GraphComparisonMode;
+  group_order_policy: "first_occurrence";
+  missing_group_policy: "exclude";
+  missing_group_row_count: number;
   panels: GraphPreviewPanel[];
 }

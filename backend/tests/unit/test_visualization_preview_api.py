@@ -35,7 +35,7 @@ def test_graphical_preview_reuses_filter_and_does_not_create_analysis_history(tm
 
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["visualization_schema_version"] == 1
+    assert payload["visualization_schema_version"] == 2
     assert payload["row_count_total"] == 4
     assert payload["row_count_included"] == 2
     assert len(payload["filter_snapshot_sha256"]) == 64
@@ -65,6 +65,7 @@ def test_box_plot_group_mode_and_unit_guard(tmp_path) -> None:
                 "graph_type": "box_plot",
                 "value_column_ids": [temperature["column_id"]],
                 "group_column_id": line["column_id"],
+                "comparison_mode": "one_value_by_group",
                 "layout": "combined",
             },
         )
@@ -84,6 +85,10 @@ def test_box_plot_group_mode_and_unit_guard(tmp_path) -> None:
         "temperature · B",
     ]
     assert [panel["result"]["n_used"] for panel in grouped.json()["panels"]] == [2, 2]
+    assert [panel["result"]["display_name"] for panel in grouped.json()["panels"]] == [
+        "A",
+        "B",
+    ]
     assert mismatched.status_code == 400
     assert mismatched.json()["error"]["code"] == "graph_preview_unit_mismatch"
 
@@ -105,6 +110,42 @@ def test_individual_value_preview_rejects_over_limit_without_sampling(tmp_path) 
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "individual_value_point_limit_exceeded"
+
+
+def test_grouped_individual_value_plot_is_one_panel_with_first_occurrence_groups(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _create_version(
+            client,
+            b"value,line\n1,B\n2,A\n3,B\n4,\n5,A\n",
+            columns=[
+                {"column_index": 0, "measurement_level": "continuous", "unit": "kg"},
+                {"column_index": 1, "measurement_level": "nominal", "unit": None},
+            ],
+        )
+        value, line = version["columns"]
+        response = client.post(
+            "/api/v1/visualizations/preview",
+            json={
+                "dataset_version_id": version["version_id"],
+                "graph_type": "individual_value_plot",
+                "value_column_ids": [value["column_id"]],
+                "group_column_id": line["column_id"],
+                "comparison_mode": "one_value_by_group",
+                "layout": "combined",
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert len(payload["panels"]) == 1
+    result = payload["panels"][0]["result"]
+    assert result["sampled"] is False
+    assert result["groups"] == [{"label": "B", "n": 2}, {"label": "A", "n": 2}]
+    assert [point["series_label"] for point in result["points"]] == ["B", "A", "B", "A"]
+    assert payload["missing_group_row_count"] == 1
 
 
 def test_run_and_imr_preview_return_independent_panels(tmp_path) -> None:
@@ -140,6 +181,51 @@ def test_run_and_imr_preview_return_independent_panels(tmp_path) -> None:
     assert all(
         panel["result"]["summary_type"] == "individuals_chart" for panel in imr.json()["panels"]
     )
+
+
+def test_grouped_imr_uses_independent_group_boundaries_and_allows_partial_failure(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _create_version(
+            client,
+            b"value,line,order\n1,A,1\n2,A,2\n4,A,3\n100,B,1\n101,B,2\n103,B,3\n8,C,1\n9,,2\n",
+            columns=[
+                {"column_index": 0, "measurement_level": "continuous", "unit": "C"},
+                {"column_index": 1, "measurement_level": "nominal", "unit": None},
+                {"column_index": 2, "measurement_level": "continuous", "unit": None},
+            ],
+        )
+        value, line, order = version["columns"]
+        response = client.post(
+            "/api/v1/visualizations/preview",
+            json={
+                "dataset_version_id": version["version_id"],
+                "graph_type": "imr_chart",
+                "value_column_ids": [value["column_id"]],
+                "group_column_id": line["column_id"],
+                "order_column_id": order["column_id"],
+                "comparison_mode": "one_value_by_group",
+                "layout": "small_multiples",
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["missing_group_row_count"] == 1
+    assert "graph_preview_missing_group_rows_excluded" in payload["warnings"]
+    assert "graph_preview_partial_panel_failure" in payload["warnings"]
+    assert [panel["status"] for panel in payload["panels"]] == [
+        "succeeded",
+        "succeeded",
+        "failed",
+    ]
+    first, second = payload["panels"][:2]
+    assert first["result"]["group_boundary_policy"] == "independent_within_group"
+    assert first["result"]["moving_range_chart"]["point_count"] == 2
+    assert second["result"]["moving_range_chart"]["point_count"] == 2
+    assert second["result"]["moving_range_chart"]["points"][0]["value"] == 1.0
 
 
 def _create_version(

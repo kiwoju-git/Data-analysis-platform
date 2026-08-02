@@ -16,6 +16,7 @@ GraphType = Literal[
     "imr_chart",
 ]
 GraphLayout = Literal["combined", "overlay", "small_multiples"]
+GraphComparisonMode = Literal["multiple_values", "one_value_by_group"]
 
 
 class GraphPreviewRequest(BaseModel):
@@ -32,6 +33,9 @@ class GraphPreviewRequest(BaseModel):
     point_limit: int = Field(default=1000, ge=10, le=2000)
     histogram_bin_count: int | None = Field(default=None, ge=1, le=200)
     layout: GraphLayout = "small_multiples"
+    comparison_mode: GraphComparisonMode = "multiple_values"
+    group_order_policy: Literal["first_occurrence"] = "first_occurrence"
+    missing_group_policy: Literal["exclude"] = "exclude"
 
     @model_validator(mode="after")
     def validate_roles(self) -> "GraphPreviewRequest":
@@ -55,13 +59,14 @@ class GraphPreviewRequest(BaseModel):
         }
         if len(self.value_column_ids) > limits[self.graph_type]:
             raise ValueError(f"{self.graph_type} has too many value columns")
-        if self.group_column_id is not None and len(self.value_column_ids) != 1:
-            raise ValueError("group mode requires exactly one value column")
-        if self.group_column_id is not None and self.graph_type not in {
-            "box_plot",
-            "individual_value_plot",
-        }:
-            raise ValueError("group_column_id is not supported for this graph type")
+        comparison_graphs = {"box_plot", "individual_value_plot", "imr_chart"}
+        if self.comparison_mode == "one_value_by_group":
+            if self.graph_type not in comparison_graphs:
+                raise ValueError("group comparison is not supported for this graph type")
+            if self.group_column_id is None or len(self.value_column_ids) != 1:
+                raise ValueError("group comparison requires one value and one group column")
+        elif self.group_column_id is not None and self.graph_type in comparison_graphs:
+            raise ValueError("multiple value comparison does not accept group_column_id")
         return self
 
 
@@ -86,7 +91,7 @@ class GraphPreviewPanel(BaseModel):
 class GraphPreviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    visualization_schema_version: Literal[1] = 1
+    visualization_schema_version: Literal[2] = 2
     graph_type: GraphType
     dataset_version_id: UUID
     source_schema_hash: str
@@ -96,4 +101,8 @@ class GraphPreviewResponse(BaseModel):
     row_count_included: int
     warnings: list[str]
     layout: GraphLayout
+    comparison_mode: GraphComparisonMode
+    group_order_policy: Literal["first_occurrence"]
+    missing_group_policy: Literal["exclude"]
+    missing_group_row_count: int = Field(ge=0)
     panels: list[GraphPreviewPanel]

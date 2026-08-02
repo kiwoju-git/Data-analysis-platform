@@ -43,6 +43,11 @@ export function GraphBuilderPage({
   const state = useGraphBuilderState(version);
   const definition = graphBuilderDefinition(state.graphType);
   const roleColumns = graphBuilderColumns(version);
+  const supportsGroupedComparison = [
+    "box_plot",
+    "individual_value_plot",
+    "imr_chart",
+  ].includes(state.graphType);
   const openMethod = (methodId: string) => {
     const method = catalog?.methods.find((candidate) => candidate.method_id === methodId);
     if (method !== undefined) onOpenAnalysis(method);
@@ -101,14 +106,53 @@ export function GraphBuilderPage({
           />
           <section className="surface-section" aria-labelledby="graph-roles-title">
             <h3 id="graph-roles-title">변수 선택</h3>
+            {supportsGroupedComparison ? (
+              <fieldset className="segmented-fieldset graph-comparison-mode">
+                <legend>비교 방식</legend>
+                <div className="segmented-control">
+                  <label>
+                    <input
+                      checked={state.comparisonMode === "multiple_values"}
+                      name="graph-comparison-mode"
+                      onChange={() => state.setComparisonMode("multiple_values")}
+                      type="radio"
+                    />
+                    <span>여러 수치 변수 비교</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={state.comparisonMode === "one_value_by_group"}
+                      name="graph-comparison-mode"
+                      onChange={() => state.setComparisonMode("one_value_by_group")}
+                      type="radio"
+                    />
+                    <span>수치 변수 1개를 그룹별 비교</span>
+                  </label>
+                </div>
+              </fieldset>
+            ) : null}
             {state.graphType === "scatter_plot" ? (
               <ScatterRoleControls state={state} />
             ) : (
-              <ValueRoleControls maximum={definition.maximumValues} state={state} />
+              <ValueRoleControls
+                label={
+                  state.comparisonMode === "one_value_by_group"
+                    ? "반응 변수"
+                    : "표시할 수치 변수"
+                }
+                maximum={
+                  state.comparisonMode === "one_value_by_group"
+                    ? 1
+                    : definition.maximumValues
+                }
+                state={state}
+              />
             )}
             {definition.supportsGroup || definition.supportsOrder ? (
               <div className="graph-role-options-grid">
-                {definition.supportsGroup ? (
+                {definition.supportsGroup &&
+                (state.graphType === "scatter_plot" ||
+                  state.comparisonMode === "one_value_by_group") ? (
                   <label className="graph-role-option">
                     <strong>그룹 변수</strong>
                     <select
@@ -117,7 +161,9 @@ export function GraphBuilderPage({
                         state.setGroupColumnId(event.currentTarget.value || null)
                       }
                     >
-                      <option value="">선택 안 함</option>
+                      <option value="">
+                        {state.graphType === "scatter_plot" ? "선택 안 함" : "선택"}
+                      </option>
                       {roleColumns.group.map((column) => (
                         <option key={column.column_id} value={column.column_id}>
                           {column.display_name}
@@ -150,7 +196,8 @@ export function GraphBuilderPage({
                 ) : null}
               </div>
             ) : null}
-            {state.graphType === "box_plot" && state.groupColumnId === null ? (
+            {state.graphType === "box_plot" &&
+            state.comparisonMode === "multiple_values" ? (
               <fieldset className="graph-layout-control">
                 <legend>배치 방식</legend>
                 <div className="graph-layout-segments">
@@ -230,6 +277,18 @@ export function GraphBuilderPage({
                   단위 정보가 없어 공통 축의 해석을 사용자가 확인해야 합니다.
                 </div>
               ) : null}
+              {state.result.missing_group_row_count > 0 ? (
+                <div className="notice-box">
+                  그룹 값이 결측인 {state.result.missing_group_row_count.toLocaleString()}행은
+                  그룹 비교에서 제외했습니다.
+                </div>
+              ) : null}
+              {state.result.warnings.includes("graph_preview_partial_panel_failure") ? (
+                <div className="notice-box">
+                  일부 그룹은 유효 관측 수가 부족해 계산하지 못했습니다. 성공한 그룹 결과는
+                  그대로 표시합니다.
+                </div>
+              ) : null}
               <GraphPreviewPanels
                 graphType={state.graphType}
                 layout={state.layout}
@@ -275,16 +334,18 @@ export function GraphBuilderPage({
 type BuilderState = ReturnType<typeof useGraphBuilderState>;
 
 function ValueRoleControls({
+  label,
   maximum,
   state,
 }: {
+  label: string;
   maximum: number;
   state: BuilderState;
 }) {
   return (
     <GraphVariablePicker
       columns={state.numericColumns}
-      label="표시할 수치 변수"
+      label={label}
       maximum={maximum}
       onChange={state.setValueColumnIds}
       selectedIds={state.valueColumnIds}
@@ -333,7 +394,7 @@ function GraphPreviewPanels({
   const graphical = panels.flatMap((panel) =>
     panel.kind === "graphical_summary" && panel.result !== null ? [panel.result] : [],
   );
-  if (graphType === "box_plot" && layout === "combined" && graphical.length > 1) {
+  if (graphType === "box_plot" && layout === "combined" && graphical.length > 0) {
     return (
       <div className="graph-preview-combined">
         <ComparativeBoxplotChart chartId="graph-builder-boxplot" columns={graphical} />
@@ -385,6 +446,15 @@ function GraphPreviewPanelView({
     return (
       <article className={graphPreviewPanelClassName(panel.kind)}>
         <h4>{panel.label}</h4>
+        {panel.result.groups.length > 0 ? (
+          <div className="summary-band" aria-label="그룹별 사용 관측 수">
+            {panel.result.groups.map((group) => (
+              <span key={group.label}>
+                {group.label} N {group.n.toLocaleString()}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <InteractiveIndividualValueChart
           chartId={`graph-builder-${panel.panel_id}`}
           points={panel.result.points}
@@ -603,6 +673,9 @@ function validationMessage(code: string): string {
     dataset_version_required: "데이터셋 버전을 먼저 생성하세요.",
     graph_builder_group_requires_one_value:
       "현재는 여러 수치 변수 비교 또는 한 수치 변수의 그룹 비교 중 하나를 선택합니다.",
+    graph_builder_group_required: "그룹 비교에는 그룹 변수를 선택해야 합니다.",
+    graph_builder_group_not_allowed_in_multiple_mode:
+      "여러 수치 변수 비교에서는 그룹 변수를 사용하지 않습니다.",
     graph_builder_scatter_roles_required: "X 변수 한 개와 Y 변수 한 개 이상을 선택하세요.",
     graph_builder_too_many_values: "이 그래프 유형의 최대 변수 수를 초과했습니다.",
     graph_builder_value_required: "수치 변수를 한 개 이상 선택하세요.",

@@ -7,7 +7,7 @@ describe("createGraphPreview", () => {
 
   it("posts the typed preview request to the centralized route", async () => {
     const payload = {
-      visualization_schema_version: 1 as const,
+      visualization_schema_version: 2 as const,
       graph_type: "box_plot" as const,
       dataset_version_id: "version-1",
       source_schema_hash: "schema",
@@ -17,6 +17,10 @@ describe("createGraphPreview", () => {
       row_count_included: 8,
       warnings: [],
       layout: "combined" as const,
+      comparison_mode: "multiple_values" as const,
+      group_order_policy: "first_occurrence" as const,
+      missing_group_policy: "exclude" as const,
+      missing_group_row_count: 0,
       panels: [],
     };
     const fetchMock = vi.fn().mockResolvedValue(
@@ -33,6 +37,7 @@ describe("createGraphPreview", () => {
       graph_type: "box_plot",
       value_column_ids: ["column-1"],
       layout: "combined",
+      comparison_mode: "multiple_values",
     });
 
     expect(result).toEqual(payload);

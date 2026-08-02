@@ -21,6 +21,7 @@ export function InteractiveIndividualValueChart({
       className: "interactive-chart-point individual-value-point",
       details: [
         { label: "변수/그룹", value: point.series_label },
+        { label: "그룹", value: point.group ?? "-" },
         { label: "점 순번", value: point.point_index.toLocaleString() },
         { label: "값", value: formatNumber(point.value) },
       ],

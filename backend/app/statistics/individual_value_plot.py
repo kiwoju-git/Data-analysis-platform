@@ -30,19 +30,24 @@ def calculate_individual_value_points(
     group_column_index: int | None = None,
 ) -> dict[str, object]:
     points: list[dict[str, object]] = []
-    series_counts = {column.column_id: 0 for column in columns}
-    groups: set[str] = set()
+    series_counts: dict[str, int] = {}
+    groups: dict[str, int] = {}
     n_total = 0
     n_missing = 0
     n_non_numeric = 0
+    n_missing_group = 0
 
     for canonical_index, row in enumerate(rows):
         n_total += 1
         group = None
         if group_column_index is not None:
             raw_group = _row_value(row, group_column_index)
-            group = "(결측)" if raw_group is None or raw_group.strip() == "" else raw_group
-            groups.add(group)
+            if raw_group is None or raw_group.strip() == "":
+                n_missing_group += 1
+                continue
+            group = raw_group.strip()
+            if group not in groups:
+                groups[group] = len(groups)
             if len(groups) > MAX_GROUP_LEVELS:
                 raise GraphPointError("graph_preview_group_level_limit_exceeded")
         for column in columns:
@@ -56,13 +61,19 @@ def calculate_individual_value_points(
                 continue
             if len(points) >= point_limit:
                 raise GraphPointError("individual_value_point_limit_exceeded")
-            series_counts[column.column_id] += 1
+            series_key = (
+                column.column_id
+                if group is None
+                else f"{column.column_id}:group:{groups[group]}"
+            )
+            series_counts[series_key] = series_counts.get(series_key, 0) + 1
             points.append(
                 {
-                    "series_id": column.column_id,
+                    "series_id": series_key,
                     "series_label": group or column.display_name,
                     "source_column_label": column.display_name,
-                    "point_index": series_counts[column.column_id],
+                    "group": group,
+                    "point_index": series_counts[series_key],
                     "canonical_position": canonical_index + 1,
                     "value": value,
                 }
@@ -75,6 +86,14 @@ def calculate_individual_value_points(
         "n_total": n_total,
         "n_missing": n_missing,
         "n_non_numeric": n_non_numeric,
+        "n_missing_group": n_missing_group,
+        "groups": [
+            {
+                "label": label,
+                "n": series_counts.get(f"{columns[0].column_id}:group:{index}", 0),
+            }
+            for label, index in groups.items()
+        ],
         "points": points,
     }
 
