@@ -69,6 +69,10 @@ export const apiRoutes = {
     return apiUrl(`/dataset-versions/${pathId(versionId)}`);
   },
 
+  datasetVersionGroupLevels(versionId: string): string {
+    return apiUrl(`/dataset-versions/${pathId(versionId)}/group-levels`);
+  },
+
   datasetVersionCellCorrections(versionId: string): string {
     return apiUrl(`/dataset-versions/${pathId(versionId)}/cell-corrections`);
   },

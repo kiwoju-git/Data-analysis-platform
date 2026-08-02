@@ -18,8 +18,25 @@ import type {
   DatasetVersionMetadataResponse,
   DatasetVersionMetadataUpdateRequest,
   DatasetVersionResponse,
+  GroupLevelPreflightRequest,
+  GroupLevelPreflightResponse,
   PastedDatasetRequest,
 } from "./types";
+
+export async function fetchDatasetGroupLevels(
+  versionId: string,
+  request: GroupLevelPreflightRequest,
+): Promise<GroupLevelPreflightResponse> {
+  const response = await fetchApi(apiRoutes.datasetVersionGroupLevels(versionId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "group_level_preflight_failed");
+  }
+  return (await response.json()) as GroupLevelPreflightResponse;
+}
 
 export async function createDatasetCellCorrection(
   versionId: string,

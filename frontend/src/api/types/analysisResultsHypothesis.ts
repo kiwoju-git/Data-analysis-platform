@@ -300,23 +300,35 @@ export interface OneWayAnovaTable {
 }
 
 export interface OneWayAnovaTestResult {
+  method: string;
+  variance_model: "equal" | "unequal";
   f_statistic: number;
+  df_numerator: number;
+  df_denominator: number;
   df_between: number;
   df_within: number;
   p_value: number;
   reject_null: boolean;
-  effect_size: OneWayAnovaEffectSize;
+  effect_size: OneWayAnovaEffectSize | null;
+  effect_size_reason?: string;
 }
 
 export interface OneWayAnovaPosthocComparison {
+  comparison_id: string;
+  method: "tukey_kramer" | "dunnett" | "games_howell";
   group_1_label: string;
   group_2_label: string;
+  control_group_label: string | null;
   mean_1: number;
   mean_2: number;
   mean_difference: number;
   standard_error: number;
-  q_statistic: number;
-  raw_p_value: number;
+  mean_difference_standard_error: number;
+  statistic: number;
+  statistic_kind: string;
+  df: number | null;
+  q_statistic: number | null;
+  raw_p_value: number | null;
   adjusted_p_value: number;
   reject_adjusted: boolean;
   confidence_interval: OneWayAnovaConfidenceInterval;
@@ -330,6 +342,8 @@ export interface OneWayAnovaPosthocResult {
   reason: string | null;
   confidence_level?: number;
   q_critical?: number;
+  control_group_label?: string;
+  rng_seed?: number;
   comparisons: OneWayAnovaPosthocComparison[];
 }
 
@@ -338,11 +352,14 @@ export interface OneWayAnovaResult {
   summary_type: "one_way_anova";
   method: string;
   anova_type: string;
+  variance_model: "equal" | "unequal";
   missing_policy: string;
   alpha: number;
   confidence_level: number;
   posthoc_method: string;
   posthoc_policy: string;
+  control_group_label: string | null;
+  dunnett_rng_seed: number | null;
   package_versions: {
     numpy: string;
     scipy: string;
@@ -357,7 +374,7 @@ export interface OneWayAnovaResult {
   n_excluded_non_numeric_response: number;
   group_count: number;
   groups: OneWayAnovaGroupSummary[];
-  anova_table: OneWayAnovaTable;
+  anova_table: OneWayAnovaTable | null;
   test: OneWayAnovaTestResult;
   posthoc: OneWayAnovaPosthocResult;
 }

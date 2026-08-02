@@ -36,6 +36,7 @@ export {
 export { confirmDatasetParsing } from "./api/datasets";
 export { createDatasetFromPastedText } from "./api/datasets";
 export { fetchDatasetProfile } from "./api/datasets";
+export { fetchDatasetGroupLevels } from "./api/datasets";
 export { fetchDatasetVersion } from "./api/datasets";
 export { createDatasetCellCorrection } from "./api/datasets";
 export { fetchDatasetVersions } from "./api/datasets";

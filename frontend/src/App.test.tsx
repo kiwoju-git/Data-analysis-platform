@@ -4804,7 +4804,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "hypothesis.one_way_anova",
-          method_version: "0.1.0",
+          method_version: "0.2.0",
           module_id: "hypothesis",
           label_ko: "일원분산분석",
           label_en: "One-Way ANOVA",
@@ -4834,6 +4834,9 @@ describe("App", () => {
     expect(html).toContain("반응 변수");
     expect(html).toContain("그룹 변수");
     expect(html).toContain("Tukey-Kramer");
+    expect(html).toContain("분산 가정");
+    expect(html).toContain("등분산 가정 안 함");
+    expect(html).toContain("Dunnett");
   });
 
   it("renders the 1-proportion execution panel for a binary categorical response", () => {

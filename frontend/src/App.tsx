@@ -53,6 +53,7 @@ import {
 import { AppChrome } from "./AppChrome";
 import type { AnalysisShellProps } from "./AnalysisShell";
 import type { DescriptiveQuickGraphState } from "./DescriptiveAnalysisPanel";
+import type { OneWayAnovaExecutionOptions } from "./OneWayAnovaPanel";
 import {
   serializeAnalysisFilterDrafts,
   validateAnalysisFilterDrafts,
@@ -2533,7 +2534,7 @@ export default function App() {
     }
   }
 
-  async function handleRunOneWayAnovaAnalysis() {
+  async function handleRunOneWayAnovaAnalysis(options: OneWayAnovaExecutionOptions) {
     if (
       version === null ||
       selectedMethod === null ||
@@ -2585,9 +2586,11 @@ export default function App() {
           group_column_id: selectedOneWayAnovaGroupColumnId,
           alpha: oneWayAnovaAlpha,
           confidence_level: oneWayAnovaConfidenceLevel,
-          anova_type: "standard",
-          posthoc_method: "tukey_kramer",
-          posthoc_policy: "after_significant",
+          anova_type: options.anovaType,
+          posthoc_method: options.posthocMethod,
+          posthoc_policy: options.posthocPolicy,
+          control_group_label: options.controlGroupLabel,
+          dunnett_rng_seed: 20260802,
           missing_policy: "complete_case",
         },
       });
@@ -4043,8 +4046,8 @@ export default function App() {
     onRunOneProportionAnalysis: () => {
       void handleRunOneProportionAnalysis();
     },
-    onRunOneWayAnovaAnalysis: () => {
-      void handleRunOneWayAnovaAnalysis();
+    onRunOneWayAnovaAnalysis: (options) => {
+      void handleRunOneWayAnovaAnalysis(options);
     },
     onRunOneSampleTAnalysis: () => {
       void handleRunOneSampleTAnalysis();
@@ -5206,8 +5209,7 @@ function isOneWayAnovaResult(
   return (
     candidate.summary_type === "one_way_anova" &&
     Array.isArray(candidate.groups) &&
-    typeof candidate.anova_table === "object" &&
-    candidate.anova_table !== null &&
+    (candidate.anova_table === null || typeof candidate.anova_table === "object") &&
     typeof candidate.test === "object" &&
     candidate.test !== null &&
     typeof candidate.posthoc === "object" &&

@@ -19,7 +19,10 @@ import type { LinearModelPredictionRowsState } from "./LinearModelPanel";
 import { MannWhitneyPanel } from "./MannWhitneyPanel";
 import { NormalityAnalysisPanel } from "./NormalityAnalysisPanel";
 import { OneProportionPanel } from "./OneProportionPanel";
-import { OneWayAnovaPanel } from "./OneWayAnovaPanel";
+import {
+  OneWayAnovaPanel,
+  type OneWayAnovaExecutionOptions,
+} from "./OneWayAnovaPanel";
 import { OneSampleTPanel } from "./OneSampleTPanel";
 import { OneSampleWilcoxonPanel } from "./OneSampleWilcoxonPanel";
 import { PairedTPanel } from "./PairedTPanel";
@@ -400,7 +403,7 @@ export interface AnalysisShellProps {
   onRunMannWhitneyAnalysis: () => void;
   onRunNormalityAnalysis: () => void;
   onRunOneProportionAnalysis: () => void;
-  onRunOneWayAnovaAnalysis: () => void;
+  onRunOneWayAnovaAnalysis: (options: OneWayAnovaExecutionOptions) => void;
   onRunOneSampleTAnalysis: () => void;
   onRunOneSampleWilcoxonAnalysis: () => void;
   onRunPairedTAnalysis: () => void;
@@ -1227,6 +1230,7 @@ export function AnalysisShell({
                   alpha={oneWayAnovaAlpha}
                   analysisResult={oneWayAnovaAnalysisResult}
                   confidenceLevel={oneWayAnovaConfidenceLevel}
+                  filterDrafts={analysisFilterDrafts}
                   filterValidationError={analysisFilterValidationError}
                   groupColumnId={oneWayAnovaGroupColumnId}
                   groupColumns={oneWayAnovaGroupColumns}

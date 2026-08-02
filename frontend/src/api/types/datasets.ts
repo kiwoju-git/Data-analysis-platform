@@ -126,6 +126,36 @@ export interface DatasetVersionResponse {
   lineage_affected_cell_count?: number | null;
 }
 
+export interface GroupLevelPreflightRequest {
+  group_column_id: string;
+  filter_snapshot: {
+    expression_version: number;
+    conditions: Array<{
+      column_id: string;
+      operator: string;
+      value?: string | number | null;
+    }>;
+  };
+  maximum_levels?: number;
+}
+
+export interface GroupLevelPreflightItem {
+  value: string;
+  display_label: string;
+  n_used: number;
+}
+
+export interface GroupLevelPreflightResponse {
+  preflight_schema_version: 1;
+  dataset_version_id: string;
+  source_schema_hash: string;
+  filter_snapshot_sha256: string;
+  group_column_id: string;
+  levels: GroupLevelPreflightItem[];
+  missing_count: number;
+  truncated: boolean;
+}
+
 export interface DatasetCellCorrectionRequest {
   confirmation_parent_version_id: string;
   expected_parent_schema_hash: string;
