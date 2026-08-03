@@ -3165,56 +3165,87 @@ table {
   font-size: 0.84rem;
 }
 
-.doe-settings-matrix {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  background: var(--border-default);
+.doe-settings-table {
+  table-layout: fixed;
 }
 
-.doe-settings-matrix > label {
-  display: grid;
-  align-content: start;
-  grid-template-rows: auto auto 1fr;
-  gap: 8px;
-  min-width: 0;
-  margin: 0;
-  padding: 0 10px 10px;
-  background: #ffffff;
+.doe-settings-columns-1 {
+  min-width: 280px;
 }
 
-.doe-settings-matrix > label > span:first-child {
-  margin: 0 -10px;
-  padding: 8px 10px;
-  background: #eaf2ff;
-  color: var(--text-primary);
-  font-size: 0.84rem;
-  font-weight: 700;
-  line-height: 1.35;
+.doe-settings-columns-2 {
+  min-width: 460px;
 }
 
-.doe-settings-matrix input:not([type="checkbox"]),
-.doe-settings-matrix select {
+.doe-settings-columns-3 {
+  min-width: 620px;
+}
+
+.doe-settings-columns-4 {
+  min-width: 720px;
+}
+
+.doe-settings-table th label {
+  display: block;
+  cursor: pointer;
+}
+
+.doe-settings-control-row td {
+  vertical-align: middle;
+}
+
+.doe-settings-table input:not([type="checkbox"]),
+.doe-settings-table select {
   width: 100%;
   min-width: 0;
-  min-height: 38px;
 }
 
-.doe-settings-matrix input[type="checkbox"] {
+.doe-table-segmented {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.doe-settings-table .segmented-control span {
+  min-height: 34px;
+  padding: 5px 8px;
+}
+
+.doe-table-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.doe-table-toggle input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  align-self: center;
-  margin: 2px 0;
+  margin: 0;
 }
 
-.doe-settings-matrix .cell-subtext {
-  align-self: start;
-  margin: 0;
+.doe-settings-help-row td {
+  padding-top: 0;
+  vertical-align: top;
+}
+
+.doe-settings-help-row td:empty {
+  border-bottom: 0;
+  padding: 0;
+}
+
+.doe-settings-helper {
+  display: block;
+  color: var(--text-secondary);
   font-size: 0.76rem;
   line-height: 1.4;
+}
+
+.doe-settings-helper.is-error {
+  color: #863b2d;
 }
 
 .doe-factor-table {
@@ -3304,50 +3335,6 @@ table {
 .doe-validation-summary {
   color: var(--text-secondary);
   font-size: 0.88rem;
-}
-
-.bayesian-initial-design-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.bayesian-target-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.bayesian-recommendation-core-grid label {
-  display: grid;
-  align-content: start;
-  gap: 7px;
-  min-width: 0;
-}
-
-.bayesian-recommendation-core-grid input,
-.bayesian-recommendation-core-grid select {
-  min-height: 44px;
-}
-
-.lhs-randomization-card {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  min-height: 100%;
-  cursor: pointer;
-}
-
-.lhs-randomization-card.is-selected {
-  background: var(--brand-blue-soft);
-}
-
-.lhs-randomization-card > span {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: #eaf2ff;
-}
-
-.lhs-randomization-card small {
-  color: var(--text-secondary);
-  line-height: 1.45;
 }
 
 .lhs-factor-grid,
@@ -3501,28 +3488,6 @@ table {
   outline-offset: 2px;
 }
 
-.bayesian-recommendation-core-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: start;
-  gap: 14px;
-}
-
-.bayesian-goal-summary {
-  display: grid;
-  align-content: start;
-  gap: 7px;
-  min-height: 44px;
-  border: 1px solid var(--border-default);
-  background: var(--surface-app);
-  padding: 12px;
-}
-
-.bayesian-goal-summary > span {
-  color: var(--text-secondary);
-  font-size: 0.84rem;
-}
-
 .bayesian-exploration-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3554,13 +3519,6 @@ table {
 .bayesian-exploration-grid small {
   color: var(--text-secondary);
   line-height: 1.45;
-}
-
-.bayesian-custom-xi {
-  display: grid;
-  grid-template-columns: max-content minmax(140px, 240px);
-  align-items: center;
-  gap: 10px;
 }
 
 .bayesian-batch-result-table {
@@ -3598,16 +3556,7 @@ table {
 }
 
 @media (max-width: 900px) {
-  .doe-settings-matrix {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bayesian-recommendation-core-grid,
   .bayesian-exploration-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bayesian-initial-design-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3617,10 +3566,6 @@ table {
 }
 
 @media (max-width: 600px) {
-  .doe-settings-matrix {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .doe-action-bar,
   .doe-compact-section-heading {
     align-items: stretch;
@@ -3632,9 +3577,6 @@ table {
     width: 100%;
   }
 
-  .bayesian-initial-design-grid,
-  .bayesian-target-grid,
-  .bayesian-recommendation-core-grid,
   .bayesian-exploration-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -3648,7 +3590,6 @@ table {
     border-left: 1px solid var(--brand-blue-border);
   }
 
-  .bayesian-custom-xi,
   .bayesian-reason-metrics {
     grid-template-columns: minmax(0, 1fr);
   }

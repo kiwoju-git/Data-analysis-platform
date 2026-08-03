@@ -15,6 +15,7 @@ import {
   coordinateText,
   formatNumber,
 } from "./bayesianDisplay";
+import { DoeSettingsTable } from "../../doe/DoeSettingsTable";
 
 const EXPLORATION_OPTIONS: Array<{
   value: BayesianExplorationProfile;
@@ -122,133 +123,173 @@ export function BayesianRecommendationPanel({
       </div>
 
       <div className="bayesian-recommendation-settings">
-        <fieldset
-          className="segmented-fieldset"
-          disabled={settingsDisabled}
-        >
-          <legend>실행 방식</legend>
-          <div className="segmented-control">
-            <label>
-              <input
-                type="radio"
-                name="bayesian-execution-mode"
-                value="sequential_single"
-                checked={executionMode === "sequential_single"}
-                onChange={() =>
-                  onExecutionModeChange("sequential_single")
-                }
-              />
-              <span>결과를 하나씩 반영</span>
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="bayesian-execution-mode"
-                value="parallel_batch"
-                checked={executionMode === "parallel_batch"}
-                onChange={() => onExecutionModeChange("parallel_batch")}
-              />
-              <span>여러 실험을 동시에 수행</span>
-            </label>
-          </div>
-          <p className="cell-subtext">
-            {executionMode === "sequential_single"
-              ? "실제 결과를 입력한 뒤 GP를 갱신하여 다음 조건을 추천합니다."
-              : "같은 관측 이력을 기준으로 생성하며, batch 전체가 종료될 때까지 다음 추천을 차단합니다."}
-          </p>
-        </fieldset>
-
-        <div className="bayesian-recommendation-core-grid">
-          <label>
-            <span>한 번에 추천할 실험 수</span>
-            <input
-              inputMode="numeric"
-              value={batchSize}
-              disabled={
-                settingsDisabled ||
+        <DoeSettingsTable
+          ariaLabel="Bayesian 다음 실험 추천 설정"
+          fields={[
+            {
+              key: "execution-mode",
+              label: "실행 방식",
+              control: (
+                <fieldset
+                  className="segmented-fieldset doe-table-segmented"
+                  disabled={settingsDisabled}
+                >
+                  <legend className="visually-hidden">실행 방식</legend>
+                  <div className="segmented-control">
+                    <label>
+                      <input
+                        type="radio"
+                        name="bayesian-execution-mode"
+                        value="sequential_single"
+                        checked={executionMode === "sequential_single"}
+                        onChange={() => onExecutionModeChange("sequential_single")}
+                      />
+                      <span>결과를 하나씩 반영</span>
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="bayesian-execution-mode"
+                        value="parallel_batch"
+                        checked={executionMode === "parallel_batch"}
+                        onChange={() => onExecutionModeChange("parallel_batch")}
+                      />
+                      <span>여러 실험을 동시에 수행</span>
+                    </label>
+                  </div>
+                </fieldset>
+              ),
+              helper:
                 executionMode === "sequential_single"
-              }
-              onChange={(event) =>
-                onBatchSizeChange(event.currentTarget.value)
-              }
-            />
-            <span className="cell-subtext">
-              {executionMode === "sequential_single"
-                ? "순차 방식은 1개로 고정됩니다."
-                : "동시에 수행 가능한 수를 2~8개에서 선택하세요."}
-            </span>
-          </label>
-          <label>
-            <span>전체 trial 예산</span>
-            <input
-              inputMode="numeric"
-              value={totalTrialBudget}
-              disabled={settingsDisabled}
-              onChange={(event) =>
-                onBudgetChange(event.currentTarget.value)
-              }
-            />
-            <span className="cell-subtext">
-              현재 {study.trial_count}개 · hard limit{" "}
-              {study.recommendation_hard_trial_limit}개
-            </span>
-          </label>
-          <div className="bayesian-goal-summary">
-            <span>최적화 목표</span>
-            <strong>{objectiveSummary(study)}</strong>
-          </div>
-          <div className="bayesian-goal-summary">
-            <span>획득함수</span>
-            <strong>
-              {targetGoal
-                ? "Expected Target Improvement"
-                : "Expected Improvement (EI)"}
-            </strong>
-          </div>
-        </div>
+                  ? "실제 결과를 입력한 뒤 GP를 갱신하여 다음 조건을 추천합니다."
+                  : "같은 관측 이력을 기준으로 생성하며, batch 전체가 종료될 때까지 다음 추천을 차단합니다.",
+            },
+            {
+              key: "batch-size",
+              label: "한 번에 추천할 실험 수",
+              controlId: "bayesian-recommendation-batch-size",
+              control: (
+                <input
+                  id="bayesian-recommendation-batch-size"
+                  aria-describedby="bayesian-recommendation-batch-size-help"
+                  inputMode="numeric"
+                  value={batchSize}
+                  disabled={
+                    settingsDisabled || executionMode === "sequential_single"
+                  }
+                  onChange={(event) =>
+                    onBatchSizeChange(event.currentTarget.value)
+                  }
+                />
+              ),
+              helper:
+                executionMode === "sequential_single"
+                  ? "순차 방식은 1개로 고정됩니다."
+                  : "동시에 수행 가능한 수를 2~8개에서 선택하세요.",
+              helperId: "bayesian-recommendation-batch-size-help",
+            },
+            {
+              key: "budget",
+              label: "전체 trial 예산",
+              controlId: "bayesian-recommendation-budget",
+              control: (
+                <input
+                  id="bayesian-recommendation-budget"
+                  aria-describedby="bayesian-recommendation-budget-help"
+                  inputMode="numeric"
+                  value={totalTrialBudget}
+                  disabled={settingsDisabled}
+                  onChange={(event) => onBudgetChange(event.currentTarget.value)}
+                />
+              ),
+              helper: `현재 ${study.trial_count}개 · hard limit ${study.recommendation_hard_trial_limit}개`,
+              helperId: "bayesian-recommendation-budget-help",
+            },
+          ]}
+        />
 
-        <fieldset
-          className="bayesian-exploration-fieldset"
-          disabled={settingsDisabled}
-        >
-          <legend>탐색·활용 성향</legend>
-          <div className="bayesian-exploration-grid">
-            {EXPLORATION_OPTIONS.map((option) => (
-              <label
-                key={option.value}
-                className={
-                  explorationProfile === option.value ? "is-selected" : ""
-                }
-              >
-                <span>
-                  <input
-                    type="radio"
-                    name="bayesian-exploration-profile"
-                    value={option.value}
-                    checked={explorationProfile === option.value}
-                    onChange={() =>
-                      onExplorationProfileChange(option.value)
-                    }
-                  />
-                  <strong>{option.label}</strong>
-                </span>
-                <small>{option.description}</small>
-              </label>
-            ))}
-          </div>
-          {explorationProfile === "custom" ? (
-            <label className="bayesian-custom-xi">
-              <span>표준화 ξ (0~10)</span>
-              <input
-                inputMode="decimal"
-                value={customXi}
-                onChange={(event) =>
-                  onCustomXiChange(event.currentTarget.value)
-                }
-              />
-            </label>
-          ) : null}
-        </fieldset>
+        <DoeSettingsTable
+          ariaLabel="Bayesian 획득함수 설정"
+          fields={[
+            {
+              key: "goal",
+              label: "최적화 목표",
+              control: <strong>{objectiveSummary(study)}</strong>,
+            },
+            {
+              key: "acquisition",
+              label: "획득함수",
+              control: (
+                <strong>
+                  {targetGoal
+                    ? "Expected Target Improvement"
+                    : "Expected Improvement (EI)"}
+                </strong>
+              ),
+            },
+          ]}
+        />
+
+        <DoeSettingsTable
+          ariaLabel="Bayesian 탐색 활용 설정"
+          fields={[
+            {
+              key: "exploration",
+              label: "탐색·활용 성향",
+              control: (
+                <fieldset
+                  className="bayesian-exploration-fieldset doe-table-segmented"
+                  disabled={settingsDisabled}
+                >
+                  <legend className="visually-hidden">탐색·활용 성향</legend>
+                  <div className="bayesian-exploration-grid">
+                    {EXPLORATION_OPTIONS.map((option) => (
+                      <label
+                        key={option.value}
+                        className={
+                          explorationProfile === option.value ? "is-selected" : ""
+                        }
+                      >
+                        <span>
+                          <input
+                            type="radio"
+                            name="bayesian-exploration-profile"
+                            value={option.value}
+                            checked={explorationProfile === option.value}
+                            onChange={() =>
+                              onExplorationProfileChange(option.value)
+                            }
+                          />
+                          <strong>{option.label}</strong>
+                        </span>
+                        <small>{option.description}</small>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ),
+            },
+            ...(explorationProfile === "custom"
+              ? [
+                  {
+                    key: "xi",
+                    label: "표준화 ξ (0~10)",
+                    controlId: "bayesian-custom-xi",
+                    control: (
+                      <input
+                        id="bayesian-custom-xi"
+                        inputMode="decimal"
+                        value={customXi}
+                        onChange={(event) =>
+                          onCustomXiChange(event.currentTarget.value)
+                        }
+                      />
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
 
         <details>
           <summary>EI와 고급 탐색 설정</summary>

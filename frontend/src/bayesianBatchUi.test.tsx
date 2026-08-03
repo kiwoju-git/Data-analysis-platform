@@ -36,6 +36,8 @@ describe("Bayesian batch and DOE presentation", () => {
     expect(html).toContain("Expected Improvement (EI)");
     expect(html).toContain("탐색 우선");
     expect(html).toContain("posterior-mean fantasy");
+    expect(html).toContain('class="result-table doe-settings-table');
+    expect(html).not.toContain("doe-settings-matrix");
   });
 
   it("uses target goal fields without accepting executable objective code", () => {
@@ -72,16 +74,17 @@ describe("Bayesian batch and DOE presentation", () => {
     expect(request.objective).not.toHaveProperty("expression");
   });
 
-  it("renders aligned LHS setting groups and a randomization card", () => {
+  it("renders LHS settings and randomization with semantic DOE tables", () => {
     const html = renderToStaticMarkup(<LatinHypercubePanel />);
 
     expect(html).toContain('class="doe-compact-section"');
-    expect(html).toContain('class="doe-settings-matrix"');
+    expect(html).toContain('class="result-table doe-settings-table');
     expect(html).toContain('class="doe-advanced-settings"');
     expect(html).toContain("doe-factor-editor");
     expect(html).toContain('class="doe-action-bar"');
     expect(html).not.toContain('class="doe-form-section"');
-    expect(html).toContain("lhs-randomization-card is-selected");
+    expect(html).not.toContain("doe-settings-matrix");
+    expect(html).toContain('class="doe-table-toggle"');
     expect(html).toContain("실행 순서 무작위화");
     expect(html).toContain("compact-button");
   });

@@ -15,9 +15,9 @@ import {
   DoeActionBar,
   DoeAdvancedSettings,
   DoeFactorEditor,
-  DoeFieldGrid,
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
+import { DoeSettingsTable } from "./doe/DoeSettingsTable";
 
 interface FactorDraft {
   id: string;
@@ -104,73 +104,100 @@ export function FactorialDesignPanel({
         title="설계 기본 설정"
         description="2수준 요인배치의 반복과 센터점 수를 정합니다."
       >
-      <DoeFieldGrid>
-        <label>
-          <span>설계 이름</span>
-          <input
-            value={name}
-            onChange={(event) => {
-              setName(event.currentTarget.value);
-            }}
+        <DoeSettingsTable
+          ariaLabel="Factorial 설계 기본 설정"
+          fields={[
+            {
+              key: "name",
+              label: "설계 이름",
+              controlId: "factorial-design-name",
+              control: (
+                <input
+                  id="factorial-design-name"
+                  value={name}
+                  onChange={(event) => setName(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "replicates",
+              label: "반복",
+              controlId: "factorial-replicates",
+              control: (
+                <input
+                  id="factorial-replicates"
+                  inputMode="numeric"
+                  value={replicates}
+                  onChange={(event) => setReplicates(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "center-points",
+              label: "센터점",
+              controlId: "factorial-center-points",
+              control: (
+                <input
+                  id="factorial-center-points"
+                  inputMode="numeric"
+                  value={centerPoints}
+                  onChange={(event) => setCenterPoints(event.currentTarget.value)}
+                />
+              ),
+            },
+          ]}
+        />
+        <DoeAdvancedSettings
+          summaryText={`seed ${randomizationSeed} · ${randomize ? "실행 순서 무작위화" : "표준 순서"}`}
+        >
+          <DoeSettingsTable
+            ariaLabel="Factorial 고급 설정"
+            fields={[
+              {
+                key: "seed",
+                label: "무작위화 seed",
+                controlId: "factorial-randomization-seed",
+                control: (
+                  <input
+                    id="factorial-randomization-seed"
+                    inputMode="numeric"
+                    value={randomizationSeed}
+                    onChange={(event) => setRandomizationSeed(event.currentTarget.value)}
+                  />
+                ),
+              },
+              {
+                key: "blocks",
+                label: "블록 수",
+                controlId: "factorial-block-count",
+                control: (
+                  <input
+                    id="factorial-block-count"
+                    inputMode="numeric"
+                    value={blockCount}
+                    onChange={(event) => setBlockCount(event.currentTarget.value)}
+                  />
+                ),
+              },
+              {
+                key: "randomize",
+                label: "실행 순서 무작위화",
+                controlId: "factorial-randomize",
+                control: (
+                  <label className="doe-table-toggle" htmlFor="factorial-randomize">
+                    <input
+                      id="factorial-randomize"
+                      checked={randomize}
+                      type="checkbox"
+                      onChange={(event) => setRandomize(event.currentTarget.checked)}
+                    />
+                    <span>사용</span>
+                  </label>
+                ),
+              },
+            ]}
           />
-        </label>
-        <label>
-          <span>반복</span>
-          <input
-            inputMode="numeric"
-            value={replicates}
-            onChange={(event) => {
-              setReplicates(event.currentTarget.value);
-            }}
-          />
-        </label>
-        <label>
-          <span>센터점</span>
-          <input
-            inputMode="numeric"
-            value={centerPoints}
-            onChange={(event) => {
-              setCenterPoints(event.currentTarget.value);
-            }}
-          />
-        </label>
-      </DoeFieldGrid>
-      <DoeAdvancedSettings
-        summaryText={`seed ${randomizationSeed} · ${randomize ? "실행 순서 무작위화" : "표준 순서"}`}
-      >
-      <DoeFieldGrid>
-        <label>
-          <span>무작위화 seed</span>
-          <input
-            inputMode="numeric"
-            value={randomizationSeed}
-            onChange={(event) => {
-              setRandomizationSeed(event.currentTarget.value);
-            }}
-          />
-        </label>
-        <label>
-          <span>블록 수</span>
-          <input
-            inputMode="numeric"
-            value={blockCount}
-            onChange={(event) => {
-              setBlockCount(event.currentTarget.value);
-            }}
-          />
-        </label>
-        <label className="inline-option">
-          <span>실행 순서 무작위화</span>
-          <input
-            checked={randomize}
-            type="checkbox"
-            onChange={(event) => {
-              setRandomize(event.currentTarget.checked);
-            }}
-          />
-        </label>
-      </DoeFieldGrid>
-      </DoeAdvancedSettings>
+        </DoeAdvancedSettings>
       </DoeFormSection>
       <DoeFactorEditor
         action={

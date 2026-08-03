@@ -23,18 +23,6 @@ export function DoeFormSection({
   );
 }
 
-export function DoeFieldGrid({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`doe-settings-matrix ${className}`.trim()}>{children}</div>
-  );
-}
-
 export function DoeFactorEditor({
   action,
   children,

@@ -13,9 +13,9 @@ import {
   DoeActionBar,
   DoeAdvancedSettings,
   DoeFactorEditor,
-  DoeFieldGrid,
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
+import { DoeSettingsTable } from "./doe/DoeSettingsTable";
 
 interface BoundDraft {
   lower: string;
@@ -194,62 +194,143 @@ export function ResponseOptimizerPanel({
         title="목적 반응 설정"
         description={`${analysis.response_name}의 desirability 목표와 중요도를 정합니다.`}
       >
-        <DoeFieldGrid>
-          <label>
-            <span>목표 유형</span>
-            <select value={goal} onChange={(event) => changeGoal(event.currentTarget.value as ResponseOptimizerGoal)}>
-              <option value="maximize">최대화</option>
-              <option value="minimize">최소화</option>
-              <option value="target">목표값</option>
-              <option value="range">허용 범위</option>
-            </select>
-          </label>
-          {goal !== "minimize" ? (
-            <label>
-              <span>{goal === "range" ? "허용 하한" : "완전 비선호 하한"}</span>
-              <input
-                aria-label="Optimizer lower"
-                inputMode="decimal"
-                value={thresholds.lower}
-                onChange={(event) => setThresholds((current) => ({ ...current, lower: event.currentTarget.value }))}
-              />
-            </label>
-          ) : null}
-          {goal !== "range" ? (
-            <label>
-              <span>{goal === "target" ? "목표값" : "완전 선호 기준"}</span>
-              <input
-                aria-label="Optimizer target"
-                inputMode="decimal"
-                value={thresholds.target}
-                onChange={(event) => setThresholds((current) => ({ ...current, target: event.currentTarget.value }))}
-              />
-            </label>
-          ) : null}
-          {goal !== "maximize" ? (
-            <label>
-              <span>{goal === "range" ? "허용 상한" : "완전 비선호 상한"}</span>
-              <input
-                aria-label="Optimizer upper"
-                inputMode="decimal"
-                value={thresholds.upper}
-                onChange={(event) => setThresholds((current) => ({ ...current, upper: event.currentTarget.value }))}
-              />
-            </label>
-          ) : null}
-          <label>
-            <span>하한 방향 shape</span>
-            <input inputMode="decimal" value={lowerWeight} onChange={(event) => setLowerWeight(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>상한 방향 shape</span>
-            <input inputMode="decimal" value={upperWeight} onChange={(event) => setUpperWeight(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>목표 importance</span>
-            <input inputMode="decimal" value={importance} onChange={(event) => setImportance(event.currentTarget.value)} />
-          </label>
-        </DoeFieldGrid>
+        <DoeSettingsTable
+          ariaLabel="Response Optimizer 목적 반응 설정"
+          fields={[
+            {
+              key: "goal",
+              label: "목표 유형",
+              controlId: "optimizer-goal",
+              control: (
+                <select
+                  id="optimizer-goal"
+                  value={goal}
+                  onChange={(event) =>
+                    changeGoal(event.currentTarget.value as ResponseOptimizerGoal)
+                  }
+                >
+                  <option value="maximize">최대화</option>
+                  <option value="minimize">최소화</option>
+                  <option value="target">목표값</option>
+                  <option value="range">허용 범위</option>
+                </select>
+              ),
+            },
+            ...(goal !== "minimize"
+              ? [
+                  {
+                    key: "lower",
+                    label: goal === "range" ? "허용 하한" : "완전 비선호 하한",
+                    controlId: "optimizer-lower",
+                    control: (
+                      <input
+                        id="optimizer-lower"
+                        aria-label="Optimizer lower"
+                        inputMode="decimal"
+                        value={thresholds.lower}
+                        onChange={(event) =>
+                          setThresholds((current) => ({
+                            ...current,
+                            lower: event.currentTarget.value,
+                          }))
+                        }
+                      />
+                    ),
+                  },
+                ]
+              : []),
+            ...(goal !== "range"
+              ? [
+                  {
+                    key: "target",
+                    label: goal === "target" ? "목표값" : "완전 선호 기준",
+                    controlId: "optimizer-target",
+                    control: (
+                      <input
+                        id="optimizer-target"
+                        aria-label="Optimizer target"
+                        inputMode="decimal"
+                        value={thresholds.target}
+                        onChange={(event) =>
+                          setThresholds((current) => ({
+                            ...current,
+                            target: event.currentTarget.value,
+                          }))
+                        }
+                      />
+                    ),
+                  },
+                ]
+              : []),
+            ...(goal !== "maximize"
+              ? [
+                  {
+                    key: "upper",
+                    label: goal === "range" ? "허용 상한" : "완전 비선호 상한",
+                    controlId: "optimizer-upper",
+                    control: (
+                      <input
+                        id="optimizer-upper"
+                        aria-label="Optimizer upper"
+                        inputMode="decimal"
+                        value={thresholds.upper}
+                        onChange={(event) =>
+                          setThresholds((current) => ({
+                            ...current,
+                            upper: event.currentTarget.value,
+                          }))
+                        }
+                      />
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+        <DoeSettingsTable
+          ariaLabel="Response Optimizer desirability 설정"
+          fields={[
+            {
+              key: "lower-weight",
+              label: "하한 방향 shape",
+              controlId: "optimizer-lower-weight",
+              control: (
+                <input
+                  id="optimizer-lower-weight"
+                  inputMode="decimal"
+                  value={lowerWeight}
+                  onChange={(event) => setLowerWeight(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "upper-weight",
+              label: "상한 방향 shape",
+              controlId: "optimizer-upper-weight",
+              control: (
+                <input
+                  id="optimizer-upper-weight"
+                  inputMode="decimal"
+                  value={upperWeight}
+                  onChange={(event) => setUpperWeight(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "importance",
+              label: "목표 importance",
+              controlId: "optimizer-importance",
+              control: (
+                <input
+                  id="optimizer-importance"
+                  inputMode="decimal"
+                  value={importance}
+                  onChange={(event) => setImportance(event.currentTarget.value)}
+                />
+              ),
+            },
+          ]}
+        />
       </DoeFormSection>
 
       <DoeFactorEditor
@@ -314,64 +395,157 @@ export function ResponseOptimizerPanel({
         title="제약조건"
         description="필요한 경우 실제 단위 선형 제약을 활성화합니다."
       >
-        <DoeFieldGrid>
-          <label className="inline-option">
-            <span>선형 제약 사용</span>
-            <input type="checkbox" checked={linearEnabled} onChange={(event) => setLinearEnabled(event.currentTarget.checked)} />
-          </label>
-          {linearEnabled ? (
-            <>
-              <label>
-                <span>제약 관계</span>
-                <select
-                  value={linearRelation}
-                  onChange={(event) =>
-                    setLinearRelation(
-                      event.currentTarget.value as "less_than_or_equal" | "greater_than_or_equal",
-                    )
-                  }
-                >
-                  <option value="less_than_or_equal">합계 ≤ 경계</option>
-                  <option value="greater_than_or_equal">합계 ≥ 경계</option>
-                </select>
-              </label>
-              <label>
-                <span>제약 경계</span>
-                <input inputMode="decimal" value={linearBound} onChange={(event) => setLinearBound(event.currentTarget.value)} />
-              </label>
-            </>
-          ) : null}
-        </DoeFieldGrid>
+        <DoeSettingsTable
+          ariaLabel="Response Optimizer 제약조건 설정"
+          fields={[
+            {
+              key: "enabled",
+              label: "선형 제약 사용",
+              controlId: "optimizer-linear-enabled",
+              control: (
+                <label className="doe-table-toggle" htmlFor="optimizer-linear-enabled">
+                  <input
+                    id="optimizer-linear-enabled"
+                    type="checkbox"
+                    checked={linearEnabled}
+                    onChange={(event) => setLinearEnabled(event.currentTarget.checked)}
+                  />
+                  <span>사용</span>
+                </label>
+              ),
+            },
+            ...(linearEnabled
+              ? [
+                  {
+                    key: "relation",
+                    label: "제약 관계",
+                    controlId: "optimizer-linear-relation",
+                    control: (
+                      <select
+                        id="optimizer-linear-relation"
+                        value={linearRelation}
+                        onChange={(event) =>
+                          setLinearRelation(
+                            event.currentTarget.value as
+                              | "less_than_or_equal"
+                              | "greater_than_or_equal",
+                          )
+                        }
+                      >
+                        <option value="less_than_or_equal">합계 ≤ 경계</option>
+                        <option value="greater_than_or_equal">합계 ≥ 경계</option>
+                      </select>
+                    ),
+                  },
+                  {
+                    key: "bound",
+                    label: "제약 경계",
+                    controlId: "optimizer-linear-bound",
+                    control: (
+                      <input
+                        id="optimizer-linear-bound"
+                        inputMode="decimal"
+                        value={linearBound}
+                        onChange={(event) => setLinearBound(event.currentTarget.value)}
+                      />
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       </DoeFormSection>
       <DoeAdvancedSettings
         summaryText={`seed ${randomSeed} · 후보 ${randomCandidates}개`}
       >
-        <DoeFieldGrid>
-          <label>
-            <span>탐색 seed</span>
-            <input inputMode="numeric" value={randomSeed} onChange={(event) => setRandomSeed(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>초기 후보 수</span>
-            <input inputMode="numeric" value={randomCandidates} onChange={(event) => setRandomCandidates(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>Multi-start 수</span>
-            <input inputMode="numeric" value={multiStarts} onChange={(event) => setMultiStarts(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>시작점당 iteration</span>
-            <input inputMode="numeric" value={maxIterations} onChange={(event) => setMaxIterations(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>최대 평가 수</span>
-            <input inputMode="numeric" value={maxEvaluations} onChange={(event) => setMaxEvaluations(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>시간 budget (ms)</span>
-            <input inputMode="numeric" value={timeBudgetMs} onChange={(event) => setTimeBudgetMs(event.currentTarget.value)} />
-          </label>
-        </DoeFieldGrid>
+        <DoeSettingsTable
+          ariaLabel="Response Optimizer 고급 탐색 설정 1"
+          fields={[
+            {
+              key: "seed",
+              label: "탐색 seed",
+              controlId: "optimizer-search-seed",
+              control: (
+                <input
+                  id="optimizer-search-seed"
+                  inputMode="numeric"
+                  value={randomSeed}
+                  onChange={(event) => setRandomSeed(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "candidates",
+              label: "초기 후보 수",
+              controlId: "optimizer-random-candidates",
+              control: (
+                <input
+                  id="optimizer-random-candidates"
+                  inputMode="numeric"
+                  value={randomCandidates}
+                  onChange={(event) => setRandomCandidates(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "starts",
+              label: "Multi-start 수",
+              controlId: "optimizer-multi-starts",
+              control: (
+                <input
+                  id="optimizer-multi-starts"
+                  inputMode="numeric"
+                  value={multiStarts}
+                  onChange={(event) => setMultiStarts(event.currentTarget.value)}
+                />
+              ),
+            },
+          ]}
+        />
+        <DoeSettingsTable
+          ariaLabel="Response Optimizer 고급 탐색 설정 2"
+          fields={[
+            {
+              key: "iterations",
+              label: "시작점당 iteration",
+              controlId: "optimizer-max-iterations",
+              control: (
+                <input
+                  id="optimizer-max-iterations"
+                  inputMode="numeric"
+                  value={maxIterations}
+                  onChange={(event) => setMaxIterations(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "evaluations",
+              label: "최대 평가 수",
+              controlId: "optimizer-max-evaluations",
+              control: (
+                <input
+                  id="optimizer-max-evaluations"
+                  inputMode="numeric"
+                  value={maxEvaluations}
+                  onChange={(event) => setMaxEvaluations(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "time",
+              label: "시간 budget (ms)",
+              controlId: "optimizer-time-budget",
+              control: (
+                <input
+                  id="optimizer-time-budget"
+                  inputMode="numeric"
+                  value={timeBudgetMs}
+                  onChange={(event) => setTimeBudgetMs(event.currentTarget.value)}
+                />
+              ),
+            },
+          ]}
+        />
       </DoeAdvancedSettings>
       <DoeActionBar summary="설계영역과 제약을 검증한 뒤 최적화를 실행합니다.">
         <button

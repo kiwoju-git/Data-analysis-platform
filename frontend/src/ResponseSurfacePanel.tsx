@@ -15,9 +15,9 @@ import {
   DoeActionBar,
   DoeAdvancedSettings,
   DoeFactorEditor,
-  DoeFieldGrid,
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
+import { DoeSettingsTable } from "./doe/DoeSettingsTable";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 
 interface FactorDraft {
@@ -193,54 +193,91 @@ export function ResponseSurfacePanel() {
         title="설계 기본 설정"
         description="반응표면 설계 방식과 센터점 수를 정합니다."
       >
-      <DoeFieldGrid>
-        <label>
-          <span>설계 이름</span>
-          <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
-        </label>
-        <label>
-          <span>CCD 방식</span>
-          <select
-            value={alphaMode}
-            onChange={(event) =>
-              setAlphaMode(event.currentTarget.value as "rotatable" | "face_centered")
-            }
-          >
-            <option value="rotatable">Rotatable CCI</option>
-            <option value="face_centered">Face-centered CCD</option>
-          </select>
-        </label>
-        <label>
-          <span>센터점</span>
-          <input
-            inputMode="numeric"
-            value={centerPoints}
-            onChange={(event) => setCenterPoints(event.currentTarget.value)}
+        <DoeSettingsTable
+          ariaLabel="RSM 설계 기본 설정"
+          fields={[
+            {
+              key: "name",
+              label: "설계 이름",
+              controlId: "rsm-design-name",
+              control: (
+                <input
+                  id="rsm-design-name"
+                  value={name}
+                  onChange={(event) => setName(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "alpha-mode",
+              label: "CCD 방식",
+              controlId: "rsm-alpha-mode",
+              control: (
+                <select
+                  id="rsm-alpha-mode"
+                  value={alphaMode}
+                  onChange={(event) =>
+                    setAlphaMode(event.currentTarget.value as "rotatable" | "face_centered")
+                  }
+                >
+                  <option value="rotatable">Rotatable CCI</option>
+                  <option value="face_centered">Face-centered CCD</option>
+                </select>
+              ),
+            },
+            {
+              key: "center-points",
+              label: "센터점",
+              controlId: "rsm-center-points",
+              control: (
+                <input
+                  id="rsm-center-points"
+                  inputMode="numeric"
+                  value={centerPoints}
+                  onChange={(event) => setCenterPoints(event.currentTarget.value)}
+                />
+              ),
+            },
+          ]}
+        />
+        <DoeAdvancedSettings
+          summaryText={`seed ${randomizationSeed} · ${randomize ? "실행 순서 무작위화" : "표준 순서"}`}
+        >
+          <DoeSettingsTable
+            ariaLabel="RSM 고급 설정"
+            fields={[
+              {
+                key: "seed",
+                label: "무작위화 seed",
+                controlId: "rsm-randomization-seed",
+                control: (
+                  <input
+                    id="rsm-randomization-seed"
+                    inputMode="numeric"
+                    value={randomizationSeed}
+                    onChange={(event) => setRandomizationSeed(event.currentTarget.value)}
+                  />
+                ),
+              },
+              {
+                key: "randomize",
+                label: "실행 순서 무작위화",
+                controlId: "rsm-randomize",
+                control: (
+                  <label className="doe-table-toggle" htmlFor="rsm-randomize">
+                    <input
+                      id="rsm-randomize"
+                      type="checkbox"
+                      checked={randomize}
+                      onChange={(event) => setRandomize(event.currentTarget.checked)}
+                    />
+                    <span>사용</span>
+                  </label>
+                ),
+              },
+            ]}
           />
-        </label>
-      </DoeFieldGrid>
-      <DoeAdvancedSettings
-        summaryText={`seed ${randomizationSeed} · ${randomize ? "실행 순서 무작위화" : "표준 순서"}`}
-      >
-      <DoeFieldGrid>
-        <label>
-          <span>무작위화 seed</span>
-          <input
-            inputMode="numeric"
-            value={randomizationSeed}
-            onChange={(event) => setRandomizationSeed(event.currentTarget.value)}
-          />
-        </label>
-        <label className="inline-option">
-          <span>실행 순서 무작위화</span>
-          <input
-            type="checkbox"
-            checked={randomize}
-            onChange={(event) => setRandomize(event.currentTarget.checked)}
-          />
-        </label>
-      </DoeFieldGrid>
-      </DoeAdvancedSettings>
+        </DoeAdvancedSettings>
       </DoeFormSection>
 
       <DoeFactorEditor

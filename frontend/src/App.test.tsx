@@ -918,9 +918,10 @@ describe("App", () => {
     expect(html).toContain("실제 단위 선형 제약");
     expect(html).toContain("제약 추가");
     expect(html).toContain('class="doe-compact-section"');
-    expect(html).toContain('class="doe-settings-matrix"');
+    expect(html).toContain('class="result-table doe-settings-table');
     expect(html).toContain("doe-factor-editor");
     expect(html).toContain('class="doe-action-bar"');
+    expect(html).not.toContain("doe-settings-matrix");
     expect(html).not.toContain('class="doe-form-section"');
   });
 
@@ -1207,9 +1208,10 @@ describe("App", () => {
     expect(html).toContain("CCD 생성");
     expect(html).toContain("Full quadratic, no automatic selection");
     expect(html).toContain('class="doe-compact-section"');
-    expect(html).toContain('class="doe-settings-matrix"');
+    expect(html).toContain('class="result-table doe-settings-table');
     expect(html).toContain("doe-factor-editor");
     expect(html).toContain('class="doe-action-bar"');
+    expect(html).not.toContain("doe-settings-matrix");
     expect(html).not.toContain('class="doe-form-section"');
   });
 
@@ -1233,9 +1235,10 @@ describe("App", () => {
     );
 
     expect(html).toContain('class="doe-compact-section"');
-    expect(html).toContain('class="doe-settings-matrix"');
+    expect(html).toContain('class="result-table doe-settings-table');
     expect(html).toContain("doe-factor-editor");
     expect(html).toContain('class="doe-action-bar"');
+    expect(html).not.toContain("doe-settings-matrix");
     expect(html).not.toContain('class="doe-form-section"');
   });
 
@@ -1260,6 +1263,8 @@ describe("App", () => {
     expect(html).toContain("선형 제약 사용");
     expect(html).toContain("최대 평가 수");
     expect(html).toContain("Response Optimizer 실행");
+    expect(html).toContain('class="result-table doe-settings-table');
+    expect(html).not.toContain("doe-settings-matrix");
   });
 
   it("classifies saturated RSM sources as blocking before optimizer execution", () => {

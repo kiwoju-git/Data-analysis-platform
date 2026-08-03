@@ -16,9 +16,9 @@ import {
   DoeActionBar,
   DoeAdvancedSettings,
   DoeFactorEditor,
-  DoeFieldGrid,
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
+import { DoeSettingsTable } from "./doe/DoeSettingsTable";
 
 interface FactorDraft {
   key: number;
@@ -84,82 +84,115 @@ export function LatinHypercubePanel() {
         title="설계 기본 설정"
         description="실험 수와 요인 범위를 먼저 정하고 생성 정책은 고급 설정에서 확인합니다."
       >
-        <DoeFieldGrid>
-          <label>
-            <span>설계 이름</span>
-            <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>실험 수</span>
-            <input
-              inputMode="numeric"
-              value={runCount}
-              onChange={(event) => setRunCount(event.currentTarget.value)}
-            />
-            <span className="cell-subtext">
-              GP 계산 최소 {factors.length + 1}개 · 권장 시작 {suggestedBalanced}개 ·
-              공간충전 참고 약 {referenceSpaceFilling}개
-            </span>
-          </label>
-        </DoeFieldGrid>
+        <DoeSettingsTable
+          ariaLabel="LHS 설계 기본 설정"
+          fields={[
+            {
+              key: "name",
+              label: "설계 이름",
+              controlId: "lhs-design-name",
+              control: (
+                <input
+                  id="lhs-design-name"
+                  value={name}
+                  onChange={(event) => setName(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "run-count",
+              label: "실험 수",
+              controlId: "lhs-run-count",
+              control: (
+                <input
+                  id="lhs-run-count"
+                  aria-describedby="lhs-run-count-help"
+                  inputMode="numeric"
+                  value={runCount}
+                  onChange={(event) => setRunCount(event.currentTarget.value)}
+                />
+              ),
+              helper: `GP 계산 최소 ${factors.length + 1}개 · 권장 시작 ${suggestedBalanced}개 · 공간충전 참고 약 ${referenceSpaceFilling}개`,
+              helperId: "lhs-run-count-help",
+            },
+          ]}
+        />
         <DoeAdvancedSettings
           summaryText={`seed ${seed} · ${randomizeRunOrder ? "실행 순서 무작위화" : "표준 순서"}`}
         >
-          <DoeFieldGrid>
-            <label>
-              <span>설계 seed</span>
-              <input
-                inputMode="numeric"
-                value={seed}
-                onChange={(event) => setSeed(event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              <span>실행 순서 seed</span>
-              <input
-                inputMode="numeric"
-                value={runOrderSeed}
-                disabled={!randomizeRunOrder}
-                onChange={(event) => setRunOrderSeed(event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              <span>품질 최적화</span>
-              <select
-                value={optimization}
-                onChange={(event) =>
-                  setOptimization(event.currentTarget.value as "random_cd" | "none")
-                }
-              >
-                <option value="random_cd">Discrepancy 개선 (random-cd)</option>
-                <option value="none">기본 LHS</option>
-              </select>
-              <span className="cell-subtext">
-                여러 좌표 순열 중 centered discrepancy가 작은 설계를 찾습니다.
-              </span>
-            </label>
-            <label
-              className={`lhs-randomization-card${
-                randomizeRunOrder ? " is-selected" : ""
-              }`}
-            >
-              <span>
-                <input
-                  checked={randomizeRunOrder}
-                  type="checkbox"
-                  onChange={(event) =>
-                    setRandomizeRunOrder(event.currentTarget.checked)
-                  }
-                />
-                <strong>실행 순서 무작위화</strong>
-              </span>
-              <small>
-                {randomizeRunOrder
+          <DoeSettingsTable
+            ariaLabel="LHS 고급 설정"
+            fields={[
+              {
+                key: "seed",
+                label: "설계 seed",
+                controlId: "lhs-design-seed",
+                control: (
+                  <input
+                    id="lhs-design-seed"
+                    inputMode="numeric"
+                    value={seed}
+                    onChange={(event) => setSeed(event.currentTarget.value)}
+                  />
+                ),
+              },
+              {
+                key: "run-order-seed",
+                label: "실행 순서 seed",
+                controlId: "lhs-run-order-seed",
+                control: (
+                  <input
+                    id="lhs-run-order-seed"
+                    inputMode="numeric"
+                    value={runOrderSeed}
+                    disabled={!randomizeRunOrder}
+                    onChange={(event) => setRunOrderSeed(event.currentTarget.value)}
+                  />
+                ),
+              },
+              {
+                key: "optimization",
+                label: "품질 최적화",
+                controlId: "lhs-optimization",
+                control: (
+                  <select
+                    id="lhs-optimization"
+                    aria-describedby="lhs-optimization-help"
+                    value={optimization}
+                    onChange={(event) =>
+                      setOptimization(event.currentTarget.value as "random_cd" | "none")
+                    }
+                  >
+                    <option value="random_cd">Discrepancy 개선 (random-cd)</option>
+                    <option value="none">기본 LHS</option>
+                  </select>
+                ),
+                helper: "여러 좌표 순열 중 centered discrepancy가 작은 설계를 찾습니다.",
+                helperId: "lhs-optimization-help",
+              },
+              {
+                key: "randomize",
+                label: "실행 순서 무작위화",
+                controlId: "lhs-randomize-run-order",
+                control: (
+                  <label className="doe-table-toggle" htmlFor="lhs-randomize-run-order">
+                    <input
+                      id="lhs-randomize-run-order"
+                      checked={randomizeRunOrder}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setRandomizeRunOrder(event.currentTarget.checked)
+                      }
+                    />
+                    <span>사용</span>
+                  </label>
+                ),
+                helper: randomizeRunOrder
                   ? "공간충전 좌표는 유지하고 실제 실행 순서만 seed로 섞습니다."
-                  : "표준 순서와 실행 순서가 동일합니다."}
-              </small>
-            </label>
-          </DoeFieldGrid>
+                  : "표준 순서와 실행 순서가 동일합니다.",
+              },
+            ]}
+          />
         </DoeAdvancedSettings>
       </DoeFormSection>
       <DoeFactorEditor

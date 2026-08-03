@@ -4,9 +4,9 @@ import type { useBayesianStudyDraftState } from "./hooks/useBayesianStudyDraftSt
 import {
   DoeActionBar,
   DoeAdvancedSettings,
-  DoeFieldGrid,
   DoeFormSection,
 } from "../../doe/DoeFormPrimitives";
+import { DoeSettingsTable } from "../../doe/DoeSettingsTable";
 
 type DraftState = ReturnType<typeof useBayesianStudyDraftState>;
 
@@ -39,119 +39,186 @@ export function BayesianStudyBuilder({
         title="설계 기본 설정"
         description="스터디와 실제로 측정할 최적화 반응을 정의합니다."
       >
-      <DoeFieldGrid>
-        <label>
-          <span>스터디 이름</span>
-          <input value={draft.studyName} onChange={(event) => draft.setStudyName(event.currentTarget.value)} />
-        </label>
-        <label>
-          <span>최적화 반응</span>
-          <input value={draft.objectiveName} onChange={(event) => draft.setObjectiveName(event.currentTarget.value)} />
-        </label>
-        <label>
-          <span>반응 단위</span>
-          <input value={draft.objectiveUnit} onChange={(event) => draft.setObjectiveUnit(event.currentTarget.value)} />
-        </label>
-        <label>
-          <span>최적화 목표</span>
-          <select
-            value={draft.goalType}
-            onChange={(event) =>
-              draft.setGoalType(
-                event.currentTarget.value as
-                  | "minimize"
-                  | "maximize"
-                  | "match_target",
-              )
-            }
-          >
-            <option value="maximize">최대화</option>
-            <option value="minimize">최소화</option>
-            <option value="match_target">목표값 맞추기</option>
-          </select>
-        </label>
-      </DoeFieldGrid>
+      <DoeSettingsTable
+        ariaLabel="Bayesian 스터디 기본 설정"
+        fields={[
+          {
+            key: "name",
+            label: "스터디 이름",
+            controlId: "bayesian-study-name",
+            control: (
+              <input
+                id="bayesian-study-name"
+                value={draft.studyName}
+                onChange={(event) => draft.setStudyName(event.currentTarget.value)}
+              />
+            ),
+          },
+          {
+            key: "objective",
+            label: "최적화 반응",
+            controlId: "bayesian-objective-name",
+            control: (
+              <input
+                id="bayesian-objective-name"
+                value={draft.objectiveName}
+                onChange={(event) => draft.setObjectiveName(event.currentTarget.value)}
+              />
+            ),
+          },
+          {
+            key: "unit",
+            label: "반응 단위",
+            controlId: "bayesian-objective-unit",
+            control: (
+              <input
+                id="bayesian-objective-unit"
+                value={draft.objectiveUnit}
+                onChange={(event) => draft.setObjectiveUnit(event.currentTarget.value)}
+              />
+            ),
+          },
+          {
+            key: "goal",
+            label: "최적화 목표",
+            controlId: "bayesian-goal-type",
+            control: (
+              <select
+                id="bayesian-goal-type"
+                value={draft.goalType}
+                onChange={(event) =>
+                  draft.setGoalType(
+                    event.currentTarget.value as
+                      | "minimize"
+                      | "maximize"
+                      | "match_target",
+                  )
+                }
+              >
+                <option value="maximize">최대화</option>
+                <option value="minimize">최소화</option>
+                <option value="match_target">목표값 맞추기</option>
+              </select>
+            ),
+          },
+        ]}
+      />
       {draft.goalType === "match_target" ? (
-        <DoeFieldGrid className="bayesian-target-grid">
-          <label>
-            <span>목표값</span>
-            <input
-              inputMode="decimal"
-              value={draft.targetValue}
-              onChange={(event) =>
-                draft.setTargetValue(event.currentTarget.value)
-              }
-            />
-          </label>
-          <label>
-            <span>허용 오차 (선택)</span>
-            <input
-              inputMode="decimal"
-              value={draft.targetTolerance}
-              onChange={(event) =>
-                draft.setTargetTolerance(event.currentTarget.value)
-              }
-            />
-            <span className="cell-subtext">
-              목표 도달 여부를 설명하는 기준이며 Study를 자동 종료하지 않습니다.
-            </span>
-          </label>
-        </DoeFieldGrid>
+        <DoeSettingsTable
+          ariaLabel="Bayesian 목표값 설정"
+          fields={[
+            {
+              key: "target",
+              label: "목표값",
+              controlId: "bayesian-target-value",
+              control: (
+                <input
+                  id="bayesian-target-value"
+                  inputMode="decimal"
+                  value={draft.targetValue}
+                  onChange={(event) => draft.setTargetValue(event.currentTarget.value)}
+                />
+              ),
+            },
+            {
+              key: "tolerance",
+              label: "허용 오차 (선택)",
+              controlId: "bayesian-target-tolerance",
+              control: (
+                <input
+                  id="bayesian-target-tolerance"
+                  aria-describedby="bayesian-target-tolerance-help"
+                  inputMode="decimal"
+                  value={draft.targetTolerance}
+                  onChange={(event) =>
+                    draft.setTargetTolerance(event.currentTarget.value)
+                  }
+                />
+              ),
+              helper:
+                "목표 도달 여부를 설명하는 기준이며 Study를 자동 종료하지 않습니다.",
+              helperId: "bayesian-target-tolerance-help",
+            },
+          ]}
+        />
       ) : null}
       </DoeFormSection>
       <DoeFormSection
         title="초기 실험"
         description="Gaussian Process 학습 전에 수행할 초기 실험 수와 생성 방식을 정합니다."
       >
-      <DoeFieldGrid className="bayesian-initial-design-grid">
-        <label>
-          <span>초기 실험 수</span>
-          <input
-            inputMode="numeric"
-            value={draft.initialDesignSize}
-            onChange={(event) => draft.setInitialDesignSize(event.currentTarget.value)}
-          />
-          <span className="cell-subtext">
-            현재 요인 {draft.factors.length}개에는 최소 {draft.minimumInitialDesignSize}개가 필요합니다.
-          </span>
-        </label>
-        <label>
-          <span>초기 설계 방식</span>
-          <select
-            value={draft.initialDesignPolicy}
-            onChange={(event) =>
-              draft.setInitialDesignPolicy(
-                event.currentTarget.value as
-                  | "latin_hypercube_random_cd_v1"
-                  | "sha256_counter_uniform_feasible_v1",
-              )
-            }
-          >
-            <option value="latin_hypercube_random_cd_v1">
-              LHS 공간충전 초기설계
-            </option>
-            <option value="sha256_counter_uniform_feasible_v1">
-              선형 제약 대응 균등 초기설계
-            </option>
-          </select>
-          <span className="cell-subtext">
-            LHS는 사각형 요인 범위를 층화해 초기 실험 조건을 고르게 배치합니다.
-          </span>
-        </label>
-      </DoeFieldGrid>
+      <DoeSettingsTable
+        ariaLabel="Bayesian 초기 설계 설정"
+        fields={[
+          {
+            key: "size",
+            label: "초기 실험 수",
+            controlId: "bayesian-initial-design-size",
+            control: (
+              <input
+                id="bayesian-initial-design-size"
+                aria-describedby="bayesian-initial-design-size-help"
+                inputMode="numeric"
+                value={draft.initialDesignSize}
+                onChange={(event) =>
+                  draft.setInitialDesignSize(event.currentTarget.value)
+                }
+              />
+            ),
+            helper: `현재 요인 ${draft.factors.length}개에는 최소 ${draft.minimumInitialDesignSize}개가 필요합니다.`,
+            helperId: "bayesian-initial-design-size-help",
+          },
+          {
+            key: "policy",
+            label: "초기 설계 방식",
+            controlId: "bayesian-initial-design-policy",
+            control: (
+              <select
+                id="bayesian-initial-design-policy"
+                aria-describedby="bayesian-initial-design-policy-help"
+                value={draft.initialDesignPolicy}
+                onChange={(event) =>
+                  draft.setInitialDesignPolicy(
+                    event.currentTarget.value as
+                      | "latin_hypercube_random_cd_v1"
+                      | "sha256_counter_uniform_feasible_v1",
+                  )
+                }
+              >
+                <option value="latin_hypercube_random_cd_v1">
+                  LHS 공간충전 초기설계
+                </option>
+                <option value="sha256_counter_uniform_feasible_v1">
+                  선형 제약 대응 균등 초기설계
+                </option>
+              </select>
+            ),
+            helper: "LHS는 사각형 요인 범위를 층화해 초기 실험 조건을 고르게 배치합니다.",
+            helperId: "bayesian-initial-design-policy-help",
+          },
+        ]}
+      />
       <DoeAdvancedSettings summaryText={`seed ${draft.initialDesignSeed}`}>
-        <DoeFieldGrid>
-          <label>
-            <span>초기 설계 seed</span>
-            <input
-              inputMode="numeric"
-              value={draft.initialDesignSeed}
-              onChange={(event) =>
-                draft.setInitialDesignSeed(event.currentTarget.value)
-              }
-            />
-          </label>
-        </DoeFieldGrid>
+        <DoeSettingsTable
+          ariaLabel="Bayesian 고급 설정"
+          fields={[
+            {
+              key: "seed",
+              label: "초기 설계 seed",
+              controlId: "bayesian-initial-design-seed",
+              control: (
+                <input
+                  id="bayesian-initial-design-seed"
+                  inputMode="numeric"
+                  value={draft.initialDesignSeed}
+                  onChange={(event) =>
+                    draft.setInitialDesignSeed(event.currentTarget.value)
+                  }
+                />
+              ),
+            },
+          ]}
+        />
       </DoeAdvancedSettings>
       {draft.initialDesignPolicy === "latin_hypercube_random_cd_v1" &&
       draft.constraints.length > 0 ? (
