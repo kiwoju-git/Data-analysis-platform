@@ -423,6 +423,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             page = context.new_page()
             diagnostics.step("open Workbench")
             page.goto(frontend_base_url, wait_until="networkidle")
+            verify_browser_branding(page, frontend_base_url, diagnostics)
 
             expect(page.get_by_role("img", name="Samsung Bioepis")).to_be_visible()
             expect(
@@ -615,6 +616,208 @@ def describe_page(page: Page | None) -> str:
     except Exception as exc:
         title = f"<unavailable: {exc}>"
     return f"current URL: {page.url}; page title: {title}"
+
+
+def verify_browser_branding(
+    page: Page,
+    frontend_base_url: str,
+    diagnostics: E2EDiagnostics,
+) -> None:
+    expect(page).to_have_title("Statistical Twin")
+    favicon = page.locator('link[rel~="icon"]')
+    expect(favicon).to_have_count(1)
+    favicon_href = favicon.get_attribute("href")
+    if favicon_href != "/statistical-twin-favicon-v1.svg":
+        raise AssertionError(f"unexpected favicon href: {favicon_href}")
+    favicon_response = page.request.get(
+        f"{frontend_base_url}/statistical-twin-favicon-v1.svg"
+    )
+    if favicon_response.status != 200:
+        raise AssertionError(
+            f"favicon request returned HTTP {favicon_response.status}"
+        )
+    favicon_text = favicon_response.text()
+    if "<svg" not in favicon_text or "<script" in favicon_text.lower():
+        raise AssertionError("favicon response was not the expected safe SVG")
+    metadata_path = diagnostics.root / "statistical-twin-head-metadata.txt"
+    metadata_path.write_text(
+        "\n".join(
+            [
+                f"document.title={page.title()}",
+                f"favicon.href={favicon_href}",
+                f"favicon.status={favicon_response.status}",
+                f"favicon.content-type={favicon_response.headers.get('content-type', '')}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    diagnostics.record(
+        f"[e2e] browser head metadata: {diagnostics.artifact_label(metadata_path)}"
+    )
+
+
+def _computed_style(locator: Locator, properties: list[str]) -> dict[str, str]:
+    return locator.evaluate(
+        """
+        (element, propertyNames) => {
+          const style = getComputedStyle(element);
+          return Object.fromEntries(
+            propertyNames.map((propertyName) => [propertyName, style[propertyName]])
+          );
+        }
+        """,
+        properties,
+    )
+
+
+def _pixel_value(value: str) -> float:
+    return float(value[:-2] if value.endswith("px") else value)
+
+
+def assert_doe_table_visual_consistency(
+    root: Locator,
+    diagnostics: E2EDiagnostics,
+    label: str,
+) -> None:
+    expect(root.locator(".doe-settings-matrix")).to_have_count(0)
+    settings_table = root.locator("table.doe-settings-table").first
+    factor_table = root.locator("table.doe-factor-table").first
+    expect(settings_table).to_be_visible()
+    expect(factor_table).to_be_visible()
+
+    header_properties = [
+        "backgroundColor",
+        "color",
+        "fontSize",
+        "fontWeight",
+        "paddingTop",
+        "paddingBottom",
+    ]
+    settings_header = _computed_style(
+        settings_table.locator("thead th").first, header_properties
+    )
+    factor_header = _computed_style(
+        factor_table.locator("thead th").first, header_properties
+    )
+    for property_name in ("backgroundColor", "color", "fontSize", "fontWeight"):
+        if settings_header[property_name] != factor_header[property_name]:
+            raise AssertionError(
+                f"{label} header {property_name} mismatch: "
+                f"{settings_header[property_name]} != {factor_header[property_name]}"
+            )
+    for property_name in ("paddingTop", "paddingBottom"):
+        difference = abs(
+            _pixel_value(settings_header[property_name])
+            - _pixel_value(factor_header[property_name])
+        )
+        if difference > 1:
+            raise AssertionError(
+                f"{label} header {property_name} differed by {difference}px"
+            )
+
+    settings_control = settings_table.locator(
+        "tbody tr.doe-settings-control-row input:not([type=checkbox]), "
+        "tbody tr.doe-settings-control-row select"
+    ).first
+    factor_control = factor_table.locator("tbody input, tbody select").first
+    input_properties = [
+        "fontSize",
+        "borderRadius",
+        "borderColor",
+        "paddingTop",
+        "paddingBottom",
+        "paddingLeft",
+        "paddingRight",
+    ]
+    settings_input = _computed_style(settings_control, input_properties)
+    factor_input = _computed_style(factor_control, input_properties)
+    settings_box = settings_control.bounding_box()
+    factor_box = factor_control.bounding_box()
+    if settings_box is None or factor_box is None:
+        raise AssertionError(f"{label} input bounding box unavailable")
+    if abs(settings_box["height"] - factor_box["height"]) > 2:
+        raise AssertionError(
+            f"{label} input heights differ: "
+            f"{settings_box['height']} != {factor_box['height']}"
+        )
+    for property_name in ("fontSize", "borderRadius", "borderColor"):
+        if settings_input[property_name] != factor_input[property_name]:
+            raise AssertionError(
+                f"{label} input {property_name} mismatch: "
+                f"{settings_input[property_name]} != {factor_input[property_name]}"
+            )
+    for property_name in ("paddingTop", "paddingBottom", "paddingLeft", "paddingRight"):
+        difference = abs(
+            _pixel_value(settings_input[property_name])
+            - _pixel_value(factor_input[property_name])
+        )
+        if difference > 1:
+            raise AssertionError(
+                f"{label} input {property_name} differed by {difference}px"
+            )
+
+    section_properties = settings_table.evaluate(
+        """
+        (table) => {
+          const section = table.closest('section');
+          const heading = section?.querySelector('h4, h5');
+          if (!section || !heading) return null;
+          const sectionStyle = getComputedStyle(section);
+          const headingStyle = getComputedStyle(heading);
+          return {
+            borderRadius: sectionStyle.borderRadius,
+            paddingTop: sectionStyle.paddingTop,
+            paddingRight: sectionStyle.paddingRight,
+            paddingBottom: sectionStyle.paddingBottom,
+            paddingLeft: sectionStyle.paddingLeft,
+            headingFontSize: headingStyle.fontSize,
+          };
+        }
+        """
+    )
+    factor_section_properties = factor_table.evaluate(
+        """
+        (table) => {
+          const section = table.closest('section');
+          const heading = section?.querySelector('h4, h5');
+          if (!section || !heading) return null;
+          const sectionStyle = getComputedStyle(section);
+          const headingStyle = getComputedStyle(heading);
+          return {
+            borderRadius: sectionStyle.borderRadius,
+            paddingTop: sectionStyle.paddingTop,
+            paddingRight: sectionStyle.paddingRight,
+            paddingBottom: sectionStyle.paddingBottom,
+            paddingLeft: sectionStyle.paddingLeft,
+            headingFontSize: headingStyle.fontSize,
+          };
+        }
+        """
+    )
+    if section_properties is None or factor_section_properties is None:
+        raise AssertionError(f"{label} section styles unavailable")
+    for property_name in ("borderRadius", "headingFontSize"):
+        if section_properties[property_name] != factor_section_properties[property_name]:
+            raise AssertionError(
+                f"{label} section {property_name} mismatch: "
+                f"{section_properties[property_name]} != "
+                f"{factor_section_properties[property_name]}"
+            )
+    for property_name in ("paddingTop", "paddingRight", "paddingBottom", "paddingLeft"):
+        difference = abs(
+            _pixel_value(section_properties[property_name])
+            - _pixel_value(factor_section_properties[property_name])
+        )
+        if difference > 2:
+            raise AssertionError(
+                f"{label} section {property_name} differed by {difference}px"
+            )
+    diagnostics.record(
+        f"[e2e] {label} DOE table style match "
+        f"header={settings_header} input-height={settings_box['height']:.2f}px "
+        f"factor-input-height={factor_box['height']:.2f}px"
+    )
 
 
 def select_method_card(page: Page, module_label: str, method_label: str) -> None:
@@ -1799,8 +2002,11 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
     expect_lazy_analysis_module(page, "DoeAnalysisPanels")
     expect(page.locator(".doe-form-section")).to_have_count(0)
-    expect(page.locator(".doe-settings-matrix").first).to_be_visible()
-    diagnostics.capture_page(page, "doe-factorial-compact.png")
+    factorial_root = page.locator(
+        '.analysis-run-panel[data-analysis-execution="doe.factorial_design"]'
+    )
+    assert_doe_table_visual_consistency(factorial_root, diagnostics, "factorial")
+    diagnostics.capture_page(page, "doe-factorial-table-ui.png")
 
     page.get_by_label("반복", exact=True).fill("2")
     page.get_by_label("센터점", exact=True).fill("1")
@@ -1936,8 +2142,11 @@ def verify_doe_response_surface_analysis(
     select_method_card(page, "실험 계획법", "반응표면법")
     expect(page.locator("#workbench-title")).to_have_text("반응표면법")
     expect(page.locator(".doe-form-section")).to_have_count(0)
-    expect(page.locator(".doe-settings-matrix").first).to_be_visible()
-    diagnostics.capture_page(page, "doe-rsm-compact.png")
+    rsm_root = page.locator(
+        '.analysis-run-panel[aria-label="반응표면법 설계와 분석 입력"]'
+    )
+    assert_doe_table_visual_consistency(rsm_root, diagnostics, "response-surface")
+    diagnostics.capture_page(page, "doe-rsm-table-ui.png")
 
     page.locator("details.doe-advanced-settings > summary").click()
     page.get_by_label("실행 순서 무작위화").uncheck()
@@ -2039,8 +2248,13 @@ def verify_doe_response_surface_analysis(
         )
         source_selector.select_option(source_value)
         expect(dedicated_page.locator(".doe-form-section")).to_have_count(0)
-        expect(dedicated_page.locator(".doe-settings-matrix").first).to_be_visible()
-        diagnostics.capture_page(dedicated_page, "doe-optimizer-compact.png")
+        optimizer_root = dedicated_page.locator(
+            'section.analysis-result-section[aria-labelledby="response-optimizer-title"]'
+        )
+        assert_doe_table_visual_consistency(
+            optimizer_root, diagnostics, "response-optimizer"
+        )
+        diagnostics.capture_page(dedicated_page, "doe-optimizer-table-ui.png")
         expect(dedicated_page.get_by_label("선택한 RSM source metadata")).to_be_visible(
             timeout=20_000
         )
@@ -2137,18 +2351,10 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(workspace).to_be_visible(timeout=20_000)
 
     expect(workspace.locator(".doe-form-section")).to_have_count(0)
-    option_inputs = workspace.locator(
-        ".doe-compact-section > .doe-settings-matrix input"
-    )
-    control_tops = [
-        box["y"]
-        for index in range(option_inputs.count())
-        if (box := option_inputs.nth(index).bounding_box()) is not None
-    ]
-    assert control_tops and max(control_tops) - min(control_tops) <= 2
+    assert_doe_table_visual_consistency(workspace, diagnostics, "latin-hypercube")
     diagnostics.capture_page(page, "lhs-settings-aligned.png")
-    diagnostics.capture_page(page, "doe-lhs-compact.png")
-    option_inputs.nth(1).fill("6")
+    diagnostics.capture_page(page, "doe-lhs-table-ui.png")
+    page.get_by_label("실험 수", exact=True).fill("6")
     workspace.locator(":scope > .doe-action-bar .primary-button").click()
     expect(workspace.locator("#lhs-quality-title")).to_be_visible(timeout=20_000)
     expect(workspace.locator(".lhs-run-table tbody tr")).to_have_count(6)
@@ -2184,19 +2390,12 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     page.get_by_label("제약 1 x 계수").fill("1")
     page.get_by_label("제약 1 우변").fill("0.75")
     expect(page.locator(".doe-form-section")).to_have_count(0)
-    core_controls = (
-        page.locator(".doe-compact-section")
-        .first.locator(".doe-settings-matrix")
-        .first.locator("input, select")
+    bayesian_root = page.locator(
+        '.analysis-run-panel[aria-label="Bayesian 최적화 Study 작업"]'
     )
-    control_tops = [
-        box["y"]
-        for index in range(core_controls.count())
-        if (box := core_controls.nth(index).bounding_box()) is not None
-    ]
-    assert control_tops and max(control_tops) - min(control_tops) <= 2
+    assert_doe_table_visual_consistency(bayesian_root, diagnostics, "bayesian")
     diagnostics.capture_page(page, "bayesian-study-builder-aligned.png")
-    diagnostics.capture_page(page, "doe-bayesian-compact.png")
+    diagnostics.capture_page(page, "doe-bayesian-table-ui.png")
     page.get_by_label("최적화 목표").select_option("match_target")
     page.get_by_label("목표값", exact=True).fill("0.5")
     page.get_by_label("허용 오차 (선택)").fill("0.1")
@@ -2210,6 +2409,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
             f"Bayesian mobile page overflowed horizontally by {mobile_overflow}px"
         )
     diagnostics.capture_page(page, "bayesian-mobile.png")
+    diagnostics.capture_page(page, "doe-table-ui-mobile.png")
     page.set_viewport_size({"width": 1440, "height": 900})
     page.get_by_label("최적화 목표").select_option("maximize")
     page.get_by_role("button", name="스터디 생성").click()

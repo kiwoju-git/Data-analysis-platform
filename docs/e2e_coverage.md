@@ -6,6 +6,30 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-08-03 Statistical Twin browser-branding and DOE-table run additionally:
+
+- verifies `document.title` is exactly `Statistical Twin`, the versioned local
+  SVG favicon link is present, and the dev server returns the favicon with HTTP
+  200; the resolved head metadata is written to
+  `statistical-twin-head-metadata.txt`;
+- requires every Factorial, LHS, RSM, Response Optimizer, and Bayesian settings
+  area to render a semantic `result-table doe-settings-table`, with no legacy
+  `.doe-settings-matrix` in the live DOE DOM;
+- compares settings-table and factor-table computed header colors, typography,
+  padding, input font/border/padding, input bounding-box height, and enclosing
+  section geometry against the documented 1-2 px tolerances; and
+- retains the complete design, response-revision, ANOVA, RSM optimization and
+  restore, LHS export, Bayesian observation/batch, upload, graph, export, and
+  recovery workflows, including a 390 px page-overflow assertion.
+
+The isolated Chromium run passed in 106.9 seconds with diagnostics under
+`.tmp/e2e-diagnostics-tab-doe-ui-clean3`. Header values matched exactly in all
+five methods. Settings/factor input heights were 34/34 px for Factorial, RSM,
+LHS, and Bayesian, and 36/34 px for Response Optimizer, within the allowed 2 px.
+Screenshots are `doe-factorial-table-ui.png`, `doe-lhs-table-ui.png`,
+`doe-rsm-table-ui.png`, `doe-optimizer-table-ui.png`,
+`doe-bayesian-table-ui.png`, and `doe-table-ui-mobile.png`.
+
 The 2026-08-02 hypothesis/grouped-visualization run additionally:
 
 - creates one combined grouped Box Plot and one grouped Individual Value Plot

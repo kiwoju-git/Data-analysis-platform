@@ -1,8 +1,29 @@
 # CI Status
 
-Last updated: 2026-08-02
+Last updated: 2026-08-03
 
 ## Local Validation
+
+- The Statistical Twin browser-branding/DOE-table UI work is based on main
+  `3c9c20e8b548885cb85e52e3465e6b0a35514f66`. It changes only static browser
+  metadata, a local SVG asset, React DOM/CSS, frontend tests, and browser
+  diagnostics. API contract 8, metadata schema 18, statistical method/result
+  versions, runtime capabilities, persistence, and backend calculations remain
+  unchanged.
+- Frontend Vitest passed 247/247 across 27 files, and the production build
+  passed with `Statistical Twin` plus the versioned favicon present in
+  `dist/index.html`; the existing Vite main-chunk size warning remains
+  informational.
+- Final `scripts/test.ps1` completed in 1041.4 seconds with backend pytest
+  897/897 and frontend Vitest 247/247. Final `scripts/check.ps1` completed in
+  1101.7 seconds with tutorial verification 18, Ruff, format over 184 Python
+  files, mypy over 114 source modules, backend pytest 897/897, frontend
+  lint/typecheck/Vitest, and the production build all passing.
+- The isolated Chromium critical path passed in 106.9 seconds with diagnostics
+  under `.tmp/e2e-diagnostics-tab-doe-ui-clean3`. It verified browser title,
+  favicon HTTP 200, semantic settings tables, computed-style/bounding-box
+  parity for all five DOE methods, a 390 px no-overflow view, and the retained
+  Factorial/RSM/Optimizer/LHS/Bayesian functional workflows.
 
 - The ANOVA, grouped-visualization, and equivalence-design work is based on
   pushed main `487cc7fb54e14db55020c7f38cc99079b8fdb787`. It advances the API
