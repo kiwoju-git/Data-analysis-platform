@@ -18,6 +18,10 @@ from app.statistics.linear_model import (
     LinearModelError,
     calculate_linear_model,
 )
+from app.statistics.linear_model_columns import (
+    classify_linear_model_predictor,
+    is_supported_linear_model_response,
+)
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/linear_model_input.json")
 REFERENCE_FIXTURE = Path("backend/tests/reference/fixtures/linear_model_numpy_reference.json")
@@ -27,6 +31,84 @@ STATSMODELS_REFERENCE_FIXTURE = Path(
 STATSMODELS_REFERENCE_CSV = Path(
     "backend/tests/reference/fixtures/regression_linear_model_reference.csv",
 )
+
+
+def test_linear_model_column_classification_ignores_factor_role_for_representation() -> None:
+    assert classify_linear_model_predictor(
+        data_type="decimal",
+        measurement_level="continuous",
+        role="factor",
+    ) == "numeric"
+    assert classify_linear_model_predictor(
+        data_type="integer",
+        measurement_level="count",
+        role="factor",
+    ) == "numeric"
+    assert classify_linear_model_predictor(
+        data_type="integer",
+        measurement_level="nominal",
+        role="factor",
+    ) == "categorical"
+    assert classify_linear_model_predictor(
+        data_type="text",
+        measurement_level="nominal",
+        role="factor",
+    ) == "categorical"
+    assert classify_linear_model_predictor(
+        data_type="datetime",
+        measurement_level="datetime",
+        role="factor",
+    ) == "unsupported"
+    assert classify_linear_model_predictor(
+        data_type="decimal",
+        measurement_level="continuous",
+        role="id",
+    ) == "unsupported"
+    assert is_supported_linear_model_response(
+        data_type="decimal",
+        measurement_level="continuous",
+        role="factor",
+    )
+
+
+def test_numeric_factor_is_fit_as_numeric_and_supports_quadratic_terms() -> None:
+    afucose = LinearModelColumn(
+        column_id="afucose",
+        column_index=0,
+        display_name="afucose",
+        data_type="decimal",
+        measurement_level="continuous",
+        role="factor",
+        unit=None,
+    )
+    adcc = LinearModelColumn(
+        column_id="adcc",
+        column_index=1,
+        display_name="adcc",
+        data_type="decimal",
+        measurement_level="continuous",
+        role="response",
+        unit=None,
+    )
+    rows = [[str(4.1 + index * 0.3), str(79.6 + index * 3.1)] for index in range(12)]
+
+    result = calculate_linear_model(rows, adcc, [afucose], quadratic_terms=["afucose"])
+
+    assert result["predictors"] == [
+        {
+            "column_id": "afucose",
+            "column_index": 0,
+            "display_name": "afucose",
+            "data_type": "decimal",
+            "measurement_level": "continuous",
+            "role": "factor",
+            "unit": None,
+        },
+    ]
+    assert {item["kind"] for item in result["model_specification"]["terms"]} == {
+        "numeric_main_effect",
+        "numeric_quadratic",
+    }
 
 
 def test_linear_model_is_hand_checkable_for_shape_and_fit() -> None:

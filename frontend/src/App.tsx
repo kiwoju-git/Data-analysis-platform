@@ -94,6 +94,10 @@ import {
   type DatasetSidebarSection,
 } from "./sidebarNavigationModel";
 import type { WorkspaceMutationKind } from "./workspaceMutation";
+import {
+  isSupportedLinearModelPredictor,
+  isSupportedLinearModelResponse,
+} from "./linearModelColumns";
 
 type HealthState =
   | { kind: "checking" }
@@ -4888,30 +4892,13 @@ function selectableGageRunChartOrderColumns(
 function selectableLinearModelResponseColumns(
   columns: DatasetColumnResponse[],
 ): DatasetColumnResponse[] {
-  return selectableDescriptiveColumns(columns);
+  return columns.filter(isSupportedLinearModelResponse);
 }
 
 function selectableLinearModelPredictorColumns(
   columns: DatasetColumnResponse[],
 ): DatasetColumnResponse[] {
-  return columns.filter(
-    (column) =>
-      column.role !== "id" &&
-      column.measurement_level !== "id" &&
-      (numericDataTypes.has(column.data_type) || isLinearModelCategoricalPredictor(column)),
-  );
-}
-
-function isLinearModelCategoricalPredictor(column: DatasetColumnResponse): boolean {
-  return (
-    column.data_type !== "datetime" &&
-    (column.data_type === "text" ||
-      column.data_type === "boolean" ||
-      column.role === "factor" ||
-      column.measurement_level === "nominal" ||
-      column.measurement_level === "binary" ||
-      column.measurement_level === "ordinal")
-  );
+  return columns.filter(isSupportedLinearModelPredictor);
 }
 
 function defaultPearsonXColumnId(columns: DatasetColumnResponse[]): string | null {

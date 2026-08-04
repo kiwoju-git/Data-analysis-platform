@@ -50,6 +50,7 @@ from app.services.dataset_rows import (
     get_dataset_rows_context,
     iter_dataset_rows,
 )
+from app.statistics.linear_model_columns import classify_linear_model_predictor
 from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
@@ -2043,25 +2044,19 @@ def _manifest_categorical_levels(manifest: dict[str, object]) -> dict[str, set[s
 
 
 def _is_manifest_numeric_predictor(payload: dict[str, object]) -> bool:
-    return (
-        payload.get("data_type") in {"integer", "decimal"}
-        and payload.get("measurement_level") not in {"nominal", "binary", "ordinal"}
-        and payload.get("role") != "factor"
-    )
+    return classify_linear_model_predictor(
+        data_type=payload.get("data_type"),
+        measurement_level=payload.get("measurement_level"),
+        role=payload.get("role"),
+    ) == "numeric"
 
 
 def _target_type_compatible(predictor_kind: str, column: DatasetColumnRecord) -> bool:
-    if predictor_kind == "numeric":
-        return (
-            column.data_type in {"integer", "decimal"}
-            and column.measurement_level not in {"nominal", "binary", "ordinal"}
-            and column.role != "factor"
-        )
-    return column.data_type != "datetime" and (
-        column.data_type in {"text", "boolean"}
-        or column.measurement_level in {"nominal", "binary", "ordinal"}
-        or column.role == "factor"
-    )
+    return classify_linear_model_predictor(
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+    ) == predictor_kind
 
 
 def _fill_training_ranges(

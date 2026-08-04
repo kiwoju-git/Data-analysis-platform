@@ -59,6 +59,10 @@ from app.statistics.linear_model import (
     LinearModelError,
     calculate_linear_model,
 )
+from app.statistics.linear_model_columns import (
+    classify_linear_model_predictor,
+    is_supported_linear_model_response,
+)
 from app.statistics.pearson import (
     PearsonCorrelationColumn,
     PearsonCorrelationError,
@@ -893,7 +897,11 @@ def _validate_linear_model_column(
             code=f"linear_model_{role}_column_is_id",
             message="ID 컬럼은 회귀모형 변수로 사용할 수 없습니다.",
         )
-    if role == "response" and column.data_type not in NUMERIC_DATA_TYPES:
+    if role == "response" and not is_supported_linear_model_response(
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+    ):
         raise ApiError(
             code=f"linear_model_{role}_column_not_numeric",
             message="회귀모형 반응 변수는 숫자형 컬럼이어야 합니다.",
@@ -906,17 +914,11 @@ def _validate_linear_model_column(
 
 
 def _linear_model_predictor_supported(column: DatasetColumnRecord) -> bool:
-    if column.data_type in NUMERIC_DATA_TYPES and column.measurement_level not in {
-        "nominal",
-        "binary",
-        "ordinal",
-    }:
-        return column.role != "factor"
-    return column.data_type != "datetime" and (
-        column.data_type in {"text", "boolean"}
-        or column.measurement_level in {"nominal", "binary", "ordinal"}
-        or column.role == "factor"
-    )
+    return classify_linear_model_predictor(
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+    ) != "unsupported"
 
 
 def _linear_model_column(column: DatasetColumnRecord) -> LinearModelColumn:
@@ -1113,11 +1115,11 @@ def _linear_model_interaction_terms(
 
 
 def _linear_model_numeric_predictor(column: LinearModelColumn) -> bool:
-    return (
-        column.data_type in NUMERIC_DATA_TYPES
-        and column.measurement_level not in {"nominal", "binary", "ordinal"}
-        and column.role != "factor"
-    )
+    return classify_linear_model_predictor(
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+    ) == "numeric"
 
 
 def _linear_model_api_error(code: str) -> ApiError:

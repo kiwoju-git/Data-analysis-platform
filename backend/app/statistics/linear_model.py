@@ -10,6 +10,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy import stats  # type: ignore[import-untyped]
 
+from app.statistics.linear_model_columns import classify_linear_model_predictor
+
 MIN_RESIDUAL_DF = 1
 CONDITION_NUMBER_WARNING_THRESHOLD = 30.0
 VIF_WARNING_THRESHOLD = 5.0
@@ -582,19 +584,19 @@ def _parse_cell(
 
 
 def _is_numeric_column(column: LinearModelColumn) -> bool:
-    return (
-        column.data_type in {"integer", "decimal"}
-        and column.measurement_level not in {"nominal", "binary", "ordinal"}
-        and column.role != "factor"
-    )
+    return classify_linear_model_predictor(
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+    ) == "numeric"
 
 
 def _is_categorical_predictor_column(column: LinearModelColumn) -> bool:
-    return column.data_type != "datetime" and (
-        column.data_type in {"text", "boolean"}
-        or column.measurement_level in {"nominal", "binary", "ordinal"}
-        or column.role == "factor"
-    )
+    return classify_linear_model_predictor(
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+    ) == "categorical"
 
 
 def _coefficient_payloads(

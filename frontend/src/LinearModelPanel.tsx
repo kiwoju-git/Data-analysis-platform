@@ -23,6 +23,10 @@ import {
 import { paddedNumericRange } from "./charts/chartScale";
 import { observedDiagnosticPoints } from "./linearModelDiagnosticPoints";
 import { updateRegressionModelMetadata } from "./api/regression";
+import {
+  isNumericLinearModelPredictor,
+  linearModelPredictorKind as predictorKind,
+} from "./linearModelColumns";
 
 export type LinearModelPredictionRowsState = RegressionPredictionRowsState;
 
@@ -820,27 +824,7 @@ function shortIdentifier(value: string): string {
 }
 
 function linearModelPredictorKind(column: DatasetColumnResponse): string {
-  if (
-    column.data_type === "text" ||
-    column.data_type === "boolean" ||
-    column.role === "factor" ||
-    column.measurement_level === "nominal" ||
-    column.measurement_level === "binary" ||
-    column.measurement_level === "ordinal"
-  ) {
-    return "범주형";
-  }
-  return "숫자형";
-}
-
-function isNumericLinearModelPredictor(column: DatasetColumnResponse): boolean {
-  return (
-    (column.data_type === "integer" || column.data_type === "decimal") &&
-    column.role !== "factor" &&
-    column.measurement_level !== "nominal" &&
-    column.measurement_level !== "binary" &&
-    column.measurement_level !== "ordinal"
-  );
+  return predictorKind(column) === "categorical" ? "범주형" : "숫자형";
 }
 
 function linearModelInteractionOptions(columns: DatasetColumnResponse[]): Array<{
