@@ -3745,6 +3745,70 @@ td {
   gap: 16px;
 }
 
+.linear-model-four-in-one {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.prediction-paste-field {
+  grid-column: 1 / -1;
+}
+
+.prediction-paste-field textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.regression-paste-options {
+  align-items: end;
+  margin-block: 10px 14px;
+}
+
+.regression-paste-options > label:not(.checkbox-label) {
+  display: grid;
+  gap: 5px;
+}
+
+.prediction-paste-preview {
+  max-height: 280px;
+}
+
+.prediction-input-kind {
+  margin-block: 10px 16px;
+}
+
+.linear-model-equation {
+  box-sizing: border-box;
+  margin: 0;
+  border: 1px solid var(--brand-blue-border);
+  border-radius: 6px;
+  background: #f7faff;
+  padding: 14px 16px;
+  color: #172c4b;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.inline-field-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto minmax(110px, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.regression-optimizer-result {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
 .linear-model-diagnostic-primary {
   grid-column: 1 / -1;
   width: min(100%, 820px);
@@ -4715,6 +4779,10 @@ td select {
   }
 
   .linear-model-diagnostic-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .linear-model-four-in-one {
     grid-template-columns: 1fr;
   }
 

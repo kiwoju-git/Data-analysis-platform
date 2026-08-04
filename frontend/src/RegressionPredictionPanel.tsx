@@ -1,6 +1,9 @@
+import { useState } from "react";
+
 import type {
   DatasetVersionCatalogItem,
   DatasetVersionResponse,
+  LinearModelResult,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
   RegressionPredictionRowsPageResponse,
@@ -11,6 +14,10 @@ import {
 } from "./predictionPreflightPresentation";
 import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
 import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
+import {
+  PredictionInputKindSelector,
+  RegressionPastedPredictionPanel,
+} from "./RegressionPastedPredictionPanel";
 
 export interface RegressionPredictionRowsState {
   error: string | null;
@@ -27,6 +34,7 @@ interface RegressionPredictionPanelProps {
   isRunningPreflight: boolean;
   modelAvailable: boolean;
   modelManifestAvailable: boolean;
+  modelResult?: LinearModelResult;
   prediction: RegressionPredictionResponse | null;
   predictionError: string | null;
   predictionExportState: RegressionPredictionExportState;
@@ -47,6 +55,7 @@ export function RegressionPredictionPanel({
   isRunningPreflight,
   modelAvailable,
   modelManifestAvailable,
+  modelResult,
   prediction,
   predictionError,
   predictionExportState,
@@ -58,6 +67,7 @@ export function RegressionPredictionPanel({
   onRunPrediction,
   onRunPreflight,
 }: RegressionPredictionPanelProps) {
+  const [inputKind, setInputKind] = useState<"dataset" | "pasted">("dataset");
   const selectedTargetVersionId = predictionTargetState.selectedTargetVersionId;
   const canRunPreflight =
     expectedModelId !== null &&
@@ -82,6 +92,15 @@ export function RegressionPredictionPanel({
       ? predictionRowsState.page
       : null;
   const previewRows = activePage?.rows ?? prediction?.rows.slice(0, 25) ?? [];
+
+  if (inputKind === "pasted" && modelResult !== undefined) {
+    return (
+      <RegressionPastedPredictionPanel
+        modelResult={modelResult}
+        onSelectDataset={() => setInputKind("dataset")}
+      />
+    );
+  }
 
   return (
     <section className="result-section" aria-labelledby="regression-prediction-title">
@@ -109,6 +128,13 @@ export function RegressionPredictionPanel({
           </button>
         </div>
       </div>
+      {modelResult !== undefined ? (
+        <PredictionInputKindSelector
+          value="dataset"
+          onSelectDataset={() => setInputKind("dataset")}
+          onSelectPasted={() => setInputKind("pasted")}
+        />
+      ) : null}
       {!modelManifestAvailable ? (
         <div className="notice-box">저장된 model manifest가 없는 결과입니다.</div>
       ) : null}

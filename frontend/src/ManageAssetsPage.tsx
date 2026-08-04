@@ -475,6 +475,10 @@ function ModelAssetEditor({
           <span>
             종속 예측 {retention.preflight.counts.dependent_prediction_count.toLocaleString()}건
           </span>
+          <span>
+            붙여넣기 예측 {retention.preflight.counts.dependent_pasted_prediction_count.toLocaleString()}건
+            · 회귀 최적화 {retention.preflight.counts.dependent_optimization_count.toLocaleString()}건
+          </span>
           {retention.preflight.dependent_predictions.length > 0 ? (
             <details>
               <summary>종속 예측 위치와 삭제 작업</summary>

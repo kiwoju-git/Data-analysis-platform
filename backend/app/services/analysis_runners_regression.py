@@ -82,7 +82,7 @@ from app.storage.metadata import (
     insert_analysis_run_record_with_artifacts_and_regression_model,
 )
 
-REGRESSION_MODEL_MANIFEST_SCHEMA_VERSION = 2
+REGRESSION_MODEL_MANIFEST_SCHEMA_VERSION = 3
 REGRESSION_MODEL_ARTIFACT_KIND = "regression_model_manifest"
 REGRESSION_MODEL_MEDIA_TYPE = "application/json"
 MAX_LINEAR_MODEL_PREDICTORS = 20
@@ -656,6 +656,7 @@ def run_linear_model_analysis(
     confidence_level = _linear_model_confidence_level(options)
     quadratic_terms = _linear_model_quadratic_terms(options, predictor_columns)
     interaction_terms = _linear_model_interaction_terms(options, predictor_columns)
+    model_selection = options["model_selection"]
     _linear_model_missing_policy(options)
     _linear_model_include_intercept(options)
     _linear_model_covariance_type(options)
@@ -680,6 +681,9 @@ def run_linear_model_analysis(
                 confidence_level=confidence_level,
                 quadratic_terms=quadratic_terms,
                 interaction_terms=interaction_terms,
+                model_selection_method=str(model_selection["method"]),
+                alpha_to_remove=float(model_selection["alpha_to_remove"]),
+                hierarchy_policy=str(model_selection["hierarchy_policy"]),
             )
         except LinearModelError as exc:
             raise _linear_model_api_error(exc.code) from exc
@@ -914,11 +918,14 @@ def _validate_linear_model_column(
 
 
 def _linear_model_predictor_supported(column: DatasetColumnRecord) -> bool:
-    return classify_linear_model_predictor(
-        data_type=column.data_type,
-        measurement_level=column.measurement_level,
-        role=column.role,
-    ) != "unsupported"
+    return (
+        classify_linear_model_predictor(
+            data_type=column.data_type,
+            measurement_level=column.measurement_level,
+            role=column.role,
+        )
+        != "unsupported"
+    )
 
 
 def _linear_model_column(column: DatasetColumnRecord) -> LinearModelColumn:
@@ -1115,11 +1122,14 @@ def _linear_model_interaction_terms(
 
 
 def _linear_model_numeric_predictor(column: LinearModelColumn) -> bool:
-    return classify_linear_model_predictor(
-        data_type=column.data_type,
-        measurement_level=column.measurement_level,
-        role=column.role,
-    ) == "numeric"
+    return (
+        classify_linear_model_predictor(
+            data_type=column.data_type,
+            measurement_level=column.measurement_level,
+            role=column.role,
+        )
+        == "numeric"
+    )
 
 
 def _linear_model_api_error(code: str) -> ApiError:
@@ -1173,6 +1183,11 @@ def _linear_model_api_error(code: str) -> ApiError:
             "잔차 분산이 0이어서 계수 표준오차와 검정을 안정적으로 계산할 수 없습니다."
         ),
         "linear_model_standard_error_not_finite": "회귀 계수 표준오차가 유한하지 않습니다.",
+        "invalid_linear_model_selection_method": "지원하지 않는 회귀 모형 선택 방법입니다.",
+        "invalid_linear_model_alpha_to_remove": "Alpha to remove는 0과 1 사이여야 합니다.",
+        "invalid_linear_model_hierarchy_policy": "지원하지 않는 회귀 모형 hierarchy 정책입니다.",
+        "linear_model_term_block_invalid": "회귀 항의 설계행렬 연결을 확인할 수 없습니다.",
+        "linear_model_selection_rank_invalid": "후진 제거 단계의 항 자유도를 계산할 수 없습니다.",
     }
     return ApiError(
         code=code,
@@ -1227,6 +1242,17 @@ def _linear_model_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
         "linear_model_high_cooks_distance": (
             "Cook's distance가 큰 행이 있어 영향점 후보를 확인해야 합니다."
         ),
+        "linear_model_press_unavailable_high_leverage": (
+            "일부 관측의 leverage가 1에 너무 가까워 PRESS와 예측 R²를 "
+            "안정적으로 계산할 수 없습니다."
+        ),
+        "linear_model_post_selection_inference_exploratory": (
+            "후진 제거 후 p-value와 신뢰구간은 같은 데이터로 항을 선택한 영향을 "
+            "받으므로 탐색적으로 해석해야 합니다."
+        ),
+        "linear_model_intercept_only_selected": (
+            "후진 제거 결과 상수항만 남았습니다. 예측은 모든 입력에서 같은 평균값을 반환합니다."
+        ),
         "missing_values_excluded": "결측 행은 complete-case 정책으로 제외했습니다.",
         "non_numeric_values_excluded": "숫자로 해석할 수 없는 행은 제외했습니다.",
     }
@@ -1240,6 +1266,8 @@ def _linear_model_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
         "linear_model_categorical_treatment_coding": "info",
         "linear_model_quadratic_terms_selected": "info",
         "linear_model_interaction_terms_selected": "info",
+        "linear_model_post_selection_inference_exploratory": "warning",
+        "linear_model_intercept_only_selected": "warning",
     }
     warnings: list[AnalysisWarning] = []
     for code in warning_codes:
@@ -1283,10 +1311,15 @@ def _linear_model_manifest_payload(
         "response": result.get("response"),
         "predictors": result.get("predictors"),
         "model_specification": result.get("model_specification"),
+        "initial_model_specification": result.get("initial_model_specification"),
+        "model_selection": result.get("model_selection"),
+        "equation": result.get("equation"),
+        "training_domain": result.get("training_domain"),
         "coefficients": result.get("coefficients"),
         "sample": result.get("sample"),
         "prediction_basis": result.get("prediction_basis"),
         "fit": result.get("fit"),
+        "anova": result.get("anova"),
         "diagnostics_summary": _linear_model_manifest_diagnostics(result.get("diagnostics")),
         "missing_policy": result.get("missing_policy"),
         "alpha": result.get("alpha"),

@@ -167,6 +167,8 @@ export interface RegressionModelDeletionCounts {
   dependent_prediction_file_count: number;
   dependent_prediction_export_count: number;
   dependent_prediction_file_bytes: number;
+  dependent_pasted_prediction_count: number;
+  dependent_optimization_count: number;
 }
 
 export interface RegressionModelDependentPredictionDescriptor {
@@ -197,7 +199,7 @@ export interface RegressionModelDependentPredictionPage {
 }
 
 export interface RegressionModelDeletionPreflightResponse {
-  preflight_schema_version: 2;
+  preflight_schema_version: 3;
   model_id: string;
   source_analysis_id: string;
   method_id: "regression.linear_model";
@@ -220,7 +222,7 @@ export interface RegressionModelDeleteRequest {
 }
 
 export interface RegressionModelDeleteResponse {
-  deletion_schema_version: 2;
+  deletion_schema_version: 3;
   model_id: string;
   source_analysis_id: string;
   deletion_manifest_sha256: string;
@@ -299,5 +301,191 @@ export interface RegressionPredictionCsvExportResponse {
   columns: string[];
   row_count: number;
   preview_rows: string[][];
+}
+
+export interface RegressionPastedPredictionColumnMappingRequest {
+  input_column_index: number;
+  source_column_id: string;
+}
+
+export interface RegressionPastedPredictionInput {
+  content: string;
+  has_header: boolean;
+  delimiter: "auto" | "tab" | "comma";
+  column_mappings: RegressionPastedPredictionColumnMappingRequest[];
+}
+
+export interface RegressionPastedPredictionPreflightRequest
+  extends RegressionPastedPredictionInput {
+  expected_model_manifest_sha256: string;
+}
+
+export interface RegressionPastedPredictionExecuteRequest
+  extends RegressionPastedPredictionPreflightRequest {
+  expected_normalized_input_sha256: string;
+  confidence_level: number;
+  include_intervals: boolean;
+}
+
+export interface RegressionPastedPredictionMapping {
+  input_column_index: number;
+  input_column_name: string;
+  source_column_id: string;
+  display_name: string;
+  predictor_kind: "numeric" | "categorical";
+}
+
+export interface RegressionPastedPredictionPreflightResponse {
+  input_schema_version: 1;
+  model_id: string;
+  model_manifest_sha256: string;
+  normalized_input_sha256: string;
+  delimiter: "tab" | "comma";
+  has_header: boolean;
+  row_count_total: number;
+  row_count_usable: number;
+  row_count_excluded: number;
+  prediction_ready: boolean;
+  mappings: RegressionPastedPredictionMapping[];
+  preview_rows: string[][];
+  issues: RegressionPredictionPreflightIssue[];
+}
+
+export interface RegressionPastedPredictionRow extends RegressionPredictionRow {
+  predictor_values: Record<string, number | string>;
+}
+
+export interface RegressionPastedPredictionResponse {
+  prediction_id: string;
+  input_kind: "pasted_table";
+  model_id: string;
+  source_analysis_id: string;
+  source_dataset_version_id: string;
+  model_manifest_sha256: string;
+  normalized_input_sha256: string;
+  row_count_total: number;
+  row_count_predicted: number;
+  row_count_excluded: number;
+  row_count_omitted: number;
+  row_limit: number;
+  truncated: boolean;
+  confidence_level: number;
+  warnings: RegressionPredictionWarning[];
+  mappings: RegressionPastedPredictionMapping[];
+  rows: RegressionPastedPredictionRow[];
+  created_at: string;
+}
+
+export interface RegressionPastedPredictionRowsPageResponse {
+  prediction_id: string;
+  model_id: string;
+  offset: number;
+  limit: number;
+  total: number;
+  returned: number;
+  has_previous: boolean;
+  has_next: boolean;
+  rows: RegressionPastedPredictionRow[];
+}
+
+export interface RegressionResponseOptimizationRequest {
+  expected_model_manifest_sha256: string;
+  goal: {
+    kind: "maximize" | "minimize" | "target" | "range";
+    lower: number | null;
+    target: number | null;
+    upper: number | null;
+  };
+  factor_bounds: Array<{ column_id: string; lower: number; upper: number }>;
+  fixed_categorical_levels: Array<{ column_id: string; level: string }>;
+  linear_constraints: Array<{
+    name: string;
+    coefficients: Record<string, number>;
+    relation: "less_than_or_equal" | "greater_than_or_equal";
+    bound: number;
+  }>;
+  search: {
+    random_seed: number;
+    random_candidate_count: number;
+    multi_start_count: number;
+    max_iterations: number;
+    max_evaluations: number;
+    profile_point_count: number;
+  };
+}
+
+export interface RegressionResponseOptimizationProfilePoint {
+  predictor_value: number | string;
+  predicted_response: number;
+  desirability: number;
+}
+
+export interface RegressionResponseOptimizationProfile {
+  column_id: string;
+  display_name: string;
+  kind: "numeric" | "categorical";
+  fixed_at: number | string;
+  conditional_on_other_predictors_at_optimum: true;
+  points: RegressionResponseOptimizationProfilePoint[];
+}
+
+export interface RegressionResponseOptimizationResult {
+  schema_version: 1;
+  summary_type: "regression_response_optimizer";
+  method: string;
+  goal: {
+    kind: "maximize" | "minimize" | "target" | "range";
+    lower: number | null;
+    target: number | null;
+    upper: number | null;
+    scale: "response_units";
+  };
+  recommendation: {
+    predictor_settings: Record<string, number | string>;
+    predicted_response: number;
+    individual_desirability: number;
+    overall_desirability: number;
+    within_training_domain: boolean;
+    all_constraints_satisfied: boolean;
+  };
+  factor_region: {
+    training_domains: Array<Record<string, unknown>>;
+    search_bounds: Array<{ column_id: string; lower: number; upper: number }>;
+    fixed_categorical_levels: Record<string, string>;
+    categorical_combination_count: number;
+    linear_constraints: Array<Record<string, unknown>>;
+  };
+  profiles: RegressionResponseOptimizationProfile[];
+  search: {
+    evaluation_count: number;
+    termination_reason: string;
+    global_optimum_guaranteed: false;
+  } & Record<string, unknown>;
+  warnings: string[];
+  optimization_id: string;
+  model_id: string;
+  source_analysis_id: string;
+  source_dataset_version_id: string;
+  model_manifest_sha256: string;
+}
+
+export interface RegressionResponseOptimizationResponse {
+  optimization_id: string;
+  model_id: string;
+  source_analysis_id: string;
+  source_dataset_version_id: string;
+  method_id: "regression.linear_model_optimizer";
+  method_version: string;
+  model_manifest_sha256: string;
+  config_sha256: string;
+  result_sha256: string;
+  result: RegressionResponseOptimizationResult;
+  created_at: string;
+}
+
+export interface RegressionResponseOptimizationListResponse {
+  model_id: string;
+  optimizations: RegressionResponseOptimizationResponse[];
+  total: number;
 }
 import type { AnalysisProvenance } from "./analyses";

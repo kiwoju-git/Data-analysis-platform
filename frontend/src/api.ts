@@ -92,4 +92,9 @@ export { fetchRegressionPredictionPreflight } from "./api/regression";
 export { createRegressionPredictionCsvExport } from "./api/regression";
 export { fetchRegressionPredictionRows } from "./api/regression";
 export { fetchRegressionPredictions } from "./api/regression";
+export {
+  createRegressionPastedPrediction,
+  fetchRegressionPastedPredictionPreflight,
+  fetchRegressionPastedPredictionRows,
+} from "./api/regression";
 export type * from "./api/types";

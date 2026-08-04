@@ -2806,21 +2806,20 @@ describe("App", () => {
     expect(html).toContain("숫자형 상호작용");
     expect(html).toContain("최대 Cook");
     expect(html).toContain("Std residual");
-    expect(html).toContain("회귀 진단 차트");
+    expect(html).toContain("추가 진단");
     expect(html).toContain("Observed vs Fitted");
     expect(html).toContain("linear-model-diagnostic-layout");
-    expect(html).toContain("linear-model-diagnostic-primary");
-    expect(html).toContain("실제값과 예측값이 같은 y=x 기준선");
-    expect(html).toContain("Multiple R");
-    expect(html).toContain("Residual SE");
+    expect(html).toContain("실제 관측값과 회귀모형 예측값");
+    expect(html).toContain("모델 요약");
+    expect(html).toContain("Predicted R²");
+    expect(html).toContain("PRESS");
     expect(html).toContain("실제값 10.1");
     expect(html).toContain('tabindex="0"');
-    expect(html).toContain("Residuals vs Fitted");
+    expect(html).toContain("4-in-1 잔차 그림 보기");
     expect(html).toContain("Leverage vs Cook");
-    expect(html).toContain("Model ID");
+    expect(html).not.toContain("Model ID</span>");
     expect(html).toContain("저장 모델 관리");
     expect(html).toContain("삭제 영향 확인");
-    expect(html).toContain("12345678-90");
     expect(html).toContain("예측 사전점검");
     expect(html).toContain("예측 대상 데이터셋 버전");
     expect(html).toContain("prediction-target.csv");
@@ -2843,6 +2842,21 @@ describe("App", () => {
     expect(html).toContain("Source schema");
     expect(html).toContain("적합 시점과 일치");
     expect(html).toContain("컬럼 ID");
+    const orderedResultSectionIds = [
+      "linear-model-equation-title",
+      "linear-model-summary-title",
+      "linear-model-coefficients-title",
+      "linear-model-anova-title",
+      "linear-model-residual-plots-title",
+      "linear-model-diagnostics-title",
+      "linear-model-unusual-title",
+      "linear-model-retention-title",
+      "regression-response-optimizer-title",
+      "regression-prediction-title",
+    ];
+    expect(orderedResultSectionIds.map((id) => html.indexOf(id))).toEqual(
+      [...orderedResultSectionIds.map((id) => html.indexOf(id))].sort((left, right) => left - right),
+    );
     expect(html).toContain("학습범위 위");
   });
 

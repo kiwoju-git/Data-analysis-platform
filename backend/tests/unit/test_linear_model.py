@@ -4,6 +4,7 @@ import json
 from math import sqrt
 from pathlib import Path
 
+import numpy as np
 import pytest
 from scipy import stats  # type: ignore[import-untyped]
 
@@ -34,36 +35,54 @@ STATSMODELS_REFERENCE_CSV = Path(
 
 
 def test_linear_model_column_classification_ignores_factor_role_for_representation() -> None:
-    assert classify_linear_model_predictor(
-        data_type="decimal",
-        measurement_level="continuous",
-        role="factor",
-    ) == "numeric"
-    assert classify_linear_model_predictor(
-        data_type="integer",
-        measurement_level="count",
-        role="factor",
-    ) == "numeric"
-    assert classify_linear_model_predictor(
-        data_type="integer",
-        measurement_level="nominal",
-        role="factor",
-    ) == "categorical"
-    assert classify_linear_model_predictor(
-        data_type="text",
-        measurement_level="nominal",
-        role="factor",
-    ) == "categorical"
-    assert classify_linear_model_predictor(
-        data_type="datetime",
-        measurement_level="datetime",
-        role="factor",
-    ) == "unsupported"
-    assert classify_linear_model_predictor(
-        data_type="decimal",
-        measurement_level="continuous",
-        role="id",
-    ) == "unsupported"
+    assert (
+        classify_linear_model_predictor(
+            data_type="decimal",
+            measurement_level="continuous",
+            role="factor",
+        )
+        == "numeric"
+    )
+    assert (
+        classify_linear_model_predictor(
+            data_type="integer",
+            measurement_level="count",
+            role="factor",
+        )
+        == "numeric"
+    )
+    assert (
+        classify_linear_model_predictor(
+            data_type="integer",
+            measurement_level="nominal",
+            role="factor",
+        )
+        == "categorical"
+    )
+    assert (
+        classify_linear_model_predictor(
+            data_type="text",
+            measurement_level="nominal",
+            role="factor",
+        )
+        == "categorical"
+    )
+    assert (
+        classify_linear_model_predictor(
+            data_type="datetime",
+            measurement_level="datetime",
+            role="factor",
+        )
+        == "unsupported"
+    )
+    assert (
+        classify_linear_model_predictor(
+            data_type="decimal",
+            measurement_level="continuous",
+            role="id",
+        )
+        == "unsupported"
+    )
     assert is_supported_linear_model_response(
         data_type="decimal",
         measurement_level="continuous",
@@ -127,7 +146,7 @@ def test_linear_model_is_hand_checkable_for_shape_and_fit() -> None:
         [_x1_column(), _x2_column()],
     )
 
-    assert result["schema_version"] == 4
+    assert result["schema_version"] == 5
     assert result["summary_type"] == "linear_model"
     assert result["method"] == "ordinary_least_squares_numeric_predictors"
     assert result["missing_policy"] == "complete_case"
@@ -183,7 +202,7 @@ def test_linear_model_supports_categorical_main_effect_treatment_coding() -> Non
         [_group_column()],
     )
 
-    assert result["schema_version"] == 4
+    assert result["schema_version"] == 5
     assert result["method"] == "ordinary_least_squares_main_effects"
     assert "linear_model_categorical_treatment_coding" in result["warnings"]
     assert result["sample"] == {
@@ -237,7 +256,7 @@ def test_linear_model_supports_numeric_quadratic_and_interaction_terms() -> None
         interaction_terms=[("x1", "x2")],
     )
 
-    assert result["schema_version"] == 4
+    assert result["schema_version"] == 5
     assert result["method"] == "ordinary_least_squares_safe_terms"
     assert "linear_model_quadratic_terms_selected" in result["warnings"]
     assert "linear_model_interaction_terms_selected" in result["warnings"]
@@ -526,6 +545,210 @@ def test_linear_model_reports_complete_case_exclusions_and_warnings() -> None:
     assert sample["n_excluded_non_numeric"] == 1
     assert "missing_values_excluded" in result["warnings"]
     assert "non_numeric_values_excluded" in result["warnings"]
+
+
+def test_linear_model_press_matches_brute_force_leave_one_out_refits() -> None:
+    rows = [
+        ["4.2", "0", "1"],
+        ["6.1", "1", "0"],
+        ["9.4", "2", "2"],
+        ["10.8", "3", "1"],
+        ["14.2", "4", "3"],
+        ["15.9", "5", "2"],
+        ["19.5", "6", "4"],
+        ["21.1", "7", "3"],
+    ]
+    result = calculate_linear_model(rows, _response_column(), [_x1_column(), _x2_column()])
+    design = np.asarray([[1.0, float(row[1]), float(row[2])] for row in rows])
+    response = np.asarray([float(row[0]) for row in rows])
+    deleted_errors: list[float] = []
+    for omitted in range(len(rows)):
+        keep = [index for index in range(len(rows)) if index != omitted]
+        coefficients = np.linalg.lstsq(design[keep], response[keep], rcond=None)[0]
+        deleted_errors.append(float(response[omitted] - (design[omitted] @ coefficients)))
+    reference_press = sum(value**2 for value in deleted_errors)
+
+    assert result["fit"]["press"] == pytest.approx(reference_press, abs=1e-10)
+    assert result["fit"]["predicted_r_squared"] == pytest.approx(
+        1.0 - (reference_press / result["fit"]["tss"]),
+        abs=1e-10,
+    )
+
+
+def test_linear_model_preserves_negative_predicted_r_squared() -> None:
+    rows = [
+        ["1", "0"],
+        ["10", "1"],
+        ["1", "2"],
+        ["10", "3"],
+        ["1", "4"],
+        ["10", "5"],
+    ]
+    result = calculate_linear_model(rows, _response_column(), [_x1_column()])
+
+    assert result["fit"]["predicted_r_squared"] < 0.0
+
+
+def test_linear_model_reports_press_unavailable_for_unit_leverage() -> None:
+    result = calculate_linear_model(
+        [["1", "A"], ["2", "A"], ["4", "B"]],
+        _response_column(),
+        [_group_column()],
+    )
+
+    assert result["fit"]["press"] is None
+    assert result["fit"]["predicted_r_squared"] is None
+    assert "linear_model_press_unavailable_high_leverage" in result["warnings"]
+
+
+def test_linear_model_anova_uses_term_blocks_and_replicate_only_lack_of_fit() -> None:
+    result = calculate_linear_model(
+        [
+            ["1.0", "0"],
+            ["1.4", "0"],
+            ["2.8", "1"],
+            ["3.2", "1"],
+            ["5.8", "2"],
+            ["6.2", "2"],
+        ],
+        _response_column(),
+        [_x1_column()],
+    )
+    anova = result["anova"]
+    rows_by_kind = {row["row_kind"]: row for row in anova["rows"]}
+
+    assert anova["method"] == "adjusted_partial_sums_of_squares"
+    assert rows_by_kind["regression"]["df"] == 1
+    assert rows_by_kind["term"]["source"] == "x1"
+    assert rows_by_kind["error"]["adjusted_ss"] == pytest.approx(result["fit"]["sse"])
+    assert rows_by_kind["total"]["adjusted_ss"] == pytest.approx(result["fit"]["tss"])
+    assert anova["lack_of_fit"]["available"] is True
+    assert rows_by_kind["pure_error"]["df"] == 3
+    assert rows_by_kind["lack_of_fit"]["df"] == 1
+
+    no_replicates = calculate_linear_model(
+        [[str(1 + index + (0.1 if index % 2 else -0.1)), str(index)] for index in range(5)],
+        _response_column(),
+        [_x1_column()],
+    )
+    assert no_replicates["anova"]["lack_of_fit"] == {
+        "available": False,
+        "reason": "no_replicated_predictor_settings",
+        "rows": [],
+    }
+
+
+def test_linear_model_equation_matches_design_prediction() -> None:
+    result = calculate_linear_model(
+        [
+            ["3.2", "-2", "0"],
+            ["0.9", "-1", "1"],
+            ["3.05", "0", "2"],
+            ["7.5", "1", "0"],
+            ["12.95", "2", "1"],
+            ["22.6", "3", "2"],
+            ["20.8", "4", "0"],
+            ["34.05", "5", "1"],
+        ],
+        _response_column(),
+        [_x1_column(), _x2_column()],
+        quadratic_terms=["x1"],
+        interaction_terms=[("x1", "x2")],
+    )
+    coefficients = {item["term"]: item["estimate"] for item in result["coefficients"]}
+    x1 = 1.5
+    x2 = 0.5
+    equation_prediction = (
+        coefficients["Intercept"]
+        + coefficients["x1"] * x1
+        + coefficients["x2"] * x2
+        + coefficients["x1^2"] * x1**2
+        + coefficients["x1:x2"] * x1 * x2
+    )
+
+    assert result["equation"]["display_equation"].startswith("y = ")
+    assert equation_prediction == pytest.approx(
+        np.dot(
+            [1.0, x1, x2, x1**2, x1 * x2],
+            [item["estimate"] for item in result["coefficients"]],
+        ),
+        abs=1e-12,
+    )
+
+
+def test_linear_model_backward_elimination_records_trace_and_final_terms() -> None:
+    rows = []
+    for index in range(12):
+        x1 = float(index)
+        x2 = float((index * 7) % 5)
+        response = 10.0 + (3.0 * x1) + (20.0 if index == 11 else 0.0)
+        rows.append([str(response), str(x1), str(x2)])
+    result = calculate_linear_model(
+        rows,
+        _response_column(),
+        [_x1_column(), _x2_column()],
+        model_selection_method="backward_elimination",
+        alpha_to_remove=0.10,
+    )
+    selection = result["model_selection"]
+
+    assert selection["initial_terms"] == ["x1", "x2"]
+    assert selection["final_terms"] == ["x1"]
+    assert selection["steps"][1]["removed_term"] == "x2"
+    assert selection["steps"][1]["removal_p_value"] > 0.10
+    assert selection["steps"][0]["mallows_cp"] == pytest.approx(3.0)
+    assert {item["term"] for item in result["coefficients"]} == {"Intercept", "x1"}
+    assert "linear_model_post_selection_inference_exploratory" in result["warnings"]
+
+
+def test_linear_model_backward_elimination_preserves_strong_hierarchy() -> None:
+    rows = [
+        [str(5.0 + (2.0 * x) + (0.5 * x * x) + noise), str(x)]
+        for x, noise in zip(
+            range(-4, 5),
+            [0.2, -0.1, 0.1, -0.2, 0.0, 0.2, -0.1, 0.1, -0.2],
+            strict=False,
+        )
+    ]
+    result = calculate_linear_model(
+        rows,
+        _response_column(),
+        [_x1_column()],
+        quadratic_terms=["x1"],
+        model_selection_method="backward_elimination",
+        alpha_to_remove=0.10,
+    )
+
+    assert "x1^2" in result["model_selection"]["final_terms"]
+    assert "x1" in result["model_selection"]["final_terms"]
+
+
+def test_linear_model_backward_elimination_can_reach_intercept_only() -> None:
+    result = calculate_linear_model(
+        [[str(value), str(index)] for index, value in enumerate([1, 2, 1, 2, 1, 2, 1, 2])],
+        _response_column(),
+        [_x1_column()],
+        model_selection_method="backward_elimination",
+        alpha_to_remove=0.10,
+    )
+
+    assert result["model_selection"]["final_terms"] == []
+    assert result["model_selection"]["stop_reason"] == "intercept_only"
+    assert result["sample"]["df_model"] == 0
+    assert result["fit"]["f_statistic"] is None
+    assert result["fit"]["r_squared"] == pytest.approx(0.0, abs=1e-12)
+    assert result["equation"]["terms"] == []
+    assert "linear_model_intercept_only_selected" in result["warnings"]
+
+
+def test_residual_plot_histograms_use_every_fit_row() -> None:
+    rows = [[str(2.0 + index + ((index % 4) * 0.1)), str(index)] for index in range(40)]
+    result = calculate_linear_model(rows, _response_column(), [_x1_column()])
+
+    histogram = result["residual_plots"]["histograms"]["raw"]
+    assert histogram["n"] == 40
+    assert sum(item["count"] for item in histogram["bins"]) == 40
+    assert result["residual_plots"]["qq_plots"]["raw"]["n"] == 40
 
 
 def test_linear_model_rejects_invalid_inputs_without_fake_statistics() -> None:

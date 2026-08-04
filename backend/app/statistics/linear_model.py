@@ -4,7 +4,8 @@ import importlib.metadata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from math import isfinite, sqrt
+from math import isfinite, log, pi, sqrt
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,6 +19,8 @@ VIF_WARNING_THRESHOLD = 5.0
 STANDARDIZED_RESIDUAL_WARNING_THRESHOLD = 3.0
 DIAGNOSTIC_POINT_LIMIT = 500
 MAX_CATEGORICAL_LEVELS = 25
+PRESS_LEVERAGE_TOLERANCE = 1e-10
+MODEL_SELECTION_TIE_TOLERANCE = 1e-12
 FloatArray = NDArray[np.float64]
 
 
@@ -85,6 +88,43 @@ class _DesignMatrix:
     quadratic_term_count: int
 
 
+@dataclass(frozen=True)
+class _TermBlock:
+    block_id: str
+    term: str
+    kind: str
+    source_column_ids: tuple[str, ...]
+    column_indices: tuple[int, ...]
+    model_term: dict[str, object]
+    initial_order: int
+
+
+@dataclass(frozen=True)
+class _OlsFit:
+    design: FloatArray
+    coefficients: FloatArray
+    fitted: FloatArray
+    residuals: FloatArray
+    sse: float
+    tss: float
+    ssr: float
+    mse: float
+    residual_df: int
+    df_model: int
+    rank: int
+    parameter_count: int
+    xtx_inverse: FloatArray
+    covariance_matrix: FloatArray
+    r_squared: float
+    adjusted_r_squared: float
+    residual_standard_error: float
+    f_statistic: float | None
+    f_p_value: float | None
+    leverage: FloatArray
+    press: float | None
+    predicted_r_squared: float | None
+
+
 def calculate_linear_model(
     rows: Iterable[Sequence[str | None]],
     response_column: LinearModelColumn,
@@ -96,6 +136,9 @@ def calculate_linear_model(
     confidence_level: float = 0.95,
     interaction_terms: Sequence[tuple[str, str]] | None = None,
     quadratic_terms: Sequence[str] | None = None,
+    model_selection_method: str = "none",
+    alpha_to_remove: float = 0.10,
+    hierarchy_policy: str = "strong",
 ) -> dict[str, object]:
     if alpha <= 0.0 or alpha >= 1.0:
         raise LinearModelError("invalid_linear_model_alpha")
@@ -103,6 +146,12 @@ def calculate_linear_model(
         raise LinearModelError("invalid_linear_model_confidence_level")
     if not predictor_columns:
         raise LinearModelError("linear_model_predictors_required")
+    if model_selection_method not in {"none", "backward_elimination"}:
+        raise LinearModelError("invalid_linear_model_selection_method")
+    if not 0.0 < alpha_to_remove < 1.0:
+        raise LinearModelError("invalid_linear_model_alpha_to_remove")
+    if hierarchy_policy != "strong":
+        raise LinearModelError("invalid_linear_model_hierarchy_policy")
 
     parsed = _parse_rows(
         rows,
@@ -115,70 +164,43 @@ def calculate_linear_model(
     x_rows = parsed.x_rows
 
     n_used = len(y_values)
-    design_matrix = _build_design_matrix(
+    initial_design_matrix = _build_design_matrix(
         x_rows,
         predictor_columns,
         interaction_terms=interaction_terms or (),
         quadratic_terms=quadratic_terms or (),
     )
-    design = design_matrix.design
-    predictors = design_matrix.predictors
-    parameter_count = design_matrix.parameter_count
-    df_model = design_matrix.df_model
-    residual_df = n_used - parameter_count
-    if residual_df < MIN_RESIDUAL_DF:
-        raise LinearModelError("linear_model_residual_df_too_small")
     if min(y_values) == max(y_values):
         raise LinearModelError("linear_model_response_constant")
 
     y: FloatArray = np.asarray(y_values, dtype=float)
-    rank = int(np.linalg.matrix_rank(design))
-    if rank < parameter_count:
-        raise LinearModelError("linear_model_design_rank_deficient")
-
-    xtx = design.T @ design
-    try:
-        xtx_inverse: FloatArray = np.asarray(np.linalg.inv(xtx), dtype=float)
-    except np.linalg.LinAlgError as exc:
-        raise LinearModelError("linear_model_design_rank_deficient") from exc
-
-    coefficients: FloatArray = np.asarray(np.linalg.lstsq(design, y, rcond=None)[0], dtype=float)
-    fitted = design @ coefficients
-    residuals = y - fitted
-    sse = float(np.dot(residuals, residuals))
-    if sse <= 0.0 or not isfinite(sse):
-        raise LinearModelError("linear_model_residual_variance_zero")
-
-    y_mean = float(np.mean(y))
-    centered_y = y - y_mean
-    tss = float(np.dot(centered_y, centered_y))
-    if tss <= 0.0 or not isfinite(tss):
-        raise LinearModelError("linear_model_response_constant")
-
-    mse = sse / residual_df
-    covariance_matrix = xtx_inverse * mse
-    standard_errors: FloatArray = np.sqrt(np.diag(covariance_matrix))
+    initial_fit = _fit_ols(initial_design_matrix.design, y)
+    term_blocks = _term_blocks(initial_design_matrix)
+    design_matrix, fit, model_selection = _select_linear_model(
+        initial_design_matrix=initial_design_matrix,
+        initial_fit=initial_fit,
+        term_blocks=term_blocks,
+        y=y,
+        method=model_selection_method,
+        alpha_to_remove=alpha_to_remove,
+        hierarchy_policy=hierarchy_policy,
+    )
+    standard_errors: FloatArray = np.sqrt(np.diag(fit.covariance_matrix))
     if not np.all(np.isfinite(standard_errors)) or np.any(standard_errors <= 0.0):
         raise LinearModelError("linear_model_standard_error_not_finite")
 
-    t_critical = float(stats.t.ppf(1.0 - ((1.0 - confidence_level) / 2.0), df=residual_df))
+    t_critical = float(stats.t.ppf(1.0 - ((1.0 - confidence_level) / 2.0), df=fit.residual_df))
     coefficient_rows = _coefficient_payloads(
-        coefficients,
+        fit.coefficients,
         standard_errors,
         response_column=response_column,
         terms=design_matrix.coefficient_terms,
-        residual_df=residual_df,
+        residual_df=fit.residual_df,
         t_critical=t_critical,
         confidence_level=confidence_level,
-        vif_values=_vif_values(predictors),
+        vif_values=_vif_values(design_matrix.predictors),
     )
-
-    r_squared = 1.0 - (sse / tss)
-    adjusted_r_squared = 1.0 - ((1.0 - r_squared) * ((n_used - 1) / residual_df))
-    ssr = tss - sse
-    f_statistic = (ssr / df_model) / mse
-    f_p_value = float(stats.f.sf(f_statistic, df_model, residual_df))
-    condition_number = float(np.linalg.cond(design))
+    condition_number = float(np.linalg.cond(fit.design))
     vif_candidates: list[float] = []
     for coefficient in coefficient_rows:
         vif_value = coefficient.get("vif")
@@ -186,17 +208,35 @@ def calculate_linear_model(
             vif_candidates.append(vif_value)
     max_vif = max(vif_candidates, default=None)
     diagnostics = _diagnostics_payload(
-        fitted=fitted,
-        residuals=residuals,
-        design=design,
-        xtx_inverse=xtx_inverse,
-        mse=mse,
-        parameter_count=parameter_count,
+        fitted=fit.fitted,
+        residuals=fit.residuals,
+        design=fit.design,
+        xtx_inverse=fit.xtx_inverse,
+        mse=fit.mse,
+        parameter_count=fit.parameter_count,
         row_indices=parsed.row_indices,
+    )
+    residual_plots = _residual_plots_payload(
+        fitted=fit.fitted,
+        residuals=fit.residuals,
+        leverage=fit.leverage,
+        mse=fit.mse,
+        row_indices=parsed.row_indices,
+    )
+    anova = _anova_payload(
+        y=y,
+        fit=fit,
+        design_matrix=design_matrix,
+        term_blocks=_term_blocks(design_matrix),
+        original_predictor_rows=parsed.x_rows,
+    )
+    equation = _equation_payload(
+        response_column=response_column,
+        coefficient_rows=coefficient_rows,
     )
 
     return {
-        "schema_version": 4,
+        "schema_version": 5,
         "summary_type": "linear_model",
         "method": (
             "ordinary_least_squares_safe_terms"
@@ -221,6 +261,9 @@ def calculate_linear_model(
             categorical_predictor_count=design_matrix.categorical_predictor_count,
             interaction_term_count=design_matrix.interaction_term_count,
             quadratic_term_count=design_matrix.quadratic_term_count,
+            press_available=fit.press is not None,
+            model_selection_method=model_selection_method,
+            intercept_only=fit.df_model == 0,
         ),
         "response": _column_payload(response_column),
         "predictors": [_column_payload(column) for column in predictor_columns],
@@ -228,41 +271,764 @@ def calculate_linear_model(
             "intercept": True,
             "terms": design_matrix.model_terms,
         },
+        "initial_model_specification": {
+            "intercept": True,
+            "terms": initial_design_matrix.model_terms,
+        },
+        "model_selection": model_selection,
+        "equation": equation,
+        "training_domain": _training_domain_payload(parsed.x_rows, predictor_columns),
         "prediction_basis": {
             "basis_schema_version": 1,
             "coefficient_order": [term.term for term in design_matrix.coefficient_terms],
-            "xtx_inverse": [[float(value) for value in row] for row in xtx_inverse.tolist()],
-            "sigma_squared": mse,
-            "df_residual": residual_df,
+            "xtx_inverse": [[float(value) for value in row] for row in fit.xtx_inverse.tolist()],
+            "sigma_squared": fit.mse,
+            "df_residual": fit.residual_df,
         },
         "sample": {
             "n_total": parsed.n_total,
             "n_used": n_used,
             "n_excluded_missing": parsed.n_excluded_missing,
             "n_excluded_non_numeric": parsed.n_excluded_non_numeric,
-            "df_model": df_model,
-            "df_residual": residual_df,
+            "df_model": fit.df_model,
+            "df_residual": fit.residual_df,
         },
         "fit": {
-            "r_squared": r_squared,
-            "adjusted_r_squared": adjusted_r_squared,
-            "residual_standard_error": sqrt(mse),
-            "sigma_squared": mse,
-            "sse": sse,
-            "ssr": ssr,
-            "tss": tss,
-            "f_statistic": f_statistic,
-            "f_p_value": f_p_value,
+            "r_squared": fit.r_squared,
+            "adjusted_r_squared": fit.adjusted_r_squared,
+            "residual_standard_error": fit.residual_standard_error,
+            "sigma_squared": fit.mse,
+            "sse": fit.sse,
+            "ssr": fit.ssr,
+            "tss": fit.tss,
+            "f_statistic": fit.f_statistic,
+            "f_p_value": fit.f_p_value,
+            "press": fit.press,
+            "predicted_r_squared": fit.predicted_r_squared,
+            "predicted_r_squared_definition": (
+                "1 - PRESS / TSS using leave-one-out deleted residuals"
+            ),
         },
         "coefficients": coefficient_rows,
+        "anova": anova,
+        "residual_plots": residual_plots,
         "diagnostics": {
-            "rank": rank,
-            "parameter_count": parameter_count,
+            "rank": fit.rank,
+            "parameter_count": fit.parameter_count,
             "condition_number": condition_number,
             "max_vif": max_vif,
             **diagnostics,
         },
     }
+
+
+def _fit_ols(design: FloatArray, y: FloatArray) -> _OlsFit:
+    n_used = int(len(y))
+    parameter_count = int(design.shape[1])
+    residual_df = n_used - parameter_count
+    if residual_df < MIN_RESIDUAL_DF:
+        raise LinearModelError("linear_model_residual_df_too_small")
+    rank = int(np.linalg.matrix_rank(design))
+    if rank < parameter_count:
+        raise LinearModelError("linear_model_design_rank_deficient")
+
+    xtx = design.T @ design
+    try:
+        xtx_inverse: FloatArray = np.asarray(np.linalg.inv(xtx), dtype=float)
+    except np.linalg.LinAlgError as exc:
+        raise LinearModelError("linear_model_design_rank_deficient") from exc
+
+    coefficients: FloatArray = np.asarray(np.linalg.lstsq(design, y, rcond=None)[0], dtype=float)
+    fitted = design @ coefficients
+    residuals = y - fitted
+    sse = float(np.dot(residuals, residuals))
+    if sse <= 0.0 or not isfinite(sse):
+        raise LinearModelError("linear_model_residual_variance_zero")
+
+    centered_y = y - float(np.mean(y))
+    tss = float(np.dot(centered_y, centered_y))
+    if tss <= 0.0 or not isfinite(tss):
+        raise LinearModelError("linear_model_response_constant")
+
+    mse = sse / residual_df
+    covariance_matrix = xtx_inverse * mse
+    ssr = max(0.0, tss - sse)
+    df_model = rank - 1
+    r_squared = 1.0 - (sse / tss)
+    adjusted_r_squared = 1.0 - ((1.0 - r_squared) * ((n_used - 1) / residual_df))
+    f_statistic: float | None = None
+    f_p_value: float | None = None
+    if df_model > 0:
+        f_statistic = (ssr / df_model) / mse
+        f_p_value = float(stats.f.sf(f_statistic, df_model, residual_df))
+
+    leverage = np.asarray(np.einsum("ij,jk,ik->i", design, xtx_inverse, design), dtype=float)
+    leverage = np.clip(leverage, 0.0, 1.0)
+    press = _press_value(residuals, leverage)
+    predicted_r_squared = None if press is None else 1.0 - (press / tss)
+    return _OlsFit(
+        design=design,
+        coefficients=coefficients,
+        fitted=fitted,
+        residuals=residuals,
+        sse=sse,
+        tss=tss,
+        ssr=ssr,
+        mse=mse,
+        residual_df=residual_df,
+        df_model=df_model,
+        rank=rank,
+        parameter_count=parameter_count,
+        xtx_inverse=xtx_inverse,
+        covariance_matrix=np.asarray(covariance_matrix, dtype=float),
+        r_squared=r_squared,
+        adjusted_r_squared=adjusted_r_squared,
+        residual_standard_error=sqrt(mse),
+        f_statistic=f_statistic,
+        f_p_value=f_p_value,
+        leverage=leverage,
+        press=press,
+        predicted_r_squared=predicted_r_squared,
+    )
+
+
+def _press_value(residuals: FloatArray, leverage: FloatArray) -> float | None:
+    denominators = 1.0 - leverage
+    if np.any(denominators <= PRESS_LEVERAGE_TOLERANCE):
+        return None
+    deleted_residuals = residuals / denominators
+    press = float(np.dot(deleted_residuals, deleted_residuals))
+    return press if isfinite(press) else None
+
+
+def _term_blocks(design_matrix: _DesignMatrix) -> list[_TermBlock]:
+    blocks: list[_TermBlock] = []
+    for initial_order, model_term in enumerate(design_matrix.model_terms):
+        kind = str(model_term.get("kind"))
+        term = str(model_term.get("term"))
+        source_value = model_term.get("source_column_ids")
+        if isinstance(source_value, list):
+            source_column_ids = tuple(str(value) for value in source_value)
+        else:
+            column_id = model_term.get("column_id")
+            source_column_ids = (str(column_id),) if isinstance(column_id, str) else ()
+
+        column_indices: list[int] = []
+        for coefficient_index, coefficient_term in enumerate(
+            design_matrix.coefficient_terms[1:],
+            start=1,
+        ):
+            if kind == "categorical_main_effect":
+                source_column = coefficient_term.column
+                if (
+                    coefficient_term.term_kind == "categorical_level"
+                    and source_column is not None
+                    and source_column.column_id in source_column_ids
+                ):
+                    column_indices.append(coefficient_index)
+            elif (
+                coefficient_term.term_kind == kind
+                and coefficient_term.term == term
+                and tuple(column.column_id for column in coefficient_term.source_columns)
+                == source_column_ids
+            ):
+                column_indices.append(coefficient_index)
+        if not column_indices:
+            raise LinearModelError("linear_model_term_block_invalid")
+        blocks.append(
+            _TermBlock(
+                block_id=f"{kind}:{'|'.join(source_column_ids)}:{term}",
+                term=term,
+                kind=kind,
+                source_column_ids=source_column_ids,
+                column_indices=tuple(column_indices),
+                model_term=dict(model_term),
+                initial_order=initial_order,
+            )
+        )
+    return blocks
+
+
+def _select_linear_model(
+    *,
+    initial_design_matrix: _DesignMatrix,
+    initial_fit: _OlsFit,
+    term_blocks: Sequence[_TermBlock],
+    y: FloatArray,
+    method: str,
+    alpha_to_remove: float,
+    hierarchy_policy: str,
+) -> tuple[_DesignMatrix, _OlsFit, dict[str, object]]:
+    initial_terms = [block.term for block in term_blocks]
+    if method == "none":
+        return (
+            initial_design_matrix,
+            initial_fit,
+            {
+                "method": "none",
+                "alpha_to_remove": alpha_to_remove,
+                "hierarchy_policy": hierarchy_policy,
+                "tie_break_policy": "later_initial_term_order_within_1e-12",
+                "initial_terms": initial_terms,
+                "final_terms": initial_terms,
+                "stop_reason": "not_requested",
+                "steps": [],
+            },
+        )
+
+    active_blocks = list(term_blocks)
+    current_design = initial_design_matrix
+    current_fit = initial_fit
+    full_model_mse = initial_fit.mse
+    steps = [
+        _model_selection_step_payload(
+            step=0,
+            design_matrix=current_design,
+            fit=current_fit,
+            full_model_mse=full_model_mse,
+            removed_term=None,
+            removal_p_value=None,
+        )
+    ]
+    stop_reason = "all_remaining_terms_significant"
+
+    while active_blocks:
+        candidates: list[tuple[_TermBlock, _DesignMatrix, _OlsFit, float]] = []
+        for block in active_blocks:
+            if not _term_is_removable(block, active_blocks):
+                continue
+            reduced_blocks = [candidate for candidate in active_blocks if candidate != block]
+            reduced_design = _subset_design_matrix(initial_design_matrix, reduced_blocks)
+            reduced_fit = _fit_ols(reduced_design.design, y)
+            removal_p_value = _partial_f_removal_p_value(current_fit, reduced_fit)
+            candidates.append((block, reduced_design, reduced_fit, removal_p_value))
+
+        if not candidates:
+            stop_reason = "hierarchy_protected_terms" if active_blocks else "intercept_only"
+            break
+        best = candidates[0]
+        for candidate in candidates[1:]:
+            candidate_p = candidate[3]
+            best_p = best[3]
+            if candidate_p > best_p + MODEL_SELECTION_TIE_TOLERANCE or (
+                abs(candidate_p - best_p) <= MODEL_SELECTION_TIE_TOLERANCE
+                and candidate[0].initial_order > best[0].initial_order
+            ):
+                best = candidate
+        if best[3] <= alpha_to_remove:
+            stop_reason = "all_remaining_terms_significant"
+            break
+
+        removed_block, current_design, current_fit, removal_p_value = best
+        active_blocks = [block for block in active_blocks if block != removed_block]
+        steps.append(
+            _model_selection_step_payload(
+                step=len(steps),
+                design_matrix=current_design,
+                fit=current_fit,
+                full_model_mse=full_model_mse,
+                removed_term=removed_block.term,
+                removal_p_value=removal_p_value,
+            )
+        )
+        if not active_blocks:
+            stop_reason = "intercept_only"
+            break
+
+    return (
+        current_design,
+        current_fit,
+        {
+            "method": "backward_elimination",
+            "alpha_to_remove": alpha_to_remove,
+            "hierarchy_policy": hierarchy_policy,
+            "tie_break_policy": "later_initial_term_order_within_1e-12",
+            "initial_terms": initial_terms,
+            "final_terms": [block.term for block in active_blocks],
+            "stop_reason": stop_reason,
+            "steps": steps,
+        },
+    )
+
+
+def _term_is_removable(block: _TermBlock, active_blocks: Sequence[_TermBlock]) -> bool:
+    if block.kind not in {"numeric_main_effect", "categorical_main_effect"}:
+        return True
+    source_ids = set(block.source_column_ids)
+    for other in active_blocks:
+        if other == block:
+            continue
+        if other.kind in {"numeric_quadratic", "numeric_interaction"} and source_ids.intersection(
+            other.source_column_ids
+        ):
+            return False
+    return True
+
+
+def _subset_design_matrix(
+    initial_design_matrix: _DesignMatrix,
+    active_blocks: Sequence[_TermBlock],
+) -> _DesignMatrix:
+    ordered_blocks = sorted(active_blocks, key=lambda block: block.initial_order)
+    selected_indices = [0]
+    for block in ordered_blocks:
+        selected_indices.extend(block.column_indices)
+    selected_indices = sorted(set(selected_indices))
+    design = np.asarray(initial_design_matrix.design[:, selected_indices], dtype=float)
+    coefficient_terms = [
+        initial_design_matrix.coefficient_terms[index] for index in selected_indices
+    ]
+    model_terms = [dict(block.model_term) for block in ordered_blocks]
+    return _DesignMatrix(
+        design=design,
+        predictors=np.asarray(design[:, 1:], dtype=float),
+        coefficient_terms=coefficient_terms,
+        model_terms=model_terms,
+        df_model=max(0, int(design.shape[1]) - 1),
+        parameter_count=int(design.shape[1]),
+        categorical_predictor_count=sum(
+            block.kind == "categorical_main_effect" for block in ordered_blocks
+        ),
+        interaction_term_count=sum(block.kind == "numeric_interaction" for block in ordered_blocks),
+        quadratic_term_count=sum(block.kind == "numeric_quadratic" for block in ordered_blocks),
+    )
+
+
+def _partial_f_removal_p_value(current_fit: _OlsFit, reduced_fit: _OlsFit) -> float:
+    df_removed = current_fit.rank - reduced_fit.rank
+    if df_removed <= 0:
+        raise LinearModelError("linear_model_selection_rank_invalid")
+    adjusted_ss = max(0.0, reduced_fit.sse - current_fit.sse)
+    f_statistic = (adjusted_ss / df_removed) / current_fit.mse
+    return float(stats.f.sf(f_statistic, df_removed, current_fit.residual_df))
+
+
+def _model_selection_step_payload(
+    *,
+    step: int,
+    design_matrix: _DesignMatrix,
+    fit: _OlsFit,
+    full_model_mse: float,
+    removed_term: str | None,
+    removal_p_value: float | None,
+) -> dict[str, object]:
+    aicc, bic = _information_criteria(fit)
+    mallows_cp = (fit.sse / full_model_mse) - (len(fit.residuals) - (2 * fit.parameter_count))
+    return {
+        "step": step,
+        "active_terms": [str(term.get("term")) for term in design_matrix.model_terms],
+        "removed_term": removed_term,
+        "removal_p_value": removal_p_value,
+        "s": fit.residual_standard_error,
+        "r_squared": fit.r_squared,
+        "adjusted_r_squared": fit.adjusted_r_squared,
+        "press": fit.press,
+        "predicted_r_squared": fit.predicted_r_squared,
+        "mallows_cp": mallows_cp,
+        "aicc": aicc,
+        "bic": bic,
+        "coefficients": [
+            {
+                "term": term.term,
+                "estimate": float(fit.coefficients[index]),
+            }
+            for index, term in enumerate(design_matrix.coefficient_terms)
+        ],
+    }
+
+
+def _information_criteria(fit: _OlsFit) -> tuple[float | None, float]:
+    n_used = len(fit.residuals)
+    parameter_count = fit.parameter_count
+    base = n_used * (log(2.0 * pi) + 1.0 + log(fit.sse / n_used))
+    aic = base + (2.0 * parameter_count)
+    denominator = n_used - parameter_count - 1
+    aicc = (
+        aic + ((2.0 * parameter_count * (parameter_count + 1)) / denominator)
+        if denominator > 0
+        else None
+    )
+    bic = base + (parameter_count * log(n_used))
+    return (aicc, bic)
+
+
+def _equation_payload(
+    *,
+    response_column: LinearModelColumn,
+    coefficient_rows: Sequence[dict[str, object]],
+) -> dict[str, object]:
+    intercept = float(cast(float, coefficient_rows[0]["estimate"]))
+    terms: list[dict[str, object]] = []
+    display_parts = [f"{response_column.display_name} = {_format_equation_number(intercept)}"]
+    references: dict[str, str] = {}
+    for coefficient in coefficient_rows[1:]:
+        estimate = float(cast(float, coefficient["estimate"]))
+        display_label = _equation_term_label(coefficient)
+        sign = "+" if estimate >= 0.0 else "-"
+        display_parts.append(f" {sign} {_format_equation_number(abs(estimate))} * {display_label}")
+        term_payload = {
+            "term": coefficient.get("term"),
+            "kind": coefficient.get("term_kind"),
+            "coefficient": estimate,
+            "source_column_ids": coefficient.get("source_column_ids"),
+            "level": coefficient.get("level"),
+            "reference_level": coefficient.get("reference_level"),
+            "coding": coefficient.get("coding"),
+            "display_term": display_label,
+        }
+        terms.append(term_payload)
+        source_ids = coefficient.get("source_column_ids")
+        reference_level = coefficient.get("reference_level")
+        if (
+            isinstance(source_ids, list)
+            and len(source_ids) == 1
+            and isinstance(reference_level, str)
+        ):
+            references[str(source_ids[0])] = reference_level
+    return {
+        "response_label": response_column.display_name,
+        "intercept": intercept,
+        "terms": terms,
+        "display_equation": "".join(display_parts),
+        "coefficient_precision": "full_stored_double",
+        "categorical_reference_levels": [
+            {"column_id": column_id, "reference_level": level}
+            for column_id, level in references.items()
+        ],
+    }
+
+
+def _equation_term_label(coefficient: dict[str, object]) -> str:
+    kind = coefficient.get("term_kind")
+    term = str(coefficient.get("term"))
+    if kind == "categorical_level":
+        source_ids = coefficient.get("source_column_ids")
+        source_label = str(source_ids[0]) if isinstance(source_ids, list) and source_ids else term
+        return f"I({source_label}={coefficient.get('level')})"
+    if kind == "numeric_interaction":
+        return term.replace(":", " * ")
+    return term
+
+
+def _format_equation_number(value: float) -> str:
+    return format(value, ".12g")
+
+
+def _training_domain_payload(
+    x_rows: Sequence[Sequence[float | str]],
+    predictor_columns: Sequence[LinearModelColumn],
+) -> dict[str, object]:
+    predictors: list[dict[str, object]] = []
+    for index, column in enumerate(predictor_columns):
+        values = [row[index] for row in x_rows]
+        if _is_numeric_column(column):
+            numeric_values = [float(value) for value in values]
+            predictors.append(
+                {
+                    "column_id": column.column_id,
+                    "kind": "numeric",
+                    "minimum": min(numeric_values),
+                    "maximum": max(numeric_values),
+                    "integer_only": column.data_type == "integer"
+                    or column.measurement_level == "count",
+                }
+            )
+        else:
+            levels = sorted(
+                {str(value) for value in values}, key=lambda value: (value.casefold(), value)
+            )
+            predictors.append(
+                {
+                    "column_id": column.column_id,
+                    "kind": "categorical",
+                    "levels": levels,
+                }
+            )
+    return {"scope": "complete_case_fit_rows", "predictors": predictors}
+
+
+def _anova_payload(
+    *,
+    y: FloatArray,
+    fit: _OlsFit,
+    design_matrix: _DesignMatrix,
+    term_blocks: Sequence[_TermBlock],
+    original_predictor_rows: Sequence[Sequence[float | str]],
+) -> dict[str, object]:
+    rows: list[dict[str, object]] = [
+        {
+            "source": "Regression",
+            "row_kind": "regression",
+            "df": fit.df_model,
+            "adjusted_ss": fit.ssr,
+            "adjusted_ms": fit.ssr / fit.df_model if fit.df_model > 0 else None,
+            "f_statistic": fit.f_statistic,
+            "p_value": fit.f_p_value,
+        }
+    ]
+    for block in term_blocks:
+        retained_indices = [
+            index for index in range(fit.design.shape[1]) if index not in block.column_indices
+        ]
+        reduced_design = np.asarray(fit.design[:, retained_indices], dtype=float)
+        reduced_rank = int(np.linalg.matrix_rank(reduced_design))
+        reduced_coefficients = np.linalg.lstsq(reduced_design, y, rcond=None)[0]
+        reduced_residuals = y - (reduced_design @ reduced_coefficients)
+        reduced_sse = float(np.dot(reduced_residuals, reduced_residuals))
+        term_df = fit.rank - reduced_rank
+        adjusted_ss = max(0.0, reduced_sse - fit.sse)
+        adjusted_ms = adjusted_ss / term_df
+        f_statistic = adjusted_ms / fit.mse
+        rows.append(
+            {
+                "source": block.term,
+                "row_kind": "term",
+                "term_kind": block.kind,
+                "source_column_ids": list(block.source_column_ids),
+                "df": term_df,
+                "adjusted_ss": adjusted_ss,
+                "adjusted_ms": adjusted_ms,
+                "f_statistic": f_statistic,
+                "p_value": float(stats.f.sf(f_statistic, term_df, fit.residual_df)),
+            }
+        )
+    rows.append(
+        {
+            "source": "Error",
+            "row_kind": "error",
+            "df": fit.residual_df,
+            "adjusted_ss": fit.sse,
+            "adjusted_ms": fit.mse,
+            "f_statistic": None,
+            "p_value": None,
+        }
+    )
+    lack_of_fit = _lack_of_fit_payload(
+        y=y,
+        predictor_rows=original_predictor_rows,
+        residual_df=fit.residual_df,
+        sse=fit.sse,
+    )
+    if lack_of_fit["available"]:
+        rows.extend(cast(list[dict[str, object]], lack_of_fit["rows"]))
+    rows.append(
+        {
+            "source": "Total",
+            "row_kind": "total",
+            "df": len(y) - 1,
+            "adjusted_ss": fit.tss,
+            "adjusted_ms": None,
+            "f_statistic": None,
+            "p_value": None,
+        }
+    )
+    return {
+        "method": "adjusted_partial_sums_of_squares",
+        "rows": rows,
+        "lack_of_fit": lack_of_fit,
+        "hierarchy_note": (
+            "Term tests are conditional on every other retained term, including higher-order terms."
+        ),
+    }
+
+
+def _lack_of_fit_payload(
+    *,
+    y: FloatArray,
+    predictor_rows: Sequence[Sequence[float | str]],
+    residual_df: int,
+    sse: float,
+) -> dict[str, object]:
+    replicate_groups: dict[tuple[float | str, ...], list[float]] = {}
+    for predictor_row, response in zip(predictor_rows, y, strict=True):
+        replicate_groups.setdefault(tuple(predictor_row), []).append(float(response))
+    pure_error_df = sum(len(values) - 1 for values in replicate_groups.values())
+    if pure_error_df <= 0:
+        return {
+            "available": False,
+            "reason": "no_replicated_predictor_settings",
+            "rows": [],
+        }
+    pure_error_ss = sum(
+        sum((value - (sum(values) / len(values))) ** 2 for value in values)
+        for values in replicate_groups.values()
+    )
+    lack_of_fit_df = residual_df - pure_error_df
+    if lack_of_fit_df <= 0:
+        return {
+            "available": False,
+            "reason": "no_lack_of_fit_degrees_of_freedom",
+            "rows": [],
+        }
+    pure_error_ms = pure_error_ss / pure_error_df
+    if pure_error_ms <= 0.0 or not isfinite(pure_error_ms):
+        return {
+            "available": False,
+            "reason": "pure_error_variance_zero",
+            "rows": [],
+        }
+    lack_of_fit_ss = max(0.0, sse - pure_error_ss)
+    lack_of_fit_ms = lack_of_fit_ss / lack_of_fit_df
+    f_statistic = lack_of_fit_ms / pure_error_ms
+    return {
+        "available": True,
+        "reason": None,
+        "replicate_setting_count": sum(len(values) > 1 for values in replicate_groups.values()),
+        "rows": [
+            {
+                "source": "Lack-of-Fit",
+                "row_kind": "lack_of_fit",
+                "df": lack_of_fit_df,
+                "adjusted_ss": lack_of_fit_ss,
+                "adjusted_ms": lack_of_fit_ms,
+                "f_statistic": f_statistic,
+                "p_value": float(stats.f.sf(f_statistic, lack_of_fit_df, pure_error_df)),
+            },
+            {
+                "source": "Pure Error",
+                "row_kind": "pure_error",
+                "df": pure_error_df,
+                "adjusted_ss": pure_error_ss,
+                "adjusted_ms": pure_error_ms,
+                "f_statistic": None,
+                "p_value": None,
+            },
+        ],
+    }
+
+
+def _residual_plots_payload(
+    *,
+    fitted: FloatArray,
+    residuals: FloatArray,
+    leverage: FloatArray,
+    mse: float,
+    row_indices: Sequence[int],
+) -> dict[str, object]:
+    standard_denominator = np.sqrt(mse * np.maximum(1.0 - leverage, 0.0))
+    standardized = np.divide(
+        residuals,
+        standard_denominator,
+        out=np.full_like(residuals, np.nan),
+        where=standard_denominator > 0.0,
+    )
+    raw_values = np.asarray(residuals, dtype=float)
+    standardized_values = np.asarray(standardized, dtype=float)
+    return {
+        "residual_types_available": ["raw", "standardized"],
+        "histograms": {
+            "raw": _histogram_payload(raw_values),
+            "standardized": _histogram_payload(standardized_values),
+        },
+        "qq_plots": {
+            "raw": _qq_plot_payload(raw_values, row_indices),
+            "standardized": _qq_plot_payload(standardized_values, row_indices),
+        },
+        "residuals_vs_fits": {
+            "raw": _residual_scatter_payload(fitted, raw_values, row_indices, include_order=False),
+            "standardized": _residual_scatter_payload(
+                fitted,
+                standardized_values,
+                row_indices,
+                include_order=False,
+            ),
+        },
+        "residuals_vs_order": {
+            "raw": _residual_scatter_payload(fitted, raw_values, row_indices, include_order=True),
+            "standardized": _residual_scatter_payload(
+                fitted,
+                standardized_values,
+                row_indices,
+                include_order=True,
+            ),
+        },
+        "point_limit": DIAGNOSTIC_POINT_LIMIT,
+        "points_truncated": len(residuals) > DIAGNOSTIC_POINT_LIMIT,
+    }
+
+
+def _histogram_payload(values: FloatArray) -> dict[str, object]:
+    finite_values = values[np.isfinite(values)]
+    if finite_values.size == 0:
+        return {"n": 0, "bins": []}
+    bin_count = min(30, max(5, int(np.ceil(np.sqrt(finite_values.size)))))
+    counts, edges = np.histogram(finite_values, bins=bin_count)
+    return {
+        "n": int(finite_values.size),
+        "bins": [
+            {
+                "lower": float(edges[index]),
+                "upper": float(edges[index + 1]),
+                "count": int(counts[index]),
+            }
+            for index in range(len(counts))
+        ],
+    }
+
+
+def _qq_plot_payload(values: FloatArray, row_indices: Sequence[int]) -> dict[str, object]:
+    finite = [
+        (float(value), int(row_indices[index]))
+        for index, value in enumerate(values)
+        if isfinite(float(value))
+    ]
+    finite.sort(key=lambda item: (item[0], item[1]))
+    n_values = len(finite)
+    if n_values == 0:
+        return {"n": 0, "points": [], "reference_line": None, "truncated": False}
+    probabilities = (np.arange(1, n_values + 1, dtype=float) - 0.375) / (n_values + 0.25)
+    theoretical = np.asarray(stats.norm.ppf(probabilities), dtype=float)
+    observed = np.asarray([item[0] for item in finite], dtype=float)
+    slope, intercept = np.polyfit(theoretical, observed, 1) if n_values > 1 else (0.0, observed[0])
+    selected = _bounded_indices(n_values)
+    return {
+        "n": n_values,
+        "points": [
+            {
+                "rank": int(index + 1),
+                "row_index": finite[index][1],
+                "theoretical_quantile": float(theoretical[index]),
+                "residual": float(observed[index]),
+            }
+            for index in selected
+        ],
+        "reference_line": {"slope": float(slope), "intercept": float(intercept)},
+        "truncated": n_values > DIAGNOSTIC_POINT_LIMIT,
+    }
+
+
+def _residual_scatter_payload(
+    fitted: FloatArray,
+    residuals: FloatArray,
+    row_indices: Sequence[int],
+    *,
+    include_order: bool,
+) -> dict[str, object]:
+    finite_indices = [index for index, value in enumerate(residuals) if isfinite(float(value))]
+    selected_positions = _bounded_indices(len(finite_indices))
+    selected_indices = [finite_indices[position] for position in selected_positions]
+    return {
+        "n": len(finite_indices),
+        "points": [
+            {
+                "row_index": int(row_indices[index]),
+                "order": int(index + 1),
+                "fitted": float(fitted[index]),
+                "residual": float(residuals[index]),
+            }
+            for index in selected_indices
+        ],
+        "truncated": len(finite_indices) > DIAGNOSTIC_POINT_LIMIT,
+        "x_kind": "order" if include_order else "fitted",
+    }
+
+
+def _bounded_indices(count: int) -> list[int]:
+    if count <= DIAGNOSTIC_POINT_LIMIT:
+        return list(range(count))
+    return sorted(
+        {int(round(value)) for value in np.linspace(0, count - 1, DIAGNOSTIC_POINT_LIMIT)}
+    )
 
 
 def _parse_rows(
@@ -584,19 +1350,25 @@ def _parse_cell(
 
 
 def _is_numeric_column(column: LinearModelColumn) -> bool:
-    return classify_linear_model_predictor(
-        data_type=column.data_type,
-        measurement_level=column.measurement_level,
-        role=column.role,
-    ) == "numeric"
+    return (
+        classify_linear_model_predictor(
+            data_type=column.data_type,
+            measurement_level=column.measurement_level,
+            role=column.role,
+        )
+        == "numeric"
+    )
 
 
 def _is_categorical_predictor_column(column: LinearModelColumn) -> bool:
-    return classify_linear_model_predictor(
-        data_type=column.data_type,
-        measurement_level=column.measurement_level,
-        role=column.role,
-    ) == "categorical"
+    return (
+        classify_linear_model_predictor(
+            data_type=column.data_type,
+            measurement_level=column.measurement_level,
+            role=column.role,
+        )
+        == "categorical"
+    )
 
 
 def _coefficient_payloads(
@@ -812,6 +1584,9 @@ def _result_warnings(
     categorical_predictor_count: int,
     interaction_term_count: int,
     quadratic_term_count: int,
+    press_available: bool,
+    model_selection_method: str,
+    intercept_only: bool,
 ) -> list[str]:
     warnings = [
         "linear_model_not_causation",
@@ -831,6 +1606,12 @@ def _result_warnings(
         warnings.append("linear_model_quadratic_terms_selected")
     if interaction_term_count > 0:
         warnings.append("linear_model_interaction_terms_selected")
+    if not press_available:
+        warnings.append("linear_model_press_unavailable_high_leverage")
+    if model_selection_method == "backward_elimination":
+        warnings.append("linear_model_post_selection_inference_exploratory")
+    if intercept_only:
+        warnings.append("linear_model_intercept_only_selected")
     if condition_number >= CONDITION_NUMBER_WARNING_THRESHOLD:
         warnings.append("linear_model_high_condition_number")
     if max_vif is not None and max_vif >= VIF_WARNING_THRESHOLD:

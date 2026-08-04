@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 
 import type {
   AnalysisResultEnvelope,
@@ -12,16 +12,13 @@ import type { RegressionPredictionTargetState } from "./useRegressionPredictionT
 import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
 import { formatBytes } from "./analysisWorkbenchUtils";
+import { measurementLevelLabel, roleLabel } from "./datasetDisplay";
 import {
   RegressionPredictionPanel,
   type RegressionPredictionRowsState,
 } from "./RegressionPredictionPanel";
-import {
-  InteractiveScatterChart,
-  type InteractiveScatterPoint,
-} from "./charts/InteractiveScatterChart";
-import { paddedNumericRange } from "./charts/chartScale";
-import { observedDiagnosticPoints } from "./linearModelDiagnosticPoints";
+import { LinearModelFitResults } from "./LinearModelFitResults";
+import { RegressionResponseOptimizerPanel } from "./RegressionResponseOptimizerPanel";
 import { updateRegressionModelMetadata } from "./api/regression";
 import {
   isNumericLinearModelPredictor,
@@ -36,6 +33,8 @@ interface LinearModelPanelProps {
   confidenceLevel: number;
   filterValidationError: string | null;
   interactionKeys: string[];
+  modelSelectionMethod: "none" | "backward_elimination";
+  alphaToRemove: number;
   isRunningAnalysis: boolean;
   methodId: string;
   predictorColumnIds: string[];
@@ -56,6 +55,8 @@ interface LinearModelPanelProps {
   version: DatasetVersionResponse | null;
   onAlphaChange: (alpha: number) => void;
   onConfidenceLevelChange: (confidenceLevel: number) => void;
+  onAlphaToRemoveChange: (alpha: number) => void;
+  onModelSelectionMethodChange: (method: "none" | "backward_elimination") => void;
   onResponseColumnChange: (columnId: string) => void;
   onRun: () => void;
   onRunPrediction: () => void;
@@ -71,6 +72,8 @@ export function LinearModelPanel({
   confidenceLevel,
   filterValidationError,
   interactionKeys,
+  modelSelectionMethod,
+  alphaToRemove,
   isRunningAnalysis,
   methodId,
   predictorColumnIds,
@@ -91,6 +94,8 @@ export function LinearModelPanel({
   version,
   onAlphaChange,
   onConfidenceLevelChange,
+  onAlphaToRemoveChange,
+  onModelSelectionMethodChange,
   onResponseColumnChange,
   onRun,
   onRunPrediction,
@@ -127,16 +132,8 @@ export function LinearModelPanel({
     alpha < 1 &&
     confidenceLevel > 0 &&
     confidenceLevel < 1 &&
+    (modelSelectionMethod === "none" || (alphaToRemove > 0 && alphaToRemove < 1)) &&
     filterValidationError === null;
-  const topDiagnosticPoints =
-    result?.diagnostics.diagnostic_points.points
-      .slice()
-      .sort((left, right) => {
-        const leftDistance = left.cooks_distance ?? -1;
-        const rightDistance = right.cooks_distance ?? -1;
-        return rightDistance - leftDistance;
-      })
-      .slice(0, 5) ?? [];
   const selectedNumericPredictors = predictorColumns.filter(
     (column) => predictorColumnIds.includes(column.column_id) && isNumericLinearModelPredictor(column),
   );
@@ -265,6 +262,39 @@ export function LinearModelPanel({
               </div>
             </div>
           ) : null}
+          <div className="option-grid option-grid-wide">
+            <label>
+              <span>모형 선택 방법</span>
+              <select
+                value={modelSelectionMethod}
+                onChange={(event) =>
+                  onModelSelectionMethodChange(
+                    event.currentTarget.value as "none" | "backward_elimination",
+                  )
+                }
+              >
+                <option value="none">지정한 전체 모형 유지</option>
+                <option value="backward_elimination">후진 제거</option>
+              </select>
+            </label>
+            {modelSelectionMethod === "backward_elimination" ? (
+              <label>
+                <span>Alpha to remove</span>
+                <input
+                  aria-describedby="linear-model-alpha-remove-help"
+                  max="0.999"
+                  min="0.001"
+                  step="0.01"
+                  type="number"
+                  value={alphaToRemove}
+                  onChange={(event) => onAlphaToRemoveChange(Number(event.currentTarget.value))}
+                />
+                <small id="linear-model-alpha-remove-help">
+                  제거 가능한 항 중 p-value가 가장 큰 항을 단계적으로 검토합니다.
+                </small>
+              </label>
+            ) : null}
+          </div>
           <button
             className="primary-button"
             disabled={isRunningAnalysis || !canRun}
@@ -284,39 +314,7 @@ export function LinearModelPanel({
           ) : null}
           {result !== null ? (
             <>
-              <div className="metadata-grid" aria-label="회귀모형 요약">
-                <span>반응 변수</span>
-                <strong>{result.response.display_name}</strong>
-                <span>예측변수</span>
-                <strong>{result.predictors.length.toLocaleString()}개</strong>
-                <span>사용 N</span>
-                <strong>
-                  {result.sample.n_used.toLocaleString()} /{" "}
-                  {result.sample.n_total.toLocaleString()}
-                </strong>
-                <span>잔차 자유도</span>
-                <strong>{result.sample.df_residual.toLocaleString()}</strong>
-                <span>R²</span>
-                <strong>{formatModelNumber(result.fit.r_squared)}</strong>
-                <span>Adjusted R²</span>
-                <strong>{formatModelNumber(result.fit.adjusted_r_squared)}</strong>
-                <span>Residual SE</span>
-                <strong>{formatModelNumber(result.fit.residual_standard_error)}</strong>
-                <span>F p-value</span>
-                <strong>{formatModelNumber(result.fit.f_p_value)}</strong>
-                {result.model_manifest ? (
-                  <>
-                    <span>Model ID</span>
-                    <strong title={result.model_manifest.model_id}>
-                      {shortIdentifier(result.model_manifest.model_id)}
-                    </strong>
-                    <span>Manifest</span>
-                    <strong title={result.model_manifest.manifest_sha256}>
-                      {shortIdentifier(result.model_manifest.manifest_sha256)}
-                    </strong>
-                  </>
-                ) : null}
-              </div>
+              <LinearModelFitResults result={result} />
               {result.model_manifest ? (
                 <section className="result-section" aria-labelledby="linear-model-retention-title">
                   <div className="panel-heading">
@@ -392,6 +390,10 @@ export function LinearModelPanel({
                       <strong>
                         예측 참조 {modelRetentionState.preflight.counts.dependent_prediction_count.toLocaleString()}건
                       </strong>
+                      <span>
+                        붙여넣기 예측 {modelRetentionState.preflight.counts.dependent_pasted_prediction_count.toLocaleString()}건
+                        · 회귀 최적화 {modelRetentionState.preflight.counts.dependent_optimization_count.toLocaleString()}건
+                      </span>
                       <span>
                         manifest {formatBytes(
                           modelRetentionState.preflight.counts.manifest_file_bytes,
@@ -481,6 +483,10 @@ export function LinearModelPanel({
                   ) : null}
                 </section>
               ) : null}
+              <RegressionResponseOptimizerPanel
+                modelAvailable={modelAvailable}
+                result={result}
+              />
               <RegressionPredictionPanel
                 currentVersion={version}
                 expectedModelId={result.model_manifest?.model_id ?? null}
@@ -488,6 +494,7 @@ export function LinearModelPanel({
                 isRunningPreflight={isRunningPredictionPreflight}
                 modelAvailable={modelAvailable}
                 modelManifestAvailable={result.model_manifest !== undefined}
+                modelResult={result}
                 prediction={prediction}
                 predictionError={predictionError}
                 predictionExportState={predictionExportState}
@@ -498,121 +505,6 @@ export function LinearModelPanel({
                 onRunPrediction={onRunPrediction}
                 onRunPreflight={onRunPredictionPreflight}
               />
-              <div className="table-wrap">
-                <table className="result-table">
-                  <thead>
-                    <tr>
-                      <th>항</th>
-                      <th>추정치</th>
-                      <th>표준오차</th>
-                      <th>CI</th>
-                      <th>t</th>
-                      <th>p-value</th>
-                      <th>VIF</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.coefficients.map((coefficient) => (
-                      <tr key={coefficient.term}>
-                        <td>
-                          {coefficient.term}
-                          <span className="cell-subtle">{coefficient.term_kind}</span>
-                        </td>
-                        <td>{formatModelNumber(coefficient.estimate)}</td>
-                        <td>{formatModelNumber(coefficient.standard_error)}</td>
-                        <td>
-                          {formatPercent(coefficient.confidence_interval.level)} CI{" "}
-                          {formatModelNumber(coefficient.confidence_interval.lower)} -{" "}
-                          {formatModelNumber(coefficient.confidence_interval.upper)}
-                        </td>
-                        <td>{formatModelNumber(coefficient.statistic)}</td>
-                        <td>{formatModelNumber(coefficient.p_value)}</td>
-                        <td>{formatModelNumber(coefficient.vif)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="metadata-grid" aria-label="회귀 진단 요약">
-                <span>Condition number</span>
-                <strong>{formatModelNumber(result.diagnostics.condition_number)}</strong>
-                <span>최대 VIF</span>
-                <strong>{formatModelNumber(result.diagnostics.max_vif)}</strong>
-                <span>최대 표준화 잔차</span>
-                <strong>
-                  {formatModelNumber(result.diagnostics.residual_summary.max_abs_standardized)}
-                </strong>
-                <span>큰 잔차 후보</span>
-                <strong>
-                  {result.diagnostics.residual_summary.large_standardized_count.toLocaleString()}개
-                </strong>
-                <span>최대 leverage</span>
-                <strong>{formatModelNumber(result.diagnostics.leverage.max)}</strong>
-                <span>High leverage</span>
-                <strong>{result.diagnostics.leverage.high_count.toLocaleString()}개</strong>
-                <span>최대 Cook&apos;s D</span>
-                <strong>{formatModelNumber(result.diagnostics.influence.cooks_distance_max)}</strong>
-                <span>Influential 후보</span>
-                <strong>
-                  {result.diagnostics.influence.high_cooks_distance_count.toLocaleString()}개
-                </strong>
-                <span>Rank</span>
-                <strong>{result.diagnostics.rank.toLocaleString()}</strong>
-                <span>파라미터 수</span>
-                <strong>{result.diagnostics.parameter_count.toLocaleString()}</strong>
-              </div>
-              <div className="result-section" aria-label="회귀 진단 차트 결과">
-                <div className="panel-heading">
-                  <div>
-                    <h4>회귀 진단 차트</h4>
-                    <p>
-                      {result.diagnostics.diagnostic_points.points_included.toLocaleString()} /{" "}
-                      {result.diagnostics.diagnostic_points.point_limit.toLocaleString()} diagnostic
-                      points
-                      {result.diagnostics.diagnostic_points.truncated ? " · capped" : ""}
-                    </p>
-                  </div>
-                </div>
-                <div className="linear-model-diagnostic-layout">
-                  <div className="linear-model-diagnostic-primary">
-                  <ChartPanel title="Observed vs Fitted">
-                    {renderObservedFittedChart(result)}
-                  </ChartPanel>
-                  </div>
-                  <ChartPanel title="Residuals vs Fitted">
-                    {renderResidualFittedChart(result)}
-                  </ChartPanel>
-                  <ChartPanel title="Leverage vs Cook's D">
-                    {renderInfluenceChart(result)}
-                  </ChartPanel>
-                </div>
-              </div>
-              <div className="table-wrap">
-                <table className="result-table">
-                  <thead>
-                    <tr>
-                      <th>행 index</th>
-                      <th>Fitted</th>
-                      <th>Residual</th>
-                      <th>Std residual</th>
-                      <th>Leverage</th>
-                      <th>Cook&apos;s D</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topDiagnosticPoints.map((point) => (
-                      <tr key={point.row_index}>
-                        <td>{point.row_index.toLocaleString()}</td>
-                        <td>{formatModelNumber(point.fitted)}</td>
-                        <td>{formatModelNumber(point.residual)}</td>
-                        <td>{formatModelNumber(point.standardized_residual)}</td>
-                        <td>{formatModelNumber(point.leverage)}</td>
-                        <td>{formatModelNumber(point.cooks_distance)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </>
           ) : null}
         </>
@@ -621,210 +513,9 @@ export function LinearModelPanel({
   );
 }
 
-function ChartPanel({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="chart-panel">
-      <div className="chart-panel-title">{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function renderObservedFittedChart(result: LinearModelResult) {
-  const sourcePoints = observedDiagnosticPoints(result);
-  const range = paddedNumericRange(
-    sourcePoints.flatMap((point) => [point.fitted, point.observed]),
-  );
-  const points: InteractiveScatterPoint[] = sourcePoints.map((point) => ({
-    ariaLabel: `행 ${point.rowIndex}, 실제값 ${formatModelNumber(point.observed)}, 예측값 ${formatModelNumber(point.fitted)}, 잔차 ${formatModelNumber(point.residual)}`,
-    className: "diagnostic-point",
-    details: [
-      { label: "행 index", value: point.rowIndex.toLocaleString() },
-      { label: "실제값", value: formatModelNumber(point.observed) },
-      { label: "예측값", value: formatModelNumber(point.fitted) },
-      { label: "잔차", value: formatModelNumber(point.residual) },
-      { label: "표준화 잔차", value: formatModelNumber(point.standardizedResidual) },
-    ],
-    id: `observed-${point.rowIndex}`,
-    title: `행 ${point.rowIndex}`,
-    x: point.fitted,
-    y: point.observed,
-  }));
-  const included = result.diagnostics.diagnostic_points.points_included;
-  const total = result.sample.n_used;
-  return (
-    <InteractiveScatterChart
-      annotations={[
-        `Multiple R ${formatModelNumber(Math.sqrt(Math.max(0, result.fit.r_squared)))}`,
-        `Adjusted R² ${formatModelNumber(result.fit.adjusted_r_squared)}`,
-        `Residual SE ${formatModelNumber(result.fit.residual_standard_error)}`,
-        `표시 ${included.toLocaleString()} / 전체 ${total.toLocaleString()}${result.diagnostics.diagnostic_points.truncated ? " · R과 적합 요약은 전체 표본 기준" : ""}`,
-      ]}
-      chartId="linear-model-observed-fitted"
-      description="실제 관측값과 회귀모형 예측값을 같은 척도로 비교합니다. 점선은 실제값과 예측값이 같은 identity 기준선입니다."
-      emptyLabel="진단 point 없음"
-      formatValue={formatModelNumber}
-      points={points}
-      referenceLines={[
-        {
-          className: "identity-line",
-          label: "실제값과 예측값이 같은 y=x 기준선",
-          x1: range.min,
-          x2: range.max,
-          y1: range.min,
-          y2: range.max,
-        },
-      ]}
-      square
-      title="Observed vs Fitted"
-      xLabel="Fitted / 예측값"
-      xRange={range}
-      yLabel="Observed / 실제값"
-      yRange={range}
-    />
-  );
-}
-
-function renderResidualFittedChart(result: LinearModelResult) {
-  const sourcePoints = result.diagnostics.diagnostic_points.points.filter(
-    (point) => Number.isFinite(point.fitted) && Number.isFinite(point.residual),
-  );
-  const xRange = paddedNumericRange(sourcePoints.map((point) => point.fitted));
-  const yRange = paddedNumericRange([...sourcePoints.map((point) => point.residual), 0]);
-  const points: InteractiveScatterPoint[] = sourcePoints.map((point) => ({
-    ariaLabel: `행 ${point.row_index}, 예측값 ${formatModelNumber(point.fitted)}, 잔차 ${formatModelNumber(point.residual)}`,
-    className: "diagnostic-point",
-    details: [
-      { label: "행 index", value: point.row_index.toLocaleString() },
-      { label: "예측값", value: formatModelNumber(point.fitted) },
-      { label: "잔차", value: formatModelNumber(point.residual) },
-      { label: "표준화 잔차", value: formatModelNumber(point.standardized_residual) },
-    ],
-    id: `residual-${point.row_index}`,
-    title: `행 ${point.row_index}`,
-    warning:
-      point.standardized_residual !== null &&
-      Math.abs(point.standardized_residual) >=
-        result.diagnostics.residual_summary.large_standardized_threshold,
-    x: point.fitted,
-    y: point.residual,
-  }));
-  return (
-    <InteractiveScatterChart
-      annotations={[
-        `큰 표준화 잔차 기준 ±${formatModelNumber(result.diagnostics.residual_summary.large_standardized_threshold)}`,
-      ]}
-      chartId="linear-model-residual-fitted"
-      description="예측값에 따른 잔차 분포를 보여줍니다. 점선은 잔차 0 기준선이며 경고 원은 큰 표준화 잔차 후보입니다."
-      emptyLabel="진단 point 없음"
-      formatValue={formatModelNumber}
-      points={points}
-      referenceLines={[
-        { label: "잔차 0 기준선", x1: xRange.min, x2: xRange.max, y1: 0, y2: 0 },
-      ]}
-      title="Residuals vs Fitted"
-      xLabel="Fitted / 예측값"
-      xRange={xRange}
-      yLabel="Residual / 잔차"
-      yRange={yRange}
-    />
-  );
-}
-
-function renderInfluenceChart(result: LinearModelResult) {
-  const sourcePoints = result.diagnostics.diagnostic_points.points.filter(
-    (point) =>
-      Number.isFinite(point.leverage) &&
-      point.cooks_distance !== null &&
-      Number.isFinite(point.cooks_distance),
-  );
-  const xRange = paddedNumericRange([
-    ...sourcePoints.map((point) => point.leverage),
-    result.diagnostics.leverage.threshold,
-  ]);
-  const yRange = paddedNumericRange([
-    ...sourcePoints.map((point) => point.cooks_distance ?? 0),
-    result.diagnostics.influence.cooks_distance_threshold,
-  ]);
-  const points: InteractiveScatterPoint[] = sourcePoints.map((point) => {
-    const cooksDistance = point.cooks_distance ?? 0;
-    const highLeverage = point.leverage > result.diagnostics.leverage.threshold;
-    const highCook = cooksDistance > result.diagnostics.influence.cooks_distance_threshold;
-    return {
-      ariaLabel: `행 ${point.row_index}, leverage ${formatModelNumber(point.leverage)}, Cook's D ${formatModelNumber(cooksDistance)}, ${highLeverage || highCook ? "기준 초과" : "기준 이내"}`,
-      className: "influence-point",
-      details: [
-        { label: "행 index", value: point.row_index.toLocaleString() },
-        { label: "Leverage", value: formatModelNumber(point.leverage) },
-        { label: "Cook's D", value: formatModelNumber(cooksDistance) },
-        { label: "기준 상태", value: highLeverage || highCook ? "기준 초과" : "기준 이내" },
-      ],
-      id: `influence-${point.row_index}`,
-      title: `행 ${point.row_index}`,
-      warning: highLeverage || highCook,
-      x: point.leverage,
-      y: cooksDistance,
-    };
-  });
-  return (
-    <InteractiveScatterChart
-      annotations={[
-        `Leverage 기준 ${formatModelNumber(result.diagnostics.leverage.threshold)}`,
-        `Cook's D 기준 ${formatModelNumber(result.diagnostics.influence.cooks_distance_threshold)}`,
-      ]}
-      chartId="linear-model-leverage-cook"
-      description="각 진단점의 leverage와 Cook's D를 보여줍니다. 점선은 각 영향점 후보 기준이며 경고 원은 하나 이상의 기준을 초과한 점입니다."
-      emptyLabel="영향점 point 없음"
-      formatValue={formatModelNumber}
-      points={points}
-      referenceLines={[
-        {
-          label: "Leverage 기준",
-          x1: result.diagnostics.leverage.threshold,
-          x2: result.diagnostics.leverage.threshold,
-          y1: yRange.min,
-          y2: yRange.max,
-        },
-        {
-          label: "Cook's D 기준",
-          x1: xRange.min,
-          x2: xRange.max,
-          y1: result.diagnostics.influence.cooks_distance_threshold,
-          y2: result.diagnostics.influence.cooks_distance_threshold,
-        },
-      ]}
-      title="Leverage vs Cook's D"
-      xLabel="Leverage"
-      xRange={xRange}
-      yLabel="Cook's D"
-      yRange={yRange}
-    />
-  );
-}
-
-function formatPercent(value: number): string {
-  return `${Math.round(value * 1000) / 10}%`;
-}
-
-function formatModelNumber(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) {
-    return "NA";
-  }
-  return value.toLocaleString("ko-KR", {
-    maximumFractionDigits: 6,
-    minimumFractionDigits: 0,
-  });
-}
-
-function shortIdentifier(value: string): string {
-  if (value.length <= 16) {
-    return value;
-  }
-  return `${value.slice(0, 12)}...`;
-}
-
 function linearModelPredictorKind(column: DatasetColumnResponse): string {
-  return predictorKind(column) === "categorical" ? "범주형" : "숫자형";
+  const representation = predictorKind(column) === "categorical" ? "범주형" : "숫자형";
+  return `${representation} · ${measurementLevelLabel(column.measurement_level)} · ${roleLabel(column.role)} 역할`;
 }
 
 function linearModelInteractionOptions(columns: DatasetColumnResponse[]): Array<{

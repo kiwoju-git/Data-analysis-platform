@@ -57,6 +57,10 @@ ANALYSIS_RUN_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[1] = 1
 ANALYSIS_RUN_DELETION_SCHEMA_VERSION: Literal[1] = 1
 REGRESSION_MODEL_ARTIFACT_KIND = "regression_model_manifest"
 REGRESSION_MODEL_MEDIA_TYPE = "application/json"
+REGRESSION_PASTED_PREDICTION_METHOD_ID = "regression.predict_pasted"
+REGRESSION_PASTED_INPUT_ARTIFACT_KIND = "regression_pasted_prediction_input"
+REGRESSION_PASTED_ROWS_ARTIFACT_KIND = "regression_pasted_prediction_rows"
+REGRESSION_LINEAR_MODEL_OPTIMIZER_METHOD_ID = "regression.linear_model_optimizer"
 _RESULT_QUARANTINE_PATTERN = re.compile(r"^\.delete-r-([0-9a-f]{16})\.q$")
 _ARTIFACT_QUARANTINE_PATTERN = re.compile(r"^\.delete-a-([0-9a-fA-F-]{36})-([0-9a-f]{16})\.q$")
 
@@ -364,6 +368,11 @@ def _validated_owned_files(
             validate_regression_prediction_consistency(
                 settings, UUID(run.analysis_id), verify_rows=True
             )
+        elif run.method_id == REGRESSION_PASTED_PREDICTION_METHOD_ID:
+            _validate_pasted_prediction_artifact_relation(settings.workspace_root, run, artifacts)
+        elif run.method_id == REGRESSION_LINEAR_MODEL_OPTIMIZER_METHOD_ID:
+            if artifacts:
+                raise _artifact_error("analysis_run_artifact_metadata_invalid")
         else:
             _validate_row_snapshot_relation(run, artifacts)
     return files
@@ -382,6 +391,20 @@ def _expected_artifact_contract(
         return (
             Path("workspaces") / "analyses" / run.analysis_id / "prediction_rows.jsonl",
             REGRESSION_PREDICTION_ROWS_MEDIA_TYPE,
+        )
+    if artifact.kind == REGRESSION_PASTED_INPUT_ARTIFACT_KIND:
+        if run.method_id != REGRESSION_PASTED_PREDICTION_METHOD_ID:
+            raise _artifact_error("analysis_run_artifact_metadata_invalid")
+        return (
+            Path("workspaces") / "analyses" / run.analysis_id / "pasted_input.json",
+            "application/json",
+        )
+    if artifact.kind == REGRESSION_PASTED_ROWS_ARTIFACT_KIND:
+        if run.method_id != REGRESSION_PASTED_PREDICTION_METHOD_ID:
+            raise _artifact_error("analysis_run_artifact_metadata_invalid")
+        return (
+            Path("workspaces") / "analyses" / run.analysis_id / "prediction_rows.json",
+            "application/json",
         )
     if artifact.kind == REGRESSION_MODEL_ARTIFACT_KIND:
         if regression_model is None or regression_model.analysis_id != run.analysis_id:
@@ -408,6 +431,43 @@ def _expected_artifact_contract(
         except (ValueError, ApiError) as exc:
             raise _artifact_error("analysis_run_artifact_metadata_invalid") from exc
     raise _artifact_error("analysis_run_artifact_kind_unsupported")
+
+
+def _validate_pasted_prediction_artifact_relation(
+    workspace_root: Path,
+    run: AnalysisRunRecord,
+    artifacts: list[AnalysisArtifactRecord],
+) -> None:
+    input_artifacts = [
+        item for item in artifacts if item.kind == REGRESSION_PASTED_INPUT_ARTIFACT_KIND
+    ]
+    row_artifacts = [
+        item for item in artifacts if item.kind == REGRESSION_PASTED_ROWS_ARTIFACT_KIND
+    ]
+    if len(artifacts) != 2 or len(input_artifacts) != 1 or len(row_artifacts) != 1:
+        raise _artifact_error("analysis_run_artifact_metadata_invalid")
+    try:
+        config = json.loads(run.config_json)
+        input_payload = json.loads((workspace_root / input_artifacts[0].path).read_text("utf-8"))
+        rows_payload = json.loads((workspace_root / row_artifacts[0].path).read_text("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise _artifact_error("analysis_run_artifact_metadata_invalid") from exc
+    if not all(isinstance(item, dict) for item in (config, input_payload, rows_payload)):
+        raise _artifact_error("analysis_run_artifact_metadata_invalid")
+    if not (
+        config.get("input_kind") == "pasted_table"
+        and input_payload.get("artifact_kind") == REGRESSION_PASTED_INPUT_ARTIFACT_KIND
+        and rows_payload.get("artifact_kind") == REGRESSION_PASTED_ROWS_ARTIFACT_KIND
+        and input_payload.get("prediction_id") == run.analysis_id
+        and rows_payload.get("prediction_id") == run.analysis_id
+        and input_payload.get("model_id") == config.get("model_id")
+        and rows_payload.get("model_id") == config.get("model_id")
+        and input_payload.get("model_manifest_sha256") == config.get("model_manifest_sha256")
+        and input_payload.get("normalized_input_sha256") == config.get("normalized_input_sha256")
+        and isinstance(input_payload.get("rows"), list)
+        and isinstance(rows_payload.get("rows"), list)
+    ):
+        raise _artifact_error("analysis_run_artifact_metadata_invalid")
 
 
 def _validate_row_snapshot_relation(

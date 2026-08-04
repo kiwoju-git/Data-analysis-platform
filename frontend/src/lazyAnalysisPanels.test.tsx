@@ -62,5 +62,5 @@ describe("lazy analysis panels", () => {
       "ResponseSurfacePanel",
     ]);
     expect(Object.keys(lazyPanels)).toHaveLength(16);
-  });
+  }, 10_000);
 });

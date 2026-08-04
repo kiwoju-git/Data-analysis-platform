@@ -46,6 +46,10 @@ export function DatasetSchemaSection({
           </button>
         </div>
       </div>
+      <p className="cell-subtle">
+        역할은 분석에서의 사용 목적이며, 숫자형/범주형 판정은 데이터 타입과 측정 수준을
+        기준으로 합니다.
+      </p>
       <div className="table-wrap">
         <table className="schema-table">
           <thead>

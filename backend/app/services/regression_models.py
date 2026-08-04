@@ -2044,19 +2044,25 @@ def _manifest_categorical_levels(manifest: dict[str, object]) -> dict[str, set[s
 
 
 def _is_manifest_numeric_predictor(payload: dict[str, object]) -> bool:
-    return classify_linear_model_predictor(
-        data_type=payload.get("data_type"),
-        measurement_level=payload.get("measurement_level"),
-        role=payload.get("role"),
-    ) == "numeric"
+    return (
+        classify_linear_model_predictor(
+            data_type=payload.get("data_type"),
+            measurement_level=payload.get("measurement_level"),
+            role=payload.get("role"),
+        )
+        == "numeric"
+    )
 
 
 def _target_type_compatible(predictor_kind: str, column: DatasetColumnRecord) -> bool:
-    return classify_linear_model_predictor(
-        data_type=column.data_type,
-        measurement_level=column.measurement_level,
-        role=column.role,
-    ) == predictor_kind
+    return (
+        classify_linear_model_predictor(
+            data_type=column.data_type,
+            measurement_level=column.measurement_level,
+            role=column.role,
+        )
+        == predictor_kind
+    )
 
 
 def _fill_training_ranges(

@@ -316,6 +316,10 @@ export default function App() {
   >([]);
   const [linearModelAlpha, setLinearModelAlpha] = useState(0.05);
   const [linearModelConfidenceLevel, setLinearModelConfidenceLevel] = useState(0.95);
+  const [linearModelSelectionMethod, setLinearModelSelectionMethod] = useState<
+    "none" | "backward_elimination"
+  >("none");
+  const [linearModelAlphaToRemove, setLinearModelAlphaToRemove] = useState(0.10);
   const [analysisFilterDrafts, setAnalysisFilterDrafts] = useState<AnalysisFilterDraft[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
   const [descriptiveQuickGraphState, setDescriptiveQuickGraphState] =
@@ -3657,6 +3661,13 @@ export default function App() {
       setFlowError("invalid_linear_model_confidence_level");
       return;
     }
+    if (
+      linearModelSelectionMethod === "backward_elimination" &&
+      (linearModelAlphaToRemove <= 0 || linearModelAlphaToRemove >= 1)
+    ) {
+      setFlowError("invalid_linear_model_alpha_to_remove");
+      return;
+    }
     if (analysisFilterValidationError !== null) {
       setFlowError(analysisFilterValidationError);
       return;
@@ -3697,6 +3708,11 @@ export default function App() {
           missing_policy: "complete_case",
           include_intercept: true,
           covariance_type: "standard",
+          model_selection: {
+            method: linearModelSelectionMethod,
+            alpha_to_remove: linearModelAlphaToRemove,
+            hierarchy_policy: "strong",
+          },
         },
       });
       setAnalysisResult(response);
@@ -4031,6 +4047,8 @@ export default function App() {
     linearModelAlpha,
     linearModelAnalysisResult,
     linearModelConfidenceLevel,
+    linearModelSelectionMethod,
+    linearModelAlphaToRemove,
     linearModelInteractionKeys: selectedLinearModelInteractionKeys,
     linearModelPredictorColumnIds: selectedLinearModelPredictorColumnIds,
     linearModelPredictorColumns,
@@ -4194,6 +4212,8 @@ export default function App() {
     onRunLinearModelAnalysis: () => {
       void handleRunLinearModelAnalysis();
     },
+    onLinearModelSelectionMethodChange: setLinearModelSelectionMethod,
+    onLinearModelAlphaToRemoveChange: setLinearModelAlphaToRemove,
     onRunLinearModelPredictionPreflight: () => {
       void handleRunLinearModelPredictionPreflight();
     },

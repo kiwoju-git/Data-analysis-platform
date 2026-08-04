@@ -66,11 +66,12 @@ from app.storage.metadata import (
     get_dataset_version_catalog_record,
     get_regression_model_record,
     list_analysis_artifact_records,
+    list_analysis_run_records,
     list_regression_prediction_records_by_source,
 )
 
-REGRESSION_MODEL_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[2] = 2
-REGRESSION_MODEL_DELETION_SCHEMA_VERSION: Literal[2] = 2
+REGRESSION_MODEL_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[3] = 3
+REGRESSION_MODEL_DELETION_SCHEMA_VERSION: Literal[3] = 3
 ATTRIBUTE_CONTROL_LIMIT_SET_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[1] = 1
 ATTRIBUTE_CONTROL_LIMIT_SET_DELETION_SCHEMA_VERSION: Literal[1] = 1
 _MODEL_ARTIFACT_KIND = "regression_model_manifest"
@@ -487,8 +488,26 @@ def _regression_model_context(
         source_analysis_id=record.analysis_id,
         model_id=record.model_id,
     )
+    pasted_prediction_records = _model_owned_runs(
+        settings,
+        model_id=record.model_id,
+        source_analysis_id=record.analysis_id,
+        method_id="regression.predict_pasted",
+    )
+    optimization_records = _model_owned_runs(
+        settings,
+        model_id=record.model_id,
+        source_analysis_id=record.analysis_id,
+        method_id="regression.linear_model_optimizer",
+    )
     dependent_count = len(prediction_records)
-    blockers = ["regression_model_deletion_prediction_dependency"] if dependent_count else []
+    blockers = []
+    if dependent_count:
+        blockers.append("regression_model_deletion_prediction_dependency")
+    if pasted_prediction_records:
+        blockers.append("regression_model_deletion_pasted_prediction_dependency")
+    if optimization_records:
+        blockers.append("regression_model_deletion_optimization_dependency")
     prediction_contexts: list[_AnalysisRunDeletionContext] = []
     dependent_predictions: list[RegressionModelDependentPredictionDescriptor] = []
     cascade_blockers: list[str] = []
@@ -535,6 +554,8 @@ def _regression_model_context(
             item.counts.export_file_count for item in prediction_contexts
         ),
         dependent_prediction_file_bytes=sum(item.counts.file_bytes for item in prediction_contexts),
+        dependent_pasted_prediction_count=len(pasted_prediction_records),
+        dependent_optimization_count=len(optimization_records),
     )
     manifest_payload = {
         "preflight_schema_version": REGRESSION_MODEL_DELETION_PREFLIGHT_SCHEMA_VERSION,
@@ -567,7 +588,7 @@ def _regression_model_context(
     }
     cascade_manifest_sha256 = (
         hashlib.sha256(canonical_json_bytes(cascade_manifest_payload)).hexdigest()
-        if dependent_count
+        if dependent_count and not pasted_prediction_records and not optimization_records
         else None
     )
     return _RegressionModelDeletionContext(
@@ -722,11 +743,23 @@ def _regression_model_preflight_response(
         deletion_ready=not context.blockers,
         cascade_deletion_ready=(
             bool(context.dependent_predictions)
+            and context.counts.dependent_pasted_prediction_count == 0
+            and context.counts.dependent_optimization_count == 0
             and all(item.deletion_ready for item in context.dependent_predictions)
         ),
         blockers=context.blockers,
         cascade_blockers=sorted(
             {blocker for item in context.dependent_predictions for blocker in item.blocker_codes}
+        )
+        + (
+            ["regression_model_deletion_pasted_prediction_dependency"]
+            if context.counts.dependent_pasted_prediction_count
+            else []
+        )
+        + (
+            ["regression_model_deletion_optimization_dependency"]
+            if context.counts.dependent_optimization_count
+            else []
         )
         + (
             ["regression_model_deletion_prediction_integrity_blocked"]
@@ -739,6 +772,37 @@ def _regression_model_preflight_response(
         dependent_predictions=list(context.dependent_predictions[:5]),
         dependent_predictions_truncated=len(context.dependent_predictions) > 5,
     )
+
+
+def _model_owned_runs(
+    settings: Settings,
+    *,
+    model_id: str,
+    source_analysis_id: str,
+    method_id: str,
+) -> list[AnalysisRunRecord]:
+    records = list_analysis_run_records(
+        settings.workspace_root,
+        dataset_version_id=None,
+        method_id=method_id,
+        status=None,
+        stale=None,
+        result_available=None,
+        limit=10_000,
+        offset=0,
+    )
+    matched: list[AnalysisRunRecord] = []
+    for record in records:
+        try:
+            config = json.loads(record.config_json)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(config, dict) and (
+            config.get("model_id") == model_id
+            or config.get("source_analysis_id") == source_analysis_id
+        ):
+            matched.append(record)
+    return matched
 
 
 def _limit_set_preflight_response(

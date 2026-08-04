@@ -514,6 +514,35 @@ export const apiRoutes = {
     return apiUrl(`/regression-models/predictions/${pathId(predictionId)}/exports/csv`);
   },
 
+  regressionPastedPredictionPreflight(modelId: string): string {
+    return apiUrl(`/regression-models/${pathId(modelId)}/pasted-prediction-preflight`);
+  },
+
+  regressionPastedPredictions(modelId: string): string {
+    return apiUrl(`/regression-models/${pathId(modelId)}/pasted-predictions`);
+  },
+
+  regressionPastedPredictionRows(
+    predictionId: string,
+    limit: number,
+    offset: number,
+  ): string {
+    return urlWithQuery(
+      `/regression-models/pasted-predictions/${pathId(predictionId)}/rows`,
+      new URLSearchParams({ limit: String(limit), offset: String(offset) }),
+    );
+  },
+
+  regressionResponseOptimizations(modelId: string): string {
+    return apiUrl(`/regression-models/${pathId(modelId)}/response-optimizations`);
+  },
+
+  regressionResponseOptimization(modelId: string, optimizationId: string): string {
+    return apiUrl(
+      `/regression-models/${pathId(modelId)}/response-optimizations/${pathId(optimizationId)}`,
+    );
+  },
+
   gageRrPreflight(): string {
     return apiUrl("/quality/gage-rr/preflight");
   },

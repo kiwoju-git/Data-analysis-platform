@@ -208,7 +208,11 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "doe.response_optimizer",
         "doe.bayesian_optimization",
     ]
-    assert set(METHOD_VERSIONS) == set(method_ids) | {"regression.response_optimizer"}
+    assert set(METHOD_VERSIONS) == set(method_ids) | {
+        "regression.response_optimizer",
+        "regression.linear_model_optimizer",
+        "regression.predict_pasted",
+    }
     assert all(METHOD_VERSIONS[method.method_id] == method.method_version for method in METHODS)
 
 
@@ -7392,7 +7396,7 @@ def test_analysis_run_executes_linear_model_from_dataset_version(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -7467,13 +7471,13 @@ def test_analysis_run_executes_linear_model_from_dataset_version(tmp_path) -> No
         },
     ]
     result = payload["result"]
-    assert result["schema_version"] == 4
+    assert result["schema_version"] == 5
     assert result["summary_type"] == "linear_model"
     assert result["method"] == "ordinary_least_squares_numeric_predictors"
     assert result["missing_policy"] == "complete_case"
     assert "prediction_basis" not in result
     assert result["model_manifest"]["model_id"] == model_id
-    assert result["model_manifest"]["manifest_schema_version"] == 2
+    assert result["model_manifest"]["manifest_schema_version"] == 3
     assert len(result["model_manifest"]["manifest_sha256"]) == 64
     assert result["package_versions"] == {"numpy": "2.2.6", "scipy": "1.15.3"}
     assert result["sample"] == {
@@ -7490,6 +7494,14 @@ def test_analysis_run_executes_linear_model_from_dataset_version(tmp_path) -> No
         abs=1e-12,
     )
     assert result["fit"]["f_p_value"] == pytest.approx(1.2613348298348502e-07, abs=1e-18)
+    assert result["fit"]["press"] == pytest.approx(1.218827602384594, abs=1e-12)
+    assert result["fit"]["predicted_r_squared"] == pytest.approx(
+        0.9959624758513139,
+        abs=1e-12,
+    )
+    assert result["equation"]["response_label"] == "y"
+    assert result["anova"]["method"] == "adjusted_partial_sums_of_squares"
+    assert result["model_selection"]["method"] == "none"
     coefficients = {coefficient["term"]: coefficient for coefficient in result["coefficients"]}
     assert coefficients["Intercept"]["estimate"] == pytest.approx(7.425, abs=1e-12)
     assert coefficients["x1"]["estimate"] == pytest.approx(2.7, abs=1e-12)
@@ -7531,7 +7543,7 @@ def test_analysis_run_executes_linear_model_from_dataset_version(tmp_path) -> No
     assert model_payload["manifest_sha256"] == result["model_manifest"]["manifest_sha256"]
     assert "manifest_path" not in model_response.text
     manifest = model_payload["manifest"]
-    assert manifest["manifest_schema_version"] == 2
+    assert manifest["manifest_schema_version"] == 3
     assert manifest["model_id"] == model_id
     assert manifest["analysis_id"] == payload["analysis_id"]
     assert manifest["dataset_version_id"] == version["version_id"]
@@ -7789,7 +7801,7 @@ def test_regression_prediction_preflight_accepts_same_dataset_version(tmp_path) 
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -7862,7 +7874,7 @@ def test_regression_prediction_endpoint_returns_ols_predictions_from_manifest(tm
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -7916,7 +7928,7 @@ def test_regression_prediction_endpoint_returns_ols_predictions_from_manifest(tm
     assert payload["row_count_omitted"] == 0
     assert payload["truncated"] is False
     assert payload["provenance"]["method_id"] == "regression.predict"
-    assert payload["provenance"]["model_manifest_schema_version"] == 2
+    assert payload["provenance"]["model_manifest_schema_version"] == 3
     assert payload["warnings"][:2] == [
         {
             "code": "regression_prediction_not_causation",
@@ -7979,7 +7991,7 @@ def test_regression_prediction_rows_endpoint_pages_all_rows_and_rejects_tamperin
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -8491,7 +8503,7 @@ def test_regression_prediction_metadata_failure_removes_result_artifacts(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {"response": response_column_id, "predictors": predictor_column_id},
                 "options": {
@@ -8549,7 +8561,7 @@ def test_regression_prediction_endpoint_handles_categorical_factor_terms(tmp_pat
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -8629,7 +8641,7 @@ def test_regression_prediction_endpoint_reconstructs_numeric_extra_terms(tmp_pat
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -8712,7 +8724,7 @@ def test_regression_prediction_endpoint_rejects_manifest_without_prediction_basi
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -8790,7 +8802,7 @@ def test_regression_prediction_endpoint_rejects_preflight_errors(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": training_version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -8848,7 +8860,7 @@ def test_regression_prediction_preflight_reports_target_dataset_risks(tmp_path) 
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": training_version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -8978,7 +8990,7 @@ def test_analysis_run_executes_linear_model_with_categorical_factor(tmp_path) ->
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -9009,7 +9021,7 @@ def test_analysis_run_executes_linear_model_with_categorical_factor(tmp_path) ->
         "message": "범주형 예측변수는 첫 수준을 기준으로 하는 treatment coding으로 적합했습니다.",
     } in payload["warnings"]
     result = payload["result"]
-    assert result["schema_version"] == 4
+    assert result["schema_version"] == 5
     assert result["method"] == "ordinary_least_squares_main_effects"
     assert result["sample"]["df_model"] == 2
     assert result["sample"]["df_residual"] == 3
@@ -9071,7 +9083,7 @@ def test_analysis_run_executes_linear_model_with_numeric_extra_terms(tmp_path) -
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -9113,7 +9125,7 @@ def test_analysis_run_executes_linear_model_with_numeric_extra_terms(tmp_path) -
         "message": "선택한 숫자형 상호작용 항은 주효과와 함께 해석해야 합니다.",
     } in payload["warnings"]
     result = payload["result"]
-    assert result["schema_version"] == 4
+    assert result["schema_version"] == 5
     assert result["method"] == "ordinary_least_squares_safe_terms"
     assert result["sample"]["df_model"] == 4
     assert result["sample"]["df_residual"] == 3
@@ -12046,7 +12058,7 @@ def test_linear_model_result_manifest_files_are_removed_when_metadata_insert_fai
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -12102,7 +12114,7 @@ def test_linear_model_manifest_file_is_removed_when_result_write_fails(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "regression.linear_model",
-                "method_version": "0.1.0",
+                "method_version": "0.2.0",
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,

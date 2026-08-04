@@ -182,8 +182,136 @@ export interface LinearModelFit {
   sse: number;
   ssr: number;
   tss: number;
-  f_statistic: number;
-  f_p_value: number;
+  f_statistic: number | null;
+  f_p_value: number | null;
+  press?: number | null;
+  predicted_r_squared?: number | null;
+  predicted_r_squared_definition?: string;
+}
+
+export interface LinearModelEquationTerm {
+  term: string;
+  kind: string;
+  coefficient: number;
+  source_column_ids: string[];
+  level: string | null;
+  reference_level: string | null;
+  coding: string | null;
+  display_term: string;
+}
+
+export interface LinearModelEquation {
+  response_label: string;
+  intercept: number;
+  terms: LinearModelEquationTerm[];
+  display_equation: string;
+  coefficient_precision: string;
+  categorical_reference_levels: Array<{
+    column_id: string;
+    reference_level: string;
+  }>;
+}
+
+export interface LinearModelAnovaRow {
+  source: string;
+  row_kind: string;
+  term_kind?: string;
+  source_column_ids?: string[];
+  df: number;
+  adjusted_ss: number;
+  adjusted_ms: number | null;
+  f_statistic: number | null;
+  p_value: number | null;
+}
+
+export interface LinearModelAnova {
+  method: "adjusted_partial_sums_of_squares";
+  rows: LinearModelAnovaRow[];
+  lack_of_fit: {
+    available: boolean;
+    reason: string | null;
+    replicate_setting_count?: number;
+    rows: LinearModelAnovaRow[];
+  };
+  hierarchy_note: string;
+}
+
+export interface LinearModelSelectionStep {
+  step: number;
+  active_terms: string[];
+  removed_term: string | null;
+  removal_p_value: number | null;
+  s: number;
+  r_squared: number;
+  adjusted_r_squared: number;
+  press: number | null;
+  predicted_r_squared: number | null;
+  mallows_cp: number;
+  aicc: number | null;
+  bic: number;
+  coefficients: Array<{ term: string; estimate: number }>;
+}
+
+export interface LinearModelSelection {
+  method: "none" | "backward_elimination";
+  alpha_to_remove: number;
+  hierarchy_policy: "strong";
+  tie_break_policy: string;
+  initial_terms: string[];
+  final_terms: string[];
+  stop_reason: string;
+  steps: LinearModelSelectionStep[];
+}
+
+export interface LinearModelResidualHistogram {
+  n: number;
+  bins: Array<{ lower: number; upper: number; count: number }>;
+}
+
+export interface LinearModelResidualQqPlot {
+  n: number;
+  points: Array<{
+    rank: number;
+    row_index: number;
+    theoretical_quantile: number;
+    residual: number;
+  }>;
+  reference_line: { slope: number; intercept: number } | null;
+  truncated: boolean;
+}
+
+export interface LinearModelResidualScatter {
+  n: number;
+  points: Array<{
+    row_index: number;
+    order: number;
+    fitted: number;
+    residual: number;
+  }>;
+  truncated: boolean;
+  x_kind: "fitted" | "order";
+}
+
+export interface LinearModelResidualPlots {
+  residual_types_available: Array<"raw" | "standardized">;
+  histograms: Record<"raw" | "standardized", LinearModelResidualHistogram>;
+  qq_plots: Record<"raw" | "standardized", LinearModelResidualQqPlot>;
+  residuals_vs_fits: Record<"raw" | "standardized", LinearModelResidualScatter>;
+  residuals_vs_order: Record<"raw" | "standardized", LinearModelResidualScatter>;
+  point_limit: number;
+  points_truncated: boolean;
+}
+
+export interface LinearModelTrainingDomain {
+  scope: "complete_case_fit_rows";
+  predictors: Array<{
+    column_id: string;
+    kind: "numeric" | "categorical";
+    minimum?: number;
+    maximum?: number;
+    integer_only?: boolean;
+    levels?: string[];
+  }>;
 }
 
 export interface LinearModelCoefficient {
@@ -290,5 +418,10 @@ export interface LinearModelResult {
   fit: LinearModelFit;
   coefficients: LinearModelCoefficient[];
   diagnostics: LinearModelDiagnostics;
+  equation?: LinearModelEquation;
+  anova?: LinearModelAnova;
+  model_selection?: LinearModelSelection;
+  residual_plots?: LinearModelResidualPlots;
+  training_domain?: LinearModelTrainingDomain;
   model_manifest?: LinearModelManifestPointer;
 }

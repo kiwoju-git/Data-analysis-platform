@@ -11,12 +11,20 @@ from app.api.v1.schemas.analyses import (
     RegressionModelManifestResponse,
     RegressionModelMetadataResponse,
     RegressionModelMetadataUpdateRequest,
+    RegressionPastedPredictionExecuteRequest,
+    RegressionPastedPredictionPreflightRequest,
+    RegressionPastedPredictionPreflightResponse,
+    RegressionPastedPredictionResponse,
+    RegressionPastedPredictionRowsPageResponse,
     RegressionPredictionCsvExportResponse,
     RegressionPredictionPreflightRequest,
     RegressionPredictionPreflightResponse,
     RegressionPredictionRequest,
     RegressionPredictionResponse,
     RegressionPredictionRowsPageResponse,
+    RegressionResponseOptimizationListResponse,
+    RegressionResponseOptimizationRequest,
+    RegressionResponseOptimizationResponse,
 )
 from app.services.analysis_run_exports import create_regression_prediction_csv_export
 from app.services.regression_models import (
@@ -26,6 +34,16 @@ from app.services.regression_models import (
     get_regression_prediction_rows,
     list_regression_models,
     update_regression_model_metadata,
+)
+from app.services.regression_pasted_predictions import (
+    create_regression_pasted_prediction,
+    get_regression_pasted_prediction_rows,
+    preflight_regression_pasted_prediction,
+)
+from app.services.regression_response_optimizer import (
+    create_regression_response_optimization,
+    get_regression_response_optimization,
+    list_regression_response_optimizations,
 )
 from app.services.workspace_asset_retention import (
     delete_stored_regression_model,
@@ -181,4 +199,102 @@ def create_regression_predictions_route(
         settings=request.app.state.settings,
         model_id=model_id,
         body=body,
+    )
+
+
+@router.post(
+    "/{model_id}/response-optimizations",
+    response_model=RegressionResponseOptimizationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_regression_response_optimization_route(
+    request: Request,
+    model_id: UUID,
+    body: RegressionResponseOptimizationRequest,
+) -> RegressionResponseOptimizationResponse:
+    return create_regression_response_optimization(
+        settings=request.app.state.settings,
+        model_id=model_id,
+        body=body,
+    )
+
+
+@router.get(
+    "/{model_id}/response-optimizations",
+    response_model=RegressionResponseOptimizationListResponse,
+)
+def list_regression_response_optimizations_route(
+    request: Request,
+    model_id: UUID,
+) -> RegressionResponseOptimizationListResponse:
+    return list_regression_response_optimizations(
+        settings=request.app.state.settings,
+        model_id=model_id,
+    )
+
+
+@router.get(
+    "/{model_id}/response-optimizations/{optimization_id}",
+    response_model=RegressionResponseOptimizationResponse,
+)
+def get_regression_response_optimization_route(
+    request: Request,
+    model_id: UUID,
+    optimization_id: UUID,
+) -> RegressionResponseOptimizationResponse:
+    return get_regression_response_optimization(
+        settings=request.app.state.settings,
+        model_id=model_id,
+        optimization_id=optimization_id,
+    )
+
+
+@router.post(
+    "/{model_id}/pasted-prediction-preflight",
+    response_model=RegressionPastedPredictionPreflightResponse,
+)
+def preflight_regression_pasted_prediction_route(
+    request: Request,
+    model_id: UUID,
+    body: RegressionPastedPredictionPreflightRequest,
+) -> RegressionPastedPredictionPreflightResponse:
+    return preflight_regression_pasted_prediction(
+        settings=request.app.state.settings,
+        model_id=model_id,
+        body=body,
+    )
+
+
+@router.post(
+    "/{model_id}/pasted-predictions",
+    response_model=RegressionPastedPredictionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_regression_pasted_prediction_route(
+    request: Request,
+    model_id: UUID,
+    body: RegressionPastedPredictionExecuteRequest,
+) -> RegressionPastedPredictionResponse:
+    return create_regression_pasted_prediction(
+        settings=request.app.state.settings,
+        model_id=model_id,
+        body=body,
+    )
+
+
+@router.get(
+    "/pasted-predictions/{prediction_id}/rows",
+    response_model=RegressionPastedPredictionRowsPageResponse,
+)
+def get_regression_pasted_prediction_rows_route(
+    request: Request,
+    prediction_id: UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> RegressionPastedPredictionRowsPageResponse:
+    return get_regression_pasted_prediction_rows(
+        settings=request.app.state.settings,
+        prediction_id=prediction_id,
+        offset=offset,
+        limit=limit,
     )

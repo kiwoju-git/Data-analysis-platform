@@ -744,6 +744,57 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="regressionResponseOptimizations",
+        method="post",
+        path="/api/v1/regression-models/{model_id}/response-optimizations",
+        success_status="201",
+        response_schema="RegressionResponseOptimizationResponse",
+        parameters=frozenset({("model_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="regressionResponseOptimizations",
+        method="get",
+        path="/api/v1/regression-models/{model_id}/response-optimizations",
+        success_status="200",
+        response_schema="RegressionResponseOptimizationListResponse",
+        parameters=frozenset({("model_id", "path")}),
+    ),
+    OperationContract(
+        route_name="regressionResponseOptimization",
+        method="get",
+        path=("/api/v1/regression-models/{model_id}/response-optimizations/" "{optimization_id}"),
+        success_status="200",
+        response_schema="RegressionResponseOptimizationResponse",
+        parameters=frozenset({("model_id", "path"), ("optimization_id", "path")}),
+    ),
+    OperationContract(
+        route_name="regressionPastedPredictionPreflight",
+        method="post",
+        path="/api/v1/regression-models/{model_id}/pasted-prediction-preflight",
+        success_status="200",
+        response_schema="RegressionPastedPredictionPreflightResponse",
+        parameters=frozenset({("model_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="regressionPastedPredictions",
+        method="post",
+        path="/api/v1/regression-models/{model_id}/pasted-predictions",
+        success_status="201",
+        response_schema="RegressionPastedPredictionResponse",
+        parameters=frozenset({("model_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="regressionPastedPredictionRows",
+        method="get",
+        path="/api/v1/regression-models/pasted-predictions/{prediction_id}/rows",
+        success_status="200",
+        response_schema="RegressionPastedPredictionRowsPageResponse",
+        parameters=frozenset({("prediction_id", "path"), ("limit", "query"), ("offset", "query")}),
+    ),
+    OperationContract(
         route_name="regressionModelDependentPredictions",
         method="get",
         path="/api/v1/regression-models/{model_id}/predictions",
@@ -881,7 +932,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         array_item_refs=(
             ("dependent_predictions", "RegressionModelDependentPredictionDescriptor"),
         ),
-        property_consts=(("preflight_schema_version", 2),),
+        property_consts=(("preflight_schema_version", 3),),
     ),
     SchemaComponentContract(
         name="RegressionModelDeleteRequest",
@@ -3433,7 +3484,7 @@ def test_e2e_critical_path_keeps_linear_model_prediction_browser_flow() -> None:
         encoding="utf-8",
     )
     helper = critical_path_text.split(
-        "def verify_linear_model_fit_and_prediction(page: Page) -> None:",
+        "def verify_linear_model_fit_and_prediction(",
         maxsplit=1,
     )[1].split("\ndef ", maxsplit=1)[0]
 
@@ -3443,7 +3494,9 @@ def test_e2e_critical_path_keeps_linear_model_prediction_browser_flow() -> None:
         'row_label="12행", column_label="3컬럼"',
         'name=re.compile(r"상관관계 및 회귀분석")',
         'name=re.compile(r"^회귀모형 적합")',
-        'select_option(label="y")',
+        'select_option(label="adcc")',
+        'get_by_label("afucose 역할").select_option("factor")',
+        'to_contain_text("숫자형 · 연속 · 요인 역할")',
         'name="회귀모형 적합 실행"',
         'get_by_label("예측 대상 데이터셋 버전")',
         'has_text="4행 × 3열"',
@@ -3458,6 +3511,10 @@ def test_e2e_critical_path_keeps_linear_model_prediction_browser_flow() -> None:
         'name="전체 예측 CSV 생성"',
         'name="전체 예측 CSV 다운로드"',
         'suggested_filename.endswith(".csv")',
+        'name="4-in-1 잔차 그림 보기"',
+        'name="반응 최적화 실행"',
+        'name="직접 입력·붙여넣기"',
+        'name="붙여넣기 예측 결과"',
     ):
         assert required_contract in helper
 

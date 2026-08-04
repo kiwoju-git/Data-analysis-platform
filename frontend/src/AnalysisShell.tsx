@@ -234,6 +234,8 @@ export interface AnalysisShellProps {
   linearModelAnalysisResult?: AnalysisResultEnvelope | null;
   linearModelConfidenceLevel?: number;
   linearModelInteractionKeys?: string[];
+  linearModelSelectionMethod?: "none" | "backward_elimination";
+  linearModelAlphaToRemove?: number;
   linearModelPredictorColumnIds?: string[];
   linearModelPredictorColumns?: DatasetColumnResponse[];
   linearModelPrediction?: RegressionPredictionResponse | null;
@@ -405,6 +407,8 @@ export interface AnalysisShellProps {
   onRunIndividualsChartAnalysis?: () => void;
   onRunKruskalWallisAnalysis: () => void;
   onRunLinearModelAnalysis?: () => void;
+  onLinearModelSelectionMethodChange?: (method: "none" | "backward_elimination") => void;
+  onLinearModelAlphaToRemoveChange?: (alpha: number) => void;
   onRunLinearModelPrediction?: () => void;
   onRunLinearModelPredictionPreflight?: () => void;
   onRunMannWhitneyAnalysis: () => void;
@@ -605,6 +609,8 @@ export function AnalysisShell({
   linearModelAnalysisResult = null,
   linearModelConfidenceLevel = 0.95,
   linearModelInteractionKeys = [],
+  linearModelSelectionMethod = "none",
+  linearModelAlphaToRemove = 0.10,
   linearModelPredictorColumnIds = [],
   linearModelPredictorColumns = [],
   linearModelPrediction = null,
@@ -796,6 +802,8 @@ export function AnalysisShell({
   onRunIndividualsChartAnalysis = () => undefined,
   onRunKruskalWallisAnalysis,
   onRunLinearModelAnalysis = () => undefined,
+  onLinearModelSelectionMethodChange = () => undefined,
+  onLinearModelAlphaToRemoveChange = () => undefined,
   onRunLinearModelPrediction = () => undefined,
   onRunLinearModelPredictionPreflight = () => undefined,
   onRunMannWhitneyAnalysis,
@@ -1428,6 +1436,8 @@ export function AnalysisShell({
                   isRunningAnalysis={isRunningAnalysis}
                   methodId={method.method_id}
                   interactionKeys={linearModelInteractionKeys}
+                  modelSelectionMethod={linearModelSelectionMethod}
+                  alphaToRemove={linearModelAlphaToRemove}
                   predictorColumnIds={linearModelPredictorColumnIds}
                   predictorColumns={linearModelPredictorColumns}
                   prediction={linearModelPrediction}
@@ -1446,6 +1456,8 @@ export function AnalysisShell({
                   version={version}
                   onAlphaChange={onLinearModelAlphaChange}
                   onConfidenceLevelChange={onLinearModelConfidenceLevelChange}
+                  onAlphaToRemoveChange={onLinearModelAlphaToRemoveChange}
+                  onModelSelectionMethodChange={onLinearModelSelectionMethodChange}
                   onResponseColumnChange={onLinearModelResponseColumnChange}
                   onRun={onRunLinearModelAnalysis}
                   onRunPrediction={onRunLinearModelPrediction}

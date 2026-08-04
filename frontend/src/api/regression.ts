@@ -15,6 +15,14 @@ import type {
   RegressionPredictionResponse,
   RegressionPredictionRowsPageResponse,
   RegressionPredictionCsvExportResponse,
+  RegressionPastedPredictionExecuteRequest,
+  RegressionPastedPredictionPreflightRequest,
+  RegressionPastedPredictionPreflightResponse,
+  RegressionPastedPredictionResponse,
+  RegressionPastedPredictionRowsPageResponse,
+  RegressionResponseOptimizationListResponse,
+  RegressionResponseOptimizationRequest,
+  RegressionResponseOptimizationResponse,
 } from "./types";
 
 export async function fetchRegressionModels(
@@ -180,4 +188,76 @@ export async function createRegressionPredictionCsvExport(
   }
 
   return (await response.json()) as RegressionPredictionCsvExportResponse;
+}
+
+export async function fetchRegressionPastedPredictionPreflight(
+  modelId: string,
+  request: RegressionPastedPredictionPreflightRequest,
+): Promise<RegressionPastedPredictionPreflightResponse> {
+  const response = await fetchApi(apiRoutes.regressionPastedPredictionPreflight(modelId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "regression_pasted_prediction_preflight_failed");
+  }
+  return (await response.json()) as RegressionPastedPredictionPreflightResponse;
+}
+
+export async function createRegressionPastedPrediction(
+  modelId: string,
+  request: RegressionPastedPredictionExecuteRequest,
+): Promise<RegressionPastedPredictionResponse> {
+  const response = await fetchApi(apiRoutes.regressionPastedPredictions(modelId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "regression_pasted_prediction_failed");
+  }
+  return (await response.json()) as RegressionPastedPredictionResponse;
+}
+
+export async function fetchRegressionPastedPredictionRows(
+  predictionId: string,
+  limit: number,
+  offset: number,
+): Promise<RegressionPastedPredictionRowsPageResponse> {
+  const response = await fetchApi(
+    apiRoutes.regressionPastedPredictionRows(predictionId, limit, offset),
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw await apiRequestError(response, "regression_pasted_prediction_rows_failed");
+  }
+  return (await response.json()) as RegressionPastedPredictionRowsPageResponse;
+}
+
+export async function createRegressionResponseOptimization(
+  modelId: string,
+  request: RegressionResponseOptimizationRequest,
+): Promise<RegressionResponseOptimizationResponse> {
+  const response = await fetchApi(apiRoutes.regressionResponseOptimizations(modelId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "regression_response_optimizer_failed");
+  }
+  return (await response.json()) as RegressionResponseOptimizationResponse;
+}
+
+export async function fetchRegressionResponseOptimizations(
+  modelId: string,
+): Promise<RegressionResponseOptimizationListResponse> {
+  const response = await fetchApi(apiRoutes.regressionResponseOptimizations(modelId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "regression_response_optimizer_list_failed");
+  }
+  return (await response.json()) as RegressionResponseOptimizationListResponse;
 }

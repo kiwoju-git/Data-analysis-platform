@@ -378,6 +378,23 @@ class LinearModelInteractionTermOption(BaseModel):
     right_column_id: str = Field(min_length=1)
 
 
+class LinearModelSelectionOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["none", "backward_elimination"] = "none"
+    alpha_to_remove: float = 0.10
+    hierarchy_policy: Literal["strong"] = "strong"
+
+    @field_validator("alpha_to_remove", mode="before")
+    @classmethod
+    def require_finite_alpha_to_remove(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a finite number")
+        if not isfinite(float(value)) or not 0.0 < float(value) < 1.0:
+            raise ValueError("must be between 0 and 1")
+        return value
+
+
 class PearsonOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -439,6 +456,9 @@ class LinearModelOptions(BaseModel):
     predictor_column_ids: list[str] = Field(min_length=1)
     quadratic_terms: list[str] | None = None
     interaction_terms: list[LinearModelInteractionTermOption] | None = None
+    model_selection: LinearModelSelectionOptions = Field(
+        default_factory=LinearModelSelectionOptions
+    )
     alpha: float = 0.05
     confidence_level: float = 0.95
     missing_policy: str = "complete_case"
@@ -1601,6 +1621,92 @@ class RegressionModelMetadataResponse(BaseModel):
     metadata_updated_at: str
 
 
+class RegressionResponseOptimizationGoal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["maximize", "minimize", "target", "range"]
+    lower: float | None = None
+    target: float | None = None
+    upper: float | None = None
+
+
+class RegressionResponseOptimizationFactorBound(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_id: str = Field(min_length=1)
+    lower: float
+    upper: float
+
+
+class RegressionResponseOptimizationCategoricalSetting(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_id: str = Field(min_length=1)
+    level: str = Field(min_length=1, max_length=200)
+
+
+class RegressionResponseOptimizationConstraint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    coefficients: dict[str, float] = Field(min_length=1)
+    relation: Literal["less_than_or_equal", "greater_than_or_equal"]
+    bound: float
+
+
+class RegressionResponseOptimizationSearch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    random_seed: int = 20260804
+    random_candidate_count: int = Field(default=512, ge=32, le=100_000)
+    multi_start_count: int = Field(default=8, ge=1, le=64)
+    max_iterations: int = Field(default=300, ge=1, le=5_000)
+    max_evaluations: int = Field(default=10_000, ge=32, le=250_000)
+    profile_point_count: int = Field(default=41, ge=1, le=101)
+
+
+class RegressionResponseOptimizationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_model_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    goal: RegressionResponseOptimizationGoal
+    factor_bounds: list[RegressionResponseOptimizationFactorBound] = Field(default_factory=list)
+    fixed_categorical_levels: list[RegressionResponseOptimizationCategoricalSetting] = Field(
+        default_factory=list,
+    )
+    linear_constraints: list[RegressionResponseOptimizationConstraint] = Field(
+        default_factory=list,
+        max_length=20,
+    )
+    search: RegressionResponseOptimizationSearch = Field(
+        default_factory=RegressionResponseOptimizationSearch,
+    )
+
+
+class RegressionResponseOptimizationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    optimization_id: UUID
+    model_id: UUID
+    source_analysis_id: UUID
+    source_dataset_version_id: UUID
+    method_id: Literal["regression.linear_model_optimizer"]
+    method_version: str
+    model_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result: dict[str, Any]
+    created_at: str
+
+
+class RegressionResponseOptimizationListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: UUID
+    optimizations: list[RegressionResponseOptimizationResponse]
+    total: int = Field(ge=0)
+
+
 class RegressionModelCatalogResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1625,6 +1731,8 @@ class RegressionModelDeletionCounts(BaseModel):
     dependent_prediction_file_count: int = Field(default=0, ge=0)
     dependent_prediction_export_count: int = Field(default=0, ge=0)
     dependent_prediction_file_bytes: int = Field(default=0, ge=0)
+    dependent_pasted_prediction_count: int = Field(default=0, ge=0)
+    dependent_optimization_count: int = Field(default=0, ge=0)
 
 
 class RegressionModelDependentPredictionDescriptor(BaseModel):
@@ -1661,7 +1769,7 @@ class RegressionModelDependentPredictionPage(BaseModel):
 class RegressionModelDeletionPreflightResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    preflight_schema_version: Literal[2]
+    preflight_schema_version: Literal[3]
     model_id: UUID
     source_analysis_id: UUID
     method_id: Literal["regression.linear_model"]
@@ -1688,7 +1796,7 @@ class RegressionModelDeleteRequest(BaseModel):
 class RegressionModelDeleteResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    deletion_schema_version: Literal[2]
+    deletion_schema_version: Literal[3]
     model_id: UUID
     source_analysis_id: UUID
     deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -1868,3 +1976,107 @@ class RegressionPredictionCsvExportResponse(BaseModel):
     columns: list[str]
     row_count: int = Field(ge=0)
     preview_rows: list[list[str]]
+
+
+class RegressionPastedPredictionColumnMappingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input_column_index: int = Field(ge=0, le=200)
+    source_column_id: str = Field(min_length=1)
+
+
+class RegressionPastedPredictionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=2_097_152)
+    has_header: bool = True
+    delimiter: Literal["auto", "tab", "comma"] = "auto"
+    column_mappings: list[RegressionPastedPredictionColumnMappingRequest] = Field(
+        default_factory=list,
+        max_length=200,
+    )
+
+
+class RegressionPastedPredictionPreflightRequest(RegressionPastedPredictionInput):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_model_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RegressionPastedPredictionExecuteRequest(RegressionPastedPredictionPreflightRequest):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_normalized_input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    confidence_level: float = Field(default=0.95, gt=0.0, lt=1.0)
+    include_intervals: bool = True
+
+
+class RegressionPastedPredictionMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input_column_index: int = Field(ge=0)
+    input_column_name: str
+    source_column_id: str
+    display_name: str
+    predictor_kind: Literal["numeric", "categorical"]
+
+
+class RegressionPastedPredictionPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input_schema_version: Literal[1]
+    model_id: UUID
+    model_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    normalized_input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    delimiter: Literal["tab", "comma"]
+    has_header: bool
+    row_count_total: int = Field(ge=0, le=10_000)
+    row_count_usable: int = Field(ge=0, le=10_000)
+    row_count_excluded: int = Field(ge=0, le=10_000)
+    prediction_ready: bool
+    mappings: list[RegressionPastedPredictionMapping]
+    preview_rows: list[list[str]]
+    issues: list[RegressionPredictionPreflightIssue]
+
+
+class RegressionPastedPredictionRow(RegressionPredictionRow):
+    model_config = ConfigDict(extra="forbid")
+
+    predictor_values: dict[str, float | str]
+
+
+class RegressionPastedPredictionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prediction_id: UUID
+    input_kind: Literal["pasted_table"]
+    model_id: UUID
+    source_analysis_id: UUID
+    source_dataset_version_id: UUID
+    model_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    normalized_input_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    row_count_total: int = Field(ge=0)
+    row_count_predicted: int = Field(ge=0)
+    row_count_excluded: int = Field(ge=0)
+    row_count_omitted: int = Field(ge=0)
+    row_limit: int = Field(ge=1)
+    truncated: bool
+    confidence_level: float = Field(gt=0.0, lt=1.0)
+    warnings: list[RegressionPredictionWarning]
+    mappings: list[RegressionPastedPredictionMapping]
+    rows: list[RegressionPastedPredictionRow]
+    created_at: str
+
+
+class RegressionPastedPredictionRowsPageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prediction_id: UUID
+    model_id: UUID
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=200)
+    total: int = Field(ge=0)
+    returned: int = Field(ge=0)
+    has_previous: bool
+    has_next: bool
+    rows: list[RegressionPastedPredictionRow]
