@@ -1,6 +1,6 @@
 # Regression Prediction Contract
 
-Last updated: 2026-07-22
+Last updated: 2026-08-04
 
 ## Scope
 
@@ -33,17 +33,22 @@ or ambiguous predictor, incompatible type, unseen categorical level, or zero
 usable target row remains blocking. Range extrapolation remains non-blocking
 and is summarized per predictor with training bounds and outside-row count.
 
-Manual single-row entry, non-OLS prediction, external models, automatic
-imputation/transformation, response optimization, and chart-image export remain
-out of scope.
+Pasted table input is supported by the separate hidden dedicated method
+`regression.predict_pasted`. It uses the same validated OLS prediction basis
+but has a separate input/result contract so existing `regression.predict`
+artifacts and hashes remain unchanged. External models, automatic
+imputation/transformation, and chart-image export remain out of scope.
 
 ## API
 
 ```text
 POST /api/v1/regression-models/{model_id}/prediction-preflight
 POST /api/v1/regression-models/{model_id}/predictions
+POST /api/v1/regression-models/{model_id}/pasted-prediction-preflight
+POST /api/v1/regression-models/{model_id}/pasted-predictions
 GET  /api/v1/regression-models?limit=20&offset=0
 GET  /api/v1/regression-models/predictions/{prediction_id}/rows?limit=25&offset=0
+GET  /api/v1/regression-models/pasted-predictions/{prediction_id}/rows?limit=50&offset=0
 GET  /api/v1/dataset-versions?limit=20&offset=0
 POST /api/v1/regression-models/predictions/{prediction_id}/exports/csv
 ```
@@ -158,6 +163,33 @@ Every result preserves warnings that predictions are model-based rather than
 causal, OLS interval assumptions still apply, and extrapolation may be
 unreliable.
 
+## Pasted-Table Input
+
+The pasted preflight accepts UTF-8 text up to 2 MiB, at most 10,000 rows, tab
+or comma delimiters, an explicit header policy, optional explicit source-to-
+predictor mappings, and an expected model-manifest SHA-256. Headerless input is
+auto-mapped only for a one-predictor model; multi-predictor input requires an
+unambiguous explicit mapping.
+
+The server, not the preview UI, is authoritative. It validates required and
+duplicate columns, numeric parsing, missing values, known categorical levels,
+model freshness, and the model manifest. The response includes a normalized
+input SHA-256. Execution reparses the same content/config and rejects a changed
+hash with `regression_pasted_prediction_input_changed`.
+
+Successful execution stores:
+
+- a generic `regression.predict_pasted` analysis result;
+- a checksum-recorded normalized-input owned artifact;
+- a checksum-recorded rows artifact with paging; and
+- model, source-analysis, source-version, mapping, parsing, interval, and input
+  hash provenance.
+
+It does not create a dataset version and raw pasted content is not logged.
+Known-level categorical values are treatment-coded from the manifest. Numeric
+training-range excursions are warnings, not silent clipping. The inline result
+is capped at 1,000 rows; the rows endpoint is capped at 200 per request.
+
 ## Provenance
 
 The stored result and `RegressionPredictionProvenance` record:
@@ -211,10 +243,11 @@ warning codes. It never includes predictor columns or raw target cell values.
 ## Versions
 
 - `METHOD_VERSIONS["regression.predict"]`: `0.2.0`
+- `METHOD_VERSIONS["regression.predict_pasted"]`: `0.1.0`
 - persisted prediction result schema: `2`
 - internal prediction config schema: `3`
 - prediction rows artifact/header schema: `2`
-- linear-model manifest schema: `2` (unchanged)
+- linear-model manifest schema for current writes: `3`
 - prediction CSV export schema: `1` (unchanged)
 
 The method receives a minor bump because required dependency provenance and
@@ -226,6 +259,8 @@ versions to agree.
 
 Existing `0.1.0` and older-schema artifacts are not silently rewritten.
 Incompatible prediction artifacts return explicit recovery/consistency errors.
+The pasted method is additive; it does not change the stored config, result,
+rows, or CSV schemas of dataset-backed `regression.predict`.
 
 ## Tests
 

@@ -1,6 +1,6 @@
 # Linear Model Method Contract
 
-Last updated: 2026-07-22
+Last updated: 2026-08-04
 
 ## Scope
 
@@ -13,16 +13,28 @@ Current supported input:
 - categorical main-effect predictor columns with treatment coding
 - optional numeric quadratic terms
 - optional numeric-by-numeric interaction terms
+- optional deterministic backward elimination by complete term block with
+  strong hierarchy and an explicit alpha-to-remove
 - intercept-included ordinary least squares main effects
 - complete-case missing handling across response and selected predictors
 - explicit `alpha` and confidence level
 - standard OLS covariance only
-- residual, leverage, and Cook's distance diagnostic payloads
+- structured regression equation, PRESS, predicted R-squared, adjusted-partial
+  ANOVA, replicate-only pure error/lack-of-fit, residual, leverage, and Cook's
+  distance diagnostic payloads
+- bounded raw and standardized four-in-one residual-plot payloads: normal
+  probability, histogram, residuals versus fits, and residuals versus order
 - safe app-created JSON model manifest storage with checksum-validated retrieval
 - stored-model prediction preflight for a target dataset version
 - backend stored-model prediction from app-created OLS manifests through `regression.predict`
 - frontend same/cross-dataset prediction execution, paged raw-value-free result
   display, and full prediction CSV export
+- bounded pasted-table prediction preflight/execution tied to both the model
+  manifest SHA-256 and a normalized-input SHA-256; pasted input is an owned
+  analysis artifact and never a dataset-catalog entry
+- bounded single-response model-based optimization within recorded numeric
+  training ranges and known categorical levels, with conditional predictor
+  profiles and a confirmation-experiment warning
 - automatic storage of the app-created model plus optional operational user
   label, note, and pinned metadata managed without rewriting the manifest
 - interactive Observed-vs-Fitted, Residuals-vs-Fitted, and
@@ -40,31 +52,52 @@ Current out of scope:
 - categorical interactions, factor-by-numeric interactions, higher-order interactions, arbitrary formulas, and no-intercept models
 - HC3 or other robust covariance estimators
 - diagnostic chart artifacts
-- manual single-row prediction input and response optimization
+- optimization outside the training domain, multi-response desirability, and
+  a claim of causal or global optimality
+- forward selection, bidirectional stepwise, best subsets, and term-level GVIF
 - automatic causal interpretation
 
 ## Statistical Policy
 
 - The model is fit with NumPy least squares on a validated design matrix with an intercept column.
+- Predictor representation is classified from `data_type` and
+  `measurement_level`, not from the analysis `role`. A decimal/continuous
+  `factor` is numeric; a numeric/nominal `factor` is categorical; ID and
+  datetime predictors remain unsupported.
 - Categorical predictors use deterministic treatment coding with the first sorted observed level as the reference and `k - 1` design columns.
 - Optional quadratic and interaction terms are built only from selected numeric predictors. They are explicit request options, not auto-selected diagnostics.
 - Coefficient p-values and confidence intervals use SciPy t distributions with residual degrees of freedom.
 - The model-level F test uses SciPy F survival probabilities.
 - Missing or non-numeric values in any selected model column are excluded under one complete-case policy with explicit counts.
 - Constant response columns, constant numeric predictor columns, constant extra terms, single-level categorical predictors, excessive categorical levels, rank-deficient designs, too-small residual degrees of freedom, zero residual variance, and non-finite standard errors are rejected without returning fake statistics.
-- The result reports N, exclusions, model terms, categorical reference levels, coefficient estimates, standard errors, t statistics, p-values, confidence intervals, R², adjusted R², residual standard error, F test, VIF, condition number, residual summary, leverage summary, Cook's distance summary, capped diagnostic points, warning codes, package versions, and provenance.
+- The result reports N, exclusions, final model terms, categorical reference
+  levels, coefficient estimates, standard errors, t statistics, p-values,
+  confidence intervals, R-squared, adjusted R-squared, PRESS, predicted
+  R-squared, residual standard error, F test, VIF, condition number, ANOVA,
+  residual summary, leverage summary, Cook's distance summary, capped
+  diagnostic points, warning codes, package versions, and provenance.
+- PRESS uses deleted residuals `e_i / (1 - h_i)` over every used row. Predicted
+  R-squared is `1 - PRESS / TSS` and finite negative values remain visible. If
+  leverage makes the denominator numerically unavailable, both fields are null
+  with `linear_model_press_unavailable_high_leverage`.
+- Backward elimination starts from the exact user-specified candidate model,
+  removes the eligible term block with the largest partial-F p-value above the
+  requested threshold, keeps the intercept, and enforces strong hierarchy.
+  Its inference is explicitly exploratory.
+- Term ANOVA uses reduced-versus-full adjusted partial sums of squares. Pure
+  error and lack-of-fit are returned only when replicated predictor settings
+  provide estimable degrees of freedom; otherwise the typed reason is shown.
 - The result always warns that regression coefficients from observational data are not causal effects and that OLS relies on linearity, independence, homoscedasticity, residual-normality, and outlier/influence assumptions.
 - Diagnostic points include row index, fitted value, residual, standardized residual, leverage, and Cook's distance only. They do not include raw input cell values and are capped for UI payload size while summary diagnostics use all complete-case rows.
 
 ## Diagnostic Chart Presentation
 
-The frontend renders three interactive SVG diagnostics from the unchanged
-stored payload: Observed vs Fitted, Residuals vs Fitted, and Leverage vs
-Cook's D. Observed is computed exactly as `fitted + residual`; it is not a new
-backend result field or a refit. Observed vs Fitted uses one numeric domain on
-both axes and a labeled `y=x` identity line. Its Multiple R is the non-negative
-square root of stored R-squared, while adjusted R-squared and residual standard
-error remain the stored full-fit summaries.
+The frontend renders a result-backed four-in-one view for normal-probability,
+histogram, residuals-versus-fits, and residuals-versus-order diagnostics. Raw
+and standardized residuals are stored together and the toggle does not refit
+the model. Histogram bins use every used residual; bounded scatter and Q-Q
+points use deterministic selection with truncation metadata. Observed vs
+Fitted and Leverage vs Cook's D remain available as additional diagnostics.
 
 All three charts expose the same bounded diagnostic points through pointer
 hover and keyboard focus, with text detail below the SVG and visible threshold
@@ -85,6 +118,11 @@ persisted result schema changed for this presentation update.
   "interaction_terms": [
     {"left_column_id": "x1-column-id", "right_column_id": "x2-column-id"}
   ],
+  "model_selection": {
+    "method": "none",
+    "alpha_to_remove": 0.1,
+    "hierarchy_policy": "strong"
+  },
   "alpha": 0.05,
   "confidence_level": 0.95,
   "missing_policy": "complete_case",
@@ -101,7 +139,7 @@ The persisted result includes a model-manifest pointer:
 {
   "model_manifest": {
     "model_id": "model-uuid",
-    "manifest_schema_version": 2,
+    "manifest_schema_version": 3,
     "manifest_sha256": "sha256"
   }
 }
@@ -120,10 +158,17 @@ a separate issue class. Source schema no-op updates do not block prediction.
 
 `POST /api/v1/regression-models/{model_id}/predictions` accepts a target `dataset_version_id`, confidence level, complete-case missing policy, and interval flag. It reuses the same freshness/preflight path, rejects error-severity failures, reconstructs the OLS design matrix from the stored manifest, returns predicted means plus mean-response confidence intervals and individual prediction intervals, stores the result as a `regression.predict` analysis result envelope with source/target/model provenance, and does not expose raw cell values. Restore, paging, and full CSV export validate the result/config/rows/model relationships as well as each artifact checksum.
 
-The prediction calculation contract and remaining frontend/paged-result requirements are tracked separately in `docs/regression_prediction_contract.md`.
+The prediction calculation and pasted-input contracts are tracked in
+`docs/regression_prediction_contract.md`. General-regression optimization is
+tracked in `docs/regression_response_optimizer_contract.md`.
 
-Current result payload `schema_version`: `4`.
-Current model manifest `manifest_schema_version`: `2`.
+Current method version: `0.2.0`.
+Current result payload `schema_version`: `5`.
+Current model manifest `manifest_schema_version`: `3`.
+
+Readers retain `regression.linear_model` `0.1.0`, result schema `4`, and
+manifest schema `2`. Existing result and manifest bytes, versions, and hashes
+are never rewritten.
 
 ## Independent Reference Validation
 

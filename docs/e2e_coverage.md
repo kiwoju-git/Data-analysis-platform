@@ -162,6 +162,32 @@ Bayesian, quality, DOE, paste, and retention paths remain in the same smoke.
 
 ## Latest Local Run
 
+The 2026-08-04 regression-workflow worktree based on main
+`33d2a7d2f49b3732c4dc6e00cde96109bafff243` passed the complete Chromium
+critical path in 110.4 seconds with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 `
+  -BackendPort 8025 `
+  -FrontendPort 5215 `
+  -WorkspaceRoot .\.tmp\e2e-regression-workspace-3 `
+  -DiagnosticsRoot .\.tmp\e2e-diagnostics-regression-workflow-pass
+```
+
+The run verifies that a decimal/continuous column with the `factor` role stays
+numeric through schema confirmation, supports a quadratic term, and fits
+without the former unsupported-type error. It then verifies the fitted-model
+result order, equation, PRESS/predicted R-squared summary, adjusted-SS ANOVA,
+four interactive residual plots, saved-model optimization and predictor
+profile, server-authoritative pasted prediction, retained dataset prediction,
+and separate deletion of pasted-prediction and optimizer-owned analysis
+assets. Screenshots include `regression-four-in-one.png`,
+`regression-response-optimizer.png`, and
+`regression-pasted-prediction.png`. A preceding run found that generic
+analysis deletion did not yet recognize the two pasted-input artifacts; the
+retention validator and focused rollback/lifecycle tests were corrected before
+this passing run.
+
 The 2026-07-23 runtime-compatibility/compact-history worktree based on pushed
 main `6cc097a6f3d2983feab1fd7e4ccc2c5ab16f765d` passed the complete Chromium
 critical path in 84.9 seconds. It verifies the runtime handshake before the

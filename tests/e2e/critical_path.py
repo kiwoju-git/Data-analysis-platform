@@ -36,7 +36,7 @@ B\t16
 B\t17
 """
 
-REGRESSION_SAMPLE_DATA = """y\tx\tgroup
+REGRESSION_SAMPLE_DATA = """adcc\tafucose\tgroup
 5.2\t0\tA
 7.9\t2\tA
 11.3\t4\tA
@@ -51,7 +51,7 @@ REGRESSION_SAMPLE_DATA = """y\tx\tgroup
 13.65\t6.5\tC
 """
 
-REGRESSION_TARGET_DATA = """y\tx\tgroup
+REGRESSION_TARGET_DATA = """adcc\tafucose\tgroup
 0\t1\tA
 0\t3.5\tB
 0\t5.5\tC
@@ -542,7 +542,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             diagnostics.step("verify schema stale behavior")
             verify_schema_stale_behavior(page)
             diagnostics.step("verify linear model fit and prediction")
-            verify_linear_model_fit_and_prediction(page)
+            verify_linear_model_fit_and_prediction(page, diagnostics)
             diagnostics.step("verify attribute control chart")
             verify_attribute_control_chart(page)
             diagnostics.step("verify DOE factorial analysis")
@@ -633,9 +633,7 @@ def verify_browser_branding(
         f"{frontend_base_url}/statistical-twin-favicon-v1.svg"
     )
     if favicon_response.status != 200:
-        raise AssertionError(
-            f"favicon request returned HTTP {favicon_response.status}"
-        )
+        raise AssertionError(f"favicon request returned HTTP {favicon_response.status}")
     favicon_text = favicon_response.text()
     if "<svg" not in favicon_text or "<script" in favicon_text.lower():
         raise AssertionError("favicon response was not the expected safe SVG")
@@ -798,7 +796,10 @@ def assert_doe_table_visual_consistency(
     if section_properties is None or factor_section_properties is None:
         raise AssertionError(f"{label} section styles unavailable")
     for property_name in ("borderRadius", "headingFontSize"):
-        if section_properties[property_name] != factor_section_properties[property_name]:
+        if (
+            section_properties[property_name]
+            != factor_section_properties[property_name]
+        ):
             raise AssertionError(
                 f"{label} section {property_name} mismatch: "
                 f"{section_properties[property_name]} != "
@@ -828,9 +829,7 @@ def select_method_card(page: Page, module_label: str, method_label: str) -> None
 
 
 def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> None:
-    equivalence = page.locator(".method-item").filter(
-        has_text="1-표본 동등성 검정"
-    )
+    equivalence = page.locator(".method-item").filter(has_text="1-표본 동등성 검정")
     wilcoxon = page.locator(".method-item").filter(has_text="1-표본 Wilcoxon")
     expect(equivalence).to_have_count(1)
     expect(wilcoxon).to_have_count(1)
@@ -968,10 +967,7 @@ def assert_active_dataset_outer_alignment(
         raise AssertionError(f"{label} outer alignment bounds unavailable")
     left_delta = abs(card_box["x"] - content_box["x"])
     right_delta = abs(
-        card_box["x"]
-        + card_box["width"]
-        - content_box["x"]
-        - content_box["width"]
+        card_box["x"] + card_box["width"] - content_box["x"] - content_box["width"]
     )
     diagnostics.record(
         f"[e2e] {label} dataset-card edges: left={left_delta:.2f}px "
@@ -1046,9 +1042,9 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     response = page.get_by_role("checkbox", name=re.compile(r"^yield_pct"))
     if not response.is_checked():
         response.check()
-    page.locator(".graph-role-option").filter(has_text="그룹 변수").locator("select").select_option(
-        label="production_line"
-    )
+    page.locator(".graph-role-option").filter(has_text="그룹 변수").locator(
+        "select"
+    ).select_option(label="production_line")
     page.get_by_role("button", name="그래프 생성", exact=True).click()
     grouped_box = page.get_by_role("img", name="변수 비교 Box Plot")
     expect(grouped_box).to_be_visible(timeout=20_000)
@@ -1056,14 +1052,18 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     expect(grouped_box.locator("[tabindex='0']")).to_have_count(1)
     diagnostics.capture_page(page, "grouped-box-plot.png")
 
-    page.locator(".graph-type-button").filter(has_text=re.compile("^Individual Value Plot")).click()
+    page.locator(".graph-type-button").filter(
+        has_text=re.compile("^Individual Value Plot")
+    ).click()
     page.get_by_role("button", name="그래프 생성", exact=True).click()
     grouped_individual = page.locator(".graph-preview-grid-individual-value-plot svg")
     expect(grouped_individual).to_have_count(1, timeout=20_000)
     expect(grouped_individual.locator(".individual-value-point")).to_have_count(12)
     diagnostics.capture_page(page, "grouped-individual-value-plot.png")
 
-    page.locator(".graph-type-button").filter(has_text=re.compile("^I-MR Chart")).click()
+    page.locator(".graph-type-button").filter(
+        has_text=re.compile("^I-MR Chart")
+    ).click()
     page.get_by_role("radio", name="수치 변수 1개를 그룹별 비교").check()
     page.locator(".graph-role-option").filter(has_text="그룹 변수").locator(
         "select"
@@ -1074,7 +1074,9 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     )
     expect(grouped_imr_cards).to_have_count(3, timeout=20_000)
     for index in range(3):
-        expect(grouped_imr_cards.nth(index).locator(".chart-grid > .chart-panel")).to_have_count(2)
+        expect(
+            grouped_imr_cards.nth(index).locator(".chart-grid > .chart-panel")
+        ).to_have_count(2)
     diagnostics.capture_page(page, "grouped-imr.png")
 
     open_primary_navigation(page, "분석")
@@ -1084,18 +1086,24 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     page.get_by_label("그룹 변수", exact=True).select_option(label="production_line")
     page.get_by_label("사후비교", exact=True).select_option("tukey_kramer")
     page.get_by_role("button", name="일원분산분석 실행").click()
-    expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Tukey-Kramer", timeout=20_000)
+    expect(page.get_by_label("일원분산분석 요약")).to_contain_text(
+        "Tukey-Kramer", timeout=20_000
+    )
 
     page.get_by_label("사후비교", exact=True).select_option("dunnett")
     page.get_by_label("기준 그룹", exact=True).select_option(label="A (N 4)")
     page.get_by_role("button", name="일원분산분석 실행").click()
-    expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Dunnett", timeout=20_000)
+    expect(page.get_by_label("일원분산분석 요약")).to_contain_text(
+        "Dunnett", timeout=20_000
+    )
     expect(page.get_by_label("일원분산분석 요약")).to_contain_text("A")
     diagnostics.capture_page(page, "anova-dunnett.png")
 
     page.get_by_role("radio", name="등분산 가정 안 함").check()
     page.get_by_role("button", name="일원분산분석 실행").click()
-    expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Welch", timeout=20_000)
+    expect(page.get_by_label("일원분산분석 요약")).to_contain_text(
+        "Welch", timeout=20_000
+    )
     expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Games-Howell")
     diagnostics.capture_page(page, "anova-welch-games-howell.png")
 
@@ -1114,7 +1122,9 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     page.get_by_label("시험 그룹", exact=True).select_option(label="B (N 4)")
     page.get_by_label("기준 그룹", exact=True).select_option(label="A (N 4)")
     page.get_by_role("button", name="2-표본 동등성 검정 실행").click()
-    expect(page.get_by_label("동등성 검정 요약")).to_contain_text("독립 2-표본 평균 차이", timeout=20_000)
+    expect(page.get_by_label("동등성 검정 요약")).to_contain_text(
+        "독립 2-표본 평균 차이", timeout=20_000
+    )
     expect(page.get_by_label("동등성 검정 요약")).to_contain_text("B - A")
     diagnostics.capture_page(page, "equivalence-two-sample.png")
 
@@ -1123,8 +1133,12 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     page.get_by_label("시험 측정", exact=True).select_option(label="test_measure")
     page.get_by_label("기준 측정", exact=True).select_option(label="reference_measure")
     page.get_by_role("button", name="대응표본 동등성 검정 실행").click()
-    expect(page.get_by_label("동등성 검정 요약")).to_contain_text("대응표본 평균 차이", timeout=20_000)
-    expect(page.get_by_role("img", name=re.compile("시험 측정 - 기준 측정"))).to_be_visible()
+    expect(page.get_by_label("동등성 검정 요약")).to_contain_text(
+        "대응표본 평균 차이", timeout=20_000
+    )
+    expect(
+        page.get_by_role("img", name=re.compile("시험 측정 - 기준 측정"))
+    ).to_be_visible()
     diagnostics.capture_page(page, "equivalence-paired.png")
     open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, GRAPH_LAYOUT_DATA)
@@ -1534,7 +1548,9 @@ def verify_schema_stale_behavior(page: Page) -> None:
     expect(page.get_by_text("stale", exact=True).first).to_be_visible()
 
 
-def verify_linear_model_fit_and_prediction(page: Page) -> None:
+def verify_linear_model_fit_and_prediction(
+    page: Page, diagnostics: E2EDiagnostics
+) -> None:
     open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, REGRESSION_TARGET_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
@@ -1562,6 +1578,17 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     training_active_version_id = training_confirm_info.value.json()["version_id"]
     expect_dataset_context_counts(page, row_label="12행", column_label="3컬럼")
     expect(active_dataset_selector).to_have_value(training_active_version_id)
+    page.get_by_label("afucose 측정 수준").select_option("continuous")
+    page.get_by_label("afucose 역할").select_option("factor")
+    page.get_by_label("adcc 측정 수준").select_option("continuous")
+    page.get_by_label("adcc 역할").select_option("response")
+    with page.expect_response(
+        lambda response: response.request.method == "PATCH"
+        and response.url.endswith("/schema")
+    ):
+        page.get_by_role("button", name="스키마 저장").click()
+    expect(page.get_by_label("afucose 역할")).to_have_value("factor")
+    expect(page.get_by_label("adcc 역할")).to_have_value("response")
     open_primary_navigation(page, "분석")
     page.get_by_role(
         "button",
@@ -1574,15 +1601,23 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(page.locator("#workbench-title")).to_have_text("회귀모형 적합")
     expect_lazy_analysis_module(page, "RegressionAnalysisPanels")
 
-    page.get_by_label("반응 변수").select_option(label="y")
+    page.get_by_label("반응 변수").select_option(label="adcc")
     predictor_options = page.get_by_label("예측변수")
-    x_predictor = predictor_options.get_by_role("checkbox", name=re.compile(r"^x"))
+    x_predictor = predictor_options.get_by_role(
+        "checkbox", name=re.compile(r"^afucose")
+    )
     group_predictor = predictor_options.get_by_role(
         "checkbox",
         name=re.compile(r"^group"),
     )
     x_predictor.check()
     expect(x_predictor).to_be_checked()
+    expect(predictor_options).to_contain_text("숫자형 · 연속 · 요인 역할")
+    expect(
+        page.get_by_label("숫자형 2차항").get_by_role(
+            "checkbox", name=re.compile(r"^afucose")
+        )
+    ).to_be_visible()
     expect(group_predictor).to_be_checked()
 
     with page.expect_response(
@@ -1592,27 +1627,52 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
         page.get_by_role("button", name="회귀모형 적합 실행").click()
     model_response = model_response_info.value
     model_id = model_response.json()["result"]["model_manifest"]["model_id"]
-    model_summary = page.get_by_label("회귀모형 요약")
+    model_summary = page.get_by_label("회귀 모델 요약")
     expect(model_summary).to_be_visible(timeout=20_000)
-    expect(model_summary).to_contain_text("12 / 12")
-    expect(model_summary).to_contain_text("Model ID")
-    expect(model_summary).to_contain_text("Manifest")
+    expect(model_summary).to_contain_text("Predicted R²")
+    expect(model_summary).to_contain_text("PRESS")
+    expect(model_summary).to_contain_text("최대 VIF")
+    expect(page.get_by_role("heading", name="회귀방정식")).to_be_visible()
+    expect(page.locator(".linear-model-equation")).to_contain_text("adcc")
+    expect(page.locator(".linear-model-equation")).to_contain_text("afucose")
+    expect(page.get_by_role("heading", name="분산분석")).to_be_visible()
+    anova_table = page.locator(".result-table").filter(has_text="Adj SS")
+    expect(anova_table).to_be_visible()
+    expect(anova_table).to_contain_text("Regression")
+    page.get_by_role("button", name="4-in-1 잔차 그림 보기").click()
+    expect(page.get_by_text("잔차 정규확률도", exact=True)).to_be_visible()
+    expect(page.get_by_text("잔차 히스토그램", exact=True)).to_be_visible()
+    expect(page.get_by_text("잔차 대 적합값", exact=True)).to_be_visible()
+    expect(page.get_by_text("잔차 대 관측순서", exact=True)).to_be_visible()
+    expect(page.locator(".linear-model-four-in-one .chart-panel")).to_have_count(4)
+    diagnostics.capture_page(page, "regression-four-in-one.png")
     observed_chart = page.locator(".chart-panel").filter(has_text="Observed vs Fitted")
     expect(observed_chart).to_be_visible()
-    expect(observed_chart).to_contain_text("Multiple R")
-    expect(observed_chart.locator(".identity-line")).to_have_count(1)
+    expect(observed_chart.locator(".reference-line")).to_have_count(1)
     observed_point = observed_chart.locator(".diagnostic-point").first
     observed_point.hover()
     expect(observed_chart.locator(".chart-selected-detail")).to_contain_text("실제값")
     observed_point.focus()
     expect(observed_point).to_have_attribute("data-selected", "true")
     expect(
-        page.locator(".chart-panel").filter(has_text="Residuals vs Fitted")
-    ).to_be_visible()
-    expect(
         page.locator(".chart-panel").filter(has_text="Leverage vs Cook's D")
     ).to_be_visible()
-    expect(page.get_by_role("heading", name="예측 사전점검")).to_be_visible()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/response-optimizations")
+    ) as optimizer_response_info:
+        page.get_by_role("button", name="반응 최적화 실행").click()
+    optimizer_response = optimizer_response_info.value
+    optimizer_id = optimizer_response.json()["optimization_id"]
+    optimizer_summary = page.get_by_label("회귀 반응 최적화 결과")
+    expect(optimizer_summary).to_be_visible(timeout=20_000)
+    expect(optimizer_summary).to_contain_text("범위 안")
+    expect(page.get_by_text("확인 실험이 필요합니다", exact=False)).to_be_visible()
+    expect(page.locator(".regression-optimizer-result .chart-panel")).to_have_count(2)
+    diagnostics.capture_page(page, "regression-response-optimizer.png")
+    expect(
+        page.get_by_role("heading", name="예측 사전점검", exact=True)
+    ).to_be_visible()
 
     target_selector = page.get_by_label("예측 대상 데이터셋 버전")
     target_option = target_selector.locator("option").filter(has_text="4행 × 3열")
@@ -1636,7 +1696,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     ).to_be_visible()
     extrapolation_table = page.get_by_label("학습 범위 밖 대상값 요약")
     expect(extrapolation_table).to_be_visible()
-    expect(extrapolation_table).to_contain_text("x")
+    expect(extrapolation_table).to_contain_text("afucose")
     expect(extrapolation_table).to_contain_text("1")
 
     with page.expect_response(
@@ -1658,6 +1718,33 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     expect(prediction_table).to_be_visible()
     expect(prediction_table.get_by_role("columnheader", name="Mean CI")).to_be_visible()
     expect(prediction_table.locator("tbody tr")).to_have_count(4)
+
+    page.get_by_role("radio", name="직접 입력·붙여넣기").check()
+    paste_input = page.get_by_label("예측값 붙여넣기")
+    paste_input.fill("afucose\tgroup\n1\tA\n3.5\tB\n5.5\tC")
+    expect(page.get_by_role("heading", name="예측변수 매핑")).to_be_visible()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/pasted-prediction-preflight")
+    ):
+        page.get_by_role("button", name="예측 사전점검").click()
+    expect(page.get_by_text("예측 준비 완료", exact=True)).to_be_visible(timeout=20_000)
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/pasted-predictions")
+    ) as pasted_response_info:
+        page.get_by_role("button", name="예측 실행").click()
+    pasted_prediction_id = pasted_response_info.value.json()["prediction_id"]
+    expect(page.get_by_role("heading", name="붙여넣기 예측 결과")).to_be_visible(
+        timeout=20_000
+    )
+    pasted_table = page.locator(".result-table").filter(has_text="개별 예측구간")
+    expect(pasted_table.locator("tbody tr")).to_have_count(3)
+    diagnostics.capture_page(page, "regression-pasted-prediction.png")
+    page.get_by_role("radio", name="데이터셋에서 선택").check()
+    expect(
+        page.get_by_role("heading", name="예측 사전점검", exact=True)
+    ).to_be_visible()
 
     page.get_by_role("button", name="전체 예측 CSV 생성").click()
     csv_download_button = page.get_by_role("button", name="전체 예측 CSV 다운로드")
@@ -1783,6 +1870,31 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
                 )
         dedicated_page.close()
 
+    api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
+    for owned_analysis_id in (pasted_prediction_id, optimizer_id):
+        owned_preflight = page.request.get(
+            f"{api_v1}/analysis-runs/{owned_analysis_id}/deletion-preflight"
+        )
+        if not owned_preflight.ok:
+            raise AssertionError(
+                "owned regression result deletion preflight failed: "
+                + owned_preflight.text()
+            )
+        owned_manifest = owned_preflight.json()
+        owned_delete = page.request.delete(
+            f"{api_v1}/analysis-runs/{owned_analysis_id}/deletion",
+            data={
+                "confirmation_analysis_id": owned_analysis_id,
+                "expected_deletion_manifest_sha256": owned_manifest[
+                    "deletion_manifest_sha256"
+                ],
+            },
+        )
+        if not owned_delete.ok:
+            raise AssertionError(
+                f"owned regression result deletion failed: {owned_delete.text()}"
+            )
+
     model_retention = page.get_by_role("region", name="저장 모델 관리")
     model_retention.get_by_role("button", name="삭제 영향 확인").click()
     expect(model_retention.get_by_text("예측 참조 1건", exact=True)).to_be_visible(
@@ -1795,7 +1907,6 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     ).to_be_visible()
     expect(model_retention.get_by_role("button", name="모델 삭제")).to_be_disabled()
 
-    api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
     prediction_delete_preflight = page.request.get(
         f"{api_v1}/analysis-runs/{prediction_id}/deletion-preflight"
     )
@@ -1861,7 +1972,7 @@ def verify_linear_model_fit_and_prediction(page: Page) -> None:
     ).filter(has_text="regression.linear_model")
     expect(saved_linear_model).to_have_count(1, timeout=15_000)
     saved_linear_model.get_by_role("button", name="결과 불러오기").click()
-    expect(page.get_by_label("회귀모형 요약")).to_be_visible(timeout=15_000)
+    expect(page.get_by_label("회귀 모델 요약")).to_be_visible(timeout=15_000)
     restored_retention = page.get_by_role("region", name="저장 모델 관리")
     expect(
         restored_retention.get_by_text(unavailable_message, exact=True)

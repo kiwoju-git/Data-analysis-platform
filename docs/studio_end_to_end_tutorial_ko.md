@@ -277,7 +277,7 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 - **클릭 순서:** 역할 > term 선택 > 사전점검 > 실행 > model manifest 저장 확인.
 - **실행 전 확인:** leakage 보조 컬럼을 제외하고, categorical reference와 hierarchy를 확인한다.
 <!-- TUTORIAL_RESULT:regression.linear_model:start -->
-- **검증 source:** `regression.linear_model` v0.1.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
+- **검증 source:** `regression.linear_model` v0.2.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
 - **예상 실제 결과 (표시 반올림):**
   - N=240, exclusions=0, R-squared=0.72628, adjusted R-squared=0.71433
   - coefficient sign: temperature `positive`, temperature^2 `negative`, pressure^2 `negative`, interaction `positive`; model asset=생성됨

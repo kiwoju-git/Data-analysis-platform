@@ -65,10 +65,10 @@ summary is used as an implementation authority.
 | Forward/stepwise/best subsets | Not supported | Supported | No implementation | Useful alternatives but separate validation scope | P1 | No | None | Minitab stepwise overview |
 | Mallows' Cp | Not supported | Full-model MSE comparison across subsets | No implementation | Useful trace diagnostic for backward steps | P0 for requested trace | Yes per step, anchored to initial full model MSE | Result 5 | Minitab model summary |
 | AIC/AICc/BIC | Not supported | AICc/BIC supported for comparing models | No implementation | Useful step trace, not sole truth | P0 for trace metadata | Yes AICc/BIC per step with one documented Gaussian likelihood convention | Result 5 | Minitab model summary |
-| General regression Response Optimizer | Only DOE/RSM optimizer exists | Stored regression models can drive bounded desirability optimization | `statistics/response_optimizer.py` is RSM-oriented; no OLS adapter | Requested follow-on workflow | P0 | Yes, contextual to stored general OLS model; DOE optimizer unchanged | New dedicated config/result contract; storage decision after dependency review | Minitab Response Optimizer |
+| General regression Response Optimizer | Implemented as a contextual hidden dedicated method; DOE/RSM optimizer remains separate | Stored regression models can drive bounded desirability optimization | `statistics/regression_response_optimizer.py`, `services/regression_response_optimizer.py` | Requested follow-on workflow | P0 | Yes, contextual to stored general OLS model; DOE optimizer unchanged | Method 0.1.0, config/result schema 1, generic owned result | Minitab Response Optimizer |
 | Predictor profile | Not supported for general OLS | Optimization plot varies one predictor while fixing others | No implementation | Explains a conditional model slice | P0 | Yes for numeric curves and categorical level table/points | Optimizer result contract | Minitab optimizer output |
 | Dataset-version prediction | Supported with server preflight, CI/PI, persistence, paging, CSV | Supported | `services/regression_models.py`, `RegressionPredictionPanel.tsx` | Existing validated workflow | P0 | Preserve | Legacy prediction readers remain | Minitab prediction and interval docs |
-| Direct/pasted prediction | Not supported | New predictor settings can be entered for prediction | Explicitly out of prior contract | Requested workflow without catalog pollution | P0 | Yes: bounded server parse/preflight, content hash, explicit mappings | `regression.predict` 0.3.0 and input/config/result extension; storage decision after schema review | Minitab prediction output |
+| Direct/pasted prediction | Implemented as a separate hidden dedicated method | New predictor settings can be entered for prediction | `services/regression_pasted_predictions.py`, `RegressionPastedPredictionPanel.tsx` | Requested workflow without catalog pollution | P0 | Yes: bounded server parse/preflight, content hash, explicit mappings | `regression.predict_pasted` 0.1.0 with owned input/rows artifacts; existing prediction schemas unchanged | Minitab prediction output |
 | Prediction confidence and prediction intervals | Supported from stored OLS basis | Supported and semantically distinct | `services/regression_models.py` | Required uncertainty | P0 | Preserve for both dataset and pasted inputs | Manifest 3 remains capable; legacy manifest 2 read retained | Minitab interval distinction |
 | Categorical predictor prediction | Supported for known levels; unseen levels blocked | Supported | Prediction manifest and preflight | Correct coding and safe reuse | P0 | Preserve, including pasted input | Manifest 3 retains levels | Minitab coefficients/prediction |
 | Model/result restore | Result schema 4, manifest 2, prediction result 2/config 3/rows 2 | Product-specific | Result/manifest consistency services | Reproducibility and checksum compatibility | P0 | Keep all legacy readers; never rewrite stored checksums | New writes only use newer schemas | Existing project contracts |
@@ -126,16 +126,17 @@ writes require:
 - `regression.linear_model` method `0.2.0`;
 - linear-model result schema `5`;
 - regression model manifest schema `3`;
-- `regression.predict` method `0.3.0` if pasted-input persistence shares the
-  existing prediction method;
-- an API contract bump from `8` to `9` when the typed wire contract lands.
+- additive `regression.predict_pasted` method `0.1.0` while existing
+  `regression.predict` remains `0.2.0`;
+- additive `regression.linear_model_optimizer` method `0.1.0`;
+- API contract `9`.
 
 Readers for `regression.linear_model` `0.1.0`, result schema `4`, manifest
 schema `2`, and existing `regression.predict` artifacts remain unchanged.
-Whether SQLite needs a migration is deliberately not decided by this audit: it
-depends on whether current owned-artifact relations can represent pasted input
-snapshots and general-regression optimization without nullable/foreign-key
-violations. A JSON result extension alone is not a reason to migrate metadata.
+SQLite remains schema `18`. Existing generic analysis-run and owned-artifact
+relations represent pasted normalized-input/row snapshots and optimizer
+results without nullable/foreign-key changes. A JSON result extension alone is
+not a reason to migrate metadata.
 
 ## Statistical And Product Guardrails
 

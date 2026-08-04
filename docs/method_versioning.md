@@ -406,6 +406,31 @@ Grouped I-MR changes the non-persisted Graph Preview wire contract only.
 Visualization schema `2` and API contract `8` do not require a method-version
 change or SQLite migration.
 
+## Complete Regression Workflow Decision
+
+New `regression.linear_model` writes use method `0.2.0`, result schema `5`, and
+model-manifest schema `3`. This is a minor change because the persisted result
+adds structured equation terms, PRESS and predicted R-squared, adjusted-partial
+ANOVA, residual-plot payloads, training-domain metadata, and optional backward
+selection history. Backward selection also changes the final fitted term set
+when explicitly requested. Omitting `model_selection` preserves the full
+specified-model policy.
+
+Readers retain method `0.1.0`, result schema `4`, and manifest schema `2`.
+Existing bytes, method versions, and checksums are never rewritten.
+
+Dataset-backed `regression.predict` remains `0.2.0` with its existing stored
+schemas. Pasted input is an additive hidden dedicated method,
+`regression.predict_pasted` `0.1.0`, so the existing prediction contract is not
+silently widened. General-regression optimization is likewise additive as
+`regression.linear_model_optimizer` `0.1.0`; the existing RSM optimizer remains
+unchanged.
+
+The new typed routes and expanded linear-model request/result contract move
+the runtime API contract from `8` to `9`. SQLite remains schema `18`: generic
+analysis runs and owned artifacts already represent optimizer results and
+pasted normalized-input/row snapshots. No relational rewrite is needed.
+
 ## PR Checklist
 
 - Update `METHOD_VERSIONS` when the policy requires it.

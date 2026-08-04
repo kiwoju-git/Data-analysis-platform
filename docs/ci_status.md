@@ -1,8 +1,30 @@
 # CI Status
 
-Last updated: 2026-08-03
+Last updated: 2026-08-04
 
 ## Local Validation
+
+- The complete regression-modeling workflow is based on main
+  `33d2a7d2f49b3732c4dc6e00cde96109bafff243`. It advances the API contract
+  from 8 to 9, `regression.linear_model` from 0.1.0/result schema 4 to
+  0.2.0/result schema 5, and the saved model manifest from schema 2 to 3.
+  Metadata schema remains 18, so no SQLite migration is required. Existing
+  result-schema 4 and manifest-schema 2 assets remain readable without hash
+  rewrite.
+- Final `scripts/test.ps1` passed backend pytest 920/920 and frontend Vitest
+  253/253 across 29 files. Final `scripts/check.ps1` completed in 1119.5
+  seconds with tutorial verification 18, Ruff, format over 190 Python files,
+  mypy over 118 source modules, backend pytest 920/920, frontend lint,
+  typecheck, Vitest 253/253, and production build all passing. The existing
+  Vite main-chunk size warning remains informational.
+- The isolated Chromium critical path passed in 110.4 seconds with diagnostics
+  under `.tmp/e2e-diagnostics-regression-workflow-pass`. It covers the exact
+  decimal/continuous/factor regression fixture, structured equation, model
+  summary and ANOVA, four-in-one residual diagnostics, bounded regression
+  optimization/profile, pasted prediction, dataset prediction, and owned
+  artifact deletion lifecycle. An earlier run exposed unsupported retention
+  validation for pasted-input artifacts; that defect was fixed and the clean
+  run plus focused lifecycle tests passed afterward.
 
 - The Statistical Twin browser-branding/DOE-table UI work is based on main
   `3c9c20e8b548885cb85e52e3465e6b0a35514f66`. It changes only static browser
