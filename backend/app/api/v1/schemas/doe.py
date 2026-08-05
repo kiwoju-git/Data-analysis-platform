@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+
+from app.statistics.doe_factor_domain import DoeFactorDomain, validate_factor_domain
 
 
 class DoeFactorRequest(BaseModel):
@@ -11,6 +15,22 @@ class DoeFactorRequest(BaseModel):
     low: FiniteFloat
     high: FiniteFloat
     unit: str | None = Field(default=None, max_length=40)
+    domain_kind: Literal["continuous", "discrete_numeric"] = "continuous"
+    step: FiniteFloat | None = None
+    display_decimals: int | None = Field(default=None, ge=0, le=12)
+
+    @model_validator(mode="after")
+    def validate_domain(self) -> DoeFactorRequest:
+        validate_factor_domain(
+            DoeFactorDomain(
+                low=float(self.low),
+                high=float(self.high),
+                domain_kind=self.domain_kind,
+                step=None if self.step is None else float(self.step),
+                display_decimals=self.display_decimals,
+            )
+        )
+        return self
 
 
 class FactorialDesignCreateRequest(BaseModel):
@@ -32,6 +52,27 @@ class DoeFactorResponse(BaseModel):
     low: float
     high: float
     unit: str | None
+    domain_kind: Literal["continuous", "discrete_numeric"] = "continuous"
+    step: float | None = None
+    display_decimals: int | None = Field(default=None, ge=0, le=12)
+    level_count: int | None = Field(default=None, ge=2)
+
+    @model_validator(mode="after")
+    def populate_and_validate_domain(self) -> DoeFactorResponse:
+        domain = DoeFactorDomain(
+            low=self.low,
+            high=self.high,
+            domain_kind=self.domain_kind,
+            step=self.step,
+            display_decimals=self.display_decimals,
+        )
+        validate_factor_domain(domain)
+        expected = domain.level_count
+        if self.level_count is None:
+            self.level_count = expected
+        elif self.level_count != expected:
+            raise ValueError("level_count does not match factor domain")
+        return self
 
 
 class FactorialDesignOptionsResponse(BaseModel):
@@ -180,7 +221,10 @@ class LatinHypercubeDesignCreateRequest(BaseModel):
 class LatinHypercubeDesignOptionsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    policy: Literal["scipy_latin_hypercube_random_cd_v1"]
+    policy: Literal[
+        "scipy_latin_hypercube_random_cd_v1",
+        "mixed_lhs_balanced_discrete_v1",
+    ]
     run_count: int = Field(ge=2, le=200)
     seed: int = Field(ge=0)
     scramble: Literal[True]
@@ -200,6 +244,10 @@ class LatinHypercubeDesignQualityResponse(BaseModel):
     maximum_absolute_factor_correlation: float
     per_factor_strata_occupancy: list[list[int]]
     strata_valid: bool
+    continuous_strata_valid: bool | None = None
+    discrete_level_balance: dict[str, list[int]] = Field(default_factory=dict)
+    duplicate_count: int = Field(default=0, ge=0)
+    executable_point_count: int | None = Field(default=None, ge=0)
 
 
 class LatinHypercubeRunResponse(BaseModel):
@@ -217,12 +265,12 @@ class LatinHypercubeRunResponse(BaseModel):
 class LatinHypercubeDesignResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    design_schema_version: Literal[1]
+    design_schema_version: Literal[1, 2]
     design_id: UUID
     design_version_id: UUID
     version_number: Literal[1]
     method_id: Literal["doe.latin_hypercube"]
-    method_version: Literal["0.1.0"]
+    method_version: Literal["0.1.0", "0.2.0"]
     family: Literal["latin_hypercube_space_filling"]
     name: str
     status: str
@@ -859,6 +907,9 @@ class ResponseOptimizerDesignBoundResponse(BaseModel):
     lower: float
     upper: float
     unit: str | None
+    domain_kind: Literal["continuous", "discrete_numeric"] = "continuous"
+    step: float | None = None
+    display_decimals: int | None = None
 
 
 class ResponseOptimizerSearchBoundResponse(BaseModel):

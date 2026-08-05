@@ -9,6 +9,12 @@ from typing import Any, Final, Literal, TypedDict
 import numpy as np
 from scipy.optimize import minimize  # type: ignore[import-untyped]
 
+from app.statistics.doe_factor_domain import (
+    DoeFactorDomain,
+    DoeFactorDomainError,
+    validate_factor_domain,
+)
+
 RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION: Final[Literal[2]] = 2
 MIN_OPTIMIZER_OBJECTIVES = 1
 MAX_OPTIMIZER_OBJECTIVES = 8
@@ -29,6 +35,9 @@ class OptimizerFactor:
     high: float
     alpha: float
     unit: str | None = None
+    domain_kind: Literal["continuous", "discrete_numeric"] = "continuous"
+    step: float | None = None
+    display_decimals: int | None = None
 
 
 @dataclass(frozen=True)
@@ -261,6 +270,7 @@ def calculate_response_optimizer(
             evaluated.append(evaluation)
     if not evaluated:
         feasible = _find_feasible_candidate(
+            factors,
             search_bounds,
             factor_names,
             constraint_tuple,
@@ -282,7 +292,9 @@ def calculate_response_optimizer(
     starts = sorted(evaluated, key=lambda item: item.composite, reverse=True)[
         : search_options.multi_start_count
     ]
-    if termination_reason == "search_completed":
+    if termination_reason == "search_completed" and not any(
+        factor.domain_kind == "discrete_numeric" for factor in factors
+    ):
         for start in starts:
             local_starts_attempted += 1
             try:
@@ -361,6 +373,9 @@ def calculate_response_optimizer(
                     "lower": factor.low,
                     "upper": factor.high,
                     "unit": factor.unit,
+                    "domain_kind": factor.domain_kind,
+                    "step": factor.step,
+                    "display_decimals": factor.display_decimals,
                 }
                 for factor in factors
             ],
@@ -474,6 +489,18 @@ def _validate_inputs(
     if len(set(expected_names)) != len(expected_names):
         raise ResponseOptimizerError("response_optimizer_factor_space_invalid")
     for factor in factors:
+        try:
+            validate_factor_domain(
+                DoeFactorDomain(
+                    low=factor.low,
+                    high=factor.high,
+                    domain_kind=factor.domain_kind,
+                    step=factor.step,
+                    display_decimals=factor.display_decimals,
+                )
+            )
+        except DoeFactorDomainError as exc:
+            raise ResponseOptimizerError("response_optimizer_factor_space_invalid") from exc
         if (
             not factor.name.strip()
             or not isfinite(factor.low)
@@ -492,6 +519,8 @@ def _validate_inputs(
             source.low != expected.low
             or source.high != expected.high
             or source.alpha != expected.alpha
+            or source.domain_kind != expected.domain_kind
+            or source.step != expected.step
             for source, expected in zip(objective.model.factors, factors, strict=True)
         ):
             raise ResponseOptimizerError("response_optimizer_factor_space_mismatch")
@@ -604,6 +633,16 @@ def _search_bounds(
             or bound.upper > factor.high + CONSTRAINT_TOLERANCE
         ):
             raise ResponseOptimizerError("response_optimizer_factor_bound_invalid")
+        if factor.domain_kind == "discrete_numeric":
+            domain = DoeFactorDomain(
+                low=factor.low,
+                high=factor.high,
+                domain_kind=factor.domain_kind,
+                step=factor.step,
+                display_decimals=factor.display_decimals,
+            )
+            if not domain.is_executable(bound.lower) or not domain.is_executable(bound.upper):
+                raise ResponseOptimizerError("response_optimizer_factor_bound_not_executable")
         resolved.append(bound)
     return tuple(resolved)
 
@@ -614,18 +653,49 @@ def _initial_candidates(
     constraints: tuple[OptimizerLinearConstraint, ...],
     options: OptimizerSearchOptions,
 ) -> list[np.ndarray]:
-    candidates = [np.asarray([(bound.lower + bound.upper) / 2.0 for bound in bounds], dtype=float)]
+    choices = [
+        _factor_values_in_bounds(factor, bound)
+        for factor, bound in zip(factors, bounds, strict=True)
+    ]
+    candidates = [
+        np.asarray(
+            [values[len(values) // 2] for values in choices],
+            dtype=float,
+        )
+    ]
     candidates.extend(
         np.asarray(values, dtype=float)
-        for values in product(*((bound.lower, bound.upper) for bound in bounds))
+        for values in product(*((item[0], item[-1]) for item in choices))
     )
+    discrete_indices = [
+        index for index, factor in enumerate(factors) if factor.domain_kind == "discrete_numeric"
+    ]
+    if discrete_indices:
+        combinations = product(*(choices[index] for index in discrete_indices))
+        for combination_index, combination in enumerate(combinations):
+            if combination_index >= 4096:
+                break
+            candidate = np.asarray(
+                [values[len(values) // 2] for values in choices],
+                dtype=float,
+            )
+            for index, value in zip(discrete_indices, combination, strict=True):
+                candidate[index] = value
+            candidates.append(candidate)
     generator = np.random.default_rng(options.random_seed)
     if options.random_candidate_count:
-        lows = np.asarray([bound.lower for bound in bounds], dtype=float)
-        highs = np.asarray([bound.upper for bound in bounds], dtype=float)
-        candidates.extend(
-            generator.uniform(lows, highs) for _ in range(options.random_candidate_count)
-        )
+        for _ in range(options.random_candidate_count):
+            candidates.append(
+                np.asarray(
+                    [
+                        generator.uniform(values[0], values[-1])
+                        if factor.domain_kind == "continuous"
+                        else values[int(generator.integers(0, len(values)))]
+                        for factor, values in zip(factors, choices, strict=True)
+                    ],
+                    dtype=float,
+                )
+            )
     names = tuple(factor.name for factor in factors)
     deduplicated: list[np.ndarray] = []
     seen: set[tuple[float, ...]] = set()
@@ -640,12 +710,38 @@ def _initial_candidates(
     return deduplicated
 
 
+def _factor_values_in_bounds(
+    factor: OptimizerFactor,
+    bound: OptimizerFactorBound,
+) -> tuple[float, ...]:
+    if factor.domain_kind == "continuous":
+        return (bound.lower, bound.upper)
+    domain = DoeFactorDomain(
+        low=factor.low,
+        high=factor.high,
+        domain_kind=factor.domain_kind,
+        step=factor.step,
+        display_decimals=factor.display_decimals,
+    )
+    values = tuple(
+        value
+        for value in domain.levels()
+        if bound.lower - CONSTRAINT_TOLERANCE <= value <= bound.upper + CONSTRAINT_TOLERANCE
+    )
+    if not values:
+        raise ResponseOptimizerError("response_optimizer_factor_bound_invalid")
+    return values
+
+
 def _find_feasible_candidate(
+    factors: tuple[OptimizerFactor, ...],
     bounds: tuple[OptimizerFactorBound, ...],
     factor_names: tuple[str, ...],
     constraints: tuple[OptimizerLinearConstraint, ...],
     max_iterations: int,
 ) -> np.ndarray | None:
+    if any(factor.domain_kind == "discrete_numeric" for factor in factors):
+        return None
     center = np.asarray([(bound.lower + bound.upper) / 2.0 for bound in bounds], dtype=float)
     optimized = minimize(
         lambda values: _constraint_violation(

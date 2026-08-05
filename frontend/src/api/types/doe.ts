@@ -3,6 +3,9 @@ export interface DoeFactorRequest {
   low: number;
   high: number;
   unit?: string | null;
+  domain_kind?: "continuous" | "discrete_numeric";
+  step?: number | null;
+  display_decimals?: number | null;
 }
 
 export interface FactorialDesignCreateRequest {
@@ -20,6 +23,10 @@ export interface DoeFactorResponse {
   low: number;
   high: number;
   unit: string | null;
+  domain_kind?: "continuous" | "discrete_numeric";
+  step?: number | null;
+  display_decimals?: number | null;
+  level_count?: number | null;
 }
 
 export interface FactorialDesignOptionsResponse {
@@ -70,12 +77,12 @@ export interface LatinHypercubeDesignCreateRequest {
 }
 
 export interface LatinHypercubeDesignResponse {
-  design_schema_version: 1;
+  design_schema_version: 1 | 2;
   design_id: string;
   design_version_id: string;
   version_number: 1;
   method_id: "doe.latin_hypercube";
-  method_version: "0.1.0";
+  method_version: "0.1.0" | "0.2.0";
   family: "latin_hypercube_space_filling";
   name: string;
   status: string;
@@ -84,7 +91,7 @@ export interface LatinHypercubeDesignResponse {
   app_version: string;
   factors: DoeFactorRequest[];
   options: {
-    policy: "scipy_latin_hypercube_random_cd_v1";
+    policy: "scipy_latin_hypercube_random_cd_v1" | "mixed_lhs_balanced_discrete_v1";
     run_count: number;
     seed: number;
     scramble: true;
@@ -101,6 +108,10 @@ export interface LatinHypercubeDesignResponse {
     maximum_absolute_factor_correlation: number;
     per_factor_strata_occupancy: number[][];
     strata_valid: boolean;
+    continuous_strata_valid?: boolean;
+    discrete_level_balance?: Record<string, number[]>;
+    duplicate_count?: number;
+    executable_point_count?: number;
   };
   run_count: number;
   design_sha256: string;
@@ -626,6 +637,9 @@ export interface ResponseOptimizerResult {
       lower: number;
       upper: number;
       unit: string | null;
+      domain_kind?: "continuous" | "discrete_numeric";
+      step?: number | null;
+      display_decimals?: number | null;
     }>;
     search_bounds: ResponseOptimizerFactorBoundRequest[];
     linear_constraints: ResponseOptimizerLinearConstraintRequest[];

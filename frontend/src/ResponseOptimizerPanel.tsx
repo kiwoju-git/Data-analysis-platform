@@ -352,7 +352,12 @@ export function ResponseOptimizerPanel({
               {design.factors.map((factor) => (
                 <tr key={factor.name}>
                   <td>{factor.name}{factor.unit ? ` (${factor.unit})` : ""}</td>
-                  <td>{formatNumber(factor.low)} – {formatNumber(factor.high)}</td>
+                  <td>
+                    {formatNumber(factor.low)} – {formatNumber(factor.high)}
+                    {factor.domain_kind === "discrete_numeric" ? (
+                      <small className="field-helper">실행 간격 {formatNumber(factor.step ?? 0)}</small>
+                    ) : null}
+                  </td>
                   <td>
                     <input
                       aria-label={`${factor.name} optimizer lower bound`}

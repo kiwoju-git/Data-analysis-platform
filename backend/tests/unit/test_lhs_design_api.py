@@ -44,7 +44,7 @@ def test_lhs_design_create_restore_response_revision_and_csv(tmp_path) -> None:
     assert restored_response.status_code == 200
     assert restored_response.json() == created
     assert created["method_id"] == "doe.latin_hypercube"
-    assert created["method_version"] == "0.1.0"
+    assert created["method_version"] == "0.2.0"
     assert created["quality"]["strata_valid"] is True
     assert len(created["runs"]) == 10
     assert saved_response.status_code == 200
@@ -72,3 +72,40 @@ def test_lhs_design_rejects_invalid_bounds_and_extra_constraints(tmp_path) -> No
 
     assert invalid_response.status_code == 422
     assert unsupported_response.status_code == 422
+
+
+def test_lhs_mixed_factor_coordinates_and_csv_use_executable_grid(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    request = _request()
+    request["factors"][0] = {
+        "name": "sample_day",
+        "low": 1,
+        "high": 10,
+        "unit": "day",
+        "domain_kind": "discrete_numeric",
+        "step": 1,
+        "display_decimals": 0,
+    }
+    with TestClient(create_app(settings)) as client:
+        created_response = client.post(
+            "/api/v1/doe-designs/latin-hypercube",
+            json=request,
+        )
+        assert created_response.status_code == 201, created_response.json()
+        created = created_response.json()
+        csv_response = client.get(
+            f"/api/v1/doe-designs/latin-hypercube/{created['design_id']}/export.csv"
+        )
+
+    values = [run["factor_levels"]["sample_day"] for run in created["runs"]]
+    assert all(value == int(value) for value in values)
+    assert created["design_schema_version"] == 2
+    assert created["quality"]["duplicate_count"] == 0
+    assert (
+        max(created["quality"]["discrete_level_balance"]["sample_day"])
+        - min(created["quality"]["discrete_level_balance"]["sample_day"])
+        <= 1
+    )
+    lines = csv_response.content.decode("utf-8-sig").splitlines()
+    sample_day_index = lines[0].split(",").index("sample_day")
+    assert all("." not in line.split(",")[sample_day_index] for line in lines[1:])

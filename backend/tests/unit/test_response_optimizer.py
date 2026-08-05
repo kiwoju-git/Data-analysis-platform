@@ -145,6 +145,43 @@ def test_optimizer_finds_known_bounded_quadratic_maximum_and_honors_linear_const
     assert result["model_policy"]["global_optimum_guaranteed"] is False  # type: ignore[index]
 
 
+def test_optimizer_discrete_factor_recommendation_and_profile_stay_on_grid() -> None:
+    factor = OptimizerFactor(
+        name="sample_day",
+        low=0.0,
+        high=10.0,
+        alpha=1.0,
+        domain_kind="discrete_numeric",
+        step=2.0,
+        display_decimals=0,
+    )
+    model = OptimizerModel(
+        analysis_id="discrete-model",
+        response_name="response",
+        response_unit=None,
+        factors=(factor,),
+        terms=(
+            OptimizerTerm(kind="intercept", factor_names=(), coefficient=0.0),
+            OptimizerTerm(
+                kind="main_effect",
+                factor_names=("sample_day",),
+                coefficient=1.0,
+            ),
+        ),
+    )
+    result = calculate_response_optimizer(
+        [_objective(model, "maximize", lower=-1.0, target=1.0, upper=None)],
+        factor_bounds=[],
+        linear_constraints=[],
+        search_options=_options(random_candidate_count=64),
+    )
+
+    recommendation = result["recommendation"]
+    assert isinstance(recommendation, dict)
+    value = recommendation["actual_coordinates"]["sample_day"]
+    assert value % 2 == 0
+
+
 def test_nist_multiple_response_desirability_reference_is_reproduced() -> None:
     fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
     factor_names = tuple(fixture["factor_bounds"])

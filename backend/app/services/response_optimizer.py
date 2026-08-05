@@ -60,6 +60,11 @@ SUPPORTED_RESPONSE_OPTIMIZER_METHOD_IDS: Final[frozenset[str]] = frozenset(
 )
 RESPONSE_OPTIMIZER_CONFIG_SCHEMA_VERSION: Final[Literal[2]] = 2
 RESPONSE_OPTIMIZER_RECORD_RESPONSE_NAME = "response_optimizer"
+SUPPORTED_RESPONSE_SURFACE_METHOD_VERSIONS: Final = {"0.2.0", "0.3.0"}
+SUPPORTED_RESPONSE_OPTIMIZER_METHOD_VERSIONS: Final = {
+    "doe.response_optimizer": {"0.3.0", "0.4.0"},
+    "regression.response_optimizer": {"0.3.0"},
+}
 
 
 def list_response_surface_analysis_catalog(
@@ -81,7 +86,7 @@ def list_response_surface_analysis_catalog(
         advisory_count = 0
         informational_count = 0
         availability_code: str | None = None
-        if record.method_version != METHOD_VERSIONS["doe.response_surface"]:
+        if record.method_version not in SUPPORTED_RESPONSE_SURFACE_METHOD_VERSIONS:
             eligibility_status: Literal[
                 "eligible",
                 "acknowledgment_required",
@@ -275,7 +280,8 @@ def _validated_optimizer_response(
     design = get_response_surface_design(settings, design_id)
     if (
         record.method_id not in SUPPORTED_RESPONSE_OPTIMIZER_METHOD_IDS
-        or record.method_version != METHOD_VERSIONS[record.method_id]
+        or record.method_version
+        not in SUPPORTED_RESPONSE_OPTIMIZER_METHOD_VERSIONS[record.method_id]
         or record.response_name != RESPONSE_OPTIMIZER_RECORD_RESPONSE_NAME
     ):
         raise _metadata_error("response_optimizer_method_mismatch")
@@ -353,6 +359,9 @@ def _load_source_objectives(
             high=factor.high,
             alpha=design.options.alpha,
             unit=factor.unit,
+            domain_kind=factor.domain_kind,
+            step=factor.step,
+            display_decimals=factor.display_decimals,
         )
         for factor in design.factors
     )

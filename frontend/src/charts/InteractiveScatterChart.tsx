@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 import { ChartTooltip } from "./ChartTooltip";
 import { scaleChartValue, type NumericRange } from "./chartScale";
 import { useChartPointInteraction } from "./useChartPointInteraction";
@@ -38,6 +40,8 @@ interface InteractiveScatterChartProps {
   xRange: NumericRange;
   yLabel: string;
   yRange: NumericRange;
+  selectedPointId?: string | null;
+  onPointSelect?: (pointId: string) => void;
 }
 
 const margins = { left: 54, right: 18, top: 22, bottom: 50 };
@@ -58,6 +62,8 @@ export function InteractiveScatterChart({
   xRange,
   yLabel,
   yRange,
+  selectedPointId = null,
+  onPointSelect,
 }: InteractiveScatterChartProps) {
   const interaction = useChartPointInteraction(points.map((point) => point.id));
   const width = square || compact ? 360 : 440;
@@ -65,6 +71,12 @@ export function InteractiveScatterChart({
   const plotWidth = width - margins.left - margins.right;
   const plotHeight = height - margins.top - margins.bottom;
   const active = points.find((point) => point.id === interaction.activePoint?.id) ?? null;
+
+  useEffect(() => {
+    if (interaction.activePoint !== null) {
+      onPointSelect?.(interaction.activePoint.id);
+    }
+  }, [interaction.activePoint, onPointSelect]);
   const x = (value: number) =>
     scaleChartValue(value, xRange, margins.left, margins.left + plotWidth);
   const y = (value: number) =>
@@ -108,7 +120,8 @@ export function InteractiveScatterChart({
         {points.map((point) => {
           const cx = x(point.x);
           const cy = y(point.y);
-          const selected = interaction.activePoint?.id === point.id;
+          const selected =
+            interaction.activePoint?.id === point.id || selectedPointId === point.id;
           return (
             <g key={point.id}>
               {point.warning ? (
@@ -121,7 +134,9 @@ export function InteractiveScatterChart({
                 cy={cy}
                 data-selected={selected ? "true" : "false"}
                 onBlur={() => interaction.clear(point.id)}
-                onClick={() => interaction.activate(point.id, cx, cy, "selection")}
+                onClick={() => {
+                  interaction.activate(point.id, cx, cy, "selection");
+                }}
                 onFocus={() => interaction.activate(point.id, cx, cy, "focus")}
                 onKeyDown={(event) => interaction.handleKeyDown(event, point.id, cx, cy)}
                 onPointerEnter={(event) => interaction.move(point.id, event)}

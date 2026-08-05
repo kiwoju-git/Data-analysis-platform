@@ -69,6 +69,9 @@ def create_response_surface_design(
             low=float(factor.low),
             high=float(factor.high),
             unit=None if factor.unit is None else factor.unit.strip() or None,
+            domain_kind=factor.domain_kind,
+            step=None if factor.step is None else float(factor.step),
+            display_decimals=factor.display_decimals,
         )
         for factor in body.factors
     ]
@@ -429,6 +432,12 @@ def _response_surface_api_error(code: str) -> ApiError:
         "doe_rsm_center_points_invalid": "center point는 1개 이상이어야 합니다.",
         "doe_rsm_seed_invalid": "randomization seed는 0 이상의 정수여야 합니다.",
         "doe_rsm_run_count_exceeds_limit": "생성될 반응표면 run 수가 현재 제한을 초과합니다.",
+        "doe_rsm_factor_grid_incompatible": (
+            "현재 실행 간격에서는 요청한 CCD의 factorial, center 또는 axial point를 "
+            "실행할 수 없습니다. Face-centered 방식이나 요인 범위·간격을 검토하세요."
+        ),
+        "doe_factor_step_invalid": "일정 간격 숫자 요인의 실행 간격은 0보다 커야 합니다.",
+        "doe_factor_high_not_on_grid": "상한은 하한에서 실행 간격의 정수 배만큼 떨어져야 합니다.",
     }
     return ApiError(
         code=code,

@@ -18,9 +18,15 @@ import {
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
+import {
+  continuousFactorDomainDraft,
+  formatDoeFactorValue,
+  parseDoeFactorDomainDraft,
+  type DoeFactorDomainDraft,
+} from "./doe/factorDomain";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 
-interface FactorDraft {
+interface FactorDraft extends DoeFactorDomainDraft {
   id: number;
   name: string;
   low: string;
@@ -33,8 +39,8 @@ const maxFactorCount = 5;
 export function ResponseSurfacePanel() {
   const [name, setName] = useState("Central composite process window");
   const [factors, setFactors] = useState<FactorDraft[]>([
-    { id: 1, name: "Temperature", low: "60", high: "80", unit: "C" },
-    { id: 2, name: "Pressure", low: "5", high: "15", unit: "bar" },
+    { id: 1, name: "Temperature", low: "60", high: "80", unit: "C", ...continuousFactorDomainDraft },
+    { id: 2, name: "Pressure", low: "5", high: "15", unit: "bar", ...continuousFactorDomainDraft },
   ]);
   const [alphaMode, setAlphaMode] = useState<"rotatable" | "face_centered">("rotatable");
   const [centerPoints, setCenterPoints] = useState("5");
@@ -290,7 +296,10 @@ export function ResponseSurfacePanel() {
               const id = nextFactorId.current++;
               setFactors((current) => [
                 ...current,
-                { id, name: `Factor ${id}`, low: "-1", high: "1", unit: "" },
+                {
+                  id, name: `Factor ${id}`, low: "-1", high: "1", unit: "",
+                  ...continuousFactorDomainDraft,
+                },
               ]);
             }}
           >
@@ -304,6 +313,9 @@ export function ResponseSurfacePanel() {
             <col className="doe-factor-name-column" />
             <col className="doe-factor-bound-column" />
             <col className="doe-factor-bound-column" />
+            <col className="doe-factor-domain-column" />
+            <col className="doe-factor-bound-column" />
+            <col className="doe-factor-bound-column" />
             <col className="doe-factor-unit-column" />
             <col className="doe-factor-action-column" />
           </colgroup>
@@ -312,6 +324,9 @@ export function ResponseSurfacePanel() {
               <th>요인</th>
               <th>설계 하한</th>
               <th>설계 상한</th>
+              <th>설정 방식</th>
+              <th>실행 간격</th>
+              <th>표시 자리수</th>
               <th>단위</th>
               <th className="doe-factor-action-cell">작업</th>
             </tr>
@@ -345,6 +360,41 @@ export function ResponseSurfacePanel() {
                     value={factor.high}
                     onChange={(event) =>
                       updateFactor(setFactors, factor.id, "high", event.currentTarget.value)
+                    }
+                  />
+                </td>
+                <td>
+                  <select
+                    aria-label={`${factor.name || `요인 ${index + 1}`} 설정 방식`}
+                    value={factor.domainKind ?? "continuous"}
+                    onChange={(event) =>
+                      updateFactor(setFactors, factor.id, "domainKind", event.currentTarget.value)
+                    }
+                  >
+                    <option value="continuous">연속형</option>
+                    <option value="discrete_numeric">일정 간격 숫자</option>
+                  </select>
+                </td>
+                <td>
+                  <input
+                    aria-label={`${factor.name || `요인 ${index + 1}`} 실행 간격`}
+                    disabled={(factor.domainKind ?? "continuous") === "continuous"}
+                    inputMode="decimal"
+                    placeholder="-"
+                    value={factor.step ?? ""}
+                    onChange={(event) =>
+                      updateFactor(setFactors, factor.id, "step", event.currentTarget.value)
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${factor.name || `요인 ${index + 1}`} 표시 자리수`}
+                    inputMode="numeric"
+                    placeholder="자동"
+                    value={factor.displayDecimals ?? ""}
+                    onChange={(event) =>
+                      updateFactor(setFactors, factor.id, "displayDecimals", event.currentTarget.value)
                     }
                   />
                 </td>
@@ -540,7 +590,12 @@ export function ResponseSurfaceResponseEntry({
                 <td>{run.run_order}</td>
                 <td>{run.point_type}</td>
                 {design.factors.map((factor) => (
-                  <td key={factor.name}>{formatNumber(run.factor_levels[factor.name])}</td>
+                  <td key={factor.name}>
+                    {formatDoeFactorValue(
+                      run.factor_levels[factor.name],
+                      factor.display_decimals,
+                    )}
+                  </td>
                 ))}
                 <td>
                   <input
@@ -771,18 +826,35 @@ function designRequest(input: {
   if (names.some((name) => name.length === 0) || new Set(names).size !== names.length) {
     return "doe_rsm_factor_names_not_unique";
   }
-  const factors = input.factors.map((factor) => ({
-    name: factor.name.trim(),
-    low: Number(factor.low),
-    high: Number(factor.high),
-    unit: factor.unit.trim() || null,
-  }));
-  if (factors.some((factor) => !Number.isFinite(factor.low) || !Number.isFinite(factor.high) || factor.low >= factor.high)) {
+  const factors = input.factors.map((factor) => {
+    const low = Number(factor.low);
+    const high = Number(factor.high);
+    const domain = parseDoeFactorDomainDraft(factor, low, high);
+    return {
+      name: factor.name.trim(),
+      low,
+      high,
+      unit: factor.unit.trim() || null,
+      domain_kind: domain?.domain_kind,
+      step: domain?.step,
+      display_decimals: domain?.display_decimals,
+      validDomain: domain !== null,
+    };
+  });
+  if (factors.some((factor) => !Number.isFinite(factor.low) || !Number.isFinite(factor.high) || factor.low >= factor.high || !factor.validDomain)) {
     return "doe_rsm_factor_range_invalid";
   }
   return {
     name: input.name.trim() || "Central composite design",
-    factors,
+    factors: factors.map((factor) => ({
+      name: factor.name,
+      low: factor.low,
+      high: factor.high,
+      unit: factor.unit,
+      domain_kind: factor.domain_kind,
+      step: factor.step,
+      display_decimals: factor.display_decimals,
+    })),
     alpha_mode: input.alphaMode,
     factorial_replicates: 1,
     axial_replicates: 1,

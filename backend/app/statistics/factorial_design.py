@@ -5,6 +5,13 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Any
 
+from app.statistics.doe_factor_domain import (
+    DoeFactorDomain,
+    DoeFactorDomainError,
+    factor_domain_payload,
+    validate_factor_domain,
+)
+
 FACTORIAL_DESIGN_SCHEMA_VERSION = 1
 FACTORIAL_DESIGN_FAMILY = "two_level_full_factorial"
 MAX_FACTORIAL_FACTORS = 6
@@ -24,6 +31,9 @@ class FactorialFactor:
     low: float
     high: float
     unit: str | None = None
+    domain_kind: str = "continuous"
+    step: float | None = None
+    display_decimals: int | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +72,25 @@ def generate_two_level_full_factorial_design(
 ) -> FactorialDesign:
     _validate_factors(factors)
     _validate_options(options)
+    if options.center_points > 0:
+        for factor in factors:
+            domain = DoeFactorDomain(
+                low=factor.low,
+                high=factor.high,
+                domain_kind=factor.domain_kind,  # type: ignore[arg-type]
+                step=factor.step,
+                display_decimals=factor.display_decimals,
+            )
+            if domain.domain_kind == "discrete_numeric" and not domain.is_executable(
+                (factor.low + factor.high) / 2
+            ):
+                raise FactorialDesignError(
+                    code="doe_factorial_center_not_executable",
+                    message=(
+                        f"현재 실행 간격에서는 {factor.name} 센터점을 실행할 수 없습니다. "
+                        "센터점을 제거하거나 요인 범위와 간격을 조정하세요."
+                    ),
+                )
     base_run_count = 2 ** len(factors)
     run_count = base_run_count * options.replicates + options.center_points
     if run_count > MAX_FACTORIAL_RUNS:
@@ -156,12 +185,26 @@ def canonical_factorial_design_payload(
 
 
 def factor_to_payload(factor: FactorialFactor) -> dict[str, Any]:
-    return {
+    domain = DoeFactorDomain(
+        low=factor.low,
+        high=factor.high,
+        domain_kind=factor.domain_kind,  # type: ignore[arg-type]
+        step=factor.step,
+        display_decimals=factor.display_decimals,
+    )
+    payload = {
         "name": factor.name,
         "low": factor.low,
         "high": factor.high,
         "unit": factor.unit,
     }
+    if (
+        domain.domain_kind != "continuous"
+        or domain.step is not None
+        or domain.display_decimals is not None
+    ):
+        payload.update(factor_domain_payload(domain))
+    return payload
 
 
 def options_to_payload(options: FactorialDesignOptions) -> dict[str, Any]:
@@ -213,6 +256,17 @@ def _validate_factors(factors: list[FactorialFactor]) -> None:
                 code="doe_factorial_factor_range_invalid",
                 message="DOE 요인의 low/high 수준은 유한한 숫자이며 low < high 여야 합니다.",
             )
+        domain = DoeFactorDomain(
+            low=factor.low,
+            high=factor.high,
+            domain_kind=factor.domain_kind,  # type: ignore[arg-type]
+            step=factor.step,
+            display_decimals=factor.display_decimals,
+        )
+        try:
+            validate_factor_domain(domain)
+        except DoeFactorDomainError as exc:
+            raise FactorialDesignError(exc.code, "DOE 요인의 실행 가능 간격을 확인하세요.") from exc
 
 
 def _validate_options(options: FactorialDesignOptions) -> None:

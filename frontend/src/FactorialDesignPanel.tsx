@@ -18,8 +18,14 @@ import {
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
+import {
+  continuousFactorDomainDraft,
+  formatDoeFactorValue,
+  parseDoeFactorDomainDraft,
+  type DoeFactorDomainDraft,
+} from "./doe/factorDomain";
 
-interface FactorDraft {
+interface FactorDraft extends DoeFactorDomainDraft {
   id: string;
   name: string;
   low: string;
@@ -76,8 +82,14 @@ export function FactorialDesignPanel({
 }: FactorialDesignPanelProps) {
   const [name, setName] = useState("2-level screening design");
   const [factors, setFactors] = useState<FactorDraft[]>([
-    { id: "factor-1", name: "Temperature", low: "60", high: "80", unit: "C" },
-    { id: "factor-2", name: "Pressure", low: "5", high: "15", unit: "bar" },
+    {
+      id: "factor-1", name: "Temperature", low: "60", high: "80", unit: "C",
+      ...continuousFactorDomainDraft,
+    },
+    {
+      id: "factor-2", name: "Pressure", low: "5", high: "15", unit: "bar",
+      ...continuousFactorDomainDraft,
+    },
   ]);
   const [replicates, setReplicates] = useState("1");
   const [centerPoints, setCenterPoints] = useState("1");
@@ -213,6 +225,7 @@ export function FactorialDesignPanel({
                   low: "0",
                   high: "1",
                   unit: "",
+                  ...continuousFactorDomainDraft,
                 },
               ]);
             }}
@@ -228,6 +241,9 @@ export function FactorialDesignPanel({
             <col className="doe-factor-name-column" />
             <col className="doe-factor-bound-column" />
             <col className="doe-factor-bound-column" />
+            <col className="doe-factor-domain-column" />
+            <col className="doe-factor-bound-column" />
+            <col className="doe-factor-bound-column" />
             <col className="doe-factor-unit-column" />
             <col className="doe-factor-action-column" />
           </colgroup>
@@ -236,6 +252,9 @@ export function FactorialDesignPanel({
               <th>요인</th>
               <th>하한</th>
               <th>상한</th>
+              <th>설정 방식</th>
+              <th>실행 간격</th>
+              <th>표시 자리수</th>
               <th>단위</th>
               <th className="doe-factor-action-cell">작업</th>
             </tr>
@@ -269,6 +288,41 @@ export function FactorialDesignPanel({
                     value={factor.high}
                     onChange={(event) => {
                       updateFactor(factor.id, "high", event.currentTarget.value, setFactors);
+                    }}
+                  />
+                </td>
+                <td>
+                  <select
+                    aria-label={`${factor.name || `factor ${index + 1}`} 설정 방식`}
+                    value={factor.domainKind ?? "continuous"}
+                    onChange={(event) => {
+                      updateFactor(factor.id, "domainKind", event.currentTarget.value, setFactors);
+                    }}
+                  >
+                    <option value="continuous">연속형</option>
+                    <option value="discrete_numeric">일정 간격 숫자</option>
+                  </select>
+                </td>
+                <td>
+                  <input
+                    aria-label={`${factor.name || `factor ${index + 1}`} 실행 간격`}
+                    disabled={(factor.domainKind ?? "continuous") === "continuous"}
+                    inputMode="decimal"
+                    placeholder="-"
+                    value={factor.step ?? ""}
+                    onChange={(event) => {
+                      updateFactor(factor.id, "step", event.currentTarget.value, setFactors);
+                    }}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${factor.name || `factor ${index + 1}`} 표시 자리수`}
+                    inputMode="numeric"
+                    placeholder="자동"
+                    value={factor.displayDecimals ?? ""}
+                    onChange={(event) => {
+                      updateFactor(factor.id, "displayDecimals", event.currentTarget.value, setFactors);
                     }}
                   />
                 </td>
@@ -456,7 +510,12 @@ export function FactorialDesignPreview({
                 <td>{run.block_index ?? "-"}</td>
                 <td>{run.center_point ? "yes" : "no"}</td>
                 {design.factors.map((factor) => (
-                  <td key={factor.name}>{formatFactorLevel(run.factor_levels[factor.name])}</td>
+                  <td key={factor.name}>
+                    {formatDoeFactorValue(
+                      Number(run.factor_levels[factor.name]),
+                      factor.display_decimals,
+                    )}
+                  </td>
                 ))}
                 <td>{formatCodedLevels(run.coded_levels)}</td>
               </tr>
@@ -518,7 +577,12 @@ export function FactorialDesignPreview({
                 <td>{run.run_order}</td>
                 <td>{run.standard_order}</td>
                 {design.factors.map((factor) => (
-                  <td key={factor.name}>{formatFactorLevel(run.factor_levels[factor.name])}</td>
+                  <td key={factor.name}>
+                    {formatDoeFactorValue(
+                      Number(run.factor_levels[factor.name]),
+                      factor.display_decimals,
+                    )}
+                  </td>
                 ))}
                 <td>
                   <input
@@ -1083,11 +1147,18 @@ function validateFactorialDesignDraft({
     if (!Number.isFinite(low) || !Number.isFinite(high) || low >= high) {
       return validationError(`${factorName}의 low/high를 확인하세요.`, 0);
     }
+    const domain = parseDoeFactorDomainDraft(factor, low, high);
+    if (domain === null) {
+      return validationError(`${factorName}의 실행 간격 또는 표시 자리수를 확인하세요.`, 0);
+    }
     parsedFactors.push({
       name: factorName,
       low,
       high,
       unit: factor.unit.trim().length > 0 ? factor.unit.trim() : null,
+      domain_kind: domain.domain_kind,
+      step: domain.step,
+      display_decimals: domain.display_decimals,
     });
   }
 
@@ -1188,10 +1259,6 @@ function errorCode(error: unknown): string {
 function integerField(value: string): number | null {
   const parsed = Number(value);
   return Number.isInteger(parsed) ? parsed : null;
-}
-
-function formatFactorLevel(value: number | undefined): string {
-  return typeof value === "number" ? Number(value.toPrecision(12)).toLocaleString() : "-";
 }
 
 function formatCodedLevels(levels: Record<string, number>): string {

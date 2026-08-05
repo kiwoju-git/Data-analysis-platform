@@ -12,6 +12,11 @@ import {
   type LatinHypercubeDesignResponse,
 } from "./api";
 import { apiRoutes } from "./api/routes";
+import { InteractiveParallelCoordinatesChart } from "./charts/InteractiveParallelCoordinatesChart";
+import {
+  InteractiveScatterChart,
+  type InteractiveScatterPoint,
+} from "./charts/InteractiveScatterChart";
 import {
   DoeActionBar,
   DoeAdvancedSettings,
@@ -19,8 +24,14 @@ import {
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
+import {
+  continuousFactorDomainDraft,
+  formatDoeFactorValue,
+  parseDoeFactorDomainDraft,
+  type DoeFactorDomainDraft,
+} from "./doe/factorDomain";
 
-interface FactorDraft {
+interface FactorDraft extends DoeFactorDomainDraft {
   key: number;
   name: string;
   low: string;
@@ -29,9 +40,9 @@ interface FactorDraft {
 }
 
 const initialFactors: FactorDraft[] = [
-  { key: 1, name: "factor_1", low: "0", high: "1", unit: "" },
-  { key: 2, name: "factor_2", low: "0", high: "1", unit: "" },
-  { key: 3, name: "factor_3", low: "0", high: "1", unit: "" },
+  { key: 1, name: "factor_1", low: "0", high: "1", unit: "", ...continuousFactorDomainDraft },
+  { key: 2, name: "factor_2", low: "0", high: "1", unit: "", ...continuousFactorDomainDraft },
+  { key: 3, name: "factor_3", low: "0", high: "1", unit: "", ...continuousFactorDomainDraft },
 ];
 
 export function LatinHypercubePanel() {
@@ -50,6 +61,10 @@ export function LatinHypercubePanel() {
   const [isCreating, setIsCreating] = useState(false);
   const [isSavingResponses, setIsSavingResponses] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRunOrder, setSelectedRunOrder] = useState<number | null>(null);
+  const [visualScale, setVisualScale] = useState<"actual" | "normalized">("normalized");
+  const [xFactorName, setXFactorName] = useState("");
+  const [yFactorName, setYFactorName] = useState("");
 
   const request = useMemo(
     () => buildRequest({
@@ -75,8 +90,8 @@ export function LatinHypercubePanel() {
       <div className="notice-box">
         <strong>연속형 요인의 사각형 범위를 고르게 탐색하는 설계입니다.</strong>
         <p>
-          2수준 요인배치의 직교 효과 추정과 목적이 다르며, 범주형·정수형·선형 제약은
-          현재 지원하지 않습니다. 별도 베이지안 스터디가 LHS 초기점을 생성할 수
+          2수준 요인배치의 직교 효과 추정과 목적이 다르며, 범주형·선형 제약은
+          현재 지원하지 않습니다. 일정 간격 숫자 요인은 실행 가능한 수준에 균형 배치합니다. 별도 베이지안 스터디가 LHS 초기점을 생성할 수
           있으므로 같은 설계표를 중복 생성할 필요는 없습니다.
         </p>
       </div>
@@ -211,6 +226,7 @@ export function LatinHypercubePanel() {
                   low: "0",
                   high: "1",
                   unit: "",
+                  ...continuousFactorDomainDraft,
                 },
               ])
             }
@@ -225,6 +241,9 @@ export function LatinHypercubePanel() {
               <col className="doe-factor-name-column" />
               <col className="doe-factor-bound-column" />
               <col className="doe-factor-bound-column" />
+              <col className="doe-factor-domain-column" />
+              <col className="doe-factor-bound-column" />
+              <col className="doe-factor-bound-column" />
               <col className="doe-factor-unit-column" />
               <col className="doe-factor-action-column" />
             </colgroup>
@@ -233,6 +252,9 @@ export function LatinHypercubePanel() {
                 <th>요인</th>
                 <th>하한</th>
                 <th>상한</th>
+                <th>설정 방식</th>
+                <th>실행 간격</th>
+                <th>표시 자리수</th>
                 <th>단위</th>
                 <th className="doe-factor-action-cell">작업</th>
               </tr>
@@ -266,6 +288,46 @@ export function LatinHypercubePanel() {
                       value={factor.high}
                       onChange={(event) =>
                         updateFactor(setFactors, factor.key, "high", event.currentTarget.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <select
+                      aria-label={`${factor.name || `요인 ${index + 1}`} 설정 방식`}
+                      value={factor.domainKind ?? "continuous"}
+                      onChange={(event) =>
+                        updateFactor(setFactors, factor.key, "domainKind", event.currentTarget.value)
+                      }
+                    >
+                      <option value="continuous">연속형</option>
+                      <option value="discrete_numeric">일정 간격 숫자</option>
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      aria-label={`${factor.name || `요인 ${index + 1}`} 실행 간격`}
+                      disabled={(factor.domainKind ?? "continuous") === "continuous"}
+                      inputMode="decimal"
+                      placeholder="-"
+                      value={factor.step ?? ""}
+                      onChange={(event) =>
+                        updateFactor(setFactors, factor.key, "step", event.currentTarget.value)
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      aria-label={`${factor.name || `요인 ${index + 1}`} 표시 자리수`}
+                      inputMode="numeric"
+                      placeholder="자동"
+                      value={factor.displayDecimals ?? ""}
+                      onChange={(event) =>
+                        updateFactor(
+                          setFactors,
+                          factor.key,
+                          "displayDecimals",
+                          event.currentTarget.value,
+                        )
                       }
                     />
                   </td>
@@ -315,6 +377,9 @@ export function LatinHypercubePanel() {
                 setDesign(next);
                 setResponseDrafts({});
                 setResponseRevision(null);
+                setSelectedRunOrder(null);
+                setXFactorName(next.factors[0]?.name ?? "");
+                setYFactorName(next.factors[1]?.name ?? next.factors[0]?.name ?? "");
               })
               .catch((reason) =>
                 setError(reason instanceof Error ? reason.message : "lhs_design_failed"),
@@ -353,8 +418,27 @@ export function LatinHypercubePanel() {
                 <dd>{design.quality.strata_valid ? "통과" : "검토 필요"}</dd>
               </div>
             </dl>
+          </section>
+          <LhsDesignVisualization
+            design={design}
+            onScaleChange={setVisualScale}
+            onSelectRun={setSelectedRunOrder}
+            onXFactorChange={setXFactorName}
+            onYFactorChange={setYFactorName}
+            scale={visualScale}
+            selectedRunOrder={selectedRunOrder}
+            xFactorName={xFactorName}
+            yFactorName={yFactorName}
+          />
+          <section className="result-section" aria-labelledby="lhs-runs-title">
+            <div className="panel-heading">
+              <div>
+                <h4 id="lhs-runs-title">실험표</h4>
+                <p>평행좌표와 2요인 투영에서 선택한 run을 같은 표에서 확인합니다.</p>
+              </div>
+            </div>
             <div className="table-wrap">
-              <table className="lhs-run-table">
+              <table className="lhs-run-table result-table">
                 <thead>
                   <tr>
                     <th>Standard order</th>
@@ -367,11 +451,28 @@ export function LatinHypercubePanel() {
                 </thead>
                 <tbody>
                   {design.runs.map((run) => (
-                    <tr key={run.run_order}>
+                    <tr
+                      className={run.run_order === selectedRunOrder ? "lhs-run-selected" : undefined}
+                      data-selected={run.run_order === selectedRunOrder ? "true" : "false"}
+                      key={run.run_order}
+                    >
                       <td>{run.standard_order}</td>
-                      <td>{run.run_order}</td>
+                      <td>
+                        <button
+                          className="lhs-run-select-button"
+                          onClick={() => setSelectedRunOrder(run.run_order)}
+                          type="button"
+                        >
+                          {run.run_order}
+                        </button>
+                      </td>
                       {design.factors.map((factor) => (
-                        <td key={factor.name}>{formatNumber(run.factor_levels[factor.name])}</td>
+                        <td key={factor.name}>
+                          {formatDoeFactorValue(
+                            run.factor_levels[factor.name],
+                            factor.display_decimals,
+                          )}
+                        </td>
                       ))}
                       {design.factors.map((factor) => (
                         <td key={`${factor.name}-normalized`}>
@@ -479,12 +580,21 @@ function buildRequest(input: {
   const runCount = Number(input.runCount);
   const seed = Number(input.seed);
   const runOrderSeed = Number(input.runOrderSeed);
-  const factors = input.factors.map((item) => ({
-    name: item.name.trim(),
-    low: Number(item.low),
-    high: Number(item.high),
-    unit: item.unit.trim() || null,
-  }));
+  const factors = input.factors.map((item) => {
+    const low = Number(item.low);
+    const high = Number(item.high);
+    const domain = parseDoeFactorDomainDraft(item, low, high);
+    return {
+      name: item.name.trim(),
+      low,
+      high,
+      unit: item.unit.trim() || null,
+      domain_kind: domain?.domain_kind,
+      step: domain?.step,
+      display_decimals: domain?.display_decimals,
+      validDomain: domain !== null,
+    };
+  });
   if (
     input.name.trim() === "" ||
     !Number.isInteger(runCount) ||
@@ -500,14 +610,23 @@ function buildRequest(input: {
         item.name === "" ||
         !Number.isFinite(item.low) ||
         !Number.isFinite(item.high) ||
-        item.low >= item.high,
+        item.low >= item.high ||
+        !item.validDomain
     )
   ) {
     return null;
   }
   return {
     name: input.name.trim(),
-    factors,
+    factors: factors.map((factor) => ({
+      name: factor.name,
+      low: factor.low,
+      high: factor.high,
+      unit: factor.unit,
+      domain_kind: factor.domain_kind,
+      step: factor.step,
+      display_decimals: factor.display_decimals,
+    })),
     run_count: runCount,
     seed,
     randomize_run_order: input.randomizeRunOrder,
@@ -535,6 +654,134 @@ function Metric({ label, value }: { label: string; value: number }) {
       <dt>{label}</dt>
       <dd>{formatNumber(value)}</dd>
     </div>
+  );
+}
+
+function LhsDesignVisualization({
+  design,
+  onScaleChange,
+  onSelectRun,
+  onXFactorChange,
+  onYFactorChange,
+  scale,
+  selectedRunOrder,
+  xFactorName,
+  yFactorName,
+}: {
+  design: LatinHypercubeDesignResponse;
+  onScaleChange: (value: "actual" | "normalized") => void;
+  onSelectRun: (value: number | null) => void;
+  onXFactorChange: (value: string) => void;
+  onYFactorChange: (value: string) => void;
+  scale: "actual" | "normalized";
+  selectedRunOrder: number | null;
+  xFactorName: string;
+  yFactorName: string;
+}) {
+  const xFactor = design.factors.find((factor) => factor.name === xFactorName)
+    ?? design.factors[0];
+  const yFactor = design.factors.find((factor) => factor.name === yFactorName)
+    ?? design.factors[1]
+    ?? design.factors[0];
+  const sameFactor = xFactor.name === yFactor.name;
+  const points: InteractiveScatterPoint[] = sameFactor
+    ? []
+    : design.runs.map((run) => {
+        const x = scale === "normalized"
+          ? run.normalized_levels[xFactor.name]
+          : run.factor_levels[xFactor.name];
+        const y = scale === "normalized"
+          ? run.normalized_levels[yFactor.name]
+          : run.factor_levels[yFactor.name];
+        return {
+          id: `run-${run.run_order}`,
+          x,
+          y,
+          title: `Run ${run.run_order}`,
+          ariaLabel: `Run ${run.run_order}, ${xFactor.name} ${formatNumber(x)}, ${yFactor.name} ${formatNumber(y)}`,
+          className: "chart-point",
+          details: [
+            { label: "Standard order", value: String(run.standard_order) },
+            { label: xFactor.name, value: formatNumber(run.factor_levels[xFactor.name]) },
+            { label: yFactor.name, value: formatNumber(run.factor_levels[yFactor.name]) },
+          ],
+        };
+      });
+  const xRange = scale === "normalized"
+    ? { min: 0, max: 1 }
+    : { min: xFactor.low, max: xFactor.high };
+  const yRange = scale === "normalized"
+    ? { min: 0, max: 1 }
+    : { min: yFactor.low, max: yFactor.high };
+
+  return (
+    <section className="result-section lhs-visualization" aria-labelledby="lhs-visualization-title">
+      <div className="panel-heading">
+        <div>
+          <h4 id="lhs-visualization-title">설계 시각화</h4>
+          <p>모든 run을 생략 없이 표시하며 선택한 run은 두 그림과 실험표에서 함께 강조됩니다.</p>
+        </div>
+        <div className="segmented-control" aria-label="LHS 표시 값">
+          <button
+            aria-pressed={scale === "normalized"}
+            onClick={() => onScaleChange("normalized")}
+            type="button"
+          >
+            정규화 값
+          </button>
+          <button
+            aria-pressed={scale === "actual"}
+            onClick={() => onScaleChange("actual")}
+            type="button"
+          >
+            실제 단위
+          </button>
+        </div>
+      </div>
+      <InteractiveParallelCoordinatesChart
+        factors={design.factors}
+        mode={scale}
+        onSelectRun={onSelectRun}
+        runs={design.runs}
+        selectedRunOrder={selectedRunOrder}
+      />
+      <div className="lhs-scatter-controls">
+        <label>
+          <span>X 요인</span>
+          <select value={xFactor.name} onChange={(event) => onXFactorChange(event.currentTarget.value)}>
+            {design.factors.map((factor) => <option key={factor.name}>{factor.name}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Y 요인</span>
+          <select value={yFactor.name} onChange={(event) => onYFactorChange(event.currentTarget.value)}>
+            {design.factors.map((factor) => <option key={factor.name}>{factor.name}</option>)}
+          </select>
+        </label>
+      </div>
+      {sameFactor ? (
+        <div className="notice-box notice-warning">X 요인과 Y 요인은 서로 달라야 합니다.</div>
+      ) : (
+        <InteractiveScatterChart
+          annotations={[`${design.run_count}개 run`, "자동 sampling 없음"]}
+          chartId="lhs-two-factor-scatter"
+          description="선택한 두 요인으로 투영한 공간충전 상태입니다. 고차원 전체 균일성을 한 장으로 완전히 판단할 수는 없습니다."
+          emptyLabel="표시할 run이 없습니다."
+          formatValue={formatNumber}
+          onPointSelect={(pointId) => onSelectRun(Number(pointId.replace("run-", "")))}
+          points={points}
+          selectedPointId={selectedRunOrder === null ? null : `run-${selectedRunOrder}`}
+          title="LHS 2요인 투영"
+          xLabel={xFactor.name}
+          xRange={xRange}
+          yLabel={yFactor.name}
+          yRange={yRange}
+        />
+      )}
+      {xFactor.domain_kind === "discrete_numeric" || yFactor.domain_kind === "discrete_numeric" ? (
+        <p className="compact-note">일정 간격 숫자 요인은 허용 수준의 수직·수평 띠로 나타나는 것이 정상입니다.</p>
+      ) : null}
+    </section>
   );
 }
 

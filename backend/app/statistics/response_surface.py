@@ -13,6 +13,13 @@ from typing import Any, Final, Literal
 import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
+from app.statistics.doe_factor_domain import (
+    DoeFactorDomain,
+    DoeFactorDomainError,
+    factor_domain_payload,
+    validate_factor_domain,
+)
+
 RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION: Final[Literal[1]] = 1
 RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION: Final[Literal[2]] = 2
 RESPONSE_SURFACE_RESULT_SCHEMA_VERSION = 1
@@ -39,6 +46,9 @@ class ResponseSurfaceFactor:
     low: float
     high: float
     unit: str | None = None
+    domain_kind: Literal["continuous", "discrete_numeric"] = "continuous"
+    step: float | None = None
+    display_decimals: int | None = None
 
 
 @dataclass(frozen=True)
@@ -153,6 +163,19 @@ def generate_central_composite_design(
         )
         standard_order += 1
 
+    for factor in factors:
+        if factor.domain_kind != "discrete_numeric":
+            continue
+        domain = DoeFactorDomain(
+            factor.low,
+            factor.high,
+            factor.domain_kind,
+            factor.step,
+            factor.display_decimals,
+        )
+        if any(not domain.is_executable(run.factor_levels[factor.name]) for run in rows):
+            raise ResponseSurfaceError("doe_rsm_factor_grid_incompatible")
+
     order = list(range(len(rows)))
     if options.randomize:
         random.Random(options.randomization_seed).shuffle(order)
@@ -213,7 +236,29 @@ def canonical_response_surface_design_payload(
 
 
 def response_surface_factor_payload(factor: ResponseSurfaceFactor) -> dict[str, Any]:
-    return {"name": factor.name, "low": factor.low, "high": factor.high, "unit": factor.unit}
+    payload: dict[str, Any] = {
+        "name": factor.name,
+        "low": factor.low,
+        "high": factor.high,
+        "unit": factor.unit,
+    }
+    if (
+        factor.domain_kind != "continuous"
+        or factor.step is not None
+        or factor.display_decimals is not None
+    ):
+        payload.update(
+            factor_domain_payload(
+                DoeFactorDomain(
+                    factor.low,
+                    factor.high,
+                    factor.domain_kind,
+                    factor.step,
+                    factor.display_decimals,
+                )
+            )
+        )
+    return payload
 
 
 def response_surface_options_payload(options: ResponseSurfaceDesignOptions) -> dict[str, Any]:
@@ -432,6 +477,18 @@ def _validate_design_inputs(
         seen.add(normalized)
         if not isfinite(factor.low) or not isfinite(factor.high) or factor.low >= factor.high:
             raise ResponseSurfaceError("doe_rsm_factor_range_invalid")
+        try:
+            validate_factor_domain(
+                DoeFactorDomain(
+                    factor.low,
+                    factor.high,
+                    factor.domain_kind,
+                    factor.step,
+                    factor.display_decimals,
+                )
+            )
+        except DoeFactorDomainError as exc:
+            raise ResponseSurfaceError(exc.code) from exc
     if options.alpha_mode not in {"rotatable", "face_centered"}:
         raise ResponseSurfaceError("doe_rsm_alpha_mode_invalid")
     if options.factorial_replicates < 1 or options.axial_replicates < 1:

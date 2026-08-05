@@ -5,6 +5,7 @@ import json
 import math
 from dataclasses import asdict
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -31,6 +32,7 @@ from app.services.doe_response_revisions import create_response_revision
 from app.statistics.latin_hypercube import (
     LATIN_HYPERCUBE_FAMILY,
     LATIN_HYPERCUBE_POLICY,
+    MIXED_LATIN_HYPERCUBE_POLICY,
     LatinHypercubeError,
     LatinHypercubeFactor,
     LatinHypercubeOptions,
@@ -74,6 +76,9 @@ def create_latin_hypercube_design(
             low=float(item.low),
             high=float(item.high),
             unit=None if item.unit is None else item.unit.strip() or None,
+            domain_kind=item.domain_kind,
+            step=None if item.step is None else float(item.step),
+            display_decimals=item.display_decimals,
         )
         for item in body.factors
     ]
@@ -105,7 +110,11 @@ def create_latin_hypercube_design(
         app_version=APP_VERSION,
     )
     stored_options = {
-        "policy": LATIN_HYPERCUBE_POLICY,
+        "policy": (
+            MIXED_LATIN_HYPERCUBE_POLICY
+            if any(item.domain_kind == "discrete_numeric" for item in generated.factors)
+            else LATIN_HYPERCUBE_POLICY
+        ),
         "run_count": options.run_count,
         "seed": options.seed,
         "scramble": True,
@@ -253,7 +262,13 @@ def latin_hypercube_csv(
     for run in sorted(design.runs, key=lambda item: item.run_order):
         writer.writerow(
             [run.standard_order, run.run_order]
-            + [run.factor_levels[name] for name in factor_names]
+            + [
+                _display_factor_value(
+                    run.factor_levels[factor.name],
+                    factor.display_decimals,
+                )
+                for factor in design.factors
+            ]
             + [run.normalized_levels[name] for name in factor_names]
             + [by_response[name].get(run.run_order, "") for name in response_names]
         )
@@ -295,6 +310,13 @@ def _response(
     version: ExperimentDesignVersionRecord,
     records: list[ExperimentRunRecord],
 ) -> LatinHypercubeDesignResponse:
+    method_version: Literal["0.1.0", "0.2.0"]
+    if design.method_version == "0.1.0":
+        method_version = "0.1.0"
+    elif design.method_version == "0.2.0":
+        method_version = "0.2.0"
+    else:
+        raise _metadata_error()
     factors_payload = _list(version.factors_json)
     options_payload = _dict(version.options_json)
     quality_payload = options_payload.get("quality")
@@ -315,6 +337,9 @@ def _response(
             low=item.low,
             high=item.high,
             unit=item.unit,
+            domain_kind=item.domain_kind,
+            step=item.step,
+            display_decimals=item.display_decimals,
         )
         for item in factor_responses
     ]
@@ -326,7 +351,7 @@ def _response(
         if set(actual) != {item.name for item in factors} or set(normalized) != set(actual):
             raise _metadata_error()
         point = [normalized[item.name] for item in factors]
-        if any(not math.isfinite(value) or not 0 <= value < 1 for value in point):
+        if any(not math.isfinite(value) or not 0 <= value <= 1 for value in point):
             raise _metadata_error()
         if not 1 <= record.standard_order <= version.run_count:
             raise _metadata_error()
@@ -342,8 +367,19 @@ def _response(
     if any(point is None for point in points_by_standard):
         raise _metadata_error()
     points = np.asarray(points_by_standard, dtype=float)
-    recalculated = calculate_latin_hypercube_quality(points)
-    if not recalculated.strata_valid:
+    recalculated = calculate_latin_hypercube_quality(points, factors=factors)
+    mixed = any(item.domain_kind == "discrete_numeric" for item in factors)
+    if (not mixed and not recalculated.strata_valid) or (
+        mixed
+        and (
+            recalculated.continuous_strata_valid is not True
+            or recalculated.duplicate_count != 0
+            or any(
+                max(counts) - min(counts) > 1
+                for counts in (recalculated.discrete_level_balance or {}).values()
+            )
+        )
+    ):
         raise _metadata_error()
     for field in (
         "centered_discrepancy",
@@ -387,12 +423,12 @@ def _response(
     if calculated_hash != version.design_sha256:
         raise _metadata_error()
     return LatinHypercubeDesignResponse(
-        design_schema_version=1,
+        design_schema_version=2 if mixed else 1,
         design_id=UUID(design.design_id),
         design_version_id=UUID(version.design_version_id),
         version_number=1,
         method_id="doe.latin_hypercube",
-        method_version="0.1.0",
+        method_version=method_version,
         family="latin_hypercube_space_filling",
         name=design.name,
         status=design.status,
@@ -409,6 +445,13 @@ def _response(
                 list(item) for item in recalculated.per_factor_strata_occupancy
             ],
             strata_valid=recalculated.strata_valid,
+            continuous_strata_valid=recalculated.continuous_strata_valid,
+            discrete_level_balance={
+                key: list(value)
+                for key, value in (recalculated.discrete_level_balance or {}).items()
+            },
+            duplicate_count=recalculated.duplicate_count,
+            executable_point_count=recalculated.executable_point_count,
         ),
         run_count=version.run_count,
         design_sha256=version.design_sha256,
@@ -463,6 +506,12 @@ def _validate_revision(
 
 def _csv_text(value: str) -> str:
     return f"'{value}" if value.startswith(("=", "+", "-", "@")) else value
+
+
+def _display_factor_value(value: float, decimals: int | None) -> float | str:
+    if decimals is None:
+        return value
+    return f"{value:.{decimals}f}"
 
 
 def _json(value: object) -> str:

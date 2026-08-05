@@ -82,6 +82,9 @@ def create_factorial_design(
             low=float(factor.low),
             high=float(factor.high),
             unit=None if factor.unit is None else factor.unit.strip() or None,
+            domain_kind=factor.domain_kind,
+            step=None if factor.step is None else float(factor.step),
+            display_decimals=factor.display_decimals,
         )
         for factor in body.factors
     ]
@@ -680,6 +683,13 @@ def _verify_design_sha256(
                     low=float(factor["low"]),
                     high=float(factor["high"]),
                     unit=None if factor.get("unit") is None else str(factor["unit"]),
+                    domain_kind=str(factor.get("domain_kind", "continuous")),
+                    step=None if factor.get("step") is None else float(factor["step"]),
+                    display_decimals=(
+                        None
+                        if factor.get("display_decimals") is None
+                        else int(factor["display_decimals"])
+                    ),
                 ),
             )
         option_spec = FactorialDesignOptions(
