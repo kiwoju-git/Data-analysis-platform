@@ -6,6 +6,8 @@ import type {
   BayesianLatestRecommendationResponse,
   BayesianLatestRecommendationBatchResponse,
   BayesianObservationCreateRequest,
+  BayesianObservationBatchCreateRequest,
+  BayesianObservationBatchCreateResponse,
   BayesianRecommendationCreateRequest,
   BayesianRecommendationListResponse,
   BayesianRecommendationResponse,
@@ -234,6 +236,21 @@ export async function recordBayesianObservation(
     throw new Error(await apiErrorCode(response, "bayesian_observation_failed"));
   }
   return (await response.json()) as BayesianTrialTransitionResponse;
+}
+
+export async function recordBayesianObservationsBatch(
+  studyId: string,
+  request: BayesianObservationBatchCreateRequest,
+): Promise<BayesianObservationBatchCreateResponse> {
+  const response = await fetchApi(apiRoutes.bayesianObservationBatch(studyId), {
+    method: "PUT",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "bayesian_observation_batch_failed"));
+  }
+  return (await response.json()) as BayesianObservationBatchCreateResponse;
 }
 
 export async function abandonBayesianTrial(

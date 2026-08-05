@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
+from app.statistics.doe_factor_domain import DoeFactorDomain, validate_factor_domain
+
 MAX_BAYESIAN_TRIALS: Final = 200
 MAX_COMPLETED_OBSERVATIONS: Final = 200
 MAX_HISTORY_REVISIONS: Final = MAX_COMPLETED_OBSERVATIONS + 1
@@ -23,6 +25,22 @@ class BayesianFactorRequest(BaseModel):
     low: FiniteFloat
     high: FiniteFloat
     unit: str | None = Field(default=None, max_length=40)
+    domain_kind: Literal["continuous", "discrete_numeric"] = "continuous"
+    step: FiniteFloat | None = None
+    display_decimals: int | None = Field(default=None, ge=0, le=12)
+
+    @model_validator(mode="after")
+    def validate_domain(self) -> BayesianFactorRequest:
+        validate_factor_domain(
+            DoeFactorDomain(
+                low=float(self.low),
+                high=float(self.high),
+                domain_kind=self.domain_kind,
+                step=None if self.step is None else float(self.step),
+                display_decimals=self.display_decimals,
+            )
+        )
+        return self
 
 
 class BayesianObjectiveRequest(BaseModel):
@@ -101,6 +119,26 @@ class BayesianFactorResponse(BaseModel):
     unit: str | None
     order: int = Field(ge=1)
     scaling_rule: Literal["linear_0_1"]
+    domain_kind: Literal["continuous", "discrete_numeric"] = "continuous"
+    step: float | None = None
+    display_decimals: int | None = Field(default=None, ge=0, le=12)
+    level_count: int | None = Field(default=None, ge=2)
+
+    @model_validator(mode="after")
+    def validate_domain(self) -> BayesianFactorResponse:
+        domain = DoeFactorDomain(
+            low=self.low,
+            high=self.high,
+            domain_kind=self.domain_kind,
+            step=self.step,
+            display_decimals=self.display_decimals,
+        )
+        validate_factor_domain(domain)
+        if self.level_count != domain.level_count:
+            if self.domain_kind == "continuous" and self.level_count is None:
+                return self
+            raise ValueError("level_count does not match factor domain")
+        return self
 
 
 class BayesianObjectiveResponse(BaseModel):
@@ -175,6 +213,10 @@ class BayesianInitialDesignResponse(BaseModel):
     minimum_pairwise_distance: float | None = Field(default=None, gt=0)
     maximum_absolute_factor_correlation: float | None = Field(default=None, ge=0)
     strata_valid: bool | None = None
+    continuous_strata_valid: bool | None = None
+    discrete_level_balance: dict[str, list[int]] = Field(default_factory=dict)
+    duplicate_count: int = Field(default=0, ge=0)
+    executable_point_count: int | None = Field(default=None, ge=0)
     numpy_version: str | None = None
     scipy_version: str | None = None
 
@@ -298,7 +340,7 @@ class BayesianStudyResponse(BaseModel):
     study_id: UUID
     study_version_id: UUID
     version_number: int = Field(ge=1)
-    study_schema_version: Literal[1, 2, 3]
+    study_schema_version: Literal[1, 2, 3, 4]
     method_id: Literal["doe.bayesian_optimization"]
     method_version: str
     name: str
@@ -444,6 +486,45 @@ class BayesianTrialTransitionResponse(BaseModel):
     study_id: UUID
     trial: BayesianTrialResponse
     observation_history: BayesianHistoryRevisionResponse
+
+
+class BayesianObservationBatchItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trial_id: UUID
+    objective_value: FiniteFloat
+
+
+class BayesianObservationBatchCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: UUID
+    expected_study_version_id: UUID
+    expected_history_revision_id: UUID
+    expected_observation_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    observations: list[BayesianObservationBatchItem] = Field(
+        min_length=1,
+        max_length=MAX_COMPLETED_OBSERVATIONS,
+    )
+
+    @model_validator(mode="after")
+    def validate_unique_trials(self) -> BayesianObservationBatchCreateRequest:
+        ids = [item.trial_id for item in self.observations]
+        if len(ids) != len(set(ids)):
+            raise ValueError("observation trial IDs must be unique")
+        return self
+
+
+class BayesianObservationBatchCreateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    batch_schema_version: Literal[1]
+    study: BayesianStudyResponse
+    completed_trial_ids: list[UUID]
+    completed_trial_count: int = Field(ge=1)
+    observation_history: BayesianHistoryRevisionResponse
+    request_id: UUID
+    created_at: str
 
 
 class BayesianHistoryListResponse(BaseModel):

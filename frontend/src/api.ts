@@ -32,6 +32,7 @@ export {
   fetchBayesianStudyDeletionPreflight,
   fetchBayesianTrials,
   recordBayesianObservation,
+  recordBayesianObservationsBatch,
 } from "./api/bayesian";
 export { confirmDatasetParsing } from "./api/datasets";
 export { createDatasetFromPastedText } from "./api/datasets";

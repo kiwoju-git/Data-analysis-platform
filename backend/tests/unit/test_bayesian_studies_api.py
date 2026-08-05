@@ -120,7 +120,7 @@ def test_bayesian_study_create_restore_and_list_are_typed_and_deterministic(
     assert restored_response.json() == first
     assert first["method_id"] == "doe.bayesian_optimization"
     assert first["method_version"] == METHOD_VERSIONS["doe.bayesian_optimization"]
-    assert first["study_schema_version"] == 3
+    assert first["study_schema_version"] == 4
     assert first["initial_design"]["policy"] == ("sha256_counter_uniform_feasible_v1")
     assert first["initial_design"]["seed"] == 20260715
     assert first["trial_count"] == 4
@@ -155,10 +155,157 @@ def test_bayesian_study_create_restore_and_list_are_typed_and_deterministic(
     assert listed["items"][0]["study_id"] == second["study_id"]
     assert trials_response.status_code == 200
     assert trials_response.json()["total"] == 4
-    assert [item["trial_number"] for item in trials_response.json()["items"]] == [
-        2,
-        3,
+    assert [item["trial_number"] for item in trials_response.json()["items"]] == [2, 3]
+
+
+def test_bayesian_observation_batch_is_atomic_and_creates_one_history(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        study = _create_study(client)
+        request_id = str(uuid4())
+        body = {
+            "request_id": request_id,
+            "expected_study_version_id": study["study_version_id"],
+            "expected_history_revision_id": study["observation_history"]["history_revision_id"],
+            "expected_observation_history_sha256": study["observation_history"][
+                "observation_history_sha256"
+            ],
+            "observations": [
+                {"trial_id": study["trials"][0]["trial_id"], "objective_value": 91.2},
+                {"trial_id": study["trials"][1]["trial_id"], "objective_value": 93.4},
+                {"trial_id": study["trials"][2]["trial_id"], "objective_value": 92.8},
+            ],
+        }
+        response = client.put(
+            f"/api/v1/bayesian-studies/{study['study_id']}/observations/batch",
+            json=body,
+        )
+        after_first = response.json()["study"]
+        second = client.put(
+            f"/api/v1/bayesian-studies/{study['study_id']}/observations/batch",
+            json={
+                "request_id": str(uuid4()),
+                "expected_study_version_id": after_first["study_version_id"],
+                "expected_history_revision_id": after_first["observation_history"][
+                    "history_revision_id"
+                ],
+                "expected_observation_history_sha256": after_first["observation_history"][
+                    "observation_history_sha256"
+                ],
+                "observations": [
+                    {
+                        "trial_id": study["trials"][3]["trial_id"],
+                        "objective_value": 94.1,
+                    }
+                ],
+            },
+        )
+        replay = client.put(
+            f"/api/v1/bayesian-studies/{study['study_id']}/observations/batch",
+            json=body,
+        )
+        history = client.get(f"/api/v1/bayesian-studies/{study['study_id']}/history")
+
+    assert response.status_code == 200, response.json()
+    assert second.status_code == 200, second.json()
+    assert replay.status_code == 200, replay.json()
+    payload = response.json()
+    assert payload["completed_trial_count"] == 3
+    assert payload["observation_history"]["revision_number"] == 2
+    assert payload["study"]["completed_trial_count"] == 3
+    assert payload["study"]["pending_trial_count"] == 1
+    assert history.status_code == 200
+    assert replay.json()["observation_history"]["revision_number"] == 2
+    assert replay.json()["study"]["completed_trial_count"] == 4
+    assert history.json()["total"] == 3
+
+
+def test_bayesian_observation_batch_rolls_back_when_one_trial_is_not_pending(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        study = _create_study(client)
+        completed = _complete_trial(client, study, 0, objective_value=90.0)
+        assert completed.status_code == 200
+        current = client.get(f"/api/v1/bayesian-studies/{study['study_id']}").json()
+        response = client.put(
+            f"/api/v1/bayesian-studies/{study['study_id']}/observations/batch",
+            json={
+                "request_id": str(uuid4()),
+                "expected_study_version_id": current["study_version_id"],
+                "expected_history_revision_id": current["observation_history"][
+                    "history_revision_id"
+                ],
+                "expected_observation_history_sha256": current["observation_history"][
+                    "observation_history_sha256"
+                ],
+                "observations": [
+                    {"trial_id": current["trials"][0]["trial_id"], "objective_value": 91.0},
+                    {"trial_id": current["trials"][1]["trial_id"], "objective_value": 92.0},
+                ],
+            },
+        )
+        restored = client.get(f"/api/v1/bayesian-studies/{study['study_id']}").json()
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "bayesian_observation_trial_not_pending"
+    assert restored["completed_trial_count"] == 1
+    assert restored["trials"][1]["state"] == "pending"
+
+
+def test_bayesian_initial_design_csv_contains_only_initial_trials(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        study = _create_study(client)
+        response = client.get(f"/api/v1/bayesian-studies/{study['study_id']}/initial-design.csv")
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    text = response.content.decode("utf-8-sig")
+    assert "Temperature [C]" in text
+    assert "Time [min]" in text
+    assert text.count("initial_design") == study["initial_design"]["generated_size"]
+
+
+def test_bayesian_mixed_initial_design_and_csv_use_discrete_grid(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    request = _study_request(initial_design_size=6)
+    request["factors"] = [
+        {
+            "factor_id": "sample_day",
+            "name": "Sample day",
+            "low": 1,
+            "high": 10,
+            "unit": "day",
+            "domain_kind": "discrete_numeric",
+            "step": 1,
+            "display_decimals": 0,
+        },
+        {
+            "factor_id": "temperature",
+            "name": "Temperature",
+            "low": 20,
+            "high": 80,
+            "unit": "C",
+        },
     ]
+    request["constraints"] = []
+    with TestClient(create_app(settings)) as client:
+        created_response = client.post("/api/v1/bayesian-studies", json=request)
+        assert created_response.status_code == 201, created_response.json()
+        study = created_response.json()
+        csv_response = client.get(
+            f"/api/v1/bayesian-studies/{study['study_id']}/initial-design.csv"
+        )
+
+    assert study["study_schema_version"] == 4
+    assert study["factors"][0]["level_count"] == 10
+    assert all(
+        trial["actual_coordinates"]["sample_day"] == int(trial["actual_coordinates"]["sample_day"])
+        for trial in study["trials"]
+    )
+    lines = csv_response.content.decode("utf-8-sig").splitlines()
+    sample_day_index = lines[0].split(",").index("Sample day [day]")
+    assert all("." not in line.split(",")[sample_day_index] for line in lines[1:])
 
 
 def test_bayesian_v01_study_restores_without_relabeling_or_hash_reinterpretation(

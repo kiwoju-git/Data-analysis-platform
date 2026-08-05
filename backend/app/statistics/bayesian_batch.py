@@ -10,10 +10,11 @@ from app.api.v1.schemas.bayesian import MAX_COMPLETED_OBSERVATIONS
 from app.statistics.bayesian_optimization import (
     MIN_COMPLETED_OBSERVATIONS,
     BayesianOptimizationError,
-    _candidate_pool,
+    _candidate_pool_for_factors,
     _constraint_evaluations,
     _constraints_satisfied,
     _finite_float,
+    _has_discrete_factors,
     _novel,
     _scipy_constraints,
     _SearchBudget,
@@ -49,7 +50,7 @@ def calculate_bayesian_recommendation_batch(payload: dict[str, Any]) -> dict[str
     factors = _validated_factors(payload.get("factors"))
     constraints = _validated_constraints(payload.get("constraints"), factors)
     observations = _validated_observations(payload.get("observations"), factors)
-    excluded = _validated_excluded_points(payload.get("excluded_normalized"), len(factors))
+    excluded = _validated_excluded_points(payload.get("excluded_normalized"), factors)
     options = _validated_batch_options(payload)
     objective = _validated_objective(payload.get("objective"))
     batch_size = options["batch_size"]
@@ -159,9 +160,9 @@ def calculate_bayesian_recommendation_batch(payload: dict[str, Any]) -> dict[str
     completed_points = [item[0] for item in observations]
     existing_points = [*excluded]
     for step in range(batch_size):
-        candidates = _candidate_pool(
+        candidates = _candidate_pool_for_factors(
             rng,
-            len(factors),
+            factors,
             options["candidate_count_per_step"],
         )
         all_excluded = [*excluded, *[point.tolist() for point in selected]]
@@ -218,7 +219,10 @@ def calculate_bayesian_recommendation_batch(payload: dict[str, Any]) -> dict[str
             )
             return -float(value[0])
 
-        for index in order[: options["local_start_count_per_step"]]:
+        local_start_count = (
+            0 if _has_discrete_factors(factors) else options["local_start_count_per_step"]
+        )
+        for index in order[:local_start_count]:
             try:
                 local = minimize(
                     negative_acquisition,

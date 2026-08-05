@@ -6,6 +6,7 @@ import {
   createBayesianStudy,
   fetchBayesianStudy,
   recordBayesianObservation,
+  recordBayesianObservationsBatch,
   type BayesianStudyCloseReason,
   type BayesianStudyCreateRequest,
   type BayesianStudyResponse,
@@ -27,6 +28,9 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     useState<BayesianStudyCloseReason>("confirmation_complete");
   const [closeNote, setCloseNote] = useState("");
   const [pendingStudyClose, setPendingStudyClose] = useState(false);
+  const [pendingObservationBatch, setPendingObservationBatch] = useState(false);
+  const [pendingObservationBatchRequestId, setPendingObservationBatchRequestId] =
+    useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isSavingTrial, setIsSavingTrial] = useState(false);
@@ -45,6 +49,8 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     setObservations({});
     setPendingTransition(null);
     setPendingStudyClose(false);
+    setPendingObservationBatch(false);
+    setPendingObservationBatchRequestId(null);
     setIsCreating(false);
     setIsSavingTrial(false);
     setIsClosing(false);
@@ -101,6 +107,7 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
       setObservations({});
       setPendingTransition(null);
       setPendingStudyClose(false);
+      setPendingObservationBatch(false);
       return created;
     } catch (caught) {
       if (createGuard.isCurrent(request)) setError(bayesianErrorCode(caught));
@@ -166,6 +173,65 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     }
   }
 
+  function requestObservationBatch() {
+    if (study === null) return;
+    const entries = Object.entries(observations).filter(([, value]) => value.trim() !== "");
+    if (
+      entries.length === 0 ||
+      entries.some(([, value]) => !Number.isFinite(Number(value))) ||
+      entries.some(([trialId]) =>
+        study.trials.find((trial) => trial.trial_id === trialId)?.state !== "pending"
+      )
+    ) {
+      setError("bayesian_observation_batch_invalid");
+      return;
+    }
+    setError(null);
+    setPendingObservationBatch(true);
+    setPendingObservationBatchRequestId(crypto.randomUUID());
+  }
+
+  async function confirmObservationBatch(): Promise<boolean> {
+    if (
+      study === null ||
+      !pendingObservationBatch ||
+      pendingObservationBatchRequestId === null
+    ) return false;
+    const activeStudy = study;
+    const entries = Object.entries(observations).filter(([, value]) => value.trim() !== "");
+    const request = transitionGuard.begin();
+    setIsSavingTrial(true);
+    setError(null);
+    try {
+      const response = await recordBayesianObservationsBatch(activeStudy.study_id, {
+        request_id: pendingObservationBatchRequestId,
+        expected_study_version_id: activeStudy.study_version_id,
+        expected_history_revision_id: activeStudy.observation_history.history_revision_id,
+        expected_observation_history_sha256:
+          activeStudy.observation_history.observation_history_sha256,
+        observations: entries.map(([trialId, value]) => ({
+          trial_id: trialId,
+          objective_value: Number(value),
+        })),
+      });
+      if (!transitionGuard.isCurrent(request)) return false;
+      setStudy(response.study);
+      setObservations((current) => {
+        const next = { ...current };
+        response.completed_trial_ids.forEach((trialId) => delete next[trialId]);
+        return next;
+      });
+      setPendingObservationBatch(false);
+      setPendingObservationBatchRequestId(null);
+      return true;
+    } catch (caught) {
+      if (transitionGuard.isCurrent(request)) setError(bayesianErrorCode(caught));
+      return false;
+    } finally {
+      if (transitionGuard.isCurrent(request)) setIsSavingTrial(false);
+    }
+  }
+
   async function confirmStudyClose(): Promise<boolean> {
     if (study === null || study.status !== "active") return false;
     const activeStudy = study;
@@ -187,6 +253,7 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
       if (!closeGuard.isCurrent(request)) return false;
       setStudy(response.study);
       setPendingStudyClose(false);
+      setPendingObservationBatch(false);
       setPendingTransition(null);
       return true;
     } catch (caught) {
@@ -201,6 +268,8 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     setCloseTargetState(target);
     setCloseReason(target === "completed" ? "confirmation_complete" : "study_cancelled");
     setPendingStudyClose(false);
+    setPendingObservationBatch(false);
+    setPendingObservationBatchRequestId(null);
   }
 
   function clearStudy() {
@@ -212,6 +281,8 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     setObservations({});
     setPendingTransition(null);
     setPendingStudyClose(false);
+    setPendingObservationBatch(false);
+    setPendingObservationBatchRequestId(null);
     setIsRestoring(false);
     setIsCreating(false);
     setIsSavingTrial(false);
@@ -225,6 +296,7 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     closeReason,
     closeTarget,
     confirmStudyClose,
+    confirmObservationBatch,
     confirmTrialTransition,
     error,
     isClosing,
@@ -234,15 +306,27 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     observations,
     onCreate,
     pendingStudyClose,
+    pendingObservationBatch,
     pendingTransition,
     refreshStudy,
     requestTrialTransition,
+    requestObservationBatch,
     setCloseNote,
     setCloseReason,
     setCloseTarget,
     setError,
     setObservation: (trialId: string, value: string) =>
       setObservations((current) => ({ ...current, [trialId]: value })),
+    setObservations: (values: Record<string, string>) => {
+      setObservations((current) => ({ ...current, ...values }));
+      setPendingObservationBatch(false);
+      setPendingObservationBatchRequestId(null);
+      setError(null);
+    },
+    setPendingObservationBatch: (pending: boolean) => {
+      setPendingObservationBatch(pending);
+      if (!pending) setPendingObservationBatchRequestId(null);
+    },
     setPendingStudyClose,
     setPendingTransition,
     study,

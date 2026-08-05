@@ -11,7 +11,17 @@ import {
 export function useBayesianStudyDraftState() {
   const [studyName, setStudyName] = useState("Sequential process study");
   const [factors, setFactors] = useState<FactorDraft[]>([
-    { key: 1, factorId: "x", name: "Input", low: "-1", high: "1", unit: "" },
+    {
+      key: 1,
+      factorId: "x",
+      name: "Input",
+      low: "-1",
+      high: "1",
+      unit: "",
+      domainKind: "continuous",
+      step: "",
+      displayDecimals: "",
+    },
   ]);
   const [objectiveName, setObjectiveName] = useState("Response");
   const [objectiveUnit, setObjectiveUnit] = useState("");
@@ -50,6 +60,9 @@ export function useBayesianStudyDraftState() {
         low: "-1",
         high: "1",
         unit: "",
+        domainKind: "continuous",
+        step: "",
+        displayDecimals: "",
       },
     ]);
   }
@@ -132,6 +145,10 @@ export function useBayesianStudyDraftState() {
       low: String(factor.low),
       high: String(factor.high),
       unit: factor.unit ?? "",
+      domainKind: factor.domain_kind ?? "continuous",
+      step: factor.step == null ? "" : String(factor.step),
+      displayDecimals:
+        factor.display_decimals == null ? "" : String(factor.display_decimals),
     }));
     const factorKeyById = new Map(nextFactors.map((factor) => [factor.factorId, factor.key]));
     setStudyName(`${study.name} successor`);

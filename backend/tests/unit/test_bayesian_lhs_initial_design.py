@@ -29,8 +29,8 @@ def test_bayesian_lhs_trials_require_real_observations_before_recommendation(tmp
         assert created_response.status_code == 201
         study = created_response.json()
 
-        assert study["study_schema_version"] == 3
-        assert study["method_version"] == "0.4.0"
+        assert study["study_schema_version"] == 4
+        assert study["method_version"] == "0.5.0"
         assert study["initial_design"]["policy"] == "latin_hypercube_random_cd_v1"
         assert study["initial_design"]["strata_valid"] is True
         assert study["completed_trial_count"] == 0

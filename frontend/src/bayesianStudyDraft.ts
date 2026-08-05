@@ -5,6 +5,7 @@ import type {
   BayesianStudyCreateRequest,
   BayesianStudyResponse,
 } from "./api";
+import { parseDoeFactorDomainDraft } from "./doe/factorDomain";
 
 export interface FactorDraft {
   key: number;
@@ -13,6 +14,9 @@ export interface FactorDraft {
   low: string;
   high: string;
   unit: string;
+  domainKind?: "continuous" | "discrete_numeric";
+  step?: string;
+  displayDecimals?: string;
 }
 
 export interface ConstraintDraft {
@@ -120,13 +124,23 @@ export function buildBayesianStudyRequest(input: {
   const initialDesignPolicy =
     input.initialDesignPolicy ?? "sha256_counter_uniform_feasible_v1";
   const factorIds = input.factors.map((factor) => factor.factorId.trim());
-  const parsedFactors: BayesianFactorRequest[] = input.factors.map((factor) => ({
-    factor_id: factor.factorId.trim(),
-    name: factor.name.trim(),
-    low: Number(factor.low),
-    high: Number(factor.high),
-    unit: factor.unit.trim() || null,
-  }));
+  const parsedFactorDrafts = input.factors.map((factor) => {
+    const low = Number(factor.low);
+    const high = Number(factor.high);
+    return { factor, low, high, domain: parseDoeFactorDomainDraft(factor, low, high) };
+  });
+  const parsedFactors: BayesianFactorRequest[] = parsedFactorDrafts.map(
+    ({ factor, low, high, domain }) => ({
+      factor_id: factor.factorId.trim(),
+      name: factor.name.trim(),
+      low,
+      high,
+      unit: factor.unit.trim() || null,
+      domain_kind: domain?.domain_kind,
+      step: domain?.step,
+      display_decimals: domain?.display_decimals,
+    }),
+  );
   const size = Number(input.initialDesignSize);
   const seed = Number(input.initialDesignSeed);
   const goalType = input.goalType ?? input.direction ?? "maximize";
@@ -169,13 +183,14 @@ export function buildBayesianStudyRequest(input: {
     input.studyName.trim().length === 0 ||
     input.objectiveName.trim().length === 0 ||
     new Set(factorIds).size !== factorIds.length ||
+    parsedFactorDrafts.some((factor) => factor.domain === null) ||
     parsedFactors.some(
       (factor) =>
         !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(factor.factor_id) ||
         factor.name.length === 0 ||
         !Number.isFinite(factor.low) ||
         !Number.isFinite(factor.high) ||
-        factor.low >= factor.high,
+        factor.low >= factor.high
     ) ||
     !Number.isInteger(size) ||
     size < minimumBayesianInitialDesignSize(parsedFactors.length) ||

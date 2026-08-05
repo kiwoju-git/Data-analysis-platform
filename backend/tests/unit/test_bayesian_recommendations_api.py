@@ -168,7 +168,7 @@ def test_recommendation_create_restore_complete_and_tamper_detection(tmp_path) -
         assert completed_study["recommendation_available"] is True
 
         assert created["method_version"] == METHOD_VERSIONS["doe.bayesian_optimization"]
-        assert created["method_version"] == "0.4.0"
+        assert created["method_version"] == "0.5.0"
         assert created["config_schema_version"] == 1
         assert created["result_schema_version"] == 1
         assert created["model_schema_version"] == 1

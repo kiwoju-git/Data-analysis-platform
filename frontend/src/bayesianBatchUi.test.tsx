@@ -5,6 +5,7 @@ import type { BayesianStudyResponse } from "./api";
 import { getMethodCardTags } from "./analysisMethodGuidance";
 import { buildBayesianStudyRequest } from "./bayesianStudyDraft";
 import { BayesianRecommendationPanel } from "./features/bayesian/BayesianRecommendationPanel";
+import { InteractiveParallelCoordinatesChart } from "./charts/InteractiveParallelCoordinatesChart";
 import { LatinHypercubePanel } from "./LatinHypercubePanel";
 
 describe("Bayesian batch and DOE presentation", () => {
@@ -36,8 +37,34 @@ describe("Bayesian batch and DOE presentation", () => {
     expect(html).toContain("Expected Improvement (EI)");
     expect(html).toContain("탐색 우선");
     expect(html).toContain("posterior-mean fantasy");
+    expect(html).toContain('class="bayesian-exploration-section"');
+    expect(html).toContain('class="bayesian-exploration-options"');
     expect(html).toContain('class="result-table doe-settings-table');
     expect(html).not.toContain("doe-settings-matrix");
+  });
+
+  it("renders every LHS run in one keyboard-operable parallel coordinate chart", () => {
+    const html = renderToStaticMarkup(
+      <InteractiveParallelCoordinatesChart
+        factors={[
+          { name: "sample_day", low: 1, high: 10, unit: "day", domain_kind: "discrete_numeric", level_count: 10 },
+          { name: "temperature", low: 20, high: 80, unit: "C" },
+        ]}
+        runs={[
+          { standard_order: 1, run_order: 1, factor_levels: { sample_day: 1, temperature: 40 }, normalized_levels: { sample_day: 0, temperature: 1 / 3 } },
+          { standard_order: 2, run_order: 2, factor_levels: { sample_day: 10, temperature: 70 }, normalized_levels: { sample_day: 1, temperature: 5 / 6 } },
+        ]}
+        mode="normalized"
+        selectedRunOrder={1}
+        onSelectRun={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("LHS 평행좌표 그림");
+    expect(html).toContain("2개 실험을 2개 요인 축");
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain("10개 실행 수준");
+    expect((html.match(/class="lhs-parallel-run/g) ?? [])).toHaveLength(2);
   });
 
   it("uses target goal fields without accepting executable objective code", () => {

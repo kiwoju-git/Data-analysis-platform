@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import math
 from dataclasses import dataclass, replace
@@ -25,6 +27,8 @@ from app.api.v1.schemas.bayesian import (
     BayesianInitialDesignResponse,
     BayesianLinearConstraintResponse,
     BayesianObjectiveResponse,
+    BayesianObservationBatchCreateRequest,
+    BayesianObservationBatchCreateResponse,
     BayesianObservationCreateRequest,
     BayesianRecommendationBatchCreateRequest,
     BayesianRecommendationBatchResponse,
@@ -56,6 +60,7 @@ from app.services.analysis_run_execution import (
 from app.services.bayesian_recommendation_consistency import (
     validate_bayesian_recommendation_record,
 )
+from app.statistics.doe_factor_domain import DoeFactorDomain
 from app.statistics.latin_hypercube import (
     LatinHypercubeError,
     LatinHypercubeFactor,
@@ -75,6 +80,7 @@ from app.storage.bayesian_studies import (
     BayesianTrialRecord,
     abandon_bayesian_trial_record,
     close_bayesian_study_record,
+    complete_bayesian_trial_batch_records,
     complete_bayesian_trial_record,
     count_bayesian_history_revision_records,
     count_bayesian_recommendation_batch_item_records,
@@ -101,10 +107,10 @@ from app.storage.bayesian_studies import (
 )
 
 BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
-BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[3]] = 3
+BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[4]] = 4
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
 SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
-    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0"}
+    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0", "0.5.0"}
 )
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
 BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[2]] = 2
@@ -197,6 +203,9 @@ def create_bayesian_study(
                     low=item.low,
                     high=item.high,
                     unit=item.unit,
+                    domain_kind=item.domain_kind,
+                    step=item.step,
+                    display_decimals=item.display_decimals,
                 )
                 for item in factors
             ],
@@ -225,6 +234,13 @@ def create_bayesian_study(
                 generated_lhs.quality.maximum_absolute_factor_correlation
             ),
             strata_valid=generated_lhs.quality.strata_valid,
+            continuous_strata_valid=generated_lhs.quality.continuous_strata_valid,
+            discrete_level_balance={
+                key: list(value)
+                for key, value in (generated_lhs.quality.discrete_level_balance or {}).items()
+            },
+            duplicate_count=generated_lhs.quality.duplicate_count,
+            executable_point_count=generated_lhs.quality.executable_point_count,
             numpy_version=generated_lhs.numpy_version,
             scipy_version=generated_lhs.scipy_version,
         )
@@ -334,6 +350,47 @@ def get_bayesian_study(settings: Settings, study_id: UUID) -> BayesianStudyRespo
     return _study_response(_load_validated_study(settings, str(study_id)))
 
 
+def bayesian_initial_design_csv(
+    settings: Settings,
+    study_id: UUID,
+) -> tuple[bytes, str]:
+    study = get_bayesian_study(settings, study_id)
+    initial_trials = sorted(
+        (trial for trial in study.trials if trial.origin == "initial_design"),
+        key=lambda trial: trial.trial_number,
+    )
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\r\n")
+    factor_headers = [
+        _csv_cell(f"{factor.name} [{factor.unit}]" if factor.unit else factor.name)
+        for factor in study.factors
+    ]
+    writer.writerow(
+        ["Trial", "Trial ID", "Origin", "State"]
+        + factor_headers
+        + ["Objective", "Objective status"]
+    )
+    for trial in initial_trials:
+        writer.writerow(
+            [
+                trial.trial_number,
+                str(trial.trial_id),
+                trial.origin,
+                trial.state,
+                *[
+                    _display_factor_value(
+                        trial.actual_coordinates[factor.factor_id],
+                        factor.display_decimals,
+                    )
+                    for factor in study.factors
+                ],
+                "" if trial.objective_value is None else trial.objective_value,
+                "recorded" if trial.objective_value is not None else "pending",
+            ]
+        )
+    return output.getvalue().encode("utf-8-sig"), f"bayesian-initial-design-{study_id}.csv"
+
+
 def list_bayesian_studies(
     settings: Settings, *, offset: int, limit: int
 ) -> BayesianStudyListResponse:
@@ -386,50 +443,7 @@ def complete_bayesian_trial(
             message="완료 관측 수 상한에 도달하여 새 관측을 저장할 수 없습니다.",
             status_code=status.HTTP_409_CONFLICT,
         )
-    if trial.origin == "recommendation":
-        recommendation = get_bayesian_recommendation_record_for_trial(
-            settings.workspace_root, trial.trial_id
-        )
-        batch_bundle = get_bayesian_recommendation_batch_for_trial(
-            settings.workspace_root,
-            trial.trial_id,
-        )
-        legacy_matches = (
-            recommendation is not None
-            and recommendation.source_observation_history_sha256
-            == bundle.current_history.observation_history_sha256
-        )
-        batch_matches = False
-        if batch_bundle is not None:
-            batch, _ = batch_bundle
-            source_history = get_bayesian_history_revision_record(
-                settings.workspace_root,
-                batch.source_history_revision_id,
-            )
-            batch_trial_ids = {
-                item.trial_id
-                for item in list_bayesian_recommendation_batch_item_records(
-                    settings.workspace_root,
-                    batch.batch_id,
-                )
-            }
-            if source_history is not None:
-                source_ids = set(_json_string_list(source_history.completed_trial_ids_json))
-                current_ids = set(
-                    _json_string_list(bundle.current_history.completed_trial_ids_json)
-                )
-                batch_matches = (
-                    source_history.observation_history_sha256
-                    == batch.source_observation_history_sha256
-                    and source_ids.issubset(current_ids)
-                    and current_ids - source_ids <= batch_trial_ids
-                )
-        if not legacy_matches and not batch_matches:
-            raise ApiError(
-                code="bayesian_optimization_history_stale",
-                message="Recommendation 생성 이후 관측 이력이 변경되어 새 추천이 필요합니다.",
-                status_code=status.HTTP_409_CONFLICT,
-            )
+    _validate_recommendation_trial_history(settings, bundle, trial)
 
     now = utc_now()
     completed_trial = replace(
@@ -473,6 +487,212 @@ def complete_bayesian_trial(
         trial=_trial_response(completed_trial),
         observation_history=_history_response(new_history),
     )
+
+
+def complete_bayesian_observations_batch(
+    settings: Settings,
+    study_id: UUID,
+    body: BayesianObservationBatchCreateRequest,
+) -> BayesianObservationBatchCreateResponse:
+    bundle = _load_validated_study(settings, str(study_id))
+    if str(body.expected_study_version_id) != bundle.version.study_version_id:
+        raise ApiError(
+            code="bayesian_study_version_stale",
+            message="Study 버전이 변경되어 관측값을 다시 확인해야 합니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    requested = {str(item.trial_id): float(item.objective_value) for item in body.observations}
+
+    replay_history = get_bayesian_history_revision_record(
+        settings.workspace_root,
+        str(body.request_id),
+    )
+    if replay_history is not None:
+        previous_history = get_bayesian_history_revision_record(
+            settings.workspace_root,
+            str(body.expected_history_revision_id),
+        )
+        replay_trial_ids = set(_json_string_list(replay_history.completed_trial_ids_json))
+        previous_trial_ids = (
+            set()
+            if previous_history is None
+            else set(_json_string_list(previous_history.completed_trial_ids_json))
+        )
+        if (
+            replay_history.study_version_id != bundle.version.study_version_id
+            or replay_history.previous_history_sha256 != body.expected_observation_history_sha256
+            or previous_history is None
+            or previous_history.study_version_id != bundle.version.study_version_id
+            or previous_history.observation_history_sha256
+            != body.expected_observation_history_sha256
+            or replay_trial_ids - previous_trial_ids != set(requested)
+        ):
+            raise ApiError(
+                code="bayesian_observation_request_id_conflict",
+                message="같은 request ID가 다른 관측 저장 요청에 사용되었습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        completed_by_id = {
+            item.trial_id: item for item in bundle.trials if item.state == "completed"
+        }
+        if any(
+            trial_id not in completed_by_id
+            or completed_by_id[trial_id].objective_value != objective
+            for trial_id, objective in requested.items()
+        ):
+            raise ApiError(
+                code="bayesian_observation_request_id_conflict",
+                message="같은 request ID가 다른 관측 저장 요청에 사용되었습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        return BayesianObservationBatchCreateResponse(
+            batch_schema_version=1,
+            study=_study_response(bundle),
+            completed_trial_ids=[item.trial_id for item in body.observations],
+            completed_trial_count=len(body.observations),
+            observation_history=_history_response(replay_history),
+            request_id=body.request_id,
+            created_at=replay_history.created_at,
+        )
+
+    if bundle.study.status != "active":
+        raise _study_closed_error()
+    if (
+        str(body.expected_history_revision_id) != bundle.current_history.history_revision_id
+        or body.expected_observation_history_sha256
+        != bundle.current_history.observation_history_sha256
+    ):
+        raise _history_stale_error()
+    if (
+        sum(item.state == "completed" for item in bundle.trials) + len(requested)
+        > MAX_COMPLETED_OBSERVATIONS
+    ):
+        raise ApiError(
+            code="bayesian_observation_limit_reached",
+            message="완료 관측 수 상한을 초과하여 관측값을 저장할 수 없습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    trials_by_id = {item.trial_id: item for item in bundle.trials}
+    selected: list[BayesianTrialRecord] = []
+    for trial_id, objective in requested.items():
+        trial = trials_by_id.get(trial_id)
+        if trial is None:
+            raise ApiError(
+                code="bayesian_observation_trial_not_found",
+                message="현재 Study에 속하지 않는 trial이 포함되어 있습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        if trial.state != "pending":
+            raise ApiError(
+                code="bayesian_observation_trial_not_pending",
+                message="대기 중이 아닌 trial이 포함되어 전체 저장을 취소했습니다.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        _validate_recommendation_trial_history(settings, bundle, trial)
+        selected.append(replace(trial, state="completed", objective_value=objective))
+
+    now = utc_now()
+    selected = [replace(item, closed_at=now) for item in selected]
+    completed = [item for item in bundle.trials if item.state == "completed"] + selected
+    completed.sort(key=lambda item: item.trial_number)
+    new_history = _new_history_record(
+        study_version_id=bundle.version.study_version_id,
+        definition_sha256=bundle.version.definition_sha256,
+        revision_number=bundle.current_history.revision_number + 1,
+        completed_trials=completed,
+        previous_history_sha256=bundle.current_history.observation_history_sha256,
+        created_at=now,
+        history_revision_id=str(body.request_id),
+    )
+    try:
+        complete_bayesian_trial_batch_records(
+            settings.workspace_root,
+            observations=[(item.trial_id, requested[item.trial_id]) for item in selected],
+            closed_at=now,
+            expected_history_revision_id=bundle.current_history.history_revision_id,
+            expected_history_sha256=bundle.current_history.observation_history_sha256,
+            new_history=new_history,
+        )
+    except BayesianStorageConflict as exc:
+        messages = {
+            "bayesian_study_closed": "종료된 Study에는 관측값을 저장할 수 없습니다.",
+            "bayesian_observation_request_id_conflict": (
+                "같은 request ID가 다른 관측 저장 요청에 사용되었습니다."
+            ),
+            "bayesian_observation_trial_not_found": (
+                "현재 Study에 속하지 않는 trial이 포함되어 있습니다."
+            ),
+            "bayesian_observation_trial_not_pending": (
+                "대기 중이 아닌 trial이 포함되어 전체 저장을 취소했습니다."
+            ),
+        }
+        if exc.code in messages:
+            raise ApiError(
+                code=exc.code,
+                message=messages[exc.code],
+                status_code=status.HTTP_409_CONFLICT,
+            ) from exc
+        raise _history_stale_error() from exc
+
+    updated = _load_validated_study(settings, str(study_id))
+    return BayesianObservationBatchCreateResponse(
+        batch_schema_version=1,
+        study=_study_response(updated),
+        completed_trial_ids=[item.trial_id for item in body.observations],
+        completed_trial_count=len(body.observations),
+        observation_history=_history_response(new_history),
+        request_id=body.request_id,
+        created_at=now,
+    )
+
+
+def _validate_recommendation_trial_history(
+    settings: Settings,
+    bundle: _ValidatedStudy,
+    trial: BayesianTrialRecord,
+) -> None:
+    if trial.origin != "recommendation":
+        return
+    recommendation = get_bayesian_recommendation_record_for_trial(
+        settings.workspace_root, trial.trial_id
+    )
+    batch_bundle = get_bayesian_recommendation_batch_for_trial(
+        settings.workspace_root,
+        trial.trial_id,
+    )
+    legacy_matches = (
+        recommendation is not None
+        and recommendation.source_observation_history_sha256
+        == bundle.current_history.observation_history_sha256
+    )
+    batch_matches = False
+    if batch_bundle is not None:
+        batch, _ = batch_bundle
+        source_history = get_bayesian_history_revision_record(
+            settings.workspace_root,
+            batch.source_history_revision_id,
+        )
+        batch_trial_ids = {
+            item.trial_id
+            for item in list_bayesian_recommendation_batch_item_records(
+                settings.workspace_root,
+                batch.batch_id,
+            )
+        }
+        if source_history is not None:
+            source_ids = set(_json_string_list(source_history.completed_trial_ids_json))
+            current_ids = set(_json_string_list(bundle.current_history.completed_trial_ids_json))
+            batch_matches = (
+                source_history.observation_history_sha256 == batch.source_observation_history_sha256
+                and source_ids.issubset(current_ids)
+                and current_ids - source_ids <= batch_trial_ids
+            )
+    if not legacy_matches and not batch_matches:
+        raise ApiError(
+            code="bayesian_optimization_history_stale",
+            message="Recommendation 생성 이후 관측 이력이 변경되어 새 추천이 필요합니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
 
 
 def abandon_bayesian_trial(
@@ -847,7 +1067,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         version is None
         or version.study_id != study.study_id
         or version.version_number != study.current_version
-        or version.schema_version not in {1, 2, 3}
+        or version.schema_version not in {1, 2, 3, 4}
     ):
         raise _metadata_error()
     try:
@@ -909,7 +1129,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         ):
             raise _artifact_error()
     elif initial_design.policy == LHS_INITIAL_DESIGN_POLICY:
-        if version.schema_version not in {2, 3} or constraints:
+        if version.schema_version not in {2, 3, 4} or constraints:
             raise _artifact_error()
         expected_actual, expected_normalized = _validate_stored_lhs_initial_design(
             factors=factors,
@@ -1020,6 +1240,16 @@ def _validated_factor_payload(
             low=float(item.low),
             high=float(item.high),
             unit=None if item.unit is None else item.unit.strip() or None,
+            domain_kind=item.domain_kind,
+            step=None if item.step is None else float(item.step),
+            display_decimals=item.display_decimals,
+            level_count=DoeFactorDomain(
+                float(item.low),
+                float(item.high),
+                item.domain_kind,
+                None if item.step is None else float(item.step),
+                item.display_decimals,
+            ).level_count,
             order=index + 1,
             scaling_rule="linear_0_1",
         )
@@ -1136,13 +1366,32 @@ def _generate_initial_design(
     attempts = 0
     while len(actual_points) < size and attempts < attempt_limit:
         attempts += 1
-        normalized = {
+        candidate_normalized = {
             item.factor_id: _counter_uniform(seed, attempts, item.order) for item in factors
         }
-        actual = {
-            item.factor_id: item.low + normalized[item.factor_id] * (item.high - item.low)
-            for item in factors
-        }
+        actual: dict[str, float] = {}
+        normalized: dict[str, float] = {}
+        for item in factors:
+            domain = DoeFactorDomain(
+                item.low,
+                item.high,
+                item.domain_kind,
+                item.step,
+                item.display_decimals,
+            )
+            if item.domain_kind == "discrete_numeric":
+                levels = domain.levels()
+                index = min(
+                    len(levels) - 1,
+                    int(candidate_normalized[item.factor_id] * len(levels)),
+                )
+                actual[item.factor_id] = levels[index]
+                normalized[item.factor_id] = domain.normalized(levels[index])
+            else:
+                normalized[item.factor_id] = candidate_normalized[item.factor_id]
+                actual[item.factor_id] = item.low + normalized[item.factor_id] * (
+                    item.high - item.low
+                )
         if not _constraints_satisfied(actual, constraints):
             continue
         fingerprint = _sha256({"actual_coordinates": actual})
@@ -1201,10 +1450,11 @@ def _new_history_record(
     completed_trials: list[BayesianTrialRecord],
     previous_history_sha256: str | None,
     created_at: str,
+    history_revision_id: str | None = None,
 ) -> BayesianHistoryRevisionRecord:
     ordered = sorted(completed_trials, key=lambda item: item.trial_number)
     return BayesianHistoryRevisionRecord(
-        history_revision_id=str(uuid4()),
+        history_revision_id=history_revision_id or str(uuid4()),
         study_version_id=study_version_id,
         revision_number=revision_number,
         schema_version=BAYESIAN_HISTORY_SCHEMA_VERSION,
@@ -1263,7 +1513,6 @@ def _validate_stored_lhs_initial_design(
         or initial_design.centered_discrepancy is None
         or initial_design.minimum_pairwise_distance is None
         or initial_design.maximum_absolute_factor_correlation is None
-        or initial_design.strata_valid is not True
         or not initial_design.numpy_version
         or not initial_design.scipy_version
     ):
@@ -1283,11 +1532,37 @@ def _validate_stored_lhs_initial_design(
         dtype=float,
     )
     try:
-        quality = calculate_latin_hypercube_quality(matrix)
+        lhs_factors = [
+            LatinHypercubeFactor(
+                name=factor.factor_id,
+                low=factor.low,
+                high=factor.high,
+                unit=factor.unit,
+                domain_kind=factor.domain_kind,
+                step=factor.step,
+                display_decimals=factor.display_decimals,
+            )
+            for factor in factors
+        ]
+        quality = calculate_latin_hypercube_quality(matrix, factors=lhs_factors)
     except (LatinHypercubeError, ValueError) as exc:
         raise _artifact_error() from exc
     if (
-        not quality.strata_valid
+        (
+            any(factor.domain_kind == "discrete_numeric" for factor in factors)
+            and (
+                quality.continuous_strata_valid is not True
+                or quality.duplicate_count != 0
+                or any(
+                    max(counts) - min(counts) > 1
+                    for counts in (quality.discrete_level_balance or {}).values()
+                )
+            )
+        )
+        or (
+            all(factor.domain_kind == "continuous" for factor in factors)
+            and not quality.strata_valid
+        )
         or not math.isclose(
             quality.centered_discrepancy,
             initial_design.centered_discrepancy,
@@ -1362,6 +1637,15 @@ def _validate_trials(
                 )
             ):
                 raise _artifact_error()
+            domain = DoeFactorDomain(
+                low=factor.low,
+                high=factor.high,
+                domain_kind=factor.domain_kind,
+                step=factor.step,
+                display_decimals=factor.display_decimals,
+            )
+            if not domain.is_executable(value):
+                raise _artifact_error()
         expected_sha = _sha256(
             {
                 "definition_sha256": version.definition_sha256,
@@ -1406,7 +1690,7 @@ def _validate_histories(
     if (
         len(completed_by_id) > MAX_COMPLETED_OBSERVATIONS
         or len(histories) > MAX_HISTORY_REVISIONS
-        or len(histories) != len(completed_by_id) + 1
+        or len(histories) > len(completed_by_id) + 1
         or [item.revision_number for item in histories] != list(range(1, len(histories) + 1))
         or current.history_revision_id != histories[-1].history_revision_id
         or current.study_version_id != version.study_version_id
@@ -1424,7 +1708,6 @@ def _validate_histories(
             or history.schema_version != BAYESIAN_HISTORY_SCHEMA_VERSION
             or history.completed_trial_count != len(completed_ids)
             or history.previous_history_sha256 != previous_sha
-            or len(completed_ids) != index
             or len(completed_ids) != len(set(completed_ids))
             or not set(completed_ids).issubset(completed_by_id)
         ):
@@ -1438,7 +1721,7 @@ def _validate_histories(
             raise _artifact_error()
         if index > 0 and (
             not set(previous_ids).issubset(completed_ids)
-            or len(set(completed_ids) - set(previous_ids)) != 1
+            or len(set(completed_ids) - set(previous_ids)) < 1
         ):
             raise _artifact_error()
         expected_sha = canonical_bayesian_observation_history_sha256(
@@ -1823,7 +2106,7 @@ def _study_response(bundle: _ValidatedStudy) -> BayesianStudyResponse:
         study_id=UUID(bundle.study.study_id),
         study_version_id=UUID(bundle.version.study_version_id),
         version_number=bundle.version.version_number,
-        study_schema_version=cast(Literal[1, 2, 3], bundle.version.schema_version),
+        study_schema_version=cast(Literal[1, 2, 3, 4], bundle.version.schema_version),
         method_id=BAYESIAN_METHOD_ID,
         method_version=bundle.study.method_version,
         name=bundle.study.name,
@@ -2162,6 +2445,16 @@ def _json_string_list(payload: str) -> list[str]:
 
 def _json_dumps(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _csv_cell(value: str) -> str:
+    return f"'{value}" if value.startswith(("=", "+", "-", "@")) else value
+
+
+def _display_factor_value(value: float, decimals: int | None) -> float | str:
+    if decimals is None:
+        return value
+    return f"{value:.{decimals}f}"
 
 
 def _sha256(payload: dict[str, Any]) -> str:

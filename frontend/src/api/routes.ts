@@ -189,6 +189,10 @@ export const apiRoutes = {
     return apiUrl(`/bayesian-studies/${pathId(studyId)}`);
   },
 
+  bayesianInitialDesignCsv(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/initial-design.csv`);
+  },
+
   bayesianStudyClose(studyId: string): string {
     return apiUrl(`/bayesian-studies/${pathId(studyId)}/close`);
   },
@@ -212,6 +216,10 @@ export const apiRoutes = {
     return apiUrl(
       `/bayesian-studies/${pathId(studyId)}/trials/${pathId(trialId)}/observation`,
     );
+  },
+
+  bayesianObservationBatch(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/observations/batch`);
   },
 
   bayesianTrialAbandon(studyId: string, trialId: string): string {

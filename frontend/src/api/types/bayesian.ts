@@ -4,6 +4,9 @@ export interface BayesianFactorRequest {
   low: number;
   high: number;
   unit?: string | null;
+  domain_kind?: "continuous" | "discrete_numeric";
+  step?: number | null;
+  display_decimals?: number | null;
 }
 
 export interface BayesianObjectiveRequest {
@@ -44,6 +47,10 @@ export interface BayesianStudyCreateRequest {
 
 export interface BayesianFactorResponse extends BayesianFactorRequest {
   unit: string | null;
+  domain_kind?: "continuous" | "discrete_numeric";
+  step?: number | null;
+  display_decimals?: number | null;
+  level_count?: number | null;
   order: number;
   scaling_rule: "linear_0_1";
 }
@@ -80,6 +87,10 @@ export interface BayesianInitialDesignResponse {
   centered_discrepancy?: number | null;
   minimum_pairwise_distance?: number | null;
   strata_valid?: boolean | null;
+  continuous_strata_valid?: boolean | null;
+  discrete_level_balance?: Record<string, number[]>;
+  duplicate_count?: number;
+  executable_point_count?: number | null;
   numpy_version?: string | null;
   scipy_version?: string | null;
 }
@@ -286,6 +297,24 @@ export interface BayesianTrialTransitionResponse {
   study_id: string;
   trial: BayesianTrialResponse;
   observation_history: BayesianHistoryRevisionResponse;
+}
+
+export interface BayesianObservationBatchCreateRequest {
+  request_id: string;
+  expected_study_version_id: string;
+  expected_history_revision_id: string;
+  expected_observation_history_sha256: string;
+  observations: Array<{ trial_id: string; objective_value: number }>;
+}
+
+export interface BayesianObservationBatchCreateResponse {
+  batch_schema_version: 1;
+  study: BayesianStudyResponse;
+  completed_trial_ids: string[];
+  completed_trial_count: number;
+  observation_history: BayesianHistoryRevisionResponse;
+  request_id: string;
+  created_at: string;
 }
 
 export interface BayesianHistoryListResponse {

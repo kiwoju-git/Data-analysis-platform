@@ -391,7 +391,13 @@ def _recommendation_worker_payload(
 ) -> dict[str, Any]:
     return {
         "factors": [
-            {"factor_id": factor.factor_id, "low": factor.low, "high": factor.high}
+            {
+                "factor_id": factor.factor_id,
+                "low": factor.low,
+                "high": factor.high,
+                "domain_kind": factor.domain_kind,
+                "step": factor.step,
+            }
             for factor in study.factors
         ],
         "constraints": [item.model_dump(mode="json") for item in study.constraints],

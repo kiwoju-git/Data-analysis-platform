@@ -83,6 +83,7 @@ export function BayesianOptimizationWorkspace() {
     study.status !== "active" ||
     requestInFlight ||
     lifecycle.pendingTransition !== null ||
+    lifecycle.pendingObservationBatch ||
     lifecycle.pendingStudyClose;
   const error =
     (recommendationQueryConflict
@@ -129,6 +130,11 @@ export function BayesianOptimizationWorkspace() {
 
   async function confirmTrialTransition() {
     const updated = await lifecycle.confirmTrialTransition();
+    if (updated) await recommendation.onRefresh();
+  }
+
+  async function confirmObservationBatch() {
+    const updated = await lifecycle.confirmObservationBatch();
     if (updated) await recommendation.onRefresh();
   }
 
@@ -208,12 +214,17 @@ export function BayesianOptimizationWorkspace() {
             study={study}
             observations={lifecycle.observations}
             pendingTransition={lifecycle.pendingTransition}
+            pendingObservationBatch={lifecycle.pendingObservationBatch}
             isSaving={lifecycle.isSavingTrial}
             actionsDisabled={studyActionDisabled}
             onObservationChange={lifecycle.setObservation}
+            onObservationBatchApply={lifecycle.setObservations}
             onRequestTransition={lifecycle.requestTrialTransition}
+            onRequestObservationBatch={lifecycle.requestObservationBatch}
             onConfirmTransition={() => void confirmTrialTransition()}
+            onConfirmObservationBatch={() => void confirmObservationBatch()}
             onCancelTransition={() => lifecycle.setPendingTransition(null)}
+            onCancelObservationBatch={() => lifecycle.setPendingObservationBatch(false)}
           />
           <BayesianRecommendationPanel
             study={study}

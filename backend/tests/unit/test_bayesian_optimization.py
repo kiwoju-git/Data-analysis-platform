@@ -121,6 +121,62 @@ def test_gp_recommendation_is_seeded_bounded_and_requires_confirmation() -> None
     assert "bayesian_optimization_no_global_optimum_guarantee" in first["warnings"]
 
 
+def test_discrete_recommendation_and_batch_candidates_stay_on_execution_grid() -> None:
+    payload = _payload()
+    payload["factors"] = [
+        {
+            "factor_id": "x",
+            "low": 1.0,
+            "high": 10.0,
+            "domain_kind": "discrete_numeric",
+            "step": 1.0,
+        }
+    ]
+    payload["observations"] = [
+        {"normalized": {"x": 0.0}, "objective_value": 0.0},
+        {"normalized": {"x": 4.0 / 9.0}, "objective_value": 1.0},
+        {"normalized": {"x": 1.0}, "objective_value": 0.2},
+    ]
+    payload["excluded_normalized"] = [[0.0], [4.0 / 9.0], [1.0]]
+
+    single = calculate_bayesian_recommendation(payload)
+    actual = single["recommended_actual_coordinates"]["x"]
+    assert actual == int(actual)
+
+    batch = calculate_bayesian_recommendation_batch(
+        {
+            "factors": payload["factors"],
+            "constraints": [],
+            "observations": payload["observations"],
+            "excluded_normalized": payload["excluded_normalized"],
+            "objective": {"goal_type": "maximize", "target_value": None},
+            "batch_size": 3,
+            "acquisition": {
+                "kind": "expected_improvement",
+                "exploration_profile": "balanced",
+                "xi_standardized": 0.01,
+            },
+            "search": {
+                "random_seed": 7,
+                "candidate_count_per_step": 64,
+                "local_start_count_per_step": 2,
+                "max_iterations_per_step": 40,
+                "max_evaluations_total": 512,
+                "model_max_iterations": 30,
+                "model_max_evaluations": 100,
+                "hyperparameter_restart_count": 0,
+                "time_budget_ms": 10_000,
+                "jitter": 1e-8,
+                "duplicate_tolerance": 1e-6,
+                "batch_policy": "greedy_posterior_mean_fantasy_ei_v1",
+            },
+        }
+    )
+    batch_values = [item["actual_coordinates"]["x"] for item in batch["items"]]
+    assert all(value == int(value) for value in batch_values)
+    assert len(set(batch_values)) == len(batch_values)
+
+
 def test_batch_size_one_preserves_single_recommendation_numerics() -> None:
     single_payload = _payload()
     single = calculate_bayesian_recommendation(single_payload)

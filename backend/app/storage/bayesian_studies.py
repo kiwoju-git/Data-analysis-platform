@@ -1253,6 +1253,130 @@ def complete_bayesian_trial_record(
             )
 
 
+def complete_bayesian_trial_batch_records(
+    workspace_root: Path,
+    *,
+    observations: list[tuple[str, float]],
+    closed_at: str,
+    expected_history_revision_id: str,
+    expected_history_sha256: str,
+    new_history: BayesianHistoryRevisionRecord,
+) -> str:
+    """Complete all observations and advance one history head atomically.
+
+    The request UUID is used as ``new_history.history_revision_id``. This gives
+    the operation a durable idempotency key without adding another relational
+    record solely for retries.
+    """
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        with connection:
+            replay = connection.execute(
+                """
+                SELECT observation_history_sha256, previous_history_sha256,
+                       study_version_id
+                FROM bayesian_observation_history_revisions
+                WHERE history_revision_id = ?;
+                """,
+                (new_history.history_revision_id,),
+            ).fetchone()
+            if replay is not None:
+                if (
+                    str(replay[0]) == new_history.observation_history_sha256
+                    and str(replay[1]) == expected_history_sha256
+                    and str(replay[2]) == new_history.study_version_id
+                ):
+                    return "replay"
+                raise BayesianStorageConflict("bayesian_observation_request_id_conflict")
+
+            if not _study_is_active(connection, new_history.study_version_id):
+                raise BayesianStorageConflict("bayesian_study_closed")
+            history_count = connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM bayesian_observation_history_revisions
+                WHERE study_version_id = ?;
+                """,
+                (new_history.study_version_id,),
+            ).fetchone()
+            if history_count is None or _row_int(history_count[0]) >= MAX_HISTORY_REVISIONS:
+                raise BayesianStorageConflict("bayesian_observation_limit_reached")
+            head = connection.execute(
+                """
+                SELECT revision.history_revision_id,
+                       revision.observation_history_sha256
+                FROM bayesian_observation_history_heads AS head
+                INNER JOIN bayesian_observation_history_revisions AS revision
+                    ON revision.history_revision_id = head.history_revision_id
+                WHERE head.study_version_id = ?;
+                """,
+                (new_history.study_version_id,),
+            ).fetchone()
+            if (
+                head is None
+                or str(head[0]) != expected_history_revision_id
+                or str(head[1]) != expected_history_sha256
+            ):
+                raise BayesianStorageConflict("history head changed")
+
+            trial_ids = [trial_id for trial_id, _ in observations]
+            placeholders = ",".join("?" for _ in trial_ids)
+            trial_rows = connection.execute(
+                f"""
+                SELECT trial_id, state
+                FROM bayesian_trials
+                WHERE study_version_id = ? AND trial_id IN ({placeholders});
+                """,
+                (new_history.study_version_id, *trial_ids),
+            ).fetchall()
+            if len(trial_rows) != len(trial_ids):
+                raise BayesianStorageConflict("bayesian_observation_trial_not_found")
+            if any(str(row[1]) != "pending" for row in trial_rows):
+                raise BayesianStorageConflict("bayesian_observation_trial_not_pending")
+
+            for trial_id, objective_value in observations:
+                cursor = connection.execute(
+                    """
+                    UPDATE bayesian_trials
+                    SET state = 'completed', objective_value = ?, closed_at = ?
+                    WHERE trial_id = ? AND study_version_id = ? AND state = 'pending';
+                    """,
+                    (objective_value, closed_at, trial_id, new_history.study_version_id),
+                )
+                if cursor.rowcount != 1:
+                    raise BayesianStorageConflict("bayesian_observation_trial_not_pending")
+
+            _insert_history_revision(connection, new_history)
+            cursor = connection.execute(
+                """
+                UPDATE bayesian_observation_history_heads
+                SET history_revision_id = ?, updated_at = ?
+                WHERE study_version_id = ? AND history_revision_id = ?;
+                """,
+                (
+                    new_history.history_revision_id,
+                    new_history.created_at,
+                    new_history.study_version_id,
+                    expected_history_revision_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise BayesianStorageConflict("history head changed")
+            connection.execute(
+                """
+                UPDATE bayesian_studies
+                SET updated_at = ?
+                WHERE study_id = (
+                    SELECT study_id FROM bayesian_study_versions
+                    WHERE study_version_id = ?
+                );
+                """,
+                (closed_at, new_history.study_version_id),
+            )
+    return "created"
+
+
 def abandon_bayesian_trial_record(
     workspace_root: Path,
     *,

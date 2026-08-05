@@ -26,6 +26,9 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
             <col className="bayesian-factor-name-column" />
             <col className="bayesian-factor-bound-column" />
             <col className="bayesian-factor-bound-column" />
+            <col className="doe-factor-domain-column" />
+            <col className="bayesian-factor-bound-column" />
+            <col className="bayesian-factor-bound-column" />
             <col className="bayesian-factor-unit-column" />
             <col className="bayesian-factor-action-column" />
           </colgroup>
@@ -35,6 +38,9 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
               <th>표시 이름</th>
               <th>하한</th>
               <th>상한</th>
+              <th>설정 방식</th>
+              <th>실행 간격</th>
+              <th>표시 자리수</th>
               <th>단위</th>
               <th className="bayesian-factor-action-cell">작업</th>
             </tr>
@@ -77,6 +83,41 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
                     value={factor.high}
                     onChange={(event) =>
                       draft.updateFactor(factor.key, "high", event.currentTarget.value)
+                    }
+                  />
+                </td>
+                <td>
+                  <select
+                    aria-label={`${factor.name} 설정 방식`}
+                    value={factor.domainKind ?? "continuous"}
+                    onChange={(event) =>
+                      draft.updateFactor(factor.key, "domainKind", event.currentTarget.value)
+                    }
+                  >
+                    <option value="continuous">연속형</option>
+                    <option value="discrete_numeric">일정 간격 숫자</option>
+                  </select>
+                </td>
+                <td>
+                  <input
+                    aria-label={`${factor.name} 실행 간격`}
+                    disabled={(factor.domainKind ?? "continuous") === "continuous"}
+                    inputMode="decimal"
+                    placeholder="-"
+                    value={factor.step ?? ""}
+                    onChange={(event) =>
+                      draft.updateFactor(factor.key, "step", event.currentTarget.value)
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${factor.name} 표시 자리수`}
+                    inputMode="numeric"
+                    placeholder="자동"
+                    value={factor.displayDecimals ?? ""}
+                    onChange={(event) =>
+                      draft.updateFactor(factor.key, "displayDecimals", event.currentTarget.value)
                     }
                   />
                 </td>

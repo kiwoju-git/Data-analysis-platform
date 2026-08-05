@@ -8,6 +8,11 @@ from importlib.metadata import version
 from typing import Any, Final, Literal
 
 from app.api.v1.schemas.bayesian import MAX_COMPLETED_OBSERVATIONS
+from app.statistics.doe_factor_domain import (
+    DoeFactorDomain,
+    DoeFactorDomainError,
+    validate_factor_domain,
+)
 
 BAYESIAN_RECOMMENDATION_RESULT_SCHEMA_VERSION: Final[Literal[1]] = 1
 BAYESIAN_SURROGATE_MODEL_SCHEMA_VERSION: Final[Literal[1]] = 1
@@ -131,7 +136,7 @@ def calculate_bayesian_recommendation(payload: dict[str, Any]) -> dict[str, Any]
     factors = _validated_factors(payload.get("factors"))
     constraints = _validated_constraints(payload.get("constraints"), factors)
     observations = _validated_observations(payload.get("observations"), factors)
-    excluded = _validated_excluded_points(payload.get("excluded_normalized"), len(factors))
+    excluded = _validated_excluded_points(payload.get("excluded_normalized"), factors)
     options = _validated_options(payload.get("search"))
     direction = payload.get("objective_direction")
     if direction not in {"minimize", "maximize"}:
@@ -225,7 +230,7 @@ def calculate_bayesian_recommendation(payload: dict[str, Any]) -> dict[str, Any]
         max_evaluations=options["max_evaluations"],
     )
     rng = np.random.default_rng(options["random_seed"])
-    candidates = _candidate_pool(rng, len(factors), options["candidate_count"])
+    candidates = _candidate_pool_for_factors(rng, factors, options["candidate_count"])
     feasible = np.asarray(
         [
             candidate
@@ -272,7 +277,8 @@ def calculate_bayesian_recommendation(payload: dict[str, Any]) -> dict[str, Any]
         )
         return -float(value[0])
 
-    for index in order[: options["local_start_count"]]:
+    local_start_count = 0 if _has_discrete_factors(factors) else options["local_start_count"]
+    for index in order[:local_start_count]:
         local_starts_attempted += 1
         try:
             local = minimize(
@@ -411,10 +417,10 @@ def bayesian_worker_entry(output_queue: Any, payload: dict[str, Any]) -> None:
         output_queue.put({"status": "ok", "result": result})
 
 
-def _validated_factors(value: object) -> list[dict[str, float | str]]:
+def _validated_factors(value: object) -> list[dict[str, Any]]:
     if not isinstance(value, list) or not 1 <= len(value) <= 6:
         raise BayesianOptimizationError("bayesian_optimization_factor_space_invalid")
-    result: list[dict[str, float | str]] = []
+    result: list[dict[str, Any]] = []
     ids: set[str] = set()
     for item in value:
         if not isinstance(item, dict) or not isinstance(item.get("factor_id"), str):
@@ -422,16 +428,38 @@ def _validated_factors(value: object) -> list[dict[str, float | str]]:
         factor_id = item["factor_id"]
         low = _finite_float(item.get("low"), "bayesian_optimization_factor_space_invalid")
         high = _finite_float(item.get("high"), "bayesian_optimization_factor_space_invalid")
-        if factor_id in ids or not low < high:
+        domain_kind = item.get("domain_kind", "continuous")
+        step = item.get("step")
+        if step is not None:
+            step = _finite_float(step, "bayesian_optimization_factor_space_invalid")
+        try:
+            domain = DoeFactorDomain(
+                low=low,
+                high=high,
+                domain_kind=domain_kind,
+                step=step,
+            )
+            validate_factor_domain(domain)
+        except (DoeFactorDomainError, TypeError) as exc:
+            raise BayesianOptimizationError("bayesian_optimization_factor_space_invalid") from exc
+        if factor_id in ids:
             raise BayesianOptimizationError("bayesian_optimization_factor_space_invalid")
         ids.add(factor_id)
-        result.append({"factor_id": factor_id, "low": low, "high": high})
+        result.append(
+            {
+                "factor_id": factor_id,
+                "low": low,
+                "high": high,
+                "domain_kind": domain.domain_kind,
+                "step": domain.step,
+            }
+        )
     return result
 
 
 def _validated_constraints(
     value: object,
-    factors: list[dict[str, float | str]],
+    factors: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     if not isinstance(value, list) or len(value) > 16:
         raise BayesianOptimizationError("bayesian_optimization_constraint_invalid")
@@ -474,7 +502,7 @@ def _validated_constraints(
 
 def _validated_observations(
     value: object,
-    factors: list[dict[str, float | str]],
+    factors: list[dict[str, Any]],
 ) -> list[tuple[list[float], float]]:
     if not isinstance(value, list):
         raise BayesianOptimizationError("bayesian_optimization_history_incomplete")
@@ -492,6 +520,11 @@ def _validated_observations(
         ]
         if any(coordinate < 0.0 or coordinate > 1.0 for coordinate in point):
             raise BayesianOptimizationError("bayesian_optimization_history_incomplete")
+        if any(
+            not _normalized_is_executable(point[index], factor)
+            for index, factor in enumerate(factors)
+        ):
+            raise BayesianOptimizationError("bayesian_optimization_history_incomplete")
         objective = _finite_float(
             item.get("objective_value"), "bayesian_optimization_history_incomplete"
         )
@@ -499,18 +532,26 @@ def _validated_observations(
     return observations
 
 
-def _validated_excluded_points(value: object, factor_count: int) -> list[list[float]]:
+def _validated_excluded_points(
+    value: object,
+    factors: list[dict[str, Any]],
+) -> list[list[float]]:
     if not isinstance(value, list):
         raise BayesianOptimizationError("bayesian_optimization_artifact_mismatch")
     points: list[list[float]] = []
     for item in value:
-        if not isinstance(item, list) or len(item) != factor_count:
+        if not isinstance(item, list) or len(item) != len(factors):
             raise BayesianOptimizationError("bayesian_optimization_artifact_mismatch")
         point = [
             _finite_float(coordinate, "bayesian_optimization_artifact_mismatch")
             for coordinate in item
         ]
         if any(coordinate < 0.0 or coordinate > 1.0 for coordinate in point):
+            raise BayesianOptimizationError("bayesian_optimization_artifact_mismatch")
+        if any(
+            not _normalized_is_executable(point[index], factor)
+            for index, factor in enumerate(factors)
+        ):
             raise BayesianOptimizationError("bayesian_optimization_artifact_mismatch")
         points.append(point)
     return points
@@ -583,15 +624,49 @@ def _candidate_pool(rng: Any, factor_count: int, count: int) -> Any:
     return np.vstack([np.asarray(anchors, dtype=float), random_points])[:count]
 
 
+def _candidate_pool_for_factors(
+    rng: Any,
+    factors: list[dict[str, Any]],
+    count: int,
+) -> Any:
+    import numpy as np
+
+    candidates = _candidate_pool(rng, len(factors), count)
+    for index, factor in enumerate(factors):
+        levels = _discrete_normalized_levels(factor)
+        if levels is None:
+            continue
+        level_array = np.asarray(levels, dtype=float)
+        raw_indices = np.minimum(
+            (candidates[:, index] * len(level_array)).astype(int),
+            len(level_array) - 1,
+        )
+        candidates[:, index] = level_array[raw_indices]
+    if not _has_discrete_factors(factors):
+        return candidates
+    _, unique_indices = np.unique(candidates, axis=0, return_index=True)
+    return candidates[np.sort(unique_indices)]
+
+
 def _to_actual(
     normalized: Any,
-    factors: list[dict[str, float | str]],
+    factors: list[dict[str, Any]],
 ) -> dict[str, float]:
-    return {
-        str(factor["factor_id"]): float(factor["low"])
-        + float(normalized[index]) * (float(factor["high"]) - float(factor["low"]))
-        for index, factor in enumerate(factors)
-    }
+    actual: dict[str, float] = {}
+    for index, factor in enumerate(factors):
+        domain = _factor_domain(factor)
+        if domain.domain_kind == "discrete_numeric":
+            levels = domain.levels()
+            normalized_levels = [domain.normalized(level) for level in levels]
+            closest = min(
+                range(len(levels)),
+                key=lambda item: abs(float(normalized[index]) - normalized_levels[item]),
+            )
+            value = levels[closest]
+        else:
+            value = domain.low + float(normalized[index]) * (domain.high - domain.low)
+        actual[str(factor["factor_id"])] = value
+    return actual
 
 
 def _constraints_satisfied(actual: dict[str, float], constraints: list[dict[str, Any]]) -> bool:
@@ -631,7 +706,7 @@ def _constraint_evaluations(
 
 
 def _scipy_constraints(
-    factors: list[dict[str, float | str]],
+    factors: list[dict[str, Any]],
     constraints: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
@@ -655,6 +730,33 @@ def _scipy_constraints(
 
         result.append({"type": "ineq", "fun": evaluate})
     return result
+
+
+def _factor_domain(factor: dict[str, Any]) -> DoeFactorDomain:
+    return DoeFactorDomain(
+        low=float(factor["low"]),
+        high=float(factor["high"]),
+        domain_kind=factor.get("domain_kind", "continuous"),
+        step=None if factor.get("step") is None else float(factor["step"]),
+    )
+
+
+def _discrete_normalized_levels(factor: dict[str, Any]) -> tuple[float, ...] | None:
+    domain = _factor_domain(factor)
+    if domain.domain_kind == "continuous":
+        return None
+    return tuple(domain.normalized(level) for level in domain.levels())
+
+
+def _has_discrete_factors(factors: list[dict[str, Any]]) -> bool:
+    return any(factor.get("domain_kind", "continuous") == "discrete_numeric" for factor in factors)
+
+
+def _normalized_is_executable(normalized: float, factor: dict[str, Any]) -> bool:
+    levels = _discrete_normalized_levels(factor)
+    if levels is None:
+        return True
+    return any(abs(normalized - level) <= 1e-10 for level in levels)
 
 
 def _novel(candidate: Any, excluded: list[list[float]], tolerance: float) -> bool:

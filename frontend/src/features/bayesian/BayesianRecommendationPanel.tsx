@@ -230,66 +230,27 @@ export function BayesianRecommendationPanel({
           ]}
         />
 
-        <DoeSettingsTable
-          ariaLabel="Bayesian 탐색 활용 설정"
-          fields={[
-            {
-              key: "exploration",
-              label: "탐색·활용 성향",
-              control: (
-                <fieldset
-                  className="bayesian-exploration-fieldset doe-table-segmented"
-                  disabled={settingsDisabled}
-                >
-                  <legend className="visually-hidden">탐색·활용 성향</legend>
-                  <div className="bayesian-exploration-grid">
-                    {EXPLORATION_OPTIONS.map((option) => (
-                      <label
-                        key={option.value}
-                        className={
-                          explorationProfile === option.value ? "is-selected" : ""
-                        }
-                      >
-                        <span>
-                          <input
-                            type="radio"
-                            name="bayesian-exploration-profile"
-                            value={option.value}
-                            checked={explorationProfile === option.value}
-                            onChange={() =>
-                              onExplorationProfileChange(option.value)
-                            }
-                          />
-                          <strong>{option.label}</strong>
-                        </span>
-                        <small>{option.description}</small>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              ),
-            },
-            ...(explorationProfile === "custom"
-              ? [
-                  {
-                    key: "xi",
-                    label: "표준화 ξ (0~10)",
-                    controlId: "bayesian-custom-xi",
-                    control: (
-                      <input
-                        id="bayesian-custom-xi"
-                        inputMode="decimal"
-                        value={customXi}
-                        onChange={(event) =>
-                          onCustomXiChange(event.currentTarget.value)
-                        }
-                      />
-                    ),
-                  },
-                ]
-              : []),
-          ]}
-        />
+        <section className="bayesian-exploration-section">
+          <fieldset className="bayesian-exploration-fieldset" disabled={settingsDisabled}>
+            <legend>탐색·활용 성향</legend>
+            <div className="bayesian-exploration-options">
+              {EXPLORATION_OPTIONS.map((option) => (
+                <label key={option.value} className={explorationProfile === option.value ? "is-selected" : ""}>
+                  <span><input type="radio" name="bayesian-exploration-profile" value={option.value} checked={explorationProfile === option.value} onChange={() => onExplorationProfileChange(option.value)} /><strong>{option.label}</strong></span>
+                  <small>{option.description}</small>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {explorationProfile === "custom" ? (
+            <DoeSettingsTable ariaLabel="Bayesian 사용자 탐색 설정" fields={[{
+              key: "xi",
+              label: "표준화 ξ (0~10)",
+              controlId: "bayesian-custom-xi",
+              control: <input id="bayesian-custom-xi" inputMode="decimal" value={customXi} onChange={(event) => onCustomXiChange(event.currentTarget.value)} />,
+            }]} />
+          ) : null}
+        </section>
 
         <details>
           <summary>EI와 고급 탐색 설정</summary>

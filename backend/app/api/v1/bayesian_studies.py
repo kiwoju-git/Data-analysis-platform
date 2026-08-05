@@ -1,12 +1,14 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Query, Request, Response, status
 
 from app.api.v1.schemas.bayesian import (
     BayesianHistoryListResponse,
     BayesianHistoryRevisionResponse,
     BayesianLatestRecommendationBatchResponse,
     BayesianLatestRecommendationResponse,
+    BayesianObservationBatchCreateRequest,
+    BayesianObservationBatchCreateResponse,
     BayesianObservationCreateRequest,
     BayesianRecommendationBatchCreateRequest,
     BayesianRecommendationBatchListResponse,
@@ -40,7 +42,9 @@ from app.services.bayesian_recommendations import (
 )
 from app.services.bayesian_studies import (
     abandon_bayesian_trial,
+    bayesian_initial_design_csv,
     close_bayesian_study,
+    complete_bayesian_observations_batch,
     complete_bayesian_trial,
     create_bayesian_study,
     delete_bayesian_study,
@@ -73,6 +77,19 @@ def list_bayesian_studies_route(
     limit: int = Query(default=20, ge=1, le=100),
 ) -> BayesianStudyListResponse:
     return list_bayesian_studies(request.app.state.settings, offset=offset, limit=limit)
+
+
+@router.get("/{study_id}/initial-design.csv")
+def export_bayesian_initial_design_route(request: Request, study_id: UUID) -> Response:
+    content, filename = bayesian_initial_design_csv(request.app.state.settings, study_id)
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/{study_id}", response_model=BayesianStudyResponse)
@@ -135,6 +152,22 @@ def complete_bayesian_trial_route(
     body: BayesianObservationCreateRequest,
 ) -> BayesianTrialTransitionResponse:
     return complete_bayesian_trial(request.app.state.settings, study_id, trial_id, body)
+
+
+@router.put(
+    "/{study_id}/observations/batch",
+    response_model=BayesianObservationBatchCreateResponse,
+)
+def complete_bayesian_observations_batch_route(
+    request: Request,
+    study_id: UUID,
+    body: BayesianObservationBatchCreateRequest,
+) -> BayesianObservationBatchCreateResponse:
+    return complete_bayesian_observations_batch(
+        request.app.state.settings,
+        study_id,
+        body,
+    )
 
 
 @router.post(
