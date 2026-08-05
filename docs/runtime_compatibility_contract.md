@@ -87,6 +87,11 @@ contract, schema, and capability set. `scripts/diagnose-dev.ps1` reports ports,
 runtime contract, management OpenAPI paths, and the three dedicated method
 states without changing processes or repository settings.
 
+The default browser entry point is `http://127.0.0.1:8600`. Vite dev/preview,
+the PowerShell startup and diagnostics scripts, backend CORS defaults, and the
+runtime mismatch guidance use this same loopback port. Port 8000 remains the
+backend-only API listener.
+
 ## Error Boundary
 
 Management clients preserve HTTP status, stable error code, route-not-found

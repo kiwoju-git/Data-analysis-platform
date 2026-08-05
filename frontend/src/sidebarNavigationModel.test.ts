@@ -149,12 +149,12 @@ describe("sidebar navigation model", () => {
     );
     expect(
       normalizedDatasetSidebarLocation(
-        "http://127.0.0.1:5173/?section=dataset-parsing&dataset_version_id=v1",
+        "http://127.0.0.1:8600/?section=dataset-parsing&dataset_version_id=v1",
       ),
     ).toBe("/?section=dataset-intake&dataset_version_id=v1");
     expect(
       normalizedDatasetSidebarLocation(
-        "http://127.0.0.1:5173/?section=dataset-version",
+        "http://127.0.0.1:8600/?section=dataset-version",
       ),
     ).toBeNull();
   });

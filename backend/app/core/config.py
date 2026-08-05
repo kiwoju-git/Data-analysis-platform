@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     workspace_root: Path = Field(default_factory=default_workspace_root)
     cors_allowed_origins: list[str] = Field(
         default_factory=lambda: [
-            "http://127.0.0.1:5173",
-            "http://localhost:5173",
+            "http://127.0.0.1:8600",
+            "http://localhost:8600",
         ],
     )
 

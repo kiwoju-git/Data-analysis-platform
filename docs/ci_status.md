@@ -1,8 +1,26 @@
 # CI Status
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## Local Validation
+
+- The Bayesian legacy-restore and default-port correction is based on main
+  `d38bf7c41412cbc02528d292823f9e448f866888`. Schema-1 through schema-3
+  definition hashes are now recomputed with their original factor and initial-
+  design field sets, while schema-4 validation and tamper rejection remain
+  unchanged. The existing local workspace catalog restored all three legacy
+  Studies (schemas 2, 2, and 3) without rewriting metadata or checksums.
+- The default browser port is now 8600 across Vite dev/preview, PowerShell
+  startup and diagnostics, backend CORS defaults, runtime guidance, and setup
+  documentation. Backend port 8000 and API/method/metadata schema versions are
+  unchanged.
+- Focused backend tests passed 35/35. Full `scripts/check.ps1` completed in
+  1192.9 seconds with 18 tutorial blocks, Ruff lint/format over 192 files, mypy
+  over 119 source modules, backend pytest 936/936, frontend lint/typecheck,
+  Vitest 259/259 across 30 files, and production build all passing. The existing
+  Vite main-chunk size warning remains informational. Chromium E2E passed in
+  130.2 seconds with diagnostics under
+  `.tmp/e2e-diagnostics-bayesian-port-8600`.
 
 - The manual-input/Bayesian-bulk/executable-DOE/LHS-visualization change is
   based on main `d574454e04f258a793c9e726faaaa0d9456b7443`. It advances API

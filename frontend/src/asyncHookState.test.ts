@@ -1300,7 +1300,7 @@ describe("async workbench hooks", () => {
     const replaceState = vi.fn();
     vi.stubGlobal("window", {
       location: {
-        href: "http://127.0.0.1:5173/reports?tab=reports&analysis_id=analysis-a",
+        href: "http://127.0.0.1:8600/reports?tab=reports&analysis_id=analysis-a",
       },
       history: { replaceState },
     });
@@ -1326,7 +1326,7 @@ describe("async workbench hooks", () => {
     const replaceState = vi.fn();
     vi.stubGlobal("window", {
       location: {
-        href: "http://127.0.0.1:5173/reports?tab=reports&analysis_id=analysis-a",
+        href: "http://127.0.0.1:8600/reports?tab=reports&analysis_id=analysis-a",
       },
       history: { replaceState },
     });

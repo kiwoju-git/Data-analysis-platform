@@ -248,7 +248,7 @@ Bayesian Optimization이 `계획됨`으로 보이면, 이전 backend가 포트 8
 
 ```powershell
 Get-NetTCPConnection -State Listen |
-  Where-Object { $_.LocalPort -in 8000,5173,5174 }
+  Where-Object { $_.LocalPort -in 8000,8600 }
 
 Invoke-RestMethod http://127.0.0.1:8000/api/v1/runtime-info
 ```

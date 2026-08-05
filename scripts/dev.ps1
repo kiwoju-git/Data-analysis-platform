@@ -3,7 +3,7 @@ param(
     [switch]$FrontendOnly,
     [switch]$ReuseCompatibleBackend,
     [int]$BackendPort = 8000,
-    [int]$FrontendPort = 5173,
+    [int]$FrontendPort = 8600,
     [int]$StartupTimeoutSeconds = 30
 )
 

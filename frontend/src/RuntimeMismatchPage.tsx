@@ -38,7 +38,7 @@ export function RuntimeCompatibilityGate({
         <code>오류 코드: {state.error}</code>
         <ol>
           <li>이전에 실행한 DataLab PowerShell 창을 모두 종료합니다.</li>
-          <li>포트 8000과 5173 listener를 확인합니다.</li>
+          <li>포트 8000과 8600 listener를 확인합니다.</li>
           <li>최신 폴더에서 <code>bootstrap.ps1</code>을 실행합니다.</li>
           <li>같은 폴더에서 <code>dev.ps1</code>을 실행합니다.</li>
           <li>실행 로그에 표시된 새 브라우저 주소를 열고 Ctrl+F5를 누릅니다.</li>

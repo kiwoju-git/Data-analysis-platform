@@ -429,7 +429,7 @@ or predictions outside the declared design region are supported.
 
 QA pass criteria:
 
-- `localhost:5173` and `127.0.0.1:5173` both show `API ready` while the backend
+- `localhost:8600` and `127.0.0.1:8600` both show `API ready` while the backend
   remains loopback-only.
 - Rotatable CCI states that axial points equal the declared low/high bounds.
 - All generated run responses must be present before analysis is enabled.

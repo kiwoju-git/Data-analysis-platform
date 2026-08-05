@@ -534,7 +534,7 @@ describe("App", () => {
   it("places a directly selected Help method detail before the long method list", () => {
     vi.stubGlobal("window", {
       location: {
-        href: "http://127.0.0.1:5173/help?method_id=eda.descriptive",
+        href: "http://127.0.0.1:8600/help?method_id=eda.descriptive",
       },
     });
     const html = renderToString(
@@ -601,7 +601,7 @@ describe("App", () => {
   it("opens full restore, compare, and delete history from the Report Center query", () => {
     vi.stubGlobal("window", {
       location: {
-        href: "http://127.0.0.1:5173/reports?tab=history&dataset_version_id=version-1&method_id=eda.descriptive",
+        href: "http://127.0.0.1:8600/reports?tab=history&dataset_version_id=version-1&method_id=eda.descriptive",
       },
       history: { replaceState: vi.fn() },
     });

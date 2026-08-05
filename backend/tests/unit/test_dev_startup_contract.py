@@ -70,6 +70,7 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     dev_text = (repo_root / "scripts/dev.ps1").read_text(encoding="utf-8")
     helper_text = (repo_root / "scripts/dev_runtime_helpers.ps1").read_text(encoding="utf-8")
     diagnostics_text = (repo_root / "scripts/diagnose-dev.ps1").read_text(encoding="utf-8")
+    vite_text = (repo_root / "frontend/vite.config.ts").read_text(encoding="utf-8")
 
     assert "--strictPort" in dev_text
     assert "Get-DevPortOwner" in dev_text
@@ -90,6 +91,9 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert '"bayesian_objective_goal_modes"' in helper_text
     assert "/api/v1/runtime-info" in diagnostics_text
     assert "/api/v1/analysis-methods" in diagnostics_text
+    assert "[int]$FrontendPort = 8600" in dev_text
+    assert "[int]$FrontendPort = 8600" in diagnostics_text
+    assert "port: 8600" in vite_text
 
 
 def test_dev_runtime_helper_returns_the_repository_commit() -> None:

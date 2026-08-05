@@ -142,7 +142,7 @@ npm --prefix .\frontend run dev -- --host 127.0.0.1
 ```
 
 The backend remains bound to loopback only. The default CORS allowlist accepts
-the Vite UI at both `http://127.0.0.1:5173` and `http://localhost:5173`; no LAN
+the Vite UI at both `http://127.0.0.1:8600` and `http://localhost:8600`; no LAN
 origin or wildcard is enabled.
 
 ## Local Data
