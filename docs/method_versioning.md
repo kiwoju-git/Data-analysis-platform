@@ -464,6 +464,13 @@ needed. Metadata schema remains `18` because factor definitions and prediction
 inputs already live in versioned JSON/owned artifacts; no SQLite migration or
 legacy checksum rewrite occurs.
 
+The 2026-08-06 legacy Bayesian restore correction does not change a method or
+schema contract. It removes schema-4-only factor-domain and mixed-design
+default fields when recomputing schema-1 through schema-3 definition hashes,
+matching their originally persisted canonical payloads. Stored definitions and
+checksums are not rewritten, while genuine metadata, trial, and history tamper
+continues to fail validation.
+
 ## Analysis-Run Retention Decision
 
 Analysis-run deletion preflight, exact confirmation, file quarantine, metadata

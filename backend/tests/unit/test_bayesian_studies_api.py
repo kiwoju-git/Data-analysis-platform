@@ -308,28 +308,70 @@ def test_bayesian_mixed_initial_design_and_csv_use_discrete_grid(tmp_path) -> No
     assert all("." not in line.split(",")[sample_day_index] for line in lines[1:])
 
 
-def test_bayesian_v01_study_restores_without_relabeling_or_hash_reinterpretation(
+@pytest.mark.parametrize(
+    ("schema_version", "method_version"),
+    [(1, "0.1.0"), (2, "0.3.0"), (3, "0.4.0")],
+)
+def test_bayesian_legacy_study_restores_without_relabeling_or_hash_reinterpretation(
     tmp_path,
+    schema_version: int,
+    method_version: str,
 ) -> None:
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:
         study = _create_study(client, initial_design_size=3)
 
-        definition_payload = {
-            "study_schema_version": 1,
-            "method_id": "doe.bayesian_optimization",
-            "method_version": "0.1.0",
-            "factors": study["factors"],
-            "objective": {
+        legacy_factors = [
+            {
+                key: factor[key]
+                for key in (
+                    "factor_id",
+                    "name",
+                    "low",
+                    "high",
+                    "unit",
+                    "order",
+                    "scaling_rule",
+                )
+            }
+            for factor in study["factors"]
+        ]
+        if schema_version <= 2:
+            objective_payload = {
                 "name": study["objective"]["name"],
                 "unit": study["objective"]["unit"],
                 "direction": study["objective"]["direction"],
                 "observation_policy": study["objective"]["observation_policy"],
-            },
+            }
+        else:
+            objective_payload = {
+                "name": study["objective"]["name"],
+                "unit": study["objective"]["unit"],
+                "goal_type": study["objective"]["goal_type"],
+                "target_value": study["objective"]["target_value"],
+                "target_tolerance": study["objective"]["target_tolerance"],
+                "observation_policy": study["objective"]["observation_policy"],
+            }
+        initial_design_payload = {
+            key: value
+            for key, value in study["initial_design"].items()
+            if value is not None
+            and key
+            not in {
+                "continuous_strata_valid",
+                "discrete_level_balance",
+                "duplicate_count",
+                "executable_point_count",
+            }
+        }
+        definition_payload = {
+            "study_schema_version": schema_version,
+            "method_id": "doe.bayesian_optimization",
+            "method_version": method_version,
+            "factors": legacy_factors,
+            "objective": objective_payload,
             "constraints": study["constraints"],
-            "initial_design": {
-                key: value for key, value in study["initial_design"].items() if value is not None
-            },
+            "initial_design": initial_design_payload,
         }
         definition_sha256 = _canonical_sha256(definition_payload)
         history_sha256 = _canonical_sha256(
@@ -341,16 +383,24 @@ def test_bayesian_v01_study_restores_without_relabeling_or_hash_reinterpretation
         )
         with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
             connection.execute(
-                "UPDATE bayesian_studies SET method_version = '0.1.0' WHERE study_id = ?",
-                (study["study_id"],),
+                "UPDATE bayesian_studies SET method_version = ? WHERE study_id = ?",
+                (method_version, study["study_id"]),
             )
             connection.execute(
                 """
                 UPDATE bayesian_study_versions
-                SET schema_version = 1, definition_sha256 = ?
+                SET schema_version = ?, factors_json = ?, objective_json = ?,
+                    initial_design_json = ?, definition_sha256 = ?
                 WHERE study_version_id = ?
                 """,
-                (definition_sha256, study["study_version_id"]),
+                (
+                    schema_version,
+                    json.dumps(legacy_factors, ensure_ascii=False, sort_keys=True),
+                    json.dumps(objective_payload, ensure_ascii=False, sort_keys=True),
+                    json.dumps(initial_design_payload, ensure_ascii=False, sort_keys=True),
+                    definition_sha256,
+                    study["study_version_id"],
+                ),
             )
             for trial in study["trials"]:
                 coordinates_sha256 = _canonical_sha256(
@@ -382,7 +432,8 @@ def test_bayesian_v01_study_restores_without_relabeling_or_hash_reinterpretation
 
     assert restored_response.status_code == 200, restored_response.json()
     restored = restored_response.json()
-    assert restored["method_version"] == "0.1.0"
+    assert restored["method_version"] == method_version
+    assert restored["study_schema_version"] == schema_version
     assert restored["objective"]["goal_type"] == "maximize"
     assert restored["objective"]["direction"] == "maximize"
     assert restored["definition_sha256"] == definition_sha256

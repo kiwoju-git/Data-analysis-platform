@@ -7,8 +7,9 @@ Last updated: 2026-07-30
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
 `0.5.0`. New studies use study schema `4`; readers retain study schemas `1`,
 `2`, and `3` and their recorded method versions without rewriting checksums.
-`2`, methods `0.1.0` through `0.3.0`, and legacy single recommendations without
-rewriting them. The application stores an immutable bounded study and
+Legacy definition verification reconstructs the schema-specific factor and
+initial-design field set; schema-4 defaults are never injected into a schema-1
+through schema-3 checksum payload. The application stores an immutable bounded study and
 observation history, fits a Matérn 5/2 Gaussian Process to explicit completed
 trials, and creates either one sequential candidate or a synchronous batch of
 two through eight pending confirmation trials. It never runs the user's

@@ -2273,14 +2273,55 @@ def _definition_payload(
         "study_schema_version": study_schema_version,
         "method_id": BAYESIAN_METHOD_ID,
         "method_version": method_version,
-        "factors": [item.model_dump(mode="json") for item in factors],
+        "factors": [
+            _factor_definition_payload(item, study_schema_version=study_schema_version)
+            for item in factors
+        ],
         "objective": _objective_payload(
             objective,
             study_schema_version=study_schema_version,
         ),
         "constraints": [item.model_dump(mode="json") for item in constraints],
-        "initial_design": initial_design.model_dump(mode="json", exclude_none=True),
+        "initial_design": _initial_design_definition_payload(
+            initial_design,
+            study_schema_version=study_schema_version,
+        ),
     }
+
+
+def _factor_definition_payload(
+    factor: BayesianFactorResponse,
+    *,
+    study_schema_version: int,
+) -> dict[str, Any]:
+    if study_schema_version <= 3:
+        return {
+            "factor_id": factor.factor_id,
+            "name": factor.name,
+            "low": factor.low,
+            "high": factor.high,
+            "unit": factor.unit,
+            "order": factor.order,
+            "scaling_rule": factor.scaling_rule,
+        }
+    return factor.model_dump(mode="json")
+
+
+def _initial_design_definition_payload(
+    initial_design: BayesianInitialDesignResponse,
+    *,
+    study_schema_version: int,
+) -> dict[str, Any]:
+    payload = initial_design.model_dump(mode="json", exclude_none=True)
+    if study_schema_version <= 3:
+        for field_name in (
+            "continuous_strata_valid",
+            "discrete_level_balance",
+            "duplicate_count",
+            "executable_point_count",
+        ):
+            payload.pop(field_name, None)
+    return payload
 
 
 def _objective_payload(
