@@ -1,12 +1,17 @@
-import type { AnalysisModuleId } from "./api";
+import type {
+  AnalysisMethodDescriptor,
+  AnalysisMethodListResponse,
+  AnalysisModuleId,
+} from "./api";
 import type { AppRoute } from "./appRoute";
 
 export interface SidebarNavigationItem {
   active: boolean;
+  children?: SidebarNavigationItem[];
   disabled?: boolean;
   id: string;
   label: string;
-  onActivate: () => void;
+  onActivate?: () => void;
 }
 
 export interface SidebarNavigationGroup {
@@ -20,10 +25,13 @@ export type DatasetSidebarSection = "dataset-intake" | "dataset-version";
 
 interface SidebarNavigationOptions {
   activeAnalysisModuleId: AnalysisModuleId;
+  activeAnalysisMethodId: string | null;
+  analysisCatalog: AnalysisMethodListResponse | null;
   activePage: AppRoute["page"];
   canOpenAnalysis: boolean;
   query: URLSearchParams;
   onOpenAnalysisModule: (moduleId: AnalysisModuleId) => void;
+  onOpenAnalysisMethod: (method: AnalysisMethodDescriptor) => void;
   onOpenDatasetSection: (section: DatasetSidebarSection) => void;
   onOpenHelpSection: (
     section: "purpose" | "roles" | "methods" | "tutorial",
@@ -34,21 +42,15 @@ interface SidebarNavigationOptions {
   onOpenReportTab: (tab: "reports" | "history") => void;
 }
 
-const analysisModules: Array<[AnalysisModuleId, string]> = [
-  ["exploration", "탐색적 분석"],
-  ["hypothesis", "가설 검정"],
-  ["categorical", "범주형 데이터 분석"],
-  ["regression", "상관관계·회귀"],
-  ["quality", "품질 관리"],
-  ["doe", "실험 계획법"],
-];
-
 export function createSidebarNavigationGroups({
   activeAnalysisModuleId,
+  activeAnalysisMethodId,
+  analysisCatalog,
   activePage,
   canOpenAnalysis,
   query,
   onOpenAnalysisModule,
+  onOpenAnalysisMethod,
   onOpenDatasetSection,
   onOpenHelpSection,
   onOpenManageTab,
@@ -93,14 +95,29 @@ export function createSidebarNavigationGroups({
     },
     {
       active: activePage === "analysis",
-      children: analysisModules.map(([moduleId, label]) => ({
-        active:
-          activePage === "analysis" && activeAnalysisModuleId === moduleId,
-        disabled: !canOpenAnalysis,
-        id: moduleId,
-        label,
-        onActivate: () => onOpenAnalysisModule(moduleId),
-      })),
+      children: (analysisCatalog?.modules ?? [])
+        .slice()
+        .sort((left, right) => left.order - right.order)
+        .map((module) => ({
+          active:
+            activePage === "analysis" && activeAnalysisModuleId === module.module_id,
+          children: (analysisCatalog?.methods ?? [])
+            .filter((method) => method.module_id === module.module_id)
+            .slice()
+            .sort((left, right) => left.order - right.order)
+            .map((method) => ({
+              active:
+                activePage === "analysis" && activeAnalysisMethodId === method.method_id,
+              disabled: !canOpenAnalysis || method.availability !== "available",
+              id: method.method_id,
+              label: method.label_ko,
+              onActivate: () => onOpenAnalysisMethod(method),
+            })),
+          disabled: !canOpenAnalysis,
+          id: module.module_id,
+          label: module.label_ko,
+          onActivate: () => onOpenAnalysisModule(module.module_id),
+        })),
       id: "analysis",
       label: "분석",
     },

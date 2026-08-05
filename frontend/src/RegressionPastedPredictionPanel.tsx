@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type {
   LinearModelResult,
@@ -10,20 +10,24 @@ import {
   createRegressionPastedPrediction,
   fetchRegressionPastedPredictionPreflight,
 } from "./api/regression";
+import {
+  parseRegressionPastedPredictionPreview,
+  type RegressionPredictionDelimiter,
+} from "./regressionPastedPredictionPreview";
 
 interface RegressionPastedPredictionPanelProps {
   modelResult: LinearModelResult;
   onSelectDataset: () => void;
 }
 
-type Delimiter = "auto" | "tab" | "comma";
+type Delimiter = RegressionPredictionDelimiter;
 
 export function RegressionPastedPredictionPanel({
   modelResult,
   onSelectDataset,
 }: RegressionPastedPredictionPanelProps) {
   const [content, setContent] = useState("");
-  const [hasHeader, setHasHeader] = useState(true);
+  const [hasHeader, setHasHeader] = useState(false);
   const [delimiter, setDelimiter] = useState<Delimiter>("auto");
   const [columnMappings, setColumnMappings] = useState<Record<string, string>>({});
   const [preflight, setPreflight] =
@@ -33,13 +37,18 @@ export function RegressionPastedPredictionPanel({
   const [isChecking, setIsChecking] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const headerChoiceTouched = useRef(false);
   const tablePreview = useMemo(
-    () => parsePreview(content, delimiter, hasHeader),
+    () => parseRegressionPastedPredictionPreview(content, delimiter, hasHeader),
     [content, delimiter, hasHeader],
   );
   const manifest = modelResult.model_manifest;
   const canCheck =
-    manifest !== undefined && content.trim().length > 0 && !isChecking && !isPredicting;
+    manifest !== undefined &&
+    content.trim().length > 0 &&
+    tablePreview.dataRowCount > 0 &&
+    !isChecking &&
+    !isPredicting;
   const canPredict =
     preflight?.prediction_ready === true &&
     preflight.model_manifest_sha256 === manifest?.manifest_sha256 &&
@@ -140,7 +149,11 @@ export function RegressionPastedPredictionPanel({
             rows={8}
             value={content}
             onChange={(event) => {
-              setContent(event.currentTarget.value);
+              const next = event.currentTarget.value;
+              setContent(next);
+              if (!headerChoiceTouched.current) {
+                setHasHeader(inferHeaderFromModel(next, delimiter, modelResult));
+              }
               invalidate();
             }}
             placeholder={pastePlaceholder(modelResult)}
@@ -156,6 +169,7 @@ export function RegressionPastedPredictionPanel({
             type="checkbox"
             checked={hasHeader}
             onChange={(event) => {
+              headerChoiceTouched.current = true;
               setHasHeader(event.currentTarget.checked);
               invalidate();
             }}
@@ -167,7 +181,11 @@ export function RegressionPastedPredictionPanel({
           <select
             value={delimiter}
             onChange={(event) => {
-              setDelimiter(event.currentTarget.value as Delimiter);
+              const nextDelimiter = event.currentTarget.value as Delimiter;
+              setDelimiter(nextDelimiter);
+              if (!headerChoiceTouched.current) {
+                setHasHeader(inferHeaderFromModel(content, nextDelimiter, modelResult));
+              }
               invalidate();
             }}
           >
@@ -178,7 +196,14 @@ export function RegressionPastedPredictionPanel({
         </label>
       </div>
 
-      {tablePreview.columnCount > 0 ? (
+      {tablePreview.validationCode === "regression_pasted_prediction_header_without_data" ? (
+        <div className="warning-box" role="alert">
+          첫 행을 열 이름으로 사용하도록 설정되어 실제 예측 데이터 행이 없습니다. 열 이름이
+          없는 값 한 행을 붙여넣었다면 첫 행에 열 이름 포함을 해제하세요.
+        </div>
+      ) : null}
+
+      {tablePreview.columnCount > 0 && tablePreview.dataRowCount > 0 ? (
         <>
           <h5>예측변수 매핑</h5>
           <div className="table-wrap">
@@ -363,16 +388,26 @@ function PastedPredictionResults({ prediction }: { prediction: RegressionPastedP
   );
 }
 
-function parsePreview(content: string, delimiter: Delimiter, hasHeader: boolean) {
-  const lines = content.replace(/\r\n?/g, "\n").split("\n").filter((line) => line.trim() !== "");
-  if (lines.length === 0) {
-    return { headers: [] as string[], rows: [] as string[][], columnCount: 0 };
-  }
-  const separator = delimiter === "tab" ? "\t" : delimiter === "comma" ? "," : lines[0].includes("\t") ? "\t" : ",";
-  const rows = lines.slice(0, 11).map((line) => line.split(separator).map((cell) => cell.trim()));
-  const columnCount = Math.max(...rows.map((row) => row.length));
-  const headers = hasHeader ? rows[0] : Array.from({ length: columnCount }, (_, index) => `입력 ${index + 1}`);
-  return { headers, rows: (hasHeader ? rows.slice(1) : rows).slice(0, 10), columnCount };
+function inferHeaderFromModel(
+  content: string,
+  delimiter: Delimiter,
+  modelResult: LinearModelResult,
+): boolean {
+  const firstLine = content.split(/\r?\n/).find((line) => line.trim().length > 0);
+  if (firstLine === undefined) return false;
+  const separator = delimiter === "comma"
+    ? ","
+    : delimiter === "tab"
+      ? "\t"
+      : firstLine.includes("\t")
+        ? "\t"
+        : ",";
+  const cells = firstLine.split(separator).map((cell) => cell.trim());
+  if (cells.length !== modelResult.predictors.length) return false;
+  return cells.every((cell, index) => {
+    const predictor = modelResult.predictors[index];
+    return cell === predictor.column_id || cell === predictor.display_name;
+  });
 }
 
 function defaultMapping(

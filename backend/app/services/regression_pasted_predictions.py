@@ -261,6 +261,12 @@ def _build_state(
         )
     delimiter = _delimiter(body.content, body.delimiter)
     table = _parse_table(body.content, delimiter)
+    if body.has_header and len(table) == 1:
+        raise _error(
+            "regression_pasted_prediction_header_without_data",
+            "첫 행을 열 이름으로 사용하도록 설정되어 실제 예측 데이터 행이 없습니다. "
+            "열 이름이 없는 값 한 행을 붙여넣었다면 첫 행에 열 이름 포함을 해제하세요.",
+        )
     if len(table) < (2 if body.has_header else 1):
         raise _error("regression_pasted_prediction_no_rows", "예측할 행이 없습니다.")
     header = table[0] if body.has_header else [f"열 {index + 1}" for index in range(len(table[0]))]

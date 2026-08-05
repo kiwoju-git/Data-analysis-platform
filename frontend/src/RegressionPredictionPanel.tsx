@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import type {
   DatasetVersionCatalogItem,
   DatasetVersionResponse,
@@ -14,10 +12,7 @@ import {
 } from "./predictionPreflightPresentation";
 import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
 import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
-import {
-  PredictionInputKindSelector,
-  RegressionPastedPredictionPanel,
-} from "./RegressionPastedPredictionPanel";
+import { RegressionManualPredictionPanel } from "./RegressionManualPredictionPanel";
 
 export interface RegressionPredictionRowsState {
   error: string | null;
@@ -67,7 +62,6 @@ export function RegressionPredictionPanel({
   onRunPrediction,
   onRunPreflight,
 }: RegressionPredictionPanelProps) {
-  const [inputKind, setInputKind] = useState<"dataset" | "pasted">("dataset");
   const selectedTargetVersionId = predictionTargetState.selectedTargetVersionId;
   const canRunPreflight =
     expectedModelId !== null &&
@@ -93,11 +87,11 @@ export function RegressionPredictionPanel({
       : null;
   const previewRows = activePage?.rows ?? prediction?.rows.slice(0, 25) ?? [];
 
-  if (inputKind === "pasted" && modelResult !== undefined) {
+  if (modelResult !== undefined) {
     return (
-      <RegressionPastedPredictionPanel
+      <RegressionManualPredictionPanel
+        modelAvailable={modelAvailable}
         modelResult={modelResult}
-        onSelectDataset={() => setInputKind("dataset")}
       />
     );
   }
@@ -128,13 +122,6 @@ export function RegressionPredictionPanel({
           </button>
         </div>
       </div>
-      {modelResult !== undefined ? (
-        <PredictionInputKindSelector
-          value="dataset"
-          onSelectDataset={() => setInputKind("dataset")}
-          onSelectPasted={() => setInputKind("pasted")}
-        />
-      ) : null}
       {!modelManifestAvailable ? (
         <div className="notice-box">저장된 model manifest가 없는 결과입니다.</div>
       ) : null}

@@ -1,15 +1,54 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { AnalysisMethodListResponse } from "./api";
+
 import {
   createSidebarNavigationGroups,
   normalizeDatasetSidebarSection,
   normalizedDatasetSidebarLocation,
 } from "./sidebarNavigationModel";
 
+const analysisCatalog: AnalysisMethodListResponse = {
+  modules: [
+    ["exploration", "탐색적 분석", 10] as const,
+    ["hypothesis", "가설 검정", 20] as const,
+    ["categorical", "범주형 데이터 분석", 30] as const,
+    ["regression", "상관관계·회귀", 40] as const,
+    ["quality", "품질 관리", 50] as const,
+    ["doe", "실험 계획법", 60] as const,
+  ].map(([module_id, label_ko, order]) => ({
+    module_id: module_id as AnalysisMethodListResponse["modules"][number]["module_id"],
+    label_ko,
+    label_en: String(label_ko),
+    order,
+  })),
+  methods: ["기술통계", "그래프 요약", "정규성 검정", "등분산 검정"].map(
+    (label, index) => ({
+      method_id: `eda.method_${index}`,
+      method_version: "0.1.0",
+      module_id: "exploration" as const,
+      label_ko: label,
+      label_en: label,
+      availability: "available" as const,
+      execution_mode: "inline" as const,
+      requires_dataset: true,
+      order: index + 1,
+      disabled_reason: null,
+    }),
+  ),
+};
+
+const catalogOptions = {
+  activeAnalysisMethodId: null,
+  analysisCatalog,
+  onOpenAnalysisMethod: vi.fn(),
+};
+
 describe("sidebar navigation model", () => {
   it("builds seven readable groups with query-synchronized active leaves", () => {
     const onOpenManageTab = vi.fn();
     const groups = createSidebarNavigationGroups({
+      ...catalogOptions,
       activeAnalysisModuleId: "quality",
       activePage: "manage",
       canOpenAnalysis: true,
@@ -39,12 +78,13 @@ describe("sidebar navigation model", () => {
       "회귀모델",
     ]);
     expect(manage?.children.find((item) => item.active)?.id).toBe("models");
-    manage?.children.find((item) => item.id === "datasets")?.onActivate();
+    manage?.children.find((item) => item.id === "datasets")?.onActivate?.();
     expect(onOpenManageTab).toHaveBeenCalledWith("datasets");
   });
 
-  it("keeps all six analysis modules visible and blocks them without a catalog", () => {
+  it("keeps all six catalog analysis modules visible and blocks them while unavailable", () => {
     const groups = createSidebarNavigationGroups({
+      ...catalogOptions,
       activeAnalysisModuleId: "quality",
       activePage: "analysis",
       canOpenAnalysis: false,
@@ -73,6 +113,7 @@ describe("sidebar navigation model", () => {
 
   it("keeps only registration and preview dataset shortcuts", () => {
     const groups = createSidebarNavigationGroups({
+      ...catalogOptions,
       activeAnalysisModuleId: "exploration",
       activePage: "dataset",
       canOpenAnalysis: true,
@@ -120,6 +161,7 @@ describe("sidebar navigation model", () => {
 
   it("marks method detail URLs as the active Help leaf", () => {
     const groups = createSidebarNavigationGroups({
+      ...catalogOptions,
       activeAnalysisModuleId: "exploration",
       activePage: "help",
       canOpenAnalysis: true,
@@ -143,6 +185,7 @@ describe("sidebar navigation model", () => {
   it("opens the graph builder from the active Graph group", () => {
     const onOpenGraphs = vi.fn();
     const groups = createSidebarNavigationGroups({
+      ...catalogOptions,
       activeAnalysisModuleId: "exploration",
       activePage: "graphs",
       canOpenAnalysis: true,
@@ -161,7 +204,7 @@ describe("sidebar navigation model", () => {
     expect(graphs?.children[0]?.label).toBe("그래프 작성");
     expect(graphs?.children[0]?.active).toBe(true);
     expect(graphs?.children[0]?.id).toBe("graph-builder");
-    graphs?.children[0]?.onActivate();
+    graphs?.children[0]?.onActivate?.();
     expect(onOpenGraphs).toHaveBeenCalledTimes(1);
   });
 });

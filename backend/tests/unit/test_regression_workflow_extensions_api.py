@@ -110,6 +110,44 @@ def test_regression_pasted_prediction_rejects_changed_input_hash(tmp_path) -> No
     assert response.json()["error"]["code"] == "regression_pasted_prediction_input_changed"
 
 
+def test_regression_pasted_prediction_distinguishes_header_only_from_one_data_row(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version, model_id, manifest_sha = _fit_model(client)
+        mappings = [
+            {
+                "input_column_index": index,
+                "source_column_id": version["columns"][index + 1]["column_id"],
+            }
+            for index in range(2)
+        ]
+        request = {
+            "content": "2\t4",
+            "delimiter": "tab",
+            "column_mappings": mappings,
+            "expected_model_manifest_sha256": manifest_sha,
+        }
+        header_only = client.post(
+            f"/api/v1/regression-models/{model_id}/pasted-prediction-preflight",
+            json={**request, "has_header": True},
+        )
+        one_row = client.post(
+            f"/api/v1/regression-models/{model_id}/pasted-prediction-preflight",
+            json={**request, "has_header": False},
+        )
+
+    assert header_only.status_code == 422
+    assert header_only.json()["error"]["code"] == (
+        "regression_pasted_prediction_header_without_data"
+    )
+    assert one_row.status_code == 200, one_row.text
+    assert one_row.json()["row_count_total"] == 1
+    assert one_row.json()["row_count_usable"] == 1
+    assert one_row.json()["prediction_ready"] is True
+
+
 def test_regression_response_optimizer_api_persists_and_restores(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:

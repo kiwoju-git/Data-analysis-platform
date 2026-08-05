@@ -272,7 +272,7 @@ function OptimizationResult({ response, result }: { response: RegressionResponse
           </tbody>
         </table>
       </div>
-      <div className="chart-grid">
+      <div className="regression-optimizer-profile-grid">
         {optimization.profiles.map((profile) => <PredictorProfile key={profile.column_id} profile={profile} />)}
       </div>
       <div className="warning-box">
@@ -286,14 +286,16 @@ function OptimizationResult({ response, result }: { response: RegressionResponse
 function PredictorProfile({ profile }: { profile: RegressionResponseOptimizationProfile }) {
   if (profile.kind === "categorical") {
     return (
-      <div className="chart-panel">
+      <div className="chart-panel regression-optimizer-profile-card regression-optimizer-categorical-profile">
         <div className="chart-panel-title">{profile.display_name} 조건부 프로파일</div>
-        <table className="result-table">
-          <thead><tr><th>수준</th><th>예측 반응</th><th>Desirability</th></tr></thead>
-          <tbody>{profile.points.map((point) => (
-            <tr key={String(point.predictor_value)}><td>{String(point.predictor_value)}</td><td>{formatNumber(point.predicted_response)}</td><td>{formatNumber(point.desirability)}</td></tr>
-          ))}</tbody>
-        </table>
+        <div className="table-wrap regression-categorical-profile-table-wrap">
+          <table className="result-table regression-categorical-profile-table">
+            <thead><tr><th>수준</th><th>예측 반응</th><th>Desirability</th></tr></thead>
+            <tbody>{profile.points.map((point) => (
+              <tr key={String(point.predictor_value)}><td>{String(point.predictor_value)}</td><td>{formatNumber(point.predicted_response)}</td><td>{formatNumber(point.desirability)}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -312,7 +314,7 @@ function PredictorProfile({ profile }: { profile: RegressionResponseOptimization
     y: point.predicted_response,
   }));
   return (
-    <div className="chart-panel">
+    <div className="chart-panel regression-optimizer-profile-card regression-optimizer-numeric-profile">
       <div className="chart-panel-title">{profile.display_name} 조건부 프로파일</div>
       <InteractiveScatterChart
         annotations={["다른 predictor는 최적 설정에 고정"]}

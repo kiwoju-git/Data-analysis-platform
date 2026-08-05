@@ -4332,10 +4332,13 @@ export default function App() {
   );
   const navigationGroups = createSidebarNavigationGroups({
     activeAnalysisModuleId: selectedModuleId,
+    activeAnalysisMethodId: selectedMethod?.method_id ?? null,
+    analysisCatalog,
     activePage: appRoute.page,
     canOpenAnalysis: selectedMethod !== null || analysisCatalog !== null,
     query: navigationQuery,
     onOpenAnalysisModule: handleOpenAnalysisModule,
+    onOpenAnalysisMethod: handleOpenAnalysisMethod,
     onOpenDatasetSection: handleOpenDatasetPage,
     onOpenHelpSection: handleOpenHelpPage,
     onOpenManageTab: handleOpenManagePage,

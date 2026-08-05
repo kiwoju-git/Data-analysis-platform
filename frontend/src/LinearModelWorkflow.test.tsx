@@ -2,7 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { LinearModelFitResults } from "./LinearModelFitResults";
+import { RegressionManualPredictionPanel } from "./RegressionManualPredictionPanel";
 import { RegressionPastedPredictionPanel } from "./RegressionPastedPredictionPanel";
+import { parseRegressionPastedPredictionPreview } from "./regressionPastedPredictionPreview";
 import type { LinearModelResult } from "./api";
 
 function resultFixture(): LinearModelResult {
@@ -150,5 +152,50 @@ describe("complete linear model workflow presentation", () => {
     expect(html).toContain("첫 행에 열 이름 포함");
     expect(html).toContain("구분자");
     expect(html).toContain("textarea");
+  });
+
+  it("distinguishes a header-only paste from one usable data row", () => {
+    const headerOnly = parseRegressionPastedPredictionPreview("88", "auto", true);
+    const oneRow = parseRegressionPastedPredictionPreview("88", "auto", false);
+
+    expect(headerOnly).toMatchObject({
+      nonEmptyLineCount: 1,
+      headerRowCount: 1,
+      dataRowCount: 0,
+      inferredHeaderState: "header_only",
+      validationCode: "regression_pasted_prediction_header_without_data",
+    });
+    expect(oneRow).toMatchObject({
+      dataRowCount: 1,
+      inferredHeaderState: "data",
+      validationCode: null,
+    });
+  });
+
+  it("renders contextual prediction as one editable row grid without a dataset selector", () => {
+    const html = renderToStaticMarkup(
+      <RegressionManualPredictionPanel modelResult={resultFixture()} />,
+    );
+
+    expect(html).toContain("예측 조건 입력");
+    expect(html).toContain("regression-manual-grid");
+    expect(html).toContain("행 추가");
+    expect(html).toContain("붙여넣기 가져오기");
+    expect(html).toContain("전체 사전점검");
+    expect(html).toContain("전체 예측 실행");
+    expect(html).not.toContain("예측 대상 데이터셋 버전");
+  });
+
+  it("blocks manual prediction when the stored model is unavailable", () => {
+    const html = renderToStaticMarkup(
+      <RegressionManualPredictionPanel
+        modelAvailable={false}
+        modelResult={resultFixture()}
+      />,
+    );
+
+    expect(html).toContain("저장 모델을 사용할 수 없어 새 예측을 실행할 수 없습니다.");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>전체 사전점검<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>전체 예측 실행<\/button>/);
   });
 });

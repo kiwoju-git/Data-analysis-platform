@@ -2820,28 +2820,14 @@ describe("App", () => {
     expect(html).not.toContain("Model ID</span>");
     expect(html).toContain("저장 모델 관리");
     expect(html).toContain("삭제 영향 확인");
-    expect(html).toContain("예측 사전점검");
-    expect(html).toContain("예측 대상 데이터셋 버전");
-    expect(html).toContain("prediction-target.csv");
-    expect(html).toContain("사전점검 실행");
-    expect(html).toContain("예측 실행");
-    expect(html).toContain("예측 준비 가능");
-    expect(html).toContain("예측 결과 요약");
-    expect(html).toContain("예측 구간 차트");
-    expect(html).toContain("Prediction ID");
-    expect(html).toContain("예측 평균");
-    expect(html).toContain("9.975");
-    expect(html).toContain("예측 행 페이지 이동");
-    expect(html).toContain("전체 예측 CSV 생성");
-    expect(html).toContain("전체 예측 CSV 다운로드");
-    expect(html).toContain("1-1 / 7");
-    expect(html).toContain("다음");
-    expect(html).toContain("Schema hash");
-    expect(html).toContain("Source model");
-    expect(html).toContain("fresh");
-    expect(html).toContain("Source schema");
-    expect(html).toContain("적합 시점과 일치");
-    expect(html).toContain("컬럼 ID");
+    expect(html).toContain("예측 조건 입력");
+    expect(html).toContain("행 추가");
+    expect(html).toContain("붙여넣기 가져오기");
+    expect(html).toContain("전체 사전점검");
+    expect(html).toContain("전체 예측 실행");
+    expect(html).toContain("입력한 값은 데이터셋 목록에 등록되지 않습니다");
+    expect(html).not.toContain("예측 대상 데이터셋 버전");
+    expect(html).not.toContain("prediction-target.csv");
     const orderedResultSectionIds = [
       "linear-model-equation-title",
       "linear-model-summary-title",
@@ -2852,12 +2838,12 @@ describe("App", () => {
       "linear-model-unusual-title",
       "linear-model-retention-title",
       "regression-response-optimizer-title",
-      "regression-prediction-title",
+      "regression-manual-prediction-title",
     ];
     expect(orderedResultSectionIds.map((id) => html.indexOf(id))).toEqual(
       [...orderedResultSectionIds.map((id) => html.indexOf(id))].sort((left, right) => left - right),
     );
-    expect(html).toContain("학습범위 위");
+    expect(html).toContain("학습 범위 밖 예측");
   });
 
   it("renders the P/NP/C/U attribute control chart contract and result", () => {
