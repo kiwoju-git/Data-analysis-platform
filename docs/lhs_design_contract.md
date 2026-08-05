@@ -1,63 +1,74 @@
 # Latin Hypercube Design Contract
 
-Last updated: 2026-07-29
+Last updated: 2026-08-05
 
 ## Method And Purpose
 
-`doe.latin_hypercube` version `0.1.0` is a dedicated, dataset-independent
-space-filling design method. It uses the installed SciPy 1.15.3
-`scipy.stats.qmc.LatinHypercube`, `qmc.scale`, and `qmc.discrepancy`; it adds no
-production dependency.
+`doe.latin_hypercube` version `0.2.0` is a dedicated, dataset-independent
+space-filling design method. Continuous-only designs retain the installed
+SciPy 1.15.3 `LatinHypercube(random-cd)` numerical path. Mixed designs use the
+versioned `mixed_lhs_balanced_discrete_v1` policy and design schema `2`.
 
-LHS stratifies each continuous factor range to explore a rectangular design
-space. It is not a two-level factorial contrast design and does not
-automatically estimate factorial main effects, interactions, an optimum, or an
-observed response.
+LHS explores a declared factor region. It does not automatically estimate
+factorial effects, an optimum, or an observed response.
 
-## P0 Input Policy
+## Factor Domains
 
-- one to six continuous factors;
-- finite `low < high` bounds;
-- two to 200 runs;
-- explicit design seed;
-- `scramble=true`, `strength=1`;
-- optimization `random_cd` (default) or `none`;
-- optional deterministic run-order randomization with its own seed.
+Each of one to six factors stores `low`, `high`, optional `unit`,
+`domain_kind`, `step`, and optional `display_decimals`.
 
-Categorical, integer, mixture, conditional, repeated-center, and arbitrary
-linear-constraint designs are not supported in P0. Rejecting infeasible points
-after LHS generation would not preserve the one-point-per-marginal-stratum
-contract, so constrained space filling requires a future versioned method.
+- `continuous`: any finite value within `low < high`; `step` must be null.
+- `discrete_numeric`: executable values are exactly `low + k * step`;
+  `step > 0`, `high` must lie on the Decimal-validated grid, and the level
+  count is bounded to 10,001.
+- `display_decimals` changes screen and actual-coordinate CSV formatting only;
+  it never changes stored coordinates, normalized values, or calculations.
 
-The UI default `min(64, max(8, 3 * factor_count))` is a budget-balancing product
-heuristic, not a statistical guarantee. `d+1` is only a bare GP fitting
-minimum; a roughly `10d` computer-experiment rule is shown only as context and
-is not imposed on wet-lab work.
+Nonuniform explicit numeric levels, categorical factors, mixture factors, and
+arbitrary constrained LHS remain outside this contract.
 
-The corporate form uses a four-column core settings grid for name, run count,
-design seed, and run-order seed. Optimization and a full labeled run-order
-randomization card form the secondary grid. Disabling randomization disables
-the run-order seed and states that standard and run order are identical.
+## Generation
 
-## Stored Result And Validation
+Inputs are two to 200 runs, explicit design and run-order seeds,
+`scramble=true`, strength 1, and `random_cd` or `none` optimization.
 
-The design stores actual and normalized coordinates, standard order, run
-order, factor order/bounds/units, seeds, policy, optimization, package versions,
-and a canonical design SHA-256. Restore validates stored points rather than
-depending solely on regenerating them with a future SciPy release.
+Continuous dimensions use the existing SciPy strata. A discrete dimension is
+assigned from its LHS rank to legal levels so per-level counts differ by at
+most one. The generator validates executable coordinates and complete-row
+duplicates and deterministically regenerates up to a bounded attempt limit.
+It fails with `lhs_executable_unique_design_impossible` rather than silently
+returning fewer or duplicate runs. This mixed policy is not described as a
+classical continuous LHS in every dimension.
 
-Quality metadata includes:
+## Stored Result And Quality
 
-- centered discrepancy;
-- minimum normalized pairwise Euclidean distance;
-- maximum absolute normalized factor correlation;
-- per-factor stratum occupancy and `strata_valid`;
-- NumPy and SciPy versions.
+The immutable result stores actual and normalized coordinates, standard/run
+order, factor order/domain/unit, seeds, policy, package versions, and canonical
+SHA-256. Legacy continuous schema-1 results and method `0.1.0` restore without
+rewriting bytes or checksums.
 
-These are diagnostics, not proof of an optimal design. The response-revision
-API reuses the DOE immutable revision contract. CSV export includes standard
-and run order, actual and normalized factor columns, and an optional current
-response. Existing formula-injection escaping applies.
+Quality includes centered discrepancy, minimum normalized pairwise distance,
+maximum absolute correlation, per-factor strata, `continuous_strata_valid`,
+discrete level counts, duplicate count, and executable point count. These are
+diagnostics, not proof of an optimal design.
+
+CSV export contains actual values formatted with `display_decimals`, full
+normalized coordinates, order columns, and saved responses. Formatting does
+not mutate the stored design.
+
+## Interactive Views
+
+The result UI presents quality, then design visualization, the experiment
+table, and response entry. The visualization uses only stored result data:
+
+- an accessible parallel-coordinate SVG containing every run, with normalized
+  and actual-unit modes, roving keyboard selection, and discrete-level labels;
+- a selectable two-factor projection using the existing interactive scatter
+  foundation; and
+- shared selected-run state across both plots and the run table.
+
+The pairwise projection is not a complete assessment of high-dimensional
+space filling. No chart library or network asset is required.
 
 ## Routes
 
@@ -68,9 +79,9 @@ response. Existing formula-injection escaping applies.
 
 ## References
 
+- SciPy 1.15.3 `scipy.stats.qmc.LatinHypercube` documentation.
 - McKay, Beckman, and Conover (1979), *A Comparison of Three Methods for
   Selecting Values of Input Variables in the Analysis of Output from a
   Computer Code*.
-- SciPy 1.15.3 documentation for `scipy.stats.qmc.LatinHypercube`.
-- Loeppky, Sacks, and Welch (2009), *Choosing the Sample Size of a Computer
-  Experiment*.
+- The executable-domain decision and official JMP/Minitab references are in
+  `docs/doe_factor_domain_resolution_audit.md`.

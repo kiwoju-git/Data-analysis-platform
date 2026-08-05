@@ -54,7 +54,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91",
       "method_id": "doe.bayesian_optimization",
-      "method_version": "0.4.0",
+      "method_version": "0.5.0",
       "relative_tolerance": 1e-08,
       "result": {
         "actual_coordinates": {
@@ -84,7 +84,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73",
       "method_id": "doe.factorial_design",
-      "method_version": "0.3.0",
+      "method_version": "0.4.0",
       "relative_tolerance": 1e-08,
       "result": {
         "anova_residual": {
@@ -130,7 +130,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2",
       "method_id": "doe.response_surface",
-      "method_version": "0.2.0",
+      "method_version": "0.3.0",
       "relative_tolerance": 1e-08,
       "result": {
         "adjusted_r_squared": 0.9978448211156861,
@@ -662,7 +662,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2",
       "method_id": "doe.response_optimizer",
-      "method_version": "0.3.0",
+      "method_version": "0.4.0",
       "relative_tolerance": 1e-08,
       "result": {
         "actual_coordinates": {

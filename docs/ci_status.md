@@ -1,8 +1,32 @@
 # CI Status
 
-Last updated: 2026-08-04
+Last updated: 2026-08-05
 
 ## Local Validation
+
+- The manual-input/Bayesian-bulk/executable-DOE/LHS-visualization change is
+  based on main `d574454e04f258a793c9e726faaaa0d9456b7443`. It advances API
+  contract 9 to 10; Factorial/LHS/RSM/Response Optimizer/Bayesian methods to
+  0.4.0/0.2.0/0.3.0/0.4.0/0.5.0; LHS mixed design schema to 2; and new
+  Bayesian Study schema to 4. Metadata schema remains 18 and no migration or
+  legacy artifact rewrite is used.
+- Final `scripts/test.ps1` passed backend pytest 933/933 and frontend Vitest
+  259/259 across 30 files. Final `scripts/check.ps1` completed in 1133.1
+  seconds with tutorial verification 18, Ruff lint/format over 192 Python
+  files, mypy over 119 source modules, backend pytest 933/933, frontend lint,
+  typecheck, Vitest 259/259, and the production build all passing. The existing
+  Vite main-chunk size warning remains informational.
+- The isolated Chromium critical path passed in 116.1 seconds with diagnostics
+  under `.tmp/e2e-diagnostics-input-doe-lhs`. It covers the header-only paste
+  warning and manual prediction grid, bounded mixed regression profiles,
+  catalog-driven sidebar methods, Bayesian definition/CSV/atomic observation
+  batch and paste workflows, responsive acquisition controls, executable DOE
+  steps, and synchronized LHS parallel/scatter/run-table selection. Requested
+  screenshots are present under that diagnostics root, including
+  `regression-manual-input-grid.png`, `regression-optimizer-profile-layout.png`,
+  `sidebar-analysis-method-hierarchy.png`, `bayesian-bulk-observations.png`,
+  `bayesian-goal-layout-mobile.png`, `doe-discrete-step-factor.png`,
+  `lhs-parallel-coordinates.png`, and `lhs-two-factor-scatter.png`.
 
 - The complete regression-modeling workflow is based on main
   `33d2a7d2f49b3732c4dc6e00cde96109bafff243`. It advances the API contract

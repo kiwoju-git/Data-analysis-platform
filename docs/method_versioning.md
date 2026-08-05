@@ -2,10 +2,10 @@
 
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
-`doe.factorial_design` and `doe.response_optimizer` are `0.3.0`, and
-`doe.response_surface` is `0.2.0`. `doe.bayesian_optimization` is `0.4.0`,
+`doe.factorial_design` and `doe.response_optimizer` are `0.4.0`, and
+`doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.5.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
-`quality.run_chart` is `0.2.0`; `doe.latin_hypercube` enters at `0.1.0` and
+`quality.run_chart` is `0.2.0`; `doe.latin_hypercube` is `0.2.0` and
 the other stable IDs remain on `0.1.0`.
 
 Graph Builder uses `visualization_schema_version=1` and does not create an
@@ -438,6 +438,31 @@ pasted normalized-input/row snapshots. No relational rewrite is needed.
 - Add or update reference fixtures and explicit tolerance tests.
 - Confirm catalog and handler version alignment tests still pass.
 - Record the version rationale in `docs/progress_gate_b.md` or the PR summary.
+
+## Executable DOE Domains And Bulk Study Workflow Decision
+
+API contract `10` adds a shared factor-domain meaning: legacy/missing fields
+read as continuous, while `discrete_numeric` stores an executable `step` and
+optional display precision. Because this changes generated design coordinates
+and optimizer/recommendation candidate sets when explicitly selected, new
+writes use Factorial `0.4.0`, LHS `0.2.0`, RSM `0.3.0`, Response Optimizer
+`0.4.0`, and Bayesian Optimization `0.5.0`.
+
+LHS mixed designs write design schema `2`; continuous legacy schema `1`
+restores unchanged. New Bayesian studies write schema `4`; schema `1` through
+`3` and method `0.1.0` through `0.4.0` remain accepted readers. Factorial
+center points and RSM axial points that do not lie on a discrete grid are
+rejected, never rounded. Bayesian initial/recommended candidates and optimizer
+settings are generated on the grid before constraint and duplicate checks.
+
+Bayesian atomic observation batches, their request-ID replay behavior, and
+initial-design CSV are lifecycle/API additions carried by method `0.5.0` and
+study schema `4`; the history schema remains `1`. The regression contextual
+manual grid is an adapter over the unchanged hidden
+`regression.predict_pasted` `0.1.0` contract, so no prediction method bump is
+needed. Metadata schema remains `18` because factor definitions and prediction
+inputs already live in versioned JSON/owned artifacts; no SQLite migration or
+legacy checksum rewrite occurs.
 
 ## Analysis-Run Retention Decision
 

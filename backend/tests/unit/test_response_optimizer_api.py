@@ -248,6 +248,7 @@ def test_response_optimizer_restores_legacy_method_id_without_rewriting_record(
             ).fetchone()[0]
             legacy_result = json.loads(result_json)
             legacy_result["method_id"] = "regression.response_optimizer"
+            legacy_result["method_version"] = "0.3.0"
             legacy_result_json = json.dumps(
                 legacy_result,
                 ensure_ascii=False,
@@ -257,10 +258,11 @@ def test_response_optimizer_restores_legacy_method_id_without_rewriting_record(
             legacy_result_sha256 = hashlib.sha256(legacy_result_json.encode("utf-8")).hexdigest()
             connection.execute(
                 "UPDATE experiment_design_analyses "
-                "SET method_id = ?, result_json = ?, result_sha256 = ? "
+                "SET method_id = ?, method_version = ?, result_json = ?, result_sha256 = ? "
                 "WHERE analysis_id = ?",
                 (
                     "regression.response_optimizer",
+                    "0.3.0",
                     legacy_result_json,
                     legacy_result_sha256,
                     created["optimization_id"],

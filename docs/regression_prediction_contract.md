@@ -177,6 +177,12 @@ model freshness, and the model manifest. The response includes a normalized
 input SHA-256. Execution reparses the same content/config and rejects a changed
 hash with `regression_pasted_prediction_input_changed`.
 
+If `has_header=true` leaves no data row, the server returns the distinct
+`regression_pasted_prediction_header_without_data` error. The preview reports
+non-empty, header, and data-row counts, hides normal-looking mapping state, and
+disables preflight/execution. A one-line value input starts as headerless unless
+its cells exactly match the saved model predictor IDs or display names.
+
 Successful execution stores:
 
 - a generic `regression.predict_pasted` analysis result;
@@ -310,6 +316,20 @@ the relevant result controls.
 This entrypoint/catalog-only change keeps method `0.2.0`, result schema `2`,
 config schema `3`, and rows schema `2`; calculation, predictor coding,
 intervals, and persisted result meaning are unchanged.
+
+Inside a completed linear-model result, the contextual default is now an
+editable predictor-row grid rather than a target-dataset selector. Numeric
+predictors use validated text inputs, categorical predictors expose only saved
+training levels, one invalid cell blocks the entire run, and all rows use one
+preflight and one prediction execution. The paste importer normalizes TSV/CSV
+or a one-value-per-line row into that same grid. It then serializes the
+canonical rows through the existing `regression.predict_pasted` authoritative
+preflight, exact input SHA, artifact, and calculation path; no parallel
+frontend prediction engine or new dataset version is created.
+
+The dedicated legacy Predict entrypoint and all stored `regression.predict`
+and `regression.predict_pasted` readers remain available. This contextual UI
+change therefore adds no prediction method or result-schema version.
 
 The model catalog remains paged at 20 items and verifies each summary against
 its app-owned manifest. This favors correctness but can be costly with hundreds

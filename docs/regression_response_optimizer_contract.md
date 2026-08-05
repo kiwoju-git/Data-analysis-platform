@@ -48,6 +48,12 @@ interactions, this is explicitly a conditional slice. Categorical profiles
 report level-wise predictions and desirability rather than pretending levels
 form a continuous line.
 
+The UI renders profiles in a dedicated auto-fit grid with `min-width: 0` on
+grid items and cards. Every categorical profile table is contained by its own
+`table-wrap`, uses fixed table layout, wraps long level labels, and keeps
+numeric cells aligned. Overflow is local to that wrapper and cannot overlap an
+adjacent profile card or escape the optimizer result.
+
 ## API And Persistence
 
 ```text

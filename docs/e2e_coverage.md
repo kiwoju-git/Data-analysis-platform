@@ -570,6 +570,22 @@ under `logs`, `screenshots`, and `html` as the `e2e-logs` artifact. It does not
 upload raw workspace files or generated dataset artifacts. The current smoke
 uses synthetic data only; do not point this smoke at private user data.
 
+## Manual Input, Bayesian Bulk, And Executable DOE Coverage
+
+The API-contract-10 critical path covers the one-line regression header-only
+warning, canonical manual prediction rows, mixed numeric/categorical optimizer
+profiles, catalog-driven analysis method disclosure, full Bayesian Study
+definition and initial-design CSV, one-transaction bulk observations and paste
+mapping, responsive exploration controls, discrete step validation, and LHS
+parallel/two-factor views. Diagnostics are written under
+`.tmp/e2e-diagnostics-input-doe-lhs`; browser screenshots and computed
+bounding-box checks remain separate from the generated workspace.
+
+The numerical checks independently verify mixed LHS balance/uniqueness,
+Factorial/RSM off-grid rejection, Bayesian initial/recommended executable
+coordinates, optimizer step adherence, bulk rollback/idempotency, and legacy
+schema readers. UI screenshots never substitute for these calculations.
+
 ## Maintenance Checklist
 
 When extending `tests/e2e/critical_path.py`:

@@ -103,13 +103,15 @@
 
 .sidebar-navigation,
 .sidebar-groups,
-.sidebar-submenu {
+.sidebar-submenu,
+.sidebar-method-list {
   margin: 0;
   padding: 0;
 }
 
 .sidebar-groups,
-.sidebar-submenu {
+.sidebar-submenu,
+.sidebar-method-list {
   list-style: none;
 }
 
@@ -158,7 +160,8 @@
 }
 
 .sidebar-group-control,
-.sidebar-submenu-button {
+.sidebar-submenu-button,
+.sidebar-method-button {
   width: 100%;
   border: 0;
   background: transparent;
@@ -218,6 +221,69 @@
   padding-left: 14px;
 }
 
+.sidebar-module-item {
+  display: grid;
+  gap: 5px;
+}
+
+.sidebar-module-item > .sidebar-submenu-button {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.sidebar-item-chevron {
+  fill: none;
+  flex: 0 0 auto;
+  height: 14px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 14px;
+}
+
+.sidebar-submenu-button[aria-expanded="false"] .sidebar-item-chevron {
+  transform: rotate(-90deg);
+}
+
+.sidebar-method-list {
+  display: grid;
+  gap: 3px;
+  padding-left: 15px;
+}
+
+.sidebar-method-list[hidden] {
+  display: none;
+}
+
+.sidebar-method-button {
+  box-sizing: border-box;
+  min-height: 28px;
+  border-left: 2px solid transparent;
+  color: #4a5565;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  padding: 4px 7px 4px 11px;
+}
+
+.sidebar-group-active .sidebar-method-button {
+  color: var(--text-on-blue-muted);
+}
+
+.sidebar-method-button.is-active {
+  border-left-color: currentColor;
+  background: rgb(255 255 255 / 12%);
+  color: var(--text-on-blue);
+  font-weight: 700;
+}
+
+.sidebar-method-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .sidebar-submenu-button::before {
   position: absolute;
   top: 0.67em;
@@ -251,6 +317,7 @@
 
 .sidebar-group-control:focus-visible,
 .sidebar-submenu-button:focus-visible,
+.sidebar-method-button:focus-visible,
 .mobile-menu-toggle:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
@@ -3426,6 +3493,33 @@ table {
 .bayesian-recommendation-settings {
   display: grid;
   gap: 16px;
+  min-width: 0;
+}
+
+.bayesian-observation-paste {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.bayesian-observation-paste textarea {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.bayesian-initial-design-heading {
+  margin-top: 16px;
+}
+
+.bayesian-factor-definition-table {
+  min-width: 760px;
+}
+
+.bayesian-exploration-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .segmented-fieldset,
@@ -3488,13 +3582,15 @@ table {
   outline-offset: 2px;
 }
 
-.bayesian-exploration-grid {
+.bayesian-exploration-grid,
+.bayesian-exploration-options {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
-.bayesian-exploration-grid > label {
+.bayesian-exploration-grid > label,
+.bayesian-exploration-options > label {
   display: grid;
   align-content: start;
   gap: 7px;
@@ -3503,20 +3599,25 @@ table {
   background: var(--surface-panel);
   padding: 12px;
   cursor: pointer;
+  overflow-wrap: break-word;
+  word-break: keep-all;
 }
 
-.bayesian-exploration-grid > label.is-selected {
+.bayesian-exploration-grid > label.is-selected,
+.bayesian-exploration-options > label.is-selected {
   border-color: var(--brand-nav-blue);
   background: var(--brand-blue-soft);
 }
 
-.bayesian-exploration-grid > label > span {
+.bayesian-exploration-grid > label > span,
+.bayesian-exploration-options > label > span {
   display: flex;
   align-items: center;
   gap: 7px;
 }
 
-.bayesian-exploration-grid small {
+.bayesian-exploration-grid small,
+.bayesian-exploration-options small {
   color: var(--text-secondary);
   line-height: 1.45;
 }
@@ -3556,7 +3657,8 @@ table {
 }
 
 @media (max-width: 900px) {
-  .bayesian-exploration-grid {
+  .bayesian-exploration-grid,
+  .bayesian-exploration-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3577,7 +3679,8 @@ table {
     width: 100%;
   }
 
-  .bayesian-exploration-grid {
+  .bayesian-exploration-grid,
+  .bayesian-exploration-options {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -3777,6 +3880,56 @@ td {
   max-height: 280px;
 }
 
+.regression-manual-prediction {
+  min-width: 0;
+}
+
+.regression-manual-grid-wrap {
+  max-width: 100%;
+}
+
+.regression-manual-grid {
+  min-width: 880px;
+}
+
+.regression-manual-grid td {
+  min-width: 150px;
+  vertical-align: top;
+}
+
+.regression-manual-grid td:last-child,
+.regression-manual-grid td:nth-last-child(2) {
+  min-width: 92px;
+}
+
+.regression-manual-grid input,
+.regression-manual-grid select {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.regression-manual-grid .cell-subtle,
+.regression-manual-grid .field-error {
+  display: block;
+  margin-top: 4px;
+}
+
+.regression-manual-row-actions {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.regression-paste-import {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.regression-paste-import textarea {
+  box-sizing: border-box;
+  width: 100%;
+}
+
 .prediction-input-kind {
   margin-block: 10px 16px;
 }
@@ -3807,6 +3960,110 @@ td {
   display: grid;
   gap: 14px;
   margin-top: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.regression-optimizer-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 14px;
+  align-items: start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.regression-optimizer-profile-card {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.regression-categorical-profile-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.regression-categorical-profile-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.regression-categorical-profile-table th:first-child,
+.regression-categorical-profile-table td:first-child {
+  overflow-wrap: anywhere;
+}
+
+.doe-factor-domain-column {
+  width: 158px;
+}
+
+.lhs-parallel-chart-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.lhs-parallel-chart {
+  min-width: 640px;
+  outline-offset: 3px;
+}
+
+.lhs-parallel-svg {
+  min-width: 640px;
+}
+
+.lhs-parallel-run {
+  fill: none;
+  opacity: 0.16;
+  pointer-events: stroke;
+  stroke: #3478b9;
+  stroke-width: 1.25;
+}
+
+.lhs-parallel-run:hover,
+.lhs-parallel-run-selected {
+  opacity: 1;
+  stroke: #034da2;
+  stroke-width: 3;
+}
+
+.lhs-scatter-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.lhs-scatter-controls label {
+  display: grid;
+  gap: 5px;
+}
+
+.lhs-run-select-button {
+  border: 0;
+  background: transparent;
+  color: #034da2;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 4px 6px;
+}
+
+.lhs-run-selected td {
+  background: #eef5ff;
+}
+
+@media (max-width: 640px) {
+  .lhs-scatter-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+.regression-categorical-profile-table th:not(:first-child),
+.regression-categorical-profile-table td:not(:first-child) {
+  white-space: nowrap;
 }
 
 .linear-model-diagnostic-primary {

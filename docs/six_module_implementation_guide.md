@@ -205,6 +205,10 @@ Gate B0 storage/run foundation 후에도 다음 기능은 아직 공통 플랫�
 
 - 기존 왼쪽 사이드바는 **전역 자원 탐색**으로 유지한다.
 - 6개 모듈은 main 영역 상단의 **라우트 기반 navigation**으로 둔다.
+- 좌측 분석 메뉴는 backend method catalog의 module/order/availability를
+  그대로 사용해 `분석 > 모듈 > method` disclosure로 구성한다. inactive
+  method 목록은 기본 접힘이고 active route의 모듈만 자동으로 펼친다.
+  hidden dedicated method는 별도 문자열 목록으로 복사하거나 노출하지 않는다.
 - 서로 다른 페이지로 이동하므로 ARIA `tablist`를 무조건 사용하지 말고 `<nav>`와 링크, `aria-current="page"`를 사용한다.
 - 작은 화면에서는 가로 스크롤 또는 “분석 모듈” 메뉴로 축약한다.
 - 선택한 프로젝트, 데이터셋 버전, 활성 필터와 행 수는 어떤 탭에서도 상단 Context Bar에 계속 표시한다.

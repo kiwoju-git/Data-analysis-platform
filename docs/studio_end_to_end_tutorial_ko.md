@@ -444,7 +444,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
   max interaction order 2 > 분석 실행.
 - **실행 전 확인:** UI run order와 파일의 factor coordinates/replicate를 함께 확인한다.
 <!-- TUTORIAL_RESULT:doe.factorial_design:start -->
-- **검증 source:** `doe.factorial_design` v0.3.0 · input SHA-256 `ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73`
+- **검증 source:** `doe.factorial_design` v0.4.0 · input SHA-256 `ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73`
 - **예상 실제 결과 (표시 반올림):**
   - N=16, residual df=9, selected interaction `factor_1:factor_2`
   - effect order: `factor_1` 6.8707, `factor_2` 3.9555, `factor_1:factor_2` 3.3892, `factor_3` 0.8814
@@ -467,7 +467,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 - **클릭 순서:** CCD 생성 > coordinates 매칭 > 13 responses 저장 > quadratic model 실행.
 - **실행 전 확인:** center 반복과 pure error, factor region, response lock 안내를 확인한다.
 <!-- TUTORIAL_RESULT:doe.response_surface:start -->
-- **검증 source:** `doe.response_surface` v0.2.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
+- **검증 source:** `doe.response_surface` v0.3.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
 - **예상 실제 결과 (표시 반올림):**
   - R-squared=0.99874, adjusted=0.99784, warnings=4
   - stationary `maximum`: temperature=76.4437, pressure=9.6718, predicted=90.9986, inside region=true
@@ -491,7 +491,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 - **클릭 순서:** source 선택 > eligibility 확인/필요 warning 승인 > goal/bounds > 실행.
 - **실행 전 확인:** blocker 없음, advisory는 code별 명시 승인, constraints와 bounds를 검토한다.
 <!-- TUTORIAL_RESULT:doe.response_optimizer:start -->
-- **검증 source:** `doe.response_optimizer` v0.3.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
+- **검증 source:** `doe.response_optimizer` v0.4.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
 - **예상 실제 결과 (표시 반올림):**
   - goal `maximize`, temperature=76.5545, pressure=9.6828, predicted=90.9982
   - composite desirability=1.0000, termination `search_completed`, global optimum guaranteed=false
@@ -518,7 +518,7 @@ URL의 `design_id`, `analysis_id`, `optimization_id`는 reload 후 checksum-vali
 - **클릭 순서:** study 생성 > trial number/coordinates 대조 > 각 objective 저장 확인 > 추천 요청.
 - **실행 전 확인:** objective value와 coordinates, 저장 후 수정 불가, pending trial 없음 확인.
 <!-- TUTORIAL_RESULT:doe.bayesian_optimization:start -->
-- **검증 source:** `doe.bayesian_optimization` v0.4.0 · input SHA-256 `a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91`
+- **검증 source:** `doe.bayesian_optimization` v0.5.0 · input SHA-256 `a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91`
 - **예상 실제 결과 (표시 반올림):**
   - completed observations=5, recommended temperature=61.2818, pressure=11.4636
   - predicted mean=83.9666, posterior SD=4.2736, EI=0.2677, trial `pending`

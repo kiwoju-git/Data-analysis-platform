@@ -5,7 +5,8 @@ Last updated: 2026-07-30
 ## Current Status
 
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
-`0.4.0`. New studies use study schema `3`; readers retain study schemas `1` and
+`0.5.0`. New studies use study schema `4`; readers retain study schemas `1`,
+`2`, and `3` and their recorded method versions without rewriting checksums.
 `2`, methods `0.1.0` through `0.3.0`, and legacy single recommendations without
 rewriting them. The application stores an immutable bounded study and
 observation history, fits a Matérn 5/2 Gaussian Process to explicit completed
@@ -80,7 +81,8 @@ and reset their loading flags when selection changes.
 
 ## Lifecycle And Inputs
 
-1. Create one immutable study with one to six continuous factors, finite actual
+1. Create one immutable study with one to six continuous or fixed-step numeric
+   factors, finite actual
    low/high bounds, one numeric maximize, minimize, or match-target objective,
    and up to 16 known
    actual-unit linear inequalities.
@@ -326,6 +328,30 @@ zero files and bytes. Dataset/analysis/DOE/export cleanup is a later file-aware
 slice defined in `docs/workspace_retention_contract.md`.
 
 ## Version Decision
+
+Method `0.5.0` and study schema `4` add executable factor domains, mixed LHS
+initial design, grid-aware acquisition candidates, atomic multi-observation
+completion, and initial-design CSV. `discrete_numeric` candidates are selected
+from legal levels before constraints and duplicate checks; continuous-search
+results are never merely rounded afterward. The Study summary exposes factor
+bounds, units, step/level count, objective, initial policy/quality, and initial
+trials without an additional data request.
+
+`PUT /api/v1/bayesian-studies/{study_id}/observations/batch` validates the
+entire trial/value set before one `BEGIN IMMEDIATE` transaction. It changes all
+selected pending trials, writes exactly one history revision, and advances one
+head or rolls back everything. The request UUID is a durable revision ID:
+identical replay returns the recorded batch even after later history advances,
+while a different payload conflicts. The single-observation endpoint and
+individual immutable abandon transition remain supported.
+
+`GET /api/v1/bayesian-studies/{study_id}/initial-design.csv` exports only
+`origin=initial_design` trials in definition factor order as UTF-8-SIG. Actual
+coordinates honor display precision; normalized coordinates are not mixed into
+the basic export. Formula-like text headers are escaped.
+
+No relational field is required: study definitions and histories already use
+versioned JSON plus existing tables. SQLite remains schema 18.
 
 The catalog method moves from planning `0.1.0` to dedicated executable `0.2.0`
 because it now persists numerical GP/EI recommendations. There was no prior

@@ -874,13 +874,26 @@ def open_primary_navigation(page: Page, label: str) -> None:
     control = group.locator(".sidebar-group-control")
     if control.get_attribute("aria-expanded") != "true":
         control.click()
+    active_method = group.locator('.sidebar-method-button[aria-current="page"]')
+    if active_method.count() > 0:
+        active_method.first.click()
+        return
     active_leaf = group.locator('.sidebar-submenu-button[aria-current="page"]')
-    target = (
-        active_leaf.first
-        if active_leaf.count() > 0
-        else group.locator(".sidebar-submenu-button:not(:disabled)").first
+    if active_leaf.count() > 0:
+        active_leaf.first.click()
+        return
+    direct_leaf = group.locator(
+        ".sidebar-submenu-button:not([aria-controls]):not(:disabled)"
     )
-    target.click()
+    if direct_leaf.count() > 0:
+        direct_leaf.first.click()
+        return
+    module = group.locator(
+        ".sidebar-submenu-button[aria-controls]:not(:disabled)"
+    ).first
+    if module.get_attribute("aria-expanded") != "true":
+        module.click()
+    group.locator(".sidebar-method-button:not(:disabled)").first.click()
 
 
 def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None:
@@ -889,6 +902,38 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     )
     control = group.locator(".sidebar-group-control")
     expect(control).to_have_attribute("aria-expanded", "true")
+    modules = group.locator(".sidebar-module-item")
+    expect(modules).to_have_count(6)
+    exploration = group.locator(".sidebar-module-item").filter(
+        has=page.locator(".sidebar-submenu-button").filter(
+            has_text=re.compile("^탐색적 분석$")
+        )
+    )
+    exploration_control = exploration.locator(".sidebar-submenu-button")
+    expect(exploration_control).to_have_attribute("aria-expanded", "false")
+    expect(exploration.locator(".sidebar-method-list")).to_be_hidden()
+    exploration_control.click()
+    expect(exploration_control).to_have_attribute("aria-expanded", "true")
+    methods = exploration.locator(".sidebar-method-button")
+    expect(methods).to_have_count(4)
+    expect(methods).to_contain_text(
+        ["기술통계", "그래프 요약", "정규성 검정", "등분산 검정"]
+    )
+    methods.filter(has_text=re.compile("^정규성 검정$")).click()
+    expect(page).to_have_url(re.compile(r"/analysis/exploration/eda\.normality"))
+    expect(
+        group.locator('.sidebar-method-button[aria-current="page"]')
+    ).to_have_text("정규성 검정")
+    diagnostics.capture_page(page, "sidebar-analysis-method-hierarchy.png")
+    group.locator(".sidebar-submenu-button").filter(
+        has_text=re.compile("^탐색적 분석$")
+    ).click()
+    group.locator(".sidebar-submenu-button").filter(
+        has_text=re.compile("^탐색적 분석$")
+    ).click()
+    group.locator(".sidebar-method-button").filter(
+        has_text=re.compile("^기술통계$")
+    ).click()
     current_url = page.url
     control.click()
     expect(control).to_have_attribute("aria-expanded", "false")
@@ -1261,6 +1306,39 @@ def assert_single_chart_cards_fill(
         )
 
 
+def assert_children_do_not_overlap(
+    parent: Locator,
+    children: Locator,
+    label: str,
+) -> None:
+    parent_box = parent.bounding_box()
+    if parent_box is None:
+        raise AssertionError(f"{label} parent did not have a bounding box")
+    boxes = []
+    for index in range(children.count()):
+        box = children.nth(index).bounding_box()
+        if box is None:
+            raise AssertionError(f"{label} child {index + 1} had no bounding box")
+        if box["x"] < parent_box["x"] - 1 or (
+            box["x"] + box["width"]
+            > parent_box["x"] + parent_box["width"] + 1
+        ):
+            raise AssertionError(f"{label} child {index + 1} escaped its parent")
+        boxes.append(box)
+    for left_index, left in enumerate(boxes):
+        for right_index, right in enumerate(boxes[left_index + 1 :], left_index + 1):
+            horizontal_overlap = min(
+                left["x"] + left["width"], right["x"] + right["width"]
+            ) - max(left["x"], right["x"])
+            vertical_overlap = min(
+                left["y"] + left["height"], right["y"] + right["height"]
+            ) - max(left["y"], right["y"])
+            if horizontal_overlap > 1 and vertical_overlap > 1:
+                raise AssertionError(
+                    f"{label} children {left_index + 1} and {right_index + 1} overlapped"
+                )
+
+
 def assert_chart_width_ratio(
     card: Locator, diagnostics: E2EDiagnostics, label: str
 ) -> None:
@@ -1590,14 +1668,7 @@ def verify_linear_model_fit_and_prediction(
     expect(page.get_by_label("afucose 역할")).to_have_value("factor")
     expect(page.get_by_label("adcc 역할")).to_have_value("response")
     open_primary_navigation(page, "분석")
-    page.get_by_role(
-        "button",
-        name=re.compile(r"상관관계 및 회귀분석"),
-    ).click()
-    page.get_by_label("분석 메서드").get_by_role(
-        "button",
-        name=re.compile(r"^회귀모형 적합"),
-    ).click()
+    select_method_card(page, "상관관계 및 회귀분석", "회귀모형 적합")
     expect(page.locator("#workbench-title")).to_have_text("회귀모형 적합")
     expect_lazy_analysis_module(page, "RegressionAnalysisPanels")
 
@@ -1668,98 +1739,59 @@ def verify_linear_model_fit_and_prediction(
     expect(optimizer_summary).to_be_visible(timeout=20_000)
     expect(optimizer_summary).to_contain_text("범위 안")
     expect(page.get_by_text("확인 실험이 필요합니다", exact=False)).to_be_visible()
-    expect(page.locator(".regression-optimizer-result .chart-panel")).to_have_count(2)
-    diagnostics.capture_page(page, "regression-response-optimizer.png")
-    expect(
-        page.get_by_role("heading", name="예측 사전점검", exact=True)
-    ).to_be_visible()
-
-    target_selector = page.get_by_label("예측 대상 데이터셋 버전")
-    target_option = target_selector.locator("option").filter(has_text="4행 × 3열")
-    expect(target_option).to_have_count(1, timeout=15_000)
-    target_version_id = target_option.get_attribute("value")
-    if target_version_id is None:
-        raise AssertionError(
-            "Prediction target option did not expose a dataset version ID"
-        )
-    target_selector.select_option(target_version_id)
-    expect(target_selector).to_have_value(target_version_id)
-
-    page.get_by_role("button", name="사전점검 실행").click()
-    preflight_summary = page.get_by_label("예측 사전점검 요약")
-    expect(preflight_summary).to_be_visible(timeout=20_000)
-    expect(preflight_summary).to_contain_text("예측 준비 가능")
-    expect(preflight_summary).to_contain_text("4 / 4")
-    expect(preflight_summary).to_contain_text("다름")
-    expect(
-        page.get_by_text(re.compile(r"표시명으로 안전하게 매핑한 컬럼 2개"))
-    ).to_be_visible()
-    extrapolation_table = page.get_by_label("학습 범위 밖 대상값 요약")
-    expect(extrapolation_table).to_be_visible()
-    expect(extrapolation_table).to_contain_text("afucose")
-    expect(extrapolation_table).to_contain_text("1")
-
-    with page.expect_response(
-        lambda response: response.request.method == "POST"
-        and response.url.endswith("/predictions")
-    ) as prediction_response_info:
-        page.get_by_role("button", name="예측 실행").click()
-    prediction_response = prediction_response_info.value
-    prediction_id = prediction_response.json()["prediction_id"]
-    prediction_summary = page.get_by_label("예측 결과 요약")
-    expect(prediction_summary).to_be_visible(timeout=20_000)
-    expect(prediction_summary).to_contain_text("4 / 4")
-    expect(prediction_summary).to_contain_text("Prediction ID")
-    expect(page.get_by_role("heading", name="예측 구간 차트")).to_be_visible()
-    expect(page.locator(".prediction-interval-line")).to_have_count(4)
-    prediction_table = page.locator(".result-table").filter(
-        has_text="Prediction interval"
+    profiles = page.locator(".regression-optimizer-profile-card")
+    expect(profiles).to_have_count(2)
+    assert_children_do_not_overlap(
+        page.locator(".regression-optimizer-profile-grid"), profiles,
+        "regression optimizer profiles",
     )
-    expect(prediction_table).to_be_visible()
-    expect(prediction_table.get_by_role("columnheader", name="Mean CI")).to_be_visible()
-    expect(prediction_table.locator("tbody tr")).to_have_count(4)
+    expect(page.locator(".regression-categorical-profile-table-wrap")).to_have_count(1)
+    diagnostics.capture_page(page, "regression-optimizer-profile-layout.png")
 
-    page.get_by_role("radio", name="직접 입력·붙여넣기").check()
-    paste_input = page.get_by_label("예측값 붙여넣기")
-    paste_input.fill("afucose\tgroup\n1\tA\n3.5\tB\n5.5\tC")
-    expect(page.get_by_role("heading", name="예측변수 매핑")).to_be_visible()
+    manual_prediction = page.locator(".regression-manual-prediction")
+    expect(manual_prediction.get_by_role("heading", name="예측 조건 입력")).to_be_visible()
+    expect(manual_prediction.get_by_label("예측 대상 데이터셋 버전")).to_have_count(0)
+    manual_prediction.get_by_role("button", name="붙여넣기 가져오기").click()
+    manual_prediction.get_by_label("예측 조건 붙여넣기").fill("1\tA")
+    manual_prediction.get_by_label("첫 행에 열 이름 포함").check()
+    manual_prediction.get_by_role("button", name="입력 grid에 적용").click()
+    expect(manual_prediction.get_by_role("alert")).to_contain_text(
+        "실제 예측 데이터 행이 없습니다"
+    )
+    diagnostics.capture_page(page, "regression-one-row-header-warning.png")
+    manual_prediction.get_by_label("첫 행에 열 이름 포함").uncheck()
+    manual_prediction.get_by_role("button", name="입력 grid에 적용").click()
+    expect(manual_prediction.get_by_label("1행 afucose")).to_have_value("1")
+    expect(manual_prediction.get_by_label("1행 group")).to_have_value("A")
+    manual_prediction.get_by_role("button", name="붙여넣기 가져오기").click()
+    manual_prediction.get_by_label("예측 조건 붙여넣기").fill(
+        "afucose\tgroup\n1\tA\n3.5\tB\n5.5\tC"
+    )
+    manual_prediction.get_by_label("첫 행에 열 이름 포함").check()
+    manual_prediction.get_by_role("button", name="입력 grid에 적용").click()
+    expect(manual_prediction.locator(".regression-manual-grid tbody tr")).to_have_count(3)
+    diagnostics.capture_page(page, "regression-manual-input-grid.png")
     with page.expect_response(
         lambda response: response.request.method == "POST"
         and response.url.endswith("/pasted-prediction-preflight")
     ):
-        page.get_by_role("button", name="예측 사전점검").click()
-    expect(page.get_by_text("예측 준비 완료", exact=True)).to_be_visible(timeout=20_000)
+        manual_prediction.get_by_role("button", name="전체 사전점검").click()
+    expect(manual_prediction.get_by_role("status")).to_contain_text(
+        "사용 가능 3 / 전체 3행", timeout=20_000
+    )
     with page.expect_response(
         lambda response: response.request.method == "POST"
         and response.url.endswith("/pasted-predictions")
-    ) as pasted_response_info:
-        page.get_by_role("button", name="예측 실행").click()
-    pasted_prediction_id = pasted_response_info.value.json()["prediction_id"]
-    expect(page.get_by_role("heading", name="붙여넣기 예측 결과")).to_be_visible(
+    ) as prediction_response_info:
+        manual_prediction.get_by_role("button", name="전체 예측 실행").click()
+    prediction_id = prediction_response_info.value.json()["prediction_id"]
+    expect(manual_prediction.get_by_role("heading", name="예측 결과")).to_be_visible(
         timeout=20_000
     )
-    pasted_table = page.locator(".result-table").filter(has_text="개별 예측구간")
-    expect(pasted_table.locator("tbody tr")).to_have_count(3)
-    diagnostics.capture_page(page, "regression-pasted-prediction.png")
-    page.get_by_role("radio", name="데이터셋에서 선택").check()
-    expect(
-        page.get_by_role("heading", name="예측 사전점검", exact=True)
-    ).to_be_visible()
-
-    page.get_by_role("button", name="전체 예측 CSV 생성").click()
-    csv_download_button = page.get_by_role("button", name="전체 예측 CSV 다운로드")
-    expect(csv_download_button).to_be_visible(timeout=15_000)
-    expect(page.get_by_label("전체 예측 CSV export")).to_contain_text("4행")
-    try:
-        with page.expect_download(timeout=10_000) as download_info:
-            csv_download_button.click()
-        download = download_info.value
-        if not download.suggested_filename.endswith(".csv"):
-            raise AssertionError(
-                f"unexpected prediction CSV download name: {download.suggested_filename}",
-            )
-    except PlaywrightTimeoutError as exc:
-        raise AssertionError("Prediction CSV export download did not start") from exc
+    manual_table = manual_prediction.locator(".result-table").filter(
+        has_text="개별 예측구간"
+    )
+    expect(manual_table.locator("tbody tr")).to_have_count(3)
 
     frontend_base_url = page.url.split("/analysis", 1)[0]
     dedicated_page = page.context.new_page()
@@ -1787,7 +1819,7 @@ def verify_linear_model_fit_and_prediction(
             "예측 대상 데이터셋 버전"
         )
         expect(dedicated_target_selector).to_be_enabled(timeout=20_000)
-        dedicated_target_selector.select_option(target_version_id)
+        dedicated_target_selector.select_option(target_active_version_id)
         dedicated_page.get_by_role("button", name="예측 사전점검").click()
         expect(
             dedicated_page.get_by_role("heading", name="예측 사전점검 결과")
@@ -1812,7 +1844,7 @@ def verify_linear_model_fit_and_prediction(
         ).to_be_visible(timeout=15_000)
         expect(dedicated_page).to_have_url(re.compile(f"model_id={model_id}"))
         expect(dedicated_page).to_have_url(
-            re.compile(f"target_version_id={target_version_id}")
+            re.compile(f"target_version_id={target_active_version_id}")
         )
         expect(dedicated_page).to_have_url(
             re.compile(f"prediction_id={dedicated_prediction_id}")
@@ -1828,7 +1860,7 @@ def verify_linear_model_fit_and_prediction(
             timeout=20_000,
         )
         expect(dedicated_page.get_by_label("예측 대상 데이터셋 버전")).to_have_value(
-            target_version_id,
+            target_active_version_id,
             timeout=20_000,
         )
         expect(dedicated_page.get_by_label("선택한 회귀모형 metadata")).to_be_visible()
@@ -1871,7 +1903,7 @@ def verify_linear_model_fit_and_prediction(
         dedicated_page.close()
 
     api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
-    for owned_analysis_id in (pasted_prediction_id, optimizer_id):
+    for owned_analysis_id in (optimizer_id,):
         owned_preflight = page.request.get(
             f"{api_v1}/analysis-runs/{owned_analysis_id}/deletion-preflight"
         )
@@ -1897,9 +1929,10 @@ def verify_linear_model_fit_and_prediction(
 
     model_retention = page.get_by_role("region", name="저장 모델 관리")
     model_retention.get_by_role("button", name="삭제 영향 확인").click()
-    expect(model_retention.get_by_text("예측 참조 1건", exact=True)).to_be_visible(
+    expect(model_retention.get_by_text("예측 참조 0건", exact=True)).to_be_visible(
         timeout=15_000
     )
+    expect(model_retention.get_by_text("붙여넣기 예측 1건", exact=False)).to_be_visible()
     expect(
         model_retention.get_by_text(
             "종속 예측 결과를 먼저 삭제해야 모델을 삭제할 수 있습니다."
@@ -1932,6 +1965,7 @@ def verify_linear_model_fit_and_prediction(
     expect(model_retention.get_by_text("예측 참조 0건", exact=True)).to_be_visible(
         timeout=15_000
     )
+    expect(model_retention.get_by_text("붙여넣기 예측 0건", exact=False)).to_be_visible()
     model_retention.get_by_text(
         "이 모델로 새 예측을 실행할 수 없게 됨을 확인했습니다."
     ).click()
@@ -1943,8 +1977,12 @@ def verify_linear_model_fit_and_prediction(
         timeout=15_000
     )
     expect(model_summary).to_be_visible()
-    expect(page.get_by_role("button", name="사전점검 실행")).to_be_disabled()
-    expect(page.get_by_role("button", name="예측 실행")).to_be_disabled()
+    expect(
+        manual_prediction.get_by_role("button", name="전체 사전점검")
+    ).to_be_disabled()
+    expect(
+        manual_prediction.get_by_role("button", name="전체 예측 실행")
+    ).to_be_disabled()
 
     active_dataset_selector.select_option(target_active_version_id)
     expect_dataset_context_counts(page, row_label="4행", column_label="3컬럼")
@@ -1977,8 +2015,19 @@ def verify_linear_model_fit_and_prediction(
     expect(
         restored_retention.get_by_text(unavailable_message, exact=True)
     ).to_be_visible(timeout=15_000)
-    expect(page.get_by_role("button", name="사전점검 실행")).to_be_disabled()
-    expect(page.get_by_role("button", name="예측 실행")).to_be_disabled()
+    restored_manual_prediction = page.locator(".regression-manual-prediction")
+    expect(
+        restored_manual_prediction.get_by_text(
+            "저장 모델을 사용할 수 없어 새 예측을 실행할 수 없습니다.",
+            exact=True,
+        )
+    ).to_be_visible()
+    expect(
+        restored_manual_prediction.get_by_role("button", name="전체 사전점검")
+    ).to_be_disabled()
+    expect(
+        restored_manual_prediction.get_by_role("button", name="전체 예측 실행")
+    ).to_be_disabled()
 
 
 def verify_attribute_control_chart(page: Page) -> None:
@@ -2149,7 +2198,7 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
     expect(page.get_by_role("img", name="주효과 평균 차트")).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
-    expect(page.locator(".analysis-result-section")).to_contain_text("0.3.0")
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.4.0")
     expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
     expect(page.get_by_label("run 1 response")).to_be_disabled()
     expect(page.get_by_role("button", name="분석 후 반응 잠금")).to_be_disabled()
@@ -2465,11 +2514,31 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
     assert_doe_table_visual_consistency(workspace, diagnostics, "latin-hypercube")
     diagnostics.capture_page(page, "lhs-settings-aligned.png")
     diagnostics.capture_page(page, "doe-lhs-table-ui.png")
+    page.get_by_label("factor_1 하한").fill("1")
+    page.get_by_label("factor_1 상한").fill("10")
+    page.get_by_label("factor_1 설정 방식").select_option("discrete_numeric")
+    page.get_by_label("factor_1 실행 간격").fill("1")
+    page.get_by_label("factor_1 표시 자리수").fill("0")
+    diagnostics.capture_page(page, "doe-discrete-step-factor.png")
     page.get_by_label("실험 수", exact=True).fill("6")
     workspace.locator(":scope > .doe-action-bar .primary-button").click()
     expect(workspace.locator("#lhs-quality-title")).to_be_visible(timeout=20_000)
     expect(workspace.locator(".lhs-run-table tbody tr")).to_have_count(6)
     expect(workspace.locator('a[download][href$="/export.csv"]')).to_be_visible()
+    parallel = workspace.get_by_role("img", name="LHS 평행좌표 그림")
+    expect(parallel).to_be_visible()
+    expect(parallel.locator(".lhs-parallel-run")).to_have_count(6)
+    scatter = workspace.get_by_role("img", name="LHS 2요인 투영")
+    expect(scatter).to_be_visible()
+    expect(scatter.locator(".chart-point")).to_have_count(6)
+    workspace.locator(".lhs-parallel-chart").focus()
+    page.keyboard.press("ArrowRight")
+    expect(workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')).to_have_count(1)
+    expect(workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')).to_contain_text("1")
+    scatter.locator(".chart-point").nth(2).focus()
+    expect(workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')).to_contain_text("3")
+    diagnostics.capture_page(page, "lhs-parallel-coordinates.png")
+    diagnostics.capture_page(page, "lhs-two-factor-scatter.png")
 
     response_inputs = workspace.locator(".lhs-response-grid input")
     expect(response_inputs).to_have_count(6)
@@ -2523,28 +2592,88 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     diagnostics.capture_page(page, "doe-table-ui-mobile.png")
     page.set_viewport_size({"width": 1440, "height": 900})
     page.get_by_label("최적화 목표").select_option("maximize")
-    page.get_by_role("button", name="스터디 생성").click()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/api/v1/bayesian-studies")
+    ) as study_response_info:
+        page.get_by_role("button", name="스터디 생성").click()
+    created_study = study_response_info.value.json()
+    initial_history_revision = created_study["observation_history"][
+        "history_revision_id"
+    ]
     summary = page.get_by_label("Bayesian study 상태")
     expect(summary).to_be_visible(timeout=20_000)
     expect(summary).to_contain_text("0 / 2")
+    expect(page.get_by_role("heading", name="요인 정의")).to_be_visible()
+    expect(page.get_by_role("heading", name="초기 실험 설계")).to_be_visible()
+    factor_definition = page.locator(".bayesian-factor-definition-table")
+    expect(factor_definition).to_contain_text("하한")
+    expect(factor_definition).to_contain_text("상한")
+    expect(factor_definition).to_contain_text("단위")
+    initial_design_csv = page.get_by_role("link", name="CSV 다운로드")
+    expect(initial_design_csv).to_have_attribute(
+        "href", re.compile(r"/bayesian-studies/[0-9a-f-]+/initial-design\.csv$")
+    )
+    with page.expect_download(timeout=10_000) as initial_download_info:
+        initial_design_csv.click()
+    if not initial_download_info.value.suggested_filename.endswith(".csv"):
+        raise AssertionError("Bayesian initial-design export was not a CSV")
+    diagnostics.capture_page(page, "bayesian-study-definition.png")
     stored_constraints = page.get_by_label("Bayesian stored constraints")
     expect(stored_constraints).to_contain_text("constraint_1")
     expect(stored_constraints).to_contain_text("0.750000")
     page.get_by_label("전체 trial 예산").fill("5")
 
-    page.get_by_label("Trial 1 관측값").fill("0.8")
-    observation_buttons = page.get_by_role("button", name="관측 저장")
-    observation_buttons.nth(0).click()
-    confirmation = page.get_by_label("Trial 1 terminal action 확인")
-    expect(confirmation).to_contain_text("objective 0.8")
-    confirmation.get_by_role("button", name="관측 저장 확인").click()
-    expect(page.get_by_label("Trial 1 관측값")).to_have_count(0, timeout=20_000)
+    exploration = page.locator(".bayesian-exploration-section")
+    exploration_options = exploration.locator(".bayesian-exploration-options > label")
+    expect(exploration_options).to_have_count(4)
+    assert_children_do_not_overlap(
+        exploration.locator(".bayesian-exploration-options"),
+        exploration_options,
+        "Bayesian exploration options desktop",
+    )
+    diagnostics.capture_page(page, "bayesian-goal-layout-desktop.png")
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert_children_do_not_overlap(
+        exploration.locator(".bayesian-exploration-options"),
+        exploration_options,
+        "Bayesian exploration options mobile",
+    )
+    bayesian_mobile_overflow = page.evaluate(
+        "() => document.documentElement.scrollWidth - window.innerWidth"
+    )
+    if bayesian_mobile_overflow > 1:
+        raise AssertionError(
+            f"Bayesian study overflowed mobile viewport by {bayesian_mobile_overflow}px"
+        )
+    diagnostics.capture_page(page, "bayesian-goal-layout-mobile.png")
+    page.set_viewport_size({"width": 1440, "height": 900})
 
-    page.get_by_label("Trial 2 관측값").fill("1.0")
-    observation_buttons.nth(1).click()
-    page.get_by_label("Trial 2 terminal action 확인").get_by_role(
-        "button", name="관측 저장 확인"
-    ).click()
+    page.get_by_role("button", name="관측값 붙여넣기").click()
+    page.get_by_label("Bayesian 관측값 붙여넣기").fill("0.8\n1.0")
+    diagnostics.capture_page(page, "bayesian-observation-paste.png")
+    page.get_by_role("button", name="앞 pending trial에 적용").click()
+    expect(page.get_by_label("Trial 1 관측값")).to_have_value("0.8")
+    expect(page.get_by_label("Trial 2 관측값")).to_have_value("1.0")
+    page.get_by_role("button", name="입력한 관측 2건 저장").click()
+    confirmation = page.get_by_role("alertdialog")
+    expect(confirmation).to_contain_text("관측값 2건 저장")
+    diagnostics.capture_page(page, "bayesian-bulk-observations.png")
+    with page.expect_response(
+        lambda response: response.request.method == "PUT"
+        and response.url.endswith("/observations/batch")
+    ) as observation_batch_info:
+        confirmation.get_by_role("button", name="2건 저장").click()
+    batch_payload = observation_batch_info.value.json()
+    if batch_payload["completed_trial_count"] != 2:
+        raise AssertionError("Bayesian observation batch did not complete two trials")
+    if (
+        batch_payload["observation_history"]["history_revision_id"]
+        == initial_history_revision
+    ):
+        raise AssertionError("Bayesian observation batch did not create one revision")
+    expect(page.get_by_label("Trial 1 관측값")).to_have_count(0, timeout=20_000)
+    expect(page.get_by_label("Trial 2 관측값")).to_have_count(0)
     recommendation_button = page.get_by_role("button", name="추천 batch 생성")
     expect(recommendation_button).to_be_enabled(timeout=20_000)
     page.get_by_role("radio", name="여러 실험을 동시에 수행").check()
@@ -2573,11 +2702,8 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     ).to_be_visible()
 
     page.get_by_label("Trial 3 관측값").fill("0.97")
-    trial_three_row = page.get_by_label("Trial 3 관측값").locator("xpath=ancestor::tr")
-    trial_three_row.get_by_role("button", name="관측 저장").click()
-    page.get_by_label("Trial 3 terminal action 확인").get_by_role(
-        "button", name="관측 저장 확인"
-    ).click()
+    page.get_by_role("button", name="입력한 관측 1건 저장").click()
+    page.get_by_role("alertdialog").get_by_role("button", name="1건 저장").click()
     expect(result_section.get_by_text("전체 완료", exact=True)).to_be_visible(
         timeout=20_000
     )
@@ -2588,7 +2714,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     expect(trial_four_input).to_be_visible(timeout=45_000)
     trial_four_row = trial_four_input.locator("xpath=ancestor::tr")
     abandoned_coordinates = trial_four_row.locator("td").nth(2).inner_text()
-    trial_four_row.get_by_role("button", name="Abandon", exact=True).click()
+    trial_four_row.get_by_role("button", name="실험 포기", exact=True).click()
     abandon_confirmation = page.get_by_label("Trial 4 terminal action 확인")
     expect(abandon_confirmation).to_contain_text("향후 추천에서 제외")
     abandon_confirmation.get_by_role("button", name="Abandon 확인").click()
@@ -2628,13 +2754,8 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     ).to_be_visible()
 
     page.get_by_label("Trial 5 관측값").fill("0.96")
-    trial_five_restored_row = page.get_by_label("Trial 5 관측값").locator(
-        "xpath=ancestor::tr"
-    )
-    trial_five_restored_row.get_by_role("button", name="관측 저장").click()
-    page.get_by_label("Trial 5 terminal action 확인").get_by_role(
-        "button", name="관측 저장 확인"
-    ).click()
+    page.get_by_role("button", name="입력한 관측 1건 저장").click()
+    page.get_by_role("alertdialog").get_by_role("button", name="1건 저장").click()
     expect(page.get_by_label("Trial 5 관측값")).to_have_count(0, timeout=20_000)
 
     page.get_by_label("Bayesian study 종료 메모").fill("E2E confirmation complete")

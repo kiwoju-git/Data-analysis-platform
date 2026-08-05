@@ -5,7 +5,7 @@ Last updated: 2026-07-30
 ## Scope And Current State
 
 This contract defines the implemented bounded lifecycle for closing an
-immutable Bayesian Optimization study. Method `0.4.0` retains the explicit
+immutable Bayesian Optimization study. Method `0.5.0` retains the explicit
 status-transition API and read-only restore UI. Trial completion and trial
 abandonment remain separate terminal trial transitions; close never changes a
 trial implicitly.
@@ -73,6 +73,18 @@ Suggested reason codes include `objective_satisfied`, `budget_reached`,
 `study_cancelled`. Free-form text never replaces the stable code.
 
 ## API Acceptance Criteria
+
+The observation-batch endpoint accepts one or more finite values plus exact
+study-version/history ID/history SHA and a request UUID. All trials must belong
+to the Study and remain pending. Validation or write failure leaves every trial
+and the history head unchanged; success adds one revision regardless of batch
+size. Immediate or later identical replay is idempotent, and request-ID payload
+reuse is a conflict. Empty input rows are omitted by the client, not persisted
+as missing observations.
+
+The initial-design CSV route is read-only and available for active, closed, and
+legacy Studies after normal checksum validation. It never includes later
+recommendation trials.
 
 The implemented action route is
 `POST /api/v1/bayesian-studies/{study_id}/close`, with a typed request for

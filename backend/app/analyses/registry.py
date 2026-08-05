@@ -41,11 +41,11 @@ METHOD_VERSIONS: dict[str, str] = {
     "quality.capability": METHOD_VERSION,
     "quality.gage_rr": METHOD_VERSION,
     "quality.gage_run_chart": METHOD_VERSION,
-    "doe.factorial_design": "0.3.0",
-    "doe.latin_hypercube": "0.1.0",
-    "doe.response_surface": "0.2.0",
-    "doe.response_optimizer": "0.3.0",
-    "doe.bayesian_optimization": "0.4.0",
+    "doe.factorial_design": "0.4.0",
+    "doe.latin_hypercube": "0.2.0",
+    "doe.response_surface": "0.3.0",
+    "doe.response_optimizer": "0.4.0",
+    "doe.bayesian_optimization": "0.5.0",
 }
 
 LEGACY_METHOD_ID_ALIASES: dict[str, str] = {
