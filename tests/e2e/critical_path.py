@@ -430,6 +430,13 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
                 page.get_by_role("heading", name="Statistical Twin", exact=True)
             ).to_be_visible()
             expect(page.get_by_text("API ready")).to_be_visible(timeout=15_000)
+            expect(page).to_have_url(re.compile(r"/(?:home)?(?:\?|$)"))
+            expect(
+                page.get_by_role(
+                    "heading", name="Statistical Twin 대시보드", exact=True
+                )
+            ).to_be_visible()
+            open_primary_navigation(page, "데이터셋")
             diagnostics.step("paste synthetic TSV and confirm schema")
 
             paste_plain_text(page, PASTE_GRID_REVIEW_DATA)
@@ -534,7 +541,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             diagnostics.step("create, download, and delete one export")
             create_exports(page)
             diagnostics.step("verify Help Report Project and Manage routes")
-            verify_help_report_and_manage_routes(page)
+            verify_help_report_and_manage_routes(page, diagnostics)
             diagnostics.step("restore and compare saved results")
             restore_and_compare_saved_results(page)
             diagnostics.step("delete one stored analysis run")
@@ -825,43 +832,27 @@ def select_method_card(page: Page, module_label: str, method_label: str) -> None
     page.get_by_role("navigation", name="분석 모듈").get_by_role(
         "button", name=re.compile(rf"^{re.escape(module_label)}")
     ).click()
+    if module_label == "가설 검정":
+        family_method = page.locator(".hypothesis-family-methods").get_by_role(
+            "button", name=method_label, exact=True
+        )
+        family_method.wait_for(state="visible", timeout=15_000)
+        family_method.click()
+        return
     page.locator(".method-item").filter(has_text=method_label).click()
 
 
 def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> None:
-    equivalence = page.locator(".method-item").filter(has_text="1-표본 동등성 검정")
-    wilcoxon = page.locator(".method-item").filter(has_text="1-표본 Wilcoxon")
-    expect(equivalence).to_have_count(1)
-    expect(wilcoxon).to_have_count(1)
-    for card in (equivalence, wilcoxon):
-        expect(card.locator(".method-card-tag")).to_have_count(4)
-        wrapped = card.locator(".method-card-tag").evaluate_all(
-            """elements => elements.some(element => {
-                const style = getComputedStyle(element);
-                return element.scrollHeight > parseFloat(style.lineHeight) * 1.25;
-            })"""
-        )
-        if wrapped:
-            raise AssertionError("hypothesis method card tag wrapped internally")
-    equivalence_box = equivalence.bounding_box()
-    wilcoxon_box = wilcoxon.bounding_box()
-    if equivalence_box is None or wilcoxon_box is None:
-        raise AssertionError("hypothesis method card bounding box unavailable")
-    grid_alignment = page.locator(".method-grid").evaluate(
-        "element => getComputedStyle(element).alignItems"
-    )
-    if grid_alignment != "start":
-        raise AssertionError(
-            f"hypothesis method grid align-items was {grid_alignment}, not start"
-        )
-    diagnostics.record(
-        "[e2e] hypothesis card heights "
-        f"equivalence={equivalence_box['height']:.2f}px "
-        f"wilcoxon={wilcoxon_box['height']:.2f}px"
-    )
+    family_grid = page.locator(".hypothesis-family-grid")
+    families = family_grid.locator(".hypothesis-family-card")
+    expect(families).to_have_count(4)
+    expect(family_grid.get_by_role("button")).to_have_count(10)
+    for family_label in ("t-검정", "동등성 검정", "분산분석", "비모수 검정"):
+        expect(family_grid).to_contain_text(family_label)
+    assert_children_do_not_overlap(family_grid, families, "hypothesis families")
     diagnostics.capture_locator(
-        page.locator(".method-grid"),
-        "hypothesis-equivalence-wilcoxon-cards.png",
+        family_grid,
+        "hypothesis-family-cards.png",
     )
 
 
@@ -872,6 +863,9 @@ def open_primary_navigation(page: Page, label: str) -> None:
         )
     )
     control = group.locator(".sidebar-group-control")
+    if control.get_attribute("aria-controls") is None:
+        control.click()
+        return
     if control.get_attribute("aria-expanded") != "true":
         control.click()
     active_method = group.locator('.sidebar-method-button[aria-current="page"]')
@@ -902,9 +896,9 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     )
     control = group.locator(".sidebar-group-control")
     expect(control).to_have_attribute("aria-expanded", "true")
-    modules = group.locator(".sidebar-module-item")
+    modules = group.locator(".sidebar-tree-level-0")
     expect(modules).to_have_count(6)
-    exploration = group.locator(".sidebar-module-item").filter(
+    exploration = group.locator(".sidebar-tree-level-0").filter(
         has=page.locator(".sidebar-submenu-button").filter(
             has_text=re.compile("^탐색적 분석$")
         )
@@ -948,8 +942,11 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
 def verify_project_dashboard(page: Page, diagnostics: E2EDiagnostics) -> None:
     page.set_viewport_size({"width": 1440, "height": 900})
     page.locator(".brand-home-link").click()
-    expect(page).to_have_url(re.compile(r"/project(?:\?|$)"))
-    expect(page.locator("#project-overview-title")).to_have_text("프로젝트 개요")
+    expect(page).to_have_url(re.compile(r"/home(?:\?|$)"))
+    expect(page.locator("#project-overview-title")).to_have_text(
+        "Statistical Twin 대시보드"
+    )
+    expect(page.locator(".home-quick-card")).to_have_count(6)
     expect(page.locator(".project-dashboard-card")).to_have_count(4)
     expect(page.get_by_role("heading", name="현재 분석 데이터셋")).to_be_visible()
     expect(page.get_by_role("heading", name="데이터셋 현황")).to_be_visible()
@@ -966,6 +963,7 @@ def verify_project_dashboard(page: Page, diagnostics: E2EDiagnostics) -> None:
     )
 
     diagnostics.capture_page(page, "project-dashboard-desktop.png")
+    diagnostics.capture_page(page, "home-dashboard-wide.png")
     diagnostics.capture_locator(
         page.locator(".main"),
         "project-context-alignment.png",
@@ -978,7 +976,7 @@ def verify_project_dashboard(page: Page, diagnostics: E2EDiagnostics) -> None:
 
     page.set_viewport_size({"width": 390, "height": 844})
     page.locator(".mobile-brand-home-link").click()
-    expect(page).to_have_url(re.compile(r"/project(?:\?|$)"))
+    expect(page).to_have_url(re.compile(r"/home(?:\?|$)"))
     mobile_overflow = page.evaluate(
         "() => document.documentElement.scrollWidth - window.innerWidth"
     )
@@ -993,6 +991,7 @@ def verify_project_dashboard(page: Page, diagnostics: E2EDiagnostics) -> None:
         "mobile project dashboard",
     )
     diagnostics.capture_page(page, "project-dashboard-mobile.png")
+    diagnostics.capture_page(page, "home-dashboard-mobile.png")
     diagnostics.capture_page(page, "active-dataset-aligned-mobile.png")
     page.set_viewport_size({"width": 1440, "height": 900})
 
@@ -1397,7 +1396,9 @@ def create_exports(page: Page) -> None:
     expect(page.locator(".result-table").filter(has_text="Hedges g")).to_be_visible()
 
 
-def verify_help_report_and_manage_routes(page: Page) -> None:
+def verify_help_report_and_manage_routes(
+    page: Page, diagnostics: E2EDiagnostics
+) -> None:
     open_primary_navigation(page, "리포트")
     expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible()
     expect_lazy_workspace_page(page, "ReportCenterPage")
@@ -1444,34 +1445,39 @@ def verify_help_report_and_manage_routes(page: Page) -> None:
     expect(
         page.get_by_role("heading", name="Statistical Twin", exact=True)
     ).to_be_visible()
-    open_primary_navigation(page, "프로젝트")
-    expect(page).to_have_url(re.compile(r"/project(?:\?|$)"))
-    expect(
-        page.get_by_role("button", name="프로젝트 개요", exact=True)
-    ).to_have_attribute("aria-current", "page")
-    expect(page.get_by_role("heading", name="프로젝트 개요", exact=True)).to_be_visible(
-        timeout=15_000
+    open_primary_navigation(page, "홈")
+    expect(page).to_have_url(re.compile(r"/home(?:\?|$)"))
+    expect(page.get_by_role("button", name="홈", exact=True)).to_have_attribute(
+        "aria-current", "page"
     )
+    expect(
+        page.get_by_role("heading", name="Statistical Twin 대시보드", exact=True)
+    ).to_be_visible(timeout=15_000)
     expect_lazy_workspace_page(page, "ProjectOverviewPage")
     expect(
         page.get_by_text(
-            "현재 로컬 작업공간의 데이터와 분석 자산을 한눈에 확인합니다.",
+            "로컬 작업공간의 최근 자산을 확인하고 다음 작업을 시작합니다.",
             exact=True,
         )
     ).to_be_visible()
     page.reload(wait_until="networkidle")
-    expect(page.get_by_role("heading", name="프로젝트 개요", exact=True)).to_be_visible(
-        timeout=15_000
-    )
+    expect(
+        page.get_by_role("heading", name="Statistical Twin 대시보드", exact=True)
+    ).to_be_visible(timeout=15_000)
 
     open_primary_navigation(page, "관리")
-    expect(page.get_by_role("heading", name="데이터모델 관리")).to_be_visible(
+    expect(page.get_by_role("heading", name="자산 관리")).to_be_visible(
         timeout=15_000
     )
     expect_lazy_workspace_page(page, "ManageAssetsPage")
-    expect(page.get_by_role("heading", name="저장 데이터셋 버전")).to_be_visible()
+    expect(page.get_by_role("table")).to_be_visible()
+    expect(page.get_by_role("columnheader", name="종류")).to_be_visible()
+    diagnostics.capture_page(page, "asset-management-overview.png")
+    page.get_by_role("button", name="상세", exact=True).first.click()
+    expect(page.locator(".asset-catalog-detail")).to_be_visible()
+    diagnostics.capture_page(page, "asset-management-detail.png")
     page.reload(wait_until="networkidle")
-    expect(page.get_by_role("heading", name="데이터모델 관리")).to_be_visible(
+    expect(page.get_by_role("heading", name="자산 관리")).to_be_visible(
         timeout=15_000
     )
 
@@ -1792,6 +1798,34 @@ def verify_linear_model_fit_and_prediction(
         has_text="개별 예측구간"
     )
     expect(manual_table.locator("tbody tr")).to_have_count(3)
+    expect(manual_table).to_have_class(re.compile(r"is-summary"))
+    summary_headers = manual_table.locator("thead th")
+    for label in ("예측 평균", "평균 신뢰구간", "개별 예측구간", "상태"):
+        header = summary_headers.filter(has_text=re.compile(rf"^{re.escape(label)}$"))
+        expect(header).to_have_count(1)
+        box = header.bounding_box()
+        if box is None or box["width"] < 105:
+            raise AssertionError(f"prediction summary header {label} was too narrow: {box}")
+    diagnostics.capture_page(page, "regression-prediction-summary-table.png")
+    manual_prediction.get_by_role("button", name="입력값 포함").click()
+    full_table = manual_prediction.locator(
+        ".regression-prediction-results-table.is-full"
+    )
+    expect(full_table).to_be_visible()
+    expect(full_table.get_by_role("columnheader", name="입력 조건")).to_be_visible()
+    expect(full_table.get_by_role("columnheader", name="예측 결과")).to_be_visible()
+    results_wrap = manual_prediction.locator(".regression-prediction-results-wrap")
+    if results_wrap.evaluate("element => getComputedStyle(element).overflowX") not in {
+        "auto",
+        "scroll",
+    }:
+        raise AssertionError("prediction result wrapper did not own horizontal overflow")
+    page_overflow = page.evaluate(
+        "() => document.documentElement.scrollWidth - document.documentElement.clientWidth"
+    )
+    if page_overflow > 1:
+        raise AssertionError(f"prediction table caused {page_overflow}px page overflow")
+    diagnostics.capture_page(page, "regression-prediction-full-table.png")
 
     frontend_base_url = page.url.split("/analysis", 1)[0]
     dedicated_page = page.context.new_page()
@@ -1835,7 +1869,7 @@ def verify_linear_model_fit_and_prediction(
             timeout=20_000
         )
         dedicated_table = dedicated_page.locator(".result-table").filter(
-            has_text="Prediction interval"
+            has_text="개별 예측구간"
         )
         expect(dedicated_table.locator("tbody tr")).to_have_count(4)
         dedicated_page.get_by_role("button", name="전체 예측 CSV 생성").click()
@@ -1868,7 +1902,7 @@ def verify_linear_model_fit_and_prediction(
             timeout=20_000
         )
         restored_table = dedicated_page.locator(".result-table").filter(
-            has_text="Prediction interval"
+            has_text="개별 예측구간"
         )
         expect(restored_table.locator("tbody tr")).to_have_count(4)
         restored_export_button = dedicated_page.get_by_role(
@@ -2198,7 +2232,7 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
     expect(page.get_by_role("img", name="주효과 평균 차트")).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
-    expect(page.locator(".analysis-result-section")).to_contain_text("0.4.0")
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.5.0")
     expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
     expect(page.get_by_label("run 1 response")).to_be_disabled()
     expect(page.get_by_role("button", name="분석 후 반응 잠금")).to_be_disabled()
@@ -2207,6 +2241,59 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(page.get_by_label("반응 이름")).to_be_disabled()
     expect(page.get_by_label("run 1 response")).to_be_enabled()
     expect(page.get_by_role("button", name="새 revision 저장")).to_be_enabled()
+
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
+    page.get_by_role("radio", name="2수준 부분요인").check()
+    page.get_by_label("반복", exact=True).fill("1")
+    page.get_by_label("센터점", exact=True).fill("0")
+    for _ in range(3):
+        page.get_by_role("button", name="요인 추가", exact=True).click()
+    page.get_by_label("검증된 부분요인 설계").select_option("5-factor-half-r5")
+    diagnostics.capture_page(page, "factorial-design-type-selector.png")
+    page.get_by_role("button", name="DOE 설계 생성").click()
+    expect(page.get_by_text("Resolution", exact=True)).to_be_visible(timeout=20_000)
+    expect(page.get_by_text("V", exact=True).first).to_be_visible()
+    expect(page.get_by_role("columnheader", name="Alias group")).to_be_visible()
+    diagnostics.capture_page(page, "fractional-factorial-alias.png")
+    for run_order in range(1, 17):
+        page.get_by_label(f"run {run_order} response").fill(
+            str(50 + run_order + (run_order % 3) * 0.15)
+        )
+    with page.expect_response(
+        lambda response: response.request.method == "PUT"
+        and response.url.endswith("/responses")
+    ):
+        page.get_by_role("button", name="반응값 저장").click()
+    page.get_by_role("button", name="효과 및 ANOVA 분석").click()
+    expect(page.get_by_text("독립 효과가 아닙니다", exact=False)).to_be_visible(
+        timeout=20_000
+    )
+
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
+    page.get_by_role("radio", name="일반 완전요인").check()
+    page.get_by_role("button", name="요인 추가", exact=True).click()
+    expect(page.get_by_text("예상 실험 수 27개", exact=False)).to_be_visible()
+    page.get_by_role("button", name="일반 완전요인 설계 생성").click()
+    expect(page.get_by_role("heading", name="일반 완전요인 설계")).to_be_visible(
+        timeout=20_000
+    )
+    diagnostics.capture_page(page, "general-factorial-three-level.png")
+    for run_order in range(1, 28):
+        page.get_by_label(f"run {run_order} 반응").fill(
+            str(70 + run_order * 0.4 + (run_order % 2) * 0.1)
+        )
+    with page.expect_response(
+        lambda response: response.request.method == "PUT"
+        and "/general-factorial/" in response.url
+        and response.url.endswith("/responses")
+    ):
+        page.get_by_role("button", name="반응 저장", exact=True).click()
+    page.get_by_role("button", name="일반 완전요인 ANOVA").click()
+    expect(page.get_by_role("heading", name="분산분석")).to_be_visible(
+        timeout=20_000
+    )
 
 
 def expect_lazy_analysis_module(page: Page, module_name: str) -> None:

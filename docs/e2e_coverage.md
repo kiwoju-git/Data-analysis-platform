@@ -6,6 +6,36 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-08-06 home/assets/hypothesis-family/factorial run additionally:
+
+- switches the root and legacy `/project` entry points to the explicit Home
+  dashboard, verifies the six responsive quick actions, and keeps Dataset,
+  Analysis, Graph, Report, Manage, and Help directly reachable;
+- verifies that standalone regression prediction is absent from ordinary
+  method navigation while the saved-model contextual workflow and legacy route
+  remain usable, and checks both the compact summary and horizontally contained
+  full-input result tables;
+- exposes all ten hypothesis methods in four purpose-based families and checks
+  the recursive active sidebar disclosure chain;
+- creates a regular five-factor half fraction, verifies its Resolution V
+  generator/defining-relation/alias presentation, and does not report aliased
+  effects as independent estimates;
+- creates and analyzes a three-factor, three-level, 27-run general factorial
+  design with categorical term-block ANOVA; and
+- verifies the compact unified asset catalog/detail view and type-specific DOE
+  deletion preflight while retaining the existing RSM, LHS, Bayesian, graph,
+  export, restore, and lazy-route workflows.
+
+The isolated Chromium run passed in 115.6 seconds with diagnostics under
+`.tmp/e2e-diagnostics-home-assets-factorial`. Requested screenshots include
+`regression-prediction-summary-table.png`,
+`regression-prediction-full-table.png`, `hypothesis-family-cards.png`,
+`sidebar-analysis-method-hierarchy.png`,
+`factorial-design-type-selector.png`, `fractional-factorial-alias.png`,
+`general-factorial-three-level.png`, `asset-management-overview.png`,
+`asset-management-detail.png`, `home-dashboard-wide.png`, and
+`home-dashboard-mobile.png`.
+
 The 2026-08-03 Statistical Twin browser-branding and DOE-table run additionally:
 
 - verifies `document.title` is exactly `Statistical Twin`, the versioned local

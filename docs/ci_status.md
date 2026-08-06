@@ -4,6 +4,29 @@ Last updated: 2026-08-06
 
 ## Local Validation
 
+- The home/assets/hypothesis-family/factorial extension is based on main
+  `636592d19344a03563302dd71e7275f31bf6627b`. It advances API contract 10 to
+  11 and `doe.factorial_design` 0.4.0 to 0.5.0, and adds
+  `doe.general_factorial_design` 0.1.0. Metadata schema remains 18, so no
+  SQLite migration or legacy artifact rewrite is used. Existing two-level
+  full-factorial results and standalone regression prediction routes/readers
+  remain supported.
+- Focused backend validation passed 260 tests. Final `scripts/test.ps1`
+  completed in 1009 seconds with backend pytest 957/957 and frontend Vitest
+  262/262 across 32 files. TypeScript strict checking and the production build
+  passed, and mypy passed over 126 source modules. The isolated Chromium critical path
+  passed in 115.6 seconds with diagnostics under
+  `.tmp/e2e-diagnostics-home-assets-factorial`. It covers responsive regression
+  prediction summaries, contextual prediction navigation, all 10 hypothesis
+  methods in four families, regular fractional alias metadata, a 27-run
+  three-level general factorial ANOVA, the unified asset catalog and typed DOE
+  retention, and `/home` dashboard plus `/project` compatibility. Final
+  `scripts/check.ps1` completed in 1050.1 seconds with 18 tutorial result
+  blocks, Ruff lint/format over 202 Python files, mypy over 126 source modules,
+  backend pytest 957/957, frontend lint/typecheck, Vitest 262/262, and the
+  production build all passing. The existing Vite main-chunk size warning
+  remains informational.
+
 - The Bayesian legacy-restore and default-port correction is based on main
   `d38bf7c41412cbc02528d292823f9e448f866888`. Schema-1 through schema-3
   definition hashes are now recomputed with their original factor and initial-
