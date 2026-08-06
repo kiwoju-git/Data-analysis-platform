@@ -2,7 +2,7 @@ import { parseAnalysisLocation, type AnalysisSelection } from "./analysisNavigat
 
 export type AppRoute =
   | {
-      page: "project";
+      page: "home";
     }
   | {
       page: "dataset";
@@ -18,8 +18,11 @@ export type AppRoute =
 
 export function parseAppRoute(pathname: string, hash: string): AppRoute {
   const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-  if (normalizedPath === "/project") {
-    return { page: "project" };
+  if (normalizedPath === "/" || normalizedPath === "/home" || normalizedPath === "/project") {
+    return { page: "home" };
+  }
+  if (normalizedPath === "/datasets") {
+    return { page: "dataset" };
   }
   if (normalizedPath === "/graphs") {
     return { page: "graphs" };
@@ -41,14 +44,14 @@ export function parseAppRoute(pathname: string, hash: string): AppRoute {
     };
   }
   return {
-    page: "dataset",
+    page: "home",
   };
 }
 
 export function currentAppRoute(): AppRoute {
   if (typeof window === "undefined") {
     return {
-      page: "dataset",
+      page: "home",
     };
   }
   return parseAppRoute(window.location.pathname, window.location.hash);

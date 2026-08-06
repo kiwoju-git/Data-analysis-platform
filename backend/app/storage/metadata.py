@@ -186,6 +186,33 @@ class WorkspaceSummaryCounts:
 
 
 @dataclass(frozen=True)
+class WorkspaceAssetCatalogRecord:
+    asset_id: str
+    asset_type: str
+    subtype: str
+    method_id: str | None
+    display_name: str
+    secondary_text: str
+    status: str
+    created_at: str
+    updated_at: str
+    pinned: bool
+    note: str | None
+    dependency_count: int
+
+
+@dataclass(frozen=True)
+class ExperimentDesignDeletionSnapshot:
+    design: "ExperimentDesignRecord"
+    design_sha256: str
+    version_count: int
+    run_count: int
+    response_count: int
+    response_revision_count: int
+    analysis_count: int
+
+
+@dataclass(frozen=True)
 class AnalysisRunRecord:
     analysis_id: str
     method_id: str
@@ -2509,6 +2536,368 @@ def insert_analysis_run_record_with_artifacts_and_regression_model(
             for artifact in artifacts:
                 _insert_analysis_artifact(connection, artifact)
             _insert_regression_model(connection, regression_model)
+
+
+def list_workspace_asset_catalog_records(
+    workspace_root: Path,
+    *,
+    category: str | None,
+    method_id: str | None,
+    status_filter: str | None,
+    pinned: bool | None,
+    search: str | None,
+    sort: str,
+    offset: int,
+    limit: int,
+) -> tuple[int, list[WorkspaceAssetCatalogRecord]]:
+    catalog_sql = """
+        SELECT
+            version.version_id AS asset_id,
+            'dataset_version' AS asset_type,
+            'dataset_version' AS subtype,
+            NULL AS method_id,
+            COALESCE(metadata.user_label, dataset.original_filename) AS display_name,
+            printf('%d rows x %d columns', version.row_count, version.column_count)
+                AS secondary_text,
+            CASE WHEN COALESCE(metadata.archived, 0) = 1
+                 THEN 'archived' ELSE 'available' END AS status,
+            version.created_at,
+            COALESCE(metadata.updated_at, version.created_at) AS updated_at,
+            COALESCE(metadata.pinned, 0) AS pinned,
+            metadata.note,
+            (SELECT COUNT(*) FROM analysis_runs analysis
+             WHERE analysis.dataset_version_id = version.version_id)
+                AS dependency_count
+        FROM dataset_versions version
+        JOIN datasets dataset ON dataset.dataset_id = version.dataset_id
+        LEFT JOIN dataset_version_user_metadata metadata ON metadata.version_id = version.version_id
+
+        UNION ALL
+
+        SELECT
+            analysis.analysis_id,
+            'analysis_run',
+            analysis.method_id,
+            analysis.method_id,
+            analysis.method_id,
+            CASE WHEN analysis.stale = 1 THEN 'source stale' ELSE 'stored result' END,
+            CASE WHEN analysis.stale = 1 THEN 'stale' ELSE analysis.status END,
+            analysis.created_at,
+            analysis.updated_at,
+            0,
+            NULL,
+            (SELECT COUNT(*) FROM analysis_artifacts artifact
+             WHERE artifact.analysis_id = analysis.analysis_id)
+        FROM analysis_runs analysis
+        WHERE analysis.status = 'succeeded'
+
+        UNION ALL
+
+        SELECT
+            model.model_id,
+            'regression_model',
+            model.method_id,
+            model.method_id,
+            COALESCE(metadata.user_label, model.method_id),
+            'Saved regression model',
+            CASE WHEN analysis.stale = 1 THEN 'stale' ELSE 'available' END,
+            model.created_at,
+            COALESCE(metadata.updated_at, model.created_at),
+            COALESCE(metadata.pinned, 0),
+            metadata.note,
+            0
+        FROM regression_models model
+        JOIN analysis_runs analysis ON analysis.analysis_id = model.analysis_id
+        LEFT JOIN regression_model_user_metadata metadata ON metadata.model_id = model.model_id
+
+        UNION ALL
+
+        SELECT
+            design.design_id,
+            'doe_design',
+            design.family,
+            design.method_id,
+            design.name,
+            printf('%s design', design.family),
+            design.status,
+            design.created_at,
+            design.updated_at,
+            0,
+            NULL,
+            (
+                SELECT COUNT(*)
+                FROM experiment_design_analyses analysis
+                JOIN experiment_design_versions version
+                    ON version.design_version_id = analysis.design_version_id
+                WHERE version.design_id = design.design_id
+            ) + (
+                SELECT COUNT(*)
+                FROM experiment_response_revisions revision
+                JOIN experiment_design_versions version
+                    ON version.design_version_id = revision.design_version_id
+                WHERE version.design_id = design.design_id
+            )
+        FROM experiment_designs design
+
+        UNION ALL
+
+        SELECT
+            study.study_id,
+            'bayesian_study',
+            'bayesian_optimization',
+            study.method_id,
+            study.name,
+            printf('%d completed / %d trials',
+                (SELECT COUNT(*) FROM bayesian_trials trial
+                 JOIN bayesian_study_versions version
+                    ON version.study_version_id = trial.study_version_id
+                 WHERE version.study_id = study.study_id AND trial.state = 'completed'),
+                (SELECT COUNT(*) FROM bayesian_trials trial
+                 JOIN bayesian_study_versions version
+                    ON version.study_version_id = trial.study_version_id
+                 WHERE version.study_id = study.study_id)
+            ),
+            study.status,
+            study.created_at,
+            study.updated_at,
+            0,
+            NULL,
+            (SELECT COUNT(*) FROM bayesian_study_versions version
+             JOIN bayesian_trials trial ON trial.study_version_id = version.study_version_id
+             WHERE version.study_id = study.study_id)
+        FROM bayesian_studies study
+    """
+    clauses: list[str] = []
+    parameters: list[object] = []
+    if category is not None:
+        category_types = {
+            "datasets": ("dataset_version",),
+            "analyses": ("analysis_run",),
+            "models": ("regression_model",),
+            "designs": ("doe_design", "bayesian_study"),
+        }.get(category)
+        if category_types is None:
+            raise ValueError("workspace_asset_category_invalid")
+        placeholders = ",".join("?" for _item in category_types)
+        clauses.append(f"asset_type IN ({placeholders})")
+        parameters.extend(category_types)
+    if search:
+        clauses.append("(display_name LIKE ? ESCAPE '\\' OR secondary_text LIKE ? ESCAPE '\\')")
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        parameters.extend((f"%{escaped}%", f"%{escaped}%"))
+    if method_id:
+        clauses.append("method_id = ?")
+        parameters.append(method_id)
+    if status_filter:
+        clauses.append("status = ?")
+        parameters.append(status_filter)
+    if pinned is not None:
+        clauses.append("pinned = ?")
+        parameters.append(1 if pinned else 0)
+    where_clause = "" if not clauses else " WHERE " + " AND ".join(clauses)
+    order_clause = {
+        "updated_desc": "pinned DESC, updated_at DESC, created_at DESC, asset_id",
+        "created_desc": "pinned DESC, created_at DESC, asset_id",
+        "name_asc": "pinned DESC, display_name COLLATE NOCASE, asset_id",
+    }.get(sort)
+    if order_clause is None:
+        raise ValueError("workspace_asset_sort_invalid")
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        total = int(
+            connection.execute(
+                f"WITH assets AS ({catalog_sql}) SELECT COUNT(*) FROM assets{where_clause};",
+                tuple(parameters),
+            ).fetchone()[0]
+        )
+        rows = connection.execute(
+            f"""
+            WITH assets AS ({catalog_sql})
+            SELECT asset_id, asset_type, subtype, method_id, display_name,
+                   secondary_text, status, created_at, updated_at, pinned,
+                   note, dependency_count
+            FROM assets{where_clause}
+            ORDER BY {order_clause}
+            LIMIT ? OFFSET ?;
+            """,
+            (*parameters, limit, offset),
+        ).fetchall()
+    return total, [
+        WorkspaceAssetCatalogRecord(
+            asset_id=str(row[0]),
+            asset_type=str(row[1]),
+            subtype=str(row[2]),
+            method_id=None if row[3] is None else str(row[3]),
+            display_name=str(row[4]),
+            secondary_text=str(row[5]),
+            status=str(row[6]),
+            created_at=str(row[7]),
+            updated_at=str(row[8]),
+            pinned=_row_bool(row[9]),
+            note=None if row[10] is None else str(row[10]),
+            dependency_count=int(row[11]),
+        )
+        for row in rows
+    ]
+
+
+def get_experiment_design_deletion_snapshot(
+    workspace_root: Path, design_id: str
+) -> ExperimentDesignDeletionSnapshot | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        return _experiment_design_deletion_snapshot(connection, design_id)
+
+
+def delete_experiment_design_record(
+    workspace_root: Path,
+    *,
+    design_id: str,
+    expected_design_sha256: str,
+    expected_counts: tuple[int, int, int, int, int],
+) -> ExperimentDesignDeletionSnapshot:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        snapshot = _experiment_design_deletion_snapshot(connection, design_id)
+        if snapshot is None:
+            connection.rollback()
+            raise WorkspaceAssetStorageConflict("doe_design_deletion_conflict")
+        actual_counts = (
+            snapshot.version_count,
+            snapshot.run_count,
+            snapshot.response_count,
+            snapshot.response_revision_count,
+            snapshot.analysis_count,
+        )
+        if snapshot.design_sha256 != expected_design_sha256 or actual_counts != expected_counts:
+            connection.rollback()
+            raise WorkspaceAssetStorageConflict("doe_design_deletion_conflict")
+        version_ids = [
+            str(row[0])
+            for row in connection.execute(
+                "SELECT design_version_id FROM experiment_design_versions WHERE design_id = ?;",
+                (design_id,),
+            ).fetchall()
+        ]
+        if version_ids:
+            placeholders = ",".join("?" for _item in version_ids)
+            analysis_ids = [
+                str(row[0])
+                for row in connection.execute(
+                    f"SELECT analysis_id FROM experiment_design_analyses "
+                    f"WHERE design_version_id IN ({placeholders});",
+                    tuple(version_ids),
+                ).fetchall()
+            ]
+            if analysis_ids:
+                analysis_placeholders = ",".join("?" for _item in analysis_ids)
+                connection.execute(
+                    f"DELETE FROM experiment_design_analysis_response_revisions "
+                    f"WHERE analysis_id IN ({analysis_placeholders});",
+                    tuple(analysis_ids),
+                )
+            connection.execute(
+                f"DELETE FROM experiment_design_analyses "
+                f"WHERE design_version_id IN ({placeholders});",
+                tuple(version_ids),
+            )
+            connection.execute(
+                f"DELETE FROM experiment_response_heads "
+                f"WHERE design_version_id IN ({placeholders});",
+                tuple(version_ids),
+            )
+            revision_ids = [
+                str(row[0])
+                for row in connection.execute(
+                    f"SELECT response_revision_id FROM experiment_response_revisions "
+                    f"WHERE design_version_id IN ({placeholders});",
+                    tuple(version_ids),
+                ).fetchall()
+            ]
+            if revision_ids:
+                revision_placeholders = ",".join("?" for _item in revision_ids)
+                connection.execute(
+                    f"DELETE FROM experiment_response_revision_values "
+                    f"WHERE response_revision_id IN ({revision_placeholders});",
+                    tuple(revision_ids),
+                )
+                connection.execute(
+                    f"UPDATE experiment_response_revisions "
+                    f"SET supersedes_response_revision_id = NULL "
+                    f"WHERE response_revision_id IN ({revision_placeholders});",
+                    tuple(revision_ids),
+                )
+                connection.execute(
+                    f"DELETE FROM experiment_response_revisions "
+                    f"WHERE response_revision_id IN ({revision_placeholders});",
+                    tuple(revision_ids),
+                )
+            connection.execute(
+                f"DELETE FROM experiment_run_responses "
+                f"WHERE design_version_id IN ({placeholders});",
+                tuple(version_ids),
+            )
+        deleted = connection.execute(
+            "DELETE FROM experiment_designs WHERE design_id = ?;", (design_id,)
+        )
+        if deleted.rowcount != 1:
+            connection.rollback()
+            raise WorkspaceAssetStorageConflict("doe_design_deletion_conflict")
+        connection.commit()
+        return snapshot
+
+
+def _experiment_design_deletion_snapshot(
+    connection: sqlite3.Connection, design_id: str
+) -> ExperimentDesignDeletionSnapshot | None:
+    row = connection.execute(
+        """
+        SELECT design_id, method_id, method_version, family, name, status,
+               current_version, created_at, updated_at, app_version
+        FROM experiment_designs WHERE design_id = ?;
+        """,
+        (design_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    counts = connection.execute(
+        """
+        SELECT
+            COUNT(DISTINCT version.design_version_id),
+            COUNT(DISTINCT run.run_id),
+            COUNT(DISTINCT response.response_id),
+            COUNT(DISTINCT revision.response_revision_id),
+            COUNT(DISTINCT analysis.analysis_id)
+        FROM experiment_design_versions version
+        LEFT JOIN experiment_runs run ON run.design_version_id = version.design_version_id
+        LEFT JOIN experiment_run_responses response
+            ON response.design_version_id = version.design_version_id
+        LEFT JOIN experiment_response_revisions revision
+            ON revision.design_version_id = version.design_version_id
+        LEFT JOIN experiment_design_analyses analysis
+            ON analysis.design_version_id = version.design_version_id
+        WHERE version.design_id = ?;
+        """,
+        (design_id,),
+    ).fetchone()
+    version = connection.execute(
+        """
+        SELECT design_sha256 FROM experiment_design_versions
+        WHERE design_id = ? AND version_number = ?;
+        """,
+        (design_id, int(row[6])),
+    ).fetchone()
+    if counts is None or version is None:
+        raise WorkspaceAssetStorageConflict("doe_design_deletion_conflict")
+    return ExperimentDesignDeletionSnapshot(
+        design=_experiment_design_from_row(row),
+        design_sha256=str(version[0]),
+        version_count=int(counts[0]),
+        run_count=int(counts[1]),
+        response_count=int(counts[2]),
+        response_revision_count=int(counts[3]),
+        analysis_count=int(counts[4]),
+    )
 
 
 def insert_experiment_design_records(

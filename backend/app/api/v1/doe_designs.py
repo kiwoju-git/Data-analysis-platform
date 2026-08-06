@@ -3,6 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, Response, status
 
 from app.api.v1.schemas.doe import (
+    DoeDesignDeleteRequest,
+    DoeDesignDeleteResponse,
+    DoeDesignDeletionPreflightResponse,
     DoeDesignResponsesResponse,
     DoeDesignResponsesUpsertRequest,
     DoeFactorialAnalysisCreateRequest,
@@ -15,12 +18,20 @@ from app.api.v1.schemas.doe import (
     DoeResponseSurfaceAnalysisResponse,
     FactorialDesignCreateRequest,
     FactorialDesignResponse,
+    GeneralFactorialAnalysisCreateRequest,
+    GeneralFactorialAnalysisResponse,
+    GeneralFactorialDesignCreateRequest,
+    GeneralFactorialDesignResponse,
     LatinHypercubeDesignCreateRequest,
     LatinHypercubeDesignResponse,
     ResponseOptimizerCreateRequest,
     ResponseOptimizerResponse,
     ResponseSurfaceDesignCreateRequest,
     ResponseSurfaceDesignResponse,
+)
+from app.services.doe_design_retention import (
+    delete_doe_design,
+    get_doe_design_deletion_preflight,
 )
 from app.services.doe_designs import (
     create_factorial_design,
@@ -39,6 +50,14 @@ from app.services.doe_response_revisions import (
 from app.services.doe_response_surface_analysis import (
     create_response_surface_analysis,
     get_response_surface_analysis,
+)
+from app.services.general_factorial_designs import (
+    create_general_factorial_analysis,
+    create_general_factorial_design,
+    get_general_factorial_analysis,
+    get_general_factorial_design,
+    list_general_factorial_responses,
+    save_general_factorial_responses,
 )
 from app.services.lhs_designs import (
     create_latin_hypercube_design,
@@ -60,6 +79,94 @@ from app.services.response_surface_designs import (
 )
 
 router = APIRouter(prefix="/doe-designs", tags=["doe-designs"])
+
+
+@router.get(
+    "/{design_id}/deletion-preflight",
+    response_model=DoeDesignDeletionPreflightResponse,
+)
+def get_doe_design_deletion_preflight_route(
+    request: Request, design_id: UUID
+) -> DoeDesignDeletionPreflightResponse:
+    return get_doe_design_deletion_preflight(request.app.state.settings, design_id)
+
+
+@router.delete("/{design_id}", response_model=DoeDesignDeleteResponse)
+def delete_doe_design_route(
+    request: Request, design_id: UUID, body: DoeDesignDeleteRequest
+) -> DoeDesignDeleteResponse:
+    return delete_doe_design(request.app.state.settings, design_id, body)
+
+
+@router.post(
+    "/general-factorial",
+    response_model=GeneralFactorialDesignResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_general_factorial_design_route(
+    request: Request,
+    body: GeneralFactorialDesignCreateRequest,
+) -> GeneralFactorialDesignResponse:
+    return create_general_factorial_design(request.app.state.settings, body)
+
+
+@router.get(
+    "/general-factorial/{design_id}",
+    response_model=GeneralFactorialDesignResponse,
+)
+def get_general_factorial_design_route(
+    request: Request,
+    design_id: UUID,
+) -> GeneralFactorialDesignResponse:
+    return get_general_factorial_design(request.app.state.settings, design_id)
+
+
+@router.put(
+    "/general-factorial/{design_id}/responses",
+    response_model=DoeDesignResponsesResponse,
+)
+def save_general_factorial_responses_route(
+    request: Request,
+    design_id: UUID,
+    body: DoeDesignResponsesUpsertRequest,
+) -> DoeDesignResponsesResponse:
+    return save_general_factorial_responses(request.app.state.settings, design_id, body)
+
+
+@router.get(
+    "/general-factorial/{design_id}/responses",
+    response_model=DoeDesignResponsesResponse,
+)
+def list_general_factorial_responses_route(
+    request: Request,
+    design_id: UUID,
+) -> DoeDesignResponsesResponse:
+    return list_general_factorial_responses(request.app.state.settings, design_id)
+
+
+@router.post(
+    "/general-factorial/{design_id}/analyses",
+    response_model=GeneralFactorialAnalysisResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_general_factorial_analysis_route(
+    request: Request,
+    design_id: UUID,
+    body: GeneralFactorialAnalysisCreateRequest,
+) -> GeneralFactorialAnalysisResponse:
+    return create_general_factorial_analysis(request.app.state.settings, design_id, body)
+
+
+@router.get(
+    "/general-factorial/{design_id}/analyses/{analysis_id}",
+    response_model=GeneralFactorialAnalysisResponse,
+)
+def get_general_factorial_analysis_route(
+    request: Request,
+    design_id: UUID,
+    analysis_id: UUID,
+) -> GeneralFactorialAnalysisResponse:
+    return get_general_factorial_analysis(request.app.state.settings, design_id, analysis_id)
 
 
 @router.post(

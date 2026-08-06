@@ -21,6 +21,7 @@ import { formatLocalDateTime } from "./dateFormat";
 import { useAssetManagementState } from "./useAssetManagementState";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRegressionModelRetentionState } from "./useRegressionModelRetentionState";
+import { UnifiedAssetCatalogPanel } from "./UnifiedAssetCatalogPanel";
 import type { WorkspaceMutationKind } from "./workspaceMutation";
 
 export interface ManageAssetsPageProps {
@@ -32,6 +33,8 @@ export interface ManageAssetsPageProps {
   workspaceAssetRevision?: number;
 }
 
+type ManageTab = "all" | "datasets" | "analyses" | "models" | "designs";
+
 export function ManageAssetsPage({
   activeDatasetVersionId,
   onActivateDataset,
@@ -41,7 +44,7 @@ export function ManageAssetsPage({
   workspaceAssetRevision = 0,
 }: ManageAssetsPageProps) {
   const state = useAssetManagementState(workspaceAssetRevision);
-  const [tab, setTab] = useState<"datasets" | "models">(initialManageTab);
+  const [tab, setTab] = useState<ManageTab>(initialManageTab);
 
   useEffect(() => {
     const syncTab = () => setTab(initialManageTab());
@@ -57,32 +60,38 @@ export function ManageAssetsPage({
     <section className="asset-management-page" aria-labelledby="asset-management-title">
       <div className="panel-heading">
         <div>
-          <h2 id="asset-management-title">데이터모델 관리</h2>
-          <p>로컬에 저장된 데이터셋 버전과 회귀모델의 이름, 메모, 고정 상태를 관리합니다.</p>
+          <h2 id="asset-management-title">자산 관리</h2>
+          <p>현재 로컬 작업공간의 데이터, 분석 결과, 모델과 실험설계를 검색하고 관리합니다.</p>
         </div>
         <span className="status-pill status-ready">로컬 저장됨</span>
       </div>
-      <div className="segmented-control" role="tablist" aria-label="관리 자산 종류">
-        <button
-          aria-selected={tab === "datasets"}
-          className={tab === "datasets" ? "segment-active" : ""}
-          onClick={() => selectManageTab("datasets", setTab)}
-          role="tab"
-          type="button"
-        >
-          데이터셋
-        </button>
-        <button
-          aria-selected={tab === "models"}
-          className={tab === "models" ? "segment-active" : ""}
-          onClick={() => selectManageTab("models", setTab)}
-          role="tab"
-          type="button"
-        >
-          회귀모델
-        </button>
+      <div className="segmented-control manage-asset-tabs" role="tablist" aria-label="관리 자산 종류">
+        {([
+          ["all", "전체"],
+          ["datasets", "데이터셋"],
+          ["analyses", "분석 결과"],
+          ["models", "모델"],
+          ["designs", "실험 설계·스터디"],
+        ] as const).map(([value, label]) => (
+          <button
+            aria-selected={tab === value}
+            className={tab === value ? "segment-active" : ""}
+            key={value}
+            onClick={() => selectManageTab(value, setTab)}
+            role="tab"
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
       </div>
-      {tab === "datasets" ? (
+      {tab === "all" || tab === "analyses" || tab === "designs" ? (
+        <UnifiedAssetCatalogPanel
+          category={tab === "all" ? null : tab}
+          onMutation={() => onWorkspaceMutation("asset_deleted")}
+          revision={workspaceAssetRevision}
+        />
+      ) : tab === "datasets" ? (
         <DatasetManagementPanel
           activeDatasetVersionId={activeDatasetVersionId}
           state={state}
@@ -128,6 +137,11 @@ function DatasetManagementPanel({
   onWorkspaceMutation: (kind: WorkspaceMutationKind) => void;
   state: ReturnType<typeof useAssetManagementState>;
 }) {
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const selectedItem =
+    state.datasetCatalog?.versions.find(
+      (item) => item.version_id === selectedVersionId,
+    ) ?? null;
   return (
     <section aria-labelledby="dataset-management-title">
       <div className="panel-heading compact-heading">
@@ -167,15 +181,58 @@ function DatasetManagementPanel({
         <AssetManagementErrorNotice error={state.datasetError} />
       ) : null}
       {state.datasetCatalog?.versions.length === 0 ? <div className="empty-state">저장 데이터셋이 없습니다.</div> : null}
-      <div className="asset-management-list">
-        {state.datasetCatalog?.versions.map((item) => (
+      {state.datasetCatalog !== null && state.datasetCatalog.versions.length > 0 ? (
+        <div className="table-wrap asset-catalog-table-wrap">
+          <table className="result-table asset-catalog-table">
+            <thead>
+              <tr>
+                <th scope="col">이름</th>
+                <th scope="col">크기</th>
+                <th scope="col">상태</th>
+                <th scope="col">생성</th>
+                <th scope="col">고정</th>
+                <th className="asset-catalog-action-column" scope="col">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.datasetCatalog.versions.map((item) => (
+                <tr
+                  className={selectedVersionId === item.version_id ? "asset-catalog-row-selected" : ""}
+                  key={`${item.version_id}-${item.metadata_updated_at ?? "none"}`}
+                >
+                  <td>
+                    <strong>{item.user_label ?? item.original_filename}</strong>
+                    {item.user_label !== null ? <span className="asset-catalog-secondary">{item.original_filename}</span> : null}
+                  </td>
+                  <td>{item.row_count.toLocaleString()}행 · {item.column_count.toLocaleString()}열</td>
+                  <td>{item.version_id === activeDatasetVersionId ? "현재 분석" : item.archived ? "보관됨" : "사용 가능"}</td>
+                  <td>{formatLocalDateTime(item.created_at)}</td>
+                  <td>{item.pinned ? "고정" : "-"}</td>
+                  <td className="asset-catalog-action-column">
+                    <button
+                      aria-expanded={selectedVersionId === item.version_id}
+                      className="secondary-button compact-button"
+                      onClick={() => setSelectedVersionId((current) => current === item.version_id ? null : item.version_id)}
+                      type="button"
+                    >
+                      {selectedVersionId === item.version_id ? "상세 닫기" : "상세"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {selectedItem !== null ? (
+        <div className="asset-catalog-detail" aria-label="선택한 데이터셋 상세">
           <DatasetAssetEditor
-            active={item.version_id === activeDatasetVersionId}
-            item={item}
-            key={`${item.version_id}-${item.metadata_updated_at ?? "none"}`}
-            saved={state.savedId === item.version_id}
-            saving={state.savingId === item.version_id}
-            onActivate={() => onActivateDataset(item.version_id)}
+            active={selectedItem.version_id === activeDatasetVersionId}
+            item={selectedItem}
+            key={`${selectedItem.version_id}-${selectedItem.metadata_updated_at ?? "none"}`}
+            saved={state.savedId === selectedItem.version_id}
+            saving={state.savingId === selectedItem.version_id}
+            onActivate={() => onActivateDataset(selectedItem.version_id)}
             onMetadataChanged={onDatasetMetadataChanged}
             onVisibilityChanged={(archived) => {
               onWorkspaceMutation(
@@ -190,8 +247,8 @@ function DatasetManagementPanel({
             onStaleAsset={state.onStaleDatasetRemoved}
             onSave={state.onSaveDatasetMetadata}
           />
-        ))}
-      </div>
+        </div>
+      ) : null}
       <Pagination
         catalog={state.datasetCatalog}
         disabled={state.datasetLoading}
@@ -344,6 +401,10 @@ function RegressionModelManagementPanel({
   onWorkspaceMutation: (kind: WorkspaceMutationKind) => void;
   state: ReturnType<typeof useAssetManagementState>;
 }) {
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const selectedItem =
+    state.modelCatalog?.models.find((item) => item.model_id === selectedModelId) ??
+    null;
   return (
     <section aria-labelledby="model-management-title">
       <div className="panel-heading compact-heading">
@@ -360,13 +421,54 @@ function RegressionModelManagementPanel({
         <AssetManagementErrorNotice error={state.modelError} />
       ) : null}
       {state.modelCatalog?.models.length === 0 ? <div className="empty-state">저장 회귀모델이 없습니다.</div> : null}
-      <div className="asset-management-list">
-        {state.modelCatalog?.models.map((item) => (
+      {state.modelCatalog !== null && state.modelCatalog.models.length > 0 ? (
+        <div className="table-wrap asset-catalog-table-wrap">
+          <table className="result-table asset-catalog-table">
+            <thead>
+              <tr>
+                <th scope="col">이름</th>
+                <th scope="col">주요 정보</th>
+                <th scope="col">상태</th>
+                <th scope="col">고정</th>
+                <th className="asset-catalog-action-column" scope="col">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.modelCatalog.models.map((item) => {
+                const fallback = `${item.response?.display_name ?? "반응 metadata 확인 필요"} · predictor ${item.predictor_count ?? "?"}개`;
+                return (
+                  <tr
+                    className={selectedModelId === item.model_id ? "asset-catalog-row-selected" : ""}
+                    key={`${item.model_id}-${item.metadata_updated_at ?? "none"}`}
+                  >
+                    <td><strong>{item.user_label ?? fallback}</strong></td>
+                    <td>predictor {item.predictor_count ?? "?"}개</td>
+                    <td>{availabilityLabel(item.availability)}</td>
+                    <td>{item.pinned ? "고정" : "-"}</td>
+                    <td className="asset-catalog-action-column">
+                      <button
+                        aria-expanded={selectedModelId === item.model_id}
+                        className="secondary-button compact-button"
+                        onClick={() => setSelectedModelId((current) => current === item.model_id ? null : item.model_id)}
+                        type="button"
+                      >
+                        {selectedModelId === item.model_id ? "상세 닫기" : "상세"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {selectedItem !== null ? (
+        <div className="asset-catalog-detail" aria-label="선택한 회귀모델 상세">
           <ModelAssetEditor
-            item={item}
-            key={`${item.model_id}-${item.metadata_updated_at ?? "none"}`}
-            saved={state.savedId === item.model_id}
-            saving={state.savingId === item.model_id}
+            item={selectedItem}
+            key={`${selectedItem.model_id}-${selectedItem.metadata_updated_at ?? "none"}`}
+            saved={state.savedId === selectedItem.model_id}
+            saving={state.savingId === selectedItem.model_id}
             onSave={state.onSaveModelMetadata}
             onDeleted={() => {
               state.onRefreshModels();
@@ -374,8 +476,8 @@ function RegressionModelManagementPanel({
             }}
             onStaleAsset={state.onStaleModelRemoved}
           />
-        ))}
-      </div>
+        </div>
+      ) : null}
       <Pagination
         catalog={state.modelCatalog}
         disabled={state.modelLoading}
@@ -445,7 +547,7 @@ function ModelAssetEditor({
       />
       <div className="button-row">
         <a className="secondary-button link-button" href={`/analysis/regression/regression.predict?model_id=${encodeURIComponent(item.model_id)}`}>
-          Predict에서 열기
+          예측 입력 열기
         </a>
         <button
           className="primary-button"
@@ -994,16 +1096,20 @@ function shortId(value: string) {
   return value.length <= 12 ? value : `${value.slice(0, 8)}…`;
 }
 
-function initialManageTab(): "datasets" | "models" {
-  if (typeof window === "undefined") return "datasets";
-  return new URL(window.location.href).searchParams.get("tab") === "models"
-    ? "models"
-    : "datasets";
+function initialManageTab(): ManageTab {
+  if (typeof window === "undefined") return "all";
+  const value = new URL(window.location.href).searchParams.get("tab");
+  return value === "datasets" ||
+    value === "analyses" ||
+    value === "models" ||
+    value === "designs"
+    ? value
+    : "all";
 }
 
 function selectManageTab(
-  tab: "datasets" | "models",
-  setTab: (value: "datasets" | "models") => void,
+  tab: ManageTab,
+  setTab: (value: ManageTab) => void,
 ): void {
   setTab(tab);
   if (typeof window === "undefined") return;

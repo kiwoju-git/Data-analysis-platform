@@ -13,6 +13,7 @@ import {
 import type { RegressionPredictionExportState } from "./useRegressionPredictionExportState";
 import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
 import { RegressionManualPredictionPanel } from "./RegressionManualPredictionPanel";
+import { RegressionPredictionResultsTable } from "./RegressionPredictionResultsTable";
 
 export interface RegressionPredictionRowsState {
   error: string | null;
@@ -366,12 +367,7 @@ export function RegressionPredictionPanel({
             <div className="panel-heading"><div><h4>예측 구간 차트</h4><p>Predicted mean · mean CI · prediction interval</p></div></div>
             <div className="chart-grid chart-grid-single"><PredictionIntervalChart rows={previewRows} /></div>
           </div>
-          <div className="table-wrap">
-            <table className="result-table">
-              <thead><tr><th>행 index</th><th>예측 평균</th><th>Mean CI</th><th>Prediction interval</th><th>경고</th></tr></thead>
-              <tbody>{previewRows.map((row) => <tr key={row.row_index}><td>{row.row_index.toLocaleString()}</td><td>{number(row.predicted_mean)}</td><td>{interval(row.mean_confidence_interval)}</td><td>{interval(row.prediction_interval)}</td><td>{row.warnings.length > 0 ? row.warnings.join(", ") : "없음"}</td></tr>)}</tbody>
-            </table>
-          </div>
+          <RegressionPredictionResultsTable rowNumberOffset={-1} rows={previewRows} />
           {predictionRowsState.error !== null ? <div className="error-box" role="alert">예측 행 조회 실패: {predictionRowsState.error}</div> : null}
           {activePage !== null ? (
             <div className="result-pagination" aria-label="예측 행 페이지 이동">
@@ -463,8 +459,4 @@ function number(value: number) {
 
 function numberOrDash(value: number | null) {
   return value === null || !Number.isFinite(value) ? "-" : number(value);
-}
-
-function interval(value: { level: number; lower: number; upper: number } | null) {
-  return value === null ? "-" : `${(value.level * 100).toFixed(1)}% ${number(value.lower)} - ${number(value.upper)}`;
 }

@@ -215,7 +215,7 @@ describe("App", () => {
       methodId: "hypothesis.two_sample_t",
     });
     expect(parseAppRoute("/", "")).toEqual({
-      page: "dataset",
+      page: "home",
     });
     expect(parseAppRoute(path, "")).toEqual({
       page: "analysis",
@@ -227,7 +227,9 @@ describe("App", () => {
     expect(parseAppRoute("/reports/", "")).toEqual({ page: "reports" });
     expect(parseAppRoute("/help", "")).toEqual({ page: "help" });
     expect(parseAppRoute("/manage", "")).toEqual({ page: "manage" });
-    expect(parseAppRoute("/project", "")).toEqual({ page: "project" });
+    expect(parseAppRoute("/project", "")).toEqual({ page: "home" });
+    expect(parseAppRoute("/home", "")).toEqual({ page: "home" });
+    expect(parseAppRoute("/", "")).toEqual({ page: "home" });
     expect(parseAppRoute("/graphs", "")).toEqual({ page: "graphs" });
     expect(
       parseAnalysisPath(
@@ -486,7 +488,7 @@ describe("App", () => {
     expect(methodGridHtml).not.toContain('class="method-meta"');
     expect(methodGridHtml).not.toContain("데이터셋 필요");
     expect(methodGridHtml).not.toContain("Source 자산 선택");
-    expect(methodGridHtml).toContain('class="method-card-tags"');
+    expect(methodGridHtml).toContain('class="hypothesis-family-card"');
     expect(html).toContain("검정 선택 빠른 가이드");
     expect(html).toContain("표본 수 30과 정규성 검정 p-value는 절대적인 자동 선택 기준이 아닙니다");
     expect(html).not.toContain('class="workbench-steps"');
@@ -5097,6 +5099,8 @@ describe("App", () => {
         onOpenAnalysisPage={() => undefined}
         onOpenAnalysisMethod={() => undefined}
         onOpenDatasetPage={() => undefined}
+        onOpenGraphsPage={() => undefined}
+        onOpenHelpPage={() => undefined}
         onOpenManagePage={() => undefined}
         onOpenReportsPage={() => undefined}
       />,
@@ -5120,6 +5124,8 @@ describe("App", () => {
         onOpenAnalysisPage={() => undefined}
         onOpenAnalysisMethod={() => undefined}
         onOpenDatasetPage={() => undefined}
+        onOpenGraphsPage={() => undefined}
+        onOpenHelpPage={() => undefined}
         onOpenManagePage={() => undefined}
         onOpenReportsPage={() => undefined}
       />,
@@ -5230,14 +5236,14 @@ describe("App", () => {
     expect(html).toContain("<dt>열</dt><dd>2</dd>");
     expect(html).not.toContain("schema-hash");
     expect(html).toContain(">sample.txt · 3행 · 2열 · v1 · 2026. 06. 27. 09:00</option>");
-    expect(html.match(/href="\/project"/g)).toHaveLength(2);
+    expect(html.match(/href="\/home"/g)).toHaveLength(2);
     expect(html).toContain("Workspace child");
     expect(html).toContain("리포트");
     expect(html).toContain("관리");
     expect(html).toContain("도움말");
   });
 
-  it("renders the data and regression model management entry surface", () => {
+  it("renders the unified local asset management entry surface", () => {
     const html = renderToString(
       <ManageAssetsPage
         activeDatasetVersionId={null}
@@ -5247,13 +5253,15 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("데이터모델 관리");
+    expect(html).toContain("자산 관리");
     expect(html).toContain("데이터셋");
-    expect(html).toContain("회귀모델");
-    expect(html).toContain("목록 새로고침");
+    expect(html).toContain("분석 결과");
+    expect(html).toContain("실험 설계·스터디");
+    expect(html).toContain("저장 자산 목록");
+    expect(html).toContain("새로고침");
     expect(html).toContain("로컬 저장됨");
-    expect(html).toContain("표시 중");
-    expect(html).toContain("보관됨");
+    expect(html).toContain("고정만 보기");
+    expect(html).toContain("최근 수정");
     expect(html).toContain("전체");
   });
 
@@ -5392,13 +5400,15 @@ describe("App", () => {
         currentDatasetVersion={datasetVersionTestResponse()}
         onOpenAnalysis={() => undefined}
         onOpenDatasetPage={() => undefined}
+        onOpenGraphs={() => undefined}
+        onOpenHelp={() => undefined}
         onOpenManage={() => undefined}
         onOpenReports={() => undefined}
       />,
     );
 
-    expect(html).toContain("프로젝트");
-    expect(html).toContain("현재 로컬 작업공간의 데이터와 분석 자산");
+    expect(html).toContain("Statistical Twin 대시보드");
+    expect(html).toContain("로컬 작업공간의 최근 자산");
     expect(html).toContain("현재 분석 데이터셋");
     expect(html).toContain("장기 보관 공정 데이터");
     expect(html).toContain("source-data.csv");

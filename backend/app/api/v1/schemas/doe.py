@@ -43,6 +43,16 @@ class FactorialDesignCreateRequest(BaseModel):
     randomize: bool = True
     randomization_seed: int = Field(ge=0, le=2_147_483_647)
     block_count: int = Field(default=1, ge=1, le=64)
+    design_type: Literal["two_level_full", "two_level_fractional"] = "two_level_full"
+    fraction_id: str | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="after")
+    def validate_fraction_selection(self) -> FactorialDesignCreateRequest:
+        if self.design_type == "two_level_fractional" and not self.fraction_id:
+            raise ValueError("fraction_id is required for a fractional factorial design")
+        if self.design_type == "two_level_full" and self.fraction_id is not None:
+            raise ValueError("fraction_id is only valid for a fractional factorial design")
+        return self
 
 
 class DoeFactorResponse(BaseModel):
@@ -83,6 +93,25 @@ class FactorialDesignOptionsResponse(BaseModel):
     randomize: bool
     randomization_seed: int = Field(ge=0)
     block_count: int = Field(ge=1)
+    design_type: Literal["two_level_full", "two_level_fractional"] = "two_level_full"
+    fraction_id: str | None = None
+    design_schema_version: int = Field(default=1, ge=1)
+
+
+class FractionalFactorialMetadataResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    catalog_entry_id: str
+    base_factor_count: int = Field(ge=2)
+    fraction_exponent: int = Field(ge=1)
+    fraction: str
+    resolution: int = Field(ge=3)
+    generators: list[str]
+    defining_relation: list[str]
+    alias_groups: list[list[str]]
+    estimable_terms: list[str]
+    non_estimable_terms: list[str]
+    principal_fraction: bool
 
 
 class FactorialDesignRunResponse(BaseModel):
@@ -204,6 +233,142 @@ class FactorialDesignResponse(BaseModel):
     run_count: int = Field(ge=1)
     design_sha256: str
     runs: list[FactorialDesignRunResponse]
+    design_schema_version: int = Field(default=1, ge=1)
+    fractional: FractionalFactorialMetadataResponse | None = None
+
+
+class GeneralFactorialFactorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=80)
+    levels: list[FiniteFloat | str] = Field(min_length=2, max_length=10)
+    unit: str | None = Field(default=None, max_length=40)
+
+
+class GeneralFactorialDesignCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(default="General full factorial design", min_length=1, max_length=120)
+    factors: list[GeneralFactorialFactorRequest] = Field(min_length=2, max_length=6)
+    replicates: int = Field(default=1, ge=1, le=16)
+    randomize: bool = True
+    randomization_seed: int = Field(ge=0, le=2_147_483_647)
+    max_interaction_order: int = Field(default=2, ge=1, le=3)
+
+
+class GeneralFactorialFactorResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    levels: list[float | str]
+    unit: str | None
+
+
+class GeneralFactorialOptionsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    replicates: int = Field(ge=1)
+    randomize: bool
+    randomization_seed: int = Field(ge=0)
+    max_interaction_order: int = Field(ge=1, le=3)
+
+
+class GeneralFactorialRunResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    standard_order: int = Field(ge=1)
+    run_order: int = Field(ge=1)
+    replicate_index: int = Field(ge=1)
+    factor_levels: dict[str, float | str]
+    level_indices: dict[str, int]
+
+
+class GeneralFactorialDesignResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    design_schema_version: Literal[1]
+    design_id: UUID
+    design_version_id: UUID
+    version_number: Literal[1]
+    method_id: Literal["doe.general_factorial_design"]
+    method_version: Literal["0.1.0"]
+    family: Literal["general_full_factorial"]
+    name: str
+    status: str
+    created_at: str
+    updated_at: str
+    app_version: str
+    factors: list[GeneralFactorialFactorResponse]
+    options: GeneralFactorialOptionsResponse
+    run_count: int = Field(ge=1, le=256)
+    design_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    runs: list[GeneralFactorialRunResponse]
+
+
+class GeneralFactorialAnalysisCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_name: str = Field(min_length=1, max_length=80)
+    response_revision_id: UUID | None = None
+    max_interaction_order: int = Field(default=2, ge=1, le=3)
+
+
+class GeneralFactorialAnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_id: UUID
+    design_id: UUID
+    design_version_id: UUID
+    design_version_number: int = Field(ge=1)
+    method_id: Literal["doe.general_factorial_design"]
+    method_version: Literal["0.1.0"]
+    analysis_schema_version: Literal[1]
+    design_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    response_revision_id: UUID
+    response_revision_number: int = Field(ge=1)
+    response_revision_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    response_name: str
+    created_at: str
+    app_version: str
+    result: dict[str, object]
+
+
+class DoeDesignDeletionCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version_count: int = Field(ge=1)
+    run_count: int = Field(ge=1)
+    response_count: int = Field(ge=0)
+    response_revision_count: int = Field(ge=0)
+    analysis_count: int = Field(ge=0)
+
+
+class DoeDesignDeletionPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preflight_schema_version: Literal[1]
+    design_id: UUID
+    method_id: str
+    status: str
+    counts: DoeDesignDeletionCounts
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class DoeDesignDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_design_id: UUID
+    expected_deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class DoeDesignDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deletion_schema_version: Literal[1]
+    design_id: UUID
+    deletion_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    deleted_at: str
+    deleted_counts: DoeDesignDeletionCounts
 
 
 class LatinHypercubeDesignCreateRequest(BaseModel):
@@ -515,6 +680,7 @@ class DoeFactorialAnalysisResult(BaseModel):
     diagnostics: DoeFactorialDiagnosticsResponse
     plots: DoeFactorialPlotsResponse
     warnings: list[str]
+    fractional_design: FractionalFactorialMetadataResponse | None = None
 
 
 class DoeFactorialAnalysisResponse(BaseModel):

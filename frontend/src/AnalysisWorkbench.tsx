@@ -31,6 +31,8 @@ import type {
   AnalysisHistoryStaleFilter,
 } from "./analysisWorkbenchTypes";
 import { availabilityLabel } from "./analysisWorkbenchUtils";
+import { groupHypothesisMethods } from "./analysisMethodFamilies";
+import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
 
 export interface AnalysisWorkbenchExportState {
   analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
@@ -240,8 +242,35 @@ export function AnalysisWorkbench({
         selectedModuleId={selectedModuleId}
         onSelectMethod={(moduleId, methodId) => selectMethod(moduleId, methodId)}
       />
+      {selectedModuleId === "hypothesis" ? (
+        <div className="hypothesis-family-grid" aria-label="가설검정 family">
+          {groupHypothesisMethods(selectedMethods).map((family) => (
+            <section className="hypothesis-family-card" key={family.id}>
+              <div className="hypothesis-family-heading">
+                <h3>{family.label}</h3>
+                <span>{family.methods.length}개</span>
+              </div>
+              <p>{family.description}</p>
+              <div className="hypothesis-family-methods">
+                {family.methods.map((method) => (
+                  <button
+                    aria-pressed={method.method_id === selectedMethod?.method_id}
+                    className={method.method_id === selectedMethod?.method_id ? "is-active" : ""}
+                    disabled={method.availability !== "available"}
+                    key={method.method_id}
+                    onClick={() => selectMethod(method.module_id, method.method_id)}
+                    type="button"
+                  >
+                    {method.label_ko}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
       <div className="method-grid" aria-label="분석 메서드">
-        {selectedMethods.map((method) => {
+        {selectedMethods.filter((method) => !isContextualAnalysisMethod(method.method_id)).map((method) => {
           const cardTags = getMethodCardTags(method.method_id);
           return (
             <button
@@ -280,6 +309,7 @@ export function AnalysisWorkbench({
           );
         })}
       </div>
+      )}
       {selectedMethod !== null ? (
         <section className="analysis-workbench" aria-labelledby="workbench-title">
           <div className="panel-heading workbench-heading">

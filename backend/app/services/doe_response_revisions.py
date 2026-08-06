@@ -38,6 +38,7 @@ from app.storage.metadata import (
 RESPONSE_REVISION_SCHEMA_VERSION: Final[Literal[1]] = 1
 SUPPORTED_METHOD_IDS = {
     "doe.factorial_design",
+    "doe.general_factorial_design",
     "doe.response_surface",
     "doe.latin_hypercube",
 }

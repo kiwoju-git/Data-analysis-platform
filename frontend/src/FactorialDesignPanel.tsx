@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
-import { createDoeResponseRevision, fetchDoeResponseRevisions } from "./api";
+import {
+  createDoeResponseRevision,
+  fetchDoeResponseRevisions,
+  fetchFactorialDesign,
+  fetchFactorialDesignResponses,
+} from "./api";
 import type {
   DoeDesignResponsesResponse,
   DoeDesignResponsesUpsertRequest,
@@ -24,6 +29,7 @@ import {
   parseDoeFactorDomainDraft,
   type DoeFactorDomainDraft,
 } from "./doe/factorDomain";
+import { GeneralFactorialDesignPanel } from "./GeneralFactorialDesignPanel";
 
 interface FactorDraft extends DoeFactorDomainDraft {
   id: string;
@@ -64,6 +70,21 @@ interface ResponseValidationResult {
 
 const maxFactorCount = 6;
 const maxRunCount = 256;
+type FactorialDesignType = "two_level_full" | "two_level_fractional" | "general_factorial";
+
+const fractionalOptionsByFactorCount: Record<number, Array<{ id: string; label: string }>> = {
+  3: [{ id: "3-factor-half-r3", label: "4 runs · 1/2 fraction · Resolution III" }],
+  4: [{ id: "4-factor-half-r4", label: "8 runs · 1/2 fraction · Resolution IV" }],
+  5: [
+    { id: "5-factor-half-r5", label: "16 runs · 1/2 fraction · Resolution V" },
+    { id: "5-factor-quarter-r3", label: "8 runs · 1/4 fraction · Resolution III" },
+  ],
+  6: [
+    { id: "6-factor-half-r6", label: "32 runs · 1/2 fraction · Resolution VI" },
+    { id: "6-factor-quarter-r4", label: "16 runs · 1/4 fraction · Resolution IV" },
+    { id: "6-factor-eighth-r3", label: "8 runs · 1/8 fraction · Resolution III" },
+  ],
+};
 
 export function FactorialDesignPanel({
   analysis,
@@ -80,6 +101,15 @@ export function FactorialDesignPanel({
   responseError,
   responses,
 }: FactorialDesignPanelProps) {
+  const designLocation = useMemo(designLocationFromWindow, []);
+  const [designType, setDesignType] = useState<FactorialDesignType>(
+    designLocation.kind === "general" ? "general_factorial" : "two_level_full",
+  );
+  const [restoredDesign, setRestoredDesign] = useState<FactorialDesignResponse | null>(null);
+  const [restoredResponses, setRestoredResponses] =
+    useState<DoeDesignResponsesResponse | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [fractionId, setFractionId] = useState("");
   const [name, setName] = useState("2-level screening design");
   const [factors, setFactors] = useState<FactorDraft[]>([
     {
@@ -106,12 +136,87 @@ export function FactorialDesignPanel({
         randomize,
         randomizationSeed,
         blockCount,
+        designType,
+        fractionId,
       }),
-    [blockCount, centerPoints, factors, name, randomizationSeed, randomize, replicates],
+    [
+      blockCount,
+      centerPoints,
+      designType,
+      factors,
+      fractionId,
+      name,
+      randomizationSeed,
+      randomize,
+      replicates,
+    ],
   );
+  const displayedDesign = design ?? restoredDesign;
+  const displayedResponses = responses ?? restoredResponses;
+
+  useEffect(() => {
+    if (designLocation.designId === null || designLocation.kind === "general") return;
+    let current = true;
+    setRestoreError(null);
+    void Promise.all([
+      fetchFactorialDesign(designLocation.designId),
+      fetchFactorialDesignResponses(designLocation.designId).catch(() => null),
+    ])
+      .then(([fetchedDesign, fetchedResponses]) => {
+        if (!current) return;
+        setRestoredDesign(fetchedDesign);
+        setRestoredResponses(fetchedResponses);
+        setDesignType(
+          fetchedDesign.options.design_type === "two_level_fractional"
+            ? "two_level_fractional"
+            : "two_level_full",
+        );
+      })
+      .catch((caught) => {
+        if (current) {
+          setRestoreError(
+            caught instanceof Error ? caught.message : "doe_factorial_design_fetch_failed",
+          );
+        }
+      });
+    return () => {
+      current = false;
+    };
+  }, [designLocation.designId, designLocation.kind]);
 
   return (
     <section className="analysis-run-panel" data-analysis-execution={methodId}>
+      <DoeFormSection
+        title="설계 종류"
+        description="요인 수와 요인당 수준 수를 구분해 목적에 맞는 설계를 선택합니다."
+      >
+        <fieldset className="segmented-control factorial-design-type-selector">
+          <legend className="sr-only">설계 종류</legend>
+          {([
+            ["two_level_full", "2수준 완전요인"],
+            ["two_level_fractional", "2수준 부분요인"],
+            ["general_factorial", "일반 완전요인"],
+          ] as const).map(([value, label]) => (
+            <label key={value}>
+              <input
+                checked={designType === value}
+                name="factorial-design-type"
+                onChange={() => setDesignType(value)}
+                type="radio"
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+        <p className="compact-note">
+          요인 3개는 실험변수 3개를 뜻하며 2수준 설계에서도 지원합니다. 요인당 3개 이상의
+          수준은 일반 완전요인을 사용합니다.
+        </p>
+      </DoeFormSection>
+      {designType === "general_factorial" ? (
+        <GeneralFactorialDesignPanel initialDesignId={designLocation.designId} />
+      ) : (
+        <>
       <DoeFormSection
         title="설계 기본 설정"
         description="2수준 요인배치의 반복과 센터점 수를 정합니다."
@@ -210,6 +315,35 @@ export function FactorialDesignPanel({
             ]}
           />
         </DoeAdvancedSettings>
+        {designType === "two_level_fractional" ? (
+          <>
+          <DoeSettingsTable
+            ariaLabel="부분요인 설계 선택"
+            fields={[
+              {
+                key: "fraction",
+                label: "검증된 부분요인 설계",
+                controlId: "factorial-fraction-id",
+                control: (
+                  <select
+                    id="factorial-fraction-id"
+                    value={fractionId}
+                    onChange={(event) => setFractionId(event.currentTarget.value)}
+                  >
+                    <option value="">선택</option>
+                    {(fractionalOptionsByFactorCount[factors.length] ?? []).map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                ),
+              },
+            ]}
+          />
+          <p className="compact-note">
+            부분요인은 generator와 alias 구조가 검증된 catalog 항목만 사용할 수 있습니다.
+          </p>
+          </>
+        ) : null}
       </DoeFormSection>
       <DoeFactorEditor
         action={
@@ -374,26 +508,29 @@ export function FactorialDesignPanel({
         <span>예상 run</span>
         <strong>{validation.runCount.toLocaleString()}</strong>
         <span>Family</span>
-        <strong>two_level_full_factorial</strong>
+        <strong>{designType === "two_level_fractional" ? "two_level_regular_fractional_factorial" : "two_level_full_factorial"}</strong>
         <span>Response</span>
         <strong>run별 저장 지원</strong>
         <span>Analysis</span>
         <strong>효과·OLS/ANOVA 지원</strong>
       </div>
       {error !== null ? <div className="error-box">오류 코드: {error}</div> : null}
-      {design !== null ? (
+      {restoreError !== null ? <div className="error-box">오류 코드: {restoreError}</div> : null}
+      {displayedDesign !== null ? (
         <FactorialDesignPreview
           analysis={analysis}
           analysisError={analysisError}
-          design={design}
+          design={displayedDesign}
           isRunningAnalysis={isRunningAnalysis}
           isSavingResponses={isSavingResponses}
           onSaveResponses={onSaveResponses}
           onRunAnalysis={onRunAnalysis}
           responseError={responseError}
-          responses={responses}
+          responses={displayedResponses}
         />
       ) : null}
+        </>
+      )}
     </section>
   );
 }
@@ -486,6 +623,34 @@ export function FactorialDesignPreview({
         <span>SHA-256</span>
         <strong>{design.design_sha256.slice(0, 12)}</strong>
       </div>
+      {design.fractional ? (
+        <section className="result-section fractional-alias-summary">
+          <h3>부분요인 설계 구조</h3>
+          <div className="metadata-grid">
+            <span>Fraction</span><strong>{design.fractional.fraction}</strong>
+            <span>Resolution</span><strong>{formatResolution(design.fractional.resolution)}</strong>
+            <span>Generator</span><strong>{design.fractional.generators.join(", ")}</strong>
+            <span>Defining relation</span>
+            <strong>{design.fractional.defining_relation.join(" = ")}</strong>
+          </div>
+          <div className="table-wrap">
+            <table className="result-table">
+              <thead><tr><th>Alias group</th><th>해석</th></tr></thead>
+              <tbody>
+                {design.fractional.alias_groups.map((group) => (
+                  <tr key={group.join("=")}>
+                    <td>{group.join(" = ")}</td>
+                    <td>이 그룹의 항은 현재 설계에서 독립적으로 분리되지 않습니다.</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="notice-box notice-warning">
+            표시되는 효과는 alias group 전체의 contrast입니다. 개별 항의 독립 효과로 해석하지 마세요.
+          </div>
+        </section>
+      ) : null}
       <div className="table-wrap">
         <table className="result-table">
           <thead>
@@ -1113,6 +1278,8 @@ function validateFactorialDesignDraft({
   randomize,
   randomizationSeed,
   blockCount,
+  designType,
+  fractionId,
 }: {
   name: string;
   factors: FactorDraft[];
@@ -1121,6 +1288,8 @@ function validateFactorialDesignDraft({
   randomize: boolean;
   randomizationSeed: string;
   blockCount: string;
+  designType: FactorialDesignType;
+  fractionId: string;
 }): ValidationResult {
   const trimmedName = name.trim();
   if (trimmedName.length === 0) {
@@ -1179,7 +1348,23 @@ function validateFactorialDesignDraft({
     return validationError("Block 수는 1 이상 64 이하입니다.", 0);
   }
 
-  const runCount = 2 ** parsedFactors.length * parsedReplicates + parsedCenterPoints;
+  const fractionExponent = fractionId.includes("eighth")
+    ? 3
+    : fractionId.includes("quarter")
+      ? 2
+      : designType === "two_level_fractional"
+        ? 1
+        : 0;
+  if (
+    designType === "two_level_fractional" &&
+    !(fractionalOptionsByFactorCount[parsedFactors.length] ?? []).some(
+      (option) => option.id === fractionId,
+    )
+  ) {
+    return validationError("현재 요인 수에 맞는 검증된 부분요인 설계를 선택하세요.", 0);
+  }
+  const baseRunCount = 2 ** (parsedFactors.length - fractionExponent);
+  const runCount = baseRunCount * parsedReplicates + parsedCenterPoints;
   if (runCount > maxRunCount) {
     return validationError(`현재 설계 제한은 ${maxRunCount.toLocaleString()} runs입니다.`, runCount);
   }
@@ -1197,6 +1382,8 @@ function validateFactorialDesignDraft({
       randomize,
       randomization_seed: parsedSeed,
       block_count: parsedBlockCount,
+      design_type: designType === "two_level_fractional" ? designType : "two_level_full",
+      fraction_id: designType === "two_level_fractional" ? fractionId : null,
     },
     runCount,
   };
@@ -1265,4 +1452,22 @@ function formatCodedLevels(levels: Record<string, number>): string {
   return Object.entries(levels)
     .map(([name, level]) => `${name}:${level}`)
     .join(", ");
+}
+
+function formatResolution(value: number): string {
+  return ({ 3: "III", 4: "IV", 5: "V", 6: "VI" } as Record<number, string>)[value] ?? String(value);
+}
+
+function designLocationFromWindow(): {
+  designId: string | null;
+  kind: "general" | "two_level";
+} {
+  if (typeof window === "undefined") {
+    return { designId: null, kind: "two_level" };
+  }
+  const query = new URLSearchParams(window.location.search);
+  return {
+    designId: query.get("design_id"),
+    kind: query.get("design_kind") === "general" ? "general" : "two_level",
+  };
 }

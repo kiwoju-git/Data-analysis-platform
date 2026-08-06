@@ -4,6 +4,8 @@ import type {
   AnalysisModuleId,
 } from "./api";
 import type { AppRoute } from "./appRoute";
+import { groupHypothesisMethods } from "./analysisMethodFamilies";
+import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
 
 export interface SidebarNavigationItem {
   active: boolean;
@@ -17,8 +19,10 @@ export interface SidebarNavigationItem {
 export interface SidebarNavigationGroup {
   active: boolean;
   children: SidebarNavigationItem[];
+  direct?: boolean;
   id: AppRoute["page"];
   label: string;
+  onActivate?: () => void;
 }
 
 export type DatasetSidebarSection = "dataset-intake" | "dataset-version";
@@ -36,7 +40,9 @@ interface SidebarNavigationOptions {
   onOpenHelpSection: (
     section: "purpose" | "roles" | "methods" | "tutorial",
   ) => void;
-  onOpenManageTab: (tab: "datasets" | "models") => void;
+  onOpenManageTab: (
+    tab: "all" | "datasets" | "analyses" | "models" | "designs",
+  ) => void;
   onOpenGraphs: () => void;
   onOpenProject: () => void;
   onOpenReportTab: (tab: "reports" | "history") => void;
@@ -60,23 +66,23 @@ export function createSidebarNavigationGroups({
 }: SidebarNavigationOptions): SidebarNavigationGroup[] {
   const datasetSection = normalizeDatasetSidebarSection(query.get("section"));
   const reportTab = query.get("tab") === "history" ? "history" : "reports";
-  const manageTab = query.get("tab") === "models" ? "models" : "datasets";
+  const requestedManageTab = query.get("tab");
+  const manageTab = ["all", "datasets", "analyses", "models", "designs"].includes(
+    requestedManageTab ?? "",
+  )
+    ? requestedManageTab!
+    : "all";
   const helpSection =
     query.get("section") ?? (query.has("method_id") ? "methods" : "purpose");
 
   return [
     {
-      active: activePage === "project",
-      children: [
-        {
-          active: activePage === "project",
-          id: "project-overview",
-          label: "프로젝트 개요",
-          onActivate: onOpenProject,
-        },
-      ],
-      id: "project",
-      label: "프로젝트",
+      active: activePage === "home",
+      children: [],
+      direct: true,
+      id: "home",
+      label: "홈",
+      onActivate: onOpenProject,
     },
     {
       active: activePage === "dataset",
@@ -98,26 +104,46 @@ export function createSidebarNavigationGroups({
       children: (analysisCatalog?.modules ?? [])
         .slice()
         .sort((left, right) => left.order - right.order)
-        .map((module) => ({
+        .map((module) => {
+          const moduleMethods = (analysisCatalog?.methods ?? [])
+            .filter(
+              (method) =>
+                method.module_id === module.module_id &&
+                !isContextualAnalysisMethod(method.method_id),
+            )
+            .slice()
+            .sort((left, right) => left.order - right.order);
+          const methodItems = moduleMethods.map((method) => ({
+            active:
+              activePage === "analysis" && activeAnalysisMethodId === method.method_id,
+            disabled: !canOpenAnalysis || method.availability !== "available",
+            id: method.method_id,
+            label: method.label_ko,
+            onActivate: () => onOpenAnalysisMethod(method),
+          }));
+          const children = module.module_id === "hypothesis"
+            ? groupHypothesisMethods(moduleMethods).map((family) => ({
+                active: family.methods.some(
+                  (method) =>
+                    activePage === "analysis" && activeAnalysisMethodId === method.method_id,
+                ),
+                children: methodItems.filter((item) =>
+                  family.methods.some((method) => method.method_id === item.id),
+                ),
+                id: `hypothesis-${family.id}`,
+                label: family.label,
+              }))
+            : methodItems;
+          return ({
           active:
             activePage === "analysis" && activeAnalysisModuleId === module.module_id,
-          children: (analysisCatalog?.methods ?? [])
-            .filter((method) => method.module_id === module.module_id)
-            .slice()
-            .sort((left, right) => left.order - right.order)
-            .map((method) => ({
-              active:
-                activePage === "analysis" && activeAnalysisMethodId === method.method_id,
-              disabled: !canOpenAnalysis || method.availability !== "available",
-              id: method.method_id,
-              label: method.label_ko,
-              onActivate: () => onOpenAnalysisMethod(method),
-            })),
+          children,
           disabled: !canOpenAnalysis,
           id: module.module_id,
           label: module.label_ko,
           onActivate: () => onOpenAnalysisModule(module.module_id),
-        })),
+          });
+        }),
       id: "analysis",
       label: "분석",
     },
@@ -151,13 +177,19 @@ export function createSidebarNavigationGroups({
     {
       active: activePage === "manage",
       children: [
+        ["all", "전체 자산"],
         ["datasets", "데이터셋"],
-        ["models", "회귀모델"],
+        ["analyses", "분석 결과"],
+        ["models", "모델"],
+        ["designs", "실험 설계·스터디"],
       ].map(([id, label]) => ({
         active: activePage === "manage" && manageTab === id,
         id,
         label,
-        onActivate: () => onOpenManageTab(id as "datasets" | "models"),
+        onActivate: () =>
+          onOpenManageTab(
+            id as "all" | "datasets" | "analyses" | "models" | "designs",
+          ),
       })),
       id: "manage",
       label: "관리",

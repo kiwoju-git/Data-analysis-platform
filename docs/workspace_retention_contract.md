@@ -1,6 +1,6 @@
 # Workspace Retention And Deletion Contract
 
-Last updated: 2026-07-24
+Last updated: 2026-08-06
 
 Runtime note: destructive asset operations are exposed by the frontend only
 after API contract 3 and the relevant deletion capability pass. A generic
@@ -30,8 +30,15 @@ slices are implemented:
 Individual export deletion preserves the stored analysis result and every
 other artifact. Analysis-run deletion is intentionally narrower than cascade
 deletion: a run that owns a regression model, is the source of an attribute
-control limit set, or is referenced by a job is blocked. DOE-design,
-response-revision, bulk, and automatic deletion remain unavailable.
+control limit set, or is referenced by a job is blocked. DOE-design deletion
+is now available through a separate design-owned preflight; bulk and automatic
+deletion remain unavailable.
+
+DOE-design preflight binds the exact design/version SHA and counts for runs,
+response revisions/values, and analyses. Delete reacquires `BEGIN IMMEDIATE`,
+recomputes those identities and counts, and removes the design-owned graph in
+one transaction. It never issues a generic asset DELETE and never leaves a
+response revision or analysis orphan. Unrelated designs remain untouched.
 
 Deleting a regression-model asset never deletes or rewrites its source linear-
 model analysis result. Dependent predictions block the default model-only
@@ -123,6 +130,8 @@ of this graph, not a claim that the whole application is metadata-only.
 - `GET /api/v1/dataset-versions/{version_id}/deletion-preflight`
 - `GET /api/v1/dataset-versions/{version_id}/deletion-dependencies`
 - `DELETE /api/v1/dataset-versions/{version_id}/deletion`
+- `GET /api/v1/doe-designs/{design_id}/deletion-preflight`
+- `DELETE /api/v1/doe-designs/{design_id}`
 
 Stable blocker/error codes are:
 

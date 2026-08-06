@@ -37,6 +37,20 @@ export interface AttributeControlLimitSetsRouteParams {
 }
 
 export const apiRoutes = {
+  workspaceAssets(
+    filters: import("./types").WorkspaceAssetFilters,
+    offset: number,
+    limit: number,
+  ): string {
+    const query = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+    if (filters.category !== null) query.set("category", filters.category);
+    if (filters.methodId?.trim()) query.set("method_id", filters.methodId.trim());
+    if (filters.status?.trim()) query.set("status", filters.status.trim());
+    if (filters.pinned !== undefined) query.set("pinned", String(filters.pinned));
+    if (filters.search.trim()) query.set("search", filters.search.trim());
+    if (filters.sort) query.set("sort", filters.sort);
+    return apiUrl(`/assets?${query.toString()}`);
+  },
   health(): string {
     return apiUrl("/health");
   },
@@ -357,6 +371,30 @@ export const apiRoutes = {
 
   doeFactorialDesign(): string {
     return apiUrl("/doe-designs/factorial");
+  },
+
+  doeGeneralFactorialDesign(): string {
+    return apiUrl("/doe-designs/general-factorial");
+  },
+
+  doeGeneralFactorialDesignById(designId: string): string {
+    return apiUrl(`/doe-designs/general-factorial/${pathId(designId)}`);
+  },
+
+  doeGeneralFactorialResponses(designId: string): string {
+    return apiUrl(`/doe-designs/general-factorial/${pathId(designId)}/responses`);
+  },
+
+  doeGeneralFactorialAnalyses(designId: string): string {
+    return apiUrl(`/doe-designs/general-factorial/${pathId(designId)}/analyses`);
+  },
+
+  doeDesignDeletionPreflight(designId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/deletion-preflight`);
+  },
+
+  doeDesignDelete(designId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}`);
   },
 
   doeLatinHypercubeDesign(): string {

@@ -7,7 +7,9 @@ from app.statistics.factorial_design import (
     FactorialDesignError,
     FactorialDesignOptions,
     FactorialFactor,
+    generate_two_level_fractional_factorial_design,
     generate_two_level_full_factorial_design,
+    list_fractional_factorial_catalog,
     run_to_payload,
 )
 
@@ -220,3 +222,64 @@ def test_two_level_full_factorial_rejects_invalid_designs() -> None:
             ),
         )
     assert run_limit_error.value.code == "doe_factorial_run_count_exceeds_limit"
+
+
+@pytest.mark.parametrize(
+    ("factor_count", "fraction_id", "expected_runs", "expected_resolution"),
+    [
+        (3, "3-factor-half-r3", 4, 3),
+        (4, "4-factor-half-r4", 8, 4),
+        (5, "5-factor-half-r5", 16, 5),
+        (5, "5-factor-quarter-r3", 8, 3),
+        (6, "6-factor-quarter-r4", 16, 4),
+    ],
+)
+def test_regular_fractional_factorial_catalog_designs(
+    factor_count: int,
+    fraction_id: str,
+    expected_runs: int,
+    expected_resolution: int,
+) -> None:
+    factors = [
+        FactorialFactor(name=chr(ord("A") + index), low=-1.0, high=1.0)
+        for index in range(factor_count)
+    ]
+    design = generate_two_level_fractional_factorial_design(
+        factors,
+        FactorialDesignOptions(
+            replicates=1,
+            center_points=0,
+            randomize=False,
+            randomization_seed=17,
+            design_type="two_level_fractional",
+            fraction_id=fraction_id,
+        ),
+    )
+
+    assert len(design.runs) == expected_runs
+    assert len({tuple(run.coded_levels.values()) for run in design.runs}) == expected_runs
+    assert design.fractional is not None
+    assert design.fractional.resolution == expected_resolution
+    assert design.fractional.principal_fraction is True
+    assert design.fractional.defining_relation[0] == "I"
+    assert design.fractional.estimable_terms == tuple(factor.name for factor in factors)
+
+
+def test_regular_fractional_factorial_rejects_catalog_entry_for_another_factor_count() -> None:
+    factors = [FactorialFactor(name=name, low=-1.0, high=1.0) for name in "ABCD"]
+    with pytest.raises(FactorialDesignError) as raised:
+        generate_two_level_fractional_factorial_design(
+            factors,
+            FactorialDesignOptions(
+                replicates=1,
+                center_points=0,
+                randomize=False,
+                randomization_seed=1,
+                design_type="two_level_fractional",
+                fraction_id="3-factor-half-r3",
+            ),
+        )
+    assert raised.value.code == "doe_fractional_catalog_entry_invalid"
+    assert [entry.catalog_entry_id for entry in list_fractional_factorial_catalog(4)] == [
+        "4-factor-half-r4"
+    ]

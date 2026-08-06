@@ -714,6 +714,10 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (window.location.pathname.replace(/\/+$/, "") === "/project") {
+      replaceAppLocation(`/home${window.location.search}`);
+      return;
+    }
     const redirect = legacyResponseOptimizerRedirectLocation(
       window.location.pathname,
       window.location.search,
@@ -3728,7 +3732,7 @@ export default function App() {
   ) {
     if (typeof window !== "undefined") {
       const url = new URL(
-        pathWithActiveDatasetQuery("/"),
+        pathWithActiveDatasetQuery("/datasets"),
         window.location.origin,
       );
       url.searchParams.set("section", section);
@@ -3760,9 +3764,9 @@ export default function App() {
 
   function handleOpenProjectPage() {
     if (typeof window !== "undefined") {
-      pushAppLocation(pathWithActiveDatasetQuery("/project"));
+      pushAppLocation(pathWithActiveDatasetQuery("/home"));
     }
-    setAppRoute({ page: "project" });
+    setAppRoute({ page: "home" });
   }
 
   function handleOpenGraphsPage() {
@@ -3785,7 +3789,9 @@ export default function App() {
     setAnalysisResult(null);
   }
 
-  function handleOpenManagePage(tab: "datasets" | "models" = "datasets") {
+  function handleOpenManagePage(
+    tab: "all" | "datasets" | "analyses" | "models" | "designs" = "all",
+  ) {
     if (typeof window !== "undefined") {
       const url = new URL(
         pathWithActiveDatasetQuery("/manage"),
@@ -4388,6 +4394,8 @@ export default function App() {
         onDatasetMetadataChanged={activeDatasetSelectorProps.catalogState.onRefresh}
         onOpenAnalysisPage={handleOpenAnalysisPage}
         onOpenDatasetPage={handleOpenDatasetPage}
+        onOpenGraphsPage={handleOpenGraphsPage}
+        onOpenHelpPage={() => handleOpenHelpPage()}
         onOpenManagePage={handleOpenManagePage}
         onOpenReportsPage={handleOpenReportsPage}
         onWorkspaceMutation={publishWorkspaceMutation}

@@ -9,6 +9,7 @@ import {
   createRegressionPastedPrediction,
   fetchRegressionPastedPredictionPreflight,
 } from "./api/regression";
+import { RegressionPredictionResultsTable } from "./RegressionPredictionResultsTable";
 
 interface ManualRow {
   id: string;
@@ -286,7 +287,7 @@ function ManualPredictionResults({ prediction }: { prediction: RegressionPastedP
   return (
     <section aria-labelledby="regression-manual-results-title">
       <h4 id="regression-manual-results-title">예측 결과</h4>
-      <div className="table-wrap"><table className="result-table"><thead><tr><th scope="col">입력 행</th>{prediction.mappings.map((mapping) => <th key={mapping.source_column_id} scope="col">{mapping.display_name}</th>)}<th scope="col">예측 평균</th><th scope="col">평균 신뢰구간</th><th scope="col">개별 예측구간</th><th scope="col">상태</th></tr></thead><tbody>{prediction.rows.map((row) => <tr key={row.row_index}><td>{row.row_index + 1}</td>{prediction.mappings.map((mapping) => <td key={mapping.source_column_id}>{String(row.predictor_values[mapping.source_column_id] ?? "")}</td>)}<td>{formatNumber(row.predicted_mean)}</td><td>{formatInterval(row.mean_confidence_interval)}</td><td>{formatInterval(row.prediction_interval)}</td><td>{row.warnings.length === 0 ? "범위 안" : row.warnings.join(", ")}</td></tr>)}</tbody></table></div>
+      <RegressionPredictionResultsTable mappings={prediction.mappings} rows={prediction.rows} />
     </section>
   );
 }
@@ -352,10 +353,6 @@ function parseImportedRows(content: string, hasHeader: boolean, result: LinearMo
 
 function formatNumber(value: number): string {
   return Number.isFinite(value) ? value.toLocaleString("ko-KR", { maximumSignificantDigits: 6 }) : "-";
-}
-
-function formatInterval(interval: { lower: number; upper: number } | null): string {
-  return interval === null ? "-" : `${formatNumber(interval.lower)} ~ ${formatNumber(interval.upper)}`;
 }
 
 function errorMessage(error: unknown): string {

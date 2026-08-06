@@ -44,6 +44,8 @@ export interface WorkspaceRouterProps {
   onDatasetMetadataChanged: () => void;
   onOpenAnalysisPage: () => void;
   onOpenDatasetPage: () => void;
+  onOpenGraphsPage: () => void;
+  onOpenHelpPage: () => void;
   onOpenManagePage: () => void;
   onOpenReportsPage: (analysisId?: string) => void;
   onWorkspaceMutation?: (kind: WorkspaceMutationKind) => void;
@@ -67,6 +69,8 @@ export function WorkspaceRouter({
   onDatasetMetadataChanged,
   onOpenAnalysisPage,
   onOpenDatasetPage,
+  onOpenGraphsPage,
+  onOpenHelpPage,
   onOpenManagePage,
   onOpenReportsPage,
   onWorkspaceMutation = () => undefined,
@@ -83,7 +87,7 @@ export function WorkspaceRouter({
             ? "help-quick-start-title"
             : routePage === "manage"
               ? "asset-management-title"
-              : routePage === "project"
+              : routePage === "home"
                 ? "project-overview-title"
                 : "workspace-title";
   return (
@@ -102,14 +106,16 @@ export function WorkspaceRouter({
           />
         </WorkspacePageBoundary>
       ) : null}
-      {routePage === "project" ? (
-        <WorkspacePageBoundary pageKey="project">
+      {routePage === "home" ? (
+        <WorkspacePageBoundary pageKey="home">
           <ProjectOverviewPage
             activeDatasetCatalogItem={activeDatasetCatalogItem}
             analysisCatalog={analysisCatalog}
             currentDatasetVersion={currentDatasetVersion ?? null}
             onOpenAnalysis={onOpenAnalysisPage}
             onOpenDatasetPage={onOpenDatasetPage}
+            onOpenGraphs={onOpenGraphsPage}
+            onOpenHelp={onOpenHelpPage}
             onOpenManage={onOpenManagePage}
             onOpenReports={onOpenReportsPage}
             workspaceAssetRevision={workspaceAssetRevision}

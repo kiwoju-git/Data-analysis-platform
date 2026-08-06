@@ -2,11 +2,20 @@
 
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
-`doe.factorial_design` and `doe.response_optimizer` are `0.4.0`, and
+`doe.factorial_design` is `0.5.0`, `doe.response_optimizer` is `0.4.0`, and
 `doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.5.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
 `quality.run_chart` is `0.2.0`; `doe.latin_hypercube` is `0.2.0` and
 the other stable IDs remain on `0.1.0`.
+
+`doe.general_factorial_design` starts at `0.1.0`. API contract `11` adds its
+dedicated design/response/analysis routes, regular fractional-factorial fields,
+the unified read-only workspace asset catalog, and DOE-design deletion
+preflight. Metadata remains schema `18`: the existing versioned JSON design
+records and dependency tables represent these contracts without a relational
+migration. Existing two-level full-factorial results and checksums are never
+rewritten; the analysis reader continues to accept the existing
+`doe.factorial_design` `0.4.0` contract.
 
 Graph Builder uses `visualization_schema_version=1` and does not create an
 analysis run. Adding `/api/v1/visualizations/preview` does not bump a
@@ -445,7 +454,7 @@ API contract `10` adds a shared factor-domain meaning: legacy/missing fields
 read as continuous, while `discrete_numeric` stores an executable `step` and
 optional display precision. Because this changes generated design coordinates
 and optimizer/recommendation candidate sets when explicitly selected, new
-writes use Factorial `0.4.0`, LHS `0.2.0`, RSM `0.3.0`, Response Optimizer
+writes use Factorial `0.5.0`, LHS `0.2.0`, RSM `0.3.0`, Response Optimizer
 `0.4.0`, and Bayesian Optimization `0.5.0`.
 
 LHS mixed designs write design schema `2`; continuous legacy schema `1`

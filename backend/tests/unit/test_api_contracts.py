@@ -155,7 +155,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
     ]
 
     method_ids = [method.method_id for method in METHODS]
-    assert len(method_ids) == 33
+    assert len(method_ids) == 34
     assert len(set(method_ids)) == len(method_ids)
     assert method_ids[:4] == [
         "eda.descriptive",
@@ -203,6 +203,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "quality.gage_rr",
         "quality.gage_run_chart",
         "doe.factorial_design",
+        "doe.general_factorial_design",
         "doe.latin_hypercube",
         "doe.response_surface",
         "doe.response_optimizer",
@@ -428,7 +429,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     catalog = analysis_method_catalog()
 
     assert len(catalog.modules) == 6
-    assert len(catalog.methods) == 33
+    assert len(catalog.methods) == 34
     assert {method.availability.value for method in catalog.methods} == {"available"}
     assert catalog.methods[0].method_id == "eda.descriptive"
     assert catalog.methods[0].availability == MethodAvailability.AVAILABLE
@@ -592,6 +593,12 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     assert factorial_design.availability == MethodAvailability.AVAILABLE
     assert factorial_design.disabled_reason is None
     assert factorial_design.requires_dataset is False
+    general_factorial_design = next(
+        method for method in catalog.methods if method.method_id == "doe.general_factorial_design"
+    )
+    assert general_factorial_design.availability == MethodAvailability.AVAILABLE
+    assert general_factorial_design.disabled_reason is None
+    assert general_factorial_design.requires_dataset is False
     response_surface = next(
         method for method in catalog.methods if method.method_id == "doe.response_surface"
     )
@@ -609,6 +616,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     ]
     assert doe_methods == [
         "doe.factorial_design",
+        "doe.general_factorial_design",
         "doe.latin_hypercube",
         "doe.response_surface",
         "doe.response_optimizer",
@@ -625,7 +633,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
     assert response.status_code == 200
     payload = response.json()
     assert len(payload["modules"]) == 6
-    assert len(payload["methods"]) == 33
+    assert len(payload["methods"]) == 34
     assert {method["availability"] for method in payload["methods"]} == {"available"}
     available = [
         method["method_id"]
@@ -662,6 +670,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "quality.gage_rr",
         "quality.gage_run_chart",
         "doe.factorial_design",
+        "doe.general_factorial_design",
         "doe.latin_hypercube",
         "doe.response_surface",
         "doe.response_optimizer",
@@ -681,6 +690,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "regression.predict",
         "doe.response_optimizer",
         "doe.factorial_design",
+        "doe.general_factorial_design",
         "doe.latin_hypercube",
         "doe.response_surface",
         "doe.bayesian_optimization",
@@ -825,7 +835,7 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
     payload = response.json()
     FactorialDesignResponse.model_validate(payload)
     assert payload["method_id"] == "doe.factorial_design"
-    assert payload["method_version"] == "0.4.0"
+    assert payload["method_version"] == "0.5.0"
     assert payload["family"] == "two_level_full_factorial"
     assert payload["status"] == "designed"
     assert payload["name"] == "screening design"
@@ -837,6 +847,9 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
         "randomize": False,
         "randomization_seed": 20260702,
         "block_count": 1,
+        "design_type": "two_level_full",
+        "fraction_id": None,
+        "design_schema_version": 1,
     }
     assert [factor["name"] for factor in payload["factors"]] == ["Temperature", "Pressure"]
     assert payload["runs"][0]["run_order"] == 1
@@ -999,7 +1012,7 @@ def test_factorial_analysis_api_persists_effects_anova_diagnostics_and_provenanc
     assert analysis_response.status_code == 201
     DoeFactorialAnalysisResponse.model_validate(analysis)
     assert analysis["method_id"] == "doe.factorial_design"
-    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.4.0"
+    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.5.0"
     assert analysis["analysis_schema_version"] == 2
     assert analysis["design_version_id"] == design["design_version_id"]
     assert analysis["design_sha256"] == design["design_sha256"]

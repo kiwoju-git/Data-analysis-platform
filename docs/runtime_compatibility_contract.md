@@ -37,7 +37,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `10`);
+- `api_contract_version` (currently `11`);
 - the actual metadata schema constant (currently `18`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
@@ -51,7 +51,7 @@ The response contains no workspace path, filename, or raw data. Existing
 
 ## Frontend Gate
 
-The frontend expects API contract `10`, schema 18 or later, and every required
+The frontend expects API contract `11`, schema 18 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

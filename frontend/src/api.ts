@@ -49,12 +49,23 @@ export { updateDatasetSchema } from "./api/datasets";
 export { updateDatasetVersionMetadata } from "./api/datasets";
 export { uploadDataset } from "./api/datasets";
 export { fetchWorkspaceSummary } from "./api/workspace";
+export { fetchWorkspaceAssets } from "./api/assets";
 export { createGraphPreview } from "./api/visualizations";
 export { createFactorialDesign } from "./api/doe";
+export { deleteDoeDesign, fetchDoeDesignDeletionPreflight } from "./api/doe";
+export {
+  createGeneralFactorialAnalysis,
+  createGeneralFactorialDesign,
+  saveGeneralFactorialResponses,
+} from "./api/doe";
 export { createLatinHypercubeDesign, saveLatinHypercubeResponses } from "./api/doe";
 export { createFactorialAnalysis } from "./api/doe";
 export { fetchFactorialAnalysis } from "./api/doe";
-export { fetchFactorialDesign } from "./api/doe";
+export {
+  fetchFactorialDesign,
+  fetchGeneralFactorialDesign,
+  fetchGeneralFactorialResponses,
+} from "./api/doe";
 export { fetchFactorialDesignResponses } from "./api/doe";
 export { saveFactorialDesignResponses } from "./api/doe";
 export {

@@ -63,7 +63,7 @@ describe("sidebar navigation model", () => {
     });
 
     expect(groups.map((group) => group.label)).toEqual([
-      "프로젝트",
+      "홈",
       "데이터셋",
       "분석",
       "그래프",
@@ -74,8 +74,11 @@ describe("sidebar navigation model", () => {
     const manage = groups.find((group) => group.id === "manage");
     expect(manage?.active).toBe(true);
     expect(manage?.children.map((item) => item.label)).toEqual([
+      "전체 자산",
       "데이터셋",
-      "회귀모델",
+      "분석 결과",
+      "모델",
+      "실험 설계·스터디",
     ]);
     expect(manage?.children.find((item) => item.active)?.id).toBe("models");
     manage?.children.find((item) => item.id === "datasets")?.onActivate?.();

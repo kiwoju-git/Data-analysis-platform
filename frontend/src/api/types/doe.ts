@@ -16,6 +16,8 @@ export interface FactorialDesignCreateRequest {
   randomize: boolean;
   randomization_seed: number;
   block_count: number;
+  design_type?: "two_level_full" | "two_level_fractional";
+  fraction_id?: string | null;
 }
 
 export interface DoeFactorResponse {
@@ -35,6 +37,9 @@ export interface FactorialDesignOptionsResponse {
   randomize: boolean;
   randomization_seed: number;
   block_count: number;
+  design_type?: "two_level_full" | "two_level_fractional";
+  fraction_id?: string | null;
+  design_schema_version?: number;
 }
 
 export interface FactorialDesignRunResponse {
@@ -64,6 +69,138 @@ export interface FactorialDesignResponse {
   run_count: number;
   design_sha256: string;
   runs: FactorialDesignRunResponse[];
+  design_schema_version?: number;
+  fractional?: {
+    catalog_entry_id: string;
+    base_factor_count: number;
+    fraction_exponent: number;
+    fraction: string;
+    resolution: number;
+    generators: string[];
+    defining_relation: string[];
+    alias_groups: string[][];
+    estimable_terms: string[];
+    non_estimable_terms: string[];
+    principal_fraction: boolean;
+  } | null;
+}
+
+export interface GeneralFactorialFactorRequest {
+  name: string;
+  levels: Array<number | string>;
+  unit?: string | null;
+}
+
+export interface GeneralFactorialDesignCreateRequest {
+  name: string;
+  factors: GeneralFactorialFactorRequest[];
+  replicates: number;
+  randomize: boolean;
+  randomization_seed: number;
+  max_interaction_order: number;
+}
+
+export interface GeneralFactorialDesignResponse {
+  design_schema_version: 1;
+  design_id: string;
+  design_version_id: string;
+  version_number: 1;
+  method_id: "doe.general_factorial_design";
+  method_version: "0.1.0";
+  family: "general_full_factorial";
+  name: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  app_version: string;
+  factors: GeneralFactorialFactorRequest[];
+  options: {
+    replicates: number;
+    randomize: boolean;
+    randomization_seed: number;
+    max_interaction_order: number;
+  };
+  run_count: number;
+  design_sha256: string;
+  runs: Array<{
+    standard_order: number;
+    run_order: number;
+    replicate_index: number;
+    factor_levels: Record<string, number | string>;
+    level_indices: Record<string, number>;
+  }>;
+}
+
+export interface GeneralFactorialAnalysisResponse {
+  analysis_id: string;
+  design_id: string;
+  design_version_id: string;
+  design_version_number: number;
+  method_id: "doe.general_factorial_design";
+  method_version: "0.1.0";
+  analysis_schema_version: 1;
+  design_sha256: string;
+  response_revision_id: string;
+  response_revision_number: number;
+  response_revision_sha256: string;
+  response_name: string;
+  created_at: string;
+  app_version: string;
+  result: {
+    coding: { policy: "treatment"; reference_levels: Record<string, number | string> };
+    sample: { n_observations: number; df_model: number; df_residual: number };
+    fit: {
+      residual_standard_error: number | null;
+      r_squared: number;
+      adjusted_r_squared: number | null;
+      f_statistic: number | null;
+      f_p_value: number | null;
+    };
+    anova: {
+      rows: Array<{
+        source: string;
+        term_id: string;
+        factor_names: string[];
+        df: number;
+        adjusted_sum_squares: number;
+        adjusted_mean_square: number | null;
+        f_statistic: number | null;
+        p_value: number | null;
+      }>;
+      lack_of_fit: { available: boolean; reason: string | null };
+    };
+    group_means: Array<{
+      levels: Record<string, number | string>;
+      n: number;
+      mean: number;
+    }>;
+    warnings: string[];
+  };
+}
+
+export interface DoeDesignDeletionCounts {
+  version_count: number;
+  run_count: number;
+  response_count: number;
+  response_revision_count: number;
+  analysis_count: number;
+}
+
+export interface DoeDesignDeletionPreflightResponse {
+  preflight_schema_version: 1;
+  design_id: string;
+  method_id: string;
+  status: string;
+  counts: DoeDesignDeletionCounts;
+  deletion_manifest_sha256: string;
+}
+
+export interface DoeDesignDeleteResponse {
+  deletion_schema_version: 1;
+  design_id: string;
+  deletion_manifest_sha256: string;
+  deleted_at: string;
+  deleted_counts: DoeDesignDeletionCounts;
 }
 
 export interface LatinHypercubeDesignCreateRequest {

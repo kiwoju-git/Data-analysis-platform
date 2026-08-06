@@ -14,6 +14,7 @@ import {
   parseRegressionPastedPredictionPreview,
   type RegressionPredictionDelimiter,
 } from "./regressionPastedPredictionPreview";
+import { RegressionPredictionResultsTable } from "./RegressionPredictionResultsTable";
 
 interface RegressionPastedPredictionPanelProps {
   modelResult: LinearModelResult;
@@ -356,32 +357,7 @@ function PastedPredictionResults({ prediction }: { prediction: RegressionPastedP
         <span>제외</span><strong>{prediction.row_count_excluded.toLocaleString()}행</strong>
         <span>신뢰수준</span><strong>{(prediction.confidence_level * 100).toFixed(1)}%</strong>
       </div>
-      <div className="table-wrap">
-        <table className="result-table">
-          <thead>
-            <tr>
-              <th scope="col">입력 행</th>
-              {prediction.mappings.map((mapping) => <th key={mapping.source_column_id} scope="col">{mapping.display_name}</th>)}
-              <th scope="col">예측 평균</th>
-              <th scope="col">평균 신뢰구간</th>
-              <th scope="col">개별 예측구간</th>
-              <th scope="col">상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            {prediction.rows.map((row) => (
-              <tr key={row.row_index}>
-                <td>{row.row_index + 1}</td>
-                {prediction.mappings.map((mapping) => <td key={mapping.source_column_id}>{String(row.predictor_values[mapping.source_column_id] ?? "")}</td>)}
-                <td>{formatNumber(row.predicted_mean)}</td>
-                <td>{formatInterval(row.mean_confidence_interval)}</td>
-                <td>{formatInterval(row.prediction_interval)}</td>
-                <td>{row.warnings.length === 0 ? "범위 안" : row.warnings.join(", ")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <RegressionPredictionResultsTable mappings={prediction.mappings} rows={prediction.rows} />
       {prediction.truncated ? <div className="notice-box">화면에는 앞 {prediction.row_limit.toLocaleString()}행만 표시합니다.</div> : null}
       {prediction.warnings.map((warning) => <div className="notice-box" key={warning.code}>{warning.message}</div>)}
     </>
@@ -428,14 +404,6 @@ function predictorKindLabel(result: LinearModelResult, columnId: string): string
 function pastePlaceholder(result: LinearModelResult): string {
   const headers = result.predictors.map((predictor) => predictor.display_name).join("\t");
   return `${headers}\n${result.predictors.map(() => "값").join("\t")}`;
-}
-
-function formatNumber(value: number): string {
-  return Number.isFinite(value) ? value.toLocaleString("ko-KR", { maximumSignificantDigits: 6 }) : "-";
-}
-
-function formatInterval(interval: { lower: number; upper: number } | null): string {
-  return interval === null ? "-" : `${formatNumber(interval.lower)} ~ ${formatNumber(interval.upper)}`;
 }
 
 function errorMessage(error: unknown): string {

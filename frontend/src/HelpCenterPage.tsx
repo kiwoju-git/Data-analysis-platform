@@ -8,6 +8,7 @@ import {
 import { MethodHelpContent } from "./MethodHelpDrawer";
 import { MethodPurposeHelper } from "./MethodPurposeHelper";
 import { RoleDictionary } from "./RoleDictionary";
+import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
 
 function methodIdFromLocation(): string | null {
   if (typeof window === "undefined") return null;
@@ -30,10 +31,11 @@ export function HelpCenterPage({
     if (catalog === null) return [];
     return catalog.methods.filter(
       (method) =>
-        normalized === "" ||
-        [method.label_ko, method.label_en, method.method_id].some((value) =>
-          value.toLocaleLowerCase("ko-KR").includes(normalized),
-        ),
+        !isContextualAnalysisMethod(method.method_id) &&
+        (normalized === "" ||
+          [method.label_ko, method.label_en, method.method_id].some((value) =>
+            value.toLocaleLowerCase("ko-KR").includes(normalized),
+          )),
     );
   }, [catalog, query]);
   const selectedMethod =

@@ -23,7 +23,7 @@ describe("SidebarNavigation", () => {
   it("initializes new groups as expanded", () => {
     const groups = navigationGroups("dataset");
     expect(createSidebarExpansionState(groups)).toEqual({
-      project: true,
+      home: true,
       dataset: true,
       analysis: true,
     });
@@ -32,7 +32,7 @@ describe("SidebarNavigation", () => {
   it("preserves manual collapse and reopens a newly active group", () => {
     const datasetActive = navigationGroups("dataset");
     const collapsed = {
-      project: true,
+      home: true,
       dataset: false,
       analysis: false,
     };
@@ -45,7 +45,7 @@ describe("SidebarNavigation", () => {
     expect(
       reconcileSidebarExpansionState(collapsed, analysisActive, "dataset"),
     ).toEqual({
-      project: true,
+      home: true,
       dataset: false,
       analysis: true,
     });
@@ -53,7 +53,7 @@ describe("SidebarNavigation", () => {
 
   it("does not invoke navigation callbacks while rendering group controls", () => {
     const onActivate = vi.fn();
-    const groups = navigationGroups("project");
+    const groups = navigationGroups("home");
     groups[0].children[0].onActivate = onActivate;
 
     renderToString(<SidebarNavigation groups={groups} onNavigate={vi.fn()} />);
@@ -63,17 +63,17 @@ describe("SidebarNavigation", () => {
 });
 
 function navigationGroups(
-  activeId: "project" | "dataset" | "analysis",
+  activeId: "home" | "dataset" | "analysis",
 ): SidebarNavigationGroup[] {
   return [
-    group("project", "프로젝트", activeId),
+    group("home", "홈", activeId),
     group("dataset", "데이터셋", activeId),
     group("analysis", "분석", activeId),
   ];
 }
 
 function group(
-  id: "project" | "dataset" | "analysis",
+  id: "home" | "dataset" | "analysis",
   label: string,
   activeId: string,
 ): SidebarNavigationGroup {

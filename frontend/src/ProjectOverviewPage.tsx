@@ -22,6 +22,8 @@ export interface ProjectOverviewPageProps {
   currentDatasetVersion: DatasetVersionResponse | null;
   onOpenAnalysis: () => void;
   onOpenDatasetPage: () => void;
+  onOpenGraphs: () => void;
+  onOpenHelp: () => void;
   onOpenManage: () => void;
   onOpenReports: (analysisId?: string) => void;
   workspaceAssetRevision?: number;
@@ -33,6 +35,8 @@ export function ProjectOverviewPage({
   currentDatasetVersion,
   onOpenAnalysis,
   onOpenDatasetPage,
+  onOpenGraphs,
+  onOpenHelp,
   onOpenManage,
   onOpenReports,
   workspaceAssetRevision = 0,
@@ -47,12 +51,45 @@ export function ProjectOverviewPage({
     <section className="project-overview-page" aria-labelledby="project-overview-title">
       <div className="panel-heading project-overview-heading">
         <div>
-          <h2 id="project-overview-title">프로젝트 개요</h2>
-          <p>현재 로컬 작업공간의 데이터와 분석 자산을 한눈에 확인합니다.</p>
+          <h2 id="project-overview-title">Statistical Twin 대시보드</h2>
+          <p>로컬 작업공간의 최근 자산을 확인하고 다음 작업을 시작합니다.</p>
         </div>
         <button className="secondary-button" onClick={state.onRetry} type="button">
           새로고침
         </button>
+      </div>
+
+      <div className="home-quick-grid" aria-label="빠른 실행">
+        <HomeQuickCard
+          accent="dataset"
+          action={currentDatasetVersion === null ? "데이터 등록" : "데이터 보기"}
+          detail={currentDatasetVersion === null ? "분석을 시작하려면 데이터를 등록하세요." : `${currentDatasetVersion.row_count.toLocaleString()}행 · ${currentDatasetVersion.column_count.toLocaleString()}열`}
+          title="데이터셋"
+          onActivate={onOpenDatasetPage}
+        />
+        <HomeQuickCard
+          accent="analysis"
+          action="분석 시작"
+          detail={state.summary.data === null ? "통계 method 선택" : `저장 분석 ${state.summary.data.stored_analysis_count.toLocaleString()}건`}
+          title="분석"
+          onActivate={onOpenAnalysis}
+        />
+        <HomeQuickCard accent="graphs" action="그래프 작성" detail="변수 선택형 그래프" title="그래프" onActivate={onOpenGraphs} />
+        <HomeQuickCard
+          accent="reports"
+          action="리포트 열기"
+          detail={state.summary.data === null ? "결과 보기와 내보내기" : `리포트·내보내기 ${state.summary.data.export_report_count.toLocaleString()}건`}
+          title="리포트"
+          onActivate={() => onOpenReports()}
+        />
+        <HomeQuickCard
+          accent="manage"
+          action="자산 관리"
+          detail={state.summary.data === null ? "저장 자산 검색과 관리" : `데이터 ${state.summary.data.visible_dataset_version_count + state.summary.data.archived_dataset_version_count} · 모델 ${state.summary.data.regression_model_count}`}
+          title="관리"
+          onActivate={onOpenManage}
+        />
+        <HomeQuickCard accent="help" action="도움말 열기" detail="Method 찾기와 튜토리얼" title="도움말" onActivate={onOpenHelp} />
       </div>
 
       <div className="project-dashboard-grid">
@@ -301,6 +338,33 @@ export function ProjectOverviewPage({
         </article>
       </div>
     </section>
+  );
+}
+
+function HomeQuickCard({
+  accent,
+  action,
+  detail,
+  onActivate,
+  title,
+}: {
+  accent: "dataset" | "analysis" | "graphs" | "reports" | "manage" | "help";
+  action: string;
+  detail: string;
+  onActivate: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      aria-label={`${title}: ${action}`}
+      className={`home-quick-card is-${accent}`}
+      onClick={onActivate}
+      type="button"
+    >
+      <strong>{title}</strong>
+      <span>{detail}</span>
+      <small>{action}</small>
+    </button>
   );
 }
 

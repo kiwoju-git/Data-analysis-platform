@@ -5,6 +5,7 @@ export type WorkspaceMutationKind =
   | "dataset_deleted"
   | "model_deleted"
   | "analysis_deleted"
+  | "asset_deleted"
   | "export_deleted";
 
 export interface WorkspaceMutation {

@@ -1,29 +1,34 @@
 # DOE Factorial Design and Analysis Contract
 
-Last updated: 2026-07-15
+Last updated: 2026-08-06
 
 ## Scope and Versions
 
 `doe.factorial_design` is available through dedicated DOE APIs rather than the
 generic analysis-run endpoint.
 
-- Method version: `0.3.0`.
-- Design manifest schema: `1`.
+- Method version: `0.5.0` for new two-level writes; legacy `0.4.0` remains readable.
+- Design manifest schema: `2` for regular fractional designs and `1` for legacy/full designs.
 - Analysis envelope schema: `2`.
 - Analysis config schema: `2`.
 - Analysis result schema: `1`.
 - Response revision schema: `1`.
 - SQLite metadata schema: `10`.
 
-Version `0.3.0` keeps the v0.2.0 calculations/result schema and adds an exact
-immutable response revision ID/number/SHA dependency to analysis config,
-envelope, DB relation, restore, report, and UI. The
-method version is read from `METHOD_VERSIONS`; the design service, analysis
-service, catalog, stored record, API envelope, UI, and this document must agree.
+Version `0.5.0` preserves the existing two-level full-factorial calculations
+and adds catalog-backed regular two-level fractional designs. Fractional
+results persist generators, defining relations, resolution, alias groups,
+estimable terms, and non-estimable terms. Their analysis is deliberately
+restricted to estimable main-effect alias contrasts; it never labels aliased
+effects as independently estimated. The method version is read from
+`METHOD_VERSIONS`; the design service, analysis service, catalog, stored
+record, API envelope, UI, and this document must agree.
 
 Implemented:
 
 - 2-level full factorial design generation for 2 to 6 continuous factors.
+- Regular 2-level fractional factorial catalog entries for 3 to 6 factors,
+  including half, quarter, and eighth fractions where a tested entry exists.
 - Replicates, center points, fixed blocks, deterministic randomization seed,
   standard order, and run order.
 - Immutable design/version/run metadata and canonical `design_sha256`.
@@ -46,10 +51,17 @@ Implemented:
   before analysis; analyzed and historical revisions are read-only until the
   user explicitly starts `새 revision으로 수정`.
 
+The separate `doe.general_factorial_design` `0.1.0` contract supports 2 to 6
+factors with 2 to 10 numeric or text levels, up to 256 runs. It uses treatment
+coding, categorical term blocks, and partial sums of squares. Numeric values
+are explicitly treated as categorical levels; it does not reuse `-1/+1`
+factorial effects. Its response revisions and analysis artifacts use schema 1.
+
 Out of scope:
 
 - Automatic term selection or a quiet switch to another model.
-- Fractional factorial alias analysis, Plackett-Burman, and general factorial.
+- Arbitrary user-supplied generators, foldover construction, Plackett-Burman,
+  and claiming resolution-III screening contrasts are independent effects.
 - CCD, Box-Behnken, RSM, contour/surface plots, and response optimization.
 - Chart image export and any claim of causal effects or a guaranteed optimum.
 
@@ -59,6 +71,10 @@ Design and response routes:
 
 ```http
 POST /api/v1/doe-designs/factorial
+POST /api/v1/doe-designs/general-factorial
+GET  /api/v1/doe-designs/general-factorial/{design_id}
+PUT  /api/v1/doe-designs/general-factorial/{design_id}/responses
+POST /api/v1/doe-designs/general-factorial/{design_id}/analyses
 GET  /api/v1/doe-designs/{design_id}
 PUT  /api/v1/doe-designs/{design_id}/responses
 GET  /api/v1/doe-designs/{design_id}/responses
@@ -69,8 +85,12 @@ POST /api/v1/doe-designs/{design_id}/response-revisions/{response_revision_id}/a
 GET  /api/v1/doe-designs/{design_id}/report.html
 ```
 
-The design request accepts `name`, 2 to 6 `factors`, `replicates`,
+The two-level design request accepts `name`, 2 to 6 `factors`, `replicates`,
 `center_points`, `randomize`, `randomization_seed`, and `block_count`. A response
+request may additionally select `design_type=two_level_fractional` and one
+tested `fraction_id`; arbitrary generator strings are rejected. The general
+request accepts ordered factor `levels`, replicates, randomization settings,
+and a maximum interaction order. A response
 upsert must provide exactly one finite numeric value for every persisted
 `run_order`. Once a successful analysis marks the design `analyzed`, response
 mutation through `PUT` is rejected. Corrections use an explicit new revision

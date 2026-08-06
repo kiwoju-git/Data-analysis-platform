@@ -1,17 +1,28 @@
-# Data And Regression Model Management Contract
+# Local Workspace Asset Management Contract
 
-Last updated: 2026-07-23
+Last updated: 2026-08-06
 
 ## Current Scope
 
-The route-level lazy-loaded `/manage` page provides two tabs: `데이터셋` and
-`회귀모델`. Confirmed dataset versions and app-created regression models are
-already stored locally; the page does not add a misleading save operation.
+The route-level lazy-loaded `/manage` page is `자산 관리` and provides `전체`,
+`데이터셋`, `분석 결과`, `모델`, and `실험 설계·스터디` tabs. Confirmed
+dataset versions, succeeded analysis runs, app-created regression models,
+Factorial/LHS/RSM designs, and Bayesian Studies are already stored locally;
+the page does not add a misleading save operation.
 Users can page and refresh each catalog, assign an optional name and note, pin
 an item, activate a dataset version, open a model in Predict, and run the
-existing deletion impact workflows.
+existing type-specific deletion impact workflows. The default catalog is a
+compact `result-table`; a single selected row reveals detail and actions rather
+than rendering an editable card for every stored asset.
 
-The page is mounted only after the API contract-3 runtime handshake succeeds.
+`GET /api/v1/assets` is a bounded, read-only union catalog with category,
+search, offset, and limit filters. Its descriptors expose safe display
+metadata, status, dependency counts, and an application route. They do not
+expose raw values, absolute/internal paths, SQL, full checksums, coefficients,
+or model predictor levels. The endpoint does not imply a generic deletion
+operation: each deletion action delegates to the owning retention contract.
+
+The page is mounted only after the API contract-11 runtime handshake succeeds.
 A generic HTTP 404 from a missing route is reported as a frontend/backend
 version mismatch, while stable dataset/model not-found, optimistic metadata
 conflict, dependency blocker, and integrity failure remain separate states.
@@ -62,7 +73,7 @@ The dataset tab uses `현재 분석 데이터셋으로 사용`, `이름 저장`,
 `목록 새로고침`, and `삭제 영향 확인`. An active dataset version must be
 replaced before its delete control is enabled. The model tab states that models
 are automatically saved after a successful fit and reuses checksum-validated
-availability and deletion preflight. `Predict에서 열기` places only the model
+availability and deletion preflight. `예측 입력 열기` places only the model
 UUID in the URL.
 
 No raw value, filename, note, or label is logged or written to browser storage.
@@ -90,5 +101,6 @@ the explicit not-found empty state.
 ## Version Decision
 
 User labels require SQLite schema 15 and dataset archive visibility requires
-schema 16, both with upgrade tests. Neither changes a statistical method,
+schema 16, both with upgrade tests. The unified catalog and compact UI use the
+existing metadata and leave current schema 18 unchanged. Neither changes a statistical method,
 result/config schema, dataset schema hash, or model manifest version.

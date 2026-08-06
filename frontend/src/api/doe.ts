@@ -3,6 +3,8 @@ import { apiRoutes } from "./routes";
 import type {
   DoeDesignResponsesResponse,
   DoeDesignResponsesUpsertRequest,
+  DoeDesignDeleteResponse,
+  DoeDesignDeletionPreflightResponse,
   DoeFactorialAnalysisCreateRequest,
   DoeFactorialAnalysisResponse,
   DoeResponseSurfaceAnalysisCreateRequest,
@@ -13,6 +15,9 @@ import type {
   DoeResponseRevisionResponse,
   FactorialDesignCreateRequest,
   FactorialDesignResponse,
+  GeneralFactorialAnalysisResponse,
+  GeneralFactorialDesignCreateRequest,
+  GeneralFactorialDesignResponse,
   LatinHypercubeDesignCreateRequest,
   LatinHypercubeDesignResponse,
   ResponseSurfaceDesignCreateRequest,
@@ -20,6 +25,104 @@ import type {
   ResponseOptimizerCreateRequest,
   ResponseOptimizerResponse,
 } from "./types";
+
+export async function fetchDoeDesignDeletionPreflight(
+  designId: string,
+): Promise<DoeDesignDeletionPreflightResponse> {
+  const response = await fetchApi(apiRoutes.doeDesignDeletionPreflight(designId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_design_deletion_preflight_failed"));
+  }
+  return (await response.json()) as DoeDesignDeletionPreflightResponse;
+}
+
+export async function deleteDoeDesign(
+  designId: string,
+  deletionManifestSha256: string,
+): Promise<DoeDesignDeleteResponse> {
+  const response = await fetchApi(apiRoutes.doeDesignDelete(designId), {
+    method: "DELETE",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      confirmation_design_id: designId,
+      expected_deletion_manifest_sha256: deletionManifestSha256,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_design_delete_failed"));
+  }
+  return (await response.json()) as DoeDesignDeleteResponse;
+}
+
+export async function createGeneralFactorialDesign(
+  request: GeneralFactorialDesignCreateRequest,
+): Promise<GeneralFactorialDesignResponse> {
+  const response = await fetchApi(apiRoutes.doeGeneralFactorialDesign(), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_general_factorial_design_failed"));
+  }
+  return (await response.json()) as GeneralFactorialDesignResponse;
+}
+
+export async function fetchGeneralFactorialDesign(
+  designId: string,
+): Promise<GeneralFactorialDesignResponse> {
+  const response = await fetchApi(apiRoutes.doeGeneralFactorialDesignById(designId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_general_factorial_design_fetch_failed"));
+  }
+  return (await response.json()) as GeneralFactorialDesignResponse;
+}
+
+export async function fetchGeneralFactorialResponses(
+  designId: string,
+): Promise<DoeDesignResponsesResponse> {
+  const response = await fetchApi(apiRoutes.doeGeneralFactorialResponses(designId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_general_factorial_responses_fetch_failed"));
+  }
+  return (await response.json()) as DoeDesignResponsesResponse;
+}
+
+export async function saveGeneralFactorialResponses(
+  designId: string,
+  request: DoeDesignResponsesUpsertRequest,
+): Promise<DoeDesignResponsesResponse> {
+  const response = await fetchApi(apiRoutes.doeGeneralFactorialResponses(designId), {
+    method: "PUT",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_general_factorial_responses_failed"));
+  }
+  return (await response.json()) as DoeDesignResponsesResponse;
+}
+
+export async function createGeneralFactorialAnalysis(
+  designId: string,
+  request: { response_name: string; max_interaction_order: number },
+): Promise<GeneralFactorialAnalysisResponse> {
+  const response = await fetchApi(apiRoutes.doeGeneralFactorialAnalyses(designId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "doe_general_factorial_analysis_failed"));
+  }
+  return (await response.json()) as GeneralFactorialAnalysisResponse;
+}
 
 export async function createLatinHypercubeDesign(
   request: LatinHypercubeDesignCreateRequest,

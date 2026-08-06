@@ -21,19 +21,21 @@ from app.api.v1.schemas.doe import (
     FactorialDesignOptionsResponse,
     FactorialDesignResponse,
     FactorialDesignRunResponse,
+    FractionalFactorialMetadataResponse,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.doe_response_revisions import create_response_revision
 from app.statistics.factorial_design import (
-    FACTORIAL_DESIGN_FAMILY,
+    FRACTIONAL_FACTORIAL_DESIGN_FAMILY,
     FactorialDesignError,
     FactorialDesignOptions,
     FactorialDesignRun,
     FactorialFactor,
     canonical_factorial_design_payload,
     factor_to_payload,
-    generate_two_level_full_factorial_design,
+    fractional_metadata_for,
+    generate_two_level_factorial_design,
     options_to_payload,
 )
 from app.storage.metadata import (
@@ -94,9 +96,11 @@ def create_factorial_design(
         randomize=body.randomize,
         randomization_seed=body.randomization_seed,
         block_count=body.block_count,
+        design_type=body.design_type,
+        fraction_id=body.fraction_id,
     )
     try:
-        generated = generate_two_level_full_factorial_design(factors, options)
+        generated = generate_two_level_factorial_design(factors, options)
     except FactorialDesignError as exc:
         raise _doe_factorial_api_error(exc) from exc
 
@@ -107,7 +111,7 @@ def create_factorial_design(
         design_id=str(design_id),
         method_id=DOE_FACTORIAL_METHOD_ID,
         method_version=method_version,
-        family=FACTORIAL_DESIGN_FAMILY,
+        family=generated.family,
         name=body.name.strip(),
         status="designed",
         current_version=1,
@@ -307,6 +311,56 @@ def _factorial_design_response(
         run_count=version.run_count,
         design_sha256=version.design_sha256,
         runs=[FactorialDesignRunResponse.model_validate(run) for run in run_payloads],
+        design_schema_version=int(options.get("design_schema_version", 1)),
+        fractional=_fractional_metadata_response(design, factors, options),
+    )
+
+
+def _fractional_metadata_response(
+    design: ExperimentDesignRecord,
+    factors: list[object],
+    options: dict[str, Any],
+) -> FractionalFactorialMetadataResponse | None:
+    if design.family != FRACTIONAL_FACTORIAL_DESIGN_FAMILY:
+        return None
+    try:
+        factor_specs = [
+            FactorialFactor(
+                name=str(factor["name"]),
+                low=float(factor["low"]),
+                high=float(factor["high"]),
+                unit=None if factor.get("unit") is None else str(factor["unit"]),
+                domain_kind=str(factor.get("domain_kind", "continuous")),
+                step=None if factor.get("step") is None else float(factor["step"]),
+                display_decimals=(
+                    None
+                    if factor.get("display_decimals") is None
+                    else int(factor["display_decimals"])
+                ),
+            )
+            for factor in factors
+            if isinstance(factor, dict)
+        ]
+        fraction_id = str(options["fraction_id"])
+        metadata = fractional_metadata_for(factor_specs, fraction_id)
+    except (FactorialDesignError, KeyError, TypeError, ValueError) as exc:
+        raise ApiError(
+            code="doe_design_metadata_invalid",
+            message="저장된 부분요인 설계 metadata가 올바르지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+    return FractionalFactorialMetadataResponse(
+        catalog_entry_id=metadata.catalog_entry_id,
+        base_factor_count=metadata.base_factor_count,
+        fraction_exponent=metadata.fraction_exponent,
+        fraction=metadata.fraction,
+        resolution=metadata.resolution,
+        generators=list(metadata.generators),
+        defining_relation=list(metadata.defining_relation),
+        alias_groups=[list(group) for group in metadata.alias_groups],
+        estimable_terms=list(metadata.estimable_terms),
+        non_estimable_terms=list(metadata.non_estimable_terms),
+        principal_fraction=metadata.principal_fraction,
     )
 
 
@@ -698,6 +752,8 @@ def _verify_design_sha256(
             randomize=bool(options["randomize"]),
             randomization_seed=int(options["randomization_seed"]),
             block_count=int(options["block_count"]),
+            design_type=str(options.get("design_type", "two_level_full")),
+            fraction_id=None if options.get("fraction_id") is None else str(options["fraction_id"]),
         )
         run_specs = [FactorialDesignRunResponse.model_validate(run) for run in runs]
     except (KeyError, TypeError, ValueError) as exc:
@@ -716,6 +772,7 @@ def _verify_design_sha256(
         factors=factor_specs,
         options=option_spec,
         runs=canonical_runs,
+        schema_version=int(options.get("design_schema_version", 1)),
     )
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
         "utf-8",
