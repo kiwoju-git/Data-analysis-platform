@@ -131,6 +131,39 @@ ATTRIBUTE_CONTROL_BASELINE_DATA = """defectives\tsample_size
 12\t20
 """
 
+REPORTING_SUMMARY_DATA = """production_line\tyield_pct\ttemperature_c\tpressure_bar
+A\t90.0\t60\t5.0
+A\t91.0\t61\t5.5
+A\t89.0\t62\t6.0
+A\t92.0\t63\t6.5
+A\t88.0\t64\t7.0
+A\t90.5\t65\t7.5
+A\t91.5\t66\t8.0
+A\t89.5\t67\t8.5
+A\t92.5\t68\t9.0
+A\t87.5\t69\t9.5
+B\t94.0\t70\t10.0
+B\t94.5\t71\t10.5
+B\t93.5\t72\t11.0
+B\t94.2\t73\t11.5
+B\t93.8\t74\t12.0
+B\t94.1\t75\t12.5
+B\t94.3\t76\t13.0
+B\t93.7\t77\t13.5
+B\t94.4\t78\t14.0
+B\t93.6\t79\t14.5
+C\t95.0\t80\t15.0
+C\t98.0\t81\t15.5
+C\t92.0\t82\t16.0
+C\t100.0\t83\t16.5
+C\t90.0\t84\t17.0
+C\t97.0\t85\t17.5
+C\t93.0\t86\t18.0
+C\t99.0\t87\t18.5
+C\t91.0\t88\t19.0
+C\t96.0\t89\t19.5
+"""
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -552,6 +585,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_linear_model_fit_and_prediction(page, diagnostics)
             diagnostics.step("verify attribute control chart")
             verify_attribute_control_chart(page)
+            diagnostics.step("verify reporting summary variance and fixed-Y scatter")
+            verify_reporting_summary_variance_and_scatter(page, diagnostics)
             diagnostics.step("verify DOE factorial analysis")
             verify_doe_factorial_analysis(page, diagnostics)
             diagnostics.step("verify DOE response surface analysis and optimization")
@@ -722,8 +757,8 @@ def assert_doe_table_visual_consistency(
             )
 
     settings_control = settings_table.locator(
-        "tbody tr.doe-settings-control-row input:not([type=checkbox]), "
-        "tbody tr.doe-settings-control-row select"
+        "tbody tr.compact-settings-control-row input:not([type=checkbox]), "
+        "tbody tr.compact-settings-control-row select"
     ).first
     factor_control = factor_table.locator("tbody input, tbody select").first
     input_properties = [
@@ -828,18 +863,39 @@ def assert_doe_table_visual_consistency(
     )
 
 
+def select_option_by_label_without_retry(select: Locator, label: str) -> None:
+    select.wait_for(state="visible", timeout=15_000)
+    select.evaluate(
+        """
+        (element, optionLabel) => {
+          const option = Array.from(element.options).find(
+            (candidate) => candidate.textContent?.trim() === optionLabel,
+          );
+          if (!option) throw new Error(`option not found: ${optionLabel}`);
+          element.value = option.value;
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        """,
+        label,
+    )
+
+
 def select_method_card(page: Page, module_label: str, method_label: str) -> None:
-    page.get_by_role("navigation", name="분석 모듈").get_by_role(
+    module_button = page.get_by_role("navigation", name="분석 모듈").get_by_role(
         "button", name=re.compile(rf"^{re.escape(module_label)}")
-    ).click()
+    )
+    module_button.wait_for(state="visible", timeout=15_000)
+    module_button.evaluate("(button) => button.click()")
     if module_label == "가설 검정":
         family_method = page.locator(".hypothesis-family-methods").get_by_role(
             "button", name=method_label, exact=True
         )
         family_method.wait_for(state="visible", timeout=15_000)
-        family_method.click()
+        family_method.evaluate("(button) => button.click()")
         return
-    page.locator(".method-item").filter(has_text=method_label).click()
+    method_card = page.locator(".method-item").filter(has_text=method_label)
+    method_card.wait_for(state="visible", timeout=15_000)
+    method_card.evaluate("(button) => button.click()")
 
 
 def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> None:
@@ -915,9 +971,9 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     )
     methods.filter(has_text=re.compile("^정규성 검정$")).click()
     expect(page).to_have_url(re.compile(r"/analysis/exploration/eda\.normality"))
-    expect(
-        group.locator('.sidebar-method-button[aria-current="page"]')
-    ).to_have_text("정규성 검정")
+    expect(group.locator('.sidebar-method-button[aria-current="page"]')).to_have_text(
+        "정규성 검정"
+    )
     diagnostics.capture_page(page, "sidebar-analysis-method-hierarchy.png")
     group.locator(".sidebar-submenu-button").filter(
         has_text=re.compile("^탐색적 분석$")
@@ -1319,8 +1375,7 @@ def assert_children_do_not_overlap(
         if box is None:
             raise AssertionError(f"{label} child {index + 1} had no bounding box")
         if box["x"] < parent_box["x"] - 1 or (
-            box["x"] + box["width"]
-            > parent_box["x"] + parent_box["width"] + 1
+            box["x"] + box["width"] > parent_box["x"] + parent_box["width"] + 1
         ):
             raise AssertionError(f"{label} child {index + 1} escaped its parent")
         boxes.append(box)
@@ -1466,20 +1521,58 @@ def verify_help_report_and_manage_routes(
     ).to_be_visible(timeout=15_000)
 
     open_primary_navigation(page, "관리")
-    expect(page.get_by_role("heading", name="자산 관리")).to_be_visible(
-        timeout=15_000
-    )
+    expect(page.get_by_role("heading", name="자산 관리")).to_be_visible(timeout=15_000)
     expect_lazy_workspace_page(page, "ManageAssetsPage")
-    expect(page.get_by_role("table")).to_be_visible()
-    expect(page.get_by_role("columnheader", name="종류")).to_be_visible()
+    asset_table = page.locator(".asset-catalog-table")
+    expect(asset_table).to_be_visible()
+    expect(asset_table.get_by_role("columnheader", name="종류")).to_be_visible()
+    expect(page.locator(".asset-filter-table")).to_be_visible()
+    expect(page.locator(".asset-catalog-detail")).to_have_count(0)
+    pinned_label = page.locator(".asset-filter-table .doe-table-toggle")
+    pinned_label_box = pinned_label.bounding_box()
+    pinned_checkbox_box = pinned_label.locator('input[type="checkbox"]').bounding_box()
+    pinned_text_box = pinned_label.locator("span").bounding_box()
+    pinned_cell_box = pinned_label.locator("xpath=ancestor::td").bounding_box()
+    if (
+        pinned_label_box is None
+        or pinned_checkbox_box is None
+        or pinned_text_box is None
+        or pinned_cell_box is None
+    ):
+        raise AssertionError("asset pinned filter did not expose measurable bounds")
+    expect(pinned_label).to_contain_text("고정만 보기")
+    if pinned_text_box["x"] + pinned_text_box["width"] > (
+        pinned_cell_box["x"] + pinned_cell_box["width"] + 1
+    ):
+        raise AssertionError("asset pinned filter escaped its table cell")
+    if (
+        pinned_checkbox_box["x"] + pinned_checkbox_box["width"]
+        > pinned_text_box["x"]
+    ):
+        raise AssertionError("asset pinned checkbox overlapped its label")
+    diagnostics.capture_page(page, "asset-filter-table.png")
     diagnostics.capture_page(page, "asset-management-overview.png")
-    page.get_by_role("button", name="상세", exact=True).first.click()
+    detail_button = page.get_by_role("button", name="상세", exact=True).first
+    detail_button_id = detail_button.get_attribute("id")
+    if detail_button_id is None:
+        raise AssertionError("asset detail button did not expose a stable id")
+    detail_button.click()
     expect(page.locator(".asset-catalog-detail")).to_be_visible()
+    inline_position_is_valid = page.locator(f"#{detail_button_id}").evaluate(
+        """
+        (button) => {
+          const assetRow = button.closest('tr');
+          const detailRow = assetRow?.nextElementSibling;
+          return detailRow?.matches('tr.asset-inline-detail-row') ?? false;
+        }
+        """
+    )
+    if not inline_position_is_valid:
+        raise AssertionError("asset detail row was not rendered after the selected row")
+    diagnostics.capture_page(page, "asset-inline-detail.png")
     diagnostics.capture_page(page, "asset-management-detail.png")
     page.reload(wait_until="networkidle")
-    expect(page.get_by_role("heading", name="자산 관리")).to_be_visible(
-        timeout=15_000
-    )
+    expect(page.get_by_role("heading", name="자산 관리")).to_be_visible(timeout=15_000)
 
     open_primary_navigation(page, "분석")
     help_trigger = page.get_by_role("button", name="분석 도움말")
@@ -1494,6 +1587,172 @@ def verify_help_report_and_manage_routes(
     page.keyboard.press("Escape")
     expect(help_drawer).to_have_count(0)
     expect(help_trigger).to_be_focused()
+
+
+def verify_reporting_summary_variance_and_scatter(
+    page: Page,
+    diagnostics: E2EDiagnostics,
+) -> None:
+    open_primary_navigation(page, "데이터셋")
+    paste_plain_text(page, REPORTING_SUMMARY_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
+
+    open_primary_navigation(page, "그래프")
+    expect(page.get_by_role("heading", name="그래프 작성")).to_be_visible()
+    page.wait_for_timeout(750)
+    page.locator(".graph-type-button").filter(
+        has_text=re.compile("^Scatter Plot")
+    ).click()
+    page.get_by_role("radio", name="Y 1개 · X 여러 개").check()
+    expect(page.get_by_role("radio", name="Y 1개 · X 여러 개")).to_be_checked()
+    page.locator(".graph-role-option").filter(has_text="고정 Y 변수").locator(
+        "select"
+    ).select_option(label="yield_pct")
+    x_picker = page.locator(".graph-variable-picker").filter(
+        has_text=re.compile("^X 변수")
+    )
+    for label in ("temperature_c", "pressure_bar"):
+        checkbox = x_picker.get_by_role("checkbox", name=re.compile(rf"^{label}"))
+        if not checkbox.is_checked():
+            checkbox.check()
+    create_button = page.get_by_role("button", name="그래프 생성", exact=True)
+    expect(create_button).to_be_enabled()
+    create_button.click()
+    expect(page.get_by_role("heading", name="그래프 결과")).to_be_visible(
+        timeout=20_000
+    )
+    expect(page.locator(".graph-preview-grid-scatter-plot > article")).to_have_count(2)
+    expect(
+        page.get_by_role("heading", name="yield_pct vs temperature_c")
+    ).to_be_visible()
+    expect(
+        page.get_by_role("heading", name="yield_pct vs pressure_bar")
+    ).to_be_visible()
+    diagnostics.capture_page(page, "scatter-fixed-y-multiple-x.png")
+
+    open_primary_navigation(page, "분석")
+    select_method_card(page, "탐색적 분석", "그래프 요약")
+    picker = page.get_by_label("그래프 요약 컬럼 선택")
+    for checkbox in picker.get_by_role("checkbox").all():
+        if checkbox.is_checked():
+            checkbox.uncheck()
+    picker.get_by_role("checkbox", name=re.compile(r"^yield_pct")).check()
+    page.get_by_role("button", name="그래프 요약 실행").click()
+    summary = page.get_by_label("yield_pct 그래프 요약")
+    expect(summary).to_be_visible(timeout=20_000)
+    expect(summary.get_by_text("Anderson-Darling 정규성 검정")).to_be_visible()
+    expect(summary.get_by_text("히스토그램 + 적합 정규곡선")).to_be_visible()
+    expect(summary.get_by_text("박스플롯", exact=True)).to_be_visible()
+    expect(summary.get_by_text("Q-Q Plot", exact=True)).to_be_visible()
+    expect(summary.get_by_role("img", name="yield_pct 신뢰구간")).to_be_visible()
+    diagnostics.capture_page(page, "graphical-summary-minitab-layout.png")
+    page.set_viewport_size({"width": 390, "height": 844})
+    if (
+        page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
+        > 1
+    ):
+        raise AssertionError("graphical summary overflowed the mobile viewport")
+    diagnostics.capture_page(page, "graphical-summary-mobile.png")
+    page.set_viewport_size({"width": 1440, "height": 900})
+
+    select_method_card(page, "탐색적 분석", "등분산 검정")
+    diagnostics.record("[e2e] equal variances method selected")
+    equal_variances_panel = page.locator(
+        '[data-analysis-execution="eda.equal_variances"]'
+    )
+    expect(equal_variances_panel).to_be_visible(timeout=15_000)
+    diagnostics.record("[e2e] equal variances panel visible")
+    page.wait_for_timeout(500)
+    select_option_by_label_without_retry(
+        equal_variances_panel.locator("select").nth(0), "yield_pct"
+    )
+    diagnostics.record("[e2e] equal variances response selected")
+    select_option_by_label_without_retry(
+        equal_variances_panel.locator("select").nth(1), "production_line"
+    )
+    diagnostics.record("[e2e] equal variances group selected")
+    equal_variances_button = equal_variances_panel.get_by_role(
+        "button", name="등분산 검정 실행"
+    )
+    expect(equal_variances_button).to_be_enabled()
+    diagnostics.record("[e2e] equal variances button enabled")
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/api/v1/analysis-runs"),
+        timeout=20_000,
+    ) as equal_variances_response_info:
+        equal_variances_button.focus()
+        expect(equal_variances_button).to_be_focused()
+        page.keyboard.press("Enter")
+    equal_variances_payload = equal_variances_response_info.value.json()
+    if equal_variances_payload.get("method_id") != "eda.equal_variances":
+        raise AssertionError("equal variances response used the wrong method")
+    equal_variances_result = equal_variances_payload.get("result", {})
+    if equal_variances_result.get("schema_version") != 2:
+        raise AssertionError("equal variances response did not use result schema 2")
+    diagnostics.record(
+        "[e2e] equal variances response received; "
+        f"result keys={sorted(equal_variances_result.keys())}"
+    )
+    expect(page.locator(".equal-variances-method-table")).to_contain_text(
+        "다중 비교", timeout=20_000
+    )
+    expect(page.locator(".equal-variances-method-table")).to_contain_text("Levene 검정")
+    interval_chart = page.get_by_role(
+        "img", name="등분산 검정: yield_pct 대 production_line"
+    )
+    expect(interval_chart).to_be_visible()
+    interval_chart.locator(".variance-comparison-group").first.focus()
+    expect(
+        page.locator(".variance-comparison-chart .chart-selected-detail")
+    ).to_contain_text("표본 표준편차")
+    diagnostics.capture_page(page, "equal-variances-intervals.png")
+
+    select_method_card(page, "탐색적 분석", "그래프 요약")
+    page.get_by_role("button", name="그래프 요약 실행").click()
+    expect(page.get_by_label("yield_pct 그래프 요약")).to_be_visible(timeout=20_000)
+    open_primary_navigation(page, "리포트")
+    report_rows = page.locator(".report-run-row")
+    expect(report_rows).not_to_have_count(0, timeout=20_000)
+    report_rows.first.click()
+    page.get_by_role("button", name="HTML 생성").click()
+    expect(page.get_by_role("button", name="HTML 다운로드")).to_be_visible(
+        timeout=15_000
+    )
+    with page.expect_download(timeout=15_000) as download_info:
+        page.get_by_role("button", name="HTML 다운로드").click()
+    download = download_info.value
+    if not download.suggested_filename.startswith("statistical-twin-"):
+        raise AssertionError(
+            f"unexpected HTML report filename: {download.suggested_filename}"
+        )
+    report_path = Path(download.path())
+    report_text = report_path.read_text(encoding="utf-8")
+    for expected in (
+        "Statistical Twin Analysis Report",
+        "핵심 결과",
+        "그래프",
+        "<svg",
+        "기술 정보",
+    ):
+        if expected not in report_text:
+            raise AssertionError(f"HTML report did not contain {expected!r}")
+    if "<script" in report_text.lower():
+        raise AssertionError("HTML report contained a script element")
+    report_page = page.context.new_page()
+    try:
+        # Playwright download temp paths do not preserve the .html suffix, so a
+        # file: navigation can be served as plain text despite valid HTML.
+        report_page.set_content(report_text, wait_until="load")
+        expect(
+            report_page.get_by_role("heading", name=re.compile("결과 보고서"))
+        ).to_be_visible()
+        diagnostics.capture_page(report_page, "html-report-graphical-summary.png")
+    finally:
+        report_page.close()
 
 
 def verify_descriptive_quick_charts_and_run_chart(page: Page) -> None:
@@ -1748,14 +2007,17 @@ def verify_linear_model_fit_and_prediction(
     profiles = page.locator(".regression-optimizer-profile-card")
     expect(profiles).to_have_count(2)
     assert_children_do_not_overlap(
-        page.locator(".regression-optimizer-profile-grid"), profiles,
+        page.locator(".regression-optimizer-profile-grid"),
+        profiles,
         "regression optimizer profiles",
     )
     expect(page.locator(".regression-categorical-profile-table-wrap")).to_have_count(1)
     diagnostics.capture_page(page, "regression-optimizer-profile-layout.png")
 
     manual_prediction = page.locator(".regression-manual-prediction")
-    expect(manual_prediction.get_by_role("heading", name="예측 조건 입력")).to_be_visible()
+    expect(
+        manual_prediction.get_by_role("heading", name="예측 조건 입력")
+    ).to_be_visible()
     expect(manual_prediction.get_by_label("예측 대상 데이터셋 버전")).to_have_count(0)
     manual_prediction.get_by_role("button", name="붙여넣기 가져오기").click()
     manual_prediction.get_by_label("예측 조건 붙여넣기").fill("1\tA")
@@ -1775,7 +2037,9 @@ def verify_linear_model_fit_and_prediction(
     )
     manual_prediction.get_by_label("첫 행에 열 이름 포함").check()
     manual_prediction.get_by_role("button", name="입력 grid에 적용").click()
-    expect(manual_prediction.locator(".regression-manual-grid tbody tr")).to_have_count(3)
+    expect(manual_prediction.locator(".regression-manual-grid tbody tr")).to_have_count(
+        3
+    )
     diagnostics.capture_page(page, "regression-manual-input-grid.png")
     with page.expect_response(
         lambda response: response.request.method == "POST"
@@ -1805,7 +2069,9 @@ def verify_linear_model_fit_and_prediction(
         expect(header).to_have_count(1)
         box = header.bounding_box()
         if box is None or box["width"] < 105:
-            raise AssertionError(f"prediction summary header {label} was too narrow: {box}")
+            raise AssertionError(
+                f"prediction summary header {label} was too narrow: {box}"
+            )
     diagnostics.capture_page(page, "regression-prediction-summary-table.png")
     manual_prediction.get_by_role("button", name="입력값 포함").click()
     full_table = manual_prediction.locator(
@@ -1819,7 +2085,9 @@ def verify_linear_model_fit_and_prediction(
         "auto",
         "scroll",
     }:
-        raise AssertionError("prediction result wrapper did not own horizontal overflow")
+        raise AssertionError(
+            "prediction result wrapper did not own horizontal overflow"
+        )
     page_overflow = page.evaluate(
         "() => document.documentElement.scrollWidth - document.documentElement.clientWidth"
     )
@@ -1966,7 +2234,9 @@ def verify_linear_model_fit_and_prediction(
     expect(model_retention.get_by_text("예측 참조 0건", exact=True)).to_be_visible(
         timeout=15_000
     )
-    expect(model_retention.get_by_text("붙여넣기 예측 1건", exact=False)).to_be_visible()
+    expect(
+        model_retention.get_by_text("붙여넣기 예측 1건", exact=False)
+    ).to_be_visible()
     expect(
         model_retention.get_by_text(
             "종속 예측 결과를 먼저 삭제해야 모델을 삭제할 수 있습니다."
@@ -1999,7 +2269,9 @@ def verify_linear_model_fit_and_prediction(
     expect(model_retention.get_by_text("예측 참조 0건", exact=True)).to_be_visible(
         timeout=15_000
     )
-    expect(model_retention.get_by_text("붙여넣기 예측 0건", exact=False)).to_be_visible()
+    expect(
+        model_retention.get_by_text("붙여넣기 예측 0건", exact=False)
+    ).to_be_visible()
     model_retention.get_by_text(
         "이 모델로 새 예측을 실행할 수 없게 됨을 확인했습니다."
     ).click()
@@ -2195,18 +2467,23 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     select_method_card(page, "실험 계획법", "실험 계획 생성")
     expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
     expect_lazy_analysis_module(page, "DoeAnalysisPanels")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(500)
     expect(page.locator(".doe-form-section")).to_have_count(0)
     factorial_root = page.locator(
         '.analysis-run-panel[data-analysis-execution="doe.factorial_design"]'
     )
     assert_doe_table_visual_consistency(factorial_root, diagnostics, "factorial")
     diagnostics.capture_page(page, "doe-factorial-table-ui.png")
-
     page.get_by_label("반복", exact=True).fill("2")
     page.get_by_label("센터점", exact=True).fill("1")
     page.locator("details.doe-advanced-settings > summary").click()
     page.get_by_label("실행 순서 무작위화", exact=True).uncheck()
-    page.get_by_role("button", name="DOE 설계 생성").click()
+    expect(page.get_by_label("반복", exact=True)).to_have_value("2")
+    expect(page.get_by_text("예상 실험 9개", exact=True)).to_be_visible()
+    create_design_button = page.get_by_role("button", name="DOE 설계 생성")
+    expect(create_design_button).to_be_enabled()
+    create_design_button.click()
     expect(page.get_by_text("2-level screening design", exact=True)).to_be_visible(
         timeout=20_000
     )
@@ -2291,9 +2568,7 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     ):
         page.get_by_role("button", name="반응 저장", exact=True).click()
     page.get_by_role("button", name="일반 완전요인 ANOVA").click()
-    expect(page.get_by_role("heading", name="분산분석")).to_be_visible(
-        timeout=20_000
-    )
+    expect(page.get_by_role("heading", name="분산분석")).to_be_visible(timeout=20_000)
 
 
 def expect_lazy_analysis_module(page: Page, module_name: str) -> None:
@@ -2620,10 +2895,16 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(scatter.locator(".chart-point")).to_have_count(6)
     workspace.locator(".lhs-parallel-chart").focus()
     page.keyboard.press("ArrowRight")
-    expect(workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')).to_have_count(1)
-    expect(workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')).to_contain_text("1")
+    expect(
+        workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
+    ).to_have_count(1)
+    expect(
+        workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
+    ).to_contain_text("1")
     scatter.locator(".chart-point").nth(2).focus()
-    expect(workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')).to_contain_text("3")
+    expect(
+        workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
+    ).to_contain_text("3")
     diagnostics.capture_page(page, "lhs-parallel-coordinates.png")
     diagnostics.capture_page(page, "lhs-two-factor-scatter.png")
 

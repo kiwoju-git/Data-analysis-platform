@@ -2,7 +2,7 @@
 
 Route: `POST /api/v1/visualizations/preview`
 
-Visualization schema: `2`
+Visualization schema: `3`
 
 Runtime capability: `graph_builder_preview`
 
@@ -19,7 +19,7 @@ history item, report, or export.
 | `histogram` | 1-8 numeric columns | small multiples |
 | `qq_plot` | 1-8 numeric columns | small multiples |
 | `ecdf` | 1-6 numeric columns | small multiples |
-| `scatter_plot` | one X and 1-6 Y numeric columns | one panel per Y |
+| `scatter_plot` | fixed X + 1-6 Y, or 1-6 X + fixed Y numeric columns | one panel per X/Y pair |
 | `run_chart` | 1-6 numeric columns and optional common order | one panel per value |
 | `imr_chart` | 1-6 numeric columns, or one numeric column plus group, and optional order | an I/MR pair per value/group |
 
@@ -46,6 +46,22 @@ not contain a source path, filename, full raw row, SQL, or traceback.
 
 `visualization_schema_version` is operational visualization metadata. It is not
 a statistical method version or an analysis result schema version.
+
+## Scatter Role Direction
+
+Schema 3 adds `scatter_mode`, canonical `x_column_ids`, and canonical
+`y_column_ids`:
+
+- `fixed_x_multiple_y`: exactly one X and one to six Y columns;
+- `multiple_x_fixed_y`: one to six X columns and exactly one Y column.
+
+Each generated panel persists its actual `x_column`, `y_column`,
+`scatter_mode`, pairwise N/exclusion counts, bounded points, and the stable
+label `{Y} vs {X}`. Both directions use one common pair calculation path. X/Y
+overlap, duplicate roles, nonnumeric/ID columns, and role-count violations are
+rejected. The schema-2 request shape `x_column_id` plus `y_column_ids` remains
+accepted and normalizes to `fixed_x_multiple_y`; new clients send only schema-3
+canonical fields.
 
 ## Responsive Result Layout
 

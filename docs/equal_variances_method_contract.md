@@ -1,112 +1,78 @@
 # Equal Variances Method Contract
 
-Status: implemented for Gate B1.
+Status: implemented. Current method version: `eda.equal_variances` `0.2.0`.
 
-Method ID: `eda.equal_variances`
+Primary references:
 
-Implementation:
-
-- Backend domain module: `backend/app/statistics/equal_variances.py`
-- API dispatch: `POST /api/v1/analysis-runs`
-- Result retrieval: `GET /api/v1/analysis-runs/{analysis_id}/result`
-- Frontend panel: `frontend/src/EqualVariancesPanel.tsx`
+- Minitab, *Methods and formulas for Test for Equal Variances*:
+  https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/how-to/test-for-equal-variances/methods-and-formulas/methods-and-formulas/
+- Minitab, *Multiple Comparisons Method for Equal Variances* white paper:
+  https://support.minitab.com/en-us/minitab/media/pdfs/translate/Multiple_Comparisons_Method_Test_for_Equal_Variances.pdf
 
 ## Scope
 
-This method computes real equal-variance diagnostics for one numeric response column grouped by one group column:
+`POST /api/v1/analysis-runs` accepts one numeric response, one non-ID group,
+`0 < alpha < 1`, and complete-case handling. Calculation reads only confirmed
+canonical rows and records all missing/non-numeric exclusions.
 
-- Brown-Forsythe test using SciPy Levene with `center="median"`
-- Levene test using SciPy Levene with `center="mean"`
-- Group summaries: N, mean, median, sample variance, sample standard deviation, min, max
+Schema 2 has two primary results:
 
-It does not compute Bartlett, F-test, t-test, ANOVA, post-hoc tests, or any automatic downstream method switch.
+1. `multiple_comparisons`: Bonett pair comparisons with the Minitab-described
+   trimmed-center pooled fourth-moment scale and Nakayama/Tukey-Kramer normal
+   range adjustment. For two groups the normal critical value and two-group
+   interval allocation are used; for more than two groups the infinite-df
+   studentized-range critical value and group allocations are used.
+2. `levene`: median-centered Brown-Forsythe modification of Levene's test,
+   exposed as `levene_brown_forsythe`.
 
-## Inputs
+The classical mean-centered Levene result remains under `additional_tests` as
+`levene_mean`; it is never labeled or interpreted as the multiple-comparisons
+procedure.
 
-- `dataset_version_id`: required
-- `options.response_column_id`: required, non-ID, numeric `integer` or `decimal`
-- `options.group_column_id`: required, non-ID, different from response
-- `options.alpha`: optional, default `0.05`, must be `0 < alpha < 1`
-- `options.missing_policy`: optional, currently only `complete_case`
-- `filter_snapshot`: supported through the common Workbench AND-filter engine
+## Multiple Comparisons Result
 
-The method reads only validated canonical JSONL rows for the confirmed immutable dataset version. It must not reparse the raw upload.
+The payload contains the overall adjusted p-value, each group's sample standard
+deviation, its multiple-comparison interval, pairwise adjusted p-values, and
+non-overlapping pairs. The overall p-value is the minimum family-adjusted pair
+p-value. A `computed=false` result stores a stable warning rather than a fake
+zero, infinity, or p-value.
 
-## Missing And Invalid Values
+The Minitab trimming proportion `1 / (2 sqrt(n) - 4)` is used. Because that
+procedure and the reference method are not supported for very small groups,
+the implementation requires at least 10 usable observations per group for the
+multiple-comparisons result. Brown-Forsythe Levene remains separately
+available when its own minimum conditions are met.
 
-Rows are excluded before calculation when:
+Intervals are comparison intervals, not ordinary confidence intervals for one
+population standard deviation. When the multiple-comparisons method is the
+chosen basis, non-overlap identifies a significant pair. When Levene is the
+chosen basis for small, skewed, or heavy-tailed samples, these intervals must
+not be used to infer significant individual pairs.
 
-- response is missing
-- group is missing
-- response cannot be parsed as a finite number using the dataset parsing decimal/thousands settings
+## Result Schemas And Compatibility
 
-The result reports `n_total`, `n_used`, `n_excluded_missing_response`, `n_excluded_missing_group`, and `n_excluded_non_numeric_response`.
+- schema 2: `multiple_comparisons`, `levene`, `additional_tests`, group
+  summaries, exclusions, package versions, and stable warnings;
+- schema 1: the original `brown_forsythe` plus mean-centered `levene_mean`
+  rows remain readable with their original names and meaning.
 
-## Result Shape
+Existing schema-1 files, method versions, and checksums are not rewritten.
+Schema 2 includes a compatibility `tests` list for existing generic report and
+comparison readers, but its primary user interface reads the named fields.
 
-The result payload has `summary_type="equal_variances_test"` and includes:
+## UI And Interpretation
 
-- `response` and `group` column metadata
-- `groups[]` summaries
-- `tests[]` entries for `brown_forsythe` and `levene_mean`
-- `package_versions.numpy` and `package_versions.scipy`
-- stable warning codes
+The default table shows `다중 비교` with no fabricated test statistic and
+`Levene 검정 (Brown-Forsythe)` with F statistic and p-value. The interactive
+interval chart uses the stored group intervals and supports roving keyboard
+focus, persistent detail, and non-overlap metadata. No result automatically
+switches a later t-test or ANOVA method.
 
-Each test result includes:
+## Verification
 
-- `computed`
-- `statistic`
-- `p_value`
-- `alpha`
-- `reject_equal_variances`
-- `valid_group_n_min`
-- `warnings`
-
-If there are fewer than two groups, any group has fewer than two usable observations, all usable response values are constant, or SciPy returns a non-finite statistic/p-value, the test entry must set `computed=false` and must not fabricate statistic or p-value values.
-
-## Warnings
-
-Current stable warning codes:
-
-- `equal_variances_not_method_switch`
-- `missing_values_excluded`
-- `non_numeric_values_excluded`
-- `equal_variances_insufficient_groups`
-- `equal_variances_group_n_too_small`
-- `constant_response`
-- `constant_group`
-- `equal_variances_statistic_not_finite`
-
-`equal_variances_not_method_switch` must be present because this diagnostic does not automatically choose pooled/Welch t-test or standard/Welch ANOVA.
-
-## Error Codes
-
-Current stable request validation error codes:
-
-- `dataset_version_required`
-- `equal_variances_response_required`
-- `equal_variances_group_required`
-- `equal_variances_same_response_and_group`
-- `equal_variances_response_column_not_found`
-- `equal_variances_group_column_not_found`
-- `equal_variances_response_column_is_id`
-- `equal_variances_response_column_not_numeric`
-- `equal_variances_group_column_is_id`
-- `invalid_equal_variances_alpha`
-- `equal_variances_missing_policy_unsupported`
-
-## Tests
-
-Reference fixtures:
-
-- `backend/tests/reference/fixtures/equal_variances_input.json`
-- `backend/tests/reference/fixtures/equal_variances_scipy_reference.json`
-
-Unit/API coverage:
-
-- `backend/tests/unit/test_equal_variances.py`
-- `backend/tests/unit/test_api_contracts.py::test_analysis_run_executes_equal_variances_from_dataset_version`
-
-Frontend rendering coverage:
-
-- `frontend/src/App.test.tsx`
+- `backend/tests/unit/test_equal_variances.py` verifies SciPy Brown-Forsythe
+  and mean-centered Levene, two- and multi-group Bonett references, failure
+  policies, and the supplied `studio_process_training.csv` Minitab fixture.
+- `frontend/src/EqualVariancesPanel.test.tsx` verifies method naming, the blank
+  multiple-comparison statistic cell, the interval SVG, and keyboard entry.
+- schema-1 restore remains covered by existing analysis result tests.

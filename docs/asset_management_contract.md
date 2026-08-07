@@ -22,7 +22,7 @@ expose raw values, absolute/internal paths, SQL, full checksums, coefficients,
 or model predictor levels. The endpoint does not imply a generic deletion
 operation: each deletion action delegates to the owning retention contract.
 
-The page is mounted only after the API contract-11 runtime handshake succeeds.
+The page is mounted only after the API contract-12 runtime handshake succeeds.
 A generic HTTP 404 from a missing route is reported as a frontend/backend
 version mismatch, while stable dataset/model not-found, optimistic metadata
 conflict, dependency blocker, and integrity failure remain separate states.
@@ -56,6 +56,8 @@ The update APIs are:
 
 - `PATCH /api/v1/dataset-versions/{version_id}/metadata`
 - `PATCH /api/v1/regression-models/{model_id}/metadata`
+- `PATCH /api/v1/assets/{asset_type}/{asset_id}/metadata` for
+  `analysis_run`, `doe_design`, and `bayesian_study`
 
 The dataset metadata PATCH also accepts `archived`. An active dataset is
 protected in the UI and must be replaced before archiving. Archived datasets
@@ -68,6 +70,18 @@ path, or internal absolute path. The active dataset selector and Predict model
 catalog display `user_label` first and retain a safe fallback.
 
 ## UI And Safety
+
+The unified catalog filter uses the neutral `CompactSettingsTable` component,
+which is also the implementation behind the DOE compatibility wrapper. Search,
+status, sort, and pinned-only controls therefore share the DOE header, input,
+focus, disabled, and responsive table rules. Refresh remains a heading action.
+
+No row is selected on initial load. Selecting `상세` inserts a valid detail
+`<tr><td colspan=...>` immediately after that asset row; selecting it again
+closes it and selecting another asset moves the single open detail. Dataset,
+model, analysis, design, and study tabs use the same inline placement. Deletion
+uses the type-owned retention preflight and an accessible in-app dialog rather
+than `window.confirm()`.
 
 The dataset tab uses `현재 분석 데이터셋으로 사용`, `이름 저장`,
 `목록 새로고침`, and `삭제 영향 확인`. An active dataset version must be
@@ -101,6 +115,9 @@ the explicit not-found empty state.
 ## Version Decision
 
 User labels require SQLite schema 15 and dataset archive visibility requires
-schema 16, both with upgrade tests. The unified catalog and compact UI use the
-existing metadata and leave current schema 18 unchanged. Neither changes a statistical method,
-result/config schema, dataset schema hash, or model manifest version.
+schema 16. SQLite schema 19 adds `workspace_asset_user_metadata` for analysis
+runs, DOE designs, and Bayesian Studies because those owners previously had no
+safe operational metadata relation. Cleanup triggers follow owner deletion;
+optimistic updates use `expected_metadata_updated_at`. Stored result/design/
+study JSON, checksums, dataset schema hashes, and model manifests are never
+rewritten. This storage migration does not change a statistical method version.

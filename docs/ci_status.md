@@ -1,8 +1,32 @@
 # CI Status
 
-Last updated: 2026-08-06
+Last updated: 2026-08-08
 
 ## Local Validation
+
+- The reporting/summary/variance/assets/scatter work is based on main
+  `275e84a0049b48de3f32a126956a648f1b181172`. It advances API contract 11 to
+  12, metadata schema 18 to 19, the three changed EDA methods/results to
+  0.2.0/schema 2, Graph Preview to schema 3, and HTML reports to artifact
+  schema 2. Immutable legacy results and schema-1 HTML artifacts are not
+  rewritten. Metadata schema 19 adds only mutable user labels, notes, and pin
+  state for additional asset owner types; immutable artifact checksums remain
+  unchanged.
+- Final `scripts/test.ps1` passed backend pytest 972/972 and frontend Vitest
+  264/264 across 33 files. Final `scripts/check.ps1` completed in 1109.7
+  seconds with 18 tutorial blocks, Ruff lint/format over 206 Python files,
+  mypy over 128 source modules, backend pytest 972/972, frontend lint,
+  TypeScript strict checking, Vitest 264/264, and the production build all
+  passing. The existing Vite main-chunk size warning remains informational.
+- The isolated Chromium critical path passed in 124.8 seconds with diagnostics
+  under `.tmp/e2e-diagnostics-report-summary`. It verifies the table-aligned
+  asset filters and inline detail, fixed-Y/multiple-X scatter projections,
+  graphical-summary normal-fit/statistics/CI layout, equal-variance multiple
+  comparison intervals, and the self-contained HTML report. New screenshots
+  include `asset-filter-table.png`, `asset-inline-detail.png`,
+  `scatter-fixed-y-multiple-x.png`, `graphical-summary-minitab-layout.png`,
+  `graphical-summary-mobile.png`, `equal-variances-intervals.png`, and
+  `html-report-graphical-summary.png`.
 
 - The home/assets/hypothesis-family/factorial extension is based on main
   `636592d19344a03563302dd71e7275f31bf6627b`. It advances API contract 10 to

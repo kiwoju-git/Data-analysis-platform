@@ -1,6 +1,6 @@
 # Runtime Compatibility Contract
 
-Last updated: 2026-08-04
+Last updated: 2026-08-08
 
 ## Purpose
 
@@ -37,8 +37,8 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `11`);
-- the actual metadata schema constant (currently `18`);
+- `api_contract_version` (currently `12`);
+- the actual metadata schema constant (currently `19`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
   deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and
@@ -51,20 +51,21 @@ The response contains no workspace path, filename, or raw data. Existing
 
 ## Frontend Gate
 
-The frontend expects API contract `11`, schema 18 or later, and every required
+The frontend expects API contract `12`, schema 19 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management
 PATCH/DELETE requests therefore cannot be sent through the normal UI while the
 gate is blocked.
 
-Contract 10 retains `doe.response_optimizer` as the sole visible canonical RSM
-optimizer entry and the contract-9 regression workflow. It adds Bayesian bulk
-observation and initial-design CSV routes plus executable DOE factor-domain
-fields used by Factorial, LHS, RSM, Response Optimizer, and Bayesian studies.
-It also carries the dynamic sidebar catalog hierarchy. Exact contract matching
-prevents an older backend from accepting partial domain/bulk requests. Generic
-JSON artifacts already store the new definitions, so metadata schema stays 18.
+Contract 12 extends Graph Preview scatter roles to fixed-X/multiple-Y and
+multiple-X/fixed-Y, returns schema-2 descriptive, graphical-summary, and
+equal-variance results, creates human-readable HTML report artifacts, and adds
+optimistic user metadata editing for unified assets. Exact contract matching
+prevents an older backend from accepting only part of these requests. Metadata
+schema 19 adds user label, note, and pin ownership for analysis runs, DOE
+designs, and Bayesian studies without rewriting the immutable result or design
+artifacts they describe.
 
 Build commit `unknown` is not treated as proof of a mismatch. When both commits
 are known, they must match for this strict local runtime.

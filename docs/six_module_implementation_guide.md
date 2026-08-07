@@ -662,7 +662,7 @@ CV는 평균이 0에 가깝지 않고 사용자가 ratio scale임을 확인한 �
 
 ## 9.2 Graphical Summary (`eda.graphical_summary`)
 
-현재 구현 상태: `eda.graphical_summary`는 stdlib 기반 실제 계산으로 available 상태다. API는 canonical rows를 스트리밍해 histogram, boxplot, Q-Q, ECDF용 typed chart-data payload를 저장/반환하며, frontend는 이 payload에서 inline SVG histogram, box plot, Q-Q plot, ECDF와 결과 요약 테이블을 렌더링한다. Grouping/small multiple, KDE, chart artifact export는 아직 구현하지 않는다.
+현재 구현 상태: `eda.graphical_summary` 0.2.0은 canonical rows에서 H&F Method 6 사분위수, Minitab 정의의 표본 왜도/첨도, Anderson-Darling, 평균/중앙값/표준편차 신뢰구간과 histogram/normal-fit, boxplot, Q-Q, ECDF용 typed payload를 저장/반환한다. Frontend full mode는 histogram+통계, boxplot+Q-Q, 분리된 CI chart 순으로 interactive SVG를 렌더링하고 ECDF는 추가 그래프로 유지한다. Quick mode의 histogram/boxplot 경계는 유지한다. Grouping/small multiple과 KDE는 아직 구현하지 않는다.
 
 ### 기본 그래프
 
@@ -716,7 +716,7 @@ KDE는 bandwidth 선택이 결과에 큰 영향을 주므로 P1 옵션으로 두
 
 ## 9.4 Test for Equal Variances (`eda.equal_variances`)
 
-현재 구현 상태: `eda.equal_variances`는 available 상태다. NumPy 2.2.6/SciPy 1.15.3을 사용해 canonical rows에서 Brown-Forsythe(Levene `center="median"`)와 Levene(mean)을 계산하고, 그룹별 N/평균/중앙값/분산/표준편차 요약을 저장/반환한다. 결과는 `analysis_row_snapshot` provenance와 result SHA-256 persistence를 사용하며, 이 결과만으로 후속 pooled/Welch 또는 ANOVA 방식을 자동 전환하지 않는다. 상세 계약은 `docs/equal_variances_method_contract.md`를 따른다.
+현재 구현 상태: `eda.equal_variances` 0.2.0은 canonical rows에서 Bonett 다중 비교(범위 보정 포함)와 Minitab형 median-centered Brown-Forsythe Levene를 별도 방법으로 계산한다. 범위 보정 전후 구간, 전체 p-value, 비중첩 그룹 쌍과 interactive 표준편차 비교구간 chart를 제공한다. mean-centered classical Levene는 추가 검정으로 명확히 구분하며 다중 비교로 표시하지 않는다. schema-1 결과의 기존 두 검정은 원래 의미로 restore되고, 새 결과만 schema 2로 저장된다. 상세 계약은 `docs/equal_variances_method_contract.md`를 따른다.
 
 Levene/Brown-Forsythe smoke calculation도 `scripts/check-stat-deps.ps1`의 일부다. method available 전환에는 별도의 reference fixture, edge-case warnings, schema/result envelope 테스트가 필요하며 현재 slice에서 추가되었다.
 

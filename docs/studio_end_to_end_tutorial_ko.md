@@ -116,13 +116,13 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 - **클릭 순서:** method 선택 > 역할 선택 > 사전점검 > `분석 실행`.
 - **실행 전 확인:** 두 컬럼이 continuous이고 missing count가 0인지 확인한다.
 <!-- TUTORIAL_RESULT:eda.descriptive:start -->
-- **검증 source:** `eda.descriptive` v0.1.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
+- **검증 source:** `eda.descriptive` v0.2.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
 - **예상 실제 결과 (표시 반올림):**
-  - `yield_pct`: N=240, mean=80.3656, SD=4.9839, Q1=76.6390, median=80.7539, Q3=83.6533, range 66.4048~92.5186
-  - `tensile_strength_mpa`: N=240, mean=430.0240, SD=13.1838, Q1=420.8690, median=431.1253, Q3=438.4655, range 396.9931~468.7676
+  - `yield_pct`: N=240, mean=80.3656, SD=4.9839, Q1=76.6107, median=80.7539, Q3=83.6566, range 66.4048~92.5186
+  - `tensile_strength_mpa`: N=240, mean=430.0240, SD=13.1838, Q1=420.8630, median=431.1253, Q3=438.4683, range 396.9931~468.7676
 <!-- TUTORIAL_RESULT:eda.descriptive:end -->
 <!-- TUTORIAL_RESULT:eda.graphical_summary:start -->
-- **검증 source:** `eda.graphical_summary` v0.1.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
+- **검증 source:** `eda.graphical_summary` v0.2.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
 - **그래프 요약 예상값:**
   - `yield_pct`: N=240, missing=0, histogram bins=12, boxplot outliers=0, range 66.4048~92.5186
   - `tensile_strength_mpa`: N=240, missing=0, histogram bins=13, boxplot outliers=1, range 396.9931~468.7676

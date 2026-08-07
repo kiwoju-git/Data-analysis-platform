@@ -5,7 +5,8 @@ receive a method-version bump. `regression.predict` is `0.2.0`,
 `doe.factorial_design` is `0.5.0`, `doe.response_optimizer` is `0.4.0`, and
 `doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.5.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
-`quality.run_chart` is `0.2.0`; `doe.latin_hypercube` is `0.2.0` and
+`eda.descriptive`, `eda.graphical_summary`, and `eda.equal_variances` are
+`0.2.0`. `quality.run_chart` is `0.2.0`; `doe.latin_hypercube` is `0.2.0` and
 the other stable IDs remain on `0.1.0`.
 
 `doe.general_factorial_design` starts at `0.1.0`. API contract `11` adds its
@@ -17,7 +18,21 @@ migration. Existing two-level full-factorial results and checksums are never
 rewritten; the analysis reader continues to accept the existing
 `doe.factorial_design` `0.4.0` contract.
 
-Graph Builder uses `visualization_schema_version=1` and does not create an
+API contract `12` advances Graph Preview to visualization schema `3`, HTML
+reports to artifact schema `2`, and the three changed EDA result contracts to
+schema `2`. Metadata schema `19` adds mutable user metadata rows for unified
+analysis/design/study catalog entries; immutable result, model, design, and
+study artifacts are not rewritten.
+
+- `eda.descriptive` 0.2.0 changes Q1/Q3 and derived IQR metadata to Hyndman-Fan
+  Method 6 (`p * (n + 1)`, NumPy `weibull`).
+- `eda.graphical_summary` 0.2.0 applies the same quantiles and adds stored
+  moments, Anderson-Darling, confidence intervals, and fitted-normal chart data.
+- `eda.equal_variances` 0.2.0 replaces the ambiguous new-write pair with a
+  Bonett/Nakayama multiple-comparisons payload plus median-centered
+  Brown-Forsythe Levene; schema-1 readers preserve the former results.
+
+Graph Builder uses `visualization_schema_version=3` and does not create an
 analysis run. Adding `/api/v1/visualizations/preview` does not bump a
 statistical method version or result schema. API contract version 7 prevents a
 new frontend from calling the required preview route on an older backend.

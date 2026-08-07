@@ -6,6 +6,28 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-08-08 reporting/summary/variance/assets/scatter run additionally:
+
+- renders asset filters with the shared compact settings-table component and
+  expands exactly one detail row immediately after its selected asset;
+- creates a fixed-Y/multiple-X scatter preview and checks all generated panel
+  axis labels and bounded card geometry;
+- executes the schema-2 graphical summary, checks the fitted normal curve,
+  distribution statistics, confidence intervals, mobile stacking, and HF6
+  quartile presentation;
+- executes the schema-2 equal-variance workflow, verifies the separate Bonett-
+  Nakayama multiple-comparison and Brown-Forsythe Levene rows, and exercises
+  the keyboard-accessible comparison-interval chart; and
+- downloads and opens the schema-2 self-contained HTML graphical-summary
+  report, verifying its inline SVG sections and collapsed technical payload.
+
+The isolated Chromium run passed in 124.8 seconds with diagnostics under
+`.tmp/e2e-diagnostics-report-summary`. Requested screenshots are
+`asset-filter-table.png`, `asset-inline-detail.png`,
+`scatter-fixed-y-multiple-x.png`, `graphical-summary-minitab-layout.png`,
+`graphical-summary-mobile.png`, `equal-variances-intervals.png`, and
+`html-report-graphical-summary.png`.
+
 The 2026-08-06 home/assets/hypothesis-family/factorial run additionally:
 
 - switches the root and legacy `/project` entry points to the explicit Home
@@ -455,6 +477,7 @@ browser critical path.
 - `verify schema stale behavior`
 - `verify linear model fit and prediction`
 - `verify attribute control chart`
+- `verify reporting summary variance and fixed-Y scatter`
 - `verify DOE factorial analysis`
 - `verify DOE response surface analysis and optimization`
 - `verify standalone LHS design and response revision`
