@@ -7,7 +7,7 @@ describe("createGraphPreview", () => {
 
   it("posts the typed preview request to the centralized route", async () => {
     const payload = {
-      visualization_schema_version: 2 as const,
+      visualization_schema_version: 3 as const,
       graph_type: "box_plot" as const,
       dataset_version_id: "version-1",
       source_schema_hash: "schema",

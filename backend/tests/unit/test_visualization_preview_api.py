@@ -35,7 +35,7 @@ def test_graphical_preview_reuses_filter_and_does_not_create_analysis_history(tm
 
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["visualization_schema_version"] == 2
+    assert payload["visualization_schema_version"] == 3
     assert payload["row_count_total"] == 4
     assert payload["row_count_included"] == 2
     assert len(payload["filter_snapshot_sha256"]) == 64
@@ -110,6 +110,96 @@ def test_individual_value_preview_rejects_over_limit_without_sampling(tmp_path) 
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "individual_value_point_limit_exceeded"
+
+
+def test_scatter_preview_supports_fixed_x_and_fixed_y_pair_generation(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _create_version(
+            client,
+            b"temperature,pressure,cycle,yield\n60,5,20,80\n65,8,,85\n70,10,30,91\n",
+        )
+        temperature, pressure, cycle, response = version["columns"]
+        fixed_x = client.post(
+            "/api/v1/visualizations/preview",
+            json={
+                "dataset_version_id": version["version_id"],
+                "graph_type": "scatter_plot",
+                "scatter_mode": "fixed_x_multiple_y",
+                "x_column_ids": [temperature["column_id"]],
+                "y_column_ids": [pressure["column_id"], response["column_id"]],
+            },
+        )
+        fixed_y = client.post(
+            "/api/v1/visualizations/preview",
+            json={
+                "dataset_version_id": version["version_id"],
+                "graph_type": "scatter_plot",
+                "scatter_mode": "multiple_x_fixed_y",
+                "x_column_ids": [temperature["column_id"], cycle["column_id"]],
+                "y_column_ids": [response["column_id"]],
+            },
+        )
+        legacy = client.post(
+            "/api/v1/visualizations/preview",
+            json={
+                "dataset_version_id": version["version_id"],
+                "graph_type": "scatter_plot",
+                "x_column_id": temperature["column_id"],
+                "y_column_ids": [response["column_id"]],
+            },
+        )
+
+    assert fixed_x.status_code == 200, fixed_x.text
+    assert fixed_x.json()["scatter_mode"] == "fixed_x_multiple_y"
+    assert [panel["label"] for panel in fixed_x.json()["panels"]] == [
+        "pressure vs temperature",
+        "yield vs temperature",
+    ]
+    assert fixed_y.status_code == 200, fixed_y.text
+    assert fixed_y.json()["scatter_mode"] == "multiple_x_fixed_y"
+    assert [panel["label"] for panel in fixed_y.json()["panels"]] == [
+        "yield vs temperature",
+        "yield vs cycle",
+    ]
+    assert fixed_y.json()["panels"][1]["result"]["point_count"] == 2
+    assert fixed_y.json()["panels"][1]["result"]["n_excluded"] == 1
+    assert all(
+        panel["result"]["scatter_mode"] == "multiple_x_fixed_y"
+        for panel in fixed_y.json()["panels"]
+    )
+    assert legacy.status_code == 200, legacy.text
+    assert legacy.json()["scatter_mode"] == "fixed_x_multiple_y"
+
+
+def test_scatter_preview_rejects_duplicate_or_overlapping_roles(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _create_version(client, b"x,y\n1,2\n2,4\n")
+        x_column, y_column = version["columns"]
+        duplicate = client.post(
+            "/api/v1/visualizations/preview",
+            json={
+                "dataset_version_id": version["version_id"],
+                "graph_type": "scatter_plot",
+                "scatter_mode": "multiple_x_fixed_y",
+                "x_column_ids": [x_column["column_id"], x_column["column_id"]],
+                "y_column_ids": [y_column["column_id"]],
+            },
+        )
+        overlap = client.post(
+            "/api/v1/visualizations/preview",
+            json={
+                "dataset_version_id": version["version_id"],
+                "graph_type": "scatter_plot",
+                "scatter_mode": "fixed_x_multiple_y",
+                "x_column_ids": [x_column["column_id"]],
+                "y_column_ids": [x_column["column_id"]],
+            },
+        )
+
+    assert duplicate.status_code == 422
+    assert overlap.status_code == 422
 
 
 def test_grouped_individual_value_plot_is_one_panel_with_first_occurrence_groups(

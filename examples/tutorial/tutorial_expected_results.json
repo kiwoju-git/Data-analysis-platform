@@ -126,6 +126,32 @@
         "warning_count": 4
       }
     },
+    "doe.response_optimizer": {
+      "absolute_tolerance": 1e-08,
+      "input_file_sha256": "49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2",
+      "method_id": "doe.response_optimizer",
+      "method_version": "0.4.0",
+      "relative_tolerance": 1e-08,
+      "result": {
+        "actual_coordinates": {
+          "pressure_bar": 9.6827887340705,
+          "temperature_c": 76.55448223971531
+        },
+        "composite_desirability": 1.0,
+        "global_optimum_guaranteed": false,
+        "goal": "maximize",
+        "predicted_response": 90.99815460640144,
+        "source_analysis_count": 1,
+        "termination_reason": "search_completed",
+        "warnings": [
+          "response_optimizer_global_optimum_not_guaranteed",
+          "response_optimizer_confirmation_run_required",
+          "response_optimizer_uses_point_predictions_without_uncertainty",
+          "response_optimizer_model_adequacy_must_be_reviewed",
+          "response_optimizer_source_model_has_warnings"
+        ]
+      }
+    },
     "doe.response_surface": {
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2",
@@ -180,7 +206,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280",
       "method_id": "eda.descriptive",
-      "method_version": "0.1.0",
+      "method_version": "0.2.0",
       "relative_tolerance": 1e-08,
       "result": {
         "tensile_strength_mpa": {
@@ -191,8 +217,8 @@
           "n_missing": 0,
           "n_total": 240,
           "n_used": 240,
-          "q1": 420.869,
-          "q3": 438.4655,
+          "q1": 420.863,
+          "q3": 438.46825,
           "std": 13.183802269570714
         },
         "yield_pct": {
@@ -203,8 +229,8 @@
           "n_missing": 0,
           "n_total": 240,
           "n_used": 240,
-          "q1": 76.63900000000001,
-          "q3": 83.6533,
+          "q1": 76.61065,
+          "q3": 83.65655000000001,
           "std": 4.983883757259003
         }
       }
@@ -213,7 +239,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280",
       "method_id": "eda.graphical_summary",
-      "method_version": "0.1.0",
+      "method_version": "0.2.0",
       "relative_tolerance": 1e-08,
       "result": {
         "tensile_strength_mpa": {
@@ -655,32 +681,6 @@
           "prediction_extrapolation_risk",
           "prediction_extrapolation_risk",
           "prediction_extrapolation_risk"
-        ]
-      }
-    },
-    "doe.response_optimizer": {
-      "absolute_tolerance": 1e-08,
-      "input_file_sha256": "49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2",
-      "method_id": "doe.response_optimizer",
-      "method_version": "0.4.0",
-      "relative_tolerance": 1e-08,
-      "result": {
-        "actual_coordinates": {
-          "pressure_bar": 9.6827887340705,
-          "temperature_c": 76.55448223971531
-        },
-        "composite_desirability": 1.0,
-        "global_optimum_guaranteed": false,
-        "goal": "maximize",
-        "predicted_response": 90.99815460640144,
-        "source_analysis_count": 1,
-        "termination_reason": "search_completed",
-        "warnings": [
-          "response_optimizer_global_optimum_not_guaranteed",
-          "response_optimizer_confirmation_run_required",
-          "response_optimizer_uses_point_predictions_without_uncertainty",
-          "response_optimizer_model_adequacy_must_be_reviewed",
-          "response_optimizer_source_model_has_warnings"
         ]
       }
     },

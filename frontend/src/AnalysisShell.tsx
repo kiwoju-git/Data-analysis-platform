@@ -396,11 +396,11 @@ export interface AnalysisShellProps {
   onRunDescriptiveAnalysis: () => void;
   onOpenFullGraphicalSummary?: (columnId: string) => void;
   onRetryDescriptiveQuickGraph?: () => void;
-  onRunEqualVariancesAnalysis: () => void;
+  onRunEqualVariancesAnalysis: (methodVersion: string) => void;
   onRunEquivalenceTostAnalysis: () => void;
   onRunTwoSampleEquivalenceAnalysis?: (options: TwoSampleEquivalenceExecutionOptions) => void;
   onRunPairedEquivalenceAnalysis?: () => void;
-  onRunGraphicalSummaryAnalysis: () => void;
+  onRunGraphicalSummaryAnalysis: (confidenceLevel: number) => void;
   onRunGageRrAnalysis?: () => void;
   onRunGageRrPreflight?: () => void;
   onRunGageRunChartAnalysis?: () => void;
@@ -1066,7 +1066,7 @@ export function AnalysisShell({
                   onAlphaChange={onEqualVariancesAlphaChange}
                   onGroupColumnChange={onEqualVariancesGroupColumnChange}
                   onResponseColumnChange={onEqualVariancesResponseColumnChange}
-                  onRun={onRunEqualVariancesAnalysis}
+                  onRun={() => onRunEqualVariancesAnalysis(method.method_version)}
                 />
               );
             }

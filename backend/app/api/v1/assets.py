@@ -2,8 +2,13 @@ from typing import Literal
 
 from fastapi import APIRouter, Query, Request
 
-from app.api.v1.schemas.assets import WorkspaceAssetCatalogResponse
-from app.services.workspace_assets import list_workspace_assets
+from app.api.v1.schemas.assets import (
+    EditableWorkspaceAssetType,
+    WorkspaceAssetCatalogResponse,
+    WorkspaceAssetMetadataResponse,
+    WorkspaceAssetMetadataUpdateRequest,
+)
+from app.services.workspace_assets import list_workspace_assets, update_workspace_asset_metadata
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -30,4 +35,22 @@ def list_workspace_assets_route(
         sort=sort,
         offset=offset,
         limit=limit,
+    )
+
+
+@router.patch(
+    "/{asset_type}/{asset_id}/metadata",
+    response_model=WorkspaceAssetMetadataResponse,
+)
+def update_workspace_asset_metadata_route(
+    request: Request,
+    asset_type: EditableWorkspaceAssetType,
+    asset_id: str,
+    body: WorkspaceAssetMetadataUpdateRequest,
+) -> WorkspaceAssetMetadataResponse:
+    return update_workspace_asset_metadata(
+        request.app.state.settings,
+        asset_type=asset_type,
+        asset_id=asset_id,
+        body=body,
     )

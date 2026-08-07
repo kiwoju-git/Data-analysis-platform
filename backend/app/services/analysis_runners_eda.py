@@ -222,6 +222,7 @@ def run_graphical_summary_analysis(
     selected_columns = _selected_graphical_summary_columns(context, options)
     histogram_bin_count = _graphical_histogram_bin_count(options)
     point_limit = _graphical_point_limit(options)
+    confidence_level = float(options.get("confidence_level", 0.95))
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -240,6 +241,7 @@ def run_graphical_summary_analysis(
             thousands=context.parsing.thousands,
             histogram_bin_count=histogram_bin_count,
             point_limit=point_limit,
+            confidence_level=confidence_level,
         )
         return store_succeeded_analysis_result(
             settings=settings,

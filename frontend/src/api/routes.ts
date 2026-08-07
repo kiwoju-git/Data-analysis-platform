@@ -51,6 +51,9 @@ export const apiRoutes = {
     if (filters.sort) query.set("sort", filters.sort);
     return apiUrl(`/assets?${query.toString()}`);
   },
+  workspaceAssetMetadata(assetType: string, assetId: string): string {
+    return apiUrl(`/assets/${encodeURIComponent(assetType)}/${encodeURIComponent(assetId)}/metadata`);
+  },
   health(): string {
     return apiUrl("/health");
   },

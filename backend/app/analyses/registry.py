@@ -10,10 +10,10 @@ from app.api.v1.schemas.analyses import (
 
 METHOD_VERSION = "0.1.0"
 METHOD_VERSIONS: dict[str, str] = {
-    "eda.descriptive": METHOD_VERSION,
-    "eda.graphical_summary": METHOD_VERSION,
+    "eda.descriptive": "0.2.0",
+    "eda.graphical_summary": "0.2.0",
     "eda.normality": "0.2.0",
-    "eda.equal_variances": METHOD_VERSION,
+    "eda.equal_variances": "0.2.0",
     "hypothesis.one_sample_t": METHOD_VERSION,
     "hypothesis.paired_t": METHOD_VERSION,
     "hypothesis.two_sample_t": METHOD_VERSION,

@@ -142,6 +142,7 @@ class GraphicalSummaryOptions(BaseModel):
     column_ids: list[str] = Field(min_length=1)
     histogram_bin_count: int | None = None
     point_limit: int = 1000
+    confidence_level: float = Field(default=0.95, gt=0, lt=1)
 
     @field_validator("column_ids", mode="before")
     @classmethod

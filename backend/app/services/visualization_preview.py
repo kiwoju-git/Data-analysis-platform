@@ -88,6 +88,7 @@ def create_graph_preview(
         warnings=warnings,
         layout=request.layout,
         comparison_mode=request.comparison_mode,
+        scatter_mode=request.scatter_mode if request.graph_type == "scatter_plot" else None,
         group_order_policy=request.group_order_policy,
         missing_group_policy=request.missing_group_policy,
         missing_group_row_count=missing_group_row_count,
@@ -211,44 +212,44 @@ def _scatter_panels(
     columns_by_id: dict[str, DatasetColumnRecord],
     included_indices: tuple[int, ...] | None,
 ) -> list[GraphPreviewPanel]:
-    assert request.x_column_id is not None
-    x_column = _numeric_columns(columns_by_id, [request.x_column_id])[0]
+    x_columns = _numeric_columns(columns_by_id, request.x_column_ids)
     y_columns = _numeric_columns(columns_by_id, request.y_column_ids)
+    pairs = (
+        [(x_columns[0], y_column) for y_column in y_columns]
+        if request.scatter_mode == "fixed_x_multiple_y"
+        else [(x_column, y_columns[0]) for x_column in x_columns]
+    )
     group = _optional_group_column(columns_by_id, request.group_column_id)
-    try:
-        result = calculate_scatter_points(
-            _iter_filtered_rows(context, included_indices),
-            _point_column(x_column),
-            [_point_column(column) for column in y_columns],
-            decimal=context.parsing.decimal,
-            thousands=context.parsing.thousands,
-            point_limit=request.point_limit,
-            group_column_index=None if group is None else group.column_index,
+    panels: list[GraphPreviewPanel] = []
+    for index, (x_column, y_column) in enumerate(pairs):
+        try:
+            result = calculate_scatter_points(
+                _iter_filtered_rows(context, included_indices),
+                _point_column(x_column),
+                [_point_column(y_column)],
+                decimal=context.parsing.decimal,
+                thousands=context.parsing.thousands,
+                point_limit=request.point_limit,
+                group_column_index=None if group is None else group.column_index,
+            )
+        except GraphPointError as exc:
+            raise ApiError(code=exc.code, message=_point_error_message(exc.code)) from exc
+        panels.append(
+            GraphPreviewPanel(
+                panel_id=f"scatter-{index + 1}",
+                kind="scatter",
+                label=f"{y_column.display_name} vs {x_column.display_name}",
+                unit=y_column.unit,
+                status="succeeded",
+                result={
+                    **result,
+                    "scatter_mode": request.scatter_mode,
+                    "x_column": _safe_column_payload(x_column),
+                    "y_column": _safe_column_payload(y_column),
+                },
+            )
         )
-    except GraphPointError as exc:
-        raise ApiError(code=exc.code, message=_point_error_message(exc.code)) from exc
-    points = result["points"]
-    assert isinstance(points, list)
-    return [
-        GraphPreviewPanel(
-            panel_id=f"scatter-{index + 1}",
-            kind="scatter",
-            label=f"{y_column.display_name} vs {x_column.display_name}",
-            unit=y_column.unit,
-            status="succeeded",
-            result={
-                **result,
-                "x_column": _safe_column_payload(x_column),
-                "y_column": _safe_column_payload(y_column),
-                "points": [
-                    point
-                    for point in points
-                    if isinstance(point, dict) and point.get("series_id") == y_column.column_id
-                ],
-            },
-        )
-        for index, y_column in enumerate(y_columns)
-    ]
+    return panels
 
 
 def _sequence_panels(

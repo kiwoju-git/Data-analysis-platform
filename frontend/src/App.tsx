@@ -1950,7 +1950,7 @@ export default function App() {
     }
   }
 
-  async function handleRunGraphicalSummaryAnalysis() {
+  async function handleRunGraphicalSummaryAnalysis(confidenceLevel = 0.95) {
     if (
       version === null ||
       selectedMethod === null ||
@@ -1984,6 +1984,7 @@ export default function App() {
         options: {
           column_ids: selectedGraphicalSummaryColumnIds,
           point_limit: 1000,
+          confidence_level: confidenceLevel,
         },
       });
       setAnalysisResult(response);
@@ -2045,11 +2046,9 @@ export default function App() {
     }
   }
 
-  async function handleRunEqualVariancesAnalysis() {
+  async function handleRunEqualVariancesAnalysis(methodVersion: string) {
     if (
       version === null ||
-      selectedMethod === null ||
-      selectedMethod.method_id !== "eda.equal_variances" ||
       selectedEqualVariancesResponseColumnId === null ||
       selectedEqualVariancesGroupColumnId === null
     ) {
@@ -2077,8 +2076,8 @@ export default function App() {
         version.columns,
       );
       const response = await createAnalysisRun({
-        method_id: selectedMethod.method_id,
-        method_version: selectedMethod.method_version,
+        method_id: "eda.equal_variances",
+        method_version: methodVersion,
         dataset_version_id: version.version_id,
         filter_snapshot: {
           expression_version: 1,
@@ -4152,8 +4151,8 @@ export default function App() {
         });
       }
     },
-    onRunEqualVariancesAnalysis: () => {
-      void handleRunEqualVariancesAnalysis();
+    onRunEqualVariancesAnalysis: (methodVersion: string) => {
+      void handleRunEqualVariancesAnalysis(methodVersion);
     },
     onRunEquivalenceTostAnalysis: () => {
       void handleRunEquivalenceTostAnalysis();
@@ -4164,8 +4163,8 @@ export default function App() {
     onRunPairedEquivalenceAnalysis: () => {
       void handleRunPairedEquivalenceAnalysis();
     },
-    onRunGraphicalSummaryAnalysis: () => {
-      void handleRunGraphicalSummaryAnalysis();
+    onRunGraphicalSummaryAnalysis: (confidenceLevel) => {
+      void handleRunGraphicalSummaryAnalysis(confidenceLevel);
     },
     onRunKruskalWallisAnalysis: () => {
       void handleRunKruskalWallisAnalysis();

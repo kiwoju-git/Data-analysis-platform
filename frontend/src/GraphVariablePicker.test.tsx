@@ -50,6 +50,22 @@ describe("GraphVariablePicker", () => {
     expect((html.match(/checked=""/g) ?? [])).toHaveLength(2);
   });
 
+  it("disables an axis already used by the fixed scatter role", () => {
+    const html = renderToString(
+      <GraphVariablePicker
+        columns={[column("x", "fixed_x", null), column("y", "candidate_y", null)]}
+        disabledIds={["x"]}
+        label="Y variables"
+        maximum={6}
+        onChange={vi.fn()}
+        selectedIds={["y"]}
+      />,
+    );
+
+    expect((html.match(/disabled=""/g) ?? [])).toHaveLength(1);
+    expect((html.match(/checked=""/g) ?? [])).toHaveLength(1);
+  });
+
   it("keeps selected options removable and never silently exceeds the maximum", () => {
     expect(toggleGraphVariableSelection(["a", "b"], "a", 2)).toEqual(["b"]);
     expect(toggleGraphVariableSelection(["a", "b"], "c", 2)).toEqual(["a", "b"]);

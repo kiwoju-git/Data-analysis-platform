@@ -53,14 +53,14 @@ describe("DoeSettingsTable", () => {
 
     expect(html).toContain('class="result-table doe-settings-table');
     expect(html).toContain("<thead><tr>");
-    expect(html).toContain('<th id="doe-setting-');
+    expect(html).toContain('<th id="compact-setting-');
     expect(html).toContain('<label for="test-design-name">설계 이름</label>');
     expect(html).toContain("<tbody>");
     expect(html).toContain('id="test-randomize" type="checkbox" checked=""');
     expect(html).toContain('id="test-design-policy"');
     expect(html).toContain('id="test-seed" disabled=""');
     expect(html).toContain('id="test-seed-error"');
-    expect(html).toContain('class="doe-settings-helper is-error"');
+    expect(html).toContain('class="compact-settings-helper is-error"');
     expect(html).not.toContain("doe-settings-matrix");
   });
 });

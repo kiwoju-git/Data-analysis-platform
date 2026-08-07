@@ -14,6 +14,7 @@ export type GraphPreviewType =
 
 export type GraphPreviewLayout = "combined" | "overlay" | "small_multiples";
 export type GraphComparisonMode = "multiple_values" | "one_value_by_group";
+export type ScatterMode = "fixed_x_multiple_y" | "multiple_x_fixed_y";
 
 export interface GraphPreviewRequest {
   dataset_version_id: string;
@@ -23,6 +24,8 @@ export interface GraphPreviewRequest {
   };
   graph_type: GraphPreviewType;
   value_column_ids?: string[];
+  scatter_mode?: ScatterMode | null;
+  x_column_ids?: string[];
   x_column_id?: string | null;
   y_column_ids?: string[];
   group_column_id?: string | null;
@@ -72,6 +75,7 @@ export interface ScatterPreviewResult {
   sampled: false;
   n_total: number;
   n_excluded: number;
+  scatter_mode: ScatterMode;
   x_column: GraphPreviewColumnRef;
   y_column: GraphPreviewColumnRef;
   points: ScatterPreviewPoint[];
@@ -124,7 +128,7 @@ export type GraphPreviewPanel =
   | ImrChartPreviewPanel;
 
 export interface GraphPreviewResponse {
-  visualization_schema_version: 2;
+  visualization_schema_version: 3;
   graph_type: GraphPreviewType;
   dataset_version_id: string;
   source_schema_hash: string;
@@ -135,6 +139,7 @@ export interface GraphPreviewResponse {
   warnings: string[];
   layout: GraphPreviewLayout;
   comparison_mode: GraphComparisonMode;
+  scatter_mode: ScatterMode | null;
   group_order_policy: "first_occurrence";
   missing_group_policy: "exclude";
   missing_group_row_count: number;

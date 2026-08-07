@@ -8,6 +8,7 @@ import {
   type GraphPreviewLayout,
   type GraphPreviewResponse,
   type GraphPreviewType,
+  type ScatterMode,
 } from "./api";
 import type { AnalysisFilterDraft } from "./analysisFilters";
 import {
@@ -34,6 +35,9 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
     useState<GraphComparisonMode>("multiple_values");
   const [xColumnId, setXColumnId] = useState<string | null>(null);
   const [yColumnIds, setYColumnIds] = useState<string[]>([]);
+  const [scatterMode, setScatterMode] = useState<ScatterMode>("fixed_x_multiple_y");
+  const [fixedYColumnId, setFixedYColumnId] = useState<string | null>(null);
+  const [multipleXColumnIds, setMultipleXColumnIds] = useState<string[]>([]);
   const [groupColumnId, setGroupColumnId] = useState<string | null>(null);
   const [orderColumnId, setOrderColumnId] = useState<string | null>(null);
   const [layout, setLayout] = useState<GraphPreviewLayout>("combined");
@@ -51,6 +55,9 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
     setComparisonMode("multiple_values");
     setXColumnId(first);
     setYColumnIds(second === null ? [] : [second]);
+    setFixedYColumnId(second);
+    setMultipleXColumnIds(first === null ? [] : [first]);
+    setScatterMode("fixed_x_multiple_y");
     setGroupColumnId(null);
     setOrderColumnId(null);
     setFilterDrafts([]);
@@ -73,6 +80,9 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
                 : valueColumnIds,
             xColumnId,
             yColumnIds,
+            fixedYColumnId,
+            multipleXColumnIds,
+            scatterMode,
             groupColumnId,
             comparisonMode,
           },
@@ -120,8 +130,17 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
                 ? []
                 : [groupValueColumnId]
               : valueColumnIds,
-        x_column_id: graphType === "scatter_plot" ? xColumnId : null,
-        y_column_ids: graphType === "scatter_plot" ? yColumnIds : [],
+        scatter_mode: graphType === "scatter_plot" ? scatterMode : null,
+        x_column_ids: graphType === "scatter_plot"
+          ? scatterMode === "fixed_x_multiple_y"
+            ? xColumnId === null ? [] : [xColumnId]
+            : multipleXColumnIds
+          : [],
+        y_column_ids: graphType === "scatter_plot"
+          ? scatterMode === "fixed_x_multiple_y"
+            ? yColumnIds
+            : fixedYColumnId === null ? [] : [fixedYColumnId]
+          : [],
         group_column_id: groupColumnId,
         order_column_id: orderColumnId,
         point_limit: graphType === "individual_value_plot" ? 2000 : 1000,
@@ -169,6 +188,9 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
         : valueColumnIds,
     xColumnId,
     yColumnIds,
+    fixedYColumnId,
+    multipleXColumnIds,
+    scatterMode,
     generate,
     setFilterDrafts: (drafts: AnalysisFilterDraft[]) =>
       updateAndInvalidate(setFilterDrafts, drafts),
@@ -192,8 +214,29 @@ export function useGraphBuilderState(version: DatasetVersionResponse | null) {
         setValueColumnIds(value);
       }
     },
-    setXColumnId: (value: string | null) => updateAndInvalidate(setXColumnId, value),
-    setYColumnIds: (value: string[]) => updateAndInvalidate(setYColumnIds, value),
+    setXColumnId: (value: string | null) => {
+      invalidate();
+      setXColumnId(value);
+      setYColumnIds((current) => current.filter((columnId) => columnId !== value));
+    },
+    setYColumnIds: (value: string[]) =>
+      updateAndInvalidate(
+        setYColumnIds,
+        value.filter((columnId) => columnId !== xColumnId),
+      ),
+    setFixedYColumnId: (value: string | null) => {
+      invalidate();
+      setFixedYColumnId(value);
+      setMultipleXColumnIds((current) =>
+        current.filter((columnId) => columnId !== value),
+      );
+    },
+    setMultipleXColumnIds: (value: string[]) =>
+      updateAndInvalidate(
+        setMultipleXColumnIds,
+        value.filter((columnId) => columnId !== fixedYColumnId),
+      ),
+    setScatterMode: (value: ScatterMode) => updateAndInvalidate(setScatterMode, value),
   };
 }
 

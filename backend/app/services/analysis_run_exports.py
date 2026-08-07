@@ -62,7 +62,7 @@ ANALYSIS_RESULT_CSV_EXPORT_FORMAT: Literal["analysis_result_csv"] = "analysis_re
 ANALYSIS_RESULT_CSV_EXPORT_MEDIA_TYPE: Literal["text/csv"] = "text/csv"
 ANALYSIS_RESULT_CSV_COLUMNS = ("section", "path", "value")
 ANALYSIS_RESULT_CSV_PREVIEW_ROW_LIMIT = 50
-ANALYSIS_RESULT_HTML_REPORT_SCHEMA_VERSION = 1
+ANALYSIS_RESULT_HTML_REPORT_SCHEMA_VERSION = 2
 ANALYSIS_RESULT_HTML_REPORT_KIND: Literal["analysis_result_html_report"] = (
     "analysis_result_html_report"
 )
@@ -70,7 +70,7 @@ ANALYSIS_RESULT_HTML_REPORT_FORMAT: Literal["analysis_result_html_report"] = (
     "analysis_result_html_report"
 )
 ANALYSIS_RESULT_HTML_REPORT_MEDIA_TYPE: Literal["text/html"] = "text/html"
-ANALYSIS_RESULT_HTML_REPORT_TITLE = "DataLab Studio Analysis Report"
+ANALYSIS_RESULT_HTML_REPORT_TITLE = "Statistical Twin Analysis Report"
 REGRESSION_PREDICTION_CSV_EXPORT_SCHEMA_VERSION = 1
 REGRESSION_PREDICTION_CSV_EXPORT_KIND: Literal["regression_prediction_csv_export"] = (
     "regression_prediction_csv_export"
@@ -944,7 +944,7 @@ def _analysis_export_download_filename(
     }:
         suffix = "csv"
     else:
-        suffix = "html"
+        return f"statistical-twin-analysis-{analysis_id}-export-{export_id}.html"
     return f"datalab-analysis-{analysis_id}-export-{export_id}.{suffix}"
 
 
@@ -1098,14 +1098,7 @@ def _analysis_result_html_report_bytes(
     created_at: str,
     rows: list[list[str]],
 ) -> bytes:
-    row_markup = "\n".join(
-        "<tr>"
-        f"<td>{_html_text(section)}</td>"
-        f"<td><code>{_html_text(path)}</code></td>"
-        f"<td>{_html_text(value)}</td>"
-        "</tr>"
-        for section, path, value in rows
-    )
+    del rows
     warning_markup = "\n".join(
         "<li>"
         f"<strong>{_html_text(warning.code)}</strong>: "
@@ -1115,8 +1108,17 @@ def _analysis_result_html_report_bytes(
         for warning in result.warnings
     )
     if not warning_markup:
-        warning_markup = "<li>None</li>"
+        warning_markup = "<li>저장된 경고가 없습니다.</li>"
     method_specific_markup = _analysis_result_method_specific_report_section(result)
+    method_label = _analysis_method_report_label(result.method_id)
+    result_payload = result.result if isinstance(result.result, dict) else {}
+    input_settings = _report_input_settings(result_payload)
+    raw_result = _html_text(
+        json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True)
+    )
+    row_count_included = _report_cell_value(result.provenance.row_count_included)
+    row_count_total = _report_cell_value(result.provenance.row_count_total)
+    stale_label = "원본 변경으로 확인 필요" if stale else "현재 원본 기준"
 
     html = f"""<!doctype html>
 <html lang="ko">
@@ -1128,8 +1130,19 @@ def _analysis_result_html_report_bytes(
   >
   <title>{_html_text(ANALYSIS_RESULT_HTML_REPORT_TITLE)}</title>
   <style>
-    body {{ font-family: Arial, sans-serif; margin: 32px; color: #172033; }}
-    h1, h2 {{ margin: 0 0 12px; }}
+    body {{ font-family: Arial, sans-serif; margin: 0; color: #172033; line-height: 1.5; }}
+    main {{ max-width: 1120px; margin: 0 auto; padding: 32px; }}
+    h1, h2, h3 {{ margin: 0 0 12px; }}
+    h2 {{ margin-top: 28px; padding-bottom: 6px; border-bottom: 2px solid #034da2; }}
+    .report-kicker {{ color: #034da2; font-weight: 700; }}
+    .report-summary {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }}
+    .summary-item {{ border: 1px solid #cfd8e6; padding: 10px; }}
+    .summary-item span {{ display: block; color: #52647a; font-size: 12px; }}
+    .summary-item strong {{ display: block; margin-top: 3px; }}
     .meta {{
       display: grid;
       grid-template-columns: max-content 1fr;
@@ -1142,29 +1155,76 @@ def _analysis_result_html_report_bytes(
     th, td {{ border: 1px solid #d8dde5; padding: 6px 8px; text-align: left; vertical-align: top; }}
     th {{ background: #f2f5f9; }}
     code {{ font-family: Consolas, monospace; font-size: 12px; }}
+    pre {{ white-space: pre-wrap; overflow-wrap: anywhere; background: #f4f6f9; padding: 12px; }}
+    .report-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }}
+    .report-card {{ border: 1px solid #cfd8e6; padding: 12px; min-width: 0; break-inside: avoid; }}
+    .report-card-full {{ grid-column: 1 / -1; }}
+    svg {{ width: 100%; height: auto; }}
+    .axis {{ stroke: #51647b; stroke-width: 1; }}
+    .normal-fit {{ fill: none; stroke: #b42318; stroke-width: 2; stroke-dasharray: 6 3; }}
+    .histogram-bar {{ fill: #79a7d8; stroke: #315d8c; }}
+    .interval {{ stroke: #2166ac; stroke-width: 2; }}
+    .estimate {{ fill: #034da2; }}
+    details {{ margin-top: 18px; }}
+    summary {{ cursor: pointer; font-weight: 700; }}
+    .report-note {{ border-left: 4px solid #d99a00; background: #fff8e8; padding: 10px 12px; }}
+    @media (max-width: 760px) {{
+      main {{ padding: 18px; }}
+      .report-summary, .report-grid {{ grid-template-columns: 1fr; }}
+      .report-card-full {{ grid-column: auto; }}
+      .table-wrap {{ overflow-x: auto; }}
+      table {{ min-width: 620px; }}
+    }}
+    @media print {{
+      body {{ color: #000; }} main {{ max-width: none; padding: 0; }}
+      details:not([open]) {{ display: none; }}
+      .report-card {{ break-inside: avoid; }}
+    }}
   </style>
 </head>
 <body>
-  <h1>{_html_text(ANALYSIS_RESULT_HTML_REPORT_TITLE)}</h1>
-  <dl class="meta">
-    <dt>Analysis ID</dt><dd>{_html_text(str(analysis_id))}</dd>
-    <dt>Method</dt><dd>{_html_text(result.method_id)} v{_html_text(result.method_version)}</dd>
-    <dt>Status</dt><dd>{_html_text(result.status)}</dd>
-    <dt>Dataset Version</dt><dd>{_html_text(str(result.dataset_version_id))}</dd>
-    <dt>Source Result SHA-256</dt><dd><code>{_html_text(source_result_sha256)}</code></dd>
-    <dt>Created At</dt><dd>{_html_text(created_at)}</dd>
-    <dt>Stale</dt><dd>{_html_text(str(stale).lower())}</dd>
-  </dl>
-  <h2>Warnings</h2>
-  <ul>{warning_markup}</ul>
+<main>
+  <p class="report-kicker">{_html_text(ANALYSIS_RESULT_HTML_REPORT_TITLE)}</p>
+  <h1>{_html_text(method_label)} 결과 보고서</h1>
+  <h2>분석 요약</h2>
+  <div class="report-summary">
+    <div class="summary-item">
+      <span>분석 방법</span><strong>{_html_text(method_label)}</strong>
+    </div>
+    <div class="summary-item">
+      <span>분석 완료</span><strong>{_html_text(created_at)}</strong>
+    </div>
+    <div class="summary-item">
+      <span>사용 행 / 전체 행</span>
+      <strong>{_html_text(row_count_included)} / {_html_text(row_count_total)}</strong>
+    </div>
+    <div class="summary-item"><span>원본 상태</span><strong>{_html_text(stale_label)}</strong></div>
+  </div>
+  <h2>입력 및 설정</h2>
+  {input_settings}
+  <h2>핵심 결과</h2>
 {method_specific_markup}
-  <h2>Result Envelope</h2>
-  <table>
-    <thead><tr><th>Section</th><th>Path</th><th>Value</th></tr></thead>
-    <tbody>
-{row_markup}
-    </tbody>
-  </table>
+  <h2>해석 시 주의사항과 경고</h2>
+  <ul>{warning_markup}</ul>
+  <p class="report-note">
+    이 보고서는 저장된 분석 결과를 재구성한 문서입니다.
+    원자료를 다시 읽거나 분석을 재실행하지 않았습니다.
+  </p>
+  <details>
+    <summary>기술 정보</summary>
+    <dl class="meta">
+      <dt>Analysis ID</dt><dd>{_html_text(str(analysis_id))}</dd>
+      <dt>Method</dt><dd>{_html_text(result.method_id)} v{_html_text(result.method_version)}</dd>
+      <dt>Dataset Version</dt><dd>{_html_text(str(result.dataset_version_id))}</dd>
+      <dt>Source Result SHA-256</dt><dd><code>{_html_text(source_result_sha256)}</code></dd>
+      <dt>Status</dt><dd>{_html_text(result.status)}</dd>
+    </dl>
+  </details>
+  <details>
+    <summary>기계 판독용 원본 result JSON</summary>
+    <pre>{raw_result}</pre>
+  </details>
+</main>
 </body>
 </html>
 """
@@ -1175,19 +1235,48 @@ def _html_text(value: object) -> str:
     return escape(str(value), quote=True)
 
 
+def _analysis_method_report_label(method_id: str) -> str:
+    labels = {
+        "eda.descriptive": "기술통계",
+        "eda.graphical_summary": "그래프 요약",
+        "eda.normality": "정규성 검정",
+        "eda.equal_variances": "등분산 검정",
+        "regression.linear_model": "회귀모형 적합",
+    }
+    return labels.get(method_id, method_id)
+
+
+def _report_input_settings(payload: dict[str, object]) -> str:
+    settings = []
+    for key, label in (
+        ("missing_policy", "결측 처리"),
+        ("confidence_level", "신뢰수준"),
+        ("alpha", "유의수준"),
+        ("quartile_method", "사분위수 방법"),
+    ):
+        if key in payload:
+            settings.append(
+                f"<div><dt>{_html_text(label)}</dt><dd>{_html_text(_report_cell_value(payload[key]))}</dd></div>"
+            )
+    if not settings:
+        return "<p>저장된 결과에 별도 실행 설정 요약이 없습니다.</p>"
+    return f'<dl class="meta">{"".join(settings)}</dl>'
+
+
 def _analysis_result_method_specific_report_section(result: AnalysisResultEnvelope) -> str:
     payload = result.result
     if not isinstance(payload, dict):
         return ""
     summary_type = payload.get("summary_type")
-    if summary_type == "descriptive_statistics":
-        return _descriptive_statistics_report_section(payload)
-    if summary_type == "graphical_summary":
-        return _graphical_summary_report_section(payload)
-    if summary_type == "normality_test":
-        return _normality_report_section(payload)
-    if summary_type == "equal_variances_test":
-        return _equal_variances_report_section(payload)
+    renderers = {
+        "descriptive_statistics": _descriptive_statistics_report_section,
+        "graphical_summary": _graphical_summary_report_section_v2,
+        "normality_test": _normality_report_section,
+        "equal_variances_test": _equal_variances_report_section_v2,
+    }
+    renderer = renderers.get(str(summary_type))
+    if renderer is not None:
+        return renderer(payload)
     if summary_type in HYPOTHESIS_REPORT_SUMMARY_TYPES:
         return _hypothesis_report_section(payload, str(summary_type))
     if summary_type in CATEGORICAL_REPORT_SUMMARY_TYPES:
@@ -2437,3 +2526,341 @@ def _report_cell_value(value: object) -> str:
     if isinstance(value, int | float | str):
         return str(value)
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _graphical_summary_report_section_v2(payload: dict[str, object]) -> str:
+    columns = payload.get("columns")
+    if not isinstance(columns, list):
+        return "<p>저장된 그래프 요약 결과가 없습니다.</p>"
+    cards = "".join(
+        _graphical_summary_column_report_v2(column)
+        for column in columns
+        if isinstance(column, dict)
+    )
+    return (
+        "<p>아래 표와 그래프는 저장된 결과 payload만 사용해 재구성했습니다.</p>"
+        f'<div class="report-grid">{cards}</div>'
+    )
+
+
+def _graphical_summary_column_report_v2(column: dict[object, object]) -> str:
+    label = _report_cell_value(column.get("display_name"))
+    ad = column.get("anderson_darling")
+    metrics = (
+        ("N", column.get("n_used")),
+        ("평균", column.get("mean")),
+        ("표준편차", column.get("standard_deviation")),
+        ("분산", column.get("variance")),
+        ("왜도", column.get("skewness")),
+        ("첨도", column.get("kurtosis_excess")),
+        ("최소", column.get("min")),
+        ("Q1", column.get("q1")),
+        ("중앙값", column.get("median")),
+        ("Q3", column.get("q3")),
+        ("최대", column.get("max")),
+        ("AD A²", _report_nested_value(ad, "statistic")),
+        ("AD p-value", _report_nested_value(ad, "p_value")),
+    )
+    table_rows = "".join(
+        f"<tr><th>{_html_text(name)}</th><td>{_html_text(_report_cell_value(value))}</td></tr>"
+        for name, value in metrics
+    )
+    qq_plot_markup = _report_point_svg(
+        column.get("qq_plot"),
+        label="Q-Q Plot",
+        x_key="theoretical",
+        y_key="sample",
+    )
+    ecdf_markup = _report_point_svg(
+        column.get("ecdf"),
+        label="ECDF",
+        x_key="x",
+        y_key="probability",
+    )
+    return f"""
+<section class="report-card report-card-full">
+  <h3>{_html_text(label)}</h3>
+  <div class="report-grid">
+    <div class="report-card">
+      <h3>히스토그램 + 적합 정규곡선</h3>{_report_histogram_svg(column)}
+    </div>
+    <div class="report-card"><h3>통계 요약</h3><table><tbody>{table_rows}</tbody></table></div>
+    <div class="report-card"><h3>박스플롯</h3>{_report_boxplot_svg(column)}</div>
+    <div class="report-card"><h3>Q-Q Plot</h3>{qq_plot_markup}</div>
+    <div class="report-card report-card-full">
+      <h3>신뢰구간</h3>{_report_confidence_interval_svg(column)}
+    </div>
+  </div>
+  <details><summary>추가 그래프: ECDF</summary>{ecdf_markup}</details>
+</section>
+"""
+
+
+def _report_histogram_svg(column: dict[object, object]) -> str:
+    histogram = column.get("histogram")
+    bins_value = histogram.get("bins") if isinstance(histogram, dict) else None
+    bins = (
+        [item for item in bins_value if isinstance(item, dict)]
+        if isinstance(bins_value, list)
+        else []
+    )
+    parsed: list[tuple[float, float, float]] = []
+    for item in bins:
+        low = _report_float(item.get("lower"))
+        high = _report_float(item.get("upper"))
+        count = _report_float(item.get("count"))
+        if low is not None and high is not None and count is not None:
+            parsed.append((low, high, count))
+    if not parsed:
+        return "<p>히스토그램을 표시할 수 없습니다.</p>"
+    normal_fit = column.get("normal_fit_curve")
+    points_value = normal_fit.get("points") if isinstance(normal_fit, dict) else None
+    curve = (
+        [point for point in points_value if isinstance(point, dict)]
+        if isinstance(points_value, list)
+        else []
+    )
+    x_min = min(low for low, _, _ in parsed)
+    x_max = max(high for _, high, _ in parsed)
+    curve_values: list[tuple[float, float]] = []
+    for point in curve:
+        x = _report_float(point.get("x"))
+        y = _report_float(point.get("expected_count"))
+        if x is not None and y is not None:
+            curve_values.append((x, y))
+    y_max = max(1.0, *[count for _, _, count in parsed], *[y for _, y in curve_values])
+    bars = "".join(
+        _report_histogram_bar(low, high, count, x_min=x_min, x_max=x_max, y_max=y_max)
+        for low, high, count in parsed
+    )
+    curve_markup = ""
+    if len(curve_values) > 1:
+        point_text = " ".join(
+            f"{_report_scale(x,x_min,x_max,40,600):.3f},{_report_scale(y,0,y_max,210,20):.3f}"
+            for x, y in curve_values
+        )
+        curve_markup = (
+            f'<polyline class="normal-fit" points="{point_text}"/>'
+            '<text x="455" y="16" font-size="10">-- 적합 정규곡선</text>'
+        )
+    return (
+        '<svg role="img" aria-label="히스토그램과 적합 정규곡선" '
+        'viewBox="0 0 620 235">'
+        "<title>히스토그램과 적합 정규곡선</title>"
+        "<desc>막대는 빈도이고 점선은 저장된 적합 정규곡선입니다.</desc>"
+        '<line class="axis" x1="40" x2="600" y1="210" y2="210"/>'
+        '<line class="axis" x1="40" x2="40" y1="20" y2="210"/>'
+        f"{bars}{curve_markup}</svg>"
+    )
+
+
+def _report_histogram_bar(
+    low: float, high: float, count: float, *, x_min: float, x_max: float, y_max: float
+) -> str:
+    x = _report_scale(low, x_min, x_max, 40, 600)
+    x2 = _report_scale(high, x_min, x_max, 40, 600)
+    y = _report_scale(count, 0, y_max, 210, 20)
+    width = max(1, x2 - x - 1)
+    return (
+        f'<rect class="histogram-bar" x="{x:.3f}" y="{y:.3f}" '
+        f'width="{width:.3f}" height="{210 - y:.3f}"/>'
+    )
+
+
+def _report_boxplot_svg(column: dict[object, object]) -> str:
+    boxplot = column.get("boxplot")
+    if not isinstance(boxplot, dict):
+        return "<p>박스플롯을 표시할 수 없습니다.</p>"
+    values = [
+        _report_float(boxplot.get(key))
+        for key in ("lower_whisker", "q1", "median", "q3", "upper_whisker")
+    ]
+    if any(value is None for value in values):
+        return "<p>박스플롯을 표시할 수 없습니다.</p>"
+    low, q1, median, q3, high = (float(value) for value in values if value is not None)
+
+    def scale(value: float) -> float:
+        return _report_scale(value, low, high, 40, 600)
+
+    return (
+        '<svg role="img" aria-label="박스플롯" viewBox="0 0 620 145">'
+        "<title>박스플롯</title>"
+        "<desc>Hyndman-Fan 6 사분위수와 Tukey 1.5 IQR whisker입니다.</desc>"
+        f'<line class="axis" x1="{scale(low):.3f}" x2="{scale(high):.3f}" '
+        'y1="72" y2="72"/>'
+        f'<rect x="{scale(q1):.3f}" y="46" width="{scale(q3)-scale(q1):.3f}" '
+        'height="52" fill="#dbe9f7" stroke="#2166ac"/>'
+        f'<line class="interval" x1="{scale(median):.3f}" '
+        f'x2="{scale(median):.3f}" y1="46" y2="98"/></svg>'
+    )
+
+
+def _report_point_svg(series: object, *, label: str, x_key: str, y_key: str) -> str:
+    points_value = series.get("points") if isinstance(series, dict) else None
+    points = (
+        [point for point in points_value if isinstance(point, dict)]
+        if isinstance(points_value, list)
+        else []
+    )
+    values: list[tuple[float, float]] = []
+    for point in points:
+        x = _report_float(point.get(x_key))
+        y = _report_float(point.get(y_key))
+        if x is not None and y is not None:
+            values.append((x, y))
+    if not values:
+        return f"<p>{_html_text(label)} point를 표시할 수 없습니다.</p>"
+    x_min, x_max = min(x for x, _ in values), max(x for x, _ in values)
+    y_min, y_max = min(y for _, y in values), max(y for _, y in values)
+    circles = "".join(_report_point_circle(x, y, x_min, x_max, y_min, y_max) for x, y in values)
+    escaped_label = _html_text(label)
+    return (
+        f'<svg role="img" aria-label="{escaped_label}" viewBox="0 0 620 235">'
+        f"<title>{escaped_label}</title>"
+        "<desc>저장 payload의 bounded point입니다.</desc>"
+        '<line class="axis" x1="40" x2="600" y1="210" y2="210"/>'
+        '<line class="axis" x1="40" x2="40" y1="20" y2="210"/>'
+        f"{circles}</svg>"
+    )
+
+
+def _report_point_circle(
+    x: float,
+    y: float,
+    x_min: float,
+    x_max: float,
+    y_min: float,
+    y_max: float,
+) -> str:
+    cx = _report_scale(x, x_min, x_max, 40, 600)
+    cy = _report_scale(y, y_min, y_max, 210, 20)
+    return f'<circle cx="{cx:.3f}" cy="{cy:.3f}" r="2.4" fill="#2166ac"/>'
+
+
+def _report_confidence_interval_svg(column: dict[object, object]) -> str:
+    intervals = column.get("confidence_intervals")
+    if not isinstance(intervals, dict):
+        return "<p>신뢰구간 payload가 없습니다.</p>"
+    rows = []
+    for key, label, y in (
+        ("mean", "평균", 42),
+        ("median", "중앙값", 88),
+        ("standard_deviation", "표준편차 (별도 척도)", 164),
+    ):
+        item = intervals.get(key)
+        if not isinstance(item, dict):
+            continue
+        estimate = _report_float(item.get("estimate"))
+        lower = _report_float(item.get("lower"))
+        upper = _report_float(item.get("upper"))
+        if estimate is not None and lower is not None and upper is not None:
+            rows.append((label, y, estimate, lower, upper))
+    if not rows:
+        return "<p>신뢰구간을 계산할 수 없습니다.</p>"
+    markup = ""
+    for label, y, estimate, lower, upper in rows:
+        estimate_x = _report_scale(estimate, lower, upper, 190, 590)
+        markup += (
+            f'<text x="175" y="{y + 4}" text-anchor="end" font-size="12">'
+            f"{_html_text(label)}</text>"
+            f'<line class="interval" x1="190" x2="590" y1="{y}" y2="{y}"/>'
+            f'<circle class="estimate" cx="{estimate_x:.3f}" cy="{y}" r="4"/>'
+            f'<text x="190" y="{y + 18}" font-size="10">{lower:.6g}</text>'
+            f'<text x="590" y="{y + 18}" text-anchor="end" '
+            f'font-size="10">{upper:.6g}</text>'
+        )
+    return (
+        '<svg role="img" aria-label="평균 중앙값 표준편차 신뢰구간" '
+        'viewBox="0 0 620 205">'
+        "<title>신뢰구간</title>"
+        "<desc>평균과 중앙값은 위치 척도이고 표준편차는 별도 척도입니다.</desc>"
+        f"{markup}</svg>"
+    )
+
+
+def _report_float(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value)
+
+
+def _report_scale(value: float, minimum: float, maximum: float, start: float, end: float) -> float:
+    if maximum <= minimum:
+        return (start + end) / 2
+    return start + (value - minimum) / (maximum - minimum) * (end - start)
+
+
+def _equal_variances_report_section_v2(payload: dict[str, object]) -> str:
+    multiple = payload.get("multiple_comparisons")
+    levene = payload.get("levene")
+    if not isinstance(multiple, dict) or not isinstance(levene, dict):
+        return _equal_variances_report_section(payload)
+    method_rows = (
+        "<tr><td>다중 비교</td><td>-</td>"
+        f"<td>{_html_text(_report_cell_value(multiple.get('p_value')))}</td>"
+        f"<td>{_html_text(_report_cell_value(multiple.get('reject_equal_variances')))}</td></tr>"
+        "<tr><td>Levene 검정 (Brown-Forsythe)</td>"
+        f"<td>{_html_text(_report_cell_value(levene.get('statistic')))}</td>"
+        f"<td>{_html_text(_report_cell_value(levene.get('p_value')))}</td>"
+        f"<td>{_html_text(_report_cell_value(levene.get('reject_equal_variances')))}</td></tr>"
+    )
+    return f"""
+<h3>등분산 검정 요약</h3>
+<table>
+  <thead><tr><th>방법</th><th>검정 통계량</th><th>p-value</th><th>등분산 기각</th></tr></thead>
+  <tbody>{method_rows}</tbody>
+</table>
+<h3>표준편차 다중 비교구간</h3>
+{_variance_comparison_report_svg(multiple)}
+<p class="report-note">
+  다중 비교구간은 그룹 표준편차 비교를 위한 구간이며 모집단 표준편차의
+  일반 신뢰구간이 아닙니다. Levene 검정은 중앙값 중심 Brown-Forsythe 수정법입니다.
+</p>
+"""
+
+
+def _variance_comparison_report_svg(multiple: dict[object, object]) -> str:
+    groups_value = multiple.get("groups")
+    groups = (
+        [group for group in groups_value if isinstance(group, dict)]
+        if isinstance(groups_value, list)
+        else []
+    )
+    parsed = []
+    for group in groups:
+        interval = group.get("comparison_interval")
+        if not isinstance(interval, dict):
+            continue
+        estimate = _report_float(group.get("sample_standard_deviation"))
+        lower = _report_float(interval.get("lower"))
+        upper = _report_float(interval.get("upper"))
+        if estimate is not None and lower is not None and upper is not None:
+            parsed.append((_report_cell_value(group.get("group_label")), estimate, lower, upper))
+    if not parsed:
+        return "<p>다중 비교구간을 계산할 수 없습니다.</p>"
+    minimum = min(lower for _, _, lower, _ in parsed)
+    maximum = max(upper for _, _, _, upper in parsed)
+    height = 50 + 44 * len(parsed)
+    rows = ""
+    for index, (label, estimate, lower, upper) in enumerate(parsed):
+        y = 28 + 44 * index
+        x1 = _report_scale(lower, minimum, maximum, 150, 600)
+        x2 = _report_scale(upper, minimum, maximum, 150, 600)
+        xe = _report_scale(estimate, minimum, maximum, 150, 600)
+        rows += (
+            f'<text x="138" y="{y + 4}" text-anchor="end" font-size="12">'
+            f"{_html_text(label)}</text>"
+            f'<line class="interval" x1="{x1:.3f}" x2="{x2:.3f}" y1="{y}" y2="{y}"/>'
+            f'<line class="interval" x1="{x1:.3f}" x2="{x1:.3f}" '
+            f'y1="{y - 7}" y2="{y + 7}"/>'
+            f'<line class="interval" x1="{x2:.3f}" x2="{x2:.3f}" '
+            f'y1="{y - 7}" y2="{y + 7}"/>'
+            f'<circle class="estimate" cx="{xe:.3f}" cy="{y}" r="4"/>'
+        )
+    return (
+        f'<svg role="img" aria-label="표준편차 다중 비교구간" '
+        f'viewBox="0 0 620 {height}">'
+        "<title>표준편차 다중 비교구간</title>"
+        "<desc>점은 표본 표준편차, 선은 Bonett-Nakayama 다중 비교구간입니다.</desc>"
+        f"{rows}</svg>"
+    )

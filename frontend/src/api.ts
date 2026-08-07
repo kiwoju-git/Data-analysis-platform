@@ -49,7 +49,7 @@ export { updateDatasetSchema } from "./api/datasets";
 export { updateDatasetVersionMetadata } from "./api/datasets";
 export { uploadDataset } from "./api/datasets";
 export { fetchWorkspaceSummary } from "./api/workspace";
-export { fetchWorkspaceAssets } from "./api/assets";
+export { fetchWorkspaceAssets, updateWorkspaceAssetMetadata } from "./api/assets";
 export { createGraphPreview } from "./api/visualizations";
 export { createFactorialDesign } from "./api/doe";
 export { deleteDoeDesign, fetchDoeDesignDeletionPreflight } from "./api/doe";

@@ -5663,7 +5663,7 @@ function analysisResultJsonExportTestResponse(
   result: AnalysisResultEnvelope,
 ): AnalysisResultJsonExportResponse {
   return {
-    schema_version: 1,
+    schema_version: 2,
     export_id: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
     analysis_id: result.analysis_id,
     format: "analysis_result_json",
@@ -5717,7 +5717,7 @@ function analysisResultHtmlReportTestResponse(
     source_result_sha256: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     stale: false,
     created_at: "2026-07-04T00:00:00Z",
-    title: "DataLab Studio Analysis Report",
+    title: "Statistical Twin Analysis Report",
     section_count: 18,
   };
 }

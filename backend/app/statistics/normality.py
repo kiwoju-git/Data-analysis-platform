@@ -158,7 +158,7 @@ def _column_result(
         "skewness": _skewness(values),
         "kurtosis_excess": _kurtosis_excess(values),
         "shapiro_wilk": _shapiro_wilk(values),
-        "anderson_darling": _anderson_darling(values, alpha=alpha),
+        "anderson_darling": anderson_darling_summary(values, alpha=alpha),
         "qq_plot": {
             "point_count": len(qq_points),
             "points_truncated": qq_truncated,
@@ -188,7 +188,7 @@ def _shapiro_wilk(sorted_values: Sequence[float]) -> dict[str, object]:
     return payload
 
 
-def _anderson_darling(sorted_values: Sequence[float], *, alpha: float) -> dict[str, object]:
+def anderson_darling_summary(sorted_values: Sequence[float], *, alpha: float) -> dict[str, object]:
     computed = len(sorted_values) >= SHAPIRO_MIN_N and not _is_constant(sorted_values)
     payload: dict[str, object] = {
         "computed": computed,

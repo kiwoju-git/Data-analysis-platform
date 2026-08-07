@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import type {
   AnalysisRunDeletionPreflightResponse,
@@ -138,10 +138,6 @@ function DatasetManagementPanel({
   state: ReturnType<typeof useAssetManagementState>;
 }) {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
-  const selectedItem =
-    state.datasetCatalog?.versions.find(
-      (item) => item.version_id === selectedVersionId,
-    ) ?? null;
   return (
     <section aria-labelledby="dataset-management-title">
       <div className="panel-heading compact-heading">
@@ -195,58 +191,62 @@ function DatasetManagementPanel({
               </tr>
             </thead>
             <tbody>
-              {state.datasetCatalog.versions.map((item) => (
-                <tr
-                  className={selectedVersionId === item.version_id ? "asset-catalog-row-selected" : ""}
-                  key={`${item.version_id}-${item.metadata_updated_at ?? "none"}`}
-                >
-                  <td>
-                    <strong>{item.user_label ?? item.original_filename}</strong>
-                    {item.user_label !== null ? <span className="asset-catalog-secondary">{item.original_filename}</span> : null}
-                  </td>
-                  <td>{item.row_count.toLocaleString()}행 · {item.column_count.toLocaleString()}열</td>
-                  <td>{item.version_id === activeDatasetVersionId ? "현재 분석" : item.archived ? "보관됨" : "사용 가능"}</td>
-                  <td>{formatLocalDateTime(item.created_at)}</td>
-                  <td>{item.pinned ? "고정" : "-"}</td>
-                  <td className="asset-catalog-action-column">
-                    <button
-                      aria-expanded={selectedVersionId === item.version_id}
-                      className="secondary-button compact-button"
-                      onClick={() => setSelectedVersionId((current) => current === item.version_id ? null : item.version_id)}
-                      type="button"
-                    >
-                      {selectedVersionId === item.version_id ? "상세 닫기" : "상세"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {state.datasetCatalog.versions.map((item) => {
+                const isSelected = selectedVersionId === item.version_id;
+                const detailId = `dataset-inline-detail-${item.version_id}`;
+                return (
+                  <Fragment key={`${item.version_id}-${item.metadata_updated_at ?? "none"}`}>
+                    <tr className={isSelected ? "asset-catalog-row-selected" : ""}>
+                      <td>
+                        <strong>{item.user_label ?? item.original_filename}</strong>
+                        {item.user_label !== null ? <span className="asset-catalog-secondary">{item.original_filename}</span> : null}
+                      </td>
+                      <td>{item.row_count.toLocaleString()}행 · {item.column_count.toLocaleString()}열</td>
+                      <td>{item.version_id === activeDatasetVersionId ? "현재 분석" : item.archived ? "보관됨" : "사용 가능"}</td>
+                      <td>{formatLocalDateTime(item.created_at)}</td>
+                      <td>{item.pinned ? "고정" : "-"}</td>
+                      <td className="asset-catalog-action-column">
+                        <button
+                          aria-controls={detailId}
+                          aria-expanded={isSelected}
+                          className="secondary-button compact-button"
+                          onClick={() => setSelectedVersionId((current) => current === item.version_id ? null : item.version_id)}
+                          type="button"
+                        >
+                          {isSelected ? "상세 닫기" : "상세"}
+                        </button>
+                      </td>
+                    </tr>
+                    {isSelected ? (
+                      <tr className="asset-inline-detail-row" id={detailId}>
+                        <td colSpan={6}>
+                          <div className="asset-catalog-detail" aria-label="선택한 데이터셋 상세">
+                            <DatasetAssetEditor
+                              active={item.version_id === activeDatasetVersionId}
+                              item={item}
+                              saved={state.savedId === item.version_id}
+                              saving={state.savingId === item.version_id}
+                              onActivate={() => onActivateDataset(item.version_id)}
+                              onMetadataChanged={onDatasetMetadataChanged}
+                              onVisibilityChanged={(archived) => onWorkspaceMutation(archived ? "dataset_archived" : "dataset_unarchived")}
+                              onDeleted={(response) => {
+                                setSelectedVersionId(null);
+                                state.onRefreshDatasets();
+                                state.onRefreshModels();
+                                onAssetsDeleted(response);
+                              }}
+                              onStaleAsset={state.onStaleDatasetRemoved}
+                              onSave={state.onSaveDatasetMetadata}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
-        </div>
-      ) : null}
-      {selectedItem !== null ? (
-        <div className="asset-catalog-detail" aria-label="선택한 데이터셋 상세">
-          <DatasetAssetEditor
-            active={selectedItem.version_id === activeDatasetVersionId}
-            item={selectedItem}
-            key={`${selectedItem.version_id}-${selectedItem.metadata_updated_at ?? "none"}`}
-            saved={state.savedId === selectedItem.version_id}
-            saving={state.savingId === selectedItem.version_id}
-            onActivate={() => onActivateDataset(selectedItem.version_id)}
-            onMetadataChanged={onDatasetMetadataChanged}
-            onVisibilityChanged={(archived) => {
-              onWorkspaceMutation(
-                archived ? "dataset_archived" : "dataset_unarchived",
-              );
-            }}
-            onDeleted={(response) => {
-              state.onRefreshDatasets();
-              state.onRefreshModels();
-              onAssetsDeleted(response);
-            }}
-            onStaleAsset={state.onStaleDatasetRemoved}
-            onSave={state.onSaveDatasetMetadata}
-          />
         </div>
       ) : null}
       <Pagination
@@ -402,9 +402,6 @@ function RegressionModelManagementPanel({
   state: ReturnType<typeof useAssetManagementState>;
 }) {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const selectedItem =
-    state.modelCatalog?.models.find((item) => item.model_id === selectedModelId) ??
-    null;
   return (
     <section aria-labelledby="model-management-title">
       <div className="panel-heading compact-heading">
@@ -436,46 +433,52 @@ function RegressionModelManagementPanel({
             <tbody>
               {state.modelCatalog.models.map((item) => {
                 const fallback = `${item.response?.display_name ?? "반응 metadata 확인 필요"} · predictor ${item.predictor_count ?? "?"}개`;
+                const isSelected = selectedModelId === item.model_id;
+                const detailId = `model-inline-detail-${item.model_id}`;
                 return (
-                  <tr
-                    className={selectedModelId === item.model_id ? "asset-catalog-row-selected" : ""}
-                    key={`${item.model_id}-${item.metadata_updated_at ?? "none"}`}
-                  >
-                    <td><strong>{item.user_label ?? fallback}</strong></td>
-                    <td>predictor {item.predictor_count ?? "?"}개</td>
-                    <td>{availabilityLabel(item.availability)}</td>
-                    <td>{item.pinned ? "고정" : "-"}</td>
-                    <td className="asset-catalog-action-column">
-                      <button
-                        aria-expanded={selectedModelId === item.model_id}
-                        className="secondary-button compact-button"
-                        onClick={() => setSelectedModelId((current) => current === item.model_id ? null : item.model_id)}
-                        type="button"
-                      >
-                        {selectedModelId === item.model_id ? "상세 닫기" : "상세"}
-                      </button>
-                    </td>
-                  </tr>
+                  <Fragment key={`${item.model_id}-${item.metadata_updated_at ?? "none"}`}>
+                    <tr className={isSelected ? "asset-catalog-row-selected" : ""}>
+                      <td><strong>{item.user_label ?? fallback}</strong></td>
+                      <td>predictor {item.predictor_count ?? "?"}개</td>
+                      <td>{availabilityLabel(item.availability)}</td>
+                      <td>{item.pinned ? "고정" : "-"}</td>
+                      <td className="asset-catalog-action-column">
+                        <button
+                          aria-controls={detailId}
+                          aria-expanded={isSelected}
+                          className="secondary-button compact-button"
+                          onClick={() => setSelectedModelId((current) => current === item.model_id ? null : item.model_id)}
+                          type="button"
+                        >
+                          {isSelected ? "상세 닫기" : "상세"}
+                        </button>
+                      </td>
+                    </tr>
+                    {isSelected ? (
+                      <tr className="asset-inline-detail-row" id={detailId}>
+                        <td colSpan={5}>
+                          <div className="asset-catalog-detail" aria-label="선택한 회귀모델 상세">
+                            <ModelAssetEditor
+                              item={item}
+                              saved={state.savedId === item.model_id}
+                              saving={state.savingId === item.model_id}
+                              onSave={state.onSaveModelMetadata}
+                              onDeleted={() => {
+                                setSelectedModelId(null);
+                                state.onRefreshModels();
+                                onWorkspaceMutation("model_deleted");
+                              }}
+                              onStaleAsset={state.onStaleModelRemoved}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
-        </div>
-      ) : null}
-      {selectedItem !== null ? (
-        <div className="asset-catalog-detail" aria-label="선택한 회귀모델 상세">
-          <ModelAssetEditor
-            item={selectedItem}
-            key={`${selectedItem.model_id}-${selectedItem.metadata_updated_at ?? "none"}`}
-            saved={state.savedId === selectedItem.model_id}
-            saving={state.savingId === selectedItem.model_id}
-            onSave={state.onSaveModelMetadata}
-            onDeleted={() => {
-              state.onRefreshModels();
-              onWorkspaceMutation("model_deleted");
-            }}
-            onStaleAsset={state.onStaleModelRemoved}
-          />
         </div>
       ) : null}
       <Pagination

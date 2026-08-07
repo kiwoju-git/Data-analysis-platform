@@ -2,6 +2,7 @@ import type {
   DatasetColumnResponse,
   GraphComparisonMode,
   GraphPreviewType,
+  ScatterMode,
 } from "./api";
 import { graphBuilderDefinition } from "./graphBuilderRegistry";
 
@@ -10,6 +11,9 @@ export interface GraphBuilderSelection {
   valueColumnIds: string[];
   xColumnId: string | null;
   yColumnIds: string[];
+  fixedYColumnId?: string | null;
+  multipleXColumnIds?: string[];
+  scatterMode?: ScatterMode;
   groupColumnId: string | null;
   comparisonMode: GraphComparisonMode;
 }
@@ -30,16 +34,30 @@ export function validateGraphBuilderSelection(
       .map((column) => column.column_id),
   );
   if (selection.graphType === "scatter_plot") {
+    const scatterMode = selection.scatterMode ?? "fixed_x_multiple_y";
+    const xIds = scatterMode === "fixed_x_multiple_y"
+      ? selection.xColumnId === null ? [] : [selection.xColumnId]
+      : selection.multipleXColumnIds ?? [];
+    const yIds = scatterMode === "fixed_x_multiple_y"
+      ? selection.yColumnIds
+      : selection.fixedYColumnId == null ? [] : [selection.fixedYColumnId];
     if (
-      selection.xColumnId === null ||
-      !numericIds.has(selection.xColumnId) ||
-      selection.yColumnIds.length === 0 ||
-      selection.yColumnIds.some((columnId) => !numericIds.has(columnId))
+      xIds.length === 0 ||
+      yIds.length === 0 ||
+      xIds.some((columnId) => !numericIds.has(columnId)) ||
+      yIds.some((columnId) => !numericIds.has(columnId))
     ) {
       return "graph_builder_scatter_roles_required";
     }
-    if (selection.yColumnIds.length > definition.maximumValues) {
+    const multipleIds = scatterMode === "fixed_x_multiple_y" ? yIds : xIds;
+    if (multipleIds.length > definition.maximumValues) {
       return "graph_builder_too_many_values";
+    }
+    if (new Set(xIds).size !== xIds.length || new Set(yIds).size !== yIds.length) {
+      return "graph_builder_scatter_duplicate_columns";
+    }
+    if (xIds.some((columnId) => yIds.includes(columnId))) {
+      return "graph_builder_scatter_same_axis_column";
     }
     return null;
   }

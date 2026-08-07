@@ -355,30 +355,59 @@ function ValueRoleControls({
 
 function ScatterRoleControls({ state }: { state: BuilderState }) {
   return (
-    <div className="graph-role-grid">
-      <label className="graph-role-option">
-        <strong>X 변수</strong>
-        <select
-          value={state.xColumnId ?? ""}
-          onChange={(event) => state.setXColumnId(event.currentTarget.value || null)}
-        >
-          <option value="">선택</option>
-          {state.numericColumns.map((column) => (
-            <option key={column.column_id} value={column.column_id}>
-              {column.display_name}
-            </option>
-          ))}
-        </select>
-        <small>모든 Y 패널이 같은 X 변수를 사용합니다.</small>
-      </label>
-      <GraphVariablePicker
-        columns={state.numericColumns}
-        label="Y 변수"
-        maximum={6}
-        onChange={state.setYColumnIds}
-        selectedIds={state.yColumnIds}
-      />
+    <div className="scatter-role-workspace">
+      <fieldset className="segmented-fieldset scatter-role-mode">
+        <legend>Scatter 구성</legend>
+        <div className="segmented-control">
+          <label>
+            <input checked={state.scatterMode === "fixed_x_multiple_y"} name="scatter-role-mode" onChange={() => state.setScatterMode("fixed_x_multiple_y")} type="radio" />
+            <span>X 1개 · Y 여러 개</span>
+          </label>
+          <label>
+            <input checked={state.scatterMode === "multiple_x_fixed_y"} name="scatter-role-mode" onChange={() => state.setScatterMode("multiple_x_fixed_y")} type="radio" />
+            <span>Y 1개 · X 여러 개</span>
+          </label>
+        </div>
+      </fieldset>
+      <div className="graph-role-grid">
+        {state.scatterMode === "fixed_x_multiple_y" ? (
+          <>
+            <SingleScatterRole label="고정 X 변수" helper="모든 패널이 같은 X 변수를 사용합니다." value={state.xColumnId} state={state} onChange={state.setXColumnId} />
+            <GraphVariablePicker columns={state.numericColumns} disabledIds={state.xColumnId === null ? [] : [state.xColumnId]} label="Y 변수" maximum={6} onChange={state.setYColumnIds} selectedIds={state.yColumnIds} />
+          </>
+        ) : (
+          <>
+            <SingleScatterRole label="고정 Y 변수" helper="모든 패널이 같은 Y 변수를 사용합니다." value={state.fixedYColumnId} state={state} onChange={state.setFixedYColumnId} />
+            <GraphVariablePicker columns={state.numericColumns} disabledIds={state.fixedYColumnId === null ? [] : [state.fixedYColumnId]} label="X 변수" maximum={6} onChange={state.setMultipleXColumnIds} selectedIds={state.multipleXColumnIds} />
+          </>
+        )}
+      </div>
     </div>
+  );
+}
+
+function SingleScatterRole({
+  helper,
+  label,
+  onChange,
+  state,
+  value,
+}: {
+  helper: string;
+  label: string;
+  onChange: (columnId: string | null) => void;
+  state: BuilderState;
+  value: string | null;
+}) {
+  return (
+    <label className="graph-role-option">
+      <strong>{label}</strong>
+      <select value={value ?? ""} onChange={(event) => onChange(event.currentTarget.value || null)}>
+        <option value="">선택</option>
+        {state.numericColumns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}
+      </select>
+      <small>{helper}</small>
+    </label>
   );
 }
 
@@ -677,6 +706,8 @@ function validationMessage(code: string): string {
     graph_builder_group_not_allowed_in_multiple_mode:
       "여러 수치 변수 비교에서는 그룹 변수를 사용하지 않습니다.",
     graph_builder_scatter_roles_required: "X 변수 한 개와 Y 변수 한 개 이상을 선택하세요.",
+    graph_builder_scatter_duplicate_columns: "같은 축 역할에 중복 변수를 선택할 수 없습니다.",
+    graph_builder_scatter_same_axis_column: "같은 변수를 X와 Y에 동시에 선택할 수 없습니다.",
     graph_builder_too_many_values: "이 그래프 유형의 최대 변수 수를 초과했습니다.",
     graph_builder_value_required: "수치 변수를 한 개 이상 선택하세요.",
     filter_value_required: "필터 조건 값을 입력하세요.",

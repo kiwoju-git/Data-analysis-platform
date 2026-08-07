@@ -1579,16 +1579,17 @@ def test_analysis_run_executes_descriptive_statistics_from_dataset_version(tmp_p
     assert payload["provenance"]["row_count_included"] == 4
     result = payload["result"]
     assert result["missing_policy"] == "available_case_by_column"
-    assert result["quartile_method"] == "median_of_halves"
+    assert result["quartile_method"] == "hyndman_fan_6_weibull"
+    assert result["quantile_position"] == "p_times_n_plus_1"
 
     alpha = result["columns"][0]
     assert alpha["display_name"] == "alpha"
     assert alpha["n_total"] == 4
     assert alpha["n_used"] == 4
     assert alpha["mean"] == 2.5
-    assert alpha["q1"] == 1.5
+    assert alpha["q1"] == 1.25
     assert alpha["median"] == 2.5
-    assert alpha["q3"] == 3.5
+    assert alpha["q3"] == 3.75
 
     beta = result["columns"][1]
     assert beta["display_name"] == "beta"
@@ -1696,7 +1697,7 @@ def test_analysis_run_executes_graphical_summary_from_dataset_version(tmp_path) 
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.graphical_summary",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.graphical_summary"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -1739,7 +1740,7 @@ def test_analysis_run_executes_graphical_summary_from_dataset_version(tmp_path) 
     assert column["boxplot"]["upper_whisker"] == 2.0
     assert column["qq_plot"]["point_count"] == 2
     assert column["ecdf"]["points"][-1] == {"x": 2.0, "probability": 1.0}
-    assert "p_value" not in response.text
+    assert column["anderson_darling"]["p_value_method"] == ("stephens_normal_unknown_mean_variance")
 
     assert status_response.status_code == 200
     status_payload = status_response.json()
@@ -2031,7 +2032,7 @@ def test_analysis_run_executes_equal_variances_from_dataset_version(tmp_path) ->
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.equal_variances",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.equal_variances"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -2083,18 +2084,22 @@ def test_analysis_run_executes_equal_variances_from_dataset_version(tmp_path) ->
     assert [group["group_label"] for group in result["groups"]] == ["A", "B", "C"]
     assert [group["n"] for group in result["groups"]] == [3, 3, 3]
     tests = {test["method"]: test for test in result["tests"]}
-    assert tests["brown_forsythe"]["computed"] is True
-    assert tests["brown_forsythe"]["statistic"] == pytest.approx(
+    assert tests["multiple_comparisons"]["computed"] is False
+    assert tests["multiple_comparisons"]["warnings"] == ["multiple_comparisons_group_n_too_small"]
+    assert tests["levene_brown_forsythe"]["computed"] is True
+    assert tests["levene_brown_forsythe"]["statistic"] == pytest.approx(
         0.388888888888889,
         abs=1e-12,
     )
-    assert tests["brown_forsythe"]["p_value"] == pytest.approx(
+    assert tests["levene_brown_forsythe"]["p_value"] == pytest.approx(
         0.6937320744908164,
         abs=1e-12,
     )
-    assert tests["levene_mean"]["computed"] is True
-    assert tests["levene_mean"]["statistic"] == pytest.approx(1.5, abs=1e-12)
-    assert tests["levene_mean"]["p_value"] == pytest.approx(
+    mean_centered = result["additional_tests"][0]
+    assert mean_centered["method"] == "classical_levene_mean_centered"
+    assert mean_centered["computed"] is True
+    assert mean_centered["statistic"] == pytest.approx(1.5, abs=1e-12)
+    assert mean_centered["p_value"] == pytest.approx(
         0.2962962962962963,
         abs=1e-12,
     )
@@ -9200,7 +9205,7 @@ def test_analysis_run_applies_numeric_filter_and_freezes_row_ranges(tmp_path) ->
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "filter_snapshot": {
                     "expression_version": 1,
@@ -9264,7 +9269,7 @@ def test_analysis_run_rejects_invalid_filter_without_artifacts(tmp_path) -> None
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "filter_snapshot": {
                     "expression_version": 1,
@@ -9300,7 +9305,7 @@ def test_analysis_result_api_returns_persisted_envelope_and_detects_checksum_mis
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -9343,7 +9348,7 @@ def test_analysis_run_list_api_returns_paginated_history_without_internal_paths(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": first_version["version_id"],
                 "roles": {},
                 "options": {
@@ -9356,7 +9361,7 @@ def test_analysis_run_list_api_returns_paginated_history_without_internal_paths(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.graphical_summary",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.graphical_summary"],
                 "dataset_version_id": first_version["version_id"],
                 "roles": {},
                 "options": {
@@ -9369,7 +9374,7 @@ def test_analysis_run_list_api_returns_paginated_history_without_internal_paths(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": second_version["version_id"],
                 "roles": {},
                 "options": {
@@ -9486,7 +9491,7 @@ def test_analysis_run_comparison_api_returns_metadata_only_comparison(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -9499,7 +9504,7 @@ def test_analysis_run_comparison_api_returns_metadata_only_comparison(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "filter_snapshot": {
                     "expression_version": 1,
@@ -9522,7 +9527,7 @@ def test_analysis_run_comparison_api_returns_metadata_only_comparison(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.graphical_summary",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.graphical_summary"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -10384,7 +10389,7 @@ def test_analysis_result_json_export_creates_checksum_validated_artifact(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -10448,7 +10453,7 @@ def test_analysis_result_json_export_detects_result_checksum_mismatch_without_ar
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -10499,7 +10504,7 @@ def test_analysis_result_csv_export_creates_safe_checksum_validated_artifact(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -10579,7 +10584,7 @@ def test_analysis_result_csv_export_detects_result_checksum_mismatch_without_art
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -10630,7 +10635,7 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -10649,11 +10654,11 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert response.status_code == 201
     assert export_response.status_code == 201
     AnalysisResultHtmlReportResponse.model_validate(export_payload)
-    assert export_payload["schema_version"] == 1
+    assert export_payload["schema_version"] == 2
     assert export_payload["format"] == "analysis_result_html_report"
     assert export_payload["artifact_kind"] == "analysis_result_html_report"
     assert export_payload["media_type"] == "text/html"
-    assert export_payload["title"] == "DataLab Studio Analysis Report"
+    assert export_payload["title"] == "Statistical Twin Analysis Report"
     assert export_payload["section_count"] >= 1
     assert export_payload["stale"] is False
 
@@ -10671,6 +10676,9 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert len(export_bytes) == export_payload["size_bytes"]
     export_text = export_bytes.decode("utf-8")
     assert "기술통계 요약" in export_text
+    assert export_text.index("분석 요약") < export_text.index("기술 정보")
+    assert "<summary>기계 판독용 원본 result JSON</summary>" in export_text
+    assert "<details open" not in export_text
     assert "Content-Security-Policy" in export_text
     assert "default-src 'none'" in export_text
     assert "<th>Mean</th>" in export_text
@@ -10746,7 +10754,11 @@ def test_analysis_result_html_report_export_renders_eda_method_specific_sections
 
         equal_variances_version = _upload_confirmed_csv_dataset(
             client,
-            content=b"response,group\n8,A\n9,A\n11,B\n13,B\n",
+            content=(
+                b"response,group\n"
+                b"8,A\n9,A\n10,A\n11,A\n12,A\n13,A\n14,A\n15,A\n16,A\n17,A\n"
+                b"11,B\n13,B\n15,B\n17,B\n19,B\n21,B\n23,B\n25,B\n27,B\n29,B\n"
+            ),
             filename="html-equal-variances.csv",
         )
         response_column_id = equal_variances_version["columns"][0]["column_id"]
@@ -10777,11 +10789,12 @@ def test_analysis_result_html_report_export_renders_eda_method_specific_sections
         )
 
     assert "그래프 요약" in graph_text
-    assert "<th>Histogram bins</th>" in graph_text
-    assert "<th>Q-Q points</th>" in graph_text
-    assert "<th>ECDF points</th>" in graph_text
-    assert "<td>alpha</td>" in graph_text
-    assert "<td>2</td>" in graph_text
+    assert "히스토그램 + 적합 정규곡선" in graph_text
+    assert "통계 요약" in graph_text
+    assert "신뢰구간" in graph_text
+    assert "추가 그래프: ECDF" in graph_text
+    assert "normal-fit" in graph_text
+    assert "<svg" in graph_text
 
     assert "정규성 검정 요약" in normality_text
     assert "<th>Shapiro W</th>" in normality_text
@@ -10789,10 +10802,10 @@ def test_analysis_result_html_report_export_renders_eda_method_specific_sections
     assert "normality_insufficient_observations" in normality_text
 
     assert "등분산 검정 요약" in equal_variances_text
-    assert "Response: response / Group: group" in equal_variances_text
-    assert "brown_forsythe" in equal_variances_text
-    assert "levene_mean" in equal_variances_text
-    assert "등분산 그룹 요약" in equal_variances_text
+    assert "다중 비교" in equal_variances_text
+    assert "Levene 검정 (Brown-Forsythe)" in equal_variances_text
+    assert "표준편차 다중 비교구간" in equal_variances_text
+    assert "Bonett-Nakayama" in equal_variances_text
 
 
 def test_analysis_result_html_report_export_renders_hypothesis_method_sections(
@@ -11486,7 +11499,7 @@ def test_analysis_result_html_report_export_detects_result_checksum_mismatch_wit
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -11523,7 +11536,7 @@ def test_analysis_result_export_downloads_checksum_validated_json_and_csv_artifa
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -11592,7 +11605,7 @@ def test_analysis_result_export_list_returns_created_exports_without_internal_pa
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -11653,7 +11666,7 @@ def test_analysis_result_export_download_detects_artifact_checksum_mismatch(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -11694,7 +11707,7 @@ def test_dataset_schema_update_marks_existing_analysis_run_stale(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {
@@ -11770,7 +11783,7 @@ def test_descriptive_result_file_is_removed_when_analysis_run_insert_fails(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "eda.descriptive",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["eda.descriptive"],
                 "dataset_version_id": version["version_id"],
                 "roles": {},
                 "options": {

@@ -1,5 +1,7 @@
 from math import isclose
 
+import pytest
+
 from app.statistics.graphical_summary import (
     GraphicalSummaryColumn,
     summarize_numeric_graphics,
@@ -24,6 +26,8 @@ def test_graphical_summary_is_hand_checkable_with_fixed_histogram_bins() -> None
     )
 
     assert result["summary_type"] == "graphical_summary"
+    assert result["schema_version"] == 2
+    assert result["quartile_method"] == "hyndman_fan_6_weibull"
     assert result["histogram_method"] == "fixed_count"
     column = result["columns"][0]  # type: ignore[index]
     assert column["n_total"] == 5
@@ -70,6 +74,11 @@ def test_graphical_summary_is_hand_checkable_with_fixed_histogram_bins() -> None
     )
     assert column["qq_plot"]["points"][2]["sample"] == 3.0
     assert column["ecdf"]["points"][-1] == {"x": 5.0, "probability": 1.0}
+    assert column["normal_fit_curve"]["computed"] is True
+    assert len(column["normal_fit_curve"]["points"]) == 81
+    assert column["mean"] == 3.0
+    assert column["standard_deviation"] == pytest.approx(1.5811388300841898)
+    assert column["confidence_intervals"]["mean"]["computed"] is True
 
 
 def test_graphical_summary_reports_outliers_and_truncated_plot_points() -> None:

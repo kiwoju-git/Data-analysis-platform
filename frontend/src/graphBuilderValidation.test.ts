@@ -44,5 +44,37 @@ describe("graph builder validation", () => {
         columns,
       ),
     ).toBeNull();
+    expect(
+      validateGraphBuilderSelection(
+        {
+          graphType: "scatter_plot",
+          scatterMode: "multiple_x_fixed_y",
+          valueColumnIds: [],
+          xColumnId: "x",
+          yColumnIds: ["y"],
+          fixedYColumnId: "z",
+          multipleXColumnIds: ["x", "y"],
+          groupColumnId: null,
+          comparisonMode: "multiple_values",
+        },
+        columns,
+      ),
+    ).toBeNull();
+    expect(
+      validateGraphBuilderSelection(
+        {
+          graphType: "scatter_plot",
+          scatterMode: "multiple_x_fixed_y",
+          valueColumnIds: [],
+          xColumnId: "x",
+          yColumnIds: ["y"],
+          fixedYColumnId: "x",
+          multipleXColumnIds: ["x", "y"],
+          groupColumnId: null,
+          comparisonMode: "multiple_values",
+        },
+        columns,
+      ),
+    ).toBe("graph_builder_scatter_same_axis_column");
   });
 });

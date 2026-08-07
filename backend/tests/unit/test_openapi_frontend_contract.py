@@ -88,6 +88,15 @@ FRONTEND_ROUTE_CONTRACTS = [
         ),
     ),
     OperationContract(
+        route_name="workspaceAssetMetadata",
+        method="patch",
+        path="/api/v1/assets/{asset_type}/{asset_id}/metadata",
+        success_status="200",
+        response_schema="WorkspaceAssetMetadataResponse",
+        parameters=frozenset({("asset_type", "path"), ("asset_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="visualizationPreview",
         method="post",
         path="/api/v1/visualizations/preview",

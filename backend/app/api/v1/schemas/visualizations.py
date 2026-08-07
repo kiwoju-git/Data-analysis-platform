@@ -17,6 +17,7 @@ GraphType = Literal[
 ]
 GraphLayout = Literal["combined", "overlay", "small_multiples"]
 GraphComparisonMode = Literal["multiple_values", "one_value_by_group"]
+ScatterMode = Literal["fixed_x_multiple_y", "multiple_x_fixed_y"]
 
 
 class GraphPreviewRequest(BaseModel):
@@ -26,6 +27,8 @@ class GraphPreviewRequest(BaseModel):
     filter_snapshot: AnalysisFilterSnapshot = Field(default_factory=AnalysisFilterSnapshot)
     graph_type: GraphType
     value_column_ids: list[str] = Field(default_factory=list)
+    scatter_mode: ScatterMode | None = None
+    x_column_ids: list[str] = Field(default_factory=list)
     x_column_id: str | None = None
     y_column_ids: list[str] = Field(default_factory=list)
     group_column_id: str | None = None
@@ -40,10 +43,21 @@ class GraphPreviewRequest(BaseModel):
     @model_validator(mode="after")
     def validate_roles(self) -> "GraphPreviewRequest":
         if self.graph_type == "scatter_plot":
-            if self.x_column_id is None or not self.y_column_ids:
-                raise ValueError("scatter_plot requires x_column_id and y_column_ids")
-            if len(self.y_column_ids) > 6:
-                raise ValueError("scatter_plot supports at most 6 Y columns")
+            if not self.x_column_ids and self.x_column_id is not None:
+                self.x_column_ids = [self.x_column_id]
+            mode = self.scatter_mode or "fixed_x_multiple_y"
+            self.scatter_mode = mode
+            if mode == "fixed_x_multiple_y":
+                if len(self.x_column_ids) != 1 or not 1 <= len(self.y_column_ids) <= 6:
+                    raise ValueError("fixed_x_multiple_y requires one X and 1-6 Y columns")
+            elif len(self.y_column_ids) != 1 or not 1 <= len(self.x_column_ids) <= 6:
+                raise ValueError("multiple_x_fixed_y requires 1-6 X and one Y column")
+            if len(set(self.x_column_ids)) != len(self.x_column_ids):
+                raise ValueError("scatter_plot X columns must be unique")
+            if len(set(self.y_column_ids)) != len(self.y_column_ids):
+                raise ValueError("scatter_plot Y columns must be unique")
+            if set(self.x_column_ids) & set(self.y_column_ids):
+                raise ValueError("scatter_plot X and Y columns must be different")
             return self
 
         if not self.value_column_ids:
@@ -91,7 +105,7 @@ class GraphPreviewPanel(BaseModel):
 class GraphPreviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    visualization_schema_version: Literal[2] = 2
+    visualization_schema_version: Literal[3] = 3
     graph_type: GraphType
     dataset_version_id: UUID
     source_schema_hash: str
@@ -102,6 +116,7 @@ class GraphPreviewResponse(BaseModel):
     warnings: list[str]
     layout: GraphLayout
     comparison_mode: GraphComparisonMode
+    scatter_mode: ScatterMode | None = None
     group_order_policy: Literal["first_occurrence"]
     missing_group_policy: Literal["exclude"]
     missing_group_row_count: int = Field(ge=0)

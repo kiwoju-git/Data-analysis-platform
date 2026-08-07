@@ -1,15 +1,25 @@
+from datetime import datetime, timezone
 from typing import cast
 
+from fastapi import status
+
 from app.api.v1.schemas.assets import (
+    EditableWorkspaceAssetType,
     WorkspaceAssetCatalogResponse,
     WorkspaceAssetDescriptor,
+    WorkspaceAssetMetadataResponse,
+    WorkspaceAssetMetadataUpdateRequest,
     WorkspaceAssetOpenTarget,
     WorkspaceAssetType,
 )
 from app.core.config import Settings
+from app.core.errors import ApiError
 from app.storage.metadata import (
     WorkspaceAssetCatalogRecord,
+    WorkspaceAssetStorageConflict,
+    get_workspace_asset_user_metadata,
     list_workspace_asset_catalog_records,
+    upsert_workspace_asset_user_metadata,
 )
 
 
@@ -57,8 +67,59 @@ def _descriptor(record: WorkspaceAssetCatalogRecord) -> WorkspaceAssetDescriptor
         updated_at=record.updated_at,
         pinned=record.pinned,
         note=record.note,
+        metadata_updated_at=record.metadata_updated_at,
         dependency_count=record.dependency_count,
         open_target=_open_target(record),
+    )
+
+
+def update_workspace_asset_metadata(
+    settings: Settings,
+    *,
+    asset_type: EditableWorkspaceAssetType,
+    asset_id: str,
+    body: WorkspaceAssetMetadataUpdateRequest,
+) -> WorkspaceAssetMetadataResponse:
+    current = get_workspace_asset_user_metadata(
+        settings.workspace_root, owner_type=asset_type, owner_id=asset_id
+    )
+    fields = body.model_fields_set
+    user_label = (
+        body.user_label if "user_label" in fields else current.user_label if current else None
+    )
+    note = body.note if "note" in fields else current.note if current else None
+    pinned = body.pinned if "pinned" in fields else current.pinned if current else False
+    updated_at = datetime.now(timezone.utc).isoformat()
+    try:
+        metadata = upsert_workspace_asset_user_metadata(
+            settings.workspace_root,
+            owner_type=asset_type,
+            owner_id=asset_id,
+            user_label=user_label,
+            note=note,
+            pinned=bool(pinned),
+            updated_at=updated_at,
+            expected_updated_at=body.expected_metadata_updated_at,
+        )
+    except KeyError as exc:
+        raise ApiError(
+            code="workspace_asset_not_found",
+            message="The requested workspace asset was not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        ) from exc
+    except WorkspaceAssetStorageConflict as exc:
+        raise ApiError(
+            code=exc.code,
+            message="The asset metadata changed in another view. Refresh the catalog and retry.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
+    return WorkspaceAssetMetadataResponse(
+        asset_type=asset_type,
+        asset_id=asset_id,
+        user_label=metadata.user_label,
+        note=metadata.note,
+        pinned=metadata.pinned,
+        metadata_updated_at=metadata.updated_at,
     )
 
 

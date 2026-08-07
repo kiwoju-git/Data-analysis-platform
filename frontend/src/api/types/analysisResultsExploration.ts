@@ -27,6 +27,7 @@ export interface DescriptiveStatisticsResult {
   summary_type: "descriptive_statistics";
   missing_policy: string;
   quartile_method: string;
+  quantile_position?: string;
   std_definition: string;
   columns: DescriptiveColumnSummary[];
 }
@@ -43,6 +44,24 @@ export interface GraphicalHistogramSummary {
   binning: string;
   bin_count: number;
   bins: GraphicalHistogramBin[];
+}
+
+export interface GraphicalConfidenceInterval {
+  computed: boolean;
+  method: string;
+  confidence_level: number;
+  estimate: number | null;
+  lower: number | null;
+  upper: number | null;
+}
+
+export interface GraphicalNormalFitCurve {
+  computed: boolean;
+  scale: string;
+  mean?: number | null;
+  standard_deviation?: number | null;
+  bin_width?: number | null;
+  points: Array<{ x: number; expected_count: number }>;
 }
 
 export interface GraphicalBoxplotSummary {
@@ -81,12 +100,24 @@ export interface GraphicalSummaryColumn {
   n_used: number;
   n_missing: number;
   n_non_numeric: number;
+  mean?: number | null;
+  standard_deviation?: number | null;
+  variance?: number | null;
+  skewness?: number | null;
+  kurtosis_excess?: number | null;
   min: number | null;
   q1: number | null;
   median: number | null;
   q3: number | null;
   max: number | null;
   histogram: GraphicalHistogramSummary;
+  normal_fit_curve?: GraphicalNormalFitCurve;
+  anderson_darling?: NormalityAndersonDarlingResult;
+  confidence_intervals?: {
+    mean: GraphicalConfidenceInterval;
+    median: GraphicalConfidenceInterval;
+    standard_deviation: GraphicalConfidenceInterval;
+  };
   boxplot: GraphicalBoxplotSummary;
   qq_plot: GraphicalPointSeries;
   ecdf: GraphicalPointSeries;
@@ -98,6 +129,9 @@ export interface GraphicalSummaryResult {
   summary_type: "graphical_summary";
   histogram_method: string;
   boxplot_method: string;
+  quartile_method?: string;
+  quantile_position?: string;
+  confidence_level?: number;
   qq_plot_distribution: string;
   qq_plotting_position: string;
   ecdf_method: string;
@@ -196,6 +230,28 @@ export interface EqualVarianceGroupSummary {
   min: number | null;
   max: number | null;
   warnings: string[];
+  comparison_interval?: { lower: number; upper: number } | null;
+}
+
+export interface EqualVarianceMultipleComparisonGroup {
+  group_label: string;
+  group_index: number;
+  n: number;
+  sample_standard_deviation: number;
+  comparison_interval: { lower: number; upper: number };
+  allocation: number;
+}
+
+export interface EqualVarianceMultipleComparisons {
+  computed: boolean;
+  method: string;
+  alpha: number;
+  p_value: number | null;
+  reject_equal_variances: boolean | null;
+  groups: EqualVarianceMultipleComparisonGroup[];
+  non_overlapping_pairs: Array<{ left_group: string; right_group: string }>;
+  pairwise_p_values: Array<{ left_group: string; right_group: string; p_value: number }>;
+  warnings: string[];
 }
 
 export interface EqualVarianceTestResult {
@@ -230,4 +286,7 @@ export interface EqualVariancesResult {
   group_count: number;
   groups: EqualVarianceGroupSummary[];
   tests: EqualVarianceTestResult[];
+  multiple_comparisons?: EqualVarianceMultipleComparisons;
+  levene?: EqualVarianceTestResult;
+  additional_tests?: EqualVarianceTestResult[];
 }

@@ -3,6 +3,7 @@ import { toggleGraphVariableSelection } from "./graphVariableSelection";
 
 interface GraphVariablePickerProps {
   columns: DatasetColumnResponse[];
+  disabledIds?: string[];
   label: string;
   maximum: number;
   selectedIds: string[];
@@ -11,6 +12,7 @@ interface GraphVariablePickerProps {
 
 export function GraphVariablePicker({
   columns,
+  disabledIds = [],
   label,
   maximum,
   selectedIds,
@@ -41,7 +43,7 @@ export function GraphVariablePicker({
       <div className="graph-variable-option-grid">
         {columns.map((column) => {
           const selected = selectedIds.includes(column.column_id);
-          const disabled = limitReached && !selected;
+          const disabled = disabledIds.includes(column.column_id) || (limitReached && !selected);
           return (
             <label
               className={

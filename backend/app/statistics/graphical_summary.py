@@ -1,8 +1,21 @@
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
-from math import ceil
+from math import ceil, exp, pi, sqrt
 from statistics import NormalDist
+
+from app.statistics.normality import anderson_darling_summary
+from app.statistics.sample_distribution import (
+    mean_confidence_interval,
+    median_confidence_interval,
+    sample_moments,
+    standard_deviation_confidence_interval,
+)
+from app.statistics.sample_quantiles import (
+    QUANTILE_METHOD,
+    QUANTILE_POSITION,
+    sample_quartiles_hf6,
+)
 
 MAX_HISTOGRAM_BINS = 200
 DEFAULT_POINT_LIMIT = 1000
@@ -36,7 +49,10 @@ def summarize_numeric_graphics(
     thousands: str | None = None,
     histogram_bin_count: int | None = None,
     point_limit: int = DEFAULT_POINT_LIMIT,
+    confidence_level: float = 0.95,
 ) -> dict[str, object]:
+    if not 0 < confidence_level < 1:
+        raise ValueError("confidence_level must be between zero and one")
     accumulators = [_ColumnAccumulator(spec=column) for column in columns]
 
     for row in rows:
@@ -59,10 +75,13 @@ def summarize_numeric_graphics(
             accumulator.values.append(number)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "graphical_summary",
         "histogram_method": "freedman_diaconis" if histogram_bin_count is None else "fixed_count",
         "boxplot_method": "tukey_1_5_iqr",
+        "quartile_method": QUANTILE_METHOD,
+        "quantile_position": QUANTILE_POSITION,
+        "confidence_level": confidence_level,
         "qq_plot_distribution": "standard_normal",
         "qq_plotting_position": "rank_minus_half_over_n",
         "ecdf_method": "right_continuous",
@@ -72,6 +91,7 @@ def summarize_numeric_graphics(
                 accumulator,
                 histogram_bin_count=histogram_bin_count,
                 point_limit=point_limit,
+                confidence_level=confidence_level,
             )
             for accumulator in accumulators
         ],
@@ -101,10 +121,11 @@ def _column_summary(
     *,
     histogram_bin_count: int | None,
     point_limit: int,
+    confidence_level: float,
 ) -> dict[str, object]:
     values = sorted(accumulator.values)
     n_used = len(values)
-    q1, q3 = _quartiles(values)
+    q1, q3 = sample_quartiles_hf6(values)
     median = _median(values) if values else None
     warnings: list[str] = []
     if accumulator.n_non_numeric > 0:
@@ -119,6 +140,10 @@ def _column_summary(
     if qq_truncated or ecdf_truncated:
         warnings.append("graphical_points_truncated")
 
+    moments = sample_moments(values)
+    histogram = _histogram(values, requested_bin_count=histogram_bin_count)
+    normal_fit = _normal_fit_curve(values, histogram, moments)
+
     return {
         "column_id": accumulator.spec.column_id,
         "column_index": accumulator.spec.column_index,
@@ -131,12 +156,24 @@ def _column_summary(
         "n_used": n_used,
         "n_missing": accumulator.n_missing,
         "n_non_numeric": accumulator.n_non_numeric,
+        "mean": moments["mean"],
+        "standard_deviation": moments["standard_deviation"],
+        "variance": moments["variance"],
+        "skewness": moments["skewness"],
+        "kurtosis_excess": moments["kurtosis_excess"],
         "min": values[0] if values else None,
         "q1": q1,
         "median": median,
         "q3": q3,
         "max": values[-1] if values else None,
-        "histogram": _histogram(values, requested_bin_count=histogram_bin_count),
+        "anderson_darling": anderson_darling_summary(values, alpha=1 - confidence_level),
+        "confidence_intervals": {
+            "mean": mean_confidence_interval(values, confidence_level),
+            "median": median_confidence_interval(values, confidence_level),
+            "standard_deviation": standard_deviation_confidence_interval(values, confidence_level),
+        },
+        "histogram": histogram,
+        "normal_fit_curve": normal_fit,
         "boxplot": _boxplot(values),
         "qq_plot": {
             "point_count": len(qq_points),
@@ -218,7 +255,7 @@ def _histogram(
 
 
 def _freedman_diaconis_bin_count(sorted_values: Sequence[float]) -> int:
-    q1, q3 = _quartiles(sorted_values)
+    q1, q3 = sample_quartiles_hf6(sorted_values)
     if q1 is None or q3 is None:
         return 1
     iqr = q3 - q1
@@ -243,7 +280,7 @@ def _boxplot(sorted_values: Sequence[float]) -> dict[str, object]:
             "outlier_count": 0,
         }
 
-    q1, q3 = _quartiles(sorted_values)
+    q1, q3 = sample_quartiles_hf6(sorted_values)
     assert q1 is not None
     assert q3 is not None
     iqr = q3 - q1
@@ -261,6 +298,56 @@ def _boxplot(sorted_values: Sequence[float]) -> dict[str, object]:
         "upper_fence": upper_fence,
         "outlier_count": outlier_count,
     }
+
+
+def _normal_fit_curve(
+    sorted_values: Sequence[float],
+    histogram: dict[str, object],
+    moments: dict[str, float | None],
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "computed": False,
+        "scale": "expected_bin_count",
+        "points": [],
+    }
+    mean = moments["mean"]
+    standard_deviation = moments["standard_deviation"]
+    bins = histogram.get("bins")
+    if (
+        len(sorted_values) < 2
+        or mean is None
+        or standard_deviation is None
+        or standard_deviation <= 0
+        or not isinstance(bins, list)
+        or not bins
+    ):
+        return payload
+    first_bin = bins[0]
+    if not isinstance(first_bin, dict):
+        return payload
+    lower = first_bin.get("lower")
+    last_bin = bins[-1]
+    upper = last_bin.get("upper") if isinstance(last_bin, dict) else None
+    if not isinstance(lower, float | int) or not isinstance(upper, float | int) or upper <= lower:
+        return payload
+    bin_width = (float(upper) - float(lower)) / len(bins)
+    point_count = 81
+    points: list[dict[str, float]] = []
+    for index in range(point_count):
+        x = float(lower) + (float(upper) - float(lower)) * index / (point_count - 1)
+        z = (x - mean) / standard_deviation
+        density = exp(-0.5 * z * z) / (standard_deviation * sqrt(2 * pi))
+        points.append({"x": x, "expected_count": density * len(sorted_values) * bin_width})
+    payload.update(
+        {
+            "computed": True,
+            "mean": mean,
+            "standard_deviation": standard_deviation,
+            "bin_width": bin_width,
+            "points": points,
+        }
+    )
+    return payload
 
 
 def _qq_points(
@@ -311,23 +398,6 @@ def _selected_point_indices(n: int, point_limit: int) -> tuple[list[int], bool]:
 
     indices = {round(position * (n - 1) / (point_limit - 1)) for position in range(point_limit)}
     return sorted(indices), True
-
-
-def _quartiles(sorted_values: Sequence[float]) -> tuple[float | None, float | None]:
-    if not sorted_values:
-        return None, None
-    if len(sorted_values) == 1:
-        return sorted_values[0], sorted_values[0]
-
-    midpoint = len(sorted_values) // 2
-    if len(sorted_values) % 2 == 0:
-        lower_half = sorted_values[:midpoint]
-        upper_half = sorted_values[midpoint:]
-    else:
-        lower_half = sorted_values[:midpoint]
-        upper_half = sorted_values[midpoint + 1 :]
-
-    return _median(lower_half), _median(upper_half)
 
 
 def _median(sorted_values: Sequence[float]) -> float:

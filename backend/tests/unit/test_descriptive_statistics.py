@@ -34,11 +34,14 @@ def test_descriptive_statistics_are_hand_checkable() -> None:
     assert summary["mean"] == 2.5
     assert isclose(summary["std"], 1.2909944487358056, rel_tol=0, abs_tol=1e-12)
     assert summary["min"] == 1.0
-    assert summary["q1"] == 1.5
+    assert summary["q1"] == 1.25
     assert summary["median"] == 2.5
-    assert summary["q3"] == 3.5
+    assert summary["q3"] == 3.75
     assert summary["max"] == 4.0
     assert summary["warnings"] == ["non_numeric_values_excluded"]
+    assert result["schema_version"] == 2
+    assert result["quartile_method"] == "hyndman_fan_6_weibull"
+    assert result["quantile_position"] == "p_times_n_plus_1"
 
 
 def test_descriptive_statistics_report_constant_and_empty_columns() -> None:

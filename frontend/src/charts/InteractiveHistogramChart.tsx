@@ -15,6 +15,7 @@ interface InteractiveHistogramChartProps {
   chartId: string;
   columnName: string;
   nBasis: number;
+  normalFitPoints?: Array<{ x: number; expected_count: number }>;
 }
 
 const width = 360;
@@ -26,6 +27,7 @@ export function InteractiveHistogramChart({
   chartId,
   columnName,
   nBasis,
+  normalFitPoints = [],
 }: InteractiveHistogramChartProps) {
   const ids = bins.map((_, index) => `${chartId}-bin-${index}`);
   const interaction = useChartItemInteraction(ids);
@@ -34,7 +36,11 @@ export function InteractiveHistogramChart({
   const plotWidth = width - plot.left - plot.right;
   const plotHeight = height - plot.top - plot.bottom;
   const range = paddedNumericRange(bins.flatMap((bin) => [bin.lower, bin.upper]));
-  const maxCount = Math.max(1, ...bins.map((bin) => bin.count));
+  const maxCount = Math.max(
+    1,
+    ...bins.map((bin) => bin.count),
+    ...normalFitPoints.map((point) => point.expected_count),
+  );
   const activeIndex = ids.indexOf(interaction.activeItem?.id ?? "");
   const activeBin = activeIndex >= 0 ? bins[activeIndex] : null;
   const details = activeBin === null ? [] : binDetails(activeBin, activeIndex, nBasis);
@@ -83,6 +89,23 @@ export function InteractiveHistogramChart({
             </rect>
           );
         })}
+        {normalFitPoints.length > 1 ? (
+          <polyline
+            aria-label="적합 정규곡선"
+            className="histogram-normal-fit-line"
+            fill="none"
+            points={normalFitPoints
+              .map((point) => {
+                const x = scaleChartValue(point.x, range, plot.left, plot.left + plotWidth);
+                const y = plot.top + plotHeight - (point.expected_count / maxCount) * plotHeight;
+                return `${x},${y}`;
+              })
+              .join(" ")}
+            role="img"
+          >
+            <title>표본 평균과 표본 표준편차로 적합한 정규곡선</title>
+          </polyline>
+        ) : null}
         <text className="chart-axis-label" x={plot.left} y={height - 10}>{formatNumber(range.min)}</text>
         <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={height - 10}>{formatNumber(range.max)}</text>
         <text className="chart-axis-label" x={plot.left - 8} y={plot.top + 8}>{maxCount}</text>

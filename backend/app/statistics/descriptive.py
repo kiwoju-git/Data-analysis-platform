@@ -3,6 +3,12 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from math import fsum, sqrt
 
+from app.statistics.sample_quantiles import (
+    QUANTILE_METHOD,
+    QUANTILE_POSITION,
+    sample_quartiles_hf6,
+)
+
 
 @dataclass(frozen=True)
 class DescriptiveColumn:
@@ -53,10 +59,11 @@ def describe_numeric_columns(
             accumulator.values.append(number)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "descriptive_statistics",
         "missing_policy": "available_case_by_column",
-        "quartile_method": "median_of_halves",
+        "quartile_method": QUANTILE_METHOD,
+        "quantile_position": QUANTILE_POSITION,
         "std_definition": "sample_standard_deviation_ddof_1",
         "columns": [_column_summary(accumulator) for accumulator in accumulators],
     }
@@ -106,9 +113,9 @@ def _column_summary(accumulator: _ColumnAccumulator) -> dict[str, object]:
         "mean": _mean(values),
         "std": _sample_std(values),
         "min": values[0] if values else None,
-        "q1": _quartiles(values)[0],
+        "q1": sample_quartiles_hf6(values)[0],
         "median": _median(values) if values else None,
-        "q3": _quartiles(values)[1],
+        "q3": sample_quartiles_hf6(values)[1],
         "max": values[-1] if values else None,
         "warnings": warnings,
     }
@@ -126,23 +133,6 @@ def _sample_std(values: Sequence[float]) -> float | None:
     mean = fsum(values) / len(values)
     variance = fsum((value - mean) ** 2 for value in values) / (len(values) - 1)
     return sqrt(variance)
-
-
-def _quartiles(sorted_values: Sequence[float]) -> tuple[float | None, float | None]:
-    if not sorted_values:
-        return None, None
-    if len(sorted_values) == 1:
-        return sorted_values[0], sorted_values[0]
-
-    midpoint = len(sorted_values) // 2
-    if len(sorted_values) % 2 == 0:
-        lower_half = sorted_values[:midpoint]
-        upper_half = sorted_values[midpoint:]
-    else:
-        lower_half = sorted_values[:midpoint]
-        upper_half = sorted_values[midpoint + 1 :]
-
-    return _median(lower_half), _median(upper_half)
 
 
 def _median(sorted_values: Sequence[float]) -> float:

@@ -29,8 +29,27 @@ export interface WorkspaceAssetDescriptor {
   updated_at: string;
   pinned: boolean;
   note: string | null;
+  metadata_updated_at: string | null;
   dependency_count: number;
   open_target: { path: string; label: string };
+}
+
+export type EditableWorkspaceAssetType = "analysis_run" | "doe_design" | "bayesian_study";
+
+export interface WorkspaceAssetMetadataUpdateRequest {
+  user_label: string | null;
+  note: string | null;
+  pinned: boolean;
+  expected_metadata_updated_at: string | null;
+}
+
+export interface WorkspaceAssetMetadataResponse {
+  asset_type: EditableWorkspaceAssetType;
+  asset_id: string;
+  user_label: string | null;
+  note: string | null;
+  pinned: boolean;
+  metadata_updated_at: string;
 }
 
 export interface WorkspaceAssetCatalogResponse {

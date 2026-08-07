@@ -527,7 +527,7 @@ def _create_descriptive_analysis(
         "/api/v1/analysis-runs",
         json={
             "method_id": "eda.descriptive",
-            "method_version": "0.1.0",
+            "method_version": "0.2.0",
             "dataset_version_id": version["version_id"],
             "roles": {},
             "options": {

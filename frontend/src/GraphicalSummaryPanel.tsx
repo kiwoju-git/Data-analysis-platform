@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
@@ -15,7 +17,7 @@ interface GraphicalSummaryPanelProps {
   methodId: string;
   selectedColumnIds: string[];
   version: DatasetVersionResponse | null;
-  onRun: () => void;
+  onRun: (confidenceLevel: number) => void;
   onToggleColumn: (columnId: string, checked: boolean) => void;
 }
 
@@ -33,6 +35,8 @@ export function GraphicalSummaryPanel({
   onRun,
   onToggleColumn,
 }: GraphicalSummaryPanelProps) {
+  const [confidenceLevel, setConfidenceLevel] = useState(0.95);
+
   return (
     <section className="analysis-run-panel" data-analysis-execution={methodId}>
       {version === null ? (
@@ -53,6 +57,18 @@ export function GraphicalSummaryPanel({
               </label>
             ))}
           </div>
+          <label className="compact-analysis-option">
+            <span>신뢰수준</span>
+            <input
+              aria-label="그래프 요약 신뢰수준"
+              max="0.999"
+              min="0.5"
+              step="0.01"
+              type="number"
+              value={confidenceLevel}
+              onChange={(event) => setConfidenceLevel(Number(event.currentTarget.value))}
+            />
+          </label>
           <button
             className="primary-button"
             disabled={
@@ -61,7 +77,7 @@ export function GraphicalSummaryPanel({
               selectedColumnIds.length > maxGraphicalColumns ||
               filterValidationError !== null
             }
-            onClick={onRun}
+            onClick={() => onRun(confidenceLevel)}
             type="button"
           >
             {isRunningAnalysis ? "실행 중" : "그래프 요약 실행"}

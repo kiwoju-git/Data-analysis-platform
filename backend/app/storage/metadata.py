@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 18
+SCHEMA_VERSION: Final = 19
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -198,6 +198,7 @@ class WorkspaceAssetCatalogRecord:
     updated_at: str
     pinned: bool
     note: str | None
+    metadata_updated_at: str | None
     dependency_count: int
 
 
@@ -1302,6 +1303,47 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
 
         CREATE INDEX idx_bayesian_lifecycle_version
         ON bayesian_study_lifecycle_events(study_version_id, closed_at);
+        """,
+    ),
+    Migration(
+        version=19,
+        name="create_workspace_asset_user_metadata",
+        sql="""
+        CREATE TABLE workspace_asset_user_metadata (
+            owner_type TEXT NOT NULL CHECK (
+                owner_type IN ('analysis_run', 'doe_design', 'bayesian_study')
+            ),
+            owner_id TEXT NOT NULL,
+            user_label TEXT CHECK (user_label IS NULL OR length(user_label) <= 120),
+            note TEXT CHECK (note IS NULL OR length(note) <= 500),
+            pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (owner_type, owner_id)
+        );
+
+        CREATE INDEX idx_workspace_asset_user_metadata_order
+        ON workspace_asset_user_metadata(owner_type, pinned DESC, updated_at DESC, owner_id);
+
+        CREATE TRIGGER cleanup_analysis_run_user_metadata
+        AFTER DELETE ON analysis_runs
+        BEGIN
+            DELETE FROM workspace_asset_user_metadata
+            WHERE owner_type = 'analysis_run' AND owner_id = OLD.analysis_id;
+        END;
+
+        CREATE TRIGGER cleanup_doe_design_user_metadata
+        AFTER DELETE ON experiment_designs
+        BEGIN
+            DELETE FROM workspace_asset_user_metadata
+            WHERE owner_type = 'doe_design' AND owner_id = OLD.design_id;
+        END;
+
+        CREATE TRIGGER cleanup_bayesian_study_user_metadata
+        AFTER DELETE ON bayesian_studies
+        BEGIN
+            DELETE FROM workspace_asset_user_metadata
+            WHERE owner_type = 'bayesian_study' AND owner_id = OLD.study_id;
+        END;
         """,
     ),
 )
@@ -2565,6 +2607,7 @@ def list_workspace_asset_catalog_records(
             COALESCE(metadata.updated_at, version.created_at) AS updated_at,
             COALESCE(metadata.pinned, 0) AS pinned,
             metadata.note,
+            metadata.updated_at AS metadata_updated_at,
             (SELECT COUNT(*) FROM analysis_runs analysis
              WHERE analysis.dataset_version_id = version.version_id)
                 AS dependency_count
@@ -2579,16 +2622,19 @@ def list_workspace_asset_catalog_records(
             'analysis_run',
             analysis.method_id,
             analysis.method_id,
-            analysis.method_id,
+            COALESCE(metadata.user_label, analysis.method_id),
             CASE WHEN analysis.stale = 1 THEN 'source stale' ELSE 'stored result' END,
             CASE WHEN analysis.stale = 1 THEN 'stale' ELSE analysis.status END,
             analysis.created_at,
-            analysis.updated_at,
-            0,
-            NULL,
+            COALESCE(metadata.updated_at, analysis.updated_at),
+            COALESCE(metadata.pinned, 0),
+            metadata.note,
+            metadata.updated_at,
             (SELECT COUNT(*) FROM analysis_artifacts artifact
              WHERE artifact.analysis_id = analysis.analysis_id)
         FROM analysis_runs analysis
+        LEFT JOIN workspace_asset_user_metadata metadata
+            ON metadata.owner_type = 'analysis_run' AND metadata.owner_id = analysis.analysis_id
         WHERE analysis.status = 'succeeded'
 
         UNION ALL
@@ -2605,6 +2651,7 @@ def list_workspace_asset_catalog_records(
             COALESCE(metadata.updated_at, model.created_at),
             COALESCE(metadata.pinned, 0),
             metadata.note,
+            metadata.updated_at,
             0
         FROM regression_models model
         JOIN analysis_runs analysis ON analysis.analysis_id = model.analysis_id
@@ -2617,13 +2664,14 @@ def list_workspace_asset_catalog_records(
             'doe_design',
             design.family,
             design.method_id,
-            design.name,
+            COALESCE(metadata.user_label, design.name),
             printf('%s design', design.family),
             design.status,
             design.created_at,
-            design.updated_at,
-            0,
-            NULL,
+            COALESCE(metadata.updated_at, design.updated_at),
+            COALESCE(metadata.pinned, 0),
+            metadata.note,
+            metadata.updated_at,
             (
                 SELECT COUNT(*)
                 FROM experiment_design_analyses analysis
@@ -2638,6 +2686,8 @@ def list_workspace_asset_catalog_records(
                 WHERE version.design_id = design.design_id
             )
         FROM experiment_designs design
+        LEFT JOIN workspace_asset_user_metadata metadata
+            ON metadata.owner_type = 'doe_design' AND metadata.owner_id = design.design_id
 
         UNION ALL
 
@@ -2646,7 +2696,7 @@ def list_workspace_asset_catalog_records(
             'bayesian_study',
             'bayesian_optimization',
             study.method_id,
-            study.name,
+            COALESCE(metadata.user_label, study.name),
             printf('%d completed / %d trials',
                 (SELECT COUNT(*) FROM bayesian_trials trial
                  JOIN bayesian_study_versions version
@@ -2659,13 +2709,16 @@ def list_workspace_asset_catalog_records(
             ),
             study.status,
             study.created_at,
-            study.updated_at,
-            0,
-            NULL,
+            COALESCE(metadata.updated_at, study.updated_at),
+            COALESCE(metadata.pinned, 0),
+            metadata.note,
+            metadata.updated_at,
             (SELECT COUNT(*) FROM bayesian_study_versions version
              JOIN bayesian_trials trial ON trial.study_version_id = version.study_version_id
              WHERE version.study_id = study.study_id)
         FROM bayesian_studies study
+        LEFT JOIN workspace_asset_user_metadata metadata
+            ON metadata.owner_type = 'bayesian_study' AND metadata.owner_id = study.study_id
     """
     clauses: list[str] = []
     parameters: list[object] = []
@@ -2714,7 +2767,7 @@ def list_workspace_asset_catalog_records(
             WITH assets AS ({catalog_sql})
             SELECT asset_id, asset_type, subtype, method_id, display_name,
                    secondary_text, status, created_at, updated_at, pinned,
-                   note, dependency_count
+                   note, metadata_updated_at, dependency_count
             FROM assets{where_clause}
             ORDER BY {order_clause}
             LIMIT ? OFFSET ?;
@@ -2734,7 +2787,8 @@ def list_workspace_asset_catalog_records(
             updated_at=str(row[8]),
             pinned=_row_bool(row[9]),
             note=None if row[10] is None else str(row[10]),
-            dependency_count=int(row[11]),
+            metadata_updated_at=None if row[11] is None else str(row[11]),
+            dependency_count=int(row[12]),
         )
         for row in rows
     ]
@@ -3934,6 +3988,92 @@ def get_regression_model_user_metadata(
         table="regression_model_user_metadata",
         owner_column="model_id",
         owner_id=model_id,
+    )
+
+
+def get_workspace_asset_user_metadata(
+    workspace_root: Path,
+    *,
+    owner_type: Literal["analysis_run", "doe_design", "bayesian_study"],
+    owner_id: str,
+) -> AssetUserMetadataRecord | None:
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        row = connection.execute(
+            """
+            SELECT user_label, note, pinned, updated_at
+            FROM workspace_asset_user_metadata
+            WHERE owner_type = ? AND owner_id = ?;
+            """,
+            (owner_type, owner_id),
+        ).fetchone()
+    if row is None:
+        return None
+    return AssetUserMetadataRecord(
+        owner_id=owner_id,
+        user_label=None if row[0] is None else str(row[0]),
+        note=None if row[1] is None else str(row[1]),
+        pinned=_row_bool(row[2]),
+        updated_at=str(row[3]),
+    )
+
+
+def upsert_workspace_asset_user_metadata(
+    workspace_root: Path,
+    *,
+    owner_type: Literal["analysis_run", "doe_design", "bayesian_study"],
+    owner_id: str,
+    user_label: str | None,
+    note: str | None,
+    pinned: bool,
+    updated_at: str,
+    expected_updated_at: str | None,
+) -> AssetUserMetadataRecord:
+    owner_tables = {
+        "analysis_run": ("analysis_runs", "analysis_id"),
+        "doe_design": ("experiment_designs", "design_id"),
+        "bayesian_study": ("bayesian_studies", "study_id"),
+    }
+    table, column = owner_tables[owner_type]
+    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON;")
+        connection.execute("BEGIN IMMEDIATE;")
+        if (
+            connection.execute(f"SELECT 1 FROM {table} WHERE {column} = ?;", (owner_id,)).fetchone()
+            is None
+        ):
+            connection.rollback()
+            raise KeyError("workspace_asset_not_found")
+        current = connection.execute(
+            """
+            SELECT updated_at FROM workspace_asset_user_metadata
+            WHERE owner_type = ? AND owner_id = ?;
+            """,
+            (owner_type, owner_id),
+        ).fetchone()
+        current_updated_at = None if current is None else str(current[0])
+        if expected_updated_at is not None and expected_updated_at != current_updated_at:
+            connection.rollback()
+            raise WorkspaceAssetStorageConflict("asset_user_metadata_conflict")
+        connection.execute(
+            """
+            INSERT INTO workspace_asset_user_metadata (
+                owner_type, owner_id, user_label, note, pinned, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(owner_type, owner_id) DO UPDATE SET
+                user_label = excluded.user_label,
+                note = excluded.note,
+                pinned = excluded.pinned,
+                updated_at = excluded.updated_at;
+            """,
+            (owner_type, owner_id, user_label, note, int(pinned), updated_at),
+        )
+        connection.commit()
+    return AssetUserMetadataRecord(
+        owner_id=owner_id,
+        user_label=user_label,
+        note=note,
+        pinned=pinned,
+        updated_at=updated_at,
     )
 
 

@@ -36,6 +36,10 @@ describe("Graph Builder layout", () => {
     expect(quick).not.toContain("chart-grid-single");
     expect(full).toContain('class="chart-grid"');
     expect(full).not.toContain("chart-grid-single");
+    expect(full).toContain("히스토그램 + 적합 정규곡선");
+    expect(full).toContain("Anderson-Darling 정규성 검정");
+    expect(full).toContain("5수치 요약");
+    expect(full).toContain("추가 그래프: ECDF");
   });
 
   it.each([
