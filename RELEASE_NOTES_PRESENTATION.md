@@ -1,7 +1,7 @@
 # Statistical Twin Presentation Preview 2026.08.1
 
 This prerelease is a scoped presentation build based on full source commit
-`c3222712dae2fa3292f22168d3325890c51586ce`.
+`d46529b8eb292fa022b6a9e710e1b8797c7ecfd2`.
 
 ## Public demonstration scope
 

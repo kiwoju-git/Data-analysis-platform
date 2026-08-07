@@ -6,7 +6,7 @@ Last updated: 2026-08-08
 
 - Presentation prerelease `2026.08.1` is isolated on branch
   `release/presentation-preview-2026-08` and is based on full main source
-  `c3222712dae2fa3292f22168d3325890c51586ce`. It does not change main's full
+  `d46529b8eb292fa022b6a9e710e1b8797c7ecfd2`. It does not change main's full
   default. Profile tests passed 3 backend and 2 frontend tests; the full-profile
   API/startup regression passed 240 tests, full Vitest passed 266 tests across
   34 files, and both full and presentation production builds passed.
