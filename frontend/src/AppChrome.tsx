@@ -19,7 +19,9 @@ import type {
 } from "./sidebarNavigationModel";
 import { LanguageSwitcher } from "./i18n/LanguageSwitcher";
 import { getCurrentLocale } from "./i18n/store";
+import { t } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
+import { isPresentationProfile } from "./productProfile";
 
 export interface AppChromeProps {
   canOpenAnalysis: boolean;
@@ -196,6 +198,11 @@ export function AppChrome({
           <p className="topbar-title">{pageTitle ?? pageTitleFor(activePage)}</p>
           <div className="topbar-actions">
             <LanguageSwitcher />
+            {isPresentationProfile ? (
+              <span className="presentation-profile-badge">
+                {t("profile.previewBadge", {}, locale)}
+              </span>
+            ) : null}
             <span className={healthClassName} aria-live="polite">
               {healthLabel}
             </span>

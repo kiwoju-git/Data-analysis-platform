@@ -14,6 +14,7 @@ import { methodLabel } from "./i18n/catalogLabels";
 import { getCurrentLocale } from "./i18n/store";
 import { t } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
+import { isPresentationProfile } from "./productProfile";
 
 export interface SidebarNavigationItem {
   active: boolean;
@@ -91,7 +92,7 @@ export function createSidebarNavigationGroups({
   const helpSection =
     query.get("section") ?? (query.has("method_id") ? "methods" : "purpose");
 
-  return [
+  const groups: SidebarNavigationGroup[] = [
     {
       active: activePage === "home",
       children: [],
@@ -204,6 +205,9 @@ export function createSidebarNavigationGroups({
       label: "도움말",
     },
   ];
+  return isPresentationProfile
+    ? groups.filter((group) => ["home", "dataset", "analysis"].includes(group.id))
+    : groups;
 }
 
 function analysisDomainSidebarChildren({

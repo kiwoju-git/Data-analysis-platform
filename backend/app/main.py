@@ -21,6 +21,7 @@ from app.api.v1.workspace import router as workspace_router
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.product_profile import is_presentation_profile
 from app.services.analysis_run_exports import recover_analysis_export_quarantine_files
 from app.services.analysis_run_retention import recover_analysis_run_quarantine_files
 from app.services.dataset_cell_corrections import recover_dataset_cell_correction_files
@@ -80,17 +81,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(root_router)
     app.include_router(analysis_methods_router, prefix="/api/v1")
     app.include_router(analysis_runs_router, prefix="/api/v1")
-    app.include_router(assets_router, prefix="/api/v1")
-    app.include_router(bayesian_studies_router, prefix="/api/v1")
     app.include_router(datasets_router, prefix="/api/v1")
     app.include_router(dataset_versions_router, prefix="/api/v1")
-    app.include_router(doe_designs_router, prefix="/api/v1")
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(jobs_router, prefix="/api/v1")
-    app.include_router(quality_router, prefix="/api/v1")
-    app.include_router(regression_models_router, prefix="/api/v1")
-    app.include_router(visualizations_router, prefix="/api/v1")
     app.include_router(workspace_router, prefix="/api/v1")
+    if not is_presentation_profile(app_settings):
+        app.include_router(assets_router, prefix="/api/v1")
+        app.include_router(bayesian_studies_router, prefix="/api/v1")
+        app.include_router(doe_designs_router, prefix="/api/v1")
+        app.include_router(quality_router, prefix="/api/v1")
+        app.include_router(regression_models_router, prefix="/api/v1")
+        app.include_router(visualizations_router, prefix="/api/v1")
     return app
 
 
