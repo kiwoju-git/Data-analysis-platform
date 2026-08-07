@@ -17,6 +17,7 @@ import type {
   SidebarNavigationGroup,
   SidebarNavigationItem,
 } from "./sidebarNavigationModel";
+import { isPresentationProfile } from "./productProfile";
 
 export interface AppChromeProps {
   canOpenAnalysis: boolean;
@@ -189,6 +190,9 @@ export function AppChrome({
       <main className="main">
         <header className="topbar">
           <p className="topbar-title">{pageTitle ?? pageTitleFor(activePage)}</p>
+          {isPresentationProfile ? (
+            <span className="presentation-profile-badge">발표용 기능 미리보기</span>
+          ) : null}
           <span className={healthClassName} aria-live="polite">
             {healthLabel}
           </span>

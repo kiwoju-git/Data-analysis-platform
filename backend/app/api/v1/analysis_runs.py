@@ -21,6 +21,7 @@ from app.api.v1.schemas.analyses import (
     AnalysisRunState,
     AnalysisRunStatusResponse,
 )
+from app.core.product_profile import require_available_presentation_method
 from app.services.analysis_run_comparisons import compare_analysis_runs
 from app.services.analysis_run_exports import (
     create_analysis_result_csv_export,
@@ -41,9 +42,7 @@ from app.services.analysis_run_retention import (
     delete_stored_analysis_run,
     get_analysis_run_deletion_preflight,
 )
-from app.services.analysis_runs import (
-    create_analysis_run,
-)
+from app.services.analysis_runs import create_analysis_run
 
 router = APIRouter(prefix="/analysis-runs", tags=["analysis-runs"])
 
@@ -80,6 +79,7 @@ def create_analysis_run_route(
     request: Request,
     body: AnalysisRunRequest,
 ) -> AnalysisResultEnvelope:
+    require_available_presentation_method(request.app.state.settings, body.method_id)
     return create_analysis_run(
         settings=request.app.state.settings,
         request=body,

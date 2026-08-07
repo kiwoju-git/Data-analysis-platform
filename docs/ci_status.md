@@ -4,6 +4,20 @@ Last updated: 2026-08-08
 
 ## Local Validation
 
+- Presentation prerelease `2026.08.1` is isolated on branch
+  `release/presentation-preview-2026-08` and is based on full main source
+  `c3222712dae2fa3292f22168d3325890c51586ce`. It does not change main's full
+  default. Profile tests passed 3 backend and 2 frontend tests; the full-profile
+  API/startup regression passed 240 tests, full Vitest passed 266 tests across
+  34 files, and both full and presentation production builds passed.
+- The concurrent browser smoke passed in 104.1 seconds with full on 8000/8600
+  and presentation on 8001/8601. Separate smoke workspaces were used under
+  `.tmp/presentation-profile-smoke/full-workspace` and
+  `.tmp/presentation-profile-smoke/presentation-workspace`. Screenshots are
+  under `.tmp/presentation-profile-diagnostics`, including
+  `presentation-home.png`, `presentation-analysis-modules.png`, and
+  `full-and-presentation-concurrent.png`.
+
 - The reporting/summary/variance/assets/scatter work is based on main
   `275e84a0049b48de3f32a126956a648f1b181172`. It advances API contract 11 to
   12, metadata schema 18 to 19, the three changed EDA methods/results to

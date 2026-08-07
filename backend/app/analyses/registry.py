@@ -93,11 +93,16 @@ MODULES: tuple[AnalysisModuleDescriptor, ...] = (
 )
 
 
-def analysis_method_catalog() -> AnalysisMethodListResponse:
-    module_order = {module.module_id: module.order for module in MODULES}
+def analysis_method_catalog(
+    *,
+    module_ids: set[AnalysisModuleId] | None = None,
+) -> AnalysisMethodListResponse:
+    modules = [module for module in MODULES if module_ids is None or module.module_id in module_ids]
+    methods = [method for method in METHODS if module_ids is None or method.module_id in module_ids]
+    module_order = {module.module_id: module.order for module in modules}
     return AnalysisMethodListResponse(
-        modules=sorted(MODULES, key=lambda module: module.order),
-        methods=sorted(METHODS, key=lambda method: (module_order[method.module_id], method.order)),
+        modules=sorted(modules, key=lambda module: module.order),
+        methods=sorted(methods, key=lambda method: (module_order[method.module_id], method.order)),
     )
 
 

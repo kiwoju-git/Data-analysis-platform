@@ -5436,6 +5436,29 @@ td select {
   margin: 14px 0 8px;
 }
 
+.presentation-profile-badge {
+  border: 1px solid #b67900;
+  border-radius: 4px;
+  background: #fff5d9;
+  color: #704500;
+  padding: 5px 9px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.presentation-profile-scope {
+  border-left: 4px solid #b67900;
+  background: #fff8e7;
+  color: #503500;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+}
+
+body[data-statistical-twin-profile="presentation"] .home-quick-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .asset-filter-table {
   min-width: 720px;
 }
@@ -5837,6 +5860,10 @@ td select {
 
 @media (max-width: 560px) {
   .home-quick-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body[data-statistical-twin-profile="presentation"] .home-quick-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

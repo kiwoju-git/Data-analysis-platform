@@ -6,6 +6,7 @@ import type {
 import type { AppRoute } from "./appRoute";
 import { groupHypothesisMethods } from "./analysisMethodFamilies";
 import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
+import { isPresentationProfile } from "./productProfile";
 
 export interface SidebarNavigationItem {
   active: boolean;
@@ -75,7 +76,7 @@ export function createSidebarNavigationGroups({
   const helpSection =
     query.get("section") ?? (query.has("method_id") ? "methods" : "purpose");
 
-  return [
+  const groups: SidebarNavigationGroup[] = [
     {
       active: activePage === "home",
       children: [],
@@ -212,6 +213,9 @@ export function createSidebarNavigationGroups({
       label: "도움말",
     },
   ];
+  return isPresentationProfile
+    ? groups.filter((group) => ["home", "dataset", "analysis"].includes(group.id))
+    : groups;
 }
 
 export function normalizeDatasetSidebarSection(

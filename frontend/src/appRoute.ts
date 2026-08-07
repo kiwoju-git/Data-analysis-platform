@@ -1,4 +1,5 @@
 import { parseAnalysisLocation, type AnalysisSelection } from "./analysisNavigation";
+import { isPresentationProfile } from "./productProfile";
 
 export type AppRoute =
   | {
@@ -18,6 +19,12 @@ export type AppRoute =
 
 export function parseAppRoute(pathname: string, hash: string): AppRoute {
   const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (
+    isPresentationProfile &&
+    ["/graphs", "/reports", "/help", "/manage"].includes(normalizedPath)
+  ) {
+    return { page: "home" };
+  }
   if (normalizedPath === "/" || normalizedPath === "/home" || normalizedPath === "/project") {
     return { page: "home" };
   }
@@ -38,6 +45,12 @@ export function parseAppRoute(pathname: string, hash: string): AppRoute {
   }
   const analysisSelection = parseAnalysisLocation(normalizedPath, hash);
   if (analysisSelection !== null) {
+    if (
+      isPresentationProfile &&
+      !["exploration", "hypothesis"].includes(analysisSelection.moduleId)
+    ) {
+      return { page: "home" };
+    }
     return {
       page: "analysis",
       selection: analysisSelection,

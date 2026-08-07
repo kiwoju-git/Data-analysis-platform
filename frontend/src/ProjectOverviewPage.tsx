@@ -15,6 +15,7 @@ import {
   useProjectOverviewState,
   type ProjectResourceState,
 } from "./useProjectOverviewState";
+import { isPresentationProfile } from "./productProfile";
 
 export interface ProjectOverviewPageProps {
   activeDatasetCatalogItem?: DatasetVersionCatalogItem | null;
@@ -59,6 +60,12 @@ export function ProjectOverviewPage({
         </button>
       </div>
 
+      {isPresentationProfile ? (
+        <p className="presentation-profile-scope">
+          공개 시연 범위: 홈 · 데이터셋 · 탐색적 분석 · 가설 검정
+        </p>
+      ) : null}
+
       <div className="home-quick-grid" aria-label="빠른 실행">
         <HomeQuickCard
           accent="dataset"
@@ -74,24 +81,29 @@ export function ProjectOverviewPage({
           title="분석"
           onActivate={onOpenAnalysis}
         />
-        <HomeQuickCard accent="graphs" action="그래프 작성" detail="변수 선택형 그래프" title="그래프" onActivate={onOpenGraphs} />
-        <HomeQuickCard
-          accent="reports"
-          action="리포트 열기"
-          detail={state.summary.data === null ? "결과 보기와 내보내기" : `리포트·내보내기 ${state.summary.data.export_report_count.toLocaleString()}건`}
-          title="리포트"
-          onActivate={() => onOpenReports()}
-        />
-        <HomeQuickCard
-          accent="manage"
-          action="자산 관리"
-          detail={state.summary.data === null ? "저장 자산 검색과 관리" : `데이터 ${state.summary.data.visible_dataset_version_count + state.summary.data.archived_dataset_version_count} · 모델 ${state.summary.data.regression_model_count}`}
-          title="관리"
-          onActivate={onOpenManage}
-        />
-        <HomeQuickCard accent="help" action="도움말 열기" detail="Method 찾기와 튜토리얼" title="도움말" onActivate={onOpenHelp} />
+        {!isPresentationProfile ? (
+          <>
+            <HomeQuickCard accent="graphs" action="그래프 작성" detail="변수 선택형 그래프" title="그래프" onActivate={onOpenGraphs} />
+            <HomeQuickCard
+              accent="reports"
+              action="리포트 열기"
+              detail={state.summary.data === null ? "결과 보기와 내보내기" : `리포트·내보내기 ${state.summary.data.export_report_count.toLocaleString()}건`}
+              title="리포트"
+              onActivate={() => onOpenReports()}
+            />
+            <HomeQuickCard
+              accent="manage"
+              action="자산 관리"
+              detail={state.summary.data === null ? "저장 자산 검색과 관리" : `데이터 ${state.summary.data.visible_dataset_version_count + state.summary.data.archived_dataset_version_count} · 모델 ${state.summary.data.regression_model_count}`}
+              title="관리"
+              onActivate={onOpenManage}
+            />
+            <HomeQuickCard accent="help" action="도움말 열기" detail="Method 찾기와 튜토리얼" title="도움말" onActivate={onOpenHelp} />
+          </>
+        ) : null}
       </div>
 
+      {!isPresentationProfile ? (
       <div className="project-dashboard-grid">
         <article
           className="project-dashboard-card"
@@ -337,6 +349,7 @@ export function ProjectOverviewPage({
           </div>
         </article>
       </div>
+      ) : null}
     </section>
   );
 }

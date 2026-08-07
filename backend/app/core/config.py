@@ -1,6 +1,7 @@
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,6 +14,12 @@ def default_workspace_root() -> Path:
     return Path.home() / ".datalabstudio"
 
 
+def default_product_profile() -> Literal["full", "presentation"]:
+    return (
+        "presentation" if os.environ.get("STATISTICAL_TWIN_PROFILE") == "presentation" else "full"
+    )
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DATALAB_", env_file=".env", extra="ignore")
 
@@ -20,6 +27,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     bind_host: str = "127.0.0.1"
     bind_port: int = 8000
+    product_profile: Literal["full", "presentation"] = Field(
+        default_factory=default_product_profile,
+    )
     git_commit: str | None = None
     max_upload_bytes: int = 100 * 1024 * 1024
     workspace_root: Path = Field(default_factory=default_workspace_root)
