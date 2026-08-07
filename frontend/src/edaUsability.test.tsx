@@ -133,8 +133,8 @@ describe("EDA usability foundations", () => {
   });
 
   it("formats created_at and safely falls back for invalid timestamps", () => {
-    expect(formatLocalDateTime("2026-07-23T05:32:00+00:00")).toMatch(
-      /2026.*07.*23.*\d{2}.*\d{2}/,
+    expect(formatLocalDateTime("2026-07-23T05:32:00+00:00")).toBe(
+      "2026. 07. 23. 14:32",
     );
     expect(formatLocalDateTime("not-a-date")).toBe("날짜 확인 불가");
   });
