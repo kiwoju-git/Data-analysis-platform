@@ -15,7 +15,7 @@ TUTORIAL_ROOT = REPOSITORY_ROOT / "examples" / "tutorial"
 GENERATOR_PATH = TUTORIAL_ROOT / "generate_studio_tutorial_data.py"
 EXPECTED_RESULTS_PATH = TUTORIAL_ROOT / "tutorial_expected_results.json"
 MANIFEST_PATH = TUTORIAL_ROOT / "tutorial_data_manifest.json"
-TUTORIAL_PATH = REPOSITORY_ROOT / "docs" / "studio_end_to_end_tutorial_ko.md"
+TUTORIAL_PATH = REPOSITORY_ROOT / "docs" / "statistical_twin_end_to_end_tutorial_ko.md"
 TUTORIAL_RENDERER_PATH = REPOSITORY_ROOT / "scripts" / "render_tutorial_results.py"
 
 
@@ -100,7 +100,7 @@ def test_tutorial_expected_results_are_api_normalized_and_identifier_free() -> N
         "doe.response_optimizer",
         "doe.bayesian_optimization",
     }
-    assert payload["generated_by"] == "DataLab Studio API tutorial smoke"
+    assert payload["generated_by"] == "Statistical Twin API tutorial smoke"
     assert payload["dynamic_ids_and_timestamps_omitted"] is True
     assert set(payload["results"]) == expected_method_ids
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -164,7 +164,15 @@ def test_tutorial_markdown_drift_reports_method_and_field_paths(tmp_path: Path) 
 
 def test_tutorial_uses_current_korean_module_labels() -> None:
     text = TUTORIAL_PATH.read_text(encoding="utf-8")
+    readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
     required_labels = {
+        "홈",
+        "데이터셋",
+        "분석",
+        "그래프",
+        "리포트",
+        "관리",
+        "도움말",
         "탐색적 분석",
         "가설 검정",
         "범주형 데이터 분석",
@@ -178,8 +186,16 @@ def test_tutorial_uses_current_korean_module_labels() -> None:
         "상관관계 및 회귀`",
         "품질 분석",
         "실험계획법",
+        "Top-level Predict",
+        "데이터모델 관리",
     }
 
+    assert TUTORIAL_PATH.name == "statistical_twin_end_to_end_tutorial_ko.md"
+    assert "Statistical Twin" in text
+    assert "Statistical Twin" in readme
+    assert "DataLab Studio" not in text
+    assert "DataLab Studio" not in readme
+    assert "회귀모형 적합` > 결과의 `예측" in text
     assert required_labels <= set(text.split("`")) | {
         label for label in required_labels if label in text
     }

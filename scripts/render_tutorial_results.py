@@ -13,7 +13,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXPECTED_PATH = (
     REPOSITORY_ROOT / "examples" / "tutorial" / "tutorial_expected_results.json"
 )
-DEFAULT_TUTORIAL_PATH = REPOSITORY_ROOT / "docs" / "studio_end_to_end_tutorial_ko.md"
+DEFAULT_TUTORIAL_PATH = (
+    REPOSITORY_ROOT / "docs" / "statistical_twin_end_to_end_tutorial_ko.md"
+)
 
 
 @dataclass(frozen=True)

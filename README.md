@@ -1,80 +1,27 @@
-# DataLab Studio
+# Statistical Twin
 
-프로젝트 홈은 현재 데이터셋, 데이터셋 현황, 최근 분석, 모델 및 리포트를
-2x2 대시보드로 요약합니다. 상단 데이터셋 선택기는 사용자 이름, 행/열,
-버전과 생성 시각만 표시하며 schema hash와 UUID는 데이터셋 상세의 접힌
-기술 정보에서 확인합니다. Samsung Bioepis 로고와 `Statistical Twin` 제목은
-프로젝트 홈 링크입니다.
-
-정규성 결과는 Anderson-Darling 검정의 기각 여부를 각각
-`정규성 가정 유지 가능` 또는 `정규성 위배 신호`로 설명합니다. 기각하지
-않았다는 결과는 정규분포를 증명하지 않으며 Q-Q Plot, 이상치, 표본 수를
-함께 검토해야 합니다. Response Optimizer는 저장된 RSM full-quadratic
-모델을 사용하는 DOE 후속 기능이므로 DOE의 RSM 다음에 표시됩니다. 기존
-`regression.response_optimizer` 저장 결과와 URL은 변경 없이 복원됩니다.
-
-The `그래프 > 그래프 작성` screen creates bounded, non-persisted previews for
-Box Plot, Individual Value Plot, Histogram, Q-Q, ECDF, Scatter, Run Chart, and
-I-MR. It uses confirmed dataset versions and analysis filters, does not silently
-sample raw points, and does not add preview-only entries to analysis history.
-Box Plot과 Individual Value Plot은 여러 수치 변수 비교 또는 한 수치 변수의
-그룹별 통합 비교를 명시적으로 선택하며, grouped I-MR은 각 그룹 안에서만
-moving range와 관리한계를 독립 계산합니다.
-
-DataLab Studio is a Windows-targeted, CPU-only, local-first statistical analysis web application.
-
-데이터 업로드와 파싱 확인부터 통계 분석, 회귀 예측, 품질 관리, DOE, 결과 복원과
-내보내기까지 한 PC 안에서 수행하는 FastAPI + React 애플리케이션입니다.
-
-## 현재 상태
-
-현재 저장소는 **internal alpha / release candidate 이전 단계**입니다. 핵심 workflow와
-synthetic critical-path 검증은 구현되어 있고 최신 main push의 hosted Windows/E2E Actions는
-성공했습니다. 다만 clean Windows 11/Python 3.10/Node 22 제품-host release gate는 아직 별도
-확인 대상입니다. 확인된 개발/hosted 검증과 미완료 release evidence는
-[CI 상태](docs/ci_status.md)에 구분해 기록합니다.
+Statistical Twin은 Windows에서 로컬로 실행하는 통계 분석 웹 애플리케이션입니다.
+데이터 등록과 품질 확인, 통계 분석, 회귀, 품질 관리, 실험계획법, 그래프 작성과
+보고서 내보내기를 한 작업공간에서 수행합니다. 기본 실행은 `127.0.0.1`에만
+바인딩되며 core workflow는 데이터를 외부 서비스로 전송하지 않습니다.
 
 ## 주요 기능
 
-- 탐색적 분석, 근사 AD p-value를 포함한 정규성 진단, 가설 검정, 범주형 데이터 분석
-  - 일원분산분석은 표준/Welch 모형과 호환되는 Tukey-Kramer, Dunnett,
-    Games-Howell 비교를 명시적으로 선택합니다.
-  - 동등성 검정은 1-표본, 독립 2-표본, 대응표본 평균 차이 TOST를 구분합니다.
-- 상관관계, 선형 회귀, 저장 모형 기반 행 단위 Predict, Response Optimizer
-- Run/Individuals/Subgroup Chart, Capability, Gage R&R, P/NP/C/U 관리도
-  - Run Chart는 기존 exact/연속 패턴과 구분된 군집·혼합·추세·진동 근사 p-value를 함께 표시합니다.
-- 실행 간격을 지원하는 Factorial DOE, mixed LHS, RSM, Response Optimizer,
-  Bayesian Optimization study/원자적 관측 저장/batch 추천 lifecycle
-- immutable dataset version, 분석 저장/복원/비교, checksum 검증
-- 저장된 dataset version을 다시 활성화하는 paged 상단 selector
-- `관리` 화면의 dataset/model 사용자 이름·메모·고정, dependency-safe dataset-version 삭제
-  - 데이터셋 보관은 파일과 연결 자산을 유지한 채 일반 목록에서 숨기며 되돌릴 수 있습니다.
-  - 영구 삭제는 실제 dependency 항목을 보여주고, 별도 확인한 atomic cascade에서만 연결 분석·리포트·모델·예측을 삭제합니다.
-  - 검증하지 못한 파일은 명시적 preserve operation에서도 열거나 이동하지 않고 남겨둡니다.
-- `프로젝트`의 단일 local workspace overview와 빠른 데이터·분석·관리 진입
-- Samsung Bioepis 로컬 로고와 `Statistical Twin` 제목을 사용하는 blue-gray
-  기업형 shell, 중첩 sidebar, keyboard/mobile navigation
-- generic JSON/CSV/HTML export와 Report Center
-- Excel 범위용 view-only paste staging grid와 paged canonical preview
-- 한국어 Help Center, method context help, end-to-end 튜토리얼
-- pointer/touch/keyboard로 확인하는 정규성·그래프 요약·회귀 진단 SVG chart
+- CSV, TSV, TXT, XLSX 및 표 붙여넣기 등록
+- 파싱 확인, 스키마·측정 수준·역할 설정, 데이터 품질 점검
+- 탐색적 분석, 가설 검정, 범주형 분석, 상관·회귀, 품질 관리, 실험계획법
+- 변수 선택형 그래프, 저장 결과 복원·비교, HTML/CSV/JSON 내보내기
+- 데이터셋, 분석 결과, 모델, DOE 설계와 Bayesian Study의 로컬 자산 관리
 
-Bayesian 지원 범위는 bounded continuous/fixed-step numeric, single-response, synchronous
-sequential/batch(1~8) P0입니다. 실제 목적함수를 자동 실행하지 않으며 추천은
-확인 실험 후보입니다. multiobjective, asynchronous refill, categorical
-factor, nonlinear constraint와 전역 최적 보장은 현재 범위가 아닙니다.
-상세 상태는 [Bayesian P0 release checklist](docs/bayesian_p0_release_checklist.md)에 있습니다.
+## 필요 환경
 
-## 지원 환경
-
-- Windows 11 target
-- PowerShell
+- Windows 11
+- PowerShell 5.1
 - CPython 3.10.x
-- Node.js 22 target
-- CPU-only
-- `127.0.0.1` localhost single-user 실행
+- Node.js 22
+- Git
 
-Docker, WSL, Redis, 관리자 권한, GPU 또는 외부 서비스는 core flow에 필요하지 않습니다.
+Docker, WSL, 관리자 권한, GPU 또는 외부 서비스는 필요하지 않습니다.
 
 ## 설치
 
@@ -84,16 +31,8 @@ cd Data-analysis-platform
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```
 
-Git 실행이 차단된 환경에서는 GitHub의 **Download ZIP**으로 받은 소스를 별도
-폴더에 압축 해제한 뒤, 그 프로젝트 루트에서 같은 `bootstrap.ps1`과
-`dev.ps1`을 실행할 수 있습니다. `.git`이 없는 경우 `dev.ps1`은 절대 경로나
-파일 시각이 아닌 런타임 소스의 상대 경로와 내용으로
-`archive-sha256-...` fingerprint를 계산합니다. 따라서 같은 ZIP은 어느
-폴더에 풀어도 같은 build ID를 사용하고, 서로 다른 소스 ZIP은 호환 backend로
-잘못 재사용되지 않습니다.
-
-의존성을 설치한 뒤에는 core runtime이 외부 데이터 전송 없이 동작하도록 설계되어
-있습니다. Python 3.10 Windows 환경은 hash-locked wheel 설치 경로를 사용합니다.
+GitHub에서 받은 ZIP을 사용하는 경우 압축을 푼 프로젝트 폴더에서
+`bootstrap.ps1`을 실행하면 됩니다.
 
 ## 실행
 
@@ -101,65 +40,28 @@ Git 실행이 차단된 환경에서는 GitHub의 **Download ZIP**으로 받은 
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
 
-정상 Git checkout에서는 실행 로그의 source identity가 실제 40자리 HEAD SHA를
-사용합니다. Download ZIP 또는 Git 실행 불가 환경에서는 archive fingerprint를
-사용하며, 동일한 ID가 backend와 frontend runtime compatibility 검사에 전달됩니다.
+실행 후 브라우저에서 [http://127.0.0.1:8600](http://127.0.0.1:8600)을 엽니다.
+Backend는 `http://127.0.0.1:8000`에서 실행됩니다. 포트가 이미 사용 중이면 기존
+프로세스를 자동으로 종료하거나 다른 포트로 이동하지 않고 오류를 표시합니다.
 
-브라우저 주소는 Vite와 backend가 출력하는 localhost 주소를 사용합니다. 이미 사용 중인
-포트가 있으면 `dev.ps1`은 PID와 process 정보를 표시하고 종료합니다. 기존 process를
-자동 종료하거나 Vite를 다른 포트로 조용히 이동하지 않습니다. LAN 공개용 bind 주소로
-바꾸는 것은 지원되는 shortcut이 아닙니다.
+## 기본 사용 순서
 
-## 첫 사용 흐름
+1. `홈`에서 현재 작업공간과 최근 자산을 확인합니다.
+2. `데이터셋 > 데이터 등록`에서 파일을 올리고 파싱을 확정합니다.
+3. `데이터셋 > 미리보기`에서 스키마, 역할, 단위와 품질 점검 결과를 확인합니다.
+4. `분석`에서 모듈과 method를 선택하고 사전점검 후 실행합니다.
+5. `그래프 > 그래프 작성`에서 필요한 변수 조합을 시각화합니다.
+6. `리포트`에서 저장 결과를 열거나 HTML/CSV/JSON으로 내보냅니다.
+7. `관리`에서 데이터셋, 분석 결과, 모델, 실험 설계와 Study를 관리합니다.
 
-1. `데이터셋`에서 CSV/TSV/TXT/XLSX 파일을 올리거나 Excel 범위를 붙여넣습니다.
-2. browser preview를 검토한 뒤 server parsing suggestion을 확인하고 파싱을 확정합니다.
-3. schema에서 measurement level, 역할, 단위를 지정합니다.
-4. `분석`에서 module과 method를 선택하고 사전점검 후 실행합니다.
-5. 저장 결과를 복원·비교하거나 `리포트`에서 지원 형식으로 내보냅니다.
+회귀 예측은 별도 분석 메뉴가 아니라 `회귀모형 적합` 결과 아래의 `예측` 영역에서
+조건 행을 입력해 실행합니다. 삭제 작업은 `관리`에서 영향과 blocker를 확인한 뒤에만
+진행할 수 있습니다.
 
-새 prediction target을 등록한 뒤 training data로 돌아갈 때는 상단
-`현재 분석 데이터셋` selector를 사용합니다. 전환은 실행 전 입력과 화면 결과를 초기화하지만
-저장된 분석·모델·예측 결과를 삭제하지 않습니다. 선형 회귀 결과의 Observed vs Fitted,
-Residuals vs Fitted, Leverage vs Cook's D 점은 마우스와 키보드로 값을 확인할 수 있습니다.
-저장 자산의 이름과 메모는 왼쪽 `관리`에서 지정합니다. 보관은 파일을 삭제하지
-않습니다. Dataset version 영구 삭제는 기본적으로 dependency를 차단하며, 연결 자산
-목록과 cross-dataset 영향을 검토하고 checkbox 및 이름/짧은 ID를 확인한 경우에만
-하나의 backend transaction으로 cascade할 수 있습니다. 다른 dataset version 자체는
-삭제하지 않습니다.
+처음 사용하는 경우 [한국어 end-to-end 튜토리얼](docs/statistical_twin_end_to_end_tutorial_ko.md)과
+[synthetic sample 안내](examples/tutorial/README.md)를 참고하십시오.
 
-왼쪽 `프로젝트`는 현재 한 개의 로컬 workspace를 요약합니다. 다중 프로젝트 생성,
-cloud sync 또는 협업 기능을 제공하는 화면은 아닙니다. Sidebar에는 로컬 Samsung
-Bioepis 로고와 `Statistical Twin` 제목을 표시합니다. 이는 visible shell branding이며
-backend service name, package ID, 저장 workspace 형식은 `DataLab Studio` 계약을
-그대로 유지합니다. 데이터셋 cascade 정리 후에는 관리의 모델 목록, Report Center,
-분석 이력과 프로젝트 요약을 자동으로 다시 검증하므로 전체 페이지를 새로고침할
-필요가 없습니다. Corporate shell은 blue-gray navigation과 공통 control 표면에만
-적용되며 통계 chart의 data series, signal, control-limit 색상은 변경하지 않습니다.
-설계 참고 screenshot은 제품 asset이 아니며 저장소에는 오프라인 로고 asset만
-포함합니다.
-
-처음 사용하는 경우 앱의 `도움말`과
-[한국어 end-to-end 튜토리얼](docs/studio_end_to_end_tutorial_ko.md)을 먼저 확인하십시오.
-
-## 튜토리얼과 Sample Data
-
-- [한국어 Studio 튜토리얼](docs/studio_end_to_end_tutorial_ko.md)
-- [Synthetic tutorial data 안내](examples/tutorial/README.md)
-- 주요 파일: 240행 training CSV, 60행 paste TSV, 48행 prediction target,
-  invalid prediction target, Gage R&R, Factorial, RSM, Bayesian observation samples
-- 기대 결과: [tutorial_expected_results.json](examples/tutorial/tutorial_expected_results.json)
-
-실제 local API와 expected result 18개 section을 비교합니다.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\tutorial_smoke.ps1
-```
-
-Sample은 고정 seed로 생성한 완전한 synthetic data이며 실제 개인정보나 회사 데이터를
-포함하지 않습니다.
-
-## 검사 명령
+## 검사
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
@@ -167,99 +69,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tutorial_smoke.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.tmp\e2e-diagnostics
 ```
 
-`check.ps1`은 Ruff, format, mypy, backend pytest, frontend lint/typecheck/Vitest/build,
-tutorial Markdown truth check를 실행합니다. Chromium 설치가 필요하면
-`scripts\e2e.ps1 -InstallBrowsers`를 먼저 실행합니다.
+Chromium이 설치되지 않았다면 E2E 명령에 `-InstallBrowsers`를 추가합니다.
 
-## 개인정보와 보안
+## 데이터와 보안
 
-- 기본 bind는 `127.0.0.1`이며 외부 데이터 upload나 telemetry가 core flow에 없습니다.
-- raw row, clipboard content, filename, internal absolute path를 log/telemetry에 기록하지 않습니다.
-- app-created safe JSON artifact만 검증하며 외부 pickle/joblib을 역직렬화하지 않습니다.
-- pasted formula-like text를 실행하지 않고 HTML clipboard를 렌더링하지 않습니다.
-- user Python, shell, `eval` 실행을 제공하지 않습니다.
-- workspace와 생성 artifact는 Git 저장소 밖의 configured local workspace에 둡니다.
-
-자세한 기준은 [AGENTS.md](AGENTS.md)와
-[PRD addendum](data_prd_addendum.md)을 참조하십시오.
-
-## 리포트 지원 범위
-
-| Workflow | JSON | CSV | HTML |
-| --- | --- | --- | --- |
-| Generic analysis run | 지원 | 지원 | 지원 |
-| Regression Predict | stored result 복원 | full prediction CSV | 현재 미지원 |
-| Response Optimizer / RSM | stored result 복원 | 현재 미지원 | 현재 미지원 |
-| Factorial DOE | design/result workflow | 별도 결과 경로 | design HTML 지원 |
-| Bayesian Optimization | study/recommendation 복원 | 현재 미지원 | 현재 미지원 |
-
-PDF와 Word export는 현재 지원하지 않습니다. 상세 capability는
-[Report Center 계약](docs/report_center_contract.md)에 있습니다.
-
-## 프로젝트 구조
-
-```text
-backend/              FastAPI, domain/service/statistics/storage, pytest
-frontend/             React + Vite + TypeScript UI와 Vitest
-scripts/              bootstrap, dev, check, tutorial smoke, E2E 진입점
-docs/                 method/lifecycle/보안/진행 계약과 사용자 문서
-examples/tutorial/    deterministic synthetic tutorial pack
-tests/e2e/            Chromium critical path
-```
-
-## 주요 문서
-
-- [작업 규칙](AGENTS.md)
-- [6-module 구현 가이드](docs/six_module_implementation_guide.md)
-- [제품 보완 요구사항](data_prd_addendum.md)
-- [Gate B 진행 상태](docs/progress_gate_b.md)
-- [CI와 validation 상태](docs/ci_status.md)
-- [Frontend module loading](docs/frontend_module_loading.md)
-- [Bayesian Optimization 계약](docs/bayesian_optimization_contract.md)
-- [Bayesian batch recommendation 계약](docs/bayesian_batch_recommendation_contract.md)
-- [Bayesian lifecycle 계약](docs/bayesian_study_lifecycle_contract.md)
-- [Bayesian P0 release checklist](docs/bayesian_p0_release_checklist.md)
-- [Dataset cell correction contract](docs/dataset_cell_correction_contract.md)
-- [Latin Hypercube design contract](docs/lhs_design_contract.md)
-- [Bayesian initial observation import contract](docs/bayesian_initial_observation_import_contract.md)
-- [Bayesian catalog 성능](docs/bayesian_catalog_performance.md)
-- [Runtime compatibility 계약](docs/runtime_compatibility_contract.md)
-- [Dataset retention 계약](docs/dataset_retention_contract.md)
-- [Report Center 계약](docs/report_center_contract.md)
-- [한국어 튜토리얼](docs/studio_end_to_end_tutorial_ko.md)
-
-## 알려진 제한사항
-
-- Paste grid는 registration 전 view-only이며 cell edit/full Excel editor가 아닙니다.
-- 일부 dedicated workflow는 HTML report를 아직 지원하지 않습니다.
-- PDF/Word, chart image export는 지원하지 않습니다.
-- Clean Windows 11/Python 3.10/Node 22 release evidence와 remote required checks는
-  [CI 상태](docs/ci_status.md)에 따라 별도 gate로 남아 있습니다.
-- WECO/Nelson, Laney, non-normal capability 등 advanced quality 기능은 backlog입니다.
-- Bayesian multiobjective, asynchronous batch refill, categorical factor, nonlinear
-  constraint와 objective 자동 실행은 현재 P0 범위가 아닙니다.
-
-## 실행 버전 불일치 해결
-
-`관리`의 이름 저장/삭제가 404로 실패하면서 Predict/Response Optimizer가 비활성이고
-Bayesian Optimization이 `계획됨`으로 보이면, 이전 backend가 포트 8000을 점유하거나
-이전 Vite/browser tab을 보고 있을 가능성이 큽니다. 먼저 listener와 runtime contract를
-확인합니다.
-
-```powershell
-Get-NetTCPConnection -State Listen |
-  Where-Object { $_.LocalPort -in 8000,8600 }
-
-Invoke-RestMethod http://127.0.0.1:8000/api/v1/runtime-info
-```
-
-이전 DataLab PowerShell 창을 종료한 뒤 최신 폴더에서 `bootstrap.ps1`, `dev.ps1` 순서로
-실행하고, 로그에 새로 출력된 URL을 여십시오. 이전 browser tab은 닫거나 `Ctrl+F5`로
-새로고침합니다. 앱의 버전 불일치 화면은 backend contract/capability가 맞기 전에는
-관리 작업과 오래된 method catalog를 노출하지 않습니다. 삭제 영향 확인에서 참조 수가
-표시되어 차단되는 경우는 404가 아니라 자동 연쇄 삭제를 막는 정상 보호 동작입니다.
+- 기본 bind 주소는 `127.0.0.1`입니다.
+- 원본 데이터와 생성 자산은 Git 저장소 밖의 로컬 작업공간에 저장됩니다.
+- 원본 행, 붙여넣기 값과 내부 절대 경로를 로그나 외부 telemetry로 보내지 않습니다.
+- 임의 Python·shell·`eval` 실행과 외부 pickle/joblib 로딩을 지원하지 않습니다.
 
 ## 라이선스
 
-이 저장소에는 현재 별도 `LICENSE` 파일이 없습니다. 배포·재사용 조건을 임의의
+이 저장소에는 별도 `LICENSE` 파일이 없습니다. 배포·재사용 조건을 임의의
 오픈소스 라이선스로 해석하지 마십시오.

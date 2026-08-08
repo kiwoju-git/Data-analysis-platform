@@ -179,7 +179,7 @@ export function HelpCenterPage({
         <h2>결과 해석과 튜토리얼</h2>
         <p>
           한국어 end-to-end 튜토리얼은{" "}
-          <code>docs/studio_end_to_end_tutorial_ko.md</code>에 있습니다.
+          <code>docs/statistical_twin_end_to_end_tutorial_ko.md</code>에 있습니다.
         </p>
         <h3>자주 발생하는 오류</h3>
         <ul>

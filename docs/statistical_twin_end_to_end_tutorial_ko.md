@@ -1,17 +1,17 @@
-# DataLab Studio 한국어 end-to-end 튜토리얼
+# Statistical Twin 한국어 end-to-end 튜토리얼
 
 ## 1. 튜토리얼 목적
 
-이 문서는 DataLab Studio를 처음 사용하는 사람이 synthetic 공정 데이터 등록부터 탐색,
-가설 검정, 회귀, Predict, 품질, DOE, Response Optimizer, Bayesian Optimization, 저장 결과
-복원과 export까지 직접 수행하도록 안내한다. 화면에서 확인할 수치는
-`examples/tutorial/tutorial_expected_results.json`을 현재 Studio API로 실제 실행해 얻은 값이다.
+이 문서는 Statistical Twin을 처음 사용하는 사람이 synthetic 공정 데이터 등록부터 탐색,
+가설 검정, 회귀 예측, 품질 관리, DOE, 반응 최적화, Bayesian Optimization, 저장 결과
+복원과 내보내기까지 직접 수행하도록 안내한다. 화면에서 확인할 수치는
+`examples/tutorial/tutorial_expected_results.json`을 현재 API로 실제 실행해 얻은 값이다.
 
 ## 2. 필요한 파일
 
 - `studio_process_training.csv`: 주 학습 데이터, 240행
 - `studio_process_paste_60.tsv`: paste grid 연습용 첫 60행
-- `studio_process_prediction.csv`: Predict와 Phase II용 48행
+- `studio_process_prediction.csv`: legacy 데이터셋 예측 호환성과 Phase II용 48행
 - `studio_process_prediction_invalid.csv`: 예측 사전점검 오류 연습용
 - `studio_gage_rr.csv`: 10 parts x 3 operators x 2 replicates
 - `studio_factorial_responses.csv`: 3요인 2반복 factorial 반응
@@ -26,7 +26,7 @@
 모든 행은 seed `20260718`로 생성한 가상 기록이다. 실존 인물, 회사, 제품, 장비 또는
 생산 실적을 나타내지 않는다. `run_id`, line, supplier, operator 이름도 모두 가상 label이다.
 
-## 4. Studio 실행
+## 4. Statistical Twin 실행
 
 저장소 root의 PowerShell에서 다음을 실행한다.
 
@@ -35,9 +35,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
 
-브라우저에는 frontend가 안내한 `127.0.0.1` 주소를 입력한다. 오른쪽 위가 `API 연결됨`인지
-확인한다. `API 연결 필요`이면 backend가 실행 중인지, 다른 process가 port를 점유했는지부터
-확인한다. 데이터를 외부 사이트에 올리지 않는다.
+브라우저에서 `http://127.0.0.1:8600`을 연다. Backend 기본 주소는
+`http://127.0.0.1:8000`이다. 오른쪽 위가 `API 연결됨`인지 확인한다. `API 연결 필요`이면
+backend가 실행 중인지, 다른 process가 port를 점유했는지부터 확인한다. 데이터를 외부
+사이트에 올리지 않는다.
+
+첫 화면은 `홈`이다. 상단 빠른 실행 카드와 왼쪽 메뉴에서 다음 경로를 사용할 수 있다.
+
+- `홈`: 현재 데이터셋, 최근 분석, 모델·리포트와 확인 필요 항목
+- `데이터셋`: `데이터 등록`, `미리보기`
+- `분석`: 탐색적 분석, 가설 검정, 범주형 데이터 분석, 상관관계 및 회귀분석,
+  품질 관리, 실험 계획법
+- `그래프`: `그래프 작성`
+- `리포트`: `보고서`, `분석 이력`
+- `관리`: `전체 자산`, `데이터셋`, `분석 결과`, `모델`, `실험 설계·스터디`
+- `도움말`: 질문으로 찾기, 역할 사전, Method별 설명, 튜토리얼
 
 ## 5. 파일 업로드
 
@@ -102,9 +114,21 @@ Profile에서 type, missing, distinct level, numeric range를 확인한다. Pref
 
 Page size를 `10`, `25`, `50`, `100`으로 바꾸고 `특정 행으로 이동`을 사용한다. 셀을 선택하면
 현재 canonical page의 전체 값이 inspector에 보인다. Page 이동 시 selection은 reset된다.
-Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
+Statistical Twin은 전체 canonical rows를 browser state에 적재하지 않는다.
 
-## 12. 탐색적 분석
+## 12. 그래프 작성과 탐색적 분석
+
+### 그래프 작성
+
+왼쪽 `그래프 > 그래프 작성`에서는 저장 분석을 만들지 않고 현재 데이터셋과 필터로
+bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
+
+- `X 1개 · Y 여러 개`: X를 고정하고 Y를 최대 6개 선택
+- `Y 1개 · X 여러 개`: Y를 고정하고 X를 최대 6개 선택
+
+예를 들어 Y를 `yield_pct`로 고정하고 X에 `temperature_c`, `pressure_bar`,
+`cycle_time_s`를 선택하면 세 panel이 생성된다. 같은 컬럼을 한 pair의 X와 Y로 동시에
+선택할 수 없으며 각 panel의 axis label과 pairwise N을 확인한다.
 
 ### 기술통계와 그래프 요약
 
@@ -112,7 +136,8 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 - **Sample file:** `studio_process_training.csv`
 - **Menu/module/method:** `분석` > `탐색적 분석` > `기술통계`, 이어서 `그래프 요약`
 - **Column role:** `yield_pct`, `tensile_strength_mpa`를 분석 변수로 선택한다.
-- **Option:** available-case-by-column, 그래프 point limit 500, histogram bin은 자동.
+- **Option:** available-case-by-column, confidence level 0.95, 그래프 point limit 500,
+  histogram bin은 자동.
 - **클릭 순서:** method 선택 > 역할 선택 > 사전점검 > `분석 실행`.
 - **실행 전 확인:** 두 컬럼이 continuous이고 missing count가 0인지 확인한다.
 <!-- TUTORIAL_RESULT:eda.descriptive:start -->
@@ -127,11 +152,13 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
   - `yield_pct`: N=240, missing=0, histogram bins=12, boxplot outliers=0, range 66.4048~92.5186
   - `tensile_strength_mpa`: N=240, missing=0, histogram bins=13, boxplot outliers=1, range 396.9931~468.7676
 <!-- TUTORIAL_RESULT:eda.graphical_summary:end -->
-- **먼저 읽을 값:** N/exclusions, mean/median, SD/IQR, min/max, boxplot outlier count.
+- **먼저 읽을 값:** N/exclusions, Anderson-Darling, mean/median, SD/IQR, 5수치 요약,
+  평균·중앙값·표준편차 신뢰구간, boxplot outlier count.
 - **해석 예시:** 수율의 중심과 관측 간 산포를 함께 읽고, 범위와 사분위수 밖 후보를 확인한다.
 - **빠른 그래프:** 기술통계 표에서 `yield_pct` 옆의 `그래프` 버튼을 선택하면 같은
   dataset/filter 조건의 histogram과 boxplot이 행 바로 아래에 열린다. 한 번에 한
-  컬럼만 열리며 `그래프 요약에서 전체 보기`로 Q-Q와 ECDF까지 이어서 확인한다.
+  컬럼만 열리며 `그래프 요약에서 전체 보기`로 fitted-normal histogram, 통계 panel,
+  Q-Q, 신뢰구간과 추가 ECDF까지 이어서 확인한다.
   Boxplot에는 lower whisker, Q1, median, Q3, upper whisker의 다섯 주요 수치가
   축 아래 한 줄에 숫자로 표시된다.
 - **과해석 금지:** histogram 모양만으로 정규성, 안정성 또는 원인을 확정하지 않는다.
@@ -141,20 +168,35 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 ### 정규성 검정과 interactive Q-Q
 
 - **사용자 질문:** 선택한 수치 컬럼이 정규분포 가정과 얼마나 어긋나는가?
-- **Menu/module/method:** `탐색적 분석` > `정규성 검정`
+- **Menu/module/method:** `분석` > `탐색적 분석` > `정규성 검정`
 - **클릭 순서:** 수치 컬럼 선택 > 사전점검 > `분석 실행` > Q-Q 점에 마우스를 올리거나 키보드로 이동.
 - **먼저 읽을 값:** N/exclusions, Shapiro p, AD A, `AD p (근사)`, AD 임계값 판단, Q-Q 모양.
 - **해석:** AD p는 `stephens_normal_unknown_mean_variance` 근사값이다. p가 alpha보다 크다는 사실만으로 정규성을 증명하지 않는다. AD 근사 p와 SciPy 임계값 판단은 경계 부근에서 다를 수 있으므로 둘을 함께 표시한다.
-- **과해석 금지:** Shapiro 또는 AD 결과에 따라 Studio가 후속 검정을 자동 전환하지 않는다. 큰 N에서는 작은 차이도 유의할 수 있으므로 Q-Q, skewness, kurtosis와 분석 설계를 함께 본다.
+- **과해석 금지:** Shapiro 또는 AD 결과에 따라 Statistical Twin이 후속 검정을 자동
+  전환하지 않는다. 큰 N에서는 작은 차이도 유의할 수 있으므로 Q-Q, skewness,
+  kurtosis와 분석 설계를 함께 본다.
 - **상호작용:** Q-Q 점은 화살표/Home/End로 이동하고 Enter 또는 Space로 고정하며 Escape로 해제한다. Histogram, boxplot 요약 요소, 그래프 요약 Q-Q와 ECDF도 같은 방식으로 값을 확인할 수 있다.
 
+### 등분산 검정
+
+- **Menu/module/method:** `분석` > `탐색적 분석` > `등분산 검정`
+- **Column role:** Response=`yield_pct`, Group=`production_line`.
+- **먼저 읽을 값:** 다중 비교 p-value와 표준편차 비교구간, 이어서 중앙값 중심
+  `Levene 검정 (Brown-Forsythe)`의 F와 p-value.
+- **그래프:** 각 line의 표본 표준편차와 다중 비교구간을 키보드 또는 pointer로 확인한다.
+- **주의:** 다중 비교의 빈 통계량 칸은 정상이다. 평균 중심 고전 Levene 검정을 다중
+  비교로 해석하지 않으며, 작은 표본이나 심하게 치우친 자료에서는 방법별 제한을 검토한다.
+
 ## 13. 가설 검정
+
+가설 검정 module 화면은 `t-검정`, `동등성 검정`, `분산분석`, `비모수 검정` family로
+정리되어 있다. Family 안에서 method 이름을 선택하면 기존 실행 화면이 열린다.
 
 ### Supplier 2-표본 t-검정
 
 - **사용자 질문:** 두 synthetic supplier의 평균 수율 차이가 0과 다른가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `가설 검정` > `2-표본 t-검정`
+- **Menu/module/method:** `분석` > `가설 검정` > `t-검정` > `2-표본 t-검정`
 - **Column role:** Response=`yield_pct`, Group=`supplier`.
 - **Option:** Welch, two-sided, alpha 0.05, confidence 0.95, null difference 0.
 - **클릭 순서:** 역할/option 선택 > 사전점검 > `분석 실행`.
@@ -176,7 +218,7 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 
 - **사용자 질문:** 세 synthetic line의 평균 수율이 모두 같은가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `가설 검정` > `일원분산분석`
+- **Menu/module/method:** `분석` > `가설 검정` > `분산분석` > `일원분산분석`
 - **Column role:** Response=`yield_pct`, Group=`production_line`.
 - **Option:** standard ANOVA, Tukey-Kramer, after-significant, alpha 0.05, confidence 0.95.
 - **클릭 순서:** 역할/option > 사전점검 > 실행 > post-hoc table 확인.
@@ -200,7 +242,7 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 
 - **사용자 질문:** Pass 비율이 기준 0.80과 다른가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `범주형 데이터 분석` > `1-비율`
+- **Menu/module/method:** `분석` > `범주형 데이터 분석` > `1-비율`
 - **Column role:** Response=`pass_flag`, event=`Pass`.
 - **Option:** null=0.80, Wilson 95% CI, two-sided, alpha 0.05.
 - **클릭 순서:** event 확인 > option > 사전점검 > 실행.
@@ -221,7 +263,7 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 
 - **사용자 질문:** production line과 Pass/Fail이 연관되는가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `범주형 데이터 분석` > `카이제곱 독립성 검정`
+- **Menu/module/method:** `분석` > `범주형 데이터 분석` > `카이제곱 독립성 검정`
 - **Column role:** Row=`production_line`, Column=`pass_flag`.
 - **Option:** Pearson chi-square, alpha 0.05.
 - **클릭 순서:** 두 category 선택 > 사전점검 > 실행.
@@ -244,7 +286,8 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 
 - **사용자 질문:** 공정 X와 두 Y 사이 선형 연관의 방향과 크기는 무엇인가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `상관관계 및 회귀분석` > `Pearson 상관`, 이어서 `X-Y 상관행렬`.
+- **Menu/module/method:** `분석` > `상관관계 및 회귀분석` > `Pearson 상관`, 이어서
+  `X-Y 상관행렬`.
 - **Column role:** Pearson X=`temperature_c`, Y=`yield_pct`. Matrix X는 5 numeric
   predictors, Y는 `yield_pct`, `tensile_strength_mpa`.
 - **Option:** 95% CI, alpha 0.05; matrix는 pairwise complete case.
@@ -270,7 +313,7 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
 
 - **사용자 질문:** 6개 predictor와 선택한 곡률/상호작용으로 수율을 설명할 수 있는가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `상관관계 및 회귀분석` > `회귀모형 적합`
+- **Menu/module/method:** `분석` > `상관관계 및 회귀분석` > `회귀모형 적합`
 - **Column role:** Response=`yield_pct`; predictors=5 numeric X + `material_grade`.
 - **Option:** intercept 포함, standard covariance, 95% CI, quadratic=`temperature_c`,
   `pressure_bar`, interaction=`temperature_c * pressure_bar`.
@@ -292,26 +335,34 @@ Studio는 전체 canonical rows를 browser state에 적재하지 않는다.
   categorical treatment coding, associational-not-causal.
 - **오류 확인:** singular terms, exact collinearity, reference level, stale source schema를 확인한다.
 
-## 17. Top-level Predict
+## 17. 회귀모형 결과에서 예측
 
-- **사용자 질문:** 저장된 fit을 새로운 48행에 적용하면 평균 반응과 개별 불확실성은 얼마인가?
-- **Sample file:** source=`studio_process_training.csv`, target=`studio_process_prediction.csv`.
-- **Menu/module/method:** `상관관계 및 회귀분석` > `예측` (`사용 가능 · 전용`).
-- **Column role:** 저장된 source 회귀모형 선택, target dataset version 선택.
-- **Option:** confidence 0.95, complete-case, intervals 포함.
-- **클릭 순서:** model > target > `예측 사전점검` > `예측 실행` > page/CSV.
-- **실행 전 확인:** source fresh, manifest checksum, target schema mapping, unseen levels,
-  training range warnings를 확인한다.
+별도 `예측` method는 일반 분석 메뉴에 표시되지 않는다. `회귀모형 적합`을 실행한 뒤 결과
+하단의 `예측` 영역에서 저장된 최종 모형으로 새 조건을 계산한다.
 
-별도 target dataset은 source와 다른 immutable version이므로 schema hash와 내부 predictor ID가
-다를 수 있다. Studio가 6개 predictor를 고유한 display name과 호환 type으로 연결했다면 이는
-확인 후 진행할 수 있는 warning이다. 이 sample의 의도된 학습 범위 밖 값은 0-based row index
-3의 `temperature_c=94.0`, 14의 `pressure_bar=16.5`, 27의 `catalyst_pct=0.25`, 41의
-`feed_rate_kg_h=148.0`이다. `ready=true`와 `48/48 usable`을 함께 확인한 뒤 실행한다.
+- **사용자 질문:** 새 공정 조건에서 평균 반응과 개별 관측의 불확실성은 얼마인가?
+- **Menu/module/method:** `분석` > `상관관계 및 회귀분석` > `회귀모형 적합` > 결과의 `예측`.
+- **입력:** predictor별 빈 행에 값을 입력한다. 수치형은 숫자를, 범주형은 학습된 level을
+  선택한다.
+- **여러 행:** `행 추가`로 조건을 늘리거나 `붙여넣기 가져오기`에서 TSV/CSV를 mapping한 뒤
+  canonical 입력 grid에 적용한다.
+- **클릭 순서:** 조건 입력 > `전체 사전점검` > `전체 예측 실행` > `요약 보기` 또는
+  `입력값 포함`.
+- **실행 전 확인:** source fresh, manifest checksum, 필수 predictor, unseen level, 정수 제약과
+  training range warning을 확인한다. 한 행이라도 오류가 있으면 전체 실행이 차단된다.
 
-반면 source model stale, fit 이후 source schema 변경, 필수 predictor 누락·모호·type 불일치,
-usable row가 0인 상태는 차단 오류다. unseen category나 결측·비숫자 predictor가 있는 행은
-제외되므로 제외 후 usable row와 issue를 확인하고, usable row가 0이면 실행할 수 없다.
+첫 연습 행에는 `studio_process_prediction.csv` 첫 data row의 다음 값을 입력할 수 있다.
+
+| temperature_c | pressure_bar | cycle_time_s | catalyst_pct | feed_rate_kg_h | material_grade |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 86.848 | 10.473 | 83.48 | 0.9362 | 122.098 | A |
+
+결과의 `예측 평균`, `평균 신뢰구간`, `개별 예측구간`, `상태`를 먼저 읽는다. `입력 조건 보기`를
+펼치면 해당 행의 predictor 값을 다시 확인할 수 있다. 입력값 포함 표의 가로 이동은 표 내부에서만
+동작한다.
+
+다음 48행 결과는 별도 메뉴가 아니라 legacy dataset-backed `regression.predict` 계약을 계속
+복원하는지 `tutorial_smoke`가 검증하는 호환성 수치다. 현재 기본 UI는 위의 행 단위 입력을 사용한다.
 <!-- TUTORIAL_RESULT:regression.predict:start -->
 - **검증 source:** `regression.predict` v0.2.0 · input SHA-256 `33f515b75c35c37b92a5c2461cff36d6f1cea547ecbe268c84235ba681d5b8d2`
 - **예상 실제 결과 (표시 반올림):**
@@ -332,19 +383,15 @@ usable row가 0인 상태는 차단 오류다. unseen category나 결측·비숫
 - **오류 확인:** stale source는 현재 schema로 재적합한다. Invalid sample의 missing
   `feed_rate_kg_h`, unseen D, nonnumeric pressure, missing catalyst를 수정한다.
 
-URL에는 `model_id`, `target_version_id`, `prediction_id`만 남는다. Reload는 계산을 반복하지
-않고 checksum-validated stored result와 rows를 복원한다.
-
-Prediction target을 등록하면 그 version이 일반 분석의 현재 데이터셋이 된다. 240행 training
-data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` selector에서
-`studio_process_training.csv · 240행`을 다시 선택한다. 전환 시 아직 실행하지 않은 일반 분석
-입력과 화면 결과는 초기화되지만 저장된 분석·모델·예측 결과는 삭제되지 않는다.
+저장된 legacy 예측 URL은 계산을 반복하지 않고 checksum-validated result와 rows를 복원한다.
+기존 dataset-backed API와 결과 reader는 호환성을 위해 유지되지만 새 조건 입력의 기본 경로는
+회귀 결과 안의 행 단위 grid다.
 
 ## 18. Run Chart와 Individuals Chart
 
 - **사용자 질문:** 관측 순서에서 비무작위 패턴이나 관리 한계 신호가 있는가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `품질 관리` > `런 차트`; 비교 학습으로 `I-MR 관리도`.
+- **Menu/module/method:** `분석` > `품질 관리` > `런 차트`; 비교 학습으로 `I-MR 관리도`.
 - **Column role:** Value=`yield_pct`, Order=`timestamp`.
 - **Option:** run chart median, trend 6, oscillation 14, alpha 0.05, point limit 500.
 - **클릭 순서:** 역할/규칙 > 사전점검 > 실행 > signal list.
@@ -370,7 +417,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 
 - **사용자 질문:** 선언한 synthetic spec 안에서 수율 산포가 충분히 좁은가?
 - **Sample file:** `studio_process_training.csv`
-- **Menu/module/method:** `품질 관리` > `공정능력 분석`
+- **Menu/module/method:** `분석` > `품질 관리` > `공정능력 분석`
 - **Column role:** Value=`yield_pct`.
 - **Option:** LSL=68, USL=92, Target=82, normal distribution, histogram limit 30.
 - **클릭 순서:** value/spec > 사전점검 > 실행.
@@ -392,7 +439,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 
 - **사용자 질문:** stable baseline frozen limit로 신규 48개 비율을 monitoring할 수 있는가?
 - **Sample file:** Phase I=`studio_process_training.csv`; Phase II=`studio_process_prediction.csv`.
-- **Menu/module/method:** `품질 관리` > `계수형 관리도` > P chart.
+- **Menu/module/method:** `분석` > `품질 관리` > `계수형 관리도` > P chart.
 - **Column role:** count=`defectives_count`, denominator=`inspected_count`.
 - **Option:** Phase I, defectives, complete-case; 승격 후 Phase II에서 limit set과 target 선택.
 - **클릭 순서:** Phase I 실행 > eligibility 확인 > limit set 생성 > target upload >
@@ -415,7 +462,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 
 - **사용자 질문:** 측정시스템 변동이 part-to-part 변동보다 충분히 작은가?
 - **Sample file:** `studio_gage_rr.csv`
-- **Menu/module/method:** `품질 관리` > `Gage R&R`
+- **Menu/module/method:** `분석` > `품질 관리` > `Gage R&R`
 - **Column role:** Measurement=`measurement_mpa`, Part=`part_id`, Operator=`operator_id`,
   Replicate=`replicate`.
 - **Option:** balanced crossed ANOVA, complete-case.
@@ -437,8 +484,10 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 
 - **사용자 질문:** 세 요인의 main effect와 temperature-pressure interaction은 무엇인가?
 - **Sample file:** `studio_factorial_responses.csv`
-- **Menu/module/method:** `실험 계획법` > `실험 계획 생성`
+- **Menu/module/method:** `분석` > `실험 계획법` > `실험 계획 생성`
 - **Column role:** factors temperature 68/84, pressure 7/13, catalyst 0.8/2.2; response yield.
+- **설계 종류:** `2수준 완전요인`. `2수준 부분요인`은 generator·resolution·alias를,
+  `일반 완전요인`은 요인별 수준 목록과 예상 run 수를 별도로 표시한다.
 - **Option:** replicates=2, center points=0, randomize=false, seed=20260718, block=1.
 - **클릭 순서:** 설계 생성 > run table actual coordinates와 CSV를 맞춤 > 16 responses 저장 >
   max interaction order 2 > 분석 실행.
@@ -460,7 +509,7 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 
 - **사용자 질문:** temperature-pressure 영역 안에서 곡률과 stationary maximum은 어디인가?
 - **Sample file:** `studio_rsm_responses.csv`
-- **Menu/module/method:** `실험 계획법` > `반응표면법`
+- **Menu/module/method:** `분석` > `실험 계획법` > `반응표면법`
 - **Column role:** temperature 65~85 C, pressure 6~14 bar, response=`yield_pct`.
 - **Option:** face-centered, factorial/axial replicate=1, center=5, randomize=false,
   seed=20260718, confidence 0.95, contour 21.
@@ -480,15 +529,15 @@ data로 일반 분석을 계속하려면 상단 `현재 분석 데이터셋` sel
 - **예상 warning:** associational, contour slice/confirmation, influential point review.
 - **오류 확인:** source eligibility의 blocking/advisory, response revision과 checksum을 확인한다.
 
-## 24. Top-level Response Optimizer
+## 24. RSM 반응 최적화
 
 - **사용자 질문:** 저장된 RSM에서 yield를 maximize하는 bounded candidate는 무엇인가?
 - **Sample file:** source=`studio_rsm_responses.csv`로 만든 stored RSM analysis.
-- **Menu/module/method:** `상관관계 및 회귀분석` > `반응 최적화` (`사용 가능 · 전용`).
+- **Menu/module/method:** `분석` > `실험 계획법` > `반응 최적화`.
 - **Column role:** stored source RSM analysis, response goal maximize.
 - **Option:** source contour lower/target, design bounds 유지, seed 20260718,
   candidates 256, multi-start 8, max evaluations 5000, time 5000ms.
-- **클릭 순서:** source 선택 > eligibility 확인/필요 warning 승인 > goal/bounds > 실행.
+- **클릭 순서:** 저장된 RSM source 선택 > eligibility 확인/필요 warning 승인 > goal/bounds > 실행.
 - **실행 전 확인:** blocker 없음, advisory는 code별 명시 승인, constraints와 bounds를 검토한다.
 <!-- TUTORIAL_RESULT:doe.response_optimizer:start -->
 - **검증 source:** `doe.response_optimizer` v0.4.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
@@ -511,11 +560,12 @@ URL의 `design_id`, `analysis_id`, `optimization_id`는 reload 후 checksum-vali
 
 - **사용자 질문:** 수동 관측 5개 뒤 다음 확인 실험 후보는 어디인가?
 - **Sample file:** `studio_bayesian_observations.csv`
-- **Menu/module/method:** `실험 계획법` > `베이지안 최적화`
+- **Menu/module/method:** `분석` > `실험 계획법` > `베이지안 최적화`
 - **Column role:** factors temperature 60~90, pressure 5~15; objective yield maximize.
 - **Option:** initial size 5, seed 20260718, no constraints; recommendation seed 20260718,
   candidate 128, local start 4, xi 0.01, trial budget 20.
-- **클릭 순서:** study 생성 > trial number/coordinates 대조 > 각 objective 저장 확인 > 추천 요청.
+- **클릭 순서:** Study 생성 > 요인 정의와 초기 실험표 확인/CSV 다운로드 > pending trial에
+  objective를 직접 입력하거나 붙여넣기 > 입력한 관측 일괄 저장 > 추천 요청.
 - **실행 전 확인:** objective value와 coordinates, 저장 후 수정 불가, pending trial 없음 확인.
 <!-- TUTORIAL_RESULT:doe.bayesian_optimization:start -->
 - **검증 source:** `doe.bayesian_optimization` v0.5.0 · input SHA-256 `a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91`
@@ -526,18 +576,17 @@ URL의 `design_id`, `analysis_id`, `optimization_id`는 reload 후 checksum-vali
 - **먼저 읽을 값:** completed N/history SHA, GP model warning, predicted mean/SD, EI,
   actual coordinates, pending/completed/abandoned state.
 - **해석 예시:** 큰 uncertainty와 EI를 고려해 다음 확인 후보를 제시한 것이다.
-- **과해석 금지:** 추천은 실제 관측이 아니고 전역 최적을 보장하지 않으며 Studio가 실험을
+- **과해석 금지:** 추천은 실제 관측이 아니고 전역 최적을 보장하지 않으며 Statistical Twin이 실험을
   자동 실행하지 않는다.
 - **예상 warning:** model convergence warning, confirmation required, no global optimum guarantee.
 - **오류 확인:** history revision conflict, pending recommendation, trial budget, duplicate/abandoned
   coordinates, time budget code를 확인한다.
 
-## 26. 저장 분석 history
+## 26. 저장 분석 이력
 
-Generic analysis-run method는 dataset-scoped `분석 이력`에서 status, method version, stale,
-result availability를 filter하고 저장 결과를 복원한다. Predict와 Response Optimizer 같은
-dedicated workflow는 관계없는 generic history를 표시하지 않고 각 전용 panel/URL에서 결과를
-복원한다.
+왼쪽 `리포트 > 분석 이력`에서 dataset 범위, status, method version, stale과 result
+availability를 filter하고 저장 결과를 복원한다. 회귀 예측과 반응 최적화 같은 contextual
+workflow는 source 분석의 전용 panel/URL에서도 저장 결과를 복원한다.
 
 ## 27. 결과 비교
 
@@ -555,32 +604,32 @@ Export 전에 method/version, dataset/source IDs, N/exclusions, warnings와 stal
 CSV는 formula injection 방어가 적용되며 internal path나 raw predictor 값이 prediction result에
 추가되지 않는다.
 
-왼쪽 `리포트`를 선택하면 `/reports`의 Report Center가 열린다. 기본 목록은 성공했고 저장 결과가
-있는 일반 analysis-run이다. Method, status, stale, 저장 결과, 현재 dataset 범위를 filter한 뒤
-결과를 선택하고 JSON/CSV/HTML을 생성·다운로드한다. Predict의 full prediction CSV와 Factorial
-설계 HTML은 각 전용 workflow에서 사용한다. Predict, Response Optimizer, RSM, Bayesian의 전용
-HTML은 현재 지원되지 않으며 Report Center도 지원되는 것처럼 표시하지 않는다.
+왼쪽 `리포트 > 보고서`를 선택하면 Report Center가 열린다. Method, status, stale, 저장 결과,
+현재 dataset 범위를 filter한 뒤 결과를 선택하고 JSON/CSV/HTML을 생성·다운로드한다. 새 HTML은
+분석 요약과 핵심 결과, 저장 payload에서 만든 inline SVG를 먼저 보여주고 기술 정보와 원본 JSON은
+접힌 영역에 둔다. 회귀 예측의 전체 행 CSV와 DOE 전용 export는 해당 workflow에서도 제공한다.
 
 분석 선택이나 역할이 헷갈리면 왼쪽 `도움말`을 선택한다. `/help?section=purpose`는 질문 기반
 method 찾기, `/help?section=roles`는 역할 사전, `/help?method_id=regression.predict`는 특정 method
 설명을 연다. 분석 화면에서는 선택 method 제목 옆 `분석 도움말`로 같은 context 설명을
 열 수 있다. 필수 사전점검과 경고는 도움말 drawer가 닫혀 있어도 실행 화면에 남는다.
 
-## 29. 삭제와 retention 주의사항
+## 29. 자산 관리와 삭제 주의사항
 
 삭제 preflight가 blocker와 정확한 영향 count를 보여준다. 분석이 참조하는 model, prediction,
 limit set, study/design artifact는 block-by-default다. Source fit result와 예측용 model asset은
 서로 다른 자산이다. Model asset이 unavailable이면 fit table은 남을 수 있지만 새 Predict는
 비활성화된다. 확인 ID/hash를 읽고 irreversible action을 승인한다.
 
-왼쪽 `관리`의 `데이터모델 관리` 화면에서 데이터셋과 회귀모델에 사용자 이름, 메모,
-고정 상태를 붙일 수 있다. 회귀모델은 적합 성공 시 이미 자동 저장되므로 이름 저장을 위해
-재적합할 필요가 없고, 저장한 이름은 Predict catalog에 표시된다. 이 metadata는 dataset
-schema hash나 model manifest SHA를 바꾸지 않는다.
+왼쪽 `관리`의 `자산 관리` 화면에서는 `전체`, `데이터셋`, `분석 결과`, `모델`,
+`실험 설계·스터디` tab을 검색·상태·정렬·고정 조건으로 조회한다. `상세`를 누르면 선택한 행
+바로 아래에 이름, 메모, 고정, source·dependency와 작업이 펼쳐진다. 같은 버튼을 다시 누르면
+접히며 한 번에 하나만 열린다. 회귀모델은 적합 성공 시 자동 저장되므로 이름을 바꾸기 위해
+재적합할 필요가 없다. 사용자 metadata는 dataset schema hash나 model manifest SHA를 바꾸지 않는다.
 
 Dataset version 삭제는 `삭제 영향 확인` 후 dependency가 전혀 없고 owned artifact 검증이
 통과한 경우에만 가능하다. 참조 분석, 모델, source/target prediction, export, limit set,
-Phase II 결과 또는 job이 있으면 먼저 각 자산의 명시적 삭제 흐름을 완료해야 한다. Studio는
+Phase II 결과 또는 job이 있으면 먼저 각 자산의 명시적 삭제 흐름을 완료해야 한다. Statistical Twin은
 이 관계를 silent cascade로 지우지 않는다. 같은 dataset root에 다른 version이 있으면 공유 raw
 upload는 보존된다. Dependency가 0이지만 구버전 경로, missing 또는 checksum 문제로
 파일을 검증할 수 없으면 별도 확인 후 `파일을 보존하고 목록에서 제거`만 사용할 수
@@ -631,6 +680,6 @@ upload는 보존된다. Dependency가 0이지만 구버전 경로, missing 또�
 2. Invalid prediction sample을 사전점검해 오류를 하나씩 수정한다.
 3. RSM bounds/goal을 바꾸되 source eligibility와 confirmation run 원칙을 유지한다.
 4. Bayesian recommendation을 실제 synthetic formula로 확인한 뒤 observation을 terminal 저장한다.
-5. `scripts/tutorial_smoke.ps1`로 현재 Studio API와 expected JSON의 18개 section을 검증한다.
+5. `scripts/tutorial_smoke.ps1`로 현재 API와 expected JSON의 18개 section을 검증한다.
 6. `.venv\Scripts\python.exe scripts\render_tutorial_results.py --check`로 expected JSON과
    이 Markdown의 marker 숫자 블록을 검증한다. 숫자를 승인해 갱신할 때만 `--write`를 사용한다.
