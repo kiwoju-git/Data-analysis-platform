@@ -6,6 +6,28 @@ import {
 } from "./analysisMethodGuidance";
 
 describe("analysis method card guidance", () => {
+  it("keeps concise selection tags for every grouped hypothesis method", () => {
+    const hypothesisMethodIds = [
+      "hypothesis.one_sample_t",
+      "hypothesis.paired_t",
+      "hypothesis.two_sample_t",
+      "hypothesis.equivalence_tost",
+      "hypothesis.paired_equivalence_tost",
+      "hypothesis.two_sample_equivalence_tost",
+      "hypothesis.one_way_anova",
+      "hypothesis.one_sample_wilcoxon",
+      "hypothesis.mann_whitney",
+      "hypothesis.kruskal_wallis",
+    ];
+
+    for (const methodId of hypothesisMethodIds) {
+      const tags = getMethodCardTags(methodId);
+      expect(tags.length, methodId).toBeGreaterThanOrEqual(3);
+      expect(tags.length, methodId).toBeLessThanOrEqual(4);
+      expect(tags.every((tag) => tag.label.trim().length > 0), methodId).toBe(true);
+    }
+  });
+
   it("uses study design guidance instead of a sample-size switch", () => {
     const tTest = getAnalysisMethodGuidance("hypothesis.one_sample_t");
     const wilcoxon = getAnalysisMethodGuidance("hypothesis.one_sample_wilcoxon");
