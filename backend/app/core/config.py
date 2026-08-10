@@ -14,10 +14,16 @@ def default_workspace_root() -> Path:
     return Path.home() / ".datalabstudio"
 
 
-def default_product_profile() -> Literal["full", "presentation"]:
-    return (
-        "presentation" if os.environ.get("STATISTICAL_TWIN_PROFILE") == "presentation" else "full"
-    )
+ProductProfile = Literal["full", "presentation", "presentation-regression"]
+
+
+def default_product_profile() -> ProductProfile:
+    requested = os.environ.get("STATISTICAL_TWIN_PROFILE")
+    if requested == "presentation":
+        return "presentation"
+    if requested == "presentation-regression":
+        return "presentation-regression"
+    return "full"
 
 
 class Settings(BaseSettings):
@@ -27,7 +33,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     bind_host: str = "127.0.0.1"
     bind_port: int = 8000
-    product_profile: Literal["full", "presentation"] = Field(
+    product_profile: ProductProfile = Field(
         default_factory=default_product_profile,
     )
     git_commit: str | None = None

@@ -2,7 +2,9 @@ param(
     [int]$FullBackendPort = 8000,
     [int]$FullFrontendPort = 8600,
     [int]$PresentationBackendPort = 8001,
-    [int]$PresentationFrontendPort = 8601,
+    [int]$PresentationFrontendPort = 8701,
+    [int]$RegressionBackendPort = 8002,
+    [int]$RegressionFrontendPort = 8702,
     [string]$DiagnosticsRoot = ".\.tmp\presentation-profile-diagnostics"
 )
 
@@ -28,8 +30,17 @@ function Wait-HttpReady {
 
 Push-Location $RepoRoot
 $jobs = @()
+$oldPythonPath = $env:PYTHONPATH
 try {
-    foreach ($port in @($FullBackendPort, $FullFrontendPort, $PresentationBackendPort, $PresentationFrontendPort)) {
+    $env:PYTHONPATH = Join-Path $RepoRoot "backend"
+    foreach ($port in @(
+        $FullBackendPort,
+        $FullFrontendPort,
+        $PresentationBackendPort,
+        $PresentationFrontendPort,
+        $RegressionBackendPort,
+        $RegressionFrontendPort
+    )) {
         if ($null -ne (Get-DevPortOwner -Port $port)) {
             throw "Presentation smoke requires free port $port."
         }
@@ -37,11 +48,17 @@ try {
     $BuildId = Get-DevRepositoryBuildId -RepoRoot $RepoRoot
     $SmokeRoot = Join-Path $RepoRoot ".tmp\presentation-profile-smoke"
     $FullWorkspace = Join-Path $SmokeRoot "full-workspace"
-    $PresentationWorkspace = Join-Path $SmokeRoot "presentation-workspace"
-    if ([System.IO.Path]::GetFullPath($FullWorkspace) -eq [System.IO.Path]::GetFullPath($PresentationWorkspace)) {
-        throw "Full and presentation workspaces must differ."
+    $PresentationWorkspace = Join-Path $SmokeRoot "presentation-core-workspace"
+    $RegressionWorkspace = Join-Path $SmokeRoot "presentation-regression-workspace"
+    $ResolvedWorkspaces = @(
+        [System.IO.Path]::GetFullPath($FullWorkspace),
+        [System.IO.Path]::GetFullPath($PresentationWorkspace),
+        [System.IO.Path]::GetFullPath($RegressionWorkspace)
+    ) | Select-Object -Unique
+    if ($ResolvedWorkspaces.Count -ne 3) {
+        throw "Full, core preview, and regression preview workspaces must differ."
     }
-    New-Item -ItemType Directory -Force -Path $FullWorkspace, $PresentationWorkspace, $DiagnosticsRoot | Out-Null
+    New-Item -ItemType Directory -Force -Path $FullWorkspace, $PresentationWorkspace, $RegressionWorkspace, $DiagnosticsRoot | Out-Null
 
     & $Python -m pytest backend/tests/unit/test_presentation_profile.py
     if ($LASTEXITCODE -ne 0) { throw "Presentation backend tests failed." }
@@ -51,7 +68,10 @@ try {
     try {
         $env:VITE_STATISTICAL_TWIN_PROFILE = "presentation"
         npm --prefix .\frontend run build
-        if ($LASTEXITCODE -ne 0) { throw "Presentation frontend build failed." }
+        if ($LASTEXITCODE -ne 0) { throw "Core presentation frontend build failed." }
+        $env:VITE_STATISTICAL_TWIN_PROFILE = "presentation-regression"
+        npm --prefix .\frontend run build
+        if ($LASTEXITCODE -ne 0) { throw "Regression presentation frontend build failed." }
     }
     finally { $env:VITE_STATISTICAL_TWIN_PROFILE = $oldFrontendProfile }
 
@@ -73,9 +93,19 @@ try {
         $env:DATALAB_CORS_ALLOWED_ORIGINS = $Cors
         & $PythonPath -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $Port
     } -ArgumentList $Python, $RepoRoot, $PresentationBackendPort, $PresentationWorkspace, $BuildId, "[`"http://127.0.0.1:$PresentationFrontendPort`"]"
+    $jobs += Start-Job -ScriptBlock {
+        param($PythonPath, $Root, $Port, $Workspace, $Commit, $Cors)
+        Set-Location $Root
+        $env:STATISTICAL_TWIN_PROFILE = "presentation-regression"
+        $env:DATALAB_WORKSPACE_ROOT = $Workspace
+        $env:DATALAB_GIT_COMMIT = $Commit
+        $env:DATALAB_CORS_ALLOWED_ORIGINS = $Cors
+        & $PythonPath -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $Port
+    } -ArgumentList $Python, $RepoRoot, $RegressionBackendPort, $RegressionWorkspace, $BuildId, "[`"http://127.0.0.1:$RegressionFrontendPort`"]"
 
     Wait-HttpReady "http://127.0.0.1:$FullBackendPort/api/v1/health"
     Wait-HttpReady "http://127.0.0.1:$PresentationBackendPort/api/v1/health"
+    Wait-HttpReady "http://127.0.0.1:$RegressionBackendPort/api/v1/health"
 
     $jobs += Start-Job -ScriptBlock {
         param($Root, $Port, $BackendPort, $Commit)
@@ -93,28 +123,51 @@ try {
         $env:VITE_STATISTICAL_TWIN_PROFILE = "presentation"
         npm --prefix .\frontend run dev -- --host 127.0.0.1 --port $Port --strictPort
     } -ArgumentList $RepoRoot, $PresentationFrontendPort, $PresentationBackendPort, $BuildId
+    $jobs += Start-Job -ScriptBlock {
+        param($Root, $Port, $BackendPort, $Commit)
+        Set-Location $Root
+        $env:VITE_API_BASE_URL = "http://127.0.0.1:$BackendPort"
+        $env:VITE_GIT_COMMIT = $Commit
+        $env:VITE_STATISTICAL_TWIN_PROFILE = "presentation-regression"
+        npm --prefix .\frontend run dev -- --host 127.0.0.1 --port $Port --strictPort
+    } -ArgumentList $RepoRoot, $RegressionFrontendPort, $RegressionBackendPort, $BuildId
 
     Wait-HttpReady "http://127.0.0.1:$FullFrontendPort"
     Wait-HttpReady "http://127.0.0.1:$PresentationFrontendPort"
+    Wait-HttpReady "http://127.0.0.1:$RegressionFrontendPort"
 
     $catalog = Invoke-RestMethod "http://127.0.0.1:$PresentationBackendPort/api/v1/analysis-methods"
     if (($catalog.modules.module_id -join ",") -ne "exploration,hypothesis") {
         throw "Presentation backend catalog exposed an unexpected module."
     }
+    $regressionCatalog = Invoke-RestMethod "http://127.0.0.1:$RegressionBackendPort/api/v1/analysis-methods"
+    if (($regressionCatalog.modules.module_id -join ",") -ne "exploration,hypothesis,regression") {
+        throw "Regression presentation backend catalog exposed an unexpected module."
+    }
     & $Python .\scripts\presentation_profile_smoke.py `
         --full-url "http://127.0.0.1:$FullFrontendPort" `
-        --presentation-url "http://127.0.0.1:$PresentationFrontendPort" `
+        --core-url "http://127.0.0.1:$PresentationFrontendPort" `
+        --regression-url "http://127.0.0.1:$RegressionFrontendPort" `
         --diagnostics-root $DiagnosticsRoot
     if ($LASTEXITCODE -ne 0) { throw "Concurrent browser profile smoke failed." }
     Write-Host "Presentation profile smoke passed."
     Write-Host "Full workspace: $FullWorkspace"
     Write-Host "Presentation workspace: $PresentationWorkspace"
+    Write-Host "Regression presentation workspace: $RegressionWorkspace"
     Write-Host "Diagnostics: $DiagnosticsRoot"
+}
+catch {
+    foreach ($job in $jobs) {
+        Write-Host "--- Job $($job.Id) state=$($job.State) ---"
+        Receive-Job -Job $job -Keep -ErrorAction SilentlyContinue | Out-Host
+    }
+    throw
 }
 finally {
     foreach ($job in $jobs) {
         Stop-Job -Job $job -ErrorAction SilentlyContinue
         Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
     }
+    $env:PYTHONPATH = $oldPythonPath
     Pop-Location
 }

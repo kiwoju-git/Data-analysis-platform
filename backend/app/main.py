@@ -21,7 +21,10 @@ from app.api.v1.workspace import router as workspace_router
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
-from app.core.product_profile import is_presentation_profile
+from app.core.product_profile import (
+    is_presentation_profile,
+    presentation_profile_includes_regression,
+)
 from app.services.analysis_run_exports import recover_analysis_export_quarantine_files
 from app.services.analysis_run_retention import recover_analysis_run_quarantine_files
 from app.services.dataset_cell_corrections import recover_dataset_cell_correction_files
@@ -93,6 +96,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(quality_router, prefix="/api/v1")
         app.include_router(regression_models_router, prefix="/api/v1")
         app.include_router(visualizations_router, prefix="/api/v1")
+    elif presentation_profile_includes_regression(app_settings):
+        app.include_router(regression_models_router, prefix="/api/v1")
     return app
 
 
