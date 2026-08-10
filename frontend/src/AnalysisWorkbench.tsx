@@ -199,6 +199,10 @@ export function AnalysisWorkbench({
   };
   const analysisResultForExport =
     effectiveRestoredState.restoredAnalysisResult ?? selectedAnalysisResult;
+  const selectedHypothesisTags =
+    selectedMethod?.module_id === "hypothesis"
+      ? getMethodCardTags(selectedMethod.method_id)
+      : [];
   const selectMethod = (moduleId: AnalysisModuleId, methodId: string | null) => {
     setIsMethodHelpOpen(false);
     startTransition(() => {
@@ -313,26 +317,46 @@ export function AnalysisWorkbench({
       {selectedMethod !== null ? (
         <section className="analysis-workbench" aria-labelledby="workbench-title">
           <div className="panel-heading workbench-heading">
-            <div>
+            <div className="workbench-heading-main">
               <h3 id="workbench-title">{selectedMethod.label_ko}</h3>
               <p>
                 {selectedMethod.label_en} · {selectedMethod.method_id}
               </p>
             </div>
-            <div className="workbench-heading-actions">
-              <button
-                aria-controls="method-help-drawer"
-                aria-expanded={isMethodHelpOpen}
-                className="secondary-button compact-button"
-                onClick={() => setIsMethodHelpOpen((open) => !open)}
-                ref={methodHelpTriggerRef}
-                type="button"
-              >
-                분석 도움말
-              </button>
-              <span className={`availability-badge availability-${selectedMethod.availability}`}>
-                {availabilityLabel(selectedMethod)}
-              </span>
+            <div className="workbench-heading-side">
+              {selectedHypothesisTags.length > 0 ? (
+                <aside
+                  aria-label={`${selectedMethod.label_ko} 입력 및 설계 기준`}
+                  className="hypothesis-method-context"
+                >
+                  <strong>입력·설계 기준</strong>
+                  <div className="method-card-tags">
+                    {selectedHypothesisTags.map((tag) => (
+                      <span
+                        className={`method-card-tag method-card-tag-${tag.category}`}
+                        key={`${tag.category}-${tag.label}`}
+                      >
+                        {tag.label}
+                      </span>
+                    ))}
+                  </div>
+                </aside>
+              ) : null}
+              <div className="workbench-heading-actions">
+                <button
+                  aria-controls="method-help-drawer"
+                  aria-expanded={isMethodHelpOpen}
+                  className="secondary-button compact-button"
+                  onClick={() => setIsMethodHelpOpen((open) => !open)}
+                  ref={methodHelpTriggerRef}
+                  type="button"
+                >
+                  분석 도움말
+                </button>
+                <span className={`availability-badge availability-${selectedMethod.availability}`}>
+                  {availabilityLabel(selectedMethod)}
+                </span>
+              </div>
             </div>
           </div>
           <MethodHelpDrawer

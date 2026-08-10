@@ -4122,7 +4122,7 @@ Current bounded worktree:
   paste, invalid-target, Gage, factorial, RSM, and Bayesian inputs.
 - `scripts/tutorial_smoke.ps1` runs 18 actual Studio API result sections and
   compares only normalized, ID-free results with explicit tolerances. The
-  Korean end-to-end guide is `docs/studio_end_to_end_tutorial_ko.md`.
+  Korean end-to-end guide is `docs/statistical_twin_end_to_end_tutorial_ko.md`.
 - Prediction remains method `0.2.0` with result/config/rows schemas 2/3/2;
   optimizer remains method `0.3.0` with config/result/source-bundle schemas
   2/2/2. No statistical formula, method version, SQLite schema, or stored

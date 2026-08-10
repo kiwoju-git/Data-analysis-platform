@@ -1864,7 +1864,7 @@ Codex는 메서드를 한꺼번에 빈 골격으로 추가하지 말고 다음 v
 - Dedicated route에는 관계없는 dataset-scoped generic history/export를
   표시하지 않는다. 각 workflow의 실제 paging/export/restore만 제공한다.
 - 실제 사용자 walkthrough와 deterministic synthetic inputs는
-  `docs/studio_end_to_end_tutorial_ko.md` 및 `examples/tutorial/`에 있다.
+  `docs/statistical_twin_end_to_end_tutorial_ko.md` 및 `examples/tutorial/`에 있다.
   Expected values는 formula에서 추정한 값이 아니라 현재 Studio API smoke
   결과이며 별도 reference fixture를 대체하지 않는다.
 

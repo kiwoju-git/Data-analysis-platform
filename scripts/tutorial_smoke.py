@@ -1,4 +1,4 @@
-"""Run the tutorial pack through real DataLab Studio APIs and verify expected results."""
+"""Run the tutorial pack through real Statistical Twin APIs and verify results."""
 
 from __future__ import annotations
 
@@ -1077,7 +1077,7 @@ def collect_results() -> dict[str, Any]:
             )
     return {
         "expected_results_schema_version": 1,
-        "generated_by": "DataLab Studio API tutorial smoke",
+        "generated_by": "Statistical Twin API tutorial smoke",
         "dynamic_ids_and_timestamps_omitted": True,
         "results": results,
     }
@@ -1122,7 +1122,7 @@ def main() -> int:
     parser.add_argument(
         "--write-expected",
         action="store_true",
-        help="Write normalized expected results from this real Studio API execution.",
+        help="Write normalized expected results from this Statistical Twin API execution.",
     )
     args = parser.parse_args()
     actual = collect_results()
@@ -1131,7 +1131,9 @@ def main() -> int:
             json.dumps(actual, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        print(f"Wrote {EXPECTED_PATH.relative_to(ROOT)} from real Studio API results.")
+        print(
+            f"Wrote {EXPECTED_PATH.relative_to(ROOT)} from Statistical Twin API results."
+        )
         return 0
     if not EXPECTED_PATH.exists():
         raise RuntimeError(
@@ -1140,7 +1142,7 @@ def main() -> int:
     expected = json.loads(EXPECTED_PATH.read_text(encoding="utf-8"))
     _compare(expected, actual)
     print(
-        f"Verified {len(actual['results'])} tutorial result sections against Studio APIs."
+        f"Verified {len(actual['results'])} tutorial result sections against Statistical Twin APIs."
     )
     return 0
 

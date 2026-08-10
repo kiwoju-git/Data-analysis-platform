@@ -1,7 +1,7 @@
 {
   "dynamic_ids_and_timestamps_omitted": true,
   "expected_results_schema_version": 1,
-  "generated_by": "DataLab Studio API tutorial smoke",
+  "generated_by": "Statistical Twin API tutorial smoke",
   "results": {
     "categorical.chi_square_association": {
       "absolute_tolerance": 1e-08,

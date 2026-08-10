@@ -531,6 +531,7 @@ describe("App", () => {
     expect(html).not.toContain("사전점검 해설");
     expect(html).not.toContain("독립성은 데이터만으로 자동 검증할 수 없습니다.");
     expect(html).not.toContain("p-value는 차이가 있는지의 근거");
+    expect(html).not.toContain('class="hypothesis-method-context"');
   });
 
   it("places a directly selected Help method detail before the long method list", () => {
@@ -4278,6 +4279,13 @@ describe("App", () => {
     );
 
     expect(html).toContain("1-표본 t-검정");
+    expect(html).toContain('class="hypothesis-method-context"');
+    expect(html).toContain('aria-label="1-표본 t-검정 입력 및 설계 기준"');
+    expect(html).toContain("입력·설계 기준");
+    expect(html).toContain("연속형 수치");
+    expect(html).toContain("한 모집단");
+    expect(html).toContain("평균 비교");
+    expect(html).toContain("독립 관측");
     expect(html).toContain("1-표본 t-검정 실행");
     expect(html).toContain("기준 평균");
     expect(html).toContain("반응 변수");

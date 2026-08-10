@@ -49,7 +49,7 @@ overclaiming.
 
 For a complete Korean task sequence with deterministic synthetic files and
 API-verified expected values, use
-`docs/studio_end_to_end_tutorial_ko.md`. This checklist remains the UX QA
+`docs/statistical_twin_end_to_end_tutorial_ko.md`. This checklist remains the UX QA
 acceptance companion rather than the user tutorial itself.
 
 The Bayesian screen begins with a paged saved-Study catalog and a clear new
