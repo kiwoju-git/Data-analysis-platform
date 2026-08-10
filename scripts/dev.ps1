@@ -93,12 +93,18 @@ try {
     $previousFrontendCommit = $env:VITE_GIT_COMMIT
     try {
         if (-not $UsingExistingBackend) {
+            $BackendProductProfile = $env:STATISTICAL_TWIN_PROFILE
+            $BackendWorkspaceRoot = $env:DATALAB_WORKSPACE_ROOT
+            $BackendCorsOrigins = $env:DATALAB_CORS_ALLOWED_ORIGINS
             $BackendJob = Start-Job -ScriptBlock {
-            param($PythonPath, $Root, $Port, $Commit)
+            param($PythonPath, $Root, $Port, $Commit, $ProductProfile, $WorkspaceRoot, $CorsOrigins)
             Set-Location $Root
             $env:DATALAB_GIT_COMMIT = $Commit
+            $env:STATISTICAL_TWIN_PROFILE = $ProductProfile
+            $env:DATALAB_WORKSPACE_ROOT = $WorkspaceRoot
+            $env:DATALAB_CORS_ALLOWED_ORIGINS = $CorsOrigins
             & $PythonPath -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port $Port
-            } -ArgumentList $Python, $RepoRoot, $BackendPort, $RepositoryBuildId
+            } -ArgumentList $Python, $RepoRoot, $BackendPort, $RepositoryBuildId, $BackendProductProfile, $BackendWorkspaceRoot, $BackendCorsOrigins
 
             $deadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
             $RuntimeInfo = $null

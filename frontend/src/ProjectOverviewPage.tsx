@@ -15,7 +15,11 @@ import {
   useProjectOverviewState,
   type ProjectResourceState,
 } from "./useProjectOverviewState";
-import { isPresentationProfile } from "./productProfile";
+import {
+  isPresentationProfile,
+  presentationScopeText,
+  statisticalTwinProfile,
+} from "./productProfile";
 
 export interface ProjectOverviewPageProps {
   activeDatasetCatalogItem?: DatasetVersionCatalogItem | null;
@@ -60,11 +64,11 @@ export function ProjectOverviewPage({
         </button>
       </div>
 
-      {isPresentationProfile ? (
-        <p className="presentation-profile-scope">
-          공개 시연 범위: 홈 · 데이터셋 · 탐색적 분석 · 가설 검정
-        </p>
-      ) : null}
+        {isPresentationProfile ? (
+          <p className="presentation-profile-scope">
+            {presentationScopeText(statisticalTwinProfile)}
+          </p>
+        ) : null}
 
       <div className="home-quick-grid" aria-label="빠른 실행">
         <HomeQuickCard

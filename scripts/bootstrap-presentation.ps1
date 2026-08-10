@@ -8,7 +8,12 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Presentation bootstrap failed with exit code $LASTEXITCODE"
     }
-    Write-Host "Presentation dependencies are ready. Run .\scripts\dev-presentation.ps1."
+    if (Test-Path -LiteralPath (Join-Path $RepoRoot "START_HERE.ps1")) {
+        Write-Host "Presentation dependencies are ready. Run .\START_HERE.ps1."
+    }
+    else {
+        Write-Host "Presentation dependencies are ready. Run a profile-specific presentation launcher."
+    }
 }
 finally {
     Pop-Location

@@ -1,43 +1,20 @@
-# Statistical Twin Presentation Preview 2026.08.1
+# Statistical Twin Presentation Preview 2026.08
 
-This prerelease is a scoped presentation build based on full source commit
-`f633ba401494937990d4746ccd1e1cd109a5e32f`.
+이 release source는 `SOURCE_COMMIT.txt`에 기록된 최신 full main을 기준으로 하며 두 개의 custom ZIP profile을 제공합니다.
 
-## Public demonstration scope
+## 수정 사항
 
-- Home
-- Dataset registration and preparation
-- Exploratory Analysis
-- Hypothesis Tests
+- ZIP의 첫 README가 full `dev.ps1`을 안내하던 문제를 제거했습니다.
+- custom ZIP은 profile이 고정된 `START_HERE.ps1`만 첫 실행 경로로 제공합니다.
+- backend child job에 profile, workspace, CORS를 명시적으로 전달합니다.
+- Core preview와 Regression preview의 port와 workspace를 서로 분리했습니다.
+- frontend menu, backend method catalog, direct route guard를 같은 profile allowlist로 검증합니다.
 
-The top-level presentation navigation contains only Home, Dataset, and
-Analysis. The Analysis catalog contains only Exploratory Analysis and
-Hypothesis Tests. This is not the complete product distribution.
+## 배포 범위
 
-## Intentionally unavailable
+| Profile | 분석 module | Backend | Frontend | Workspace |
+| --- | --- | ---: | ---: | --- |
+| Core | 탐색적 분석, 가설 검정 | 8001 | 8701 | `StatisticalTwinPresentationCore` |
+| Regression | Core + 상관관계 및 회귀분석 | 8002 | 8702 | `StatisticalTwinPresentationRegression` |
 
-Categorical Analysis, Correlation and Regression, Quality Control, DOE,
-Bayesian Optimization, Graph Builder, Report Center, Asset Management, and
-Help are excluded from the presentation profile. The backend rejects hidden
-analysis methods and does not register the dedicated DOE, Bayesian, regression,
-quality, visualization, or asset-management routers.
-
-## Runtime isolation
-
-- Full application: backend 8000, frontend 8600
-- Presentation preview: backend 8001, frontend 8601
-- Presentation workspace: `%LOCALAPPDATA%\StatisticalTwinPresentation`
-
-The full and presentation processes can run concurrently and do not share a
-workspace database.
-
-## Validation
-
-- Presentation backend profile tests: 3 passed
-- Presentation frontend profile tests: 2 passed
-- Full-profile backend contract regression: 240 passed
-- Full frontend Vitest: 266 passed across 34 files
-- Full and presentation concurrent Playwright smoke: passed
-- Full and presentation production builds: passed
-
-The existing Vite chunk-size warning remains informational.
+전체 앱은 `8000/8600`을 유지합니다. 이 prerelease는 정식 전체 배포본이 아닙니다.
