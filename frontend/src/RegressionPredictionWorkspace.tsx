@@ -6,6 +6,7 @@ import {
   type RegressionPredictionResponse,
 } from "./api";
 import { restoredPredictionForSelection } from "./dedicatedResultRestore";
+import { formatLocalDateTime } from "./dateFormat";
 import { createLatestRequestGuard } from "./latestRequest";
 import { RegressionPredictionPanel } from "./RegressionPredictionPanel";
 import { useRegressionModelCatalogState } from "./useRegressionModelCatalogState";
@@ -297,7 +298,7 @@ function modelLabel(model: RegressionModelCatalogItem): string {
 
 function formatCreatedAt(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
+  return Number.isNaN(date.getTime()) ? value : formatLocalDateTime(value);
 }
 
 function CatalogError({ code, onRetry }: { code: string; onRetry: () => void }) {

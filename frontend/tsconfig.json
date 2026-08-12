@@ -16,6 +16,11 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "jsxImportSource": "statistical-twin-i18n",
+    "baseUrl": ".",
+    "paths": {
+      "statistical-twin-i18n/*": ["src/i18n/*"]
+    },
     "types": ["vitest/globals", "vite/client"]
   },
   "include": ["src", "vite.config.ts", "eslint.config.js"]

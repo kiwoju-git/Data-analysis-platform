@@ -19,6 +19,7 @@ import {
   type ScatterReferenceLine,
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { formatLocalDateTime } from "./dateFormat";
 import {
   graphBuilderDefinition,
   graphBuilderDefinitions,
@@ -727,8 +728,7 @@ function graphErrorMessage(code: string): string {
 }
 
 function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "날짜 확인 불가" : date.toLocaleString("ko-KR");
+  return formatLocalDateTime(value);
 }
 
 function formatNumber(value: number): string {

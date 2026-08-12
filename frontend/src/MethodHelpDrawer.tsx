@@ -6,6 +6,8 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import { getAnalysisMethodGuidance } from "./analysisMethodGuidance";
+import { methodLabel } from "./i18n/catalogLabels";
+import { useI18n } from "./i18n/LocaleProvider";
 
 export function MethodHelpContent({
   method,
@@ -16,16 +18,17 @@ export function MethodHelpContent({
   profile?: DatasetProfileResponse | null;
   version?: DatasetVersionResponse | null;
 }) {
+  const { locale } = useI18n();
   const guidance = getAnalysisMethodGuidance(method.method_id);
   const requiredRoles = guidance.roleRequirements.filter((role) => role.required);
 
   return (
     <div className="method-help-content">
       <HelpSection title="쉽게 말하면">
-        <p>{guidance.plainLanguage ?? `${method.label_ko}의 입력, 사전점검, 결과 해석 순서를 확인합니다.`}</p>
+        <p>{guidance.plainLanguage ?? `${methodLabel(method, locale)}의 입력, 사전점검, 결과 해석 순서를 확인합니다.`}</p>
       </HelpSection>
       <HelpSection title="언제 사용하는가">
-        <p>{method.label_ko} 질문과 데이터 구조가 일치할 때 사용합니다. 실행 전에 설계와 독립성 가정을 확인하세요.</p>
+        <p>{methodLabel(method, locale)} 질문과 데이터 구조가 일치할 때 사용합니다. 실행 전에 설계와 독립성 가정을 확인하세요.</p>
       </HelpSection>
       <HelpSection title="필수 역할">
         <ul>
@@ -71,7 +74,9 @@ export function MethodHelpContent({
         결과 하나만으로 인과관계나 실무적 중요성을 단정하지 마세요. 추정치, 신뢰구간, 효과크기,
         N/제외, 가정과 경고를 함께 확인해야 합니다.
       </div>
-      <a className="text-link" href="/help?section=tutorial">한국어 튜토리얼에서 확인</a>
+      <a className="text-link" href="/help?section=tutorial">
+        {locale === "ko" ? "한국어 튜토리얼에서 확인" : "Open the English tutorial"}
+      </a>
     </div>
   );
 }
@@ -91,6 +96,7 @@ export function MethodHelpDrawer({
   version?: DatasetVersionResponse | null;
   onClose: () => void;
 }) {
+  const { locale } = useI18n();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -118,7 +124,7 @@ export function MethodHelpDrawer({
       <div className="method-help-drawer-heading">
         <div>
           <span>분석 도움말</span>
-          <h3 id="method-help-drawer-title">{method.label_ko}</h3>
+          <h3 id="method-help-drawer-title">{methodLabel(method, locale)}</h3>
           <code>{method.method_id}</code>
         </div>
         <button

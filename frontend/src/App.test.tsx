@@ -160,10 +160,10 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the DataLab Studio shell", () => {
+  it("renders the Statistical Twin shell", () => {
     const html = renderToString(<App />);
 
-    expect(html).toContain("DataLab Studio");
+    expect(html).toContain("Statistical Twin");
     expect(html).toContain("프런트엔드와 백엔드 호환성을 확인하고 있습니다.");
   });
 
@@ -1774,14 +1774,14 @@ describe("App", () => {
       1,
       "http://127.0.0.1:8000/api/v1/analysis-runs?limit=20&offset=0&dataset_version_id=version-1&method_id=eda.descriptive&status=succeeded&stale=false&result_available=true",
       expect.objectContaining({
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       `http://127.0.0.1:8000/api/v1/analysis-runs/${restored.analysis_id}/result`,
       expect.objectContaining({
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -1789,14 +1789,14 @@ describe("App", () => {
       `http://127.0.0.1:8000/api/v1/analysis-runs/${restored.analysis_id}/exports`,
       expect.objectContaining({
         method: "GET",
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       `http://127.0.0.1:8000/api/v1/analysis-runs/comparison?left_analysis_id=${comparison.left.analysis_id}&right_analysis_id=${comparison.right.analysis_id}`,
       expect.objectContaining({
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
     );
   });
@@ -1933,7 +1933,9 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/exports/export-1/deletion-preflight",
-      expect.objectContaining({ headers: { Accept: "application/json" } }),
+      expect.objectContaining({
+        headers: { Accept: "application/json", "Accept-Language": "ko" },
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -2003,7 +2005,9 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/deletion-preflight",
-      expect.objectContaining({ headers: { Accept: "application/json" } }),
+      expect.objectContaining({
+        headers: { Accept: "application/json", "Accept-Language": "ko" },
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -5727,6 +5731,7 @@ function analysisResultHtmlReportTestResponse(
     created_at: "2026-07-04T00:00:00Z",
     title: "Statistical Twin Analysis Report",
     section_count: 18,
+    report_locale: "ko",
   };
 }
 

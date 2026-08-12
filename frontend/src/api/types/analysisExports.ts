@@ -46,6 +46,7 @@ export interface AnalysisResultHtmlReportResponse {
   created_at: string;
   title: string;
   section_count: number;
+  report_locale: "en" | "ko";
 }
 
 export interface AnalysisResultExportListItem {

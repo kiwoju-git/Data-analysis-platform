@@ -10650,15 +10650,29 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
         download_response = client.get(
             f"/api/v1/analysis-runs/{analysis_id}/exports/{export_payload['export_id']}/download",
         )
+        korean_export_response = client.post(
+            f"/api/v1/analysis-runs/{analysis_id}/exports/html",
+            json={"locale": "ko"},
+        )
+        korean_export_payload = korean_export_response.json()
+        korean_download_response = client.get(
+            f"/api/v1/analysis-runs/{analysis_id}/exports/"
+            f"{korean_export_payload['export_id']}/download",
+        )
+        unsupported_locale_response = client.post(
+            f"/api/v1/analysis-runs/{analysis_id}/exports/html",
+            json={"locale": "fr"},
+        )
 
     assert response.status_code == 201
     assert export_response.status_code == 201
     AnalysisResultHtmlReportResponse.model_validate(export_payload)
-    assert export_payload["schema_version"] == 2
+    assert export_payload["schema_version"] == 3
     assert export_payload["format"] == "analysis_result_html_report"
     assert export_payload["artifact_kind"] == "analysis_result_html_report"
     assert export_payload["media_type"] == "text/html"
     assert export_payload["title"] == "Statistical Twin Analysis Report"
+    assert export_payload["report_locale"] == "en"
     assert export_payload["section_count"] >= 1
     assert export_payload["stale"] is False
 
@@ -10675,9 +10689,10 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert hashlib.sha256(export_bytes).hexdigest() == export_payload["sha256"]
     assert len(export_bytes) == export_payload["size_bytes"]
     export_text = export_bytes.decode("utf-8")
-    assert "기술통계 요약" in export_text
-    assert export_text.index("분석 요약") < export_text.index("기술 정보")
-    assert "<summary>기계 판독용 원본 result JSON</summary>" in export_text
+    assert '<html lang="en">' in export_text
+    assert "Descriptive Statistics Summary" in export_text
+    assert export_text.index("Analysis Summary") < export_text.index("Technical Information")
+    assert "<summary>Machine-readable Source Result JSON</summary>" in export_text
     assert "<details open" not in export_text
     assert "Content-Security-Policy" in export_text
     assert "default-src 'none'" in export_text
@@ -10689,6 +10704,16 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert str(tmp_path) not in export_text
     assert "workspaces/analyses" not in export_text
     assert "result_path" not in export_text
+
+    assert korean_export_response.status_code == 201
+    assert korean_export_payload["schema_version"] == 3
+    assert korean_export_payload["report_locale"] == "ko"
+    assert korean_export_payload["title"] == "Statistical Twin 분석 보고서"
+    korean_export_text = korean_download_response.content.decode("utf-8")
+    assert '<html lang="ko">' in korean_export_text
+    assert "기술통계 요약" in korean_export_text
+    assert "<summary>기술 정보</summary>" in korean_export_text
+    assert unsupported_locale_response.status_code == 422
 
     assert download_response.status_code == 200
     assert download_response.headers["content-type"].startswith("text/html")
@@ -12352,7 +12377,10 @@ def _export_analysis_html_report_text(
     client: TestClient,
     analysis_id: str,
 ) -> str:
-    export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/html")
+    export_response = client.post(
+        f"/api/v1/analysis-runs/{analysis_id}/exports/html",
+        json={"locale": "ko"},
+    )
     assert export_response.status_code == 201
     export_payload = export_response.json()
     artifact = get_analysis_artifact_record(

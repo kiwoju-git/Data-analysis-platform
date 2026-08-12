@@ -26,6 +26,8 @@ import { analysisMethodDisplayLabel } from "./analysisNavigation";
 import { useAnalysisExportState } from "./useAnalysisExportState";
 import { useAnalysisRunDeletionState } from "./useAnalysisRunDeletionState";
 import { useReportCenterState } from "./useReportCenterState";
+import { methodLabel } from "./i18n/catalogLabels";
+import { useI18n } from "./i18n/LocaleProvider";
 
 export function ReportCenterPage({
   catalog,
@@ -301,6 +303,7 @@ function ReportFilters({
   currentDatasetVersionId: string | null;
   state: ReturnType<typeof useReportCenterState>;
 }) {
+  const { locale } = useI18n();
   return (
     <div className="report-filter-grid">
       <label>
@@ -312,7 +315,7 @@ function ReportFilters({
           <option value="">전체</option>
           {catalog?.methods.map((method) => (
             <option key={method.method_id} value={method.method_id}>
-              {method.label_ko}
+              {methodLabel(method, locale)}
             </option>
           ))}
         </select>

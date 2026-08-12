@@ -1,4 +1,6 @@
 import { AnalysisFilterControls } from "./AnalysisFilterControls";
+import { moduleLabel } from "./i18n/catalogLabels";
+import { useI18n } from "./i18n/LocaleProvider";
 import {
   AnalysisWorkbench,
   type AnalysisWorkbenchComparisonState,
@@ -908,6 +910,7 @@ export function AnalysisShell({
   onToggleXyCorrelationXColumn = () => undefined,
   onToggleXyCorrelationYColumn = () => undefined,
 }: AnalysisShellProps) {
+  const { locale } = useI18n();
   const selectedModule =
     analysisCatalog?.modules.find((module) => module.module_id === selectedModuleId) ?? null;
   const selectedAnalysisResult =
@@ -947,7 +950,8 @@ export function AnalysisShell({
           <h2 id="analysis-modules-title">분석 모듈</h2>
           {selectedModule !== null ? (
             <p>
-              {selectedModule.label_ko} · {selectedModule.label_en}
+              {moduleLabel(selectedModule, locale)}
+              {locale === "ko" ? ` · ${selectedModule.label_en}` : ""}
             </p>
           ) : null}
         </div>

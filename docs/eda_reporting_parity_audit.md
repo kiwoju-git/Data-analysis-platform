@@ -37,7 +37,7 @@ versions.
 | Equal-variance Levene row | Median Brown-Forsythe labeled Brown-Forsythe | Minitab Levene is the Brown-Forsythe median-centered modification | Label as Levene (Brown-Forsythe) | `eda.equal_variances` 0.2.0, result schema 2 |
 | Equal-variance second row | Mean-centered Levene labeled Levene | Minitab multiple-comparisons procedure | Implement Bonett pair tests plus Nakayama normal-range multiplicity adjustment | Equal-variance schema 2 |
 | Mean-centered Levene | Default result row | Optional additional diagnostic | Preserve as `additional_tests`; never call it multiple comparisons | Equal-variance schema 2 |
-| HTML report | Technical metadata and path/value envelope dominate | Human-readable stored-result report | Renderer registry, method sections, inline SVG, closed technical/raw details | artifact schema 2 |
+| HTML report | Technical metadata and path/value envelope dominate | Human-readable stored-result report | Renderer registry, method sections, inline SVG, closed technical/raw details, en/ko locale | artifact schema 3 |
 
 ## Statistical risks and policies
 
@@ -60,5 +60,4 @@ versions.
   relational migration. Artifact bytes and checksums are never rewritten.
 - Graph Preview visualization schema moves from 2 to 3. The backend accepts the legacy singular-X
   request shape and normalizes it to the canonical role lists.
-- HTML report artifact schema moves from 1 to 2. Existing schema 1 artifacts remain downloadable.
-
+- HTML report artifact schema 3 records the requested report locale. Existing schema 1 and 2 artifacts remain downloadable.

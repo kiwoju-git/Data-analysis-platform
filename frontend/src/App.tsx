@@ -98,6 +98,8 @@ import {
   isSupportedLinearModelPredictor,
   isSupportedLinearModelResponse,
 } from "./linearModelColumns";
+import { useI18n } from "./i18n/LocaleProvider";
+import type { TranslationKey } from "./i18n/translate";
 
 type HealthState =
   | { kind: "checking" }
@@ -108,14 +110,17 @@ type SubgroupChartType = "xbar_r" | "xbar_s";
 
 const numericDataTypes = new Set<DatasetColumnResponse["data_type"]>(["integer", "decimal"]);
 
-function statusLabel(health: HealthState): string {
+function statusLabel(
+  health: HealthState,
+  translate: (key: TranslationKey) => string,
+): string {
   if (health.kind === "ready") {
-    return `API ${health.response.status}`;
+    return translate("api.status.ready");
   }
   if (health.kind === "error") {
-    return health.message;
+    return translate("api.status.unavailable");
   }
-  return "API 확인 중";
+  return translate("api.status.checking");
 }
 
 function statusClassName(health: HealthState): string {
@@ -129,6 +134,7 @@ function statusClassName(health: HealthState): string {
 }
 
 export default function App() {
+  const { locale, t } = useI18n();
   const runtimeCompatibility = useRuntimeCompatibilityState();
   const [health, setHealth] = useState<HealthState>({ kind: "checking" });
   const [analysisCatalog, setAnalysisCatalog] = useState<AnalysisMethodListResponse | null>(null);
@@ -4336,6 +4342,7 @@ export default function App() {
     typeof window === "undefined" ? "" : window.location.search,
   );
   const navigationGroups = createSidebarNavigationGroups({
+    locale,
     activeAnalysisModuleId: selectedModuleId,
     activeAnalysisMethodId: selectedMethod?.method_id ?? null,
     analysisCatalog,
@@ -4354,14 +4361,15 @@ export default function App() {
   const activeModuleLabel =
     analysisCatalog?.modules.find(
       (module) => module.module_id === selectedModuleId,
-    )?.label_ko ?? null;
+    )?.[locale === "ko" ? "label_ko" : "label_en"] ?? null;
   return (
     <AppChrome
       activeDatasetSelectorProps={activeDatasetSelectorProps}
       activePage={appRoute.page}
       canOpenAnalysis={selectedMethod !== null || analysisCatalog !== null}
       healthClassName={statusClassName(health)}
-      healthLabel={statusLabel(health)}
+      healthLabel={statusLabel(health, t)}
+      locale={locale}
       navigationGroups={navigationGroups}
       onOpenAnalysisPage={handleOpenAnalysisPage}
       onOpenDatasetPage={handleOpenDatasetPage}

@@ -1,4 +1,5 @@
 import type { AnalysisMethodDescriptor } from "./api";
+import { getCurrentLocale } from "./i18n/store";
 
 export function availabilityLabel(method: AnalysisMethodDescriptor): string {
   if (method.availability === "available") {
@@ -29,7 +30,9 @@ export function formatDateTime(value: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  return parsed.toLocaleString("ko-KR");
+  return parsed.toLocaleString(getCurrentLocale() === "ko" ? "ko-KR" : "en-US", {
+    timeZone: "Asia/Seoul",
+  });
 }
 
 export function comparisonCellValue(value: string | number | boolean | null): string {

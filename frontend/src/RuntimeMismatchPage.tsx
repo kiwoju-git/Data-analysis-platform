@@ -15,7 +15,7 @@ export function RuntimeCompatibilityGate({
   if (state.kind === "checking") {
     return (
       <main className="runtime-gate-page" aria-busy="true">
-        <h1>DataLab Studio</h1>
+        <h1>Statistical Twin</h1>
         <p role="status">프런트엔드와 백엔드 호환성을 확인하고 있습니다.</p>
       </main>
     );
@@ -37,7 +37,7 @@ export function RuntimeCompatibilityGate({
         ) : null}
         <code>오류 코드: {state.error}</code>
         <ol>
-          <li>이전에 실행한 DataLab PowerShell 창을 모두 종료합니다.</li>
+          <li>이전에 실행한 Statistical Twin PowerShell 창을 모두 종료합니다.</li>
           <li>포트 8000과 8600 listener를 확인합니다.</li>
           <li>최신 폴더에서 <code>bootstrap.ps1</code>을 실행합니다.</li>
           <li>같은 폴더에서 <code>dev.ps1</code>을 실행합니다.</li>

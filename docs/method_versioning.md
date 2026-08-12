@@ -32,6 +32,11 @@ study artifacts are not rewritten.
   Bonett/Nakayama multiple-comparisons payload plus median-centered
   Brown-Forsythe Levene; schema-1 readers preserve the former results.
 
+API contract `13` adds localized HTML-report generation and artifact schema
+`3`. This is a presentation/export contract only, so no statistical method or
+result schema changes. Existing HTML artifact schemas 1 and 2 remain
+downloadable without regeneration, and metadata schema remains 19.
+
 Graph Builder uses `visualization_schema_version=3` and does not create an
 analysis run. Adding `/api/v1/visualizations/preview` does not bump a
 statistical method version or result schema. API contract version 7 prevents a

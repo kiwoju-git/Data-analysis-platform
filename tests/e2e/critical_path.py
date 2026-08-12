@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from playwright.sync_api import (
+    Browser,
     BrowserContext,
     Locator,
     Page,
@@ -447,12 +448,126 @@ class E2EDiagnostics:
         return screenshot_path
 
 
+def verify_localization_shell(
+    browser: Browser,
+    frontend_base_url: str,
+    diagnostics: E2EDiagnostics,
+) -> None:
+    diagnostics.step("verify English default and persistent Korean switch")
+    context = browser.new_context()
+    page = context.new_page()
+    try:
+        page.goto(frontend_base_url, wait_until="networkidle")
+        expect(page.locator("html")).to_have_attribute("lang", "en")
+        expect(page.get_by_role("button", name="English")).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        expect(page.get_by_text("API ready", exact=True)).to_be_visible(timeout=15_000)
+        for label in (
+            "Home",
+            "Datasets",
+            "Analysis",
+            "Graphs",
+            "Reports",
+            "Manage",
+            "Help",
+        ):
+            expect(page.get_by_text(label, exact=True).first).to_be_visible()
+        for module_label in (
+            "Exploratory Analysis",
+            "Hypothesis Tests",
+            "Categorical Data Analysis",
+            "Correlation and Regression",
+            "Quality Control",
+            "Design of Experiments",
+        ):
+            expect(page.get_by_text(module_label, exact=True).first).to_be_visible()
+
+        visible_hangul = page.evaluate(
+            """() => {
+              const text = document.body.innerText;
+              const attributes = Array.from(document.querySelectorAll('[aria-label], [title], [placeholder], [alt]'))
+                .flatMap((node) => ['aria-label', 'title', 'placeholder', 'alt'].map((name) => node.getAttribute(name) || ''))
+                .join('\\n');
+              return (text + '\\n' + attributes).match(/[가-힣]+/g) || [];
+            }"""
+        )
+        assert (
+            visible_hangul == []
+        ), f"English UI contains Hangul: {visible_hangul[:20]}"
+        diagnostics.capture_page(page, "home-en.png")
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.wait_for_timeout(250)
+        expect(page.get_by_role("button", name="English")).to_be_visible()
+        expect(page.get_by_text("API ready", exact=True)).to_be_visible()
+        assert_mobile_locale_controls(page, "English", "API ready")
+        assert page.evaluate(
+            "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        )
+        diagnostics.capture_page(page, "mobile-en.png")
+        page.set_viewport_size({"width": 1280, "height": 800})
+
+        page.goto(f"{frontend_base_url}/help?section=purpose", wait_until="networkidle")
+        page.locator(".help-search-field input").fill("regression")
+        diagnostics.capture_page(page, "help-en.png")
+        route_before = page.url
+        page.evaluate("window.__localeStateMarker = 'preserved'")
+        page.get_by_role("button", name="Korean").click()
+        expect(page.locator("html")).to_have_attribute("lang", "ko")
+        expect(page.get_by_text("도움말", exact=True).first).to_be_visible()
+        expect(page.locator(".help-search-field input")).to_have_value("regression")
+        assert page.url == route_before
+        assert page.evaluate("window.__localeStateMarker") == "preserved"
+        expect(page.get_by_role("button", name="한국어")).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        assert (
+            page.evaluate("window.localStorage.getItem('statistical-twin.locale')")
+            == "ko"
+        )
+        diagnostics.capture_page(page, "help-ko.png")
+
+        page.reload(wait_until="networkidle")
+        expect(page.locator("html")).to_have_attribute("lang", "ko")
+        expect(page.get_by_role("button", name="한국어")).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        page.get_by_text("홈", exact=True).first.click()
+        diagnostics.capture_page(page, "home-ko.png")
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.wait_for_timeout(250)
+        expect(page.get_by_role("button", name="한국어")).to_be_visible()
+        expect(page.get_by_text("API 준비됨", exact=True)).to_be_visible()
+        assert_mobile_locale_controls(page, "한국어", "API 준비됨")
+        assert page.evaluate(
+            "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        )
+        diagnostics.capture_page(page, "mobile-ko.png")
+    finally:
+        context.close()
+
+
+def assert_mobile_locale_controls(page: Page, language: str, api_status: str) -> None:
+    sidebar_box = page.locator(".sidebar").bounding_box()
+    language_box = page.get_by_role("button", name=language).bounding_box()
+    api_box = page.get_by_text(api_status, exact=True).bounding_box()
+    assert sidebar_box is not None and sidebar_box["x"] + sidebar_box["width"] <= 1
+    assert language_box is not None and api_box is not None
+    assert language_box["x"] + language_box["width"] <= api_box["x"]
+    assert language_box["y"] < api_box["y"] + api_box["height"]
+    assert api_box["y"] < language_box["y"] + language_box["height"]
+
+
 def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            verify_localization_shell(browser, frontend_base_url, diagnostics)
             context = browser.new_context(accept_downloads=True)
+            context.add_init_script(
+                "window.localStorage.setItem('statistical-twin.locale', 'ko');"
+            )
             page = context.new_page()
             diagnostics.step("open Workbench")
             page.goto(frontend_base_url, wait_until="networkidle")
@@ -462,7 +577,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             expect(
                 page.get_by_role("heading", name="Statistical Twin", exact=True)
             ).to_be_visible()
-            expect(page.get_by_text("API ready")).to_be_visible(timeout=15_000)
+            expect(page.get_by_text("API 준비됨")).to_be_visible(timeout=15_000)
             expect(page).to_have_url(re.compile(r"/(?:home)?(?:\?|$)"))
             expect(
                 page.get_by_role(
@@ -1545,10 +1660,7 @@ def verify_help_report_and_manage_routes(
         pinned_cell_box["x"] + pinned_cell_box["width"] + 1
     ):
         raise AssertionError("asset pinned filter escaped its table cell")
-    if (
-        pinned_checkbox_box["x"] + pinned_checkbox_box["width"]
-        > pinned_text_box["x"]
-    ):
+    if pinned_checkbox_box["x"] + pinned_checkbox_box["width"] > pinned_text_box["x"]:
         raise AssertionError("asset pinned checkbox overlapped its label")
     diagnostics.capture_page(page, "asset-filter-table.png")
     diagnostics.capture_page(page, "asset-management-overview.png")
@@ -1732,7 +1844,8 @@ def verify_reporting_summary_variance_and_scatter(
     report_path = Path(download.path())
     report_text = report_path.read_text(encoding="utf-8")
     for expected in (
-        "Statistical Twin Analysis Report",
+        "Statistical Twin 분석 보고서",
+        '<html lang="ko">',
         "핵심 결과",
         "그래프",
         "<svg",

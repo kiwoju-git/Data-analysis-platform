@@ -1,6 +1,7 @@
 # HTML Report Coverage Matrix
 
-HTML report artifact schema 2 is generated only from the stored result envelope. It does not
+HTML report artifact schema 3 is generated only from the stored result envelope. It records
+the requested `en` or `ko` report locale and does not
 rerun analyses or read raw dataset rows. All user-provided text is escaped and all graphics are
 self-contained inline SVG without scripts or external resources.
 

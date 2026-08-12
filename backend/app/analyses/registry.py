@@ -75,7 +75,7 @@ MODULES: tuple[AnalysisModuleDescriptor, ...] = (
     AnalysisModuleDescriptor(
         module_id=AnalysisModuleId.REGRESSION,
         label_ko="상관관계 및 회귀분석",
-        label_en="Correlation And Regression",
+        label_en="Correlation and Regression",
         order=40,
     ),
     AnalysisModuleDescriptor(
@@ -87,7 +87,7 @@ MODULES: tuple[AnalysisModuleDescriptor, ...] = (
     AnalysisModuleDescriptor(
         module_id=AnalysisModuleId.DOE,
         label_ko="실험 계획법",
-        label_en="Design Of Experiments",
+        label_en="Design of Experiments",
         order=60,
     ),
 )

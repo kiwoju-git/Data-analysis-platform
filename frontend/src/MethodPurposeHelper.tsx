@@ -1,5 +1,7 @@
 import type { AnalysisMethodListResponse, AnalysisModuleId } from "./api";
 import { availabilityLabel } from "./analysisWorkbenchUtils";
+import { methodLabel } from "./i18n/catalogLabels";
+import { useI18n } from "./i18n/LocaleProvider";
 
 const purposeGuideItems = [
   {
@@ -121,6 +123,7 @@ export function MethodPurposeHelper({
   catalog: AnalysisMethodListResponse;
   onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
 }) {
+  const { locale } = useI18n();
   const methodsById = new Map(catalog.methods.map((method) => [method.method_id, method]));
 
   return (
@@ -145,7 +148,7 @@ export function MethodPurposeHelper({
                 const canSelect = method !== null && method.availability === "available";
                 return (
                   <button
-                    aria-label={`${method?.label_ko ?? methodId} 메서드 보기`}
+                    aria-label={`${method === null ? methodId : methodLabel(method, locale)} 메서드 보기`}
                     className={
                       canSelect
                         ? "purpose-method-button"
@@ -160,7 +163,7 @@ export function MethodPurposeHelper({
                     }}
                     type="button"
                   >
-                    <span>{method?.label_ko ?? "catalog 없음"}</span>
+                    <span>{method === null ? "catalog 없음" : methodLabel(method, locale)}</span>
                     <code>{methodId}</code>
                     <small>
                       {method === null

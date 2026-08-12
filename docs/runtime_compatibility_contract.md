@@ -4,7 +4,7 @@ Last updated: 2026-08-08
 
 ## Purpose
 
-DataLab Studio must not run a new frontend against an older backend that happens
+Statistical Twin must not run a new frontend against an older backend that happens
 to own the same localhost port. A liveness response alone is insufficient: the
 frontend and destructive management workflows require an explicit API contract
 and capability handshake.
@@ -37,7 +37,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `12`);
+- `api_contract_version` (currently `13`);
 - the actual metadata schema constant (currently `19`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
@@ -51,7 +51,7 @@ The response contains no workspace path, filename, or raw data. Existing
 
 ## Frontend Gate
 
-The frontend expects API contract `12`, schema 19 or later, and every required
+The frontend expects API contract `13`, schema 19 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management
@@ -66,6 +66,13 @@ prevents an older backend from accepting only part of these requests. Metadata
 schema 19 adds user label, note, and pin ownership for analysis runs, DOE
 designs, and Bayesian studies without rewriting the immutable result or design
 artifacts they describe.
+
+Contract 13 adds the typed `en`/`ko` HTML-report request and records
+`report_locale` on new artifact-schema-3 responses. Locale changes presentation
+only: API field names, statistical values, result schemas, stored result
+checksums, and existing schema-1/2 HTML artifacts are unchanged. Every frontend
+request sends the current locale in `Accept-Language`; exact contract matching
+prevents an older backend from silently ignoring the localized-report body.
 
 Build commit `unknown` is not treated as proof of a mismatch. When both commits
 are known, they must match for this strict local runtime.

@@ -6,6 +6,7 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import { formatBytes, shortHash } from "./datasetDisplay";
+import { formatLocalDateTime } from "./dateFormat";
 import { DatasetPreviewSection } from "./DatasetPreviewSection";
 import { DatasetProfileSection } from "./DatasetProfileSection";
 import { DatasetSchemaSection } from "./DatasetSchemaSection";
@@ -159,8 +160,5 @@ export function DatasetVersionPanel({
 function formatCreatedAt(value: string): string | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatLocalDateTime(value);
 }

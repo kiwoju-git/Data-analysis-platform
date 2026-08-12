@@ -17,12 +17,16 @@ import type {
   SidebarNavigationGroup,
   SidebarNavigationItem,
 } from "./sidebarNavigationModel";
+import { LanguageSwitcher } from "./i18n/LanguageSwitcher";
+import { getCurrentLocale } from "./i18n/store";
+import type { AppLocale } from "./i18n/types";
 
 export interface AppChromeProps {
   canOpenAnalysis: boolean;
   children: ReactNode;
   healthClassName: string;
   healthLabel: string;
+  locale?: AppLocale;
   activePage: AppRoute["page"];
   activeDatasetSelectorProps: ActiveDatasetVersionSelectorProps;
   navigationGroups?: SidebarNavigationGroup[];
@@ -41,6 +45,7 @@ export function AppChrome({
   children,
   healthClassName,
   healthLabel,
+  locale = getCurrentLocale(),
   activePage,
   activeDatasetSelectorProps,
   navigationGroups,
@@ -187,11 +192,14 @@ export function AppChrome({
         <SidebarNavigation groups={groups} onNavigate={closeMobileMenu} />
       </aside>
       <main className="main">
-        <header className="topbar">
+        <header className="topbar" data-locale={locale}>
           <p className="topbar-title">{pageTitle ?? pageTitleFor(activePage)}</p>
-          <span className={healthClassName} aria-live="polite">
-            {healthLabel}
-          </span>
+          <div className="topbar-actions">
+            <LanguageSwitcher />
+            <span className={healthClassName} aria-live="polite">
+              {healthLabel}
+            </span>
+          </div>
         </header>
         <div className="active-dataset-region">
           <ActiveDatasetVersionSelector {...activeDatasetSelectorProps} />
@@ -231,6 +239,7 @@ function fallbackNavigationGroups({
   | "children"
   | "healthClassName"
   | "healthLabel"
+  | "locale"
   | "navigationGroups"
   | "pageTitle"
 >) {

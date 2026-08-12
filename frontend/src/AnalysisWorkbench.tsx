@@ -33,6 +33,8 @@ import type {
 import { availabilityLabel } from "./analysisWorkbenchUtils";
 import { groupHypothesisMethods } from "./analysisMethodFamilies";
 import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
+import { methodLabel, moduleLabel } from "./i18n/catalogLabels";
+import { useI18n } from "./i18n/LocaleProvider";
 
 export interface AnalysisWorkbenchExportState {
   analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
@@ -147,6 +149,7 @@ export function AnalysisWorkbench({
   renderAnalysisFilters,
   renderExecutableMethod,
 }: AnalysisWorkbenchProps) {
+  const { locale } = useI18n();
   const [isMethodHelpOpen, setIsMethodHelpOpen] = useState(false);
   const methodHelpTriggerRef = useRef<HTMLButtonElement>(null);
   const executablePanel =
@@ -229,8 +232,8 @@ export function AnalysisWorkbench({
             }}
             type="button"
           >
-            <span>{module.label_ko}</span>
-            <small>{module.label_en}</small>
+            <span>{moduleLabel(module, locale)}</span>
+            {locale === "ko" ? <small>{module.label_en}</small> : null}
           </button>
         ))}
       </nav>
@@ -265,7 +268,7 @@ export function AnalysisWorkbench({
                     onClick={() => selectMethod(method.module_id, method.method_id)}
                     type="button"
                   >
-                    {method.label_ko}
+                    {methodLabel(method, locale)}
                   </button>
                 ))}
               </div>
@@ -292,8 +295,8 @@ export function AnalysisWorkbench({
           >
             <div className="method-title-row">
               <div>
-                <h3>{method.label_ko}</h3>
-                <p>{method.label_en}</p>
+                <h3>{methodLabel(method, locale)}</h3>
+                {locale === "ko" ? <p>{method.label_en}</p> : null}
               </div>
               <span className={`availability-badge availability-${method.availability}`}>
                 {availabilityLabel(method)}
@@ -307,7 +310,9 @@ export function AnalysisWorkbench({
               ))}
             </div>
             {method.disabled_reason !== null ? (
-              <p className="method-reason">{method.disabled_reason}</p>
+              <p className="method-reason">
+                {locale === "ko" ? method.disabled_reason : "This method is currently unavailable."}
+              </p>
             ) : null}
             </button>
           );
@@ -318,15 +323,15 @@ export function AnalysisWorkbench({
         <section className="analysis-workbench" aria-labelledby="workbench-title">
           <div className="panel-heading workbench-heading">
             <div className="workbench-heading-main">
-              <h3 id="workbench-title">{selectedMethod.label_ko}</h3>
+              <h3 id="workbench-title">{methodLabel(selectedMethod, locale)}</h3>
               <p>
-                {selectedMethod.label_en} · {selectedMethod.method_id}
+                {locale === "ko" ? `${selectedMethod.label_en} · ` : ""}{selectedMethod.method_id}
               </p>
             </div>
             <div className="workbench-heading-side">
               {selectedHypothesisTags.length > 0 ? (
                 <aside
-                  aria-label={`${selectedMethod.label_ko} 입력 및 설계 기준`}
+                  aria-label={`${methodLabel(selectedMethod, locale)} 입력 및 설계 기준`}
                   className="hypothesis-method-context"
                 >
                   <strong>입력·설계 기준</strong>
@@ -429,7 +434,7 @@ export function AnalysisWorkbench({
           ) : null}
           {executablePanel === null || executablePanel === undefined ? (
             <section className="analysis-run-panel" aria-label="분석 실행 상태">
-              <div className="notice-box">{workbenchStatusMessage(selectedMethod)}</div>
+              <div className="notice-box">{workbenchStatusMessage(selectedMethod, locale)}</div>
             </section>
           ) : null}
         </section>
@@ -452,15 +457,20 @@ function AnalysisRunErrorNotice({ errorCode }: { errorCode: string }) {
   );
 }
 
-function workbenchStatusMessage(method: AnalysisMethodDescriptor): string {
+function workbenchStatusMessage(
+  method: AnalysisMethodDescriptor,
+  locale: "en" | "ko",
+): string {
   if (method.availability === "disabled") {
-    return method.disabled_reason ?? "이 메서드는 현재 비활성 상태입니다.";
+    return locale === "ko"
+      ? method.disabled_reason ?? "이 메서드는 현재 비활성 상태입니다."
+      : "This method is currently unavailable.";
   }
   if (method.availability === "planned") {
-    return (
-      method.disabled_reason ??
-      "계산 코드, 기준 데이터, 수치 검증 테스트가 준비된 뒤 실행할 수 있습니다."
-    );
+    return locale === "ko"
+      ? method.disabled_reason ??
+          "계산 코드, 기준 데이터, 수치 검증 테스트가 준비된 뒤 실행할 수 있습니다."
+      : "This planned method is not yet available to run.";
   }
   return "선택한 메서드는 현재 실행할 수 있습니다.";
 }

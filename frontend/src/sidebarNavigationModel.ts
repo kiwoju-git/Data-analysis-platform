@@ -6,6 +6,9 @@ import type {
 import type { AppRoute } from "./appRoute";
 import { groupHypothesisMethods } from "./analysisMethodFamilies";
 import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
+import { methodLabel, moduleLabel } from "./i18n/catalogLabels";
+import { getCurrentLocale } from "./i18n/store";
+import type { AppLocale } from "./i18n/types";
 
 export interface SidebarNavigationItem {
   active: boolean;
@@ -28,6 +31,7 @@ export interface SidebarNavigationGroup {
 export type DatasetSidebarSection = "dataset-intake" | "dataset-version";
 
 interface SidebarNavigationOptions {
+  locale?: AppLocale;
   activeAnalysisModuleId: AnalysisModuleId;
   activeAnalysisMethodId: string | null;
   analysisCatalog: AnalysisMethodListResponse | null;
@@ -49,6 +53,7 @@ interface SidebarNavigationOptions {
 }
 
 export function createSidebarNavigationGroups({
+  locale = getCurrentLocale(),
   activeAnalysisModuleId,
   activeAnalysisMethodId,
   analysisCatalog,
@@ -118,7 +123,7 @@ export function createSidebarNavigationGroups({
               activePage === "analysis" && activeAnalysisMethodId === method.method_id,
             disabled: !canOpenAnalysis || method.availability !== "available",
             id: method.method_id,
-            label: method.label_ko,
+            label: methodLabel(method, locale),
             onActivate: () => onOpenAnalysisMethod(method),
           }));
           const children = module.module_id === "hypothesis"
@@ -140,7 +145,7 @@ export function createSidebarNavigationGroups({
           children,
           disabled: !canOpenAnalysis,
           id: module.module_id,
-          label: module.label_ko,
+          label: moduleLabel(module, locale),
           onActivate: () => onOpenAnalysisModule(module.module_id),
           });
         }),

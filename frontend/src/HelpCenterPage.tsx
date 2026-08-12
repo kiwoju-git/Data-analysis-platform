@@ -9,6 +9,8 @@ import { MethodHelpContent } from "./MethodHelpDrawer";
 import { MethodPurposeHelper } from "./MethodPurposeHelper";
 import { RoleDictionary } from "./RoleDictionary";
 import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
+import { methodLabel } from "./i18n/catalogLabels";
+import { useI18n } from "./i18n/LocaleProvider";
 
 function methodIdFromLocation(): string | null {
   if (typeof window === "undefined") return null;
@@ -22,6 +24,7 @@ export function HelpCenterPage({
   catalog: AnalysisMethodListResponse | null;
   onOpenAnalysis: (method: AnalysisMethodDescriptor) => void;
 }) {
+  const { locale } = useI18n();
   const [query, setQuery] = useState("");
   const [selectedMethodId, setSelectedMethodId] = useState(methodIdFromLocation);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -138,7 +141,7 @@ export function HelpCenterPage({
             <div className="panel-heading">
               <div>
                 <h3 ref={detailHeadingRef} tabIndex={-1}>
-                  {selectedMethod.label_ko}
+                  {methodLabel(selectedMethod, locale)}
                 </h3>
                 <p>v{selectedMethod.method_version}</p>
               </div>
@@ -167,8 +170,8 @@ export function HelpCenterPage({
               onClick={() => selectHelpMethod(method)}
               type="button"
             >
-              <strong>{method.label_ko}</strong>
-              <span>{method.label_en}</span>
+              <strong>{methodLabel(method, locale)}</strong>
+              {locale === "ko" ? <span>{method.label_en}</span> : null}
               <code>{method.method_id}</code>
             </button>
           ))}
@@ -178,8 +181,15 @@ export function HelpCenterPage({
       <section className="help-reference-band" id="tutorial">
         <h2>결과 해석과 튜토리얼</h2>
         <p>
-          한국어 end-to-end 튜토리얼은{" "}
-          <code>docs/statistical_twin_end_to_end_tutorial_ko.md</code>에 있습니다.
+          {locale === "ko"
+            ? "한국어 end-to-end 튜토리얼은"
+            : "The English end-to-end tutorial is at"}{" "}
+          <code>
+            {locale === "ko"
+              ? "docs/statistical_twin_end_to_end_tutorial_ko.md"
+              : "docs/statistical_twin_end_to_end_tutorial_en.md"}
+          </code>
+          에 있습니다.
         </p>
         <h3>자주 발생하는 오류</h3>
         <ul>

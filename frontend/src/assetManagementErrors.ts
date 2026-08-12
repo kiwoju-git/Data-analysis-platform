@@ -42,7 +42,7 @@ export function classifyAssetManagementError(
       correlationId,
       kind: "contract_mismatch",
       title: "앱 버전 불일치",
-      message: "현재 백엔드에는 이 관리 경로가 없습니다. 이전 DataLab 창을 종료한 뒤 최신 폴더의 dev.ps1로 다시 실행하세요.",
+      message: "현재 백엔드에는 이 관리 경로가 없습니다. 이전 Statistical Twin 창을 종료한 뒤 최신 폴더의 dev.ps1로 다시 실행하세요.",
     };
   }
   if (code === "dataset_version_not_found" || code === "regression_model_not_found") {

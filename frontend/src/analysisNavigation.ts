@@ -1,4 +1,5 @@
 import type { AnalysisMethodListResponse, AnalysisModuleId } from "./api";
+import { getCurrentLocale } from "./i18n/store";
 
 export interface AnalysisSelection {
   moduleId: AnalysisModuleId;
@@ -43,7 +44,7 @@ export function analysisMethodDisplayLabel(
       : methodId;
   return (
     catalog?.methods.find((method) => method.method_id === canonicalMethodId)
-      ?.label_ko ?? fallback
+      ?.[getCurrentLocale() === "ko" ? "label_ko" : "label_en"] ?? fallback
   );
 }
 

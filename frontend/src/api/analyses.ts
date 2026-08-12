@@ -22,6 +22,7 @@ import type {
   AnalysisRunListResponse,
   AnalysisRunRequest,
 } from "./types";
+import { getCurrentLocale } from "../i18n/store";
 
 export async function fetchAnalysisMethods(
   signal?: AbortSignal,
@@ -198,7 +199,9 @@ export async function createAnalysisResultHtmlReport(
       method: "POST",
       headers: {
         Accept: "application/json",
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ locale: getCurrentLocale() }),
     },
   );
 

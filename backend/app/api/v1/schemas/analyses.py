@@ -1386,6 +1386,13 @@ class AnalysisResultHtmlReportResponse(BaseModel):
     created_at: str
     title: str
     section_count: int = Field(ge=0)
+    report_locale: Literal["en", "ko"]
+
+
+class AnalysisResultHtmlReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    locale: Literal["en", "ko"] = "en"
 
 
 class AnalysisResultExportListItemResponse(BaseModel):

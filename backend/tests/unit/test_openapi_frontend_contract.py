@@ -318,6 +318,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="201",
         response_schema="AnalysisResultHtmlReportResponse",
         parameters=frozenset({("analysis_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
         route_name="analysisRunExports",

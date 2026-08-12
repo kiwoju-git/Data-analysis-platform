@@ -12,6 +12,7 @@ import type {
   AttributeControlPhase,
   AttributeControlPhase2State,
 } from "./useAttributeControlPhase2State";
+import { formatLocalDateTime } from "./dateFormat";
 
 interface AttributeControlChartPanelProps {
   analysisResult: AnalysisResultEnvelope | null;
@@ -535,7 +536,7 @@ function formatNumber(value: number): string {
 
 function formatDate(value: string): string {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("ko-KR");
+  return Number.isNaN(parsed.getTime()) ? value : formatLocalDateTime(value);
 }
 
 function shortId(value: string): string {

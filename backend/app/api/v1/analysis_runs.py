@@ -10,6 +10,7 @@ from app.api.v1.schemas.analyses import (
     AnalysisResultExportDeleteResponse,
     AnalysisResultExportDeletionPreflightResponse,
     AnalysisResultExportListResponse,
+    AnalysisResultHtmlReportRequest,
     AnalysisResultHtmlReportResponse,
     AnalysisResultJsonExportResponse,
     AnalysisRunComparisonResponse,
@@ -148,10 +149,12 @@ def create_analysis_result_csv_export_route(
 def create_analysis_result_html_report_export_route(
     request: Request,
     analysis_id: UUID,
+    body: AnalysisResultHtmlReportRequest | None = None,
 ) -> AnalysisResultHtmlReportResponse:
     return create_analysis_result_html_report_export(
         settings=request.app.state.settings,
         analysis_id=analysis_id,
+        locale=body.locale if body is not None else "en",
     )
 
 

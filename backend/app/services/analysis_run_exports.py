@@ -29,6 +29,7 @@ from app.api.v1.schemas.analyses import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
+from app.i18n.report_text import ReportLocale, report_text
 from app.services.analysis_run_execution import canonical_json_bytes
 from app.services.analysis_run_execution import utc_now as _utc_now
 from app.services.analysis_run_results import get_analysis_run_result
@@ -62,7 +63,7 @@ ANALYSIS_RESULT_CSV_EXPORT_FORMAT: Literal["analysis_result_csv"] = "analysis_re
 ANALYSIS_RESULT_CSV_EXPORT_MEDIA_TYPE: Literal["text/csv"] = "text/csv"
 ANALYSIS_RESULT_CSV_COLUMNS = ("section", "path", "value")
 ANALYSIS_RESULT_CSV_PREVIEW_ROW_LIMIT = 50
-ANALYSIS_RESULT_HTML_REPORT_SCHEMA_VERSION = 2
+ANALYSIS_RESULT_HTML_REPORT_SCHEMA_VERSION = 3
 ANALYSIS_RESULT_HTML_REPORT_KIND: Literal["analysis_result_html_report"] = (
     "analysis_result_html_report"
 )
@@ -605,6 +606,7 @@ def create_regression_prediction_csv_export(
 def create_analysis_result_html_report_export(
     settings: Settings,
     analysis_id: UUID,
+    locale: Literal["en", "ko"] = "en",
 ) -> AnalysisResultHtmlReportResponse:
     record = get_analysis_run_record(settings.workspace_root, str(analysis_id))
     if record is None:
@@ -631,6 +633,7 @@ def create_analysis_result_html_report_export(
         stale=record.stale,
         created_at=created_at,
         rows=rows,
+        locale=locale,
     )
     export_sha256 = hashlib.sha256(export_bytes).hexdigest()
 
@@ -667,8 +670,13 @@ def create_analysis_result_html_report_export(
         source_result_sha256=record.result_sha256,
         stale=record.stale,
         created_at=created_at,
-        title=ANALYSIS_RESULT_HTML_REPORT_TITLE,
+        title=report_text(
+            locale,
+            en=ANALYSIS_RESULT_HTML_REPORT_TITLE,
+            ko="Statistical Twin 분석 보고서",
+        ),
         section_count=len(rows),
+        report_locale=locale,
     )
 
 
@@ -1097,38 +1105,86 @@ def _analysis_result_html_report_bytes(
     stale: bool,
     created_at: str,
     rows: list[list[str]],
+    locale: ReportLocale = "en",
 ) -> bytes:
     del rows
     warning_markup = "\n".join(
         "<li>"
         f"<strong>{_html_text(warning.code)}</strong>: "
-        f"{_html_text(warning.message)} "
+        f"{_html_text(warning.message if locale == 'ko' else 'Review this analysis warning.')} "
         f"<span>{_html_text(warning.severity)}</span>"
         "</li>"
         for warning in result.warnings
     )
     if not warning_markup:
-        warning_markup = "<li>저장된 경고가 없습니다.</li>"
-    method_specific_markup = _analysis_result_method_specific_report_section(result)
-    method_label = _analysis_method_report_label(result.method_id)
+        warning_markup = report_text(
+            locale,
+            en="<li>No saved warnings.</li>",
+            ko="<li>저장된 경고가 없습니다.</li>",
+        )
+    method_specific_markup = _analysis_result_method_specific_report_section(result, locale)
+    method_label = _analysis_method_report_label(result.method_id, locale)
     result_payload = result.result if isinstance(result.result, dict) else {}
-    input_settings = _report_input_settings(result_payload)
+    input_settings = _report_input_settings(result_payload, locale)
     raw_result = _html_text(
         json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True)
     )
     row_count_included = _report_cell_value(result.provenance.row_count_included)
     row_count_total = _report_cell_value(result.provenance.row_count_total)
-    stale_label = "원본 변경으로 확인 필요" if stale else "현재 원본 기준"
+    stale_label = report_text(
+        locale,
+        en="Review required because the source changed" if stale else "Current source",
+        ko="원본 변경으로 확인 필요" if stale else "현재 원본 기준",
+    )
+    report_heading = report_text(
+        locale,
+        en=f"{method_label} Results Report",
+        ko=f"{method_label} 결과 보고서",
+    )
+    summary_heading = report_text(locale, en="Analysis Summary", ko="분석 요약")
+    method_heading = report_text(locale, en="Analysis Method", ko="분석 방법")
+    completed_heading = report_text(locale, en="Completed", ko="분석 완료")
+    rows_heading = report_text(locale, en="Rows Used / Total Rows", ko="사용 행 / 전체 행")
+    source_heading = report_text(locale, en="Source Status", ko="원본 상태")
+    settings_heading = report_text(locale, en="Inputs and Settings", ko="입력 및 설정")
+    results_heading = report_text(locale, en="Key Results", ko="핵심 결과")
+    warning_heading = report_text(
+        locale,
+        en="Interpretation Notes and Warnings",
+        ko="해석 시 주의사항과 경고",
+    )
+    note = report_text(
+        locale,
+        en=(
+            "This report reconstructs the saved analysis result. "
+            "It does not reread the source data or rerun the analysis."
+        ),
+        ko=(
+            "이 보고서는 저장된 분석 결과를 재구성한 문서입니다. "
+            "원자료를 다시 읽거나 분석을 재실행하지 않았습니다."
+        ),
+    )
+    technical_heading = report_text(locale, en="Technical Information", ko="기술 정보")
+    raw_heading = report_text(
+        locale,
+        en="Machine-readable Source Result JSON",
+        ko="기계 판독용 원본 result JSON",
+    )
+    report_title = report_text(
+        locale,
+        en=ANALYSIS_RESULT_HTML_REPORT_TITLE,
+        ko="Statistical Twin 분석 보고서",
+    )
 
     html = f"""<!doctype html>
-<html lang="ko">
+<html lang="{locale}">
 <head>
   <meta charset="utf-8">
   <meta
     http-equiv="Content-Security-Policy"
     content="default-src 'none'; style-src 'unsafe-inline'"
   >
-  <title>{_html_text(ANALYSIS_RESULT_HTML_REPORT_TITLE)}</title>
+  <title>{_html_text(report_title)}</title>
   <style>
     body {{ font-family: Arial, sans-serif; margin: 0; color: #172033; line-height: 1.5; }}
     main {{ max-width: 1120px; margin: 0 auto; padding: 32px; }}
@@ -1184,34 +1240,35 @@ def _analysis_result_html_report_bytes(
 </head>
 <body>
 <main>
-  <p class="report-kicker">{_html_text(ANALYSIS_RESULT_HTML_REPORT_TITLE)}</p>
-  <h1>{_html_text(method_label)} 결과 보고서</h1>
-  <h2>분석 요약</h2>
+  <p class="report-kicker">{_html_text(report_title)}</p>
+  <h1>{_html_text(report_heading)}</h1>
+  <h2>{_html_text(summary_heading)}</h2>
   <div class="report-summary">
     <div class="summary-item">
-      <span>분석 방법</span><strong>{_html_text(method_label)}</strong>
+      <span>{_html_text(method_heading)}</span><strong>{_html_text(method_label)}</strong>
     </div>
     <div class="summary-item">
-      <span>분석 완료</span><strong>{_html_text(created_at)}</strong>
+      <span>{_html_text(completed_heading)}</span><strong>{_html_text(created_at)}</strong>
     </div>
     <div class="summary-item">
-      <span>사용 행 / 전체 행</span>
+      <span>{_html_text(rows_heading)}</span>
       <strong>{_html_text(row_count_included)} / {_html_text(row_count_total)}</strong>
     </div>
-    <div class="summary-item"><span>원본 상태</span><strong>{_html_text(stale_label)}</strong></div>
+    <div class="summary-item">
+      <span>{_html_text(source_heading)}</span><strong>{_html_text(stale_label)}</strong>
+    </div>
   </div>
-  <h2>입력 및 설정</h2>
+  <h2>{_html_text(settings_heading)}</h2>
   {input_settings}
-  <h2>핵심 결과</h2>
+  <h2>{_html_text(results_heading)}</h2>
 {method_specific_markup}
-  <h2>해석 시 주의사항과 경고</h2>
+  <h2>{_html_text(warning_heading)}</h2>
   <ul>{warning_markup}</ul>
   <p class="report-note">
-    이 보고서는 저장된 분석 결과를 재구성한 문서입니다.
-    원자료를 다시 읽거나 분석을 재실행하지 않았습니다.
+    {_html_text(note)}
   </p>
   <details>
-    <summary>기술 정보</summary>
+    <summary>{_html_text(technical_heading)}</summary>
     <dl class="meta">
       <dt>Analysis ID</dt><dd>{_html_text(str(analysis_id))}</dd>
       <dt>Method</dt><dd>{_html_text(result.method_id)} v{_html_text(result.method_version)}</dd>
@@ -1221,7 +1278,7 @@ def _analysis_result_html_report_bytes(
     </dl>
   </details>
   <details>
-    <summary>기계 판독용 원본 result JSON</summary>
+    <summary>{_html_text(raw_heading)}</summary>
     <pre>{raw_result}</pre>
   </details>
 </main>
@@ -1235,35 +1292,45 @@ def _html_text(value: object) -> str:
     return escape(str(value), quote=True)
 
 
-def _analysis_method_report_label(method_id: str) -> str:
+def _analysis_method_report_label(method_id: str, locale: ReportLocale = "en") -> str:
     labels = {
-        "eda.descriptive": "기술통계",
-        "eda.graphical_summary": "그래프 요약",
-        "eda.normality": "정규성 검정",
-        "eda.equal_variances": "등분산 검정",
-        "regression.linear_model": "회귀모형 적합",
+        "eda.descriptive": ("Descriptive Statistics", "기술통계"),
+        "eda.graphical_summary": ("Graphical Summary", "그래프 요약"),
+        "eda.normality": ("Normality Test", "정규성 검정"),
+        "eda.equal_variances": ("Test for Equal Variances", "등분산 검정"),
+        "regression.linear_model": ("Fit Regression Model", "회귀모형 적합"),
     }
-    return labels.get(method_id, method_id)
+    label = labels.get(method_id)
+    if label is None:
+        return method_id
+    return label[1] if locale == "ko" else label[0]
 
 
-def _report_input_settings(payload: dict[str, object]) -> str:
+def _report_input_settings(payload: dict[str, object], locale: ReportLocale = "en") -> str:
     settings = []
-    for key, label in (
-        ("missing_policy", "결측 처리"),
-        ("confidence_level", "신뢰수준"),
-        ("alpha", "유의수준"),
-        ("quartile_method", "사분위수 방법"),
+    for key, label_en, label_ko in (
+        ("missing_policy", "Missing-data handling", "결측 처리"),
+        ("confidence_level", "Confidence level", "신뢰수준"),
+        ("alpha", "Significance level", "유의수준"),
+        ("quartile_method", "Quartile method", "사분위수 방법"),
     ):
         if key in payload:
+            label = label_ko if locale == "ko" else label_en
             settings.append(
                 f"<div><dt>{_html_text(label)}</dt><dd>{_html_text(_report_cell_value(payload[key]))}</dd></div>"
             )
     if not settings:
-        return "<p>저장된 결과에 별도 실행 설정 요약이 없습니다.</p>"
+        return report_text(
+            locale,
+            en="<p>No separate run-settings summary is stored with this result.</p>",
+            ko="<p>저장된 결과에 별도 실행 설정 요약이 없습니다.</p>",
+        )
     return f'<dl class="meta">{"".join(settings)}</dl>'
 
 
-def _analysis_result_method_specific_report_section(result: AnalysisResultEnvelope) -> str:
+def _analysis_result_method_specific_report_section(
+    result: AnalysisResultEnvelope, locale: ReportLocale = "en"
+) -> str:
     payload = result.result
     if not isinstance(payload, dict):
         return ""
@@ -1276,19 +1343,21 @@ def _analysis_result_method_specific_report_section(result: AnalysisResultEnvelo
     }
     renderer = renderers.get(str(summary_type))
     if renderer is not None:
-        return renderer(payload)
+        return renderer(payload, locale)
     if summary_type in HYPOTHESIS_REPORT_SUMMARY_TYPES:
-        return _hypothesis_report_section(payload, str(summary_type))
+        return _hypothesis_report_section(payload, str(summary_type), locale)
     if summary_type in CATEGORICAL_REPORT_SUMMARY_TYPES:
-        return _categorical_report_section(payload, str(summary_type))
+        return _categorical_report_section(payload, str(summary_type), locale)
     if summary_type in REGRESSION_REPORT_SUMMARY_TYPES:
-        return _regression_report_section(payload, str(summary_type))
+        return _regression_report_section(payload, str(summary_type), locale)
     if summary_type in QUALITY_REPORT_SUMMARY_TYPES:
-        return _quality_report_section(payload, str(summary_type))
+        return _quality_report_section(payload, str(summary_type), locale)
     return ""
 
 
-def _descriptive_statistics_report_section(payload: dict[str, object]) -> str:
+def _descriptive_statistics_report_section(
+    payload: dict[str, object], locale: ReportLocale = "en"
+) -> str:
     columns = payload.get("columns")
     if not isinstance(columns, list):
         return ""
@@ -1299,9 +1368,15 @@ def _descriptive_statistics_report_section(payload: dict[str, object]) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Descriptive Statistics Summary", ko="기술통계 요약")
+    description = report_text(
+        locale,
+        en="Values from the saved result are shown without recalculation.",
+        ko="저장된 분석 결과의 기술통계 값을 재계산 없이 표시합니다.",
+    )
     return f"""
-  <h2>기술통계 요약</h2>
-  <p>저장된 분석 결과의 기술통계 값을 재계산 없이 표시합니다.</p>
+  <h2>{_html_text(heading)}</h2>
+  <p>{_html_text(description)}</p>
   <table>
     <thead>
       <tr>
@@ -1414,7 +1489,7 @@ def _graphical_summary_report_row(column: dict[object, object]) -> str:
     )
 
 
-def _normality_report_section(payload: dict[str, object]) -> str:
+def _normality_report_section(payload: dict[str, object], locale: ReportLocale = "en") -> str:
     columns = payload.get("columns")
     if not isinstance(columns, list):
         return ""
@@ -1425,9 +1500,15 @@ def _normality_report_section(payload: dict[str, object]) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Normality Test Summary", ko="정규성 검정 요약")
+    description = report_text(
+        locale,
+        en="Shows stored Shapiro-Wilk, Anderson-Darling, and shape statistics.",
+        ko="저장된 정규성 검정 결과의 Shapiro-Wilk, Anderson-Darling, 형상 통계량을 표시합니다.",
+    )
     return f"""
-  <h2>정규성 검정 요약</h2>
-  <p>저장된 정규성 검정 결과의 Shapiro-Wilk, Anderson-Darling, 형상 통계량을 표시합니다.</p>
+  <h2>{_html_text(heading)}</h2>
+  <p>{_html_text(description)}</p>
   <table>
     <thead>
       <tr>
@@ -1476,7 +1557,7 @@ def _normality_report_row(column: dict[object, object]) -> str:
     )
 
 
-def _equal_variances_report_section(payload: dict[str, object]) -> str:
+def _equal_variances_report_section(payload: dict[str, object], locale: ReportLocale = "en") -> str:
     tests = payload.get("tests")
     groups = payload.get("groups")
     test_markup = (
@@ -1500,9 +1581,13 @@ def _equal_variances_report_section(payload: dict[str, object]) -> str:
     group_name = _report_nested_value(payload.get("group"), "display_name")
     response_label = _html_text(_report_cell_value(response_name))
     group_label = _html_text(_report_cell_value(group_name))
+    summary_heading = report_text(
+        locale, en="Test for Equal Variances Summary", ko="등분산 검정 요약"
+    )
+    group_heading = report_text(locale, en="Group Summary", ko="등분산 그룹 요약")
 
     return f"""
-  <h2>등분산 검정 요약</h2>
+  <h2>{_html_text(summary_heading)}</h2>
   <p>Response: {response_label} / Group: {group_label}</p>
   <table>
     <thead>
@@ -1521,7 +1606,7 @@ def _equal_variances_report_section(payload: dict[str, object]) -> str:
 {test_markup}
     </tbody>
   </table>
-  <h2>등분산 그룹 요약</h2>
+  <h2>{_html_text(group_heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -1574,16 +1659,24 @@ def _equal_variances_group_report_row(group: dict[object, object]) -> str:
     )
 
 
-def _hypothesis_report_section(payload: dict[str, object], summary_type: str) -> str:
+def _hypothesis_report_section(
+    payload: dict[str, object], summary_type: str, locale: ReportLocale = "en"
+) -> str:
     metric_markup = "\n".join(_hypothesis_metric_report_rows(payload, summary_type))
-    group_markup = _hypothesis_groups_report_markup(payload.get("groups"))
-    posthoc_markup = _hypothesis_posthoc_report_markup(payload.get("posthoc"))
+    group_markup = _hypothesis_groups_report_markup(payload.get("groups"), locale)
+    posthoc_markup = _hypothesis_posthoc_report_markup(payload.get("posthoc"), locale)
     if not metric_markup and not group_markup and not posthoc_markup:
         return ""
 
+    heading = report_text(locale, en="Hypothesis Test Summary", ko="가설 검정 요약")
+    description = report_text(
+        locale,
+        en="Shows stored test statistics, estimates, confidence intervals, and effect sizes.",
+        ko="저장된 hypothesis 결과의 핵심 검정값, 추정치, 신뢰구간, 효과크기를 표시합니다.",
+    )
     return f"""
-  <h2>가설 검정 요약</h2>
-  <p>저장된 hypothesis 결과의 핵심 검정값, 추정치, 신뢰구간, 효과크기를 표시합니다.</p>
+  <h2>{_html_text(heading)}</h2>
+  <p>{_html_text(description)}</p>
   <table>
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
@@ -1688,7 +1781,7 @@ def _hypothesis_tost_metric_rows(payload: dict[str, object]) -> list[str]:
     ]
 
 
-def _hypothesis_groups_report_markup(groups: object) -> str:
+def _hypothesis_groups_report_markup(groups: object, locale: ReportLocale = "en") -> str:
     if not isinstance(groups, list):
         return ""
     row_markup = "\n".join(
@@ -1697,8 +1790,9 @@ def _hypothesis_groups_report_markup(groups: object) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Hypothesis-Test Group Summary", ko="가설 검정 그룹 요약")
     return f"""
-  <h2>가설 검정 그룹 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -1732,7 +1826,7 @@ def _hypothesis_group_report_row(group: dict[object, object]) -> str:
     )
 
 
-def _hypothesis_posthoc_report_markup(posthoc: object) -> str:
+def _hypothesis_posthoc_report_markup(posthoc: object, locale: ReportLocale = "en") -> str:
     if not isinstance(posthoc, dict):
         return ""
     comparisons = posthoc.get("comparisons")
@@ -1748,8 +1842,9 @@ def _hypothesis_posthoc_report_markup(posthoc: object) -> str:
 
     performed = _report_cell_value(posthoc.get("performed"))
     method = _report_cell_value(posthoc.get("method") or posthoc.get("multiplicity_method"))
+    heading = report_text(locale, en="Post-Hoc Comparisons", ko="가설 검정 사후 비교")
     return f"""
-  <h2>가설 검정 사후 비교</h2>
+  <h2>{_html_text(heading)}</h2>
   <p>Performed: {_html_text(performed)} / Method: {_html_text(method)}</p>
   <table>
     <thead>
@@ -1793,16 +1888,29 @@ def _posthoc_estimate_value(comparison: dict[object, object]) -> object:
     )
 
 
-def _categorical_report_section(payload: dict[str, object], summary_type: str) -> str:
+def _categorical_report_section(
+    payload: dict[str, object], summary_type: str, locale: ReportLocale = "en"
+) -> str:
     metric_markup = "\n".join(_categorical_metric_report_rows(payload, summary_type))
-    group_markup = _categorical_groups_report_markup(payload.get("groups"))
-    contingency_markup = _categorical_contingency_report_markup(payload.get("contingency_table"))
+    group_markup = _categorical_groups_report_markup(payload.get("groups"), locale)
+    contingency_markup = _categorical_contingency_report_markup(
+        payload.get("contingency_table"), locale
+    )
     if not metric_markup and not group_markup and not contingency_markup:
         return ""
 
+    heading = report_text(locale, en="Categorical Analysis Summary", ko="범주형 분석 요약")
+    description = report_text(
+        locale,
+        en=(
+            "Shows stored test statistics, proportions or differences, "
+            "confidence intervals, and effect sizes."
+        ),
+        ko="저장된 categorical 결과의 검정값, 비율/차이, 신뢰구간, 효과크기를 표시합니다.",
+    )
     return f"""
-  <h2>범주형 분석 요약</h2>
-  <p>저장된 categorical 결과의 검정값, 비율/차이, 신뢰구간, 효과크기를 표시합니다.</p>
+  <h2>{_html_text(heading)}</h2>
+  <p>{_html_text(description)}</p>
   <table>
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
@@ -1892,7 +2000,7 @@ def _categorical_test_metric_rows(test: dict[object, object]) -> list[str]:
     ]
 
 
-def _categorical_groups_report_markup(groups: object) -> str:
+def _categorical_groups_report_markup(groups: object, locale: ReportLocale = "en") -> str:
     if not isinstance(groups, list):
         return ""
     row_markup = "\n".join(
@@ -1901,8 +2009,9 @@ def _categorical_groups_report_markup(groups: object) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Categorical Group Summary", ko="범주형 그룹 요약")
     return f"""
-  <h2>범주형 그룹 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -1934,7 +2043,9 @@ def _categorical_group_report_row(group: dict[object, object]) -> str:
     )
 
 
-def _categorical_contingency_report_markup(contingency_table: object) -> str:
+def _categorical_contingency_report_markup(
+    contingency_table: object, locale: ReportLocale = "en"
+) -> str:
     if not isinstance(contingency_table, dict):
         return ""
     rows = contingency_table.get("rows")
@@ -1946,8 +2057,9 @@ def _categorical_contingency_report_markup(contingency_table: object) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Contingency Table Summary", ko="범주형 교차표 요약")
     return f"""
-  <h2>범주형 교차표 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead><tr><th>Row level</th><th>Row total</th><th>Observed cells</th></tr></thead>
     <tbody>
@@ -1980,16 +2092,26 @@ def _categorical_observed_cells_text(cells: object) -> str:
     return "; ".join(parts)
 
 
-def _regression_report_section(payload: dict[str, object], summary_type: str) -> str:
+def _regression_report_section(
+    payload: dict[str, object], summary_type: str, locale: ReportLocale = "en"
+) -> str:
     metric_markup = "\n".join(_regression_metric_report_rows(payload, summary_type))
-    pairs_markup = _regression_pairs_report_markup(payload.get("pairs"))
-    coefficients_markup = _linear_model_coefficients_report_markup(payload.get("coefficients"))
+    pairs_markup = _regression_pairs_report_markup(payload.get("pairs"), locale)
+    coefficients_markup = _linear_model_coefficients_report_markup(
+        payload.get("coefficients"), locale
+    )
     if not metric_markup and not pairs_markup and not coefficients_markup:
         return ""
 
+    heading = report_text(locale, en="Correlation and Regression Summary", ko="상관/회귀 분석 요약")
+    description = report_text(
+        locale,
+        en="Shows stored association, model-fit, and coefficient results.",
+        ko="저장된 correlation/regression 결과의 association, fit, coefficient 값을 표시합니다.",
+    )
     return f"""
-  <h2>상관/회귀 분석 요약</h2>
-  <p>저장된 correlation/regression 결과의 association, fit, coefficient 값을 표시합니다.</p>
+  <h2>{_html_text(heading)}</h2>
+  <p>{_html_text(description)}</p>
   <table>
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
@@ -2057,7 +2179,7 @@ def _regression_metric_report_rows(
     ]
 
 
-def _regression_pairs_report_markup(pairs: object) -> str:
+def _regression_pairs_report_markup(pairs: object, locale: ReportLocale = "en") -> str:
     if not isinstance(pairs, list):
         return ""
     row_markup = "\n".join(
@@ -2066,8 +2188,9 @@ def _regression_pairs_report_markup(pairs: object) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Correlation Pair Summary", ko="상관 쌍 요약")
     return f"""
-  <h2>상관 쌍 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -2114,7 +2237,9 @@ def _regression_pair_report_row(pair: dict[object, object]) -> str:
     )
 
 
-def _linear_model_coefficients_report_markup(coefficients: object) -> str:
+def _linear_model_coefficients_report_markup(
+    coefficients: object, locale: ReportLocale = "en"
+) -> str:
     if not isinstance(coefficients, list):
         return ""
     row_markup = "\n".join(
@@ -2125,8 +2250,9 @@ def _linear_model_coefficients_report_markup(coefficients: object) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Linear-Model Coefficient Summary", ko="선형모델 계수 요약")
     return f"""
-  <h2>선형모델 계수 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -2167,18 +2293,28 @@ def _linear_model_coefficient_report_row(coefficient: dict[object, object]) -> s
     )
 
 
-def _quality_report_section(payload: dict[str, object], summary_type: str) -> str:
+def _quality_report_section(
+    payload: dict[str, object], summary_type: str, locale: ReportLocale = "en"
+) -> str:
     metric_markup = "\n".join(_quality_metric_report_rows(payload, summary_type))
-    chart_markup = _quality_chart_summaries_report_markup(payload)
-    signal_markup = _quality_signals_report_markup(payload.get("signals"))
-    capability_markup = _quality_capability_report_markup(payload.get("capability"))
-    gage_markup = _gage_variance_components_report_markup(payload.get("variance_components"))
+    chart_markup = _quality_chart_summaries_report_markup(payload, locale)
+    signal_markup = _quality_signals_report_markup(payload.get("signals"), locale)
+    capability_markup = _quality_capability_report_markup(payload.get("capability"), locale)
+    gage_markup = _gage_variance_components_report_markup(
+        payload.get("variance_components"), locale
+    )
     if not any((metric_markup, chart_markup, signal_markup, capability_markup, gage_markup)):
         return ""
 
+    heading = report_text(locale, en="Quality Control Summary", ko="품질 관리 요약")
+    description = report_text(
+        locale,
+        en="Shows stored chart, process-capability, and Gage diagnostic results.",
+        ko="저장된 quality 결과의 핵심 차트, 공정능력, Gage 진단 값을 표시합니다.",
+    )
     return f"""
-  <h2>품질 관리 요약</h2>
-  <p>저장된 quality 결과의 핵심 차트, 공정능력, Gage 진단 값을 표시합니다.</p>
+  <h2>{_html_text(heading)}</h2>
+  <p>{_html_text(description)}</p>
   <table>
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
@@ -2253,7 +2389,9 @@ def _quality_metric_report_rows(
     ]
 
 
-def _quality_chart_summaries_report_markup(payload: dict[str, object]) -> str:
+def _quality_chart_summaries_report_markup(
+    payload: dict[str, object], locale: ReportLocale = "en"
+) -> str:
     chart_specs = (
         ("individuals_chart", "Individuals"),
         ("moving_range_chart", "Moving range"),
@@ -2271,8 +2409,9 @@ def _quality_chart_summaries_report_markup(payload: dict[str, object]) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Quality Chart Summary", ko="품질 차트 요약")
     return f"""
-  <h2>품질 차트 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -2306,7 +2445,7 @@ def _quality_chart_summary_report_row(label: str, chart: dict[object, object]) -
     )
 
 
-def _quality_signals_report_markup(signals: object) -> str:
+def _quality_signals_report_markup(signals: object, locale: ReportLocale = "en") -> str:
     if not isinstance(signals, list):
         return ""
     row_markup = "\n".join(
@@ -2315,8 +2454,9 @@ def _quality_signals_report_markup(signals: object) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Quality Signal Summary", ko="품질 신호 요약")
     return f"""
-  <h2>품질 신호 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -2359,7 +2499,7 @@ def _quality_signal_range(signal: dict[object, object]) -> str:
     return f"{_report_cell_value(start)}-{_report_cell_value(end)}"
 
 
-def _quality_capability_report_markup(capability: object) -> str:
+def _quality_capability_report_markup(capability: object, locale: ReportLocale = "en") -> str:
     if not isinstance(capability, dict):
         return ""
     row_markup = "\n".join(
@@ -2370,8 +2510,9 @@ def _quality_capability_report_markup(capability: object) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Process Capability Summary", ko="공정능력 요약")
     return f"""
-  <h2>공정능력 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -2401,7 +2542,7 @@ def _quality_capability_report_row(label: object, indices: dict[object, object])
     )
 
 
-def _gage_variance_components_report_markup(components: object) -> str:
+def _gage_variance_components_report_markup(components: object, locale: ReportLocale = "en") -> str:
     if not isinstance(components, dict):
         return ""
     component_rows = [
@@ -2413,8 +2554,9 @@ def _gage_variance_components_report_markup(components: object) -> str:
     if not row_markup:
         return ""
 
+    heading = report_text(locale, en="Gage R&R Variance Summary", ko="Gage R&R 분산 요약")
     return f"""
-  <h2>Gage R&amp;R 분산 요약</h2>
+  <h2>{_html_text(heading)}</h2>
   <table>
     <thead>
       <tr>
@@ -2528,36 +2670,51 @@ def _report_cell_value(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
-def _graphical_summary_report_section_v2(payload: dict[str, object]) -> str:
+def _graphical_summary_report_section_v2(
+    payload: dict[str, object], locale: ReportLocale = "en"
+) -> str:
     columns = payload.get("columns")
     if not isinstance(columns, list):
-        return "<p>저장된 그래프 요약 결과가 없습니다.</p>"
+        return report_text(
+            locale,
+            en="<p>No saved graphical-summary result is available.</p>",
+            ko="<p>저장된 그래프 요약 결과가 없습니다.</p>",
+        )
     cards = "".join(
-        _graphical_summary_column_report_v2(column)
+        _graphical_summary_column_report_v2(column, locale)
         for column in columns
         if isinstance(column, dict)
     )
     return (
-        "<p>아래 표와 그래프는 저장된 결과 payload만 사용해 재구성했습니다.</p>"
-        f'<div class="report-grid">{cards}</div>'
+        report_text(
+            locale,
+            en="<p>The tables and charts below use only the saved result payload.</p>",
+            ko="<p>아래 표와 그래프는 저장된 결과 payload만 사용해 재구성했습니다.</p>",
+        )
+        + f'<div class="report-grid">{cards}</div>'
     )
 
 
-def _graphical_summary_column_report_v2(column: dict[object, object]) -> str:
+def _graphical_summary_column_report_v2(
+    column: dict[object, object], locale: ReportLocale = "en"
+) -> str:
     label = _report_cell_value(column.get("display_name"))
     ad = column.get("anderson_darling")
     metrics = (
         ("N", column.get("n_used")),
-        ("평균", column.get("mean")),
-        ("표준편차", column.get("standard_deviation")),
-        ("분산", column.get("variance")),
-        ("왜도", column.get("skewness")),
-        ("첨도", column.get("kurtosis_excess")),
-        ("최소", column.get("min")),
+        (report_text(locale, en="Mean", ko="평균"), column.get("mean")),
+        (
+            report_text(locale, en="Standard deviation", ko="표준편차"),
+            column.get("standard_deviation"),
+        ),
+        (report_text(locale, en="Variance", ko="분산"), column.get("variance")),
+        (report_text(locale, en="Skewness", ko="왜도"), column.get("skewness")),
+        (report_text(locale, en="Kurtosis", ko="첨도"), column.get("kurtosis_excess")),
+        (report_text(locale, en="Minimum", ko="최소"), column.get("min")),
         ("Q1", column.get("q1")),
-        ("중앙값", column.get("median")),
+        (report_text(locale, en="Median", ko="중앙값"), column.get("median")),
         ("Q3", column.get("q3")),
-        ("최대", column.get("max")),
+        (report_text(locale, en="Maximum", ko="최대"), column.get("max")),
         ("AD A²", _report_nested_value(ad, "statistic")),
         ("AD p-value", _report_nested_value(ad, "p_value")),
     )
@@ -2570,33 +2727,46 @@ def _graphical_summary_column_report_v2(column: dict[object, object]) -> str:
         label="Q-Q Plot",
         x_key="theoretical",
         y_key="sample",
+        locale=locale,
     )
     ecdf_markup = _report_point_svg(
         column.get("ecdf"),
         label="ECDF",
         x_key="x",
         y_key="probability",
+        locale=locale,
     )
+    histogram_heading = report_text(
+        locale, en="Histogram + Normal Fit", ko="히스토그램 + 적합 정규곡선"
+    )
+    statistics_heading = report_text(locale, en="Statistical Summary", ko="통계 요약")
+    boxplot_heading = report_text(locale, en="Box Plot", ko="박스플롯")
+    interval_heading = report_text(locale, en="Confidence Intervals", ko="신뢰구간")
+    extra_heading = report_text(locale, en="Additional Chart: ECDF", ko="추가 그래프: ECDF")
     return f"""
 <section class="report-card report-card-full">
   <h3>{_html_text(label)}</h3>
   <div class="report-grid">
     <div class="report-card">
-      <h3>히스토그램 + 적합 정규곡선</h3>{_report_histogram_svg(column)}
+      <h3>{_html_text(histogram_heading)}</h3>{_report_histogram_svg(column, locale)}
     </div>
-    <div class="report-card"><h3>통계 요약</h3><table><tbody>{table_rows}</tbody></table></div>
-    <div class="report-card"><h3>박스플롯</h3>{_report_boxplot_svg(column)}</div>
+    <div class="report-card">
+      <h3>{_html_text(statistics_heading)}</h3><table><tbody>{table_rows}</tbody></table>
+    </div>
+    <div class="report-card">
+      <h3>{_html_text(boxplot_heading)}</h3>{_report_boxplot_svg(column, locale)}
+    </div>
     <div class="report-card"><h3>Q-Q Plot</h3>{qq_plot_markup}</div>
     <div class="report-card report-card-full">
-      <h3>신뢰구간</h3>{_report_confidence_interval_svg(column)}
+      <h3>{_html_text(interval_heading)}</h3>{_report_confidence_interval_svg(column, locale)}
     </div>
   </div>
-  <details><summary>추가 그래프: ECDF</summary>{ecdf_markup}</details>
+  <details><summary>{_html_text(extra_heading)}</summary>{ecdf_markup}</details>
 </section>
 """
 
 
-def _report_histogram_svg(column: dict[object, object]) -> str:
+def _report_histogram_svg(column: dict[object, object], locale: ReportLocale = "en") -> str:
     histogram = column.get("histogram")
     bins_value = histogram.get("bins") if isinstance(histogram, dict) else None
     bins = (
@@ -2612,7 +2782,9 @@ def _report_histogram_svg(column: dict[object, object]) -> str:
         if low is not None and high is not None and count is not None:
             parsed.append((low, high, count))
     if not parsed:
-        return "<p>히스토그램을 표시할 수 없습니다.</p>"
+        return report_text(
+            locale, en="<p>Histogram unavailable.</p>", ko="<p>히스토그램을 표시할 수 없습니다.</p>"
+        )
     normal_fit = column.get("normal_fit_curve")
     points_value = normal_fit.get("points") if isinstance(normal_fit, dict) else None
     curve = (
@@ -2639,15 +2811,24 @@ def _report_histogram_svg(column: dict[object, object]) -> str:
             f"{_report_scale(x,x_min,x_max,40,600):.3f},{_report_scale(y,0,y_max,210,20):.3f}"
             for x, y in curve_values
         )
+        fit_label = _html_text(report_text(locale, en="Fitted normal curve", ko="적합 정규곡선"))
         curve_markup = (
             f'<polyline class="normal-fit" points="{point_text}"/>'
-            '<text x="455" y="16" font-size="10">-- 적합 정규곡선</text>'
+            f'<text x="455" y="16" font-size="10">-- {fit_label}</text>'
         )
+    title = report_text(
+        locale, en="Histogram and Fitted Normal Curve", ko="히스토그램과 적합 정규곡선"
+    )
+    description = report_text(
+        locale,
+        en="Bars show frequency; the dashed line is the stored fitted normal curve.",
+        ko="막대는 빈도이고 점선은 저장된 적합 정규곡선입니다.",
+    )
     return (
-        '<svg role="img" aria-label="히스토그램과 적합 정규곡선" '
+        f'<svg role="img" aria-label="{_html_text(title)}" '
         'viewBox="0 0 620 235">'
-        "<title>히스토그램과 적합 정규곡선</title>"
-        "<desc>막대는 빈도이고 점선은 저장된 적합 정규곡선입니다.</desc>"
+        f"<title>{_html_text(title)}</title>"
+        f"<desc>{_html_text(description)}</desc>"
         '<line class="axis" x1="40" x2="600" y1="210" y2="210"/>'
         '<line class="axis" x1="40" x2="40" y1="20" y2="210"/>'
         f"{bars}{curve_markup}</svg>"
@@ -2667,25 +2848,35 @@ def _report_histogram_bar(
     )
 
 
-def _report_boxplot_svg(column: dict[object, object]) -> str:
+def _report_boxplot_svg(column: dict[object, object], locale: ReportLocale = "en") -> str:
     boxplot = column.get("boxplot")
     if not isinstance(boxplot, dict):
-        return "<p>박스플롯을 표시할 수 없습니다.</p>"
+        return report_text(
+            locale, en="<p>Box plot unavailable.</p>", ko="<p>박스플롯을 표시할 수 없습니다.</p>"
+        )
     values = [
         _report_float(boxplot.get(key))
         for key in ("lower_whisker", "q1", "median", "q3", "upper_whisker")
     ]
     if any(value is None for value in values):
-        return "<p>박스플롯을 표시할 수 없습니다.</p>"
+        return report_text(
+            locale, en="<p>Box plot unavailable.</p>", ko="<p>박스플롯을 표시할 수 없습니다.</p>"
+        )
     low, q1, median, q3, high = (float(value) for value in values if value is not None)
 
     def scale(value: float) -> float:
         return _report_scale(value, low, high, 40, 600)
 
+    title = report_text(locale, en="Box Plot", ko="박스플롯")
+    description = report_text(
+        locale,
+        en="Hyndman-Fan 6 quartiles with Tukey 1.5 IQR whiskers.",
+        ko="Hyndman-Fan 6 사분위수와 Tukey 1.5 IQR whisker입니다.",
+    )
     return (
-        '<svg role="img" aria-label="박스플롯" viewBox="0 0 620 145">'
-        "<title>박스플롯</title>"
-        "<desc>Hyndman-Fan 6 사분위수와 Tukey 1.5 IQR whisker입니다.</desc>"
+        f'<svg role="img" aria-label="{_html_text(title)}" viewBox="0 0 620 145">'
+        f"<title>{_html_text(title)}</title>"
+        f"<desc>{_html_text(description)}</desc>"
         f'<line class="axis" x1="{scale(low):.3f}" x2="{scale(high):.3f}" '
         'y1="72" y2="72"/>'
         f'<rect x="{scale(q1):.3f}" y="46" width="{scale(q3)-scale(q1):.3f}" '
@@ -2695,7 +2886,14 @@ def _report_boxplot_svg(column: dict[object, object]) -> str:
     )
 
 
-def _report_point_svg(series: object, *, label: str, x_key: str, y_key: str) -> str:
+def _report_point_svg(
+    series: object,
+    *,
+    label: str,
+    x_key: str,
+    y_key: str,
+    locale: ReportLocale = "en",
+) -> str:
     points_value = series.get("points") if isinstance(series, dict) else None
     points = (
         [point for point in points_value if isinstance(point, dict)]
@@ -2709,15 +2907,25 @@ def _report_point_svg(series: object, *, label: str, x_key: str, y_key: str) -> 
         if x is not None and y is not None:
             values.append((x, y))
     if not values:
-        return f"<p>{_html_text(label)} point를 표시할 수 없습니다.</p>"
+        unavailable = report_text(
+            locale, en=f"{label} points unavailable.", ko=f"{label} point를 표시할 수 없습니다."
+        )
+        return f"<p>{_html_text(unavailable)}</p>"
     x_min, x_max = min(x for x, _ in values), max(x for x, _ in values)
     y_min, y_max = min(y for _, y in values), max(y for _, y in values)
     circles = "".join(_report_point_circle(x, y, x_min, x_max, y_min, y_max) for x, y in values)
     escaped_label = _html_text(label)
+    description = _html_text(
+        report_text(
+            locale,
+            en="Bounded points from the saved payload.",
+            ko="저장 payload의 bounded point입니다.",
+        )
+    )
     return (
         f'<svg role="img" aria-label="{escaped_label}" viewBox="0 0 620 235">'
         f"<title>{escaped_label}</title>"
-        "<desc>저장 payload의 bounded point입니다.</desc>"
+        f"<desc>{description}</desc>"
         '<line class="axis" x1="40" x2="600" y1="210" y2="210"/>'
         '<line class="axis" x1="40" x2="40" y1="20" y2="210"/>'
         f"{circles}</svg>"
@@ -2737,15 +2945,27 @@ def _report_point_circle(
     return f'<circle cx="{cx:.3f}" cy="{cy:.3f}" r="2.4" fill="#2166ac"/>'
 
 
-def _report_confidence_interval_svg(column: dict[object, object]) -> str:
+def _report_confidence_interval_svg(
+    column: dict[object, object], locale: ReportLocale = "en"
+) -> str:
     intervals = column.get("confidence_intervals")
     if not isinstance(intervals, dict):
-        return "<p>신뢰구간 payload가 없습니다.</p>"
+        return report_text(
+            locale,
+            en="<p>No confidence-interval payload is available.</p>",
+            ko="<p>신뢰구간 payload가 없습니다.</p>",
+        )
     rows = []
     for key, label, y in (
-        ("mean", "평균", 42),
-        ("median", "중앙값", 88),
-        ("standard_deviation", "표준편차 (별도 척도)", 164),
+        ("mean", report_text(locale, en="Mean", ko="평균"), 42),
+        ("median", report_text(locale, en="Median", ko="중앙값"), 88),
+        (
+            "standard_deviation",
+            report_text(
+                locale, en="Standard deviation (separate scale)", ko="표준편차 (별도 척도)"
+            ),
+            164,
+        ),
     ):
         item = intervals.get(key)
         if not isinstance(item, dict):
@@ -2756,7 +2976,11 @@ def _report_confidence_interval_svg(column: dict[object, object]) -> str:
         if estimate is not None and lower is not None and upper is not None:
             rows.append((label, y, estimate, lower, upper))
     if not rows:
-        return "<p>신뢰구간을 계산할 수 없습니다.</p>"
+        return report_text(
+            locale,
+            en="<p>Confidence intervals unavailable.</p>",
+            ko="<p>신뢰구간을 계산할 수 없습니다.</p>",
+        )
     markup = ""
     for label, y, estimate, lower, upper in rows:
         estimate_x = _report_scale(estimate, lower, upper, 190, 590)
@@ -2769,11 +2993,22 @@ def _report_confidence_interval_svg(column: dict[object, object]) -> str:
             f'<text x="590" y="{y + 18}" text-anchor="end" '
             f'font-size="10">{upper:.6g}</text>'
         )
+    title = report_text(locale, en="Confidence Intervals", ko="신뢰구간")
+    aria = report_text(
+        locale,
+        en="Mean, median, and standard-deviation confidence intervals",
+        ko="평균 중앙값 표준편차 신뢰구간",
+    )
+    description = report_text(
+        locale,
+        en="Mean and median use a location scale; standard deviation uses a separate scale.",
+        ko="평균과 중앙값은 위치 척도이고 표준편차는 별도 척도입니다.",
+    )
     return (
-        '<svg role="img" aria-label="평균 중앙값 표준편차 신뢰구간" '
+        f'<svg role="img" aria-label="{_html_text(aria)}" '
         'viewBox="0 0 620 205">'
-        "<title>신뢰구간</title>"
-        "<desc>평균과 중앙값은 위치 척도이고 표준편차는 별도 척도입니다.</desc>"
+        f"<title>{_html_text(title)}</title>"
+        f"<desc>{_html_text(description)}</desc>"
         f"{markup}</svg>"
     )
 
@@ -2790,36 +3025,64 @@ def _report_scale(value: float, minimum: float, maximum: float, start: float, en
     return start + (value - minimum) / (maximum - minimum) * (end - start)
 
 
-def _equal_variances_report_section_v2(payload: dict[str, object]) -> str:
+def _equal_variances_report_section_v2(
+    payload: dict[str, object], locale: ReportLocale = "en"
+) -> str:
     multiple = payload.get("multiple_comparisons")
     levene = payload.get("levene")
     if not isinstance(multiple, dict) or not isinstance(levene, dict):
-        return _equal_variances_report_section(payload)
+        return _equal_variances_report_section(payload, locale)
+    multiple_label = report_text(locale, en="Multiple Comparisons", ko="다중 비교")
+    levene_label = report_text(
+        locale, en="Levene's Test (Brown-Forsythe)", ko="Levene 검정 (Brown-Forsythe)"
+    )
     method_rows = (
-        "<tr><td>다중 비교</td><td>-</td>"
+        f"<tr><td>{_html_text(multiple_label)}</td><td>-</td>"
         f"<td>{_html_text(_report_cell_value(multiple.get('p_value')))}</td>"
         f"<td>{_html_text(_report_cell_value(multiple.get('reject_equal_variances')))}</td></tr>"
-        "<tr><td>Levene 검정 (Brown-Forsythe)</td>"
+        f"<tr><td>{_html_text(levene_label)}</td>"
         f"<td>{_html_text(_report_cell_value(levene.get('statistic')))}</td>"
         f"<td>{_html_text(_report_cell_value(levene.get('p_value')))}</td>"
         f"<td>{_html_text(_report_cell_value(levene.get('reject_equal_variances')))}</td></tr>"
     )
+    heading = report_text(locale, en="Test for Equal Variances Summary", ko="등분산 검정 요약")
+    method_header = report_text(locale, en="Method", ko="방법")
+    statistic_header = report_text(locale, en="Test Statistic", ko="검정 통계량")
+    reject_header = report_text(locale, en="Reject Equal Variances", ko="등분산 기각")
+    interval_heading = report_text(
+        locale,
+        en="Multiple-Comparison Intervals for Standard Deviations",
+        ko="표준편차 다중 비교구간",
+    )
+    note = report_text(
+        locale,
+        en=(
+            "These multiple-comparison intervals compare group standard deviations; "
+            "they are not ordinary confidence intervals for population standard deviations. "
+            "Levene's test uses the median-centered Brown-Forsythe modification."
+        ),
+        ko=(
+            "다중 비교구간은 그룹 표준편차 비교를 위한 구간이며 모집단 표준편차의 "
+            "일반 신뢰구간이 아닙니다. Levene 검정은 중앙값 중심 Brown-Forsythe 수정법입니다."
+        ),
+    )
     return f"""
-<h3>등분산 검정 요약</h3>
+<h3>{_html_text(heading)}</h3>
 <table>
-  <thead><tr><th>방법</th><th>검정 통계량</th><th>p-value</th><th>등분산 기각</th></tr></thead>
+  <thead><tr><th>{_html_text(method_header)}</th><th>{_html_text(statistic_header)}</th><th>p-value</th><th>{_html_text(reject_header)}</th></tr></thead>
   <tbody>{method_rows}</tbody>
 </table>
-<h3>표준편차 다중 비교구간</h3>
-{_variance_comparison_report_svg(multiple)}
+<h3>{_html_text(interval_heading)}</h3>
+{_variance_comparison_report_svg(multiple, locale)}
 <p class="report-note">
-  다중 비교구간은 그룹 표준편차 비교를 위한 구간이며 모집단 표준편차의
-  일반 신뢰구간이 아닙니다. Levene 검정은 중앙값 중심 Brown-Forsythe 수정법입니다.
+  {_html_text(note)}
 </p>
 """
 
 
-def _variance_comparison_report_svg(multiple: dict[object, object]) -> str:
+def _variance_comparison_report_svg(
+    multiple: dict[object, object], locale: ReportLocale = "en"
+) -> str:
     groups_value = multiple.get("groups")
     groups = (
         [group for group in groups_value if isinstance(group, dict)]
@@ -2837,7 +3100,11 @@ def _variance_comparison_report_svg(multiple: dict[object, object]) -> str:
         if estimate is not None and lower is not None and upper is not None:
             parsed.append((_report_cell_value(group.get("group_label")), estimate, lower, upper))
     if not parsed:
-        return "<p>다중 비교구간을 계산할 수 없습니다.</p>"
+        return report_text(
+            locale,
+            en="<p>Multiple-comparison intervals unavailable.</p>",
+            ko="<p>다중 비교구간을 계산할 수 없습니다.</p>",
+        )
     minimum = min(lower for _, _, lower, _ in parsed)
     maximum = max(upper for _, _, _, upper in parsed)
     height = 50 + 44 * len(parsed)
@@ -2857,10 +3124,23 @@ def _variance_comparison_report_svg(multiple: dict[object, object]) -> str:
             f'y1="{y - 7}" y2="{y + 7}"/>'
             f'<circle class="estimate" cx="{xe:.3f}" cy="{y}" r="4"/>'
         )
+    title = report_text(
+        locale,
+        en="Multiple-Comparison Intervals for Standard Deviations",
+        ko="표준편차 다중 비교구간",
+    )
+    description = report_text(
+        locale,
+        en=(
+            "Points are sample standard deviations; lines are Bonett-Nakayama "
+            "multiple-comparison intervals."
+        ),
+        ko="점은 표본 표준편차, 선은 Bonett-Nakayama 다중 비교구간입니다.",
+    )
     return (
-        f'<svg role="img" aria-label="표준편차 다중 비교구간" '
+        f'<svg role="img" aria-label="{_html_text(title)}" '
         f'viewBox="0 0 620 {height}">'
-        "<title>표준편차 다중 비교구간</title>"
-        "<desc>점은 표본 표준편차, 선은 Bonett-Nakayama 다중 비교구간입니다.</desc>"
+        f"<title>{_html_text(title)}</title>"
+        f"<desc>{_html_text(description)}</desc>"
         f"{rows}</svg>"
     )

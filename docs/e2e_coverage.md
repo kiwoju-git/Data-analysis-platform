@@ -463,6 +463,16 @@ browser critical path.
 
 - `wait for backend health`
 - `wait for frontend dev server`
+- `verify English default and persistent Korean switch`
+  - starts from an empty browser context and verifies English, `html[lang=en]`,
+    the seven English top-level navigation labels, and no visible Hangul in
+    text or accessible attributes;
+  - switches to Korean without navigation or remount, preserves the Help
+    search draft, persists `statistical-twin.locale`, and verifies the choice
+    again after reload;
+  - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
+    `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
+    overflow and keep the language/API controls visible.
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`

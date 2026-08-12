@@ -1288,6 +1288,28 @@ After push, verify these items in GitHub UI:
 - The `e2e-logs` artifact is present even on failure and contains only `logs`, `screenshots`, and `html` diagnostics, not raw workspace data.
 - The Actions page exposes a `workflow_dispatch` manual run button for the `ci` workflow.
 
+### English/Korean Localization Validation (2026-08-12)
+
+- Base: `b554f9e83a11559e599105af4f6847488890d6fe`.
+- `scripts/test.ps1`: backend 972 passed and frontend Vitest 270 passed.
+- Final `scripts/check.ps1` passed in 1,169.4 seconds: tutorial sync, Ruff,
+  formatting for 208 Python files, mypy for 130 source files, backend 972,
+  localization audit, ESLint, strict TypeScript, frontend 270, and production
+  build.
+- Focused HTML locale/API validation: 8 HTML export tests and 207
+  OpenAPI/startup contract tests passed.
+- Localization audit: 2,951 frontend source strings and 2,963 translation keys
+  passed key, placeholder, empty-value, English-Hangul, missing, and orphan
+  checks.
+- Chromium E2E passed in 148.4 seconds, including fresh-context English, all
+  six English analysis-module labels, state-preserving Korean switching,
+  reload persistence, English DOM Hangul detection, 390 x 844 overflow
+  assertions, bilingual screenshots, localized HTML export, and the existing
+  full application critical path.
+- Production build passed. Vite continues to report the existing informational
+  large-chunk warning; the localization catalog/runtime chunk is 597.31 kB
+  (231.75 kB gzip). No runtime CDN or localization dependency was introduced.
+
 ## Follow-up
 
 - After pushing this PR or main update, verify the latest Actions run in GitHub UI or with an authenticated `gh run list --repo kiwoju-git/Data-analysis-platform --branch main --limit 5`.
