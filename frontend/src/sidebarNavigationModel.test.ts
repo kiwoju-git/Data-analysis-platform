@@ -22,9 +22,14 @@ const analysisCatalog: AnalysisMethodListResponse = {
     label_en: String(label_ko),
     order,
   })),
-  methods: ["기술통계", "그래프 요약", "정규성 검정", "등분산 검정"].map(
-    (label, index) => ({
-      method_id: `eda.method_${index}`,
+  methods: [
+    ["eda.descriptive", "기술통계"],
+    ["eda.graphical_summary", "그래프 요약"],
+    ["eda.normality", "정규성 검정"],
+    ["eda.equal_variances", "등분산 검정"],
+  ].map(
+    ([method_id, label], index) => ({
+      method_id,
       method_version: "0.1.0",
       module_id: "exploration" as const,
       label_ko: label,
@@ -85,10 +90,10 @@ describe("sidebar navigation model", () => {
     expect(onOpenManageTab).toHaveBeenCalledWith("datasets");
   });
 
-  it("keeps all six catalog analysis modules visible and blocks them while unavailable", () => {
+  it("keeps all eight analysis domains visible and blocks them while unavailable", () => {
     const groups = createSidebarNavigationGroups({
       ...catalogOptions,
-      activeAnalysisModuleId: "quality",
+      activeAnalysisDomainId: "quality-process-monitoring",
       activePage: "analysis",
       canOpenAnalysis: false,
       query: new URLSearchParams(),
@@ -103,15 +108,29 @@ describe("sidebar navigation model", () => {
     const analysis = groups.find((group) => group.id === "analysis");
 
     expect(analysis?.children.map((item) => item.id)).toEqual([
-      "exploration",
-      "hypothesis",
-      "categorical",
-      "regression",
-      "quality",
-      "doe",
+      "basic-exploration",
+      "mean-equivalence",
+      "proportions-categorical",
+      "correlation-regression-prediction",
+      "doe-optimization",
+      "ai-ml-experimental-design",
+      "quality-process-monitoring",
+      "measurement-variability",
     ]);
     expect(analysis?.children.every((item) => item.disabled)).toBe(true);
-    expect(analysis?.children.find((item) => item.active)?.id).toBe("quality");
+    expect(analysis?.children.find((item) => item.active)?.id).toBe(
+      "quality-process-monitoring",
+    );
+    expect(
+      analysis?.children
+        .find((item) => item.id === "correlation-regression-prediction")
+        ?.children?.some((item) => item.id.endsWith("prediction-optimization")),
+    ).toBe(false);
+    expect(
+      analysis?.children
+        .find((item) => item.id === "ai-ml-experimental-design")
+        ?.children?.some((item) => item.id.endsWith("surrogate-stage")),
+    ).toBe(false);
   });
 
   it("keeps only registration and preview dataset shortcuts", () => {
@@ -160,6 +179,40 @@ describe("sidebar navigation model", () => {
         "http://127.0.0.1:8600/?section=dataset-version",
       ),
     ).toBeNull();
+  });
+
+  it("builds the active domain-family-method chain and leaves planned work disabled", () => {
+    const groups = createSidebarNavigationGroups({
+      ...catalogOptions,
+      activeAnalysisMethodId: "eda.equal_variances",
+      activePage: "analysis",
+      canOpenAnalysis: true,
+      query: new URLSearchParams(),
+      onOpenDatasetSection: vi.fn(),
+      onOpenHelpSection: vi.fn(),
+      onOpenGraphs: vi.fn(),
+      onOpenManageTab: vi.fn(),
+      onOpenProject: vi.fn(),
+      onOpenReportTab: vi.fn(),
+    });
+    const analysis = groups.find((group) => group.id === "analysis");
+    const measurement = analysis?.children.find(
+      (item) => item.id === "measurement-variability",
+    );
+    const variance = measurement?.children?.find((item) =>
+      item.id.endsWith("variance-comparison"),
+    );
+
+    expect(measurement?.active).toBe(true);
+    expect(variance?.active).toBe(true);
+    expect(variance?.children?.find((item) => item.id === "eda.equal_variances")?.active).toBe(
+      true,
+    );
+    const plannedTwoVariances = variance?.children?.find((item) =>
+      item.id.includes("quality.two_variances"),
+    );
+    expect(plannedTwoVariances?.disabled).toBe(true);
+    expect(plannedTwoVariances).not.toHaveProperty("onActivate");
   });
 
   it("marks method detail URLs as the active Help leaf", () => {

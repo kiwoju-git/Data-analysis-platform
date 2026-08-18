@@ -29,6 +29,215 @@
   text-rendering: optimizeLegibility;
 }
 
+.analysis-domain-intro {
+  margin-bottom: 14px;
+}
+
+.analysis-domain-intro h2,
+.analysis-domain-intro p {
+  margin-top: 0;
+}
+
+.analysis-domain-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analysis-domain-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto auto;
+  min-width: 0;
+  min-height: 220px;
+  padding: 18px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.analysis-domain-card:hover {
+  border-color: #3b73b9;
+  background: #f7faff;
+}
+
+.analysis-domain-card:focus-visible {
+  outline: 3px solid #8abcf3;
+  outline-offset: 2px;
+}
+
+.analysis-domain-order {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  background: #e6f0fb;
+  color: #164f91;
+  font-weight: 700;
+}
+
+.analysis-domain-card > strong {
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.analysis-domain-card-description {
+  margin-top: 8px;
+  color: #46566f;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+.analysis-domain-card-meta {
+  margin-top: 14px;
+  color: #53647d;
+  font-size: 0.86rem;
+}
+
+.analysis-domain-card-families {
+  margin-top: 12px;
+  color: #2f5f91;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.analysis-domain-card-action {
+  margin-top: 10px;
+  color: #0756a4;
+  font-weight: 700;
+}
+
+.analysis-domain-family-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.analysis-domain-family-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.analysis-domain-family-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analysis-domain-family-heading h3,
+.analysis-domain-family-heading p {
+  margin-top: 0;
+}
+
+.analysis-domain-family-heading p {
+  margin-bottom: 12px;
+  color: #52627a;
+  line-height: 1.45;
+}
+
+.analysis-domain-count {
+  flex: 0 0 auto;
+  color: #53647d;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.analysis-domain-method-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.analysis-domain-method-list button {
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid #aac1de;
+  border-radius: 4px;
+  background: #fff;
+  color: #17385f;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+.analysis-domain-method-list button:hover:not(:disabled),
+.analysis-domain-method-list button.is-active {
+  border-color: #1f65ae;
+  background: #e8f2ff;
+}
+
+.analysis-domain-workflow-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e1e8f1;
+  color: #40516b;
+  line-height: 1.45;
+}
+
+.analysis-domain-workflow-row small {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid #afc3dc;
+  border-radius: 4px;
+  background: #f4f8fd;
+  color: #365778;
+  white-space: nowrap;
+}
+
+.analysis-domain-workflow-row.is-planned {
+  color: #667085;
+}
+
+.analysis-domain-workflow-row.is-planned small {
+  border-color: #c9cdd5;
+  background: #f5f5f6;
+  color: #5d6470;
+}
+
+.analysis-domain-guidance {
+  margin-top: 10px;
+}
+
+@media (max-width: 1360px) {
+  .analysis-domain-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .analysis-domain-grid,
+  .analysis-domain-family-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .analysis-domain-card {
+    min-height: 0;
+  }
+
+  .analysis-domain-family-heading,
+  .analysis-domain-workflow-row {
+    display: block;
+  }
+
+  .analysis-domain-count,
+  .analysis-domain-workflow-row small {
+    display: inline-block;
+    margin-top: 6px;
+    white-space: normal;
+  }
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

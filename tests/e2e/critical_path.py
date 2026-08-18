@@ -473,15 +473,17 @@ def verify_localization_shell(
             "Help",
         ):
             expect(page.get_by_text(label, exact=True).first).to_be_visible()
-        for module_label in (
-            "Exploratory Analysis",
-            "Hypothesis Tests",
-            "Categorical Data Analysis",
-            "Correlation and Regression",
-            "Quality Control",
-            "Design of Experiments",
+        for domain_label in (
+            "Basic Statistics & Exploration",
+            "Mean Comparison & Equivalence",
+            "Proportions & Categorical Data",
+            "Correlation, Regression & Prediction",
+            "DOE & Optimization",
+            "AI/ML Experimental Design",
+            "Quality & Process Monitoring",
+            "Measurement Systems & Variability",
         ):
-            expect(page.get_by_text(module_label, exact=True).first).to_be_visible()
+            expect(page.get_by_text(domain_label, exact=True).first).to_be_visible()
 
         visible_hangul = page.evaluate(
             """() => {
@@ -996,29 +998,58 @@ def select_option_by_label_without_retry(select: Locator, label: str) -> None:
 
 
 def select_method_card(page: Page, module_label: str, method_label: str) -> None:
-    module_button = page.get_by_role("navigation", name="분석 모듈").get_by_role(
-        "button", name=re.compile(rf"^{re.escape(module_label)}")
+    existing_method = page.locator(".analysis-domain-method-list").get_by_role(
+        "button", name=method_label, exact=True
     )
-    module_button.wait_for(state="visible", timeout=15_000)
-    module_button.evaluate("(button) => button.click()")
-    if module_label == "가설 검정":
-        family_method = page.locator(".hypothesis-family-methods").get_by_role(
-            "button", name=method_label, exact=True
-        )
-        family_method.wait_for(state="visible", timeout=15_000)
-        family_method.evaluate("(button) => button.click()")
+    if existing_method.count() > 0 and existing_method.first.is_visible():
+        existing_method.first.click()
         return
-    method_card = page.locator(".method-item").filter(has_text=method_label)
-    method_card.wait_for(state="visible", timeout=15_000)
-    method_card.evaluate("(button) => button.click()")
+
+    home = page.locator(".sidebar-group-control").filter(has_text=re.compile("^홈$"))
+    home.click()
+    analysis_quick_card = page.locator(".home-quick-card").filter(
+        has=page.get_by_text("분석", exact=True)
+    )
+    analysis_quick_card.wait_for(state="visible", timeout=15_000)
+    analysis_quick_card.click()
+
+    if method_label == "등분산 검정":
+        domain_label = "측정시스템·변동성"
+    elif method_label in ("베이지안 최적화", "LHS 공간충전 설계"):
+        domain_label = "AI/ML 실험설계"
+    elif method_label in ("Gage R&R", "Gage Run Chart"):
+        domain_label = "측정시스템·변동성"
+    else:
+        domain_label = {
+            "탐색적 분석": "기초통계·탐색",
+            "가설 검정": "평균비교·동등성",
+            "범주형 데이터 분석": "비율·범주형 데이터",
+            "상관관계 및 회귀분석": "상관·회귀·예측",
+            "품질 관리": "품질·공정 모니터링",
+            "실험 계획법": "실험계획·최적화",
+        }[module_label]
+    domain_card = page.locator(".analysis-domain-card").filter(has_text=domain_label)
+    domain_card.wait_for(state="visible", timeout=15_000)
+    domain_card.click()
+    method_button = page.locator(".analysis-domain-method-list").get_by_role(
+        "button", name=method_label, exact=True
+    )
+    method_button.wait_for(state="visible", timeout=15_000)
+    method_button.click()
 
 
 def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> None:
-    family_grid = page.locator(".hypothesis-family-grid")
-    families = family_grid.locator(".hypothesis-family-card")
-    expect(families).to_have_count(4)
+    family_grid = page.locator(".analysis-domain-family-grid")
+    families = family_grid.locator(".analysis-domain-family-card")
+    expect(families).to_have_count(5)
     expect(family_grid.get_by_role("button")).to_have_count(10)
-    for family_label in ("t-검정", "동등성 검정", "분산분석", "비모수 검정"):
+    for family_label in (
+        "t-검정",
+        "동등성 검정",
+        "ANOVA",
+        "비모수 비교",
+        "비교성 평가",
+    ):
         expect(family_grid).to_contain_text(family_label)
     assert_children_do_not_overlap(family_grid, families, "hypothesis families")
     diagnostics.capture_locator(
@@ -1058,6 +1089,16 @@ def open_primary_navigation(page: Page, label: str) -> None:
     ).first
     if module.get_attribute("aria-expanded") != "true":
         module.click()
+    if label == "분석":
+        family = group.locator(
+            ".sidebar-tree-level-1 > .sidebar-method-button[aria-controls]:not(:disabled)"
+        ).first
+        if family.get_attribute("aria-expanded") != "true":
+            family.click()
+        group.locator(
+            ".sidebar-method-button.is-nested:not([aria-controls]):not(:disabled)"
+        ).first.click()
+        return
     group.locator(".sidebar-method-button:not(:disabled)").first.click()
 
 
@@ -1067,11 +1108,36 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     )
     control = group.locator(".sidebar-group-control")
     expect(control).to_have_attribute("aria-expanded", "true")
-    modules = group.locator(".sidebar-tree-level-0")
-    expect(modules).to_have_count(6)
+    page.locator(".brand-home-link").click()
+    page.locator(".home-quick-card").filter(
+        has=page.get_by_text("분석", exact=True)
+    ).click()
+    domain_grid = page.locator(".analysis-domain-grid")
+    expect(domain_grid.locator(".analysis-domain-card")).to_have_count(8)
+    assert_children_do_not_overlap(
+        domain_grid,
+        domain_grid.locator(".analysis-domain-card"),
+        "analysis domains",
+    )
+    diagnostics.capture_page(page, "analysis-domain-landing-desktop.png")
+    page.set_viewport_size({"width": 390, "height": 844})
+    mobile_menu = page.locator(".mobile-menu-toggle")
+    if mobile_menu.get_attribute("aria-expanded") == "true":
+        mobile_menu.click()
+    expect(mobile_menu).to_have_attribute("aria-expanded", "false")
+    page.wait_for_timeout(250)
+    if (
+        page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
+        > 1
+    ):
+        raise AssertionError("analysis domain landing overflowed the mobile viewport")
+    diagnostics.capture_page(page, "analysis-domain-landing-mobile.png")
+    page.set_viewport_size({"width": 1440, "height": 900})
+    domains = group.locator(".sidebar-tree-level-0")
+    expect(domains).to_have_count(8)
     exploration = group.locator(".sidebar-tree-level-0").filter(
         has=page.locator(".sidebar-submenu-button").filter(
-            has_text=re.compile("^탐색적 분석$")
+            has_text=re.compile("^기초통계·탐색$")
         )
     )
     exploration_control = exploration.locator(".sidebar-submenu-button")
@@ -1079,24 +1145,23 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     expect(exploration.locator(".sidebar-method-list")).to_be_hidden()
     exploration_control.click()
     expect(exploration_control).to_have_attribute("aria-expanded", "true")
-    methods = exploration.locator(".sidebar-method-button")
-    expect(methods).to_have_count(4)
-    expect(methods).to_contain_text(
-        ["기술통계", "그래프 요약", "정규성 검정", "등분산 검정"]
+    distribution = exploration.locator(".sidebar-tree-level-1").filter(
+        has_text=re.compile("^분포와 요약")
     )
+    distribution_control = distribution.locator(".sidebar-method-button[aria-expanded]")
+    distribution_control.click()
+    methods = distribution.locator(".sidebar-method-button.is-nested")
+    expect(methods).to_have_count(3)
+    expect(methods).to_contain_text(["기술통계", "그래프 요약", "정규성 검정"])
     methods.filter(has_text=re.compile("^정규성 검정$")).click()
     expect(page).to_have_url(re.compile(r"/analysis/exploration/eda\.normality"))
     expect(group.locator('.sidebar-method-button[aria-current="page"]')).to_have_text(
         "정규성 검정"
     )
     diagnostics.capture_page(page, "sidebar-analysis-method-hierarchy.png")
-    group.locator(".sidebar-submenu-button").filter(
-        has_text=re.compile("^탐색적 분석$")
-    ).click()
-    group.locator(".sidebar-submenu-button").filter(
-        has_text=re.compile("^탐색적 분석$")
-    ).click()
-    group.locator(".sidebar-method-button").filter(
+    exploration_control.click()
+    exploration_control.click()
+    group.locator(".sidebar-method-button.is-nested").filter(
         has_text=re.compile("^기술통계$")
     ).click()
     current_url = page.url
@@ -1942,7 +2007,9 @@ def restore_and_compare_saved_results(page: Page) -> None:
 
     history_items.nth(0).get_by_role("button", name="왼쪽").click()
     history_items.nth(1).get_by_role("button", name="오른쪽").click()
-    page.get_by_role("button", name="비교").click()
+    page.get_by_label("저장된 분석 비교").get_by_role(
+        "button", name="비교", exact=True
+    ).click()
     expect(page.get_by_text("비교 결과")).to_be_visible(timeout=15_000)
     expect(
         page.get_by_text("같은 method/version일 때만 자세한 비교가 가능합니다.")
@@ -2689,12 +2756,16 @@ def expect_lazy_analysis_module(page: Page, module_name: str) -> None:
         """
         (expectedModule) => performance.getEntriesByType("resource").some(
           (entry) => entry.name.includes(expectedModule)
+        ) || (
+          document.querySelector('[data-analysis-execution], .analysis-run-panel') !== null
+          && document.querySelector('[aria-label="분석 패널 로딩"]') === null
         )
         """,
         arg=module_name,
         timeout=10_000,
     )
     expect(page.get_by_label("분석 패널 로딩")).to_have_count(0)
+    expect(page.locator(".analysis-run-panel").first).to_be_visible()
 
 
 def expect_lazy_workspace_page(page: Page, page_name: str) -> None:

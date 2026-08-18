@@ -1,6 +1,7 @@
 import { AnalysisFilterControls } from "./AnalysisFilterControls";
-import { moduleLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
+import type { AnalysisDomainDefinition } from "./analysisDomains";
+import { analysisDomainForMethod } from "./analysisDomainMapping";
 import {
   AnalysisWorkbench,
   type AnalysisWorkbenchComparisonState,
@@ -136,6 +137,7 @@ interface AnalysisResultByMethod {
 }
 
 export interface AnalysisShellProps {
+  activeAnalysisDomain?: AnalysisDomainDefinition | null;
   analysisCatalog: AnalysisMethodListResponse | null;
   analysisCatalogError: string | null;
   analysisFilterDrafts: AnalysisFilterDraft[];
@@ -347,6 +349,7 @@ export interface AnalysisShellProps {
   selectedMethod: AnalysisMethodDescriptor | null;
   selectedMethods: AnalysisMethodDescriptor[];
   selectedModuleId: AnalysisModuleId;
+  showSelectedAnalysisMethod?: boolean;
   twoSampleTAlpha: number;
   twoSampleTAlternative: string;
   twoSampleTAnalysisResult: AnalysisResultEnvelope | null;
@@ -428,6 +431,7 @@ export interface AnalysisShellProps {
   onRunTwoProportionAnalysis: () => void;
   onRunXyCorrelationAnalysis?: () => void;
   onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
+  onOpenAnalysisDomain?: (domain: AnalysisDomainDefinition) => void;
   onOpenHelp?: (section: "purpose" | "roles") => void;
   onChiSquareAssociationAlphaChange: (alpha: number) => void;
   onChiSquareAssociationColumnColumnChange: (columnId: string) => void;
@@ -517,6 +521,7 @@ export interface AnalysisShellProps {
 }
 
 export function AnalysisShell({
+  activeAnalysisDomain,
   analysisCatalog,
   analysisCatalogError,
   analysisFilterDrafts,
@@ -748,6 +753,7 @@ export function AnalysisShell({
   selectedMethod,
   selectedMethods,
   selectedModuleId,
+  showSelectedAnalysisMethod = true,
   twoSampleTAlpha,
   twoSampleTAlternative,
   twoSampleTAnalysisResult,
@@ -823,6 +829,7 @@ export function AnalysisShell({
   onRunTwoProportionAnalysis,
   onRunXyCorrelationAnalysis = () => undefined,
   onSelectMethod,
+  onOpenAnalysisDomain = () => undefined,
   onOpenHelp = () => undefined,
   onChiSquareAssociationAlphaChange,
   onChiSquareAssociationColumnColumnChange,
@@ -910,9 +917,11 @@ export function AnalysisShell({
   onToggleXyCorrelationXColumn = () => undefined,
   onToggleXyCorrelationYColumn = () => undefined,
 }: AnalysisShellProps) {
-  const { locale } = useI18n();
-  const selectedModule =
-    analysisCatalog?.modules.find((module) => module.module_id === selectedModuleId) ?? null;
+  const { t } = useI18n();
+  const resolvedAnalysisDomain =
+    activeAnalysisDomain === undefined && selectedMethod !== null
+      ? analysisDomainForMethod(selectedMethod.method_id)
+      : activeAnalysisDomain ?? null;
   const selectedAnalysisResult =
     selectedMethod === null
       ? null
@@ -947,13 +956,16 @@ export function AnalysisShell({
     <section className="analysis-shell" aria-labelledby="analysis-modules-title">
       <div className="analysis-heading">
         <div>
-          <h2 id="analysis-modules-title">분석 모듈</h2>
-          {selectedModule !== null ? (
-            <p>
-              {moduleLabel(selectedModule, locale)}
-              {locale === "ko" ? ` · ${selectedModule.label_en}` : ""}
-            </p>
-          ) : null}
+          <h2 id="analysis-modules-title">
+            {resolvedAnalysisDomain === null
+              ? t("analysisDomains.title")
+              : t(resolvedAnalysisDomain.labelKey)}
+          </h2>
+          <p>
+            {resolvedAnalysisDomain === null
+              ? t("analysisDomains.subtitle")
+              : t(resolvedAnalysisDomain.descriptionKey)}
+          </p>
         </div>
       </div>
       {analysisCatalogError !== null ? (
@@ -964,6 +976,7 @@ export function AnalysisShell({
       ) : null}
       {analysisCatalog !== null ? (
         <AnalysisWorkbench
+          activeDomain={resolvedAnalysisDomain}
           analysisRunError={analysisRunError}
           catalog={analysisCatalog}
           comparisonState={workbenchComparisonState}
@@ -975,8 +988,10 @@ export function AnalysisShell({
           selectedMethod={selectedMethod}
           selectedMethods={selectedMethods}
           selectedModuleId={selectedModuleId}
+          showSelectedMethod={showSelectedAnalysisMethod}
           version={version}
           onSelectMethod={onSelectMethod}
+          onOpenDomain={onOpenAnalysisDomain}
           onOpenHelp={onOpenHelp}
           renderAnalysisFilters={(method) =>
             method.requires_dataset && version !== null ? (

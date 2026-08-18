@@ -649,6 +649,19 @@ Factorial/RSM off-grid rejection, Bayesian initial/recommended executable
 coordinates, optimizer step adherence, bulk rollback/idempotency, and legacy
 schema readers. UI screenshots never substitute for these calculations.
 
+## Analysis Domain Navigation Coverage
+
+The analysis-domain critical path verifies the eight presentation domains in
+the specified order, the 4-by-2 desktop and single-column mobile landing
+layouts, and the recursive `Analysis > Domain > Family > Method` sidebar. It
+also checks active-chain expansion, collapsed inactive families, direct legacy
+method URLs, stored-result restore/compare, and representative EDA,
+hypothesis, regression, quality, Factorial, RSM, LHS, and Bayesian panels after
+navigation. The screenshots are stored under
+`.tmp/e2e-diagnostics-analysis-domains/screenshots`, including
+`analysis-domain-landing-desktop.png`, `analysis-domain-landing-mobile.png`,
+and `sidebar-analysis-method-hierarchy.png`.
+
 ## Maintenance Checklist
 
 When extending `tests/e2e/critical_path.py`:

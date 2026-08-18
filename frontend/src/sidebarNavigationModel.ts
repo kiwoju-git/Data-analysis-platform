@@ -1,13 +1,13 @@
 import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
-  AnalysisModuleId,
 } from "./api";
 import type { AppRoute } from "./appRoute";
-import { groupHypothesisMethods } from "./analysisMethodFamilies";
-import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
-import { methodLabel, moduleLabel } from "./i18n/catalogLabels";
+import { ANALYSIS_DOMAINS, type AnalysisDomainId } from "./analysisDomains";
+import { analysisMethodPlacement } from "./analysisDomainMapping";
+import { methodLabel } from "./i18n/catalogLabels";
 import { getCurrentLocale } from "./i18n/store";
+import { t } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
 
 export interface SidebarNavigationItem {
@@ -32,14 +32,15 @@ export type DatasetSidebarSection = "dataset-intake" | "dataset-version";
 
 interface SidebarNavigationOptions {
   locale?: AppLocale;
-  activeAnalysisModuleId: AnalysisModuleId;
+  activeAnalysisDomainId?: AnalysisDomainId | null;
+  activeAnalysisModuleId?: string;
   activeAnalysisMethodId: string | null;
   analysisCatalog: AnalysisMethodListResponse | null;
   activePage: AppRoute["page"];
   canOpenAnalysis: boolean;
   query: URLSearchParams;
-  onOpenAnalysisModule: (moduleId: AnalysisModuleId) => void;
   onOpenAnalysisMethod: (method: AnalysisMethodDescriptor) => void;
+  onOpenAnalysisModule?: (moduleId: string) => void;
   onOpenDatasetSection: (section: DatasetSidebarSection) => void;
   onOpenHelpSection: (
     section: "purpose" | "roles" | "methods" | "tutorial",
@@ -54,13 +55,12 @@ interface SidebarNavigationOptions {
 
 export function createSidebarNavigationGroups({
   locale = getCurrentLocale(),
-  activeAnalysisModuleId,
+  activeAnalysisDomainId,
   activeAnalysisMethodId,
   analysisCatalog,
   activePage,
   canOpenAnalysis,
   query,
-  onOpenAnalysisModule,
   onOpenAnalysisMethod,
   onOpenDatasetSection,
   onOpenHelpSection,
@@ -69,6 +69,10 @@ export function createSidebarNavigationGroups({
   onOpenProject,
   onOpenReportTab,
 }: SidebarNavigationOptions): SidebarNavigationGroup[] {
+  const resolvedActiveDomainId =
+    activeAnalysisDomainId === undefined && activeAnalysisMethodId !== null
+      ? analysisMethodPlacement(activeAnalysisMethodId)?.domain.id ?? null
+      : activeAnalysisDomainId ?? null;
   const datasetSection = normalizeDatasetSidebarSection(query.get("section"));
   const reportTab = query.get("tab") === "history" ? "history" : "reports";
   const requestedManageTab = query.get("tab");
@@ -106,49 +110,45 @@ export function createSidebarNavigationGroups({
     },
     {
       active: activePage === "analysis",
-      children: (analysisCatalog?.modules ?? [])
-        .slice()
-        .sort((left, right) => left.order - right.order)
-        .map((module) => {
-          const moduleMethods = (analysisCatalog?.methods ?? [])
-            .filter(
-              (method) =>
-                method.module_id === module.module_id &&
-                !isContextualAnalysisMethod(method.method_id),
-            )
-            .slice()
-            .sort((left, right) => left.order - right.order);
-          const methodItems = moduleMethods.map((method) => ({
-            active:
-              activePage === "analysis" && activeAnalysisMethodId === method.method_id,
-            disabled: !canOpenAnalysis || method.availability !== "available",
-            id: method.method_id,
-            label: methodLabel(method, locale),
-            onActivate: () => onOpenAnalysisMethod(method),
-          }));
-          const children = module.module_id === "hypothesis"
-            ? groupHypothesisMethods(moduleMethods).map((family) => ({
-                active: family.methods.some(
-                  (method) =>
-                    activePage === "analysis" && activeAnalysisMethodId === method.method_id,
-                ),
-                children: methodItems.filter((item) =>
-                  family.methods.some((method) => method.method_id === item.id),
-                ),
-                id: `hypothesis-${family.id}`,
-                label: family.label,
-              }))
-            : methodItems;
-          return ({
-          active:
-            activePage === "analysis" && activeAnalysisModuleId === module.module_id,
-          children,
-          disabled: !canOpenAnalysis,
-          id: module.module_id,
-          label: moduleLabel(module, locale),
-          onActivate: () => onOpenAnalysisModule(module.module_id),
+      children: ANALYSIS_DOMAINS.map((domain) => ({
+        active:
+          activePage === "analysis" && resolvedActiveDomainId === domain.id,
+        children: domain.families.flatMap((family) => {
+          const activeFamily =
+            activeAnalysisMethodId !== null &&
+            analysisMethodPlacement(activeAnalysisMethodId)?.family.id === family.id;
+          const methodItems = family.methodIds.flatMap((methodId) => {
+            const method = analysisCatalog?.methods.find(
+              (candidate) => candidate.method_id === methodId,
+            );
+            if (method === undefined) return [];
+            return [{
+              active:
+                activePage === "analysis" && activeAnalysisMethodId === method.method_id,
+              disabled: !canOpenAnalysis || method.availability !== "available",
+              id: method.method_id,
+              label: methodLabel(method, locale),
+              onActivate: () => onOpenAnalysisMethod(method),
+            }];
           });
+          const plannedItems = (family.plannedWorkflows ?? []).map((workflow) => ({
+            active: false,
+            disabled: true,
+            id: `planned-${workflow.id}`,
+            label: `${t(workflow.labelKey, {}, locale)} · ${t("analysisPlanned.label", {}, locale)}`,
+          }));
+          if (methodItems.length === 0 && plannedItems.length === 0) return [];
+          return [{
+            active: activeFamily,
+            children: [...methodItems, ...plannedItems],
+            id: `${domain.id}-${family.id}`,
+            label: t(family.labelKey, {}, locale),
+          }];
         }),
+        disabled: !canOpenAnalysis,
+        id: domain.id,
+        label: t(domain.labelKey, {}, locale),
+      })),
       id: "analysis",
       label: "분석",
     },

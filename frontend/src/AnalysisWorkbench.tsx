@@ -1,8 +1,8 @@
 import { startTransition, useRef, useState, type ReactNode } from "react";
 
 import { AnalysisPanelBoundary } from "./AnalysisPanelBoundary";
+import { AnalysisDomainLanding } from "./AnalysisDomainLanding";
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
-import { AnalysisSelectionQuickGuide } from "./AnalysisSelectionQuickGuide";
 import { CompactAnalysisHistoryPanel } from "./CompactAnalysisHistoryPanel";
 import { MethodHelpDrawer } from "./MethodHelpDrawer";
 import { getMethodCardTags } from "./analysisMethodGuidance";
@@ -26,14 +26,14 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import { getAnalysisRunErrorDetails } from "./analysisRunErrors";
+import type { AnalysisDomainDefinition } from "./analysisDomains";
+import { analysisDomainForMethod } from "./analysisDomainMapping";
 import type {
   AnalysisHistoryResultAvailabilityFilter,
   AnalysisHistoryStaleFilter,
 } from "./analysisWorkbenchTypes";
 import { availabilityLabel } from "./analysisWorkbenchUtils";
-import { groupHypothesisMethods } from "./analysisMethodFamilies";
-import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
-import { methodLabel, moduleLabel } from "./i18n/catalogLabels";
+import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
 
 export interface AnalysisWorkbenchExportState {
@@ -115,6 +115,7 @@ export interface AnalysisWorkbenchRestoredState {
 }
 
 interface AnalysisWorkbenchProps {
+  activeDomain?: AnalysisDomainDefinition | null;
   catalog: AnalysisMethodListResponse;
   selectedModuleId: AnalysisModuleId;
   selectedMethods: AnalysisMethodDescriptor[];
@@ -127,6 +128,8 @@ interface AnalysisWorkbenchProps {
   restoredState?: AnalysisWorkbenchRestoredState;
   version: DatasetVersionResponse | null;
   profile: DatasetProfileResponse | null;
+  showSelectedMethod?: boolean;
+  onOpenDomain?: (domain: AnalysisDomainDefinition) => void;
   onSelectMethod: (moduleId: AnalysisModuleId, methodId: string | null) => void;
   onOpenHelp?: (section: "purpose" | "roles") => void;
   renderAnalysisFilters?: (method: AnalysisMethodDescriptor) => ReactNode;
@@ -134,9 +137,8 @@ interface AnalysisWorkbenchProps {
 }
 
 export function AnalysisWorkbench({
+  activeDomain,
   catalog,
-  selectedModuleId,
-  selectedMethods,
   selectedMethod,
   selectedAnalysisResult = null,
   analysisRunError,
@@ -144,6 +146,8 @@ export function AnalysisWorkbench({
   restoredState,
   version,
   profile,
+  showSelectedMethod = true,
+  onOpenDomain = () => undefined,
   onSelectMethod,
   onOpenHelp = () => undefined,
   renderAnalysisFilters,
@@ -212,31 +216,13 @@ export function AnalysisWorkbench({
       onSelectMethod(moduleId, methodId);
     });
   };
+  const resolvedDomain =
+    activeDomain === undefined && selectedMethod !== null
+      ? analysisDomainForMethod(selectedMethod.method_id)
+      : activeDomain ?? null;
 
   return (
     <>
-      <nav className="module-nav" aria-label="분석 모듈">
-        {catalog.modules.map((module) => (
-          <button
-            aria-current={module.module_id === selectedModuleId ? "page" : undefined}
-            className={
-              module.module_id === selectedModuleId
-                ? "module-button module-button-active"
-                : "module-button"
-            }
-            key={module.module_id}
-            onClick={() => {
-              const firstMethod =
-                catalog.methods.find((method) => method.module_id === module.module_id) ?? null;
-              selectMethod(module.module_id, firstMethod?.method_id ?? null);
-            }}
-            type="button"
-          >
-            <span>{moduleLabel(module, locale)}</span>
-            {locale === "ko" ? <small>{module.label_en}</small> : null}
-          </button>
-        ))}
-      </nav>
       <div className="analysis-help-links" aria-label="분석 선택 도움말">
         <button className="text-button" onClick={() => onOpenHelp("purpose")} type="button">
           분석 선택 도움말
@@ -245,81 +231,14 @@ export function AnalysisWorkbench({
           역할 사전
         </button>
       </div>
-      <AnalysisSelectionQuickGuide
-        selectedModuleId={selectedModuleId}
-        onSelectMethod={(moduleId, methodId) => selectMethod(moduleId, methodId)}
+      <AnalysisDomainLanding
+        catalog={catalog}
+        domain={resolvedDomain}
+        selectedMethodId={showSelectedMethod ? selectedMethod?.method_id ?? null : null}
+        onOpenDomain={onOpenDomain}
+        onSelectMethod={(method) => selectMethod(method.module_id, method.method_id)}
       />
-      {selectedModuleId === "hypothesis" ? (
-        <div className="hypothesis-family-grid" aria-label="가설검정 family">
-          {groupHypothesisMethods(selectedMethods).map((family) => (
-            <section className="hypothesis-family-card" key={family.id}>
-              <div className="hypothesis-family-heading">
-                <h3>{family.label}</h3>
-                <span>{family.methods.length}개</span>
-              </div>
-              <p>{family.description}</p>
-              <div className="hypothesis-family-methods">
-                {family.methods.map((method) => (
-                  <button
-                    aria-pressed={method.method_id === selectedMethod?.method_id}
-                    className={method.method_id === selectedMethod?.method_id ? "is-active" : ""}
-                    disabled={method.availability !== "available"}
-                    key={method.method_id}
-                    onClick={() => selectMethod(method.module_id, method.method_id)}
-                    type="button"
-                  >
-                    {methodLabel(method, locale)}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      ) : (
-      <div className="method-grid" aria-label="분석 메서드">
-        {selectedMethods.filter((method) => !isContextualAnalysisMethod(method.method_id)).map((method) => {
-          const cardTags = getMethodCardTags(method.method_id);
-          return (
-            <button
-            aria-pressed={method.method_id === selectedMethod?.method_id}
-            className={
-              method.method_id === selectedMethod?.method_id
-                ? "method-item method-item-active"
-                : "method-item"
-            }
-            key={method.method_id}
-            onClick={() => {
-              selectMethod(method.module_id, method.method_id);
-            }}
-            type="button"
-          >
-            <div className="method-title-row">
-              <div>
-                <h3>{methodLabel(method, locale)}</h3>
-                {locale === "ko" ? <p>{method.label_en}</p> : null}
-              </div>
-              <span className={`availability-badge availability-${method.availability}`}>
-                {availabilityLabel(method)}
-              </span>
-            </div>
-            <div className="method-card-tags" aria-label="분석 선택 기준">
-              {cardTags.map((tag) => (
-                <span className={`method-card-tag method-card-tag-${tag.category}`} key={`${tag.category}-${tag.label}`}>
-                  {tag.label}
-                </span>
-              ))}
-            </div>
-            {method.disabled_reason !== null ? (
-              <p className="method-reason">
-                {locale === "ko" ? method.disabled_reason : "This method is currently unavailable."}
-              </p>
-            ) : null}
-            </button>
-          );
-        })}
-      </div>
-      )}
-      {selectedMethod !== null ? (
+      {showSelectedMethod && selectedMethod !== null ? (
         <section className="analysis-workbench" aria-labelledby="workbench-title">
           <div className="panel-heading workbench-heading">
             <div className="workbench-heading-main">

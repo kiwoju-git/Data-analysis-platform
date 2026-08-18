@@ -9,6 +9,8 @@ import { MethodHelpContent } from "./MethodHelpDrawer";
 import { MethodPurposeHelper } from "./MethodPurposeHelper";
 import { RoleDictionary } from "./RoleDictionary";
 import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
+import { analysisMethodPlacement } from "./analysisDomainMapping";
+import { ANALYSIS_DOMAINS } from "./analysisDomains";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
 
@@ -24,7 +26,7 @@ export function HelpCenterPage({
   catalog: AnalysisMethodListResponse | null;
   onOpenAnalysis: (method: AnalysisMethodDescriptor) => void;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const [query, setQuery] = useState("");
   const [selectedMethodId, setSelectedMethodId] = useState(methodIdFromLocation);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -36,11 +38,21 @@ export function HelpCenterPage({
       (method) =>
         !isContextualAnalysisMethod(method.method_id) &&
         (normalized === "" ||
-          [method.label_ko, method.label_en, method.method_id].some((value) =>
+          [
+            method.label_ko,
+            method.label_en,
+            method.method_id,
+            ...(analysisMethodPlacement(method.method_id) === null
+              ? []
+              : [
+                  t(analysisMethodPlacement(method.method_id)!.domain.labelKey),
+                  t(analysisMethodPlacement(method.method_id)!.family.labelKey),
+                ]),
+          ].some((value) =>
             value.toLocaleLowerCase("ko-KR").includes(normalized),
           )),
     );
-  }, [catalog, query]);
+  }, [catalog, query, t]);
   const selectedMethod =
     catalog?.methods.find((method) => method.method_id === selectedMethodId) ??
     null;
@@ -117,6 +129,34 @@ export function HelpCenterPage({
       ) : (
         <div className="notice-box">분석 method catalog를 불러오는 중입니다.</div>
       )}
+      <section className="help-domain-index" aria-labelledby="help-domain-index-title">
+        <div className="panel-heading">
+          <div>
+            <h2 id="help-domain-index-title">{t("analysisDomains.title")}</h2>
+            <p>{t("analysisDomains.subtitle")}</p>
+          </div>
+        </div>
+        <div className="analysis-domain-family-grid">
+          {ANALYSIS_DOMAINS.map((domain) => (
+            <section className="analysis-domain-family-card" key={domain.id}>
+              <h3>{t(domain.labelKey)}</h3>
+              <p>{t(domain.descriptionKey)}</p>
+              <div className="method-card-tags">
+                {domain.families.map((family) => (
+                  <span className="method-card-tag" key={family.id}>
+                    {t(family.labelKey)}
+                  </span>
+                ))}
+              </div>
+              {domain.families.flatMap((family) => family.plannedWorkflows ?? []).map((workflow) => (
+                <p className="compact-note" key={workflow.id}>
+                  {t(workflow.labelKey)} · {t("analysisPlanned.label")}
+                </p>
+              ))}
+            </section>
+          ))}
+        </div>
+      </section>
       <section
         className="help-method-browser"
         id="methods"
@@ -172,6 +212,12 @@ export function HelpCenterPage({
             >
               <strong>{methodLabel(method, locale)}</strong>
               {locale === "ko" ? <span>{method.label_en}</span> : null}
+              {analysisMethodPlacement(method.method_id) !== null ? (
+                <span>
+                  {t(analysisMethodPlacement(method.method_id)!.domain.labelKey)} ·{" "}
+                  {t(analysisMethodPlacement(method.method_id)!.family.labelKey)}
+                </span>
+              ) : null}
               <code>{method.method_id}</code>
             </button>
           ))}

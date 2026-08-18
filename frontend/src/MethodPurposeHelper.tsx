@@ -55,7 +55,7 @@ const purposeGuideItems = [
   },
   {
     question: "저장된 회귀모형으로 새 데이터를 예측하고 싶다",
-    methods: ["regression.predict"],
+    methods: ["regression.linear_model"],
     reason: "저장 모델을 선택하고 source freshness와 target schema를 확인한 뒤 예측합니다.",
     roles: "Response, Predictor, 예측 대상 데이터셋",
     caution: "source schema가 바뀌어 모델이 stale이면 현재 schema로 회귀모형을 다시 적합해야 합니다.",

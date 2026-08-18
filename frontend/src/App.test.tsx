@@ -224,6 +224,10 @@ describe("App", () => {
         methodId: "regression.fit_model",
       },
     });
+    expect(parseAppRoute("/analysis", "")).toEqual({
+      page: "analysis",
+      selection: null,
+    });
     expect(parseAppRoute("/reports/", "")).toEqual({ page: "reports" });
     expect(parseAppRoute("/help", "")).toEqual({ page: "help" });
     expect(parseAppRoute("/manage", "")).toEqual({ page: "manage" });
@@ -444,7 +448,7 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("실험 계획법");
+    expect(html).toContain("실험계획·최적화");
     expect(html).not.toContain('id="factorial-design-title"');
     expect(html).toContain("DOE 설계 생성");
     expect(html).toContain("screening design");
@@ -488,9 +492,9 @@ describe("App", () => {
     expect(methodGridHtml).not.toContain('class="method-meta"');
     expect(methodGridHtml).not.toContain("데이터셋 필요");
     expect(methodGridHtml).not.toContain("Source 자산 선택");
-    expect(methodGridHtml).toContain('class="hypothesis-family-card"');
-    expect(html).toContain("검정 선택 빠른 가이드");
-    expect(html).toContain("표본 수 30과 정규성 검정 p-value는 절대적인 자동 선택 기준이 아닙니다");
+    expect(methodGridHtml).toContain('class="analysis-domain-family-card"');
+    expect(html).toContain("2-표본 비교 선택 가이드");
+    expect(html).toContain("추정 대상과 설계에 따라");
     expect(html).not.toContain('class="workbench-steps"');
     expect(html).not.toContain('class="workbench-summary"');
     expect(html).not.toContain("실행 방식");
@@ -2304,7 +2308,7 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("상관관계 및 회귀분석");
+    expect(html).toContain("상관·회귀·예측");
     expect(html).toContain("Pearson 상관 실행");
     expect(html).toContain("X 변수");
     expect(html).toContain("Y 변수");
@@ -3156,7 +3160,7 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("품질 관리");
+    expect(html).toContain("품질·공정 모니터링");
     expect(html).toContain("I-MR 관리도 실행");
     expect(html).not.toContain('id="individuals-chart-title"');
     expect(html).not.toContain("<p>quality.individuals_chart</p>");
@@ -3228,7 +3232,7 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("품질 관리");
+    expect(html).toContain("품질·공정 모니터링");
     expect(html).toContain("런 차트 실행");
     expect(html).toContain("canonical row order");
     expect(html).toContain("When");
@@ -3734,7 +3738,7 @@ describe("App", () => {
       />,
     );
 
-    expect(html).toContain("탐색적 분석");
+    expect(html).toContain("기초통계·탐색");
     expect(html).toContain("분석 필터");
     expect(html).toContain("기술통계 실행");
     expect(html).toContain("A");
@@ -5144,8 +5148,8 @@ describe("App", () => {
     );
 
     expect(datasetHtml).toContain("데이터셋 등록");
-    expect(datasetHtml).not.toContain("분석 모듈");
-    expect(analysisHtml).toContain("분석 모듈");
+    expect(datasetHtml).not.toContain("분석 도메인");
+    expect(analysisHtml).toContain("기초통계·탐색");
     expect(analysisHtml).toContain("2개 그룹 필요");
     expect(analysisHtml).toContain("해결 방법:");
     expect(analysisHtml).toContain("오류 코드:");

@@ -100,6 +100,11 @@ import {
 } from "./linearModelColumns";
 import { useI18n } from "./i18n/LocaleProvider";
 import type { TranslationKey } from "./i18n/translate";
+import type { AnalysisDomainDefinition } from "./analysisDomains";
+import {
+  analysisDomainById,
+  analysisDomainForMethod,
+} from "./analysisDomainMapping";
 
 type HealthState =
   | { kind: "checking" }
@@ -145,9 +150,6 @@ export default function App() {
     selectedModuleId,
     selectAnalysisMethod,
   } = useAnalysisSelection(analysisCatalog);
-  const lastSelectedMethodByModuleRef = useRef(
-    new Map<AnalysisModuleId, string>(),
-  );
   const [selectedDescriptiveColumnIds, setSelectedDescriptiveColumnIds] = useState<string[]>([]);
   const [selectedGraphicalSummaryColumnIds, setSelectedGraphicalSummaryColumnIds] = useState<
     string[]
@@ -644,15 +646,6 @@ export default function App() {
     resetRestoredAnalysisResultState,
     restoredAnalysisRunId,
   ]);
-
-  useEffect(() => {
-    if (selectedMethod !== null) {
-      lastSelectedMethodByModuleRef.current.set(
-        selectedMethod.module_id,
-        selectedMethod.method_id,
-      );
-    }
-  }, [selectedMethod]);
 
   useEffect(() => {
     const deletion = analysisExportState.analysisResultExportDeletion;
@@ -3827,6 +3820,11 @@ export default function App() {
 
   function handleSelectAnalysisMethod(moduleId: AnalysisModuleId, methodId: string | null) {
     analysisExportState.clearAnalysisExportErrors();
+    if (methodId !== null && typeof window !== "undefined") {
+      pushAppLocation(
+        pathWithActiveDatasetQuery(buildAnalysisPath(moduleId, methodId)),
+      );
+    }
     selectAnalysisMethod(moduleId, methodId);
     if (methodId !== null) {
       setAppRoute({
@@ -3840,38 +3838,33 @@ export default function App() {
   }
 
   function handleOpenAnalysisPage() {
-    const method = selectedMethod ?? selectedMethods[0] ?? analysisCatalog?.methods[0] ?? null;
-    if (method === null) {
-      return;
+    if (typeof window !== "undefined") {
+      pushAppLocation(pathWithActiveDatasetQuery("/analysis"));
     }
-    handleSelectAnalysisMethod(method.module_id, method.method_id);
+    setAppRoute({ page: "analysis", selection: null });
   }
 
-  function handleOpenAnalysisModule(moduleId: AnalysisModuleId) {
-    const rememberedMethodId =
-      lastSelectedMethodByModuleRef.current.get(moduleId) ?? null;
-    const method =
-      analysisCatalog?.methods.find(
-        (candidate) =>
-          candidate.module_id === moduleId &&
-          candidate.method_id === rememberedMethodId &&
-          candidate.availability === "available",
-      ) ??
-      analysisCatalog?.methods.find(
-        (candidate) =>
-          candidate.module_id === moduleId &&
-          candidate.availability === "available",
-      ) ??
-      null;
-    if (method === null) return;
-    pushAppLocation(
-      pathWithActiveDatasetQuery(
-        buildAnalysisPath(method.module_id, method.method_id),
-      ),
-    );
+  function handleOpenAnalysisDomain(domain: AnalysisDomainDefinition) {
+    if (typeof window !== "undefined") {
+      const url = new URL(pathWithActiveDatasetQuery("/analysis"), window.location.origin);
+      url.searchParams.set("domain", domain.id);
+      pushAppLocation(`${url.pathname}${url.search}`);
+    }
+    setAppRoute({ page: "analysis", selection: null });
   }
 
+  const requestedAnalysisDomain =
+    appRoute.page !== "analysis"
+      ? null
+      : appRoute.selection !== null
+        ? analysisDomainForMethod(appRoute.selection.methodId)
+        : analysisDomainById(
+            typeof window === "undefined"
+              ? null
+              : new URLSearchParams(window.location.search).get("domain"),
+          );
   const analysisPageProps = {
+    activeAnalysisDomain: requestedAnalysisDomain,
     analysisCatalog,
     analysisCatalogError,
     analysisFilterDrafts,
@@ -4083,6 +4076,8 @@ export default function App() {
     selectedMethod,
     selectedMethods,
     selectedModuleId,
+    showSelectedAnalysisMethod:
+      appRoute.page === "analysis" && appRoute.selection !== null,
     twoSampleTAlpha,
     twoSampleTAlternative,
     twoSampleTAnalysisResult,
@@ -4238,6 +4233,7 @@ export default function App() {
       void handleRunTwoProportionAnalysis();
     },
     onSelectMethod: handleSelectAnalysisMethod,
+    onOpenAnalysisDomain: handleOpenAnalysisDomain,
     onToggleDescriptiveQuickGraph: (columnId: string) => {
       void handleToggleDescriptiveQuickGraph(columnId);
     },
@@ -4343,13 +4339,15 @@ export default function App() {
   );
   const navigationGroups = createSidebarNavigationGroups({
     locale,
-    activeAnalysisModuleId: selectedModuleId,
-    activeAnalysisMethodId: selectedMethod?.method_id ?? null,
+    activeAnalysisDomainId: requestedAnalysisDomain?.id ?? null,
+    activeAnalysisMethodId:
+      appRoute.page === "analysis" && appRoute.selection !== null
+        ? selectedMethod?.method_id ?? null
+        : null,
     analysisCatalog,
     activePage: appRoute.page,
     canOpenAnalysis: selectedMethod !== null || analysisCatalog !== null,
     query: navigationQuery,
-    onOpenAnalysisModule: handleOpenAnalysisModule,
     onOpenAnalysisMethod: handleOpenAnalysisMethod,
     onOpenDatasetSection: handleOpenDatasetPage,
     onOpenHelpSection: handleOpenHelpPage,
@@ -4358,10 +4356,8 @@ export default function App() {
     onOpenProject: handleOpenProjectPage,
     onOpenReportTab: (tab) => handleOpenReportsPage(undefined, tab),
   });
-  const activeModuleLabel =
-    analysisCatalog?.modules.find(
-      (module) => module.module_id === selectedModuleId,
-    )?.[locale === "ko" ? "label_ko" : "label_en"] ?? null;
+  const activeDomainLabel =
+    requestedAnalysisDomain === null ? null : t(requestedAnalysisDomain.labelKey);
   return (
     <AppChrome
       activeDatasetSelectorProps={activeDatasetSelectorProps}
@@ -4379,8 +4375,8 @@ export default function App() {
       onOpenProjectPage={handleOpenProjectPage}
       onOpenReportsPage={handleOpenReportsPage}
       pageTitle={
-        appRoute.page === "analysis" && activeModuleLabel !== null
-          ? `분석 · ${activeModuleLabel}`
+        appRoute.page === "analysis" && activeDomainLabel !== null
+          ? `${t("navigation.analysis")} · ${activeDomainLabel}`
           : undefined
       }
     >
