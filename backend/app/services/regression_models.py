@@ -75,6 +75,10 @@ REGRESSION_PREDICTION_CONFIG_SCHEMA_VERSION = 3
 REGRESSION_PREDICTION_ROWS_SCHEMA_VERSION = 2
 MAX_REGRESSION_PREDICTION_INLINE_ROWS = 1000
 REGRESSION_PREDICTION_ROWS_ARTIFACT_KIND = "regression_prediction_rows"
+REGRESSION_MODEL_METHOD_IDS = {
+    "regression.linear_model",
+    "regression.partial_least_squares",
+}
 REGRESSION_PREDICTION_ROWS_MEDIA_TYPE = "application/x-ndjson"
 
 
@@ -203,7 +207,7 @@ def list_regression_models(
         response_column: RegressionModelCatalogResponseColumn | None = None
         predictor_count: int | None = None
         if (
-            record.method_id != "regression.linear_model"
+            record.method_id not in REGRESSION_MODEL_METHOD_IDS
             or catalog_record.source_analysis_status != AnalysisRunState.SUCCEEDED.value
         ):
             availability = "integrity_error"
@@ -228,7 +232,10 @@ def list_regression_models(
                 model_id=UUID(record.model_id),
                 source_analysis_id=UUID(record.analysis_id),
                 source_dataset_version_id=UUID(record.dataset_version_id),
-                method_id="regression.linear_model",
+                method_id=cast(
+                    Literal["regression.linear_model", "regression.partial_least_squares"],
+                    record.method_id,
+                ),
                 method_version=record.method_version,
                 schema_hash=record.schema_hash,
                 response=response_column,

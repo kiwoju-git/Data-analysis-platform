@@ -67,7 +67,7 @@ def test_bootstrap_consumes_hash_lock_without_hidden_dependency_resolution() -> 
     assert "backend[dev]" not in bootstrap
 
 
-def test_only_bayesian_worker_module_references_sklearn_and_startup_does_not_import_it() -> None:
+def test_only_statistical_worker_modules_reference_sklearn_and_startup_does_not_import_it() -> None:
     app_root = REPO_ROOT / "backend" / "app"
     matches = [
         path for path in app_root.rglob("*.py") if "sklearn" in path.read_text(encoding="utf-8")
@@ -76,6 +76,7 @@ def test_only_bayesian_worker_module_references_sklearn_and_startup_does_not_imp
     assert matches == [
         app_root / "statistics" / "bayesian_batch.py",
         app_root / "statistics" / "bayesian_optimization.py",
+        app_root / "statistics" / "pls_regression.py",
     ]
 
     environment = os.environ.copy()

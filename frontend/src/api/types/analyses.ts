@@ -11,6 +11,7 @@ import type {
 } from "./analysisResultsCategorical";
 import type {
   LinearModelResult,
+  PlsRegressionResult,
   PearsonCorrelationResult,
   XyCorrelationResult,
 } from "./analysisResultsRegression";
@@ -162,6 +163,7 @@ export interface AnalysisResultEnvelope {
     | GageRrResult
     | GageRunChartResult
     | LinearModelResult
+    | PlsRegressionResult
     | Record<string, unknown>
     | null;
 }

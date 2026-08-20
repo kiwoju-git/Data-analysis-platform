@@ -1,6 +1,8 @@
 import { apiErrorCode, apiRequestError, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type {
+  PlsPointPredictionRequest,
+  PlsPointPredictionResponse,
   RegressionModelDeleteRequest,
   RegressionModelDeleteResponse,
   RegressionModelDeletionPreflightResponse,
@@ -24,6 +26,21 @@ import type {
   RegressionResponseOptimizationRequest,
   RegressionResponseOptimizationResponse,
 } from "./types";
+
+export async function createPlsPointPredictions(
+  modelId: string,
+  request: PlsPointPredictionRequest,
+): Promise<PlsPointPredictionResponse> {
+  const response = await fetchApi(apiRoutes.plsPointPredictions(modelId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "pls_prediction_failed");
+  }
+  return (await response.json()) as PlsPointPredictionResponse;
+}
 
 export async function fetchRegressionModels(
   offset = 0,

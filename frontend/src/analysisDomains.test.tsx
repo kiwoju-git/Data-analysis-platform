@@ -37,6 +37,7 @@ const expectedRegistryMethodIds = [
   "regression.pearson",
   "regression.xy_correlation",
   "regression.linear_model",
+  "regression.partial_least_squares",
   "regression.predict",
   "quality.attribute_control_chart",
   "quality.subgroup_chart",

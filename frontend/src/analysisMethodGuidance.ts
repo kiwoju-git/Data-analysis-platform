@@ -1,3 +1,5 @@
+import { translationToken } from "./i18n/translate";
+
 export interface MethodRoleRequirement {
   label: string;
   required: boolean;
@@ -359,6 +361,36 @@ export const analysisMethodGuidance = {
       "예측변수들이 서로 완전히 중복되거나 선형 조합인 경우",
       "회귀계수를 관찰 데이터만으로 원인 효과라고 해석하는 경우",
     ],
+  },
+  "regression.partial_least_squares": {
+    methodId: "regression.partial_least_squares",
+    roleRequirements: [
+      required(
+        translationToken("pls.guidance.responseRole"),
+        translationToken("pls.guidance.responseDetail"),
+      ),
+      required(
+        translationToken("pls.guidance.predictorRole"),
+        translationToken("pls.guidance.predictorDetail"),
+      ),
+    ],
+    optionChecklist: [
+      translationToken("pls.guidance.components"),
+      translationToken("pls.guidance.scaling"),
+      translationToken("pls.guidance.completeCase"),
+    ],
+    preflightChecks: [
+      translationToken("pls.guidance.sample"),
+      translationToken("pls.guidance.variation"),
+      translationToken("pls.guidance.cv"),
+    ],
+    resultFocus: [
+      translationToken("pls.guidance.selection"),
+      translationToken("pls.guidance.coefficients"),
+      translationToken("pls.guidance.latent"),
+      translationToken("pls.guidance.prediction"),
+    ],
+    plainLanguage: translationToken("pls.description"),
   },
   "regression.predict": {
     methodId: "regression.predict",

@@ -540,6 +540,10 @@ export const apiRoutes = {
     return apiUrl(`/regression-models/${pathId(modelId)}/predictions`);
   },
 
+  plsPointPredictions(modelId: string): string {
+    return apiUrl(`/regression-models/${pathId(modelId)}/pls-point-predictions`);
+  },
+
   regressionModelDependentPredictions(
     modelId: string,
     offset: number,

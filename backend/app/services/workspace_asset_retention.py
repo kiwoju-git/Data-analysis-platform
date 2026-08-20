@@ -76,6 +76,10 @@ ATTRIBUTE_CONTROL_LIMIT_SET_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[1] = 1
 ATTRIBUTE_CONTROL_LIMIT_SET_DELETION_SCHEMA_VERSION: Literal[1] = 1
 _MODEL_ARTIFACT_KIND = "regression_model_manifest"
 _MODEL_MEDIA_TYPE = "application/json"
+_REGRESSION_MODEL_METHOD_IDS = {
+    "regression.linear_model",
+    "regression.partial_least_squares",
+}
 _MODEL_QUARANTINE_PATTERN = re.compile(r"^\.delete-m-([0-9a-fA-F-]{36})-([0-9a-f]{16})\.q$")
 _LIMIT_SET_QUARANTINE_PATTERN = re.compile(r"^\.delete-l-([0-9a-fA-F-]{36})-([0-9a-f]{16})\.q$")
 
@@ -425,7 +429,8 @@ def _regression_model_context(
     source_run = get_analysis_run_record(settings.workspace_root, record.analysis_id)
     if (
         source_run is None
-        or source_run.method_id != "regression.linear_model"
+        or source_run.method_id != record.method_id
+        or source_run.method_id not in _REGRESSION_MODEL_METHOD_IDS
         or source_run.method_version != record.method_version
         or source_run.dataset_version_id != record.dataset_version_id
         or source_run.status != "succeeded"
@@ -465,7 +470,8 @@ def _regression_model_context(
     if not (
         str(response.analysis_id) == record.analysis_id
         and str(response.dataset_version_id) == record.dataset_version_id
-        and response.method_id == record.method_id == "regression.linear_model"
+        and response.method_id == record.method_id
+        and response.method_id in _REGRESSION_MODEL_METHOD_IDS
         and response.method_version == record.method_version
         and response.schema_hash == record.schema_hash
         and manifest.get("model_id") == record.model_id
@@ -738,7 +744,10 @@ def _regression_model_preflight_response(
         preflight_schema_version=REGRESSION_MODEL_DELETION_PREFLIGHT_SCHEMA_VERSION,
         model_id=UUID(context.model.model_id),
         source_analysis_id=UUID(context.model.analysis_id),
-        method_id=cast(Literal["regression.linear_model"], context.model.method_id),
+        method_id=cast(
+            Literal["regression.linear_model", "regression.partial_least_squares"],
+            context.model.method_id,
+        ),
         method_version=context.model.method_version,
         deletion_ready=not context.blockers,
         cascade_deletion_ready=(

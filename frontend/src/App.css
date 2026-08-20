@@ -6464,3 +6464,211 @@ td select {
 @media (max-width: 760px) {
   .asset-inline-metadata-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.pls-regression-panel {
+  max-width: 100%;
+}
+
+.pls-predictor-field {
+  min-width: 0;
+}
+
+.pls-predictor-field .checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+
+.pls-predictor-field .checkbox-grid label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.pls-predictor-field .checkbox-grid span {
+  overflow-wrap: break-word;
+}
+
+.pls-settings-table {
+  min-width: 760px;
+}
+
+.pls-settings-table .doe-table-toggle {
+  align-items: flex-start;
+  white-space: normal;
+}
+
+.pls-results {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.result-definition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0;
+  margin: 0;
+  border: 1px solid var(--border-default);
+}
+
+.result-definition-grid > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-default);
+  padding: 8px 10px;
+}
+
+.result-definition-grid dt,
+.result-definition-grid dd {
+  margin: 0;
+}
+
+.result-definition-grid dt {
+  color: var(--text-secondary);
+}
+
+.result-definition-grid dd {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pls-selection-table-wrap .result-table {
+  min-width: 840px;
+}
+
+.pls-selection-table-wrap td:not(:first-child),
+.pls-selection-table-wrap th:not(:first-child),
+.pls-prediction-grid td,
+.pls-prediction-grid th {
+  white-space: nowrap;
+}
+
+.pls-chart-grid,
+.pls-chart-grid > .result-section {
+  min-width: 0;
+}
+
+.pls-chart-grid .interactive-chart {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 220px;
+  border: 1px solid var(--border-default);
+  background: #fff;
+}
+
+.pls-selection-chart,
+.pls-scatter-chart {
+  aspect-ratio: 16 / 7;
+}
+
+.pls-loading-chart {
+  min-height: 190px;
+}
+
+.pls-selected-component-line {
+  stroke: #a33a2b;
+  stroke-dasharray: 5 4;
+  stroke-width: 2;
+}
+
+.pls-training-line {
+  stroke: #1f5d8f;
+  stroke-width: 2;
+}
+
+.pls-cv-line {
+  stroke: #b05b18;
+  stroke-dasharray: 6 3;
+  stroke-width: 2;
+}
+
+.pls-training-point,
+.pls-score-point {
+  fill: #1f5d8f;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.pls-cv-point {
+  fill: #b05b18;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.pls-loading-positive {
+  fill: #2f6f9f;
+}
+
+.pls-loading-negative {
+  fill: #b05b18;
+}
+
+.pls-training-point.is-selected,
+.pls-cv-point.is-selected,
+.pls-score-point.is-selected {
+  stroke: #111827;
+  stroke-width: 3;
+}
+
+.chart-reference-line {
+  stroke: #6b7280;
+  stroke-dasharray: 4 4;
+  stroke-width: 1.5;
+}
+
+.pls-chart-grid .chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 8px;
+  font-size: 0.82rem;
+}
+
+.pls-chart-grid .chart-legend span::before {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  margin-right: 6px;
+  background: currentColor;
+  content: "";
+  vertical-align: middle;
+}
+
+.pls-chart-grid .chart-legend .pls-training-point {
+  color: #1f5d8f;
+}
+
+.pls-chart-grid .chart-legend .pls-cv-point {
+  color: #b05b18;
+}
+
+.pls-point-prediction {
+  min-width: 0;
+}
+
+.pls-prediction-grid {
+  min-width: max(760px, 100%);
+}
+
+.pls-prediction-grid input {
+  min-width: 120px;
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .pls-predictor-field .checkbox-grid,
+  .pls-chart-grid,
+  .result-definition-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pls-chart-grid .interactive-chart {
+    min-height: 190px;
+  }
+}

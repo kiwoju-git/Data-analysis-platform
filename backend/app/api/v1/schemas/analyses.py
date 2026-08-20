@@ -483,6 +483,43 @@ class LinearModelOptions(BaseModel):
         return value
 
 
+class PlsCrossValidationOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["k_fold", "leave_one_out"] = "k_fold"
+    folds: int = Field(default=5, ge=2, le=10)
+    shuffle: bool = True
+    seed: int = 20260820
+
+
+class PlsRegressionOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    predictor_column_ids: list[str] = Field(min_length=2, max_length=100)
+    missing_policy: Literal["complete_case"] = "complete_case"
+    scale: bool = True
+    component_selection: Literal["automatic_cv", "fixed"] = "automatic_cv"
+    n_components: int | None = Field(default=None, ge=1, le=30)
+    max_components: int = Field(default=10, ge=1, le=30)
+    cv: PlsCrossValidationOptions = Field(default_factory=PlsCrossValidationOptions)
+    max_iter: int = Field(default=500, ge=1, le=10_000)
+    tol: float = Field(default=1e-6, gt=0.0, le=0.1)
+    plot_point_limit: int = Field(default=2000, ge=100, le=5000)
+
+    @model_validator(mode="after")
+    def validate_component_selection(self) -> "PlsRegressionOptions":
+        if self.component_selection == "fixed" and self.n_components is None:
+            raise ValueError("pls_component_count_invalid")
+        if self.n_components is not None and self.n_components > self.max_components:
+            raise ValueError("pls_component_count_invalid")
+        if len(set(self.predictor_column_ids)) != len(self.predictor_column_ids):
+            raise ValueError("duplicate_pls_predictor")
+        if self.response_column_id in self.predictor_column_ids:
+            raise ValueError("pls_response_predictor_overlap")
+        return self
+
+
 class GageRrOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1586,7 +1623,7 @@ class RegressionModelCatalogItem(BaseModel):
     model_id: UUID
     source_analysis_id: UUID
     source_dataset_version_id: UUID
-    method_id: Literal["regression.linear_model"]
+    method_id: Literal["regression.linear_model", "regression.partial_least_squares"]
     method_version: str
     schema_hash: str
     response: RegressionModelCatalogResponseColumn | None
@@ -1627,6 +1664,39 @@ class RegressionModelMetadataResponse(BaseModel):
     note: str | None
     pinned: bool
     metadata_updated_at: str
+
+
+class PlsPointPredictionInputRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    client_row_id: str = Field(min_length=1, max_length=120)
+    values: dict[str, float]
+
+
+class PlsPointPredictionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_model_manifest_sha256: str = Field(min_length=64, max_length=64)
+    rows: list[PlsPointPredictionInputRow] = Field(min_length=1, max_length=10_000)
+
+
+class PlsPointPredictionRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    client_row_id: str
+    predicted_value: float
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PlsPointPredictionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: UUID
+    model_manifest_sha256: str
+    response_column_id: str
+    row_count: int = Field(ge=1)
+    intervals_supported: Literal[False] = False
+    rows: list[PlsPointPredictionRow]
 
 
 class RegressionResponseOptimizationGoal(BaseModel):
@@ -1780,7 +1850,7 @@ class RegressionModelDeletionPreflightResponse(BaseModel):
     preflight_schema_version: Literal[3]
     model_id: UUID
     source_analysis_id: UUID
-    method_id: Literal["regression.linear_model"]
+    method_id: Literal["regression.linear_model", "regression.partial_least_squares"]
     method_version: str
     deletion_ready: bool
     cascade_deletion_ready: bool

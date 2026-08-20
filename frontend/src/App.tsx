@@ -44,6 +44,7 @@ import {
   type OneSampleWilcoxonResult,
   type PairedTResult,
   type PearsonCorrelationResult,
+  type PlsRegressionResult,
   type RunChartResult,
   type SubgroupChartResult,
   type TwoSampleTResult,
@@ -54,6 +55,7 @@ import { AppChrome } from "./AppChrome";
 import type { AnalysisShellProps } from "./AnalysisShell";
 import type { DescriptiveQuickGraphState } from "./DescriptiveAnalysisPanel";
 import type { OneWayAnovaExecutionOptions } from "./OneWayAnovaPanel";
+import type { PlsRunConfig } from "./PlsRegressionPanel";
 import type { TwoSampleEquivalenceExecutionOptions } from "./TwoSampleEquivalencePanel";
 import {
   serializeAnalysisFilterDrafts,
@@ -1007,6 +1009,10 @@ export default function App() {
       : null;
   const linearModelAnalysisResult =
     displayedAnalysisResult?.method_id === "regression.linear_model" ? displayedAnalysisResult : null;
+  const plsAnalysisResult =
+    displayedAnalysisResult?.method_id === "regression.partial_least_squares"
+      ? displayedAnalysisResult
+      : null;
   const attributeControlChartAnalysisResult =
     displayedAnalysisResult?.method_id === "quality.attribute_control_chart"
       ? displayedAnalysisResult
@@ -1084,6 +1090,9 @@ export default function App() {
     : null;
   const linearModelResult = isLinearModelResult(linearModelAnalysisResult?.result)
     ? linearModelAnalysisResult.result
+    : null;
+  const plsResult = isPlsRegressionResult(plsAnalysisResult?.result)
+    ? plsAnalysisResult.result
     : null;
   const attributeControlChartResult = isAttributeControlChartResult(
     attributeControlChartAnalysisResult?.result,
@@ -3725,6 +3734,62 @@ export default function App() {
     }
   }
 
+  async function handleRunPlsAnalysis(config: PlsRunConfig) {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "regression.partial_least_squares"
+    ) {
+      setFlowError("pls_response_required");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: { expression_version: 1, conditions: filterConditions },
+        roles: {
+          response: config.responseColumnId,
+          predictors: config.predictorColumnIds.join(","),
+        },
+        options: {
+          response_column_id: config.responseColumnId,
+          predictor_column_ids: config.predictorColumnIds,
+          missing_policy: "complete_case",
+          scale: config.scale,
+          component_selection: config.componentSelection,
+          n_components: config.nComponents,
+          max_components: config.maxComponents,
+          cv: {
+            method: config.cvMethod,
+            folds: config.cvFolds,
+            shuffle: config.cvShuffle,
+            seed: config.cvSeed,
+          },
+          max_iter: config.maxIter,
+          tol: config.tolerance,
+          plot_point_limit: config.plotPointLimit,
+        },
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
   function handleOpenDatasetPage(
     section: DatasetSidebarSection = "dataset-intake",
   ) {
@@ -4050,6 +4115,7 @@ export default function App() {
     runChartValueColumns,
     linearModelAlpha,
     linearModelAnalysisResult,
+    plsAnalysisResult,
     linearModelConfidenceLevel,
     linearModelSelectionMethod,
     linearModelAlphaToRemove,
@@ -4067,6 +4133,7 @@ export default function App() {
     linearModelResponseColumnId: selectedLinearModelResponseColumnId,
     linearModelResponseColumns,
     linearModelResult,
+    plsResult,
     isRunningLinearModelPrediction,
     isRunningLinearModelPredictionPreflight,
     profile,
@@ -4217,6 +4284,9 @@ export default function App() {
     },
     onRunLinearModelAnalysis: () => {
       void handleRunLinearModelAnalysis();
+    },
+    onRunPlsAnalysis: (config) => {
+      void handleRunPlsAnalysis(config);
     },
     onLinearModelSelectionMethodChange: setLinearModelSelectionMethod,
     onLinearModelAlphaToRemoveChange: setLinearModelAlphaToRemove,
@@ -5562,6 +5632,23 @@ function isLinearModelResult(
     Array.isArray(candidate.coefficients) &&
     typeof candidate.diagnostics === "object" &&
     candidate.diagnostics !== null
+  );
+}
+
+function isPlsRegressionResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is PlsRegressionResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.summary_type === "partial_least_squares_regression" &&
+    typeof candidate.component_selection === "object" &&
+    candidate.component_selection !== null &&
+    typeof candidate.model_summary === "object" &&
+    candidate.model_summary !== null &&
+    Array.isArray(candidate.coefficients)
   );
 }
 

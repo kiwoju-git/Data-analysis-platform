@@ -1,0 +1,23 @@
+{
+  "reference": "Minitab Partial Least Squares Regression example with cross-validation",
+  "source_url": "https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/regression/how-to/partial-least-squares/before-you-start/example-with-cross-validation/",
+  "data_url": "https://support.minitab.com/en-us/datasets/media/generated-content/datasets/WineAroma.MWX",
+  "data_sha256": "145ad5394fd44c1195aea016257c476c36e5f72a46ec15898911d4da4f3f857f",
+  "response": "Aroma",
+  "predictor_contract": "17 main effects plus 16 two-way interactions between Cd and each remaining element",
+  "scale": true,
+  "cross_validation": "leave_one_out",
+  "selected_components": 4,
+  "rows": [
+    {"components": 1, "x_variance": 0.158849, "error": 14.9389, "r_squared": 0.637435, "press": 23.3439, "predicted_r_squared": 0.433444},
+    {"components": 2, "x_variance": 0.442267, "error": 12.2966, "r_squared": 0.701564, "press": 21.0936, "predicted_r_squared": 0.488060},
+    {"components": 3, "x_variance": 0.522977, "error": 7.9761, "r_squared": 0.806420, "press": 19.6136, "predicted_r_squared": 0.523978},
+    {"components": 4, "x_variance": 0.594546, "error": 6.6519, "r_squared": 0.838559, "press": 18.1683, "predicted_r_squared": 0.559056},
+    {"components": 5, "x_variance": null, "error": 5.8530, "r_squared": 0.857948, "press": 19.2675, "predicted_r_squared": 0.532379},
+    {"components": 6, "x_variance": null, "error": 5.0123, "r_squared": 0.878352, "press": 22.3739, "predicted_r_squared": 0.456988},
+    {"components": 7, "x_variance": null, "error": 4.3109, "r_squared": 0.895374, "press": 24.0041, "predicted_r_squared": 0.417421},
+    {"components": 8, "x_variance": null, "error": 4.0866, "r_squared": 0.900818, "press": 24.7736, "predicted_r_squared": 0.398747},
+    {"components": 9, "x_variance": null, "error": 3.5886, "r_squared": 0.912904, "press": 24.9090, "predicted_r_squared": 0.395460},
+    {"components": 10, "x_variance": null, "error": 3.2750, "r_squared": 0.920516, "press": 24.8293, "predicted_r_squared": 0.397395}
+  ]
+}

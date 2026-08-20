@@ -30,6 +30,10 @@ import { OneSampleTPanel } from "./OneSampleTPanel";
 import { OneSampleWilcoxonPanel } from "./OneSampleWilcoxonPanel";
 import { PairedTPanel } from "./PairedTPanel";
 import { PairedEquivalencePanel } from "./PairedEquivalencePanel";
+import {
+  PlsRegressionPanel,
+  type PlsRunConfig,
+} from "./PlsRegressionPanel";
 import { TwoSampleTPanel } from "./TwoSampleTPanel";
 import {
   TwoSampleEquivalencePanel,
@@ -90,6 +94,7 @@ import type {
   OneSampleWilcoxonResult,
   PairedTResult,
   PearsonCorrelationResult,
+  PlsRegressionResult,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
   RunChartResult,
@@ -127,6 +132,7 @@ interface AnalysisResultByMethod {
   pearsonAnalysisResult: AnalysisResultEnvelope | null;
   xyCorrelationAnalysisResult: AnalysisResultEnvelope | null;
   linearModelAnalysisResult: AnalysisResultEnvelope | null;
+  plsAnalysisResult: AnalysisResultEnvelope | null;
   attributeControlChartAnalysisResult: AnalysisResultEnvelope | null;
   individualsChartAnalysisResult: AnalysisResultEnvelope | null;
   subgroupChartAnalysisResult: AnalysisResultEnvelope | null;
@@ -253,6 +259,8 @@ export interface AnalysisShellProps {
   linearModelResponseColumnId?: string | null;
   linearModelResponseColumns?: DatasetColumnResponse[];
   linearModelResult?: LinearModelResult | null;
+  plsAnalysisResult?: AnalysisResultEnvelope | null;
+  plsResult?: PlsRegressionResult | null;
   isRunningLinearModelPrediction?: boolean;
   isRunningLinearModelPredictionPreflight?: boolean;
   mannWhitneyAlpha: number;
@@ -412,6 +420,7 @@ export interface AnalysisShellProps {
   onRunIndividualsChartAnalysis?: () => void;
   onRunKruskalWallisAnalysis: () => void;
   onRunLinearModelAnalysis?: () => void;
+  onRunPlsAnalysis?: (config: PlsRunConfig) => void;
   onLinearModelSelectionMethodChange?: (method: "none" | "backward_elimination") => void;
   onLinearModelAlphaToRemoveChange?: (alpha: number) => void;
   onRunLinearModelPrediction?: () => void;
@@ -614,6 +623,7 @@ export function AnalysisShell({
   kruskalWallisResult,
   linearModelAlpha = 0.05,
   linearModelAnalysisResult = null,
+  plsAnalysisResult = null,
   linearModelConfidenceLevel = 0.95,
   linearModelInteractionKeys = [],
   linearModelSelectionMethod = "none",
@@ -651,6 +661,7 @@ export function AnalysisShell({
   linearModelResponseColumnId = null,
   linearModelResponseColumns = [],
   linearModelResult = null,
+  plsResult = null,
   isRunningLinearModelPrediction = false,
   isRunningLinearModelPredictionPreflight = false,
   mannWhitneyAlpha,
@@ -810,6 +821,7 @@ export function AnalysisShell({
   onRunIndividualsChartAnalysis = () => undefined,
   onRunKruskalWallisAnalysis,
   onRunLinearModelAnalysis = () => undefined,
+  onRunPlsAnalysis = () => undefined,
   onLinearModelSelectionMethodChange = () => undefined,
   onLinearModelAlphaToRemoveChange = () => undefined,
   onRunLinearModelPrediction = () => undefined,
@@ -944,6 +956,7 @@ export function AnalysisShell({
           pearsonAnalysisResult,
           xyCorrelationAnalysisResult,
           linearModelAnalysisResult,
+          plsAnalysisResult,
           attributeControlChartAnalysisResult,
           individualsChartAnalysisResult,
           subgroupChartAnalysisResult,
@@ -1488,6 +1501,22 @@ export function AnalysisShell({
               );
             }
             if (
+              method.method_id === "regression.partial_least_squares" &&
+              method.availability === "available"
+            ) {
+              return (
+                <PlsRegressionPanel
+                  analysisResult={plsAnalysisResult}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  methodId={method.method_id}
+                  onRun={onRunPlsAnalysis}
+                  result={plsResult}
+                  version={version}
+                />
+              );
+            }
+            if (
               method.method_id === "regression.predict" &&
               method.availability === "available"
             ) {
@@ -1844,6 +1873,8 @@ function selectedAnalysisResultForMethod(
       return results.xyCorrelationAnalysisResult;
     case "regression.linear_model":
       return results.linearModelAnalysisResult;
+    case "regression.partial_least_squares":
+      return results.plsAnalysisResult;
     case "quality.attribute_control_chart":
       return results.attributeControlChartAnalysisResult;
     case "quality.individuals_chart":

@@ -3,6 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, status
 
 from app.api.v1.schemas.analyses import (
+    PlsPointPredictionRequest,
+    PlsPointPredictionResponse,
     RegressionModelCatalogResponse,
     RegressionModelDeleteRequest,
     RegressionModelDeleteResponse,
@@ -27,6 +29,7 @@ from app.api.v1.schemas.analyses import (
     RegressionResponseOptimizationResponse,
 )
 from app.services.analysis_run_exports import create_regression_prediction_csv_export
+from app.services.pls_predictions import create_pls_point_predictions
 from app.services.regression_models import (
     create_regression_predictions,
     get_regression_model_manifest,
@@ -196,6 +199,22 @@ def create_regression_predictions_route(
     body: RegressionPredictionRequest,
 ) -> RegressionPredictionResponse:
     return create_regression_predictions(
+        settings=request.app.state.settings,
+        model_id=model_id,
+        body=body,
+    )
+
+
+@router.post(
+    "/{model_id}/pls-point-predictions",
+    response_model=PlsPointPredictionResponse,
+)
+def create_pls_point_predictions_route(
+    request: Request,
+    model_id: UUID,
+    body: PlsPointPredictionRequest,
+) -> PlsPointPredictionResponse:
+    return create_pls_point_predictions(
         settings=request.app.state.settings,
         model_id=model_id,
         body=body,

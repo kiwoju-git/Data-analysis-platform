@@ -11,7 +11,7 @@ def test_frontend_analysis_domains_cover_current_registry_exactly_once() -> None
         Path(__file__).resolve().parents[3] / "frontend" / "src" / "analysisDomains.ts"
     ).read_text(encoding="utf-8")
     blocks = re.findall(
-        r"(?:methodIds|contextualMethodIds):\s*\[(.*?)\]",
+        r"(?:methodIds|contextualMethodIds|directMethodIds|directContextualMethodIds):\s*\[(.*?)\]",
         source,
         flags=re.DOTALL,
     )

@@ -806,6 +806,15 @@ FRONTEND_ROUTE_CONTRACTS = [
         ),
     ),
     OperationContract(
+        route_name="plsPointPredictions",
+        method="post",
+        path="/api/v1/regression-models/{model_id}/pls-point-predictions",
+        success_status="200",
+        response_schema="PlsPointPredictionResponse",
+        parameters=frozenset({("model_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="regressionModelMetadata",
         method="patch",
         path="/api/v1/regression-models/{model_id}/metadata",
@@ -2691,7 +2700,12 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             }
         ),
         property_any_of_refs=(("response", frozenset({"RegressionModelCatalogResponseColumn"})),),
-        property_consts=(("method_id", "regression.linear_model"),),
+        property_enums=(
+            (
+                "method_id",
+                frozenset({"regression.linear_model", "regression.partial_least_squares"}),
+            ),
+        ),
     ),
     SchemaComponentContract(
         name="RegressionModelCatalogResponse",
@@ -3082,7 +3096,14 @@ FRONTEND_RESULT_TYPE_FILE_CONTRACTS = [
     ),
     FrontendResultTypeFileContract(
         path="frontend/src/api/types/analysisResultsRegression.ts",
-        summary_types=frozenset({"pearson_correlation", "xy_correlation_matrix", "linear_model"}),
+        summary_types=frozenset(
+            {
+                "pearson_correlation",
+                "xy_correlation_matrix",
+                "linear_model",
+                "partial_least_squares_regression",
+            }
+        ),
     ),
     FrontendResultTypeFileContract(
         path="frontend/src/api/types/analysisResultsQuality.ts",

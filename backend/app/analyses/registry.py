@@ -30,6 +30,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "regression.pearson": METHOD_VERSION,
     "regression.xy_correlation": METHOD_VERSION,
     "regression.linear_model": "0.2.0",
+    "regression.partial_least_squares": "0.1.0",
     "regression.linear_model_optimizer": "0.1.0",
     "regression.predict": "0.2.0",
     "regression.predict_pasted": "0.1.0",
@@ -323,6 +324,13 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_ko="회귀모형 적합",
         label_en="Fit Regression Model",
         order=30,
+    ),
+    _available(
+        method_id="regression.partial_least_squares",
+        module_id=AnalysisModuleId.REGRESSION,
+        label_ko="PLS 회귀",
+        label_en="Partial Least Squares Regression",
+        order=35,
     ),
     _available(
         method_id="regression.predict",

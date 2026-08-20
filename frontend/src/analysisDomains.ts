@@ -176,6 +176,7 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
       "regression.pearson",
       "regression.xy_correlation",
       "regression.linear_model",
+      "regression.partial_least_squares",
     ],
     directContextualMethodIds: ["regression.predict"],
     directContextualWorkflows: [
@@ -183,14 +184,6 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
         id: "regression.linear_model_optimizer",
         labelKey: "analysisContext.regressionOptimizer.label",
         descriptionKey: "analysisContext.regressionOptimizer.description",
-      },
-    ],
-    directPlannedWorkflows: [
-      {
-        id: "regression.partial_least_squares",
-        labelKey: "analysisPlanned.pls.label",
-        descriptionKey: "analysisPlanned.pls.description",
-        showInSidebar: true,
       },
     ],
     contextualSummaryKey: "analysisContext.regressionModelActions",

@@ -118,7 +118,7 @@ export interface RegressionModelCatalogItem {
   model_id: string;
   source_analysis_id: string;
   source_dataset_version_id: string;
-  method_id: "regression.linear_model";
+  method_id: "regression.linear_model" | "regression.partial_least_squares";
   method_version: string;
   schema_hash: string;
   response: RegressionModelCatalogResponseColumn | null;
@@ -155,6 +155,27 @@ export interface RegressionModelCatalogResponse {
   offset: number;
   has_previous: boolean;
   has_next: boolean;
+}
+
+export interface PlsPointPredictionRequest {
+  expected_model_manifest_sha256: string;
+  rows: Array<{
+    client_row_id: string;
+    values: Record<string, number>;
+  }>;
+}
+
+export interface PlsPointPredictionResponse {
+  model_id: string;
+  model_manifest_sha256: string;
+  response_column_id: string;
+  row_count: number;
+  intervals_supported: false;
+  rows: Array<{
+    client_row_id: string;
+    predicted_value: number;
+    warnings: string[];
+  }>;
 }
 
 export interface RegressionModelDeletionCounts {

@@ -425,3 +425,94 @@ export interface LinearModelResult {
   training_domain?: LinearModelTrainingDomain;
   model_manifest?: LinearModelManifestPointer;
 }
+
+export interface PlsModelSelectionRow {
+  components: number;
+  x_variance: number;
+  training_sse: number;
+  training_r_squared: number;
+  press: number;
+  predicted_r_squared: number;
+  cv_rmse: number;
+  iterations: number[];
+  converged: boolean;
+}
+
+export interface PlsDiagnosticPoint {
+  row_index: number;
+  observed: number;
+  fitted: number;
+  cross_validated_fitted: number;
+  residual: number;
+  cross_validated_residual: number;
+}
+
+export interface PlsRegressionResult {
+  schema_version: 1;
+  summary_type: "partial_least_squares_regression";
+  method: {
+    name: string;
+    engine: string;
+    engine_version: string;
+    component_selection: "automatic_cv" | "fixed";
+    cv_method: "k_fold" | "leave_one_out";
+    cv_folds: number;
+    cv_shuffle: boolean;
+    cv_seed: number | null;
+    scale: boolean;
+    max_iter: number;
+    tol: number;
+    missing_policy: "complete_case";
+  };
+  response: LinearModelColumnRef;
+  predictors: LinearModelColumnRef[];
+  sample: {
+    n_total: number;
+    n_used: number;
+    n_excluded: number;
+    n_excluded_missing: number;
+    n_excluded_non_numeric: number;
+    predictor_count: number;
+  };
+  component_selection: {
+    selected_components: number;
+    evaluated_components: number;
+    maximum_allowed_components: number;
+    tie_tolerance: number;
+    rows: PlsModelSelectionRow[];
+  };
+  model_summary: {
+    selected_components: number;
+    training_r_squared: number;
+    predicted_r_squared: number;
+    press: number;
+    cv_rmse: number;
+    cumulative_x_variance: number;
+  };
+  coefficients: Array<{
+    column_id: string;
+    display_name: string;
+    coefficient: number;
+    standardized_coefficient: number;
+    direction: "positive" | "negative" | "zero";
+  }>;
+  latent_components: {
+    x_weights: number[][];
+    y_weights: number[][];
+    x_loadings: number[][];
+    y_loadings: number[][];
+    x_rotations: number[][];
+    score_row_indices: number[];
+    x_scores: number[][];
+    y_scores: number[][];
+  };
+  diagnostics: {
+    point_limit: number;
+    point_count_total: number;
+    truncated: boolean;
+    points: PlsDiagnosticPoint[];
+  };
+  training_ranges: Array<{ column_id: string; minimum: number; maximum: number }>;
+  warnings: string[];
+  model_manifest?: LinearModelManifestPointer;
+}
