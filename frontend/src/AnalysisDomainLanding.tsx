@@ -1,11 +1,17 @@
 import type { AnalysisMethodDescriptor, AnalysisMethodListResponse } from "./api";
 import { ANALYSIS_DOMAINS, type AnalysisDomainDefinition } from "./analysisDomains";
 import {
+  directCatalogMethods,
   domainCatalogMethods,
   validateAnalysisDomainCatalog,
 } from "./analysisDomainMapping";
 import { domainGuidanceKey } from "./analysisDomainGuidance";
 import { AnalysisDomainFamilyCard } from "./AnalysisDomainFamilyCard";
+import {
+  AnalysisDomainMethodCard,
+  ContextualDomainMethodCard,
+  PlannedDomainMethodCard,
+} from "./AnalysisDomainMethodCard";
 import { useI18n } from "./i18n/LocaleProvider";
 
 interface AnalysisDomainLandingProps {
@@ -39,7 +45,7 @@ export function AnalysisDomainLanding({
             const methods = domainCatalogMethods(catalog, candidate);
             const planned = candidate.families.reduce(
               (count, family) => count + (family.plannedWorkflows?.length ?? 0),
-              0,
+              candidate.directPlannedWorkflows?.length ?? 0,
             );
             return (
               <button
@@ -81,19 +87,52 @@ export function AnalysisDomainLanding({
         <div className="notice-box analysis-domain-guidance">
           {t(domainGuidanceKey(domain.id))}
         </div>
+        {(domain.selectionGuideKeys?.length ?? 0) > 0 ? (
+          <ul className="analysis-domain-selection-guide">
+            {domain.selectionGuideKeys?.map((key) => <li key={key}>{t(key)}</li>)}
+          </ul>
+        ) : null}
       </div>
       {mappingNotice}
-      <div className="analysis-domain-family-grid">
-        {domain.families.map((family) => (
-          <AnalysisDomainFamilyCard
-            catalog={catalog}
-            family={family}
-            key={family.id}
-            selectedMethodId={selectedMethodId}
-            onSelectMethod={onSelectMethod}
-          />
-        ))}
-      </div>
+      {domain.landingMode === "flat_methods" ? (
+        <>
+          <div className="analysis-domain-method-grid">
+            {directCatalogMethods(catalog, domain).map((method) => (
+              <AnalysisDomainMethodCard
+                key={method.method_id}
+                method={method}
+                selected={selectedMethodId === method.method_id}
+                onSelectMethod={onSelectMethod}
+              />
+            ))}
+            {(domain.directPlannedWorkflows ?? []).map((workflow) => (
+              <PlannedDomainMethodCard key={workflow.id} workflow={workflow} />
+            ))}
+            {(domain.directContextualWorkflows ?? [])
+              .filter((workflow) => workflow.presentation === "card")
+              .map((workflow) => (
+                <ContextualDomainMethodCard key={workflow.id} workflow={workflow} />
+              ))}
+          </div>
+          {domain.contextualSummaryKey !== undefined ? (
+            <p className="analysis-domain-contextual-summary">
+              {t(domain.contextualSummaryKey)}
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <div className="analysis-domain-family-grid">
+          {domain.families.map((family) => (
+            <AnalysisDomainFamilyCard
+              catalog={catalog}
+              family={family}
+              key={family.id}
+              selectedMethodId={selectedMethodId}
+              onSelectMethod={onSelectMethod}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

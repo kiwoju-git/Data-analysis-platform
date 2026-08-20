@@ -14,59 +14,68 @@ export interface AnalysisPlannedWorkflow {
   descriptionKey: TranslationKey;
   id: string;
   labelKey: TranslationKey;
+  presentation?: "card" | "notice";
+  showInSidebar?: boolean;
 }
 
 export type AnalysisContextualWorkflow = AnalysisPlannedWorkflow;
 
+export type AnalysisDomainLandingMode = "flat_methods" | "family_cards";
+export type AnalysisDomainSidebarMode = "flat_methods" | "family_tree";
+export type AnalysisFamilyLayout = "compact" | "wide" | "direct_single" | "planned";
+
 export interface AnalysisDomainFamily {
+  columnSpan?: 1 | 2;
   contextualMethodIds?: readonly string[];
   contextualWorkflows?: readonly AnalysisContextualWorkflow[];
   descriptionKey: TranslationKey;
   id: string;
   labelKey: TranslationKey;
+  layout?: AnalysisFamilyLayout;
   methodIds: readonly string[];
   plannedWorkflows?: readonly AnalysisPlannedWorkflow[];
 }
 
 export interface AnalysisDomainDefinition {
+  contextualSummaryKey?: TranslationKey;
   descriptionKey: TranslationKey;
+  directContextualMethodIds?: readonly string[];
+  directContextualWorkflows?: readonly AnalysisContextualWorkflow[];
+  directMethodIds?: readonly string[];
+  directPlannedWorkflows?: readonly AnalysisPlannedWorkflow[];
   families: readonly AnalysisDomainFamily[];
   id: AnalysisDomainId;
   labelKey: TranslationKey;
+  landingMode: AnalysisDomainLandingMode;
   order: number;
+  selectionGuideKeys?: readonly TranslationKey[];
+  sidebarMode: AnalysisDomainSidebarMode;
 }
 
 export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
   {
     id: "basic-exploration",
     order: 1,
+    landingMode: "flat_methods",
+    sidebarMode: "flat_methods",
     labelKey: "analysisDomains.basic.label",
     descriptionKey: "analysisDomains.basic.description",
-    families: [
+    directMethodIds: ["eda.descriptive", "eda.graphical_summary", "eda.normality"],
+    directPlannedWorkflows: [
       {
-        id: "distribution-summary",
-        labelKey: "analysisFamilies.distribution.label",
-        descriptionKey: "analysisFamilies.distribution.description",
-        methodIds: ["eda.descriptive", "eda.graphical_summary", "eda.normality"],
-      },
-      {
-        id: "multivariate-exploration",
-        labelKey: "analysisFamilies.multivariateExploration.label",
-        descriptionKey: "analysisFamilies.multivariateExploration.description",
-        methodIds: [],
-        plannedWorkflows: [
-          {
-            id: "eda.multivariate_review",
-            labelKey: "analysisPlanned.multivariateReview.label",
-            descriptionKey: "analysisPlanned.multivariateReview.description",
-          },
-        ],
+        id: "eda.multivariate_review",
+        labelKey: "analysisPlanned.multivariateReview.label",
+        descriptionKey: "analysisPlanned.multivariateReview.description",
+        showInSidebar: true,
       },
     ],
+    families: [],
   },
   {
     id: "mean-equivalence",
     order: 2,
+    landingMode: "family_cards",
+    sidebarMode: "family_tree",
     labelKey: "analysisDomains.mean.label",
     descriptionKey: "analysisDomains.mean.description",
     families: [
@@ -79,19 +88,13 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
           "hypothesis.paired_t",
           "hypothesis.two_sample_t",
         ],
-        contextualWorkflows: [
-          {
-            id: "two-sample-comparison-guide",
-            labelKey: "analysisContext.twoSampleGuide.label",
-            descriptionKey: "analysisContext.twoSampleGuide.description",
-          },
-        ],
       },
       {
         id: "analysis-of-variance",
         labelKey: "analysisFamilies.anova.label",
         descriptionKey: "analysisFamilies.anova.description",
         methodIds: ["hypothesis.one_way_anova"],
+        layout: "direct_single",
       },
       {
         id: "equivalence-tests",
@@ -99,22 +102,11 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
         descriptionKey: "analysisFamilies.equivalence.description",
         methodIds: [
           "hypothesis.equivalence_tost",
-          "hypothesis.paired_equivalence_tost",
           "hypothesis.two_sample_equivalence_tost",
+          "hypothesis.paired_equivalence_tost",
         ],
-      },
-      {
-        id: "comparability-assessment",
-        labelKey: "analysisFamilies.comparability.label",
-        descriptionKey: "analysisFamilies.comparability.description",
-        methodIds: [],
-        plannedWorkflows: [
-          {
-            id: "hypothesis.comparability_assessment",
-            labelKey: "analysisPlanned.comparability.label",
-            descriptionKey: "analysisPlanned.comparability.description",
-          },
-        ],
+        columnSpan: 2,
+        layout: "wide",
       },
       {
         id: "nonparametric-tests",
@@ -125,12 +117,36 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
           "hypothesis.mann_whitney",
           "hypothesis.kruskal_wallis",
         ],
+        columnSpan: 2,
+        layout: "wide",
       },
+      {
+        id: "comparability-assessment",
+        labelKey: "analysisFamilies.comparability.label",
+        descriptionKey: "analysisFamilies.comparability.description",
+        methodIds: [],
+        layout: "planned",
+        plannedWorkflows: [
+          {
+            id: "hypothesis.comparability_assessment",
+            labelKey: "analysisPlanned.comparability.label",
+            descriptionKey: "analysisPlanned.comparability.description",
+            showInSidebar: true,
+          },
+        ],
+      },
+    ],
+    selectionGuideKeys: [
+      "analysisContext.twoSampleGuide.mean",
+      "analysisContext.twoSampleGuide.rank",
+      "analysisContext.twoSampleGuide.equivalence",
     ],
   },
   {
     id: "proportions-categorical",
     order: 3,
+    landingMode: "family_cards",
+    sidebarMode: "family_tree",
     labelKey: "analysisDomains.categorical.label",
     descriptionKey: "analysisDomains.categorical.description",
     families: [
@@ -145,119 +161,80 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
         labelKey: "analysisFamilies.association.label",
         descriptionKey: "analysisFamilies.association.description",
         methodIds: ["categorical.chi_square_association"],
+        layout: "direct_single",
       },
     ],
   },
   {
     id: "correlation-regression-prediction",
     order: 4,
+    landingMode: "flat_methods",
+    sidebarMode: "flat_methods",
     labelKey: "analysisDomains.regression.label",
     descriptionKey: "analysisDomains.regression.description",
-    families: [
+    directMethodIds: [
+      "regression.pearson",
+      "regression.xy_correlation",
+      "regression.linear_model",
+    ],
+    directContextualMethodIds: ["regression.predict"],
+    directContextualWorkflows: [
       {
-        id: "correlation",
-        labelKey: "analysisFamilies.correlation.label",
-        descriptionKey: "analysisFamilies.correlation.description",
-        methodIds: ["regression.pearson", "regression.xy_correlation"],
-      },
-      {
-        id: "regression-modeling",
-        labelKey: "analysisFamilies.regression.label",
-        descriptionKey: "analysisFamilies.regression.description",
-        methodIds: ["regression.linear_model"],
-      },
-      {
-        id: "prediction-optimization",
-        labelKey: "analysisFamilies.predictionOptimization.label",
-        descriptionKey: "analysisFamilies.predictionOptimization.description",
-        methodIds: [],
-        contextualMethodIds: ["regression.predict"],
-        contextualWorkflows: [
-          {
-            id: "regression.linear_model_optimizer",
-            labelKey: "analysisContext.regressionOptimizer.label",
-            descriptionKey: "analysisContext.regressionOptimizer.description",
-          },
-        ],
-      },
-      {
-        id: "latent-variable-regression",
-        labelKey: "analysisFamilies.latentRegression.label",
-        descriptionKey: "analysisFamilies.latentRegression.description",
-        methodIds: [],
-        plannedWorkflows: [
-          {
-            id: "regression.partial_least_squares",
-            labelKey: "analysisPlanned.pls.label",
-            descriptionKey: "analysisPlanned.pls.description",
-          },
-        ],
+        id: "regression.linear_model_optimizer",
+        labelKey: "analysisContext.regressionOptimizer.label",
+        descriptionKey: "analysisContext.regressionOptimizer.description",
       },
     ],
+    directPlannedWorkflows: [
+      {
+        id: "regression.partial_least_squares",
+        labelKey: "analysisPlanned.pls.label",
+        descriptionKey: "analysisPlanned.pls.description",
+        showInSidebar: true,
+      },
+    ],
+    contextualSummaryKey: "analysisContext.regressionModelActions",
+    families: [],
   },
   {
     id: "doe-optimization",
     order: 5,
+    landingMode: "flat_methods",
+    sidebarMode: "flat_methods",
     labelKey: "analysisDomains.doe.label",
     descriptionKey: "analysisDomains.doe.description",
-    families: [
-      {
-        id: "factorial-designs",
-        labelKey: "analysisFamilies.factorial.label",
-        descriptionKey: "analysisFamilies.factorial.description",
-        methodIds: ["doe.factorial_design"],
-        contextualMethodIds: ["doe.general_factorial_design"],
-      },
-      {
-        id: "response-surface",
-        labelKey: "analysisFamilies.responseSurface.label",
-        descriptionKey: "analysisFamilies.responseSurface.description",
-        methodIds: ["doe.response_surface"],
-      },
-      {
-        id: "response-optimization",
-        labelKey: "analysisFamilies.responseOptimization.label",
-        descriptionKey: "analysisFamilies.responseOptimization.description",
-        methodIds: ["doe.response_optimizer"],
-      },
+    directMethodIds: [
+      "doe.factorial_design",
+      "doe.general_factorial_design",
+      "doe.response_surface",
+      "doe.response_optimizer",
     ],
+    families: [],
   },
   {
     id: "ai-ml-experimental-design",
     order: 6,
+    landingMode: "flat_methods",
+    sidebarMode: "flat_methods",
     labelKey: "analysisDomains.ai.label",
     descriptionKey: "analysisDomains.ai.description",
-    families: [
+    directMethodIds: ["doe.latin_hypercube", "doe.bayesian_optimization"],
+    directContextualWorkflows: [
       {
-        id: "space-filling-design",
-        labelKey: "analysisFamilies.spaceFilling.label",
-        descriptionKey: "analysisFamilies.spaceFilling.description",
-        methodIds: ["doe.latin_hypercube"],
-      },
-      {
-        id: "sequential-optimization",
-        labelKey: "analysisFamilies.sequential.label",
-        descriptionKey: "analysisFamilies.sequential.description",
-        methodIds: ["doe.bayesian_optimization"],
-      },
-      {
-        id: "surrogate-stage",
-        labelKey: "analysisFamilies.surrogate.label",
-        descriptionKey: "analysisFamilies.surrogate.description",
-        methodIds: [],
-        contextualWorkflows: [
-          {
-            id: "gaussian-process-surrogate",
-            labelKey: "analysisContext.gaussianProcess.label",
-            descriptionKey: "analysisContext.gaussianProcess.description",
-          },
-        ],
+        id: "gaussian-process-surrogate",
+        labelKey: "analysisContext.gaussianProcess.label",
+        descriptionKey: "analysisContext.gaussianProcess.description",
+        presentation: "card",
+        showInSidebar: true,
       },
     ],
+    families: [],
   },
   {
     id: "quality-process-monitoring",
     order: 7,
+    landingMode: "family_cards",
+    sidebarMode: "family_tree",
     labelKey: "analysisDomains.quality.label",
     descriptionKey: "analysisDomains.quality.description",
     families: [
@@ -276,12 +253,14 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
         labelKey: "analysisFamilies.processBehavior.label",
         descriptionKey: "analysisFamilies.processBehavior.description",
         methodIds: ["quality.run_chart"],
+        layout: "direct_single",
       },
       {
         id: "process-capability",
         labelKey: "analysisFamilies.capability.label",
         descriptionKey: "analysisFamilies.capability.description",
         methodIds: ["quality.capability"],
+        layout: "direct_single",
       },
       {
         id: "multivariate-monitoring",
@@ -293,6 +272,7 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
             id: "quality.multivariate_monitoring",
             labelKey: "analysisPlanned.multivariateMonitoring.label",
             descriptionKey: "analysisPlanned.multivariateMonitoring.description",
+            showInSidebar: true,
           },
         ],
       },
@@ -301,6 +281,8 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
   {
     id: "measurement-variability",
     order: 8,
+    landingMode: "family_cards",
+    sidebarMode: "family_tree",
     labelKey: "analysisDomains.measurement.label",
     descriptionKey: "analysisDomains.measurement.description",
     families: [

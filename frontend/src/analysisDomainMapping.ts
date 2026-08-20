@@ -9,11 +9,17 @@ import {
 export interface AnalysisMethodPlacement {
   contextual: boolean;
   domain: AnalysisDomainDefinition;
-  family: AnalysisDomainFamily;
+  family: AnalysisDomainFamily | null;
 }
 const placements = new Map<string, AnalysisMethodPlacement>();
 
 for (const domain of ANALYSIS_DOMAINS) {
+  for (const methodId of domain.directMethodIds ?? []) {
+    addPlacement(methodId, domain, null, false);
+  }
+  for (const methodId of domain.directContextualMethodIds ?? []) {
+    addPlacement(methodId, domain, null, true);
+  }
   for (const family of domain.families) {
     for (const methodId of family.methodIds) {
       addPlacement(methodId, domain, family, false);
@@ -27,7 +33,7 @@ for (const domain of ANALYSIS_DOMAINS) {
 function addPlacement(
   methodId: string,
   domain: AnalysisDomainDefinition,
-  family: AnalysisDomainFamily,
+  family: AnalysisDomainFamily | null,
   contextual: boolean,
 ) {
   if (placements.has(methodId)) {
@@ -61,9 +67,26 @@ export function domainCatalogMethods(
   domain: AnalysisDomainDefinition,
 ): AnalysisMethodDescriptor[] {
   const ids = new Set(
-    domain.families.flatMap((family) => [...family.methodIds]),
+    [
+      ...(domain.directMethodIds ?? []),
+      ...domain.families.flatMap((family) => [...family.methodIds]),
+    ],
   );
   return catalog.methods.filter((method) => ids.has(method.method_id));
+}
+
+export function directCatalogMethods(
+  catalog: AnalysisMethodListResponse,
+  domain: AnalysisDomainDefinition,
+): AnalysisMethodDescriptor[] {
+  const ids = new Set(domain.directMethodIds ?? []);
+  return catalog.methods
+    .filter((method) => ids.has(method.method_id))
+    .sort(
+      (left, right) =>
+        (domain.directMethodIds?.indexOf(left.method_id) ?? 0) -
+        (domain.directMethodIds?.indexOf(right.method_id) ?? 0),
+    );
 }
 
 export function familyCatalogMethods(

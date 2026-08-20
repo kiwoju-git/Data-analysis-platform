@@ -4349,6 +4349,7 @@ export default function App() {
     canOpenAnalysis: selectedMethod !== null || analysisCatalog !== null,
     query: navigationQuery,
     onOpenAnalysisMethod: handleOpenAnalysisMethod,
+    onOpenAnalysisDomain: handleOpenAnalysisDomain,
     onOpenDatasetSection: handleOpenDatasetPage,
     onOpenHelpSection: handleOpenHelpPage,
     onOpenManageTab: handleOpenManagePage,

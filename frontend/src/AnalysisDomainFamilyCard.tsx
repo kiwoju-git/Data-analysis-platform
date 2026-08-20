@@ -24,20 +24,14 @@ export function AnalysisDomainFamilyCard({
   const contextualMethods = contextualCatalogMethods(catalog, family);
 
   return (
-    <section className="analysis-domain-family-card">
+    <section
+      className={`analysis-domain-family-card analysis-domain-family-${family.layout ?? "compact"}${family.columnSpan === 2 ? " analysis-domain-family-span-2" : ""}`}
+    >
       <div className="analysis-domain-family-heading">
-        <div>
-          <h3>{t(family.labelKey)}</h3>
-          <p>{t(family.descriptionKey)}</p>
-        </div>
-        <span className="analysis-domain-count">
-          {t("analysisDomains.availableCount", {
-            count: methods.filter((method) => method.availability === "available").length,
-          })}
-        </span>
+        <h3>{t(family.labelKey)}</h3>
       </div>
       {methods.length > 0 ? (
-        <div className="analysis-domain-method-list">
+        <div className={`analysis-domain-method-list${methods.length === 3 ? " has-three-methods" : ""}`}>
           {methods.map((method) => (
             <button
               aria-pressed={selectedMethodId === method.method_id}

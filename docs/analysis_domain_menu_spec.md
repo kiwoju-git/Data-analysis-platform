@@ -155,9 +155,12 @@ family card 구성:
 
 규칙:
 
-- family의 method 목록은 기본 접힘
+- `flat_methods` domain은 family node 없이 method를 바로 표시
+- `family_tree` domain의 family method 목록은 기본 접힘
 - active method가 있는 chain은 자동 펼침
-- domain/family click은 toggle만 수행
+- inactive domain click은 `/analysis?domain={domain-id}` landing으로 이동하고 submenu를 펼침
+- active domain click은 현재 landing을 유지한 채 submenu만 접거나 펼침
+- 실행 method가 하나뿐이고 contextual/planned child가 없는 family는 family click으로 method에 바로 진입
 - method click만 실제 navigation 수행
 - hidden contextual method는 일반 sidebar에서 제외
 - planned workflow는 disabled item 또는 roadmap link로만 표시
@@ -169,8 +172,8 @@ family card 구성:
 
 | Presentation domain | Family | Current method / workflow | 상태 |
 |---|---|---|---|
-| 기초통계·탐색 | 분포와 요약 | `eda.descriptive`, `eda.graphical_summary`, `eda.normality` | Available |
-| 기초통계·탐색 | 다변량 탐색 | `eda.multivariate_review` | Planned |
+| 기초통계·탐색 | Direct | `eda.descriptive`, `eda.graphical_summary`, `eda.normality` | Available |
+| 기초통계·탐색 | Direct | `eda.multivariate_review` (PCA 기반 다변량 검토) | Planned |
 | 평균비교·동등성 | t-검정 | `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.two_sample_t` | Available |
 | 평균비교·동등성 | ANOVA | `hypothesis.one_way_anova` | Available |
 | 평균비교·동등성 | 동등성 검정 | 1-sample, paired, 2-sample TOST | Available |
@@ -206,17 +209,14 @@ family card 구성:
 
 ## 7.2 landing UI
 
-Family 1: `분포와 요약 / Distribution & Summary`
+이 domain은 `flat_methods` presentation을 사용하며 중간 family heading을 표시하지 않는다.
 
 ```text
-[기술통계] [그래프 요약] [정규성 검정]
+[기술통계] [그래프 요약] [정규성 검정] [PCA 기반 다변량 검토 — Planned]
 ```
 
-Family 2: `다변량 탐색 / Multivariate Exploration`
-
-```text
-[Exploratory Multivariate Review — Planned]
-```
+PCA 계획 카드는 response 없이 여러 수치 변수의 분산 구조를 주성분으로 요약하는
+향후 범위를 명시하며 실행 button이나 backend registry entry를 제공하지 않는다.
 
 `Test for Equal Variances`는 여기서 중복 노출하지 않고 `측정시스템·변동성`에 표시한다. 기존 route와 backend module은 유지한다.
 
@@ -688,31 +688,14 @@ Family 2: `범주형 관련성 / Categorical Association`
 
 ## 10.1 landing UI
 
-Family 1: `상관 분석 / Correlation`
+이 domain은 `flat_methods` presentation을 사용한다.
 
 ```text
-[Pearson Correlation] [X–Y Correlation Matrix]
+[Pearson Correlation] [X–Y Correlation Matrix] [Fit Regression Model] [PLS Regression — Planned]
 ```
 
-Family 2: `회귀 모형 / Regression Modeling`
-
-```text
-[Fit Regression Model]
-```
-
-Family 3: `예측·최적화 / Prediction & Optimization`
-
-```text
-[저장 모델로 예측] [회귀모형 기반 반응 최적화]
-```
-
-Family 4: `잠재변수 회귀 / Latent-Variable Regression`
-
-```text
-[PLS Regression — Planned]
-```
-
-Prediction과 regression optimizer는 contextual workflow다. 일반 method card를 중복 생성하지 않는다.
+Prediction과 regression optimizer는 contextual workflow다. OLS card 아래 안내만 표시하고 일반
+method card나 sidebar leaf를 중복 생성하지 않는다.
 
 ## 10.2 `regression.pearson`
 

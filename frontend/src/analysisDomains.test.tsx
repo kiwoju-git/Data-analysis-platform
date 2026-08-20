@@ -6,6 +6,7 @@ import { ANALYSIS_DOMAINS } from "./analysisDomains";
 import {
   analysisDomainForMethod,
   analysisFamilyForMethod,
+  analysisMethodPlacement,
   mappedAnalysisMethodIds,
   validateAnalysisDomainCatalog,
 } from "./analysisDomainMapping";
@@ -83,6 +84,25 @@ describe("analysis domain navigation", () => {
     expect(analysisFamilyForMethod("eda.equal_variances")?.id).toBe(
       "variance-comparison",
     );
+    expect(analysisFamilyForMethod("eda.descriptive")).toBeNull();
+    expect(analysisMethodPlacement("doe.general_factorial_design")?.contextual).toBe(false);
+  });
+
+  it("uses metadata-driven flat and grouped presentation modes", () => {
+    expect(ANALYSIS_DOMAINS.filter((domain) => domain.landingMode === "flat_methods").map((domain) => domain.id)).toEqual([
+      "basic-exploration",
+      "correlation-regression-prediction",
+      "doe-optimization",
+      "ai-ml-experimental-design",
+    ]);
+    const mean = ANALYSIS_DOMAINS[1];
+    expect(mean.landingMode).toBe("family_cards");
+    expect(mean.families.find((family) => family.id === "analysis-of-variance")?.layout).toBe("direct_single");
+    expect(mean.families.find((family) => family.id === "equivalence-tests")?.methodIds).toEqual([
+      "hypothesis.equivalence_tost",
+      "hypothesis.two_sample_equivalence_tost",
+      "hypothesis.paired_equivalence_tost",
+    ]);
   });
 
   it("reports a new unmapped registry method and a stale mapping", () => {
@@ -108,6 +128,16 @@ describe("analysis domain navigation", () => {
       />,
     );
     const measurement = ANALYSIS_DOMAINS[7];
+    const basic = ANALYSIS_DOMAINS[0];
+    const basicHtml = renderToString(
+      <AnalysisDomainLanding
+        catalog={catalog}
+        domain={basic}
+        selectedMethodId={null}
+        onOpenDomain={() => undefined}
+        onSelectMethod={() => undefined}
+      />,
+    );
     const familyHtml = renderToString(
       <AnalysisDomainLanding
         catalog={catalog}
@@ -119,6 +149,9 @@ describe("analysis domain navigation", () => {
     );
 
     expect(rootHtml.match(/class="analysis-domain-card"/gu)).toHaveLength(8);
+    expect(basicHtml.match(/analysis-domain-method-card/gu)).toHaveLength(4);
+    expect(basicHtml).toContain("PCA 기반 다변량 검토");
+    expect(basicHtml).not.toContain("analysis-domain-family-card");
     expect(familyHtml).toContain("Two Variances");
     expect(familyHtml).not.toContain(">Two Variances</button>");
     expect(familyHtml).toContain("등분산 검정");

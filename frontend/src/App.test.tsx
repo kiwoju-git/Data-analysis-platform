@@ -492,9 +492,9 @@ describe("App", () => {
     expect(methodGridHtml).not.toContain('class="method-meta"');
     expect(methodGridHtml).not.toContain("데이터셋 필요");
     expect(methodGridHtml).not.toContain("Source 자산 선택");
-    expect(methodGridHtml).toContain('class="analysis-domain-family-card"');
-    expect(html).toContain("2-표본 비교 선택 가이드");
-    expect(html).toContain("추정 대상과 설계에 따라");
+    expect(methodGridHtml).toContain('class="analysis-domain-family-card analysis-domain-family-');
+    expect(html).toContain("독립 그룹 평균 → 2-표본 t-검정");
+    expect(html).toContain("순위 기반 비교 → Mann-Whitney U 검정");
     expect(html).not.toContain('class="workbench-steps"');
     expect(html).not.toContain('class="workbench-summary"');
     expect(html).not.toContain("실행 방식");
@@ -4287,13 +4287,16 @@ describe("App", () => {
     );
 
     expect(html).toContain("1-표본 t-검정");
-    expect(html).toContain('class="hypothesis-method-context"');
+    expect(html).toContain('class="workbench-method-context-strip"');
     expect(html).toContain('aria-label="1-표본 t-검정 입력 및 설계 기준"');
     expect(html).toContain("입력·설계 기준");
     expect(html).toContain("연속형 수치");
     expect(html).toContain("한 모집단");
     expect(html).toContain("평균 비교");
     expect(html).toContain("독립 관측");
+    expect(html.indexOf('class="workbench-heading-actions"')).toBeLessThan(
+      html.indexOf('class="workbench-method-context-strip"'),
+    );
     expect(html).toContain("1-표본 t-검정 실행");
     expect(html).toContain("기준 평균");
     expect(html).toContain("반응 변수");

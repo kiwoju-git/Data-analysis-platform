@@ -2,23 +2,46 @@
 
 ## Scope and compatibility
 
-This Phase 1 change adds a presentation taxonomy only. The six backend
+The presentation layer keeps the eight-domain taxonomy while refining how each
+domain is entered and how its methods are shown. The six backend
 `AnalysisModuleId` values, method IDs, routes, request and result schemas,
 method versions, saved artifacts, checksums, restore behavior, and calculation
 panels are unchanged. A leaf method still opens its existing route:
 
 `/analysis/{legacy-module}/{method-id}`
 
-The root `/analysis` route shows the eight-domain landing page. A selected
+The root `/analysis` route shows the eight-domain landing page. Clicking an
+inactive sidebar domain opens its landing and expands its submenu. Clicking the
+already-active domain only toggles that submenu. A selected
 domain uses `/analysis?domain={domain-id}`. The query is presentation state and
 does not enter an analysis request or saved result.
+
+## Presentation modes
+
+`analysisDomains.ts` is the single source for two independent display choices:
+
+- `flat_methods` landing/sidebar: Basic Statistics & Exploration; Correlation,
+  Regression & Prediction; DOE & Optimization; AI/ML Experimental Design.
+- `family_cards` landing and `family_tree` sidebar: Mean Comparison &
+  Equivalence; Proportions & Categorical Data; Quality & Process Monitoring;
+  Measurement Systems & Variability.
+
+Flat domains show executable methods, planned work, and explicitly contextual
+information at one level. A grouped family with exactly one executable method
+and no contextual/planned siblings becomes a direct sidebar leaf. ANOVA,
+Categorical Association, Time-Ordered Patterns, and Process Performance
+therefore open their existing method without another disclosure level.
+
+Basic Statistics no longer exposes Distribution & Summary or Multivariate
+Exploration headings. Its four same-level cards are Descriptive Statistics,
+Graphical Summary, Normality Test, and planned PCA-Based Multivariate Review.
+The PCA card has no executable action and no backend registry entry.
 
 ## Domain mapping
 
 | Presentation domain | Family | Existing executable methods | Contextual or planned |
 | --- | --- | --- | --- |
-| Basic Statistics & Exploration | Distribution & Summary | `eda.descriptive`, `eda.graphical_summary`, `eda.normality` | none |
-| Basic Statistics & Exploration | Multivariate Exploration | none | planned `eda.multivariate_review` |
+| Basic Statistics & Exploration | Flat methods | `eda.descriptive`, `eda.graphical_summary`, `eda.normality` | planned PCA-based `eda.multivariate_review` |
 | Mean Comparison & Equivalence | t-Tests | `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.two_sample_t` | Two-Sample Comparison guide |
 | Mean Comparison & Equivalence | ANOVA | `hypothesis.one_way_anova` | ANOVA is a family, not a duplicate method |
 | Mean Comparison & Equivalence | Equivalence Tests | `hypothesis.equivalence_tost`, `hypothesis.paired_equivalence_tost`, `hypothesis.two_sample_equivalence_tost` | none |
@@ -26,16 +49,9 @@ does not enter an analysis request or saved result.
 | Mean Comparison & Equivalence | Nonparametric Tests | `hypothesis.one_sample_wilcoxon`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis` | none |
 | Proportions & Categorical Data | Proportion Tests | `categorical.one_proportion`, `categorical.two_proportion` | none |
 | Proportions & Categorical Data | Categorical Association | `categorical.chi_square_association` | none |
-| Correlation, Regression & Prediction | Correlation | `regression.pearson`, `regression.xy_correlation` | none |
-| Correlation, Regression & Prediction | Regression Models | `regression.linear_model` | none |
-| Correlation, Regression & Prediction | Prediction & Optimization | none | contextual `regression.predict` and regression optimizer |
-| Correlation, Regression & Prediction | Latent Variable Regression | none | planned `regression.partial_least_squares` |
-| DOE & Optimization | Factorial Designs | `doe.factorial_design` | contextual `doe.general_factorial_design` inside the existing factorial workflow |
-| DOE & Optimization | Response Surface Methods | `doe.response_surface` | none |
-| DOE & Optimization | Response Optimization | `doe.response_optimizer` | none |
-| AI/ML Experimental Design | Space-Filling Design | `doe.latin_hypercube` | none |
-| AI/ML Experimental Design | Sequential Optimization | `doe.bayesian_optimization` | none |
-| AI/ML Experimental Design | Surrogate Stage | none | Gaussian Process is shown as an internal surrogate, not another method |
+| Correlation, Regression & Prediction | Flat methods | `regression.pearson`, `regression.xy_correlation`, `regression.linear_model` | contextual prediction/optimizer; planned PLS pending Phase B |
+| DOE & Optimization | Flat methods | `doe.factorial_design`, `doe.general_factorial_design`, `doe.response_surface`, `doe.response_optimizer` | none |
+| AI/ML Experimental Design | Flat methods | `doe.latin_hypercube`, `doe.bayesian_optimization` | Gaussian Process shown as disabled BO-internal context |
 | Quality & Process Monitoring | Control Charts | `quality.attribute_control_chart`, `quality.subgroup_chart`, `quality.individuals_chart` | none |
 | Quality & Process Monitoring | Process Behavior | `quality.run_chart` | none |
 | Quality & Process Monitoring | Process Capability | `quality.capability` | none |
@@ -74,6 +90,11 @@ No Phase 1 source changes were made to the panel callback wiring in
 `App.tsx`/`AnalysisShell.tsx`, API client payload builders, backend schemas, or
 statistical services. Existing frontend tests continue to assert representative
 request bodies and result sections after the navigation change.
+
+The selected-method heading now uses a two-row grid: title and non-wrapping
+actions on the first row, followed by a full-width compact input/design tag
+strip. This is presentation-only and leaves guidance tags and panel state
+unchanged.
 
 ## Deliberately not added
 

@@ -23,15 +23,21 @@ const analysisCatalog: AnalysisMethodListResponse = {
     order,
   })),
   methods: [
-    ["eda.descriptive", "기술통계"],
-    ["eda.graphical_summary", "그래프 요약"],
-    ["eda.normality", "정규성 검정"],
-    ["eda.equal_variances", "등분산 검정"],
+    ["eda.descriptive", "기술통계", "exploration"],
+    ["eda.graphical_summary", "그래프 요약", "exploration"],
+    ["eda.normality", "정규성 검정", "exploration"],
+    ["eda.equal_variances", "등분산 검정", "exploration"],
+    ["hypothesis.one_way_anova", "일원분산분석", "hypothesis"],
+    ["categorical.chi_square_association", "카이제곱 독립성 검정", "categorical"],
+    ["quality.run_chart", "런 차트", "quality"],
+    ["quality.capability", "공정능력 분석", "quality"],
+    ["doe.latin_hypercube", "LHS 공간충전 설계", "doe"],
+    ["doe.bayesian_optimization", "베이지안 최적화", "doe"],
   ].map(
-    ([method_id, label], index) => ({
+    ([method_id, label, module_id], index) => ({
       method_id,
       method_version: "0.1.0",
-      module_id: "exploration" as const,
+      module_id: module_id as AnalysisMethodListResponse["methods"][number]["module_id"],
       label_ko: label,
       label_en: label,
       availability: "available" as const,
@@ -91,6 +97,7 @@ describe("sidebar navigation model", () => {
   });
 
   it("keeps all eight analysis domains visible and blocks them while unavailable", () => {
+    const onOpenAnalysisDomain = vi.fn();
     const groups = createSidebarNavigationGroups({
       ...catalogOptions,
       activeAnalysisDomainId: "quality-process-monitoring",
@@ -98,6 +105,7 @@ describe("sidebar navigation model", () => {
       canOpenAnalysis: false,
       query: new URLSearchParams(),
       onOpenAnalysisModule: vi.fn(),
+      onOpenAnalysisDomain,
       onOpenDatasetSection: vi.fn(),
       onOpenHelpSection: vi.fn(),
       onOpenGraphs: vi.fn(),
@@ -131,6 +139,44 @@ describe("sidebar navigation model", () => {
         .find((item) => item.id === "ai-ml-experimental-design")
         ?.children?.some((item) => item.id.endsWith("surrogate-stage")),
     ).toBe(false);
+    const basic = analysis?.children.find((item) => item.id === "basic-exploration");
+    expect(basic?.children?.map((item) => item.id)).toEqual([
+      "eda.descriptive",
+      "eda.graphical_summary",
+      "eda.normality",
+      "planned-eda.multivariate_review",
+    ]);
+    expect(basic?.children?.some((item) => item.id.includes("distribution-summary"))).toBe(false);
+    basic?.onActivate?.();
+    expect(onOpenAnalysisDomain).toHaveBeenCalledWith(expect.objectContaining({ id: "basic-exploration" }));
+  });
+
+  it("flattens single-method families and keeps GP as contextual information", () => {
+    const groups = createSidebarNavigationGroups({
+      ...catalogOptions,
+      activeAnalysisDomainId: "mean-equivalence",
+      activePage: "analysis",
+      canOpenAnalysis: true,
+      query: new URLSearchParams(),
+      onOpenAnalysisDomain: vi.fn(),
+      onOpenDatasetSection: vi.fn(),
+      onOpenHelpSection: vi.fn(),
+      onOpenGraphs: vi.fn(),
+      onOpenManageTab: vi.fn(),
+      onOpenProject: vi.fn(),
+      onOpenReportTab: vi.fn(),
+    });
+    const analysis = groups.find((group) => group.id === "analysis");
+    const mean = analysis?.children.find((item) => item.id === "mean-equivalence");
+    const anova = mean?.children?.find((item) => item.id === "hypothesis.one_way_anova");
+    expect(anova?.label).toBe("ANOVA");
+    expect(anova?.children).toBeUndefined();
+    const categorical = analysis?.children.find((item) => item.id === "proportions-categorical");
+    expect(categorical?.children?.find((item) => item.id === "categorical.chi_square_association")?.label).toBe("범주형 관련성");
+    const quality = analysis?.children.find((item) => item.id === "quality-process-monitoring");
+    expect(quality?.children?.find((item) => item.id === "quality.run_chart")?.label).toBe("시계열 패턴");
+    const ai = analysis?.children.find((item) => item.id === "ai-ml-experimental-design");
+    expect(ai?.children?.find((item) => item.id === "planned-gaussian-process-surrogate")?.disabled).toBe(true);
   });
 
   it("keeps only registration and preview dataset shortcuts", () => {

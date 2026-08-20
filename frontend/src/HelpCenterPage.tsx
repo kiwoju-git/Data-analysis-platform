@@ -46,7 +46,9 @@ export function HelpCenterPage({
               ? []
               : [
                   t(analysisMethodPlacement(method.method_id)!.domain.labelKey),
-                  t(analysisMethodPlacement(method.method_id)!.family.labelKey),
+                  ...(analysisMethodPlacement(method.method_id)!.family === null
+                    ? []
+                    : [t(analysisMethodPlacement(method.method_id)!.family!.labelKey)]),
                 ]),
           ].some((value) =>
             value.toLocaleLowerCase("ko-KR").includes(normalized),
@@ -214,8 +216,10 @@ export function HelpCenterPage({
               {locale === "ko" ? <span>{method.label_en}</span> : null}
               {analysisMethodPlacement(method.method_id) !== null ? (
                 <span>
-                  {t(analysisMethodPlacement(method.method_id)!.domain.labelKey)} ·{" "}
-                  {t(analysisMethodPlacement(method.method_id)!.family.labelKey)}
+                  {t(analysisMethodPlacement(method.method_id)!.domain.labelKey)}
+                  {analysisMethodPlacement(method.method_id)!.family === null
+                    ? null
+                    : ` · ${t(analysisMethodPlacement(method.method_id)!.family!.labelKey)}`}
                 </span>
               ) : null}
               <code>{method.method_id}</code>

@@ -674,7 +674,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
                 raise AssertionError("descriptive result row did not contain Value")
 
             diagnostics.step("verify graph builder box plot preview")
-            verify_graph_builder_box_plot(page)
+            verify_graph_builder_box_plot(page, diagnostics)
 
             open_primary_navigation(page, "분석")
             select_method_card(page, "가설 검정", "2-표본 t-검정")
@@ -998,7 +998,9 @@ def select_option_by_label_without_retry(select: Locator, label: str) -> None:
 
 
 def select_method_card(page: Page, module_label: str, method_label: str) -> None:
-    existing_method = page.locator(".analysis-domain-method-list").get_by_role(
+    existing_method = page.locator(
+        ".analysis-domain-method-list, .analysis-domain-method-grid"
+    ).get_by_role(
         "button", name=method_label, exact=True
     )
     if existing_method.count() > 0 and existing_method.first.is_visible():
@@ -1031,7 +1033,9 @@ def select_method_card(page: Page, module_label: str, method_label: str) -> None
     domain_card = page.locator(".analysis-domain-card").filter(has_text=domain_label)
     domain_card.wait_for(state="visible", timeout=15_000)
     domain_card.click()
-    method_button = page.locator(".analysis-domain-method-list").get_by_role(
+    method_button = page.locator(
+        ".analysis-domain-method-list, .analysis-domain-method-grid"
+    ).get_by_role(
         "button", name=method_label, exact=True
     )
     method_button.wait_for(state="visible", timeout=15_000)
@@ -1052,6 +1056,21 @@ def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> 
     ):
         expect(family_grid).to_contain_text(family_label)
     assert_children_do_not_overlap(family_grid, families, "hypothesis families")
+    t_card = families.filter(has=page.get_by_role("heading", name="t-검정"))
+    anova_card = families.filter(has=page.get_by_role("heading", name="ANOVA"))
+    height_difference = abs(
+        t_card.bounding_box()["height"] - anova_card.bounding_box()["height"]
+    )
+    if height_difference > 2:
+        raise AssertionError(
+            f"t-test and ANOVA cards differed by {height_difference:.2f}px"
+        )
+    equivalence = families.filter(
+        has=page.get_by_role("heading", name="동등성 검정")
+    )
+    expect(equivalence.get_by_role("button")).to_have_text(
+        ["1-표본 동등성 검정", "2-표본 동등성 검정", "대응표본 동등성 검정"]
+    )
     diagnostics.capture_locator(
         family_grid,
         "hypothesis-family-cards.png",
@@ -1090,14 +1109,6 @@ def open_primary_navigation(page: Page, label: str) -> None:
     if module.get_attribute("aria-expanded") != "true":
         module.click()
     if label == "분석":
-        family = group.locator(
-            ".sidebar-tree-level-1 > .sidebar-method-button[aria-controls]:not(:disabled)"
-        ).first
-        if family.get_attribute("aria-expanded") != "true":
-            family.click()
-        group.locator(
-            ".sidebar-method-button.is-nested:not([aria-controls]):not(:disabled)"
-        ).first.click()
         return
     group.locator(".sidebar-method-button:not(:disabled)").first.click()
 
@@ -1145,14 +1156,17 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     expect(exploration.locator(".sidebar-method-list")).to_be_hidden()
     exploration_control.click()
     expect(exploration_control).to_have_attribute("aria-expanded", "true")
-    distribution = exploration.locator(".sidebar-tree-level-1").filter(
-        has_text=re.compile("^분포와 요약")
+    expect(page).to_have_url(re.compile(r"/analysis\?[^#]*domain=basic-exploration"))
+    expect(page.locator(".analysis-domain-method-grid .analysis-domain-method-card")).to_have_count(4)
+    expect(page.get_by_text("PCA 기반 다변량 검토", exact=True)).to_be_visible()
+    diagnostics.capture_page(page, "basic-domain-flat-cards.png")
+    methods = exploration.locator(
+        ".sidebar-method-list > li > .sidebar-method-button"
     )
-    distribution_control = distribution.locator(".sidebar-method-button[aria-expanded]")
-    distribution_control.click()
-    methods = distribution.locator(".sidebar-method-button.is-nested")
-    expect(methods).to_have_count(3)
-    expect(methods).to_contain_text(["기술통계", "그래프 요약", "정규성 검정"])
+    expect(methods).to_have_count(4)
+    expect(methods).to_contain_text(
+        ["기술통계", "그래프 요약", "정규성 검정", "PCA 기반 다변량 검토 · 계획됨"]
+    )
     methods.filter(has_text=re.compile("^정규성 검정$")).click()
     expect(page).to_have_url(re.compile(r"/analysis/exploration/eda\.normality"))
     expect(group.locator('.sidebar-method-button[aria-current="page"]')).to_have_text(
@@ -1161,7 +1175,7 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     diagnostics.capture_page(page, "sidebar-analysis-method-hierarchy.png")
     exploration_control.click()
     exploration_control.click()
-    group.locator(".sidebar-method-button.is-nested").filter(
+    exploration.locator(".sidebar-method-list > li > .sidebar-method-button").filter(
         has_text=re.compile("^기술통계$")
     ).click()
     current_url = page.url
@@ -1279,8 +1293,9 @@ def verify_active_dataset_analysis_alignment(
     diagnostics.capture_page(page, "active-dataset-aligned-analysis.png")
 
 
-def verify_graph_builder_box_plot(page: Page) -> None:
+def verify_graph_builder_box_plot(page: Page, diagnostics: E2EDiagnostics) -> None:
     open_primary_navigation(page, "그래프")
+    diagnostics.step("verify graph builder page heading")
     expect(page.get_by_role("heading", name="그래프 작성")).to_be_visible(
         timeout=15_000
     )
@@ -1288,17 +1303,31 @@ def verify_graph_builder_box_plot(page: Page) -> None:
     if not value_checkbox.is_checked():
         value_checkbox.check()
     page.get_by_role("button", name="그래프 생성", exact=True).click()
+    diagnostics.step("verify graph builder result heading")
     expect(page.get_by_role("heading", name="그래프 결과")).to_be_visible(
         timeout=20_000
     )
-    expect(page.get_by_label("그래프 provenance")).to_contain_text("사용 행")
-    expect(page.get_by_role("img", name=re.compile(r"Box Plot"))).to_be_visible()
-    expect(
-        page.get_by_text(
-            "이 결과는 미리보기이며 저장 분석 이력, result artifact 또는 export를 만들지 않습니다.",
-            exact=True,
-        )
-    ).to_be_visible()
+    result = page.locator(
+        'section.result-section[aria-labelledby="graph-preview-result-title"]'
+    )
+    diagnostics.step("verify graph builder provenance")
+    provenance_text = result.locator(".metadata-grid").text_content() or ""
+    if "사용 행" not in provenance_text:
+        raise AssertionError("graph preview provenance did not report used rows")
+    chart = result.locator('svg[role="img"]').first
+    diagnostics.step("verify graph builder result SVG")
+    if not chart.is_visible():
+        raise AssertionError("graph preview SVG was not visible")
+    chart_title = chart.locator("title").text_content() or ""
+    if "Box Plot" not in chart_title:
+        raise AssertionError(f"unexpected graph preview title: {chart_title!r}")
+    note_text = result.locator(".interpretation-note").text_content() or ""
+    diagnostics.step("verify graph builder preview note")
+    expected_note = (
+        "이 결과는 미리보기이며 저장 분석 이력, result artifact 또는 export를 만들지 않습니다."
+    )
+    if note_text.strip() != expected_note:
+        raise AssertionError(f"unexpected graph preview note: {note_text!r}")
 
 
 def verify_graph_layout_refinements(page: Page, diagnostics: E2EDiagnostics) -> None:
@@ -1752,6 +1781,8 @@ def verify_help_report_and_manage_routes(
     expect(page.get_by_role("heading", name="자산 관리")).to_be_visible(timeout=15_000)
 
     open_primary_navigation(page, "분석")
+    select_method_card(page, "탐색적 분석", "기술통계")
+    expect(page.locator("#workbench-title")).to_have_text("기술통계")
     help_trigger = page.get_by_role("button", name="분석 도움말")
     expect(help_trigger).to_be_visible()
     help_trigger.click()
