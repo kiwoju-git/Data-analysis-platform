@@ -1314,3 +1314,24 @@ After push, verify these items in GitHub UI:
 
 - After pushing this PR or main update, verify the latest Actions run in GitHub UI or with an authenticated `gh run list --repo kiwoju-git/Data-analysis-platform --branch main --limit 5`.
 - If Actions still does not run on main push, debug repository-level Actions settings outside this code PR.
+
+### Domain Refinement And PLS Validation (2026-08-20)
+
+- Base: `368d0331542a82104cac7a693ecc0b72e2b37243`.
+- Phase A frontend: 35 Vitest files / 278 tests, strict typecheck, production
+  build, and the 152.5-second Chromium E2E all passed. Diagnostics are under
+  `.tmp/e2e-diagnostics-domain-phase-a-pass`.
+- Phase B focused PLS/reference/API/startup checks passed after adding the
+  official Minitab Wine Aroma static reference and lazy sklearn imports.
+- Final `scripts/test.ps1`: backend 986 passed in 1,138.25 seconds and frontend
+  36 files / 280 tests passed.
+- Final `scripts/check.ps1`: tutorial synchronization, Ruff lint/format for 215
+  Python files, mypy for 133 source files, backend 986 tests, localization
+  audit for 2,946 frontend source strings and 3,191 translation keys, ESLint,
+  strict TypeScript, frontend 280 tests, and production build all passed in
+  1,219 seconds.
+- Final Chromium E2E passed in 155.1 seconds, including actual PLS analysis,
+  persisted-model point prediction, and the four requested PLS screenshots
+  under `.tmp/e2e-diagnostics-domain-pls/screenshots`.
+- Vite retains the existing informational warning for chunks over 500 kB; no
+  new production dependency was added.

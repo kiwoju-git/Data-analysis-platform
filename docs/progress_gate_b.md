@@ -253,9 +253,13 @@ Gate D2 now includes the dedicated response-surface and bounded response-optimiz
 
 Current stabilization update:
 
-- Current catalog count: 34 stable catalog IDs, 34 available IDs, and 27
+- Current catalog count: 35 stable catalog IDs, 35 available IDs, and 28
   generic `MethodExecutionHandler` entries. The remaining seven are dedicated
   workflows and are rejected by generic analysis-run.
+- `regression.partial_least_squares` v0.1 is the fourth generic regression
+  analysis. It provides bounded PLS1 fitting, leakage-free K-fold/LOO component
+  evaluation, static Minitab Wine Aroma reference coverage, safe JSON model
+  persistence, and point prediction without OLS-style inference or intervals.
 
 - `regression.predict` preflight now rejects missing, wrong-method,
   method-version-mismatched, stale, or source-schema-drifted model analyses and

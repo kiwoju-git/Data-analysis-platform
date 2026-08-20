@@ -184,7 +184,7 @@ family card 구성:
 | 상관·회귀·예측 | 상관 분석 | Pearson, X–Y Correlation | Available |
 | 상관·회귀·예측 | 회귀 모형 | Fit Regression Model | Available |
 | 상관·회귀·예측 | 예측·최적화 | saved-model prediction, regression optimizer | Contextual |
-| 상관·회귀·예측 | 잠재변수 회귀 | PLS Regression | Planned |
+| 상관·회귀·예측 | 잠재변수 회귀 | PLS Regression | Available (`regression.partial_least_squares` v0.1.0) |
 | 실험계획·최적화 | 요인배치 설계 | two-level full/fractional, general full factorial | Available |
 | 실험계획·최적화 | 반응표면 | RSM | Available |
 | 실험계획·최적화 | 최적화 | Response Optimizer | Available |
@@ -691,7 +691,7 @@ Family 2: `범주형 관련성 / Categorical Association`
 이 domain은 `flat_methods` presentation을 사용한다.
 
 ```text
-[Pearson Correlation] [X–Y Correlation Matrix] [Fit Regression Model] [PLS Regression — Planned]
+[Pearson Correlation] [X–Y Correlation Matrix] [Fit Regression Model] [PLS Regression]
 ```
 
 Prediction과 regression optimizer는 contextual workflow다. OLS card 아래 안내만 표시하고 일반
@@ -819,13 +819,20 @@ method card나 sidebar leaf를 중복 생성하지 않는다.
 - categorical profile table
 - confirmation-experiment warning
 
-## 10.7 Planned — PLS Regression
+## 10.7 Available — PLS Regression
 
 권장 future ID:
 
 ```text
 regression.partial_least_squares
 ```
+
+The executable P0 contract is `docs/pls_regression_method_contract.md`. PLS is
+PLS1 only: one numeric response, at least two numeric predictors, complete-case
+handling, optional scaling, fixed or leakage-free cross-validated component
+selection, safe JSON model persistence, and point prediction. PLS2,
+categorical predictors, OLS-style coefficient inference, prediction intervals,
+and PLS-based monitoring remain out of scope.
 
 P0 입력:
 

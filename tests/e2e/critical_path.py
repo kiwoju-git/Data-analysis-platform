@@ -59,6 +59,25 @@ REGRESSION_TARGET_DATA = """adcc\tafucose\tgroup
 0\t8\tA
 """
 
+PLS_SAMPLE_DATA = """yield_pct\ttemperature_c\tpressure_bar
+68.4\t60\t5.0
+70.1\t62\t5.4
+72.5\t64\t5.8
+73.6\t66\t6.2
+76.4\t68\t6.6
+77.1\t70\t7.0
+79.8\t72\t7.4
+81.3\t74\t7.8
+83.6\t76\t8.2
+84.9\t78\t8.6
+87.4\t80\t9.0
+88.2\t82\t9.4
+91.1\t84\t9.8
+92.3\t86\t10.2
+94.7\t88\t10.6
+96.0\t90\t11.0
+"""
+
 ATTRIBUTE_CONTROL_CHART_DATA = """defectives\tsample_size
 6\t20
 """
@@ -700,6 +719,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_schema_stale_behavior(page)
             diagnostics.step("verify linear model fit and prediction")
             verify_linear_model_fit_and_prediction(page, diagnostics)
+            diagnostics.step("verify PLS regression and point prediction")
+            verify_pls_regression_and_prediction(page, diagnostics)
             diagnostics.step("verify attribute control chart")
             verify_attribute_control_chart(page)
             diagnostics.step("verify reporting summary variance and fixed-Y scatter")
@@ -2545,6 +2566,73 @@ def verify_linear_model_fit_and_prediction(
     expect(
         restored_manual_prediction.get_by_role("button", name="전체 예측 실행")
     ).to_be_disabled()
+
+
+def verify_pls_regression_and_prediction(
+    page: Page, diagnostics: E2EDiagnostics
+) -> None:
+    open_primary_navigation(page, "데이터셋")
+    paste_plain_text(page, PLS_SAMPLE_DATA)
+    page.get_by_role("button", name="붙여넣기 데이터 등록").click()
+    expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    expect_dataset_context_counts(page, row_label="16행", column_label="3컬럼")
+
+    open_primary_navigation(page, "분석")
+    select_method_card(page, "상관관계 및 회귀분석", "PLS 회귀")
+    expect(page.locator("#workbench-title")).to_have_text("PLS 회귀")
+    expect_lazy_analysis_module(page, "RegressionAnalysisPanels")
+
+    panel = page.locator(".pls-regression-panel")
+    panel.get_by_label("반응 변수").select_option(label="yield_pct")
+    predictors = panel.get_by_role("group", name="예측변수")
+    predictors.get_by_role("checkbox", name="temperature_c").check()
+    predictors.get_by_role("checkbox", name="pressure_bar").check()
+    expect(panel.get_by_label("PLS 성분 설정")).to_be_visible()
+    diagnostics.capture_page(page, "pls-input.png")
+
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/api/v1/analysis-runs")
+    ) as result_info:
+        panel.get_by_role("button", name="PLS 회귀 실행").click()
+    if not result_info.value.ok:
+        raise AssertionError(f"PLS analysis failed: {result_info.value.text()}")
+
+    expect(panel.get_by_role("heading", name="모형 선택", exact=True)).to_be_visible(
+        timeout=30_000
+    )
+    selection_table = panel.locator(".pls-selection-table-wrap")
+    expect(selection_table).to_contain_text("예측 R²")
+    expect(selection_table.locator("tbody tr")).to_have_count(2)
+    expect(panel.locator(".pls-selection-chart")).to_be_visible()
+    diagnostics.capture_page(page, "pls-model-selection.png")
+
+    expect(panel.get_by_role("heading", name="반응 그림")).to_be_visible()
+    expect(panel.locator(".pls-scatter-chart").first).to_be_visible()
+    expect(panel.locator(".pls-scatter-chart").first.locator(".chart-reference-line")).to_have_count(1)
+    diagnostics.capture_page(page, "pls-response-plot.png")
+
+    expect(panel.get_by_role("heading", name="점수")).to_be_visible()
+    expect(panel.get_by_role("heading", name="적재량")).to_be_visible()
+    expect(panel.locator(".pls-loading-chart")).to_be_visible()
+    expect(panel.locator(".pls-scatter-chart").nth(1).locator(".chart-reference-line")).to_have_count(0)
+    diagnostics.capture_page(page, "pls-score-loading.png")
+
+    prediction = panel.locator(".pls-point-prediction")
+    expect(prediction.get_by_role("heading", name="점예측")).to_be_visible()
+    prediction.get_by_label("temperature_c 1").fill("75")
+    prediction.get_by_label("pressure_bar 1").fill("8")
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/pls-point-predictions")
+    ) as prediction_info:
+        prediction.get_by_role("button", name="점예측 실행").click()
+    if not prediction_info.value.ok:
+        raise AssertionError(f"PLS prediction failed: {prediction_info.value.text()}")
+    expect(prediction.locator("tbody tr").first).to_contain_text("준비됨")
+    if prediction.locator("tbody tr td").nth(3).inner_text().strip() == "-":
+        raise AssertionError("PLS point prediction did not render a numeric value")
 
 
 def verify_attribute_control_chart(page: Page) -> None:

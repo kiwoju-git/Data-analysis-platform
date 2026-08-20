@@ -486,6 +486,7 @@ browser critical path.
 - `delete one stored analysis run`
 - `verify schema stale behavior`
 - `verify linear model fit and prediction`
+- `verify PLS regression and point prediction`
 - `verify attribute control chart`
 - `verify reporting summary variance and fixed-Y scatter`
 - `verify DOE factorial analysis`
@@ -515,6 +516,11 @@ browser critical path.
 - `verify grouped graphs and hypothesis extensions`
 - `verify lazy panel direct routes`
 - `verify lazy panel error boundary`
+- `verify graph builder page heading`
+- `verify graph builder result heading`
+- `verify graph builder provenance`
+- `verify graph builder result SVG`
+- `verify graph builder preview note`
 
 ## Not Covered
 
@@ -661,6 +667,20 @@ navigation. The screenshots are stored under
 `.tmp/e2e-diagnostics-analysis-domains/screenshots`, including
 `analysis-domain-landing-desktop.png`, `analysis-domain-landing-mobile.png`,
 and `sidebar-analysis-method-hierarchy.png`.
+
+The refined navigation run also checks that clicking a domain opens its
+landing, flat domains omit intermediate family disclosures, single-method
+families navigate directly, planned PCA remains non-executable, and the
+selected-method actions and context strip do not wrap or overflow. Phase A
+passed with diagnostics under `.tmp/e2e-diagnostics-domain-phase-a-pass`.
+
+The `verify PLS regression and point prediction` step creates a synthetic
+numeric dataset, opens PLS from the flat Correlation, Regression & Prediction
+domain, runs leakage-free automatic component selection, checks the selection
+table and response/score/loading plots, and submits one point prediction from
+the persisted safe JSON model. Its requested screenshots are `pls-input.png`,
+`pls-model-selection.png`, `pls-response-plot.png`, and
+`pls-score-loading.png`.
 
 ## Maintenance Checklist
 

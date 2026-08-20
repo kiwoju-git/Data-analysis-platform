@@ -37,7 +37,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `13`);
+- `api_contract_version` (currently `14`);
 - the actual metadata schema constant (currently `19`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
@@ -51,7 +51,7 @@ The response contains no workspace path, filename, or raw data. Existing
 
 ## Frontend Gate
 
-The frontend expects API contract `13`, schema 19 or later, and every required
+The frontend expects API contract `14`, schema 19 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management
@@ -73,6 +73,12 @@ only: API field names, statistical values, result schemas, stored result
 checksums, and existing schema-1/2 HTML artifacts are unchanged. Every frontend
 request sends the current locale in `Accept-Language`; exact contract matching
 prevents an older backend from silently ignoring the localized-report body.
+
+Contract 14 adds `regression.partial_least_squares` to the method catalog,
+extends regression-model catalog identities to distinguish OLS and PLS, and
+adds the typed PLS point-prediction route. Metadata schema 19 remains valid;
+model kind and prediction coefficients are stored in the checksummed JSON
+manifest rather than a new SQLite relation.
 
 Build commit `unknown` is not treated as proof of a mismatch. When both commits
 are known, they must match for this strict local runtime.

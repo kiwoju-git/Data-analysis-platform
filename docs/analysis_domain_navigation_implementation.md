@@ -49,7 +49,7 @@ The PCA card has no executable action and no backend registry entry.
 | Mean Comparison & Equivalence | Nonparametric Tests | `hypothesis.one_sample_wilcoxon`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis` | none |
 | Proportions & Categorical Data | Proportion Tests | `categorical.one_proportion`, `categorical.two_proportion` | none |
 | Proportions & Categorical Data | Categorical Association | `categorical.chi_square_association` | none |
-| Correlation, Regression & Prediction | Flat methods | `regression.pearson`, `regression.xy_correlation`, `regression.linear_model` | contextual prediction/optimizer; planned PLS pending Phase B |
+| Correlation, Regression & Prediction | Flat methods | `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `regression.partial_least_squares` | contextual OLS prediction/optimizer; PLS point prediction is available from its fitted result |
 | DOE & Optimization | Flat methods | `doe.factorial_design`, `doe.general_factorial_design`, `doe.response_surface`, `doe.response_optimizer` | none |
 | AI/ML Experimental Design | Flat methods | `doe.latin_hypercube`, `doe.bayesian_optimization` | Gaussian Process shown as disabled BO-internal context |
 | Quality & Process Monitoring | Control Charts | `quality.attribute_control_chart`, `quality.subgroup_chart`, `quality.individuals_chart` | none |
@@ -102,14 +102,19 @@ unchanged.
 - Two-Sample Comparison is guidance across existing methods, not a calculation.
 - Gaussian Process remains Bayesian Optimization surrogate information.
 - Comparability Assessment is planned because it must coordinate multiple CQAs and tests.
-- PLS Regression and PLS-Based Monitoring are not presented as available.
-- Two Variances, multivariate review, PLS, comparability, and multivariate monitoring require their own later statistical contracts and PRs.
+- PLS Regression is available as a distinct PLS1 regression method. PLS-Based
+  Monitoring remains planned and is not presented as the same calculation.
+- Two Variances, multivariate review, comparability, and multivariate
+  monitoring require their own later statistical contracts and PRs.
 
 ## Version and migration decision
 
-- API contract: unchanged.
-- Statistical method versions: unchanged.
-- Result schemas: unchanged.
+- Phase A API contract: unchanged. Phase B API contract: `13` to `14` for the
+  PLS option/result and point-prediction contracts.
+- Existing statistical method versions are unchanged. New
+  `regression.partial_least_squares` writes use method version `0.1.0`.
+- Existing result schemas are unchanged. PLS result schema and safe JSON model
+  manifest schema both start at `1`.
 - Metadata schema: unchanged.
 - SQLite migration: none.
 - Existing saved artifacts and checksums: not rewritten.

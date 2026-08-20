@@ -468,6 +468,22 @@ pasted normalized-input/row snapshots. No relational rewrite is needed.
 - Confirm catalog and handler version alignment tests still pass.
 - Record the version rationale in `docs/progress_gate_b.md` or the PR summary.
 
+## Partial Least Squares Regression Decision
+
+`regression.partial_least_squares` is a new method at `0.1.0`, with result
+schema `1` and safe JSON `pls_model_manifest` schema `1`. It implements PLS1
+for one numeric response and at least two numeric predictors, leakage-free
+K-fold or leave-one-out component evaluation, fixed or predicted-R-squared
+component selection, and point prediction. It does not add OLS coefficient
+tests, VIF, ANOVA, confidence intervals, or prediction intervals.
+
+API contract `14` adds the typed PLS analysis options/result and PLS model
+point-prediction route. Existing OLS method, result, prediction, and model
+manifest versions remain unchanged. Metadata schema remains `19`: the generic
+analysis, artifact, and regression-model records safely distinguish PLS by
+method ID and manifest kind, so no relational migration or legacy checksum
+rewrite is required.
+
 ## Executable DOE Domains And Bulk Study Workflow Decision
 
 API contract `10` adds a shared factor-domain meaning: legacy/missing fields
