@@ -879,7 +879,8 @@ regression.gaussian_process
 Family 1: `요인배치 설계 / Factorial Designs`
 
 ```text
-[2-Level Full/Fractional Factorial] [General Full Factorial]
+[Create Factorial Design]
+  [2-Level Full Factorial] [2-Level Fractional Factorial] [General Full Factorial]
 ```
 
 Family 2: `반응표면 / Response Surface`
@@ -914,11 +915,12 @@ LHS와 Bayesian은 이 도메인에서 중복 표시하지 않는다.
 
 factor 설정:
 
-- 2~6 continuous factors
+- 2~6 numeric or two-level categorical factors for two-level designs
 - name
-- low/high
+- numeric low/high or categorical low/high labels
 - domain kind
 - step/display decimals/unit when current factor-domain contract supports them
+- categorical pseudo-centers retain all low/high text combinations while numeric factors use midpoints
 
 고급 설정:
 
@@ -948,8 +950,13 @@ factor 설정:
 
 ## 11.3 `doe.general_factorial_design`
 
+- 일반 navigation에는 독립 card로 중복 표시하지 않고
+  `doe.factorial_design` workspace의 General Full 설계 종류로 연다.
+- 기존 method ID, API, 저장 설계와 direct URL reader는 유지한다.
 - factor 2~6개
 - each factor 2~10 numeric or text levels
+- explicit level type/count editor; levels preserve entered order
+- all-factors three-level preset; 3-level full factorial is a special case of General Full
 - run cap 256
 - replicates
 - randomization settings

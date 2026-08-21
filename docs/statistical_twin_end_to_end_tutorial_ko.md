@@ -493,7 +493,7 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
   max interaction order 2 > 분석 실행.
 - **실행 전 확인:** UI run order와 파일의 factor coordinates/replicate를 함께 확인한다.
 <!-- TUTORIAL_RESULT:doe.factorial_design:start -->
-- **검증 source:** `doe.factorial_design` v0.5.0 · input SHA-256 `ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73`
+- **검증 source:** `doe.factorial_design` v0.6.0 · input SHA-256 `ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73`
 - **예상 실제 결과 (표시 반올림):**
   - N=16, residual df=9, selected interaction `factor_1:factor_2`
   - effect order: `factor_1` 6.8707, `factor_2` 3.9555, `factor_1:factor_2` 3.3892, `factor_3` 0.8814

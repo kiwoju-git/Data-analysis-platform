@@ -34,10 +34,10 @@ class FactorialFactor:
     low: float | str
     high: float | str
     unit: str | None = None
-    factor_kind: str = "numeric"
     domain_kind: str = "continuous"
     step: float | None = None
     display_decimals: int | None = None
+    factor_kind: str = "numeric"
 
 
 @dataclass(frozen=True)
@@ -541,9 +541,7 @@ def _validate_executable_centers(factors: list[FactorialFactor]) -> None:
             step=factor.step,
             display_decimals=factor.display_decimals,
         )
-        if domain.domain_kind == "discrete_numeric" and not domain.is_executable(
-            (low + high) / 2
-        ):
+        if domain.domain_kind == "discrete_numeric" and not domain.is_executable((low + high) / 2):
             raise FactorialDesignError(
                 code="doe_factorial_center_not_executable",
                 message=(

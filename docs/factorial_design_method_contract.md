@@ -1,22 +1,32 @@
 # DOE Factorial Design and Analysis Contract
 
-Last updated: 2026-08-06
+Last updated: 2026-08-21
 
 ## Scope and Versions
 
 `doe.factorial_design` is available through dedicated DOE APIs rather than the
 generic analysis-run endpoint.
 
-- Method version: `0.5.0` for new two-level writes; legacy `0.4.0` remains readable.
-- Design manifest schema: `2` for regular fractional designs and `1` for legacy/full designs.
+- Method version: `0.6.0` for new two-level writes; legacy `0.4.0` and `0.5.0` remain readable.
+- Design manifest schema: `2` for new full/fractional designs; schema `1` legacy numeric full designs remain readable.
 - Analysis envelope schema: `2`.
 - Analysis config schema: `2`.
 - Analysis result schema: `1`.
 - Response revision schema: `1`.
-- SQLite metadata schema: `10`.
+- SQLite metadata schema: `19` (unchanged by this contract update).
 
-Version `0.5.0` preserves the existing two-level full-factorial calculations
-and adds catalog-backed regular two-level fractional designs. Fractional
+Version `0.6.0` preserves the existing two-level full/fractional coded
+calculations while extending factor metadata and actual run levels to support
+numeric and two-level categorical factors. Numeric factors map `-1/+1` to
+low/high values; categorical factors map the same coded signs to low/high text
+labels. Generator, defining-relation, resolution, rank, and alias calculations
+remain based on the coded signs and are not redefined for categorical factors.
+
+New full and fractional writes use design schema `2`. Legacy schema-1 numeric
+full designs and existing schema-2 fractional designs are read without
+rewriting their payloads or checksums. Version `0.5.0` originally preserved the
+existing two-level full-factorial calculations
+and added catalog-backed regular two-level fractional designs. Fractional
 results persist generators, defining relations, resolution, alias groups,
 estimable terms, and non-estimable terms. Their analysis is deliberately
 restricted to estimable main-effect alias contrasts; it never labels aliased
@@ -26,7 +36,7 @@ record, API envelope, UI, and this document must agree.
 
 Implemented:
 
-- 2-level full factorial design generation for 2 to 6 continuous factors.
+- 2-level full factorial design generation for 2 to 6 numeric and/or categorical factors.
 - Regular 2-level fractional factorial catalog entries for 3 to 6 factors,
   including half, quarter, and eighth fractions where a tested entry exists.
 - Replicates, center points, fixed blocks, deterministic randomization seed,
@@ -34,7 +44,7 @@ Implemented:
 - Immutable design/version/run metadata and canonical `design_sha256`.
 - Complete numeric response revisions stored against immutable run IDs, with
   current/history identity and no in-place overwrite.
-- `-1/+1` factorial coding and center-point coding at `0`.
+- `-1/+1` factorial coding; numeric centers use `0` while categorical pseudo-centers retain `-1/+1` levels.
 - Main effects and interactions through the selected maximum order, with all
   lower-order terms retained to enforce hierarchy.
 - OLS coefficients, factorial effects (`effect = 2 * coefficient`), confidence
@@ -51,11 +61,21 @@ Implemented:
   before analysis; analyzed and historical revisions are read-only until the
   user explicitly starts `새 revision으로 수정`.
 
-The separate `doe.general_factorial_design` `0.1.0` contract supports 2 to 6
+Categorical factors have no numeric midpoint. With at least one numeric factor,
+each requested center setting uses numeric midpoints and expands across every
+categorical low/high combination. With `q` categorical factors this produces
+`2^q` pseudo-center runs per center setting per block. All-categorical designs
+must use zero center points; replication supplies pure-error information.
+Discrete numeric midpoints must remain executable on their declared grid.
+
+The contextual `doe.general_factorial_design` `0.1.0` contract supports 2 to 6
 factors with 2 to 10 numeric or text levels, up to 256 runs. It uses treatment
 coding, categorical term blocks, and partial sums of squares. Numeric values
 are explicitly treated as categorical levels; it does not reuse `-1/+1`
-factorial effects. Its response revisions and analysis artifacts use schema 1.
+factorial effects. A factor cannot mix numeric and text levels. Its response
+revisions and analysis artifacts use schema 1. The canonical UI entry is the
+`doe.factorial_design` workspace; existing General Full URLs redirect there
+with the design ID and general-design mode preserved.
 
 Out of scope:
 

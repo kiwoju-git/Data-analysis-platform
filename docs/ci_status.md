@@ -1,8 +1,35 @@
 # CI Status
 
-Last updated: 2026-08-08
+Last updated: 2026-08-21
 
 ## Local Validation
+
+- The Mann-Whitney input and factorial DOE parity work is based on main
+  `2e06e20cf05e84d86ea9ad05216073aad4034dd9`. It advances API contract 14
+  to 15, `hypothesis.mann_whitney` 0.1.0/result schema 1 to 0.2.0/schema 2,
+  and `doe.factorial_design` 0.5.0/design schema 1 to 0.6.0/schema 2.
+  `doe.general_factorial_design` remains 0.1.0/schema 1 because its explicit
+  level editor and three-level preset do not change calculation meaning.
+  Metadata schema remains 19; legacy method readers and immutable checksums
+  are preserved without a SQLite migration or artifact rewrite.
+- Final `scripts/test.ps1` passed backend pytest 1005/1005 in 1123.13 seconds
+  and frontend Vitest 285/285 across 37 files in 15.06 seconds. Final
+  `scripts/check.ps1` completed in 1195.2 seconds with 18 tutorial blocks,
+  Ruff lint/format over 215 Python files, mypy over 133 source modules,
+  backend pytest 1005/1005, localization coverage for 2971 source strings and
+  3265 keys, frontend lint/typecheck, Vitest 285/285, and the production build
+  all passing. The existing Vite chunk-size warning remains informational.
+- The isolated Chromium critical path passed in 160.8 seconds with diagnostics
+  under `.tmp/e2e-diagnostics-mann-whitney-factorial`. It covers explicit A/C
+  selection from a three-level stacked group, independent available-case
+  unstacked samples, mixed numeric/categorical full and fractional designs,
+  categorical pseudo-centers, 27-run three-level and 30-run mixed-level General
+  Full designs, pasted level application, and the legacy General Full URL
+  redirect/restore. Requested screenshots include
+  `mann-whitney-stacked-selected-groups.png`, `mann-whitney-unstacked.png`,
+  `factorial-design-type-selector.png`, `fractional-factorial-alias.png`,
+  `general-factorial-three-level.png`, and
+  `general-factorial-mixed-levels.png`.
 
 - The reporting/summary/variance/assets/scatter work is based on main
   `275e84a0049b48de3f32a126956a648f1b181172`. It advances API contract 11 to

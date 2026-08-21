@@ -1,5 +1,5 @@
 from math import isfinite
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from fastapi import status
@@ -12,6 +12,8 @@ from app.api.v1.schemas.analyses import (
     EquivalenceTostOptions,
     KruskalWallisOptions,
     MannWhitneyOptions,
+    MannWhitneyStackedOptions,
+    MannWhitneyUnstackedOptions,
     OneSampleTOptions,
     OneSampleWilcoxonOptions,
     OneWayAnovaOptions,
@@ -1699,10 +1701,11 @@ def run_mann_whitney_analysis(
     try:
         try:
             if options["input_layout"] == "unstacked":
+                sample_2_column = cast(MannWhitneyResponseColumn, selected_columns[1])
                 result = calculate_mann_whitney_unstacked(
                     _iter_rows_for_snapshot(context, row_snapshot),
                     selected_columns[0],
-                    selected_columns[1],
+                    sample_2_column,
                     decimal=context.parsing.decimal,
                     thousands=context.parsing.thousands,
                     alpha=alpha,
@@ -1710,10 +1713,11 @@ def run_mann_whitney_analysis(
                     method=method,
                 )
             else:
+                group_column = cast(MannWhitneyGroupColumn, selected_columns[1])
                 result = calculate_mann_whitney(
                     _iter_rows_for_snapshot(context, row_snapshot),
                     selected_columns[0],
-                    selected_columns[1],
+                    group_column,
                     decimal=context.parsing.decimal,
                     thousands=context.parsing.thousands,
                     alpha=alpha,
@@ -1747,7 +1751,11 @@ def _validate_mann_whitney_options(options: dict[str, Any]) -> dict[str, Any]:
         if normalized.get("missing_policy", "complete_case") == "complete_case":
             normalized["missing_policy"] = "complete_case_selected_groups"
     try:
-        return TypeAdapter(MannWhitneyOptions).validate_python(normalized).model_dump()
+        validated = cast(
+            MannWhitneyStackedOptions | MannWhitneyUnstackedOptions,
+            TypeAdapter(MannWhitneyOptions).validate_python(normalized),
+        )
+        return validated.model_dump()
     except ValidationError as exc:
         raise ApiError(
             code="invalid_mann_whitney_options",

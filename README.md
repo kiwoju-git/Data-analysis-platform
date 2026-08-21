@@ -35,6 +35,10 @@ Open [http://127.0.0.1:8600](http://127.0.0.1:8600). The backend runs at `http:/
 4. Use **Graphs**, **Reports**, and **Manage** to inspect or retain saved work.
 5. Choose `KOR` or `ENG` beside the API status to change the interface language without resetting the current work.
 
+Mann-Whitney accepts either a value/group layout or two numeric sample columns.
+Create Factorial Design contains two-level full/fractional and General Full
+designs; General Full supports 2 to 10 ordered numeric or text levels per factor.
+
 Guides: [English tutorial](docs/statistical_twin_end_to_end_tutorial_en.md), [한국어 튜토리얼](docs/statistical_twin_end_to_end_tutorial_ko.md), and [synthetic tutorial data](examples/tutorial/README.md).
 
 ## Check

@@ -682,6 +682,22 @@ the persisted safe JSON model. Its requested screenshots are `pls-input.png`,
 `pls-model-selection.png`, `pls-response-plot.png`, and
 `pls-score-loading.png`.
 
+## Mann-Whitney And Factorial Input Coverage
+
+The API-contract-15 workflow covers both Mann-Whitney layouts: selected A/C
+levels from a three-level stacked group and two unstacked numeric sample
+columns with different usable sample sizes. It verifies that the unselected
+stacked level is counted and that a missing value in one unstacked column does
+not remove the other column's observation.
+
+The DOE path verifies that General Full Factorial has one canonical entry
+inside Create Factorial Design, that a legacy General Full URL preserves its
+design ID through a replace redirect, and that explicit numeric/text level
+editors produce 3-level and mixed 2-by-3-by-5 designs. The two-level path mixes
+a numeric factor with a categorical A/B factor and checks coded corners,
+expanded categorical pseudo-centers, response entry, and analysis. Requested
+diagnostics use `.tmp/e2e-diagnostics-mann-whitney-factorial`.
+
 ## Maintenance Checklist
 
 When extending `tests/e2e/critical_path.py`:

@@ -16,7 +16,7 @@
     "published_replication": "The complete eight-run standard-order design is repeated for replicate 2.",
     "application_run_order": "Randomization is disabled for direct NIST parity, so application run_order is 1 through 16. Seeded shuffle behavior is an application-specific contract covered by the companion factorial_design_reference.json fixture.",
     "application_blocking": "NIST standard-order parity is unblocked. The application's round-robin block assignment is covered separately and is not attributed to NIST.",
-    "application_checksum": "The expected SHA-256 is derived from the NIST factor table using the application's canonical schema-version-1 JSON payload; NIST does not publish this checksum.",
+    "application_checksum": "The expected SHA-256 is derived from the NIST factor table using the application's canonical schema-version-2 JSON payload; NIST does not publish this checksum.",
     "analysis_limit": "This fixture validates an immutable design asset only. It does not provide responses, effects, OLS, ANOVA, diagnostics, or optimization results."
   },
   "tolerances": {
@@ -58,7 +58,7 @@
       [24.0, 0.005, 0.02]
     ],
     "expected_application_metadata": {
-      "schema_version": 1,
+      "schema_version": 2,
       "family": "two_level_full_factorial",
       "run_count": 16,
       "standard_orders": [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8],
@@ -66,7 +66,7 @@
       "replicate_indices": [1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2],
       "center_points": [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
       "block_indices": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
-      "design_sha256": "6a2fe196b7400d02877ad28c74b020ae09c46be837b39ad409706c1c0ebc1935"
+      "design_sha256": "e733fb3b62c9c781ebf9adab945bbaf5a6e737c795e3f14bffbc0e5077029d7a"
     }
   },
   "failure_case": {

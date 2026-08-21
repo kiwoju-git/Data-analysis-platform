@@ -1437,6 +1437,31 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     expect(page.get_by_label("일원분산분석 요약")).to_contain_text("Games-Howell")
     diagnostics.capture_page(page, "anova-welch-games-howell.png")
 
+    select_method_card(page, "가설 검정", "Mann-Whitney U")
+    expect(page.locator("#workbench-title")).to_have_text("Mann-Whitney U")
+    page.get_by_label("반응 변수", exact=True).select_option(label="yield_pct")
+    page.get_by_label("그룹 변수", exact=True).select_option(label="production_line")
+    expect(page.get_by_text("비교할 그룹 수준 2개를 선택하세요", exact=False)).to_be_visible(
+        timeout=20_000
+    )
+    page.get_by_label("그룹 1", exact=True).select_option(label="A (N 4)")
+    page.get_by_label("그룹 2", exact=True).select_option(label="C (N 4)")
+    page.get_by_role("button", name="Mann-Whitney U 실행").click()
+    mann_summary = page.get_by_label("Mann-Whitney U 요약")
+    expect(mann_summary).to_contain_text("A vs C", timeout=20_000)
+    expect(mann_summary).to_contain_text("4")
+    diagnostics.capture_page(page, "mann-whitney-stacked-selected-groups.png")
+
+    page.get_by_role("button", name="표본별 수치 열 2개").click()
+    page.get_by_label("표본 1", exact=True).select_option(label="test_measure")
+    page.get_by_label("표본 2", exact=True).select_option(label="reference_measure")
+    page.get_by_role("button", name="Mann-Whitney U 실행").click()
+    expect(mann_summary).to_contain_text(
+        "test_measure vs reference_measure", timeout=20_000
+    )
+    expect(mann_summary).to_contain_text("표본별 수치 열 2개")
+    diagnostics.capture_page(page, "mann-whitney-unstacked.png")
+
     open_primary_navigation(page, "데이터셋")
     paste_plain_text(page, EQUIVALENCE_DESIGN_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
@@ -2776,10 +2801,16 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     diagnostics.capture_page(page, "doe-factorial-table-ui.png")
     page.get_by_label("반복", exact=True).fill("2")
     page.get_by_label("센터점", exact=True).fill("1")
+    page.get_by_label("factor 2 name", exact=True).fill("Material")
+    page.get_by_label("Material 요인 유형", exact=True).select_option("categorical")
+    page.get_by_label("Material low", exact=True).fill("A")
+    page.get_by_label("Material high", exact=True).fill("B")
+    page.get_by_label("Material unit", exact=True).fill("")
     page.locator("details.doe-advanced-settings > summary").click()
     page.get_by_label("실행 순서 무작위화", exact=True).uncheck()
     expect(page.get_by_label("반복", exact=True)).to_have_value("2")
-    expect(page.get_by_text("예상 실험 9개", exact=True)).to_be_visible()
+    expect(page.get_by_label("센터점 run 미리보기")).to_contain_text("2")
+    expect(page.get_by_text("예상 실험 10개", exact=True)).to_be_visible()
     create_design_button = page.get_by_role("button", name="DOE 설계 생성")
     expect(create_design_button).to_be_enabled()
     create_design_button.click()
@@ -2790,7 +2821,7 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
         page.get_by_text("분석을 실행하면 현재 설계의 반응값이 잠깁니다.", exact=False)
     ).to_be_visible()
 
-    for run_order in range(1, 10):
+    for run_order in range(1, 11):
         page.get_by_label(f"run {run_order} response").fill(
             str(40 + run_order + (0.25 if run_order % 2 == 0 else -0.25))
         )
@@ -2798,7 +2829,7 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     response_summary = page.get_by_label("저장된 DOE 반응 요약")
     expect(response_summary).to_be_visible(timeout=20_000)
     expect(response_summary).to_contain_text("Yield")
-    expect(response_summary).to_contain_text("9")
+    expect(response_summary).to_contain_text("10")
 
     page.get_by_label("최대 상호작용 차수").select_option("2")
     page.get_by_role("button", name="효과 및 ANOVA 분석").click()
@@ -2808,7 +2839,7 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
     expect(page.get_by_role("img", name="주효과 평균 차트")).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
-    expect(page.locator(".analysis-result-section")).to_contain_text("0.5.0")
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.6.0")
     expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
     expect(page.get_by_label("run 1 response")).to_be_disabled()
     expect(page.get_by_role("button", name="분석 후 반응 잠금")).to_be_disabled()
@@ -2849,6 +2880,8 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     page.reload(wait_until="networkidle")
     expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
     page.get_by_role("radio", name="일반 완전요인").check()
+    expect(page.get_by_role("button", name="모든 요인을 3수준으로 설정")).to_be_visible()
+    expect(page.get_by_role("columnheader", name="수준 유형")).to_be_visible()
     page.get_by_role("button", name="요인 추가", exact=True).click()
     expect(page.get_by_text("예상 실험 수 27개", exact=False)).to_be_visible()
     page.get_by_role("button", name="일반 완전요인 설계 생성").click()
@@ -2868,6 +2901,45 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
         page.get_by_role("button", name="반응 저장", exact=True).click()
     page.get_by_role("button", name="일반 완전요인 ANOVA").click()
     expect(page.get_by_role("heading", name="분산분석")).to_be_visible(timeout=20_000)
+
+    origin = page.evaluate("() => window.location.origin")
+    page.goto(
+        f"{origin}/analysis/doe/doe.factorial_design?design_kind=general",
+        wait_until="networkidle",
+    )
+    expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
+    page.get_by_role("button", name="요인 추가", exact=True).click()
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.get_by_label("Temperature 수준 수", exact=True).select_option("2")
+    page.get_by_label("Factor 3 수준 수", exact=True).select_option("5")
+    factor_three_editor = page.get_by_label("Factor 3 수준 편집")
+    factor_three_editor.get_by_label("수준 붙여넣기").fill(
+        "Low, Middle, High, Very High, Maximum"
+    )
+    factor_three_editor.get_by_role("button", name="붙여넣기 적용").click()
+    expect(page.get_by_text("예상 실험 수 30개", exact=False)).to_be_visible()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/api/v1/doe-designs/general-factorial")
+    ) as created_general_info:
+        page.get_by_role("button", name="일반 완전요인 설계 생성").click()
+    created_general_id = created_general_info.value.json()["design_id"]
+    expect(page.get_by_role("heading", name="일반 완전요인 설계")).to_be_visible(
+        timeout=20_000
+    )
+    expect(page.get_by_text("30", exact=True).first).to_be_visible()
+    diagnostics.capture_page(page, "general-factorial-mixed-levels.png")
+
+    page.goto(
+        f"{origin}/analysis/doe/doe.general_factorial_design?design_id={created_general_id}",
+        wait_until="networkidle",
+    )
+    expect(page).to_have_url(re.compile(r"/analysis/doe/doe\.factorial_design\?"))
+    if f"design_id={created_general_id}" not in page.url or "design_kind=general" not in page.url:
+        raise AssertionError(f"legacy General Full redirect lost query state: {page.url}")
+    expect(page.get_by_role("heading", name="일반 완전요인 설계")).to_be_visible(
+        timeout=20_000
+    )
 
 
 def expect_lazy_analysis_module(page: Page, module_name: str) -> None:

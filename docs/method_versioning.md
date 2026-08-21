@@ -2,12 +2,12 @@
 
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
-`doe.factorial_design` is `0.5.0`, `doe.response_optimizer` is `0.4.0`, and
+`doe.factorial_design` is `0.6.0`, `doe.response_optimizer` is `0.4.0`, and
 `doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.5.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
 `eda.descriptive`, `eda.graphical_summary`, and `eda.equal_variances` are
-`0.2.0`. `quality.run_chart` is `0.2.0`; `doe.latin_hypercube` is `0.2.0` and
-the other stable IDs remain on `0.1.0`.
+`0.2.0`. `quality.run_chart` and `hypothesis.mann_whitney` are `0.2.0`;
+`doe.latin_hypercube` is `0.2.0` and the other stable IDs remain on `0.1.0`.
 
 `doe.general_factorial_design` starts at `0.1.0`. API contract `11` adds its
 dedicated design/response/analysis routes, regular fractional-factorial fields,
@@ -483,6 +483,33 @@ manifest versions remain unchanged. Metadata schema remains `19`: the generic
 analysis, artifact, and regression-model records safely distinguish PLS by
 method ID and manifest kind, so no relational migration or legacy checksum
 rewrite is required.
+
+## Mann-Whitney And Categorical Factorial Decision
+
+`hypothesis.mann_whitney` moves from `0.1.0`/result schema `1` to `0.2.0`/
+schema `2`. New requests select either stacked response/group input (including
+two explicitly selected levels from a variable with more than two groups) or
+two unstacked numeric sample columns. Unstacked missing values are removed
+independently per sample. The U statistic, p-value, rank-biserial effect, and
+common-language calculation are shared across both adapters. Existing schema-1
+results and stacked requests without `input_layout` retain their recorded
+meaning and are not rewritten.
+
+`doe.factorial_design` moves from `0.5.0` to `0.6.0`; new full/fractional writes
+use design schema `2`. The coded matrix, regular generators, defining relation,
+resolution, and aliases are unchanged. The new schema adds an explicit numeric
+or categorical factor kind and allows actual run levels to be numbers or text.
+Categorical pseudo-centers expand over all categorical low/high combinations
+within every block. Legacy schema-1 numeric full designs and existing
+schema-2 fractional designs retain their stored checksums.
+
+`doe.general_factorial_design` stays at `0.1.0` with design/result schema `1`.
+The explicit 2-to-10-level editor, three-level preset, and canonical navigation
+entry are presentation changes; validation that a single factor cannot mix
+numeric and text levels enforces the existing treatment-coding contract rather
+than changing its calculation. API contract `15` carries the new typed
+Mann-Whitney and factorial request/response shapes. Metadata schema remains
+`19`, so no SQLite migration or immutable artifact rewrite is required.
 
 ## Executable DOE Domains And Bulk Study Workflow Decision
 

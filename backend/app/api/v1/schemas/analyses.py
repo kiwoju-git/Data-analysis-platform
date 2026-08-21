@@ -375,9 +375,7 @@ class MannWhitneyStackedOptions(MannWhitneyCommonOptions):
     group_column_id: str = Field(min_length=1)
     group_1_value: str | None = Field(default=None, min_length=1, max_length=500)
     group_2_value: str | None = Field(default=None, min_length=1, max_length=500)
-    missing_policy: Literal["complete_case_selected_groups"] = (
-        "complete_case_selected_groups"
-    )
+    missing_policy: Literal["complete_case_selected_groups"] = "complete_case_selected_groups"
 
     @model_validator(mode="after")
     def validate_group_selection(self) -> "MannWhitneyStackedOptions":

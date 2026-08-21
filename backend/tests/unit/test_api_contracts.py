@@ -843,7 +843,7 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
     payload = response.json()
     FactorialDesignResponse.model_validate(payload)
     assert payload["method_id"] == "doe.factorial_design"
-    assert payload["method_version"] == "0.5.0"
+    assert payload["method_version"] == "0.6.0"
     assert payload["family"] == "two_level_full_factorial"
     assert payload["status"] == "designed"
     assert payload["name"] == "screening design"
@@ -857,7 +857,7 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
         "block_count": 1,
         "design_type": "two_level_full",
         "fraction_id": None,
-        "design_schema_version": 1,
+        "design_schema_version": 2,
     }
     assert [factor["name"] for factor in payload["factors"]] == ["Temperature", "Pressure"]
     assert payload["runs"][0]["run_order"] == 1
@@ -1020,7 +1020,7 @@ def test_factorial_analysis_api_persists_effects_anova_diagnostics_and_provenanc
     assert analysis_response.status_code == 201
     DoeFactorialAnalysisResponse.model_validate(analysis)
     assert analysis["method_id"] == "doe.factorial_design"
-    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.5.0"
+    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.6.0"
     assert analysis["analysis_schema_version"] == 2
     assert analysis["design_version_id"] == design["design_version_id"]
     assert analysis["design_sha256"] == design["design_sha256"]
@@ -2214,7 +2214,7 @@ def test_analysis_run_executes_two_sample_t_from_dataset_version(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.two_sample_t",
-                "method_version": METHOD_VERSIONS["hypothesis.mann_whitney"],
+                "method_version": METHOD_VERSIONS["hypothesis.two_sample_t"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,

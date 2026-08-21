@@ -346,9 +346,7 @@ def _fractional_metadata_response(
         return None
     try:
         factor_specs = [
-            _factorial_factor_from_payload(factor)
-            for factor in factors
-            if isinstance(factor, dict)
+            _factorial_factor_from_payload(factor) for factor in factors if isinstance(factor, dict)
         ]
         fraction_id = str(options["fraction_id"])
         metadata = fractional_metadata_for(factor_specs, fraction_id)

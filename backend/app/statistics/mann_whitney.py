@@ -146,9 +146,7 @@ def calculate_mann_whitney(
         )
         for index, group in enumerate(selected_stacked_groups)
     ]
-    n_excluded_missing_response = sum(
-        group.n_excluded_missing for group in selected_stacked_groups
-    )
+    n_excluded_missing_response = sum(group.n_excluded_missing for group in selected_stacked_groups)
     n_excluded_non_numeric_response = sum(
         group.n_excluded_non_numeric for group in selected_stacked_groups
     )
@@ -333,9 +331,7 @@ def calculate_mann_whitney_samples(
             n_excluded_missing=n_excluded_missing,
             n_excluded_non_numeric=n_excluded_non_numeric,
         ),
-        "groups": [
-            _group_summary(group, ranks_by_group[group.group_index]) for group in groups
-        ],
+        "groups": [_group_summary(group, ranks_by_group[group.group_index]) for group in groups],
         "test": test_result,
     }
 

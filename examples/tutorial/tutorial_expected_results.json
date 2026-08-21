@@ -84,7 +84,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73",
       "method_id": "doe.factorial_design",
-      "method_version": "0.5.0",
+      "method_version": "0.6.0",
       "relative_tolerance": 1e-08,
       "result": {
         "anova_residual": {

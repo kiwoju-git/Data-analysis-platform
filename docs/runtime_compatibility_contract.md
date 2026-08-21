@@ -1,6 +1,6 @@
 # Runtime Compatibility Contract
 
-Last updated: 2026-08-08
+Last updated: 2026-08-21
 
 ## Purpose
 
@@ -37,7 +37,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `14`);
+- `api_contract_version` (currently `15`);
 - the actual metadata schema constant (currently `19`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
@@ -51,7 +51,7 @@ The response contains no workspace path, filename, or raw data. Existing
 
 ## Frontend Gate
 
-The frontend expects API contract `14`, schema 19 or later, and every required
+The frontend expects API contract `15`, schema 19 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management
@@ -79,6 +79,14 @@ extends regression-model catalog identities to distinguish OLS and PLS, and
 adds the typed PLS point-prediction route. Metadata schema 19 remains valid;
 model kind and prediction coefficients are stored in the checksummed JSON
 manifest rather than a new SQLite relation.
+
+Contract 15 adds the discriminated stacked/unstacked Mann-Whitney request,
+selected levels for stacked variables with more than two groups, schema-2
+Mann-Whitney results, and numeric/categorical two-level factorial factor
+contracts. New two-level factorial writes use design schema 2 and can store
+actual text levels while retaining the existing coded `-1/+1` matrix. Metadata
+schema 19 remains sufficient because factors and runs are already stored as
+checksummed JSON; no SQLite migration or legacy artifact rewrite is performed.
 
 Build commit `unknown` is not treated as proof of a mismatch. When both commits
 are known, they must match for this strict local runtime.

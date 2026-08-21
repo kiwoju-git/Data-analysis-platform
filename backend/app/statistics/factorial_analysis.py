@@ -42,6 +42,7 @@ def calculate_factorial_analysis(
     runs: Sequence[FactorialAnalysisRun],
     factor_names: Sequence[str],
     *,
+    categorical_factor_names: Sequence[str] = (),
     response_name: str,
     response_unit: str | None,
     max_interaction_order: int = 2,
@@ -51,6 +52,7 @@ def calculate_factorial_analysis(
     _validate_inputs(
         runs,
         factor_names,
+        categorical_factor_names=categorical_factor_names,
         max_interaction_order=max_interaction_order,
         confidence_level=confidence_level,
         point_limit=point_limit,
@@ -224,6 +226,7 @@ def _validate_inputs(
     runs: Sequence[FactorialAnalysisRun],
     factor_names: Sequence[str],
     *,
+    categorical_factor_names: Sequence[str],
     max_interaction_order: int,
     confidence_level: float,
     point_limit: int,
@@ -243,15 +246,23 @@ def _validate_inputs(
     if len({run.run_order for run in runs}) != len(runs):
         raise FactorialAnalysisError("doe_factorial_analysis_run_order_duplicate")
     expected_factors = set(factor_names)
+    categorical_factors = set(categorical_factor_names)
+    if len(categorical_factors) != len(
+        categorical_factor_names
+    ) or not categorical_factors.issubset(expected_factors):
+        raise FactorialAnalysisError("doe_factorial_analysis_factors_invalid")
+    numeric_factors = expected_factors - categorical_factors
     for run in runs:
         if not isfinite(run.response):
             raise FactorialAnalysisError("doe_factorial_response_not_finite")
         if set(run.coded_levels) != expected_factors:
             raise FactorialAnalysisError("doe_factorial_coded_levels_invalid")
-        levels = set(run.coded_levels.values())
-        if run.center_point and levels != {0}:
+        if run.center_point and (
+            any(run.coded_levels[name] != 0 for name in numeric_factors)
+            or any(run.coded_levels[name] not in {-1, 1} for name in categorical_factors)
+        ):
             raise FactorialAnalysisError("doe_factorial_center_coding_invalid")
-        if not run.center_point and not levels.issubset({-1, 1}):
+        if not run.center_point and not set(run.coded_levels.values()).issubset({-1, 1}):
             raise FactorialAnalysisError("doe_factorial_coded_levels_invalid")
 
 

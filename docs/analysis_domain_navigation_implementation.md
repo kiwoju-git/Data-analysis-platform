@@ -50,7 +50,7 @@ The PCA card has no executable action and no backend registry entry.
 | Proportions & Categorical Data | Proportion Tests | `categorical.one_proportion`, `categorical.two_proportion` | none |
 | Proportions & Categorical Data | Categorical Association | `categorical.chi_square_association` | none |
 | Correlation, Regression & Prediction | Flat methods | `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `regression.partial_least_squares` | contextual OLS prediction/optimizer; PLS point prediction is available from its fitted result |
-| DOE & Optimization | Flat methods | `doe.factorial_design`, `doe.general_factorial_design`, `doe.response_surface`, `doe.response_optimizer` | none |
+| DOE & Optimization | Flat methods | `doe.factorial_design`, `doe.response_surface`, `doe.response_optimizer` | contextual `doe.general_factorial_design` opens inside the factorial workspace |
 | AI/ML Experimental Design | Flat methods | `doe.latin_hypercube`, `doe.bayesian_optimization` | Gaussian Process shown as disabled BO-internal context |
 | Quality & Process Monitoring | Control Charts | `quality.attribute_control_chart`, `quality.subgroup_chart`, `quality.individuals_chart` | none |
 | Quality & Process Monitoring | Process Behavior | `quality.run_chart` | none |
@@ -95,6 +95,14 @@ The selected-method heading now uses a two-row grid: title and non-wrapping
 actions on the first row, followed by a full-width compact input/design tag
 strip. This is presentation-only and leaves guidance tags and panel state
 unchanged.
+
+The later API-contract-15 refinement removes the duplicate standalone General
+Full Factorial leaf from ordinary navigation. `doe.factorial_design` is the
+canonical workspace for two-level full, regular two-level fractional, and
+general full factorial creation. The `doe.general_factorial_design` method ID,
+dedicated APIs, saved designs, and readers remain registered as contextual
+compatibility surfaces. A legacy direct URL is replace-redirected to the
+factorial workspace with `design_kind=general` and its `design_id` preserved.
 
 ## Deliberately not added
 

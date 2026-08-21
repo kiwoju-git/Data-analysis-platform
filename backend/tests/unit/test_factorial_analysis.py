@@ -116,6 +116,39 @@ def test_factorial_analysis_preserves_small_scale_nonconstant_response() -> None
     assert result["sample"]["df_residual"] == 0
 
 
+def test_factorial_analysis_accepts_categorical_pseudo_centers() -> None:
+    runs = _replicated_two_factor_runs()
+    for run in runs:
+        if run.center_point:
+            run.coded_levels["B"] = -1 if run.run_order % 2 else 1
+
+    result = calculate_factorial_analysis(
+        runs,
+        ["A", "B"],
+        categorical_factor_names=["B"],
+        response_name="Yield",
+        response_unit=None,
+        max_interaction_order=2,
+    )
+
+    assert result["sample"]["center_point_count"] == 3
+    assert result["model_policy"]["center_curvature_included"] is True
+
+
+def test_factorial_analysis_rejects_nonzero_numeric_pseudo_center() -> None:
+    runs = _replicated_two_factor_runs()
+    runs[-1].coded_levels["A"] = 1
+
+    with pytest.raises(FactorialAnalysisError, match="doe_factorial_center_coding_invalid"):
+        calculate_factorial_analysis(
+            runs,
+            ["A", "B"],
+            categorical_factor_names=["B"],
+            response_name="Yield",
+            response_unit=None,
+        )
+
+
 @pytest.mark.parametrize(
     ("runs", "error"),
     [

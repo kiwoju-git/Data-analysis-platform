@@ -145,6 +145,7 @@ class TwoLevelCategoricalFactorResponse(BaseModel):
     unit: str | None
     level_count: Literal[2] = 2
 
+
 TwoLevelFactorResponse = Annotated[
     TwoLevelNumericFactorResponse | TwoLevelCategoricalFactorResponse,
     Field(discriminator="factor_kind"),

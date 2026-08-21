@@ -76,6 +76,9 @@ def create_factorial_analysis(
         result_payload = calculate_factorial_analysis(
             calculation_runs,
             [factor.name for factor in design.factors],
+            categorical_factor_names=[
+                factor.name for factor in design.factors if factor.factor_kind == "categorical"
+            ],
             response_name=response_name,
             response_unit=unit,
             max_interaction_order=(

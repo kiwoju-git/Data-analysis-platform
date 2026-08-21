@@ -3,7 +3,7 @@
   "cases": [
     {
       "case_id": "two_factor_standard_with_center",
-      "design_sha256": "b68f1a7c3f99d35ae97c6ef7d7729108276de1bc1e7f468055bb8a33a7c6d545",
+      "design_sha256": "1b904acb504d2317cd790d68bfa31572b85d9bf3b87a69596c720a7fc96df2d7",
       "runs": [
         {
           "standard_order": 1,
@@ -54,26 +54,28 @@
     },
     {
       "case_id": "three_factor_seeded_random_blocks",
-      "design_sha256": "f923b41739b0820ac4204ea2feeed6b6f530052855f51205afab3c66a93e055e",
+      "design_sha256": "0359c38d97c2a358bee5fd662cb6a91e9e597b12d8ac90a283a126d214df17d7",
       "run_order_summary": [
         {"run_order": 1, "standard_order": 8, "replicate_index": 1, "block_index": 1, "center_point": false},
-        {"run_order": 2, "standard_order": 2, "replicate_index": 2, "block_index": 2, "center_point": false},
+        {"run_order": 2, "standard_order": 4, "replicate_index": 2, "block_index": 2, "center_point": false},
         {"run_order": 3, "standard_order": 1, "replicate_index": 1, "block_index": 1, "center_point": false},
-        {"run_order": 4, "standard_order": 3, "replicate_index": 2, "block_index": 2, "center_point": false},
-        {"run_order": 5, "standard_order": 7, "replicate_index": 1, "block_index": 1, "center_point": false},
-        {"run_order": 6, "standard_order": 5, "replicate_index": 2, "block_index": 2, "center_point": false},
-        {"run_order": 7, "standard_order": 1, "replicate_index": 2, "block_index": 1, "center_point": false},
-        {"run_order": 8, "standard_order": 3, "replicate_index": 1, "block_index": 2, "center_point": false},
-        {"run_order": 9, "standard_order": 4, "replicate_index": 2, "block_index": 1, "center_point": false},
-        {"run_order": 10, "standard_order": 6, "replicate_index": 2, "block_index": 2, "center_point": false},
-        {"run_order": 11, "standard_order": 6, "replicate_index": 1, "block_index": 1, "center_point": false},
-        {"run_order": 12, "standard_order": 7, "replicate_index": 2, "block_index": 2, "center_point": false},
-        {"run_order": 13, "standard_order": 2, "replicate_index": 1, "block_index": 1, "center_point": false},
-        {"run_order": 14, "standard_order": 8, "replicate_index": 2, "block_index": 2, "center_point": false},
-        {"run_order": 15, "standard_order": 10, "replicate_index": 2, "block_index": 1, "center_point": true},
-        {"run_order": 16, "standard_order": 9, "replicate_index": 1, "block_index": 2, "center_point": true},
-        {"run_order": 17, "standard_order": 4, "replicate_index": 1, "block_index": 1, "center_point": false},
-        {"run_order": 18, "standard_order": 5, "replicate_index": 1, "block_index": 2, "center_point": false}
+        {"run_order": 4, "standard_order": 7, "replicate_index": 2, "block_index": 2, "center_point": false},
+        {"run_order": 5, "standard_order": 5, "replicate_index": 2, "block_index": 1, "center_point": false},
+        {"run_order": 6, "standard_order": 3, "replicate_index": 2, "block_index": 2, "center_point": false},
+        {"run_order": 7, "standard_order": 8, "replicate_index": 2, "block_index": 1, "center_point": false},
+        {"run_order": 8, "standard_order": 9, "replicate_index": 1, "block_index": 1, "center_point": true},
+        {"run_order": 9, "standard_order": 1, "replicate_index": 2, "block_index": 1, "center_point": false},
+        {"run_order": 10, "standard_order": 3, "replicate_index": 1, "block_index": 2, "center_point": false},
+        {"run_order": 11, "standard_order": 6, "replicate_index": 2, "block_index": 1, "center_point": false},
+        {"run_order": 12, "standard_order": 10, "replicate_index": 2, "block_index": 1, "center_point": true},
+        {"run_order": 13, "standard_order": 6, "replicate_index": 1, "block_index": 1, "center_point": false},
+        {"run_order": 14, "standard_order": 12, "replicate_index": 4, "block_index": 2, "center_point": true},
+        {"run_order": 15, "standard_order": 2, "replicate_index": 1, "block_index": 1, "center_point": false},
+        {"run_order": 16, "standard_order": 7, "replicate_index": 1, "block_index": 2, "center_point": false},
+        {"run_order": 17, "standard_order": 2, "replicate_index": 2, "block_index": 1, "center_point": false},
+        {"run_order": 18, "standard_order": 11, "replicate_index": 3, "block_index": 2, "center_point": true},
+        {"run_order": 19, "standard_order": 4, "replicate_index": 1, "block_index": 1, "center_point": false},
+        {"run_order": 20, "standard_order": 5, "replicate_index": 1, "block_index": 2, "center_point": false}
       ]
     }
   ]
