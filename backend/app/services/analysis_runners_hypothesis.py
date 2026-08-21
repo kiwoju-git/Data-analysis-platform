@@ -3,7 +3,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import status
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
@@ -59,6 +59,7 @@ from app.statistics.mann_whitney import (
     MannWhitneyGroupColumn,
     MannWhitneyResponseColumn,
     calculate_mann_whitney,
+    calculate_mann_whitney_unstacked,
 )
 from app.statistics.one_sample_t import (
     OneSampleTColumn,
@@ -1682,11 +1683,10 @@ def run_mann_whitney_analysis(
 
     options = _validate_mann_whitney_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
-    response_column, group_column = _selected_mann_whitney_columns(context, options)
+    selected_columns = _selected_mann_whitney_columns(context, options)
     alpha = _mann_whitney_alpha(options)
     alternative = _mann_whitney_alternative(options)
     method = _mann_whitney_method(options)
-    _mann_whitney_missing_policy(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -1698,16 +1698,30 @@ def run_mann_whitney_analysis(
     )
     try:
         try:
-            result = calculate_mann_whitney(
-                _iter_rows_for_snapshot(context, row_snapshot),
-                response_column,
-                group_column,
-                decimal=context.parsing.decimal,
-                thousands=context.parsing.thousands,
-                alpha=alpha,
-                alternative=alternative,
-                method=method,
-            )
+            if options["input_layout"] == "unstacked":
+                result = calculate_mann_whitney_unstacked(
+                    _iter_rows_for_snapshot(context, row_snapshot),
+                    selected_columns[0],
+                    selected_columns[1],
+                    decimal=context.parsing.decimal,
+                    thousands=context.parsing.thousands,
+                    alpha=alpha,
+                    alternative=alternative,
+                    method=method,
+                )
+            else:
+                result = calculate_mann_whitney(
+                    _iter_rows_for_snapshot(context, row_snapshot),
+                    selected_columns[0],
+                    selected_columns[1],
+                    decimal=context.parsing.decimal,
+                    thousands=context.parsing.thousands,
+                    alpha=alpha,
+                    alternative=alternative,
+                    method=method,
+                    group_1_value=options.get("group_1_value"),
+                    group_2_value=options.get("group_2_value"),
+                )
         except MannWhitneyError as exc:
             raise _mann_whitney_api_error(exc.code) from exc
         warnings = _mann_whitney_warnings(result)
@@ -1727,8 +1741,13 @@ def run_mann_whitney_analysis(
 
 
 def _validate_mann_whitney_options(options: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(options)
+    if "input_layout" not in normalized:
+        normalized["input_layout"] = "stacked"
+        if normalized.get("missing_policy", "complete_case") == "complete_case":
+            normalized["missing_policy"] = "complete_case_selected_groups"
     try:
-        return MannWhitneyOptions.model_validate(options).model_dump()
+        return TypeAdapter(MannWhitneyOptions).validate_python(normalized).model_dump()
     except ValidationError as exc:
         raise ApiError(
             code="invalid_mann_whitney_options",
@@ -1740,7 +1759,30 @@ def _validate_mann_whitney_options(options: dict[str, Any]) -> dict[str, Any]:
 def _selected_mann_whitney_columns(
     context: DatasetRowsContext,
     options: dict[str, Any],
-) -> tuple[MannWhitneyResponseColumn, MannWhitneyGroupColumn]:
+) -> tuple[MannWhitneyResponseColumn, MannWhitneyResponseColumn | MannWhitneyGroupColumn]:
+    if options.get("input_layout") == "unstacked":
+        sample_1_id = options.get("sample_1_column_id")
+        sample_2_id = options.get("sample_2_column_id")
+        if not isinstance(sample_1_id, str) or not isinstance(sample_2_id, str):
+            raise ApiError(
+                code="mann_whitney_sample_columns_required",
+                message="Mann-Whitney U 표본 컬럼 두 개를 선택해야 합니다.",
+            )
+        columns_by_id = {column.column_id: column for column in context.columns}
+        selected = (columns_by_id.get(sample_1_id), columns_by_id.get(sample_2_id))
+        if selected[0] is None or selected[1] is None:
+            raise ApiError(
+                code="mann_whitney_sample_column_not_found",
+                message="요청한 Mann-Whitney U 표본 컬럼을 찾을 수 없습니다.",
+            )
+        for column in selected:
+            assert column is not None
+            _validate_mann_whitney_response_column(column)
+        return (
+            _mann_whitney_numeric_column(selected[0]),
+            _mann_whitney_numeric_column(selected[1]),
+        )
+
     response_column_id = options.get("response_column_id")
     group_column_id = options.get("group_column_id")
     if not isinstance(response_column_id, str) or not response_column_id:
@@ -1776,15 +1818,7 @@ def _selected_mann_whitney_columns(
     _validate_mann_whitney_response_column(response_column)
     _validate_mann_whitney_group_column(group_column)
     return (
-        MannWhitneyResponseColumn(
-            column_id=response_column.column_id,
-            column_index=response_column.column_index,
-            display_name=response_column.display_name,
-            data_type=response_column.data_type,
-            measurement_level=response_column.measurement_level,
-            role=response_column.role,
-            unit=response_column.unit,
-        ),
+        _mann_whitney_numeric_column(response_column),
         MannWhitneyGroupColumn(
             column_id=group_column.column_id,
             column_index=group_column.column_index,
@@ -1794,6 +1828,18 @@ def _selected_mann_whitney_columns(
             role=group_column.role,
             unit=group_column.unit,
         ),
+    )
+
+
+def _mann_whitney_numeric_column(column: DatasetColumnRecord) -> MannWhitneyResponseColumn:
+    return MannWhitneyResponseColumn(
+        column_id=column.column_id,
+        column_index=column.column_index,
+        display_name=column.display_name,
+        data_type=column.data_type,
+        measurement_level=column.measurement_level,
+        role=column.role,
+        unit=column.unit,
     )
 
 
@@ -1854,22 +1900,17 @@ def _mann_whitney_method(options: dict[str, Any]) -> str:
     return str(raw_value)
 
 
-def _mann_whitney_missing_policy(options: dict[str, Any]) -> str:
-    raw_value = options.get("missing_policy", "complete_case")
-    if raw_value != "complete_case":
-        raise ApiError(
-            code="mann_whitney_missing_policy_unsupported",
-            message="Mann-Whitney U는 현재 complete-case 결측 처리만 지원합니다.",
-        )
-    return raw_value
-
-
 def _mann_whitney_api_error(code: str) -> ApiError:
     messages = {
         "invalid_mann_whitney_options": "Mann-Whitney U 옵션 계약이 올바르지 않습니다.",
         "mann_whitney_requires_exactly_two_groups": (
             "Mann-Whitney U에는 사용 가능한 그룹이 정확히 2개 필요합니다."
         ),
+        "mann_whitney_group_selection_incomplete": "비교할 그룹 두 개를 모두 선택해야 합니다.",
+        "mann_whitney_groups_must_differ": "서로 다른 그룹 두 개를 선택해야 합니다.",
+        "mann_whitney_selected_group_not_found": "선택한 그룹이 현재 데이터에 없습니다.",
+        "mann_whitney_sample_columns_must_differ": "서로 다른 표본 컬럼 두 개를 선택해야 합니다.",
+        "mann_whitney_sample_value_not_finite": "표본에는 유한한 수치만 사용할 수 있습니다.",
         "mann_whitney_group_n_too_small": "각 그룹에는 최소 1개 사용 값이 필요합니다.",
         "mann_whitney_exact_with_ties": (
             "동률 값이 있을 때는 exact Mann-Whitney U p-value를 계산하지 않습니다."

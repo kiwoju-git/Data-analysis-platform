@@ -4659,7 +4659,7 @@ describe("App", () => {
       methods: [
         {
           method_id: "hypothesis.mann_whitney",
-          method_version: "0.1.0",
+          method_version: "0.2.0",
           module_id: "hypothesis",
           label_ko: "Mann-Whitney U",
           label_en: "Mann-Whitney U",
@@ -4765,6 +4765,8 @@ describe("App", () => {
 
     expect(html).toContain("Mann-Whitney U");
     expect(html).toContain("Mann-Whitney U 실행");
+    expect(html).toContain("값 1열 + 그룹 1열");
+    expect(html).toContain("표본별 수치 열 2개");
     expect(html).toContain("p-value 방식");
     expect(html).toContain("반응 변수");
     expect(html).toContain("그룹 변수");

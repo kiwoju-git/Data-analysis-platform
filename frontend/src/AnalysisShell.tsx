@@ -19,7 +19,10 @@ import { EquivalenceTostPanel } from "./EquivalenceTostPanel";
 import { GraphicalSummaryPanel } from "./GraphicalSummaryPanel";
 import { KruskalWallisPanel } from "./KruskalWallisPanel";
 import type { LinearModelPredictionRowsState } from "./LinearModelPanel";
-import { MannWhitneyPanel } from "./MannWhitneyPanel";
+import {
+  MannWhitneyPanel,
+  type MannWhitneyExecutionOptions,
+} from "./MannWhitneyPanel";
 import { NormalityAnalysisPanel } from "./NormalityAnalysisPanel";
 import { OneProportionPanel } from "./OneProportionPanel";
 import {
@@ -425,7 +428,7 @@ export interface AnalysisShellProps {
   onLinearModelAlphaToRemoveChange?: (alpha: number) => void;
   onRunLinearModelPrediction?: () => void;
   onRunLinearModelPredictionPreflight?: () => void;
-  onRunMannWhitneyAnalysis: () => void;
+  onRunMannWhitneyAnalysis: (options: MannWhitneyExecutionOptions) => void;
   onRunNormalityAnalysis: () => void;
   onRunOneProportionAnalysis: () => void;
   onRunOneWayAnovaAnalysis: (options: OneWayAnovaExecutionOptions) => void;
@@ -1251,6 +1254,7 @@ export function AnalysisShell({
                   alpha={mannWhitneyAlpha}
                   alternative={mannWhitneyAlternative}
                   analysisResult={mannWhitneyAnalysisResult}
+                  filterDrafts={analysisFilterDrafts}
                   filterValidationError={analysisFilterValidationError}
                   groupColumnId={mannWhitneyGroupColumnId}
                   groupColumns={mannWhitneyGroupColumns}

@@ -1,6 +1,6 @@
 from enum import Enum
 from math import isfinite
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -352,15 +352,12 @@ class OneSampleWilcoxonOptions(BaseModel):
         return value
 
 
-class MannWhitneyOptions(BaseModel):
+class MannWhitneyCommonOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    response_column_id: str = Field(min_length=1)
-    group_column_id: str = Field(min_length=1)
-    alpha: float = 0.05
+    alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
     alternative: Literal["two_sided", "greater", "less"] = "two_sided"
     method: Literal["auto", "exact", "asymptotic"] = "auto"
-    missing_policy: str = "complete_case"
 
     @field_validator("alpha", mode="before")
     @classmethod
@@ -370,6 +367,45 @@ class MannWhitneyOptions(BaseModel):
         if not isfinite(float(value)):
             raise ValueError("must be a finite number")
         return value
+
+
+class MannWhitneyStackedOptions(MannWhitneyCommonOptions):
+    input_layout: Literal["stacked"] = "stacked"
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    group_1_value: str | None = Field(default=None, min_length=1, max_length=500)
+    group_2_value: str | None = Field(default=None, min_length=1, max_length=500)
+    missing_policy: Literal["complete_case_selected_groups"] = (
+        "complete_case_selected_groups"
+    )
+
+    @model_validator(mode="after")
+    def validate_group_selection(self) -> "MannWhitneyStackedOptions":
+        if (self.group_1_value is None) != (self.group_2_value is None):
+            raise ValueError("both selected group values are required")
+        if self.group_1_value is not None and self.group_2_value is not None:
+            if self.group_1_value.strip() == self.group_2_value.strip():
+                raise ValueError("selected group values must differ")
+        return self
+
+
+class MannWhitneyUnstackedOptions(MannWhitneyCommonOptions):
+    input_layout: Literal["unstacked"]
+    sample_1_column_id: str = Field(min_length=1)
+    sample_2_column_id: str = Field(min_length=1)
+    missing_policy: Literal["available_case_by_sample"] = "available_case_by_sample"
+
+    @model_validator(mode="after")
+    def validate_sample_columns(self) -> "MannWhitneyUnstackedOptions":
+        if self.sample_1_column_id == self.sample_2_column_id:
+            raise ValueError("sample columns must differ")
+        return self
+
+
+MannWhitneyOptions = Annotated[
+    MannWhitneyStackedOptions | MannWhitneyUnstackedOptions,
+    Field(discriminator="input_layout"),
+]
 
 
 class LinearModelInteractionTermOption(BaseModel):

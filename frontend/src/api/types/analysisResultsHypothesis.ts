@@ -122,6 +122,17 @@ export interface MannWhitneyTestResult {
   effect_size: MannWhitneyEffectSize;
 }
 
+export interface MannWhitneySampleSummary {
+  sample_index: number;
+  label: string;
+  source_column: MannWhitneyColumnRef;
+  source_group_value: string | null;
+  n_total: number;
+  n_used: number;
+  n_excluded_missing: number;
+  n_excluded_non_numeric: number;
+}
+
 export interface MannWhitneyResult {
   schema_version: number;
   summary_type: "mann_whitney_u_test";
@@ -138,14 +149,18 @@ export interface MannWhitneyResult {
     scipy: string;
   };
   warnings: string[];
-  response: MannWhitneyColumnRef;
-  group: MannWhitneyColumnRef;
+  input_layout?: "stacked" | "unstacked";
+  response?: MannWhitneyColumnRef;
+  group?: MannWhitneyColumnRef;
   n_total: number;
   n_used: number;
   n_excluded_missing_response: number;
   n_excluded_missing_group: number;
   n_excluded_non_numeric_response: number;
+  n_excluded_unselected_groups?: number;
+  selected_group_values?: string[];
   group_count: number;
+  samples?: MannWhitneySampleSummary[];
   groups: MannWhitneyGroupSummary[];
   test: MannWhitneyTestResult;
 }

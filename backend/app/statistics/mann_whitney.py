@@ -50,6 +50,17 @@ class _GroupAccumulator:
     values: list[float] = field(default_factory=list)
 
 
+@dataclass
+class _StackedGroupAccumulator:
+    raw_label: str
+    display_label: str
+    group_index: int
+    n_total: int = 0
+    n_excluded_missing: int = 0
+    n_excluded_non_numeric: int = 0
+    values: list[float] = field(default_factory=list)
+
+
 def calculate_mann_whitney(
     rows: Iterable[Sequence[str | None]],
     response_column: MannWhitneyResponseColumn,
@@ -60,27 +71,46 @@ def calculate_mann_whitney(
     alpha: float = 0.05,
     alternative: str = "two_sided",
     method: str = "auto",
+    group_1_value: str | None = None,
+    group_2_value: str | None = None,
 ) -> dict[str, object]:
     if alternative not in ALTERNATIVES:
         raise MannWhitneyError("invalid_mann_whitney_alternative")
     if method not in METHODS:
         raise MannWhitneyError("invalid_mann_whitney_method")
 
-    groups: dict[str, _GroupAccumulator] = {}
+    if (group_1_value is None) != (group_2_value is None):
+        raise MannWhitneyError("mann_whitney_group_selection_incomplete")
+    selected_values = None
+    if group_1_value is not None and group_2_value is not None:
+        selected_values = (group_1_value.strip(), group_2_value.strip())
+        if selected_values[0] == selected_values[1]:
+            raise MannWhitneyError("mann_whitney_groups_must_differ")
+
+    groups: dict[str, _StackedGroupAccumulator] = {}
     n_total = 0
-    n_excluded_missing_response = 0
     n_excluded_missing_group = 0
-    n_excluded_non_numeric_response = 0
 
     for row in rows:
         n_total += 1
         response_value = _row_value(row, response_column.column_index)
         group_value = _row_value(row, group_column.column_index)
-        if response_value is None or response_value.strip() == "":
-            n_excluded_missing_response += 1
-            continue
         if group_value is None or group_value.strip() == "":
             n_excluded_missing_group += 1
+            continue
+
+        raw_group_label = group_value.strip()
+        group = groups.get(raw_group_label)
+        if group is None:
+            group = _StackedGroupAccumulator(
+                raw_label=raw_group_label,
+                display_label=_safe_group_label(group_value),
+                group_index=len(groups),
+            )
+            groups[raw_group_label] = group
+        group.n_total += 1
+        if response_value is None or response_value.strip() == "":
+            group.n_excluded_missing += 1
             continue
 
         response_number = _parse_number(
@@ -89,46 +119,204 @@ def calculate_mann_whitney(
             thousands=thousands,
         )
         if response_number is None:
-            n_excluded_non_numeric_response += 1
+            group.n_excluded_non_numeric += 1
             continue
-
-        group_label = _safe_group_label(group_value)
-        group = groups.get(group_label)
-        if group is None:
-            group = _GroupAccumulator(
-                group_label=group_label,
-                group_index=len(groups),
-            )
-            groups[group_label] = group
         group.values.append(response_number)
 
-    group_list = list(groups.values())
-    if len(group_list) != 2:
+    if selected_values is None:
+        if len(groups) != 2:
+            raise MannWhitneyError("mann_whitney_requires_exactly_two_groups")
+        selected_stacked_groups = list(groups.values())
+    else:
+        try:
+            selected_stacked_groups = [groups[selected_values[0]], groups[selected_values[1]]]
+        except KeyError as exc:
+            raise MannWhitneyError("mann_whitney_selected_group_not_found") from exc
+
+    if len(selected_stacked_groups) != 2:
         raise MannWhitneyError("mann_whitney_requires_exactly_two_groups")
-    if any(len(group.values) < MIN_GROUP_N for group in group_list):
+    if any(len(group.values) < MIN_GROUP_N for group in selected_stacked_groups):
         raise MannWhitneyError("mann_whitney_group_n_too_small")
 
-    all_values = [value for group in group_list for value in group.values]
+    sample_groups = [
+        _GroupAccumulator(
+            group_label=group.display_label,
+            group_index=index,
+            values=list(group.values),
+        )
+        for index, group in enumerate(selected_stacked_groups)
+    ]
+    n_excluded_missing_response = sum(
+        group.n_excluded_missing for group in selected_stacked_groups
+    )
+    n_excluded_non_numeric_response = sum(
+        group.n_excluded_non_numeric for group in selected_stacked_groups
+    )
+    core = calculate_mann_whitney_samples(
+        sample_groups[0].values,
+        sample_groups[1].values,
+        sample_1_label=sample_groups[0].group_label,
+        sample_2_label=sample_groups[1].group_label,
+        alpha=alpha,
+        alternative=alternative,
+        method=method,
+        n_excluded_missing=n_excluded_missing_response + n_excluded_missing_group,
+        n_excluded_non_numeric=n_excluded_non_numeric_response,
+    )
+    selected_raw_labels = {group.raw_label for group in selected_stacked_groups}
+    n_excluded_unselected_groups = sum(
+        group.n_total for label, group in groups.items() if label not in selected_raw_labels
+    )
+
+    return {
+        "schema_version": 2,
+        "summary_type": "mann_whitney_u_test",
+        "method": "mann_whitney_u",
+        "input_layout": "stacked",
+        "missing_policy": "complete_case_selected_groups",
+        "alternative": alternative,
+        "alpha": alpha,
+        **core,
+        "response": _column_payload(response_column),
+        "group": _column_payload(group_column),
+        "n_total": n_total,
+        "n_used": sum(len(group.values) for group in selected_stacked_groups),
+        "n_excluded_missing_response": n_excluded_missing_response,
+        "n_excluded_missing_group": n_excluded_missing_group,
+        "n_excluded_non_numeric_response": n_excluded_non_numeric_response,
+        "n_excluded_unselected_groups": n_excluded_unselected_groups,
+        "selected_group_values": [group.raw_label for group in selected_stacked_groups],
+        "group_count": len(sample_groups),
+        "samples": [
+            {
+                "sample_index": index + 1,
+                "label": group.display_label,
+                "source_column": _column_payload(response_column),
+                "source_group_value": group.raw_label,
+                "n_total": group.n_total,
+                "n_used": len(group.values),
+                "n_excluded_missing": group.n_excluded_missing,
+                "n_excluded_non_numeric": group.n_excluded_non_numeric,
+            }
+            for index, group in enumerate(selected_stacked_groups)
+        ],
+    }
+
+
+def calculate_mann_whitney_unstacked(
+    rows: Iterable[Sequence[str | None]],
+    sample_1_column: MannWhitneyResponseColumn,
+    sample_2_column: MannWhitneyResponseColumn,
+    *,
+    decimal: str = ".",
+    thousands: str | None = None,
+    alpha: float = 0.05,
+    alternative: str = "two_sided",
+    method: str = "auto",
+) -> dict[str, object]:
+    if sample_1_column.column_id == sample_2_column.column_id:
+        raise MannWhitneyError("mann_whitney_sample_columns_must_differ")
+
+    sample_values: list[list[float]] = [[], []]
+    missing_counts = [0, 0]
+    non_numeric_counts = [0, 0]
+    n_rows = 0
+    for row in rows:
+        n_rows += 1
+        for index, column in enumerate((sample_1_column, sample_2_column)):
+            raw_value = _row_value(row, column.column_index)
+            if raw_value is None or raw_value.strip() == "":
+                missing_counts[index] += 1
+                continue
+            parsed = _parse_number(raw_value, decimal=decimal, thousands=thousands)
+            if parsed is None:
+                non_numeric_counts[index] += 1
+                continue
+            sample_values[index].append(parsed)
+
+    core = calculate_mann_whitney_samples(
+        sample_values[0],
+        sample_values[1],
+        sample_1_label=sample_1_column.display_name,
+        sample_2_label=sample_2_column.display_name,
+        alpha=alpha,
+        alternative=alternative,
+        method=method,
+        n_excluded_missing=sum(missing_counts),
+        n_excluded_non_numeric=sum(non_numeric_counts),
+    )
+    columns = (sample_1_column, sample_2_column)
+    return {
+        "schema_version": 2,
+        "summary_type": "mann_whitney_u_test",
+        "method": "mann_whitney_u",
+        "input_layout": "unstacked",
+        "missing_policy": "available_case_by_sample",
+        "alternative": alternative,
+        "alpha": alpha,
+        **core,
+        "n_total": n_rows * 2,
+        "n_used": len(sample_values[0]) + len(sample_values[1]),
+        "n_excluded_missing_response": sum(missing_counts),
+        "n_excluded_missing_group": 0,
+        "n_excluded_non_numeric_response": sum(non_numeric_counts),
+        "n_excluded_unselected_groups": 0,
+        "group_count": 2,
+        "samples": [
+            {
+                "sample_index": index + 1,
+                "label": column.display_name,
+                "source_column": _column_payload(column),
+                "source_group_value": None,
+                "n_total": n_rows,
+                "n_used": len(sample_values[index]),
+                "n_excluded_missing": missing_counts[index],
+                "n_excluded_non_numeric": non_numeric_counts[index],
+            }
+            for index, column in enumerate(columns)
+        ],
+    }
+
+
+def calculate_mann_whitney_samples(
+    sample_1_values: Sequence[float],
+    sample_2_values: Sequence[float],
+    *,
+    sample_1_label: str,
+    sample_2_label: str,
+    alpha: float = 0.05,
+    alternative: str = "two_sided",
+    method: str = "auto",
+    n_excluded_missing: int = 0,
+    n_excluded_non_numeric: int = 0,
+) -> dict[str, object]:
+    if alternative not in ALTERNATIVES:
+        raise MannWhitneyError("invalid_mann_whitney_alternative")
+    if method not in METHODS:
+        raise MannWhitneyError("invalid_mann_whitney_method")
+    groups = [
+        _GroupAccumulator(_safe_group_label(sample_1_label), 0, list(sample_1_values)),
+        _GroupAccumulator(_safe_group_label(sample_2_label), 1, list(sample_2_values)),
+    ]
+    if any(len(group.values) < MIN_GROUP_N for group in groups):
+        raise MannWhitneyError("mann_whitney_group_n_too_small")
+    if any(not isfinite(value) for group in groups for value in group.values):
+        raise MannWhitneyError("mann_whitney_sample_value_not_finite")
+
+    all_values = [value for group in groups for value in group.values]
     has_ties = len(set(all_values)) != len(all_values)
-    resolved_method = _resolved_method(method, group_list=group_list, has_ties=has_ties)
-    result = _test_result(
-        group_list[0],
-        group_list[1],
+    resolved_method = _resolved_method(method, group_list=groups, has_ties=has_ties)
+    test_result = _test_result(
+        groups[0],
+        groups[1],
         alpha=alpha,
         alternative=alternative,
         requested_method=method,
         resolved_method=resolved_method,
         has_ties=has_ties,
     )
-    ranks_by_group = _rank_summaries(group_list)
-
+    ranks_by_group = _rank_summaries(groups)
     return {
-        "schema_version": 1,
-        "summary_type": "mann_whitney_u_test",
-        "method": "mann_whitney_u",
-        "missing_policy": "complete_case",
-        "alternative": alternative,
-        "alpha": alpha,
         "requested_method": method,
         "resolved_method": resolved_method,
         "use_continuity": resolved_method == "asymptotic",
@@ -138,26 +326,17 @@ def calculate_mann_whitney(
             "scipy": importlib.metadata.version("scipy"),
         },
         "warnings": _result_warnings(
-            groups=group_list,
+            groups=groups,
             requested_method=method,
             resolved_method=resolved_method,
             has_ties=has_ties,
-            n_excluded_missing_response=n_excluded_missing_response,
-            n_excluded_missing_group=n_excluded_missing_group,
-            n_excluded_non_numeric_response=n_excluded_non_numeric_response,
+            n_excluded_missing=n_excluded_missing,
+            n_excluded_non_numeric=n_excluded_non_numeric,
         ),
-        "response": _column_payload(response_column),
-        "group": _column_payload(group_column),
-        "n_total": n_total,
-        "n_used": sum(len(group.values) for group in group_list),
-        "n_excluded_missing_response": n_excluded_missing_response,
-        "n_excluded_missing_group": n_excluded_missing_group,
-        "n_excluded_non_numeric_response": n_excluded_non_numeric_response,
-        "group_count": len(group_list),
         "groups": [
-            _group_summary(group, ranks_by_group[group.group_index]) for group in group_list
+            _group_summary(group, ranks_by_group[group.group_index]) for group in groups
         ],
-        "test": result,
+        "test": test_result,
     }
 
 
@@ -321,9 +500,8 @@ def _result_warnings(
     requested_method: str,
     resolved_method: str,
     has_ties: bool,
-    n_excluded_missing_response: int,
-    n_excluded_missing_group: int,
-    n_excluded_non_numeric_response: int,
+    n_excluded_missing: int,
+    n_excluded_non_numeric: int,
 ) -> list[str]:
     warnings = [
         "mann_whitney_independence_assumption",
@@ -337,9 +515,9 @@ def _result_warnings(
         warnings.append("group_size_imbalance")
     if any(len(group.values) < 5 for group in groups):
         warnings.append("small_group_size")
-    if n_excluded_missing_response > 0 or n_excluded_missing_group > 0:
+    if n_excluded_missing > 0:
         warnings.append("missing_values_excluded")
-    if n_excluded_non_numeric_response > 0:
+    if n_excluded_non_numeric > 0:
         warnings.append("non_numeric_values_excluded")
     if any(len(set(group.values)) == 1 for group in groups):
         warnings.append("constant_group")

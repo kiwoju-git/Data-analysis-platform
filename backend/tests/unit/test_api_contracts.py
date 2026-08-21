@@ -2214,7 +2214,7 @@ def test_analysis_run_executes_two_sample_t_from_dataset_version(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.two_sample_t",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.mann_whitney"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -2557,7 +2557,7 @@ def test_analysis_run_executes_mann_whitney_from_dataset_version(tmp_path) -> No
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.mann_whitney",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.mann_whitney"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -2608,7 +2608,9 @@ def test_analysis_run_executes_mann_whitney_from_dataset_version(tmp_path) -> No
     result = payload["result"]
     assert result["summary_type"] == "mann_whitney_u_test"
     assert result["method"] == "mann_whitney_u"
-    assert result["missing_policy"] == "complete_case"
+    assert result["schema_version"] == 2
+    assert result["input_layout"] == "stacked"
+    assert result["missing_policy"] == "complete_case_selected_groups"
     assert result["alternative"] == "two_sided"
     assert result["alpha"] == 0.05
     assert result["requested_method"] == "exact"
@@ -2688,6 +2690,84 @@ def test_mann_whitney_typed_options_reject_invalid_contract(
     error = response.json()["error"]
     assert error["code"] == "invalid_mann_whitney_options"
     assert forbidden_text not in _public_error_text(response)
+
+
+def test_mann_whitney_analysis_selects_two_stacked_groups(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"response,group\n1,A\n2,A\n100,B\n101,B\n4,C\n5,C\n",
+            filename="mann-whitney-three-groups.csv",
+        )
+        response_column_id = version["columns"][0]["column_id"]
+        group_column_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.mann_whitney",
+                "method_version": METHOD_VERSIONS["hypothesis.mann_whitney"],
+                "dataset_version_id": version["version_id"],
+                "roles": {"response": response_column_id, "group": group_column_id},
+                "options": {
+                    "input_layout": "stacked",
+                    "response_column_id": response_column_id,
+                    "group_column_id": group_column_id,
+                    "group_1_value": "A",
+                    "group_2_value": "C",
+                    "alpha": 0.05,
+                    "alternative": "two_sided",
+                    "method": "exact",
+                    "missing_policy": "complete_case_selected_groups",
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    result = response.json()["result"]
+    assert result["selected_group_values"] == ["A", "C"]
+    assert result["n_excluded_unselected_groups"] == 2
+    assert [group["group_label"] for group in result["groups"]] == ["A", "C"]
+
+
+def test_mann_whitney_analysis_unstacked_keeps_each_samples_available_cases(
+    tmp_path,
+) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = _upload_confirmed_csv_dataset(
+            client,
+            content=b"Brand A,Brand B\n1,10\n,11\n3,\n4,12\n,13\n",
+            filename="mann-whitney-unstacked.csv",
+        )
+        sample_1_id = version["columns"][0]["column_id"]
+        sample_2_id = version["columns"][1]["column_id"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "hypothesis.mann_whitney",
+                "method_version": METHOD_VERSIONS["hypothesis.mann_whitney"],
+                "dataset_version_id": version["version_id"],
+                "roles": {"sample_1": sample_1_id, "sample_2": sample_2_id},
+                "options": {
+                    "input_layout": "unstacked",
+                    "sample_1_column_id": sample_1_id,
+                    "sample_2_column_id": sample_2_id,
+                    "alpha": 0.05,
+                    "alternative": "two_sided",
+                    "method": "exact",
+                    "missing_policy": "available_case_by_sample",
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    result = response.json()["result"]
+    assert result["input_layout"] == "unstacked"
+    assert result["missing_policy"] == "available_case_by_sample"
+    assert [sample["n_used"] for sample in result["samples"]] == [3, 4]
+    assert [sample["n_excluded_missing"] for sample in result["samples"]] == [2, 1]
+    assert [group["n"] for group in result["groups"]] == [3, 4]
 
 
 def test_analysis_run_executes_one_sample_t_from_dataset_version(tmp_path) -> None:

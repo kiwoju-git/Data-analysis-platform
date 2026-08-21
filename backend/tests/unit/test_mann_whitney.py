@@ -8,6 +8,7 @@ from app.statistics.mann_whitney import (
     MannWhitneyGroupColumn,
     MannWhitneyResponseColumn,
     calculate_mann_whitney,
+    calculate_mann_whitney_unstacked,
 )
 
 INPUT_FIXTURE = Path("backend/tests/reference/fixtures/mann_whitney_input.json")
@@ -26,7 +27,9 @@ def test_mann_whitney_is_hand_checkable_for_u_and_effect_size() -> None:
 
     assert result["summary_type"] == "mann_whitney_u_test"
     assert result["method"] == "mann_whitney_u"
-    assert result["missing_policy"] == "complete_case"
+    assert result["schema_version"] == 2
+    assert result["input_layout"] == "stacked"
+    assert result["missing_policy"] == "complete_case_selected_groups"
     assert result["requested_method"] == "exact"
     assert result["resolved_method"] == "exact"
     assert result["has_ties"] is False
@@ -152,6 +155,78 @@ def test_mann_whitney_rejects_invalid_design_without_fake_statistic() -> None:
         )
 
 
+def test_mann_whitney_selects_two_of_three_stacked_groups() -> None:
+    rows = [
+        ["1", "A"],
+        ["2", "A"],
+        ["100", "B"],
+        ["101", "B"],
+        ["4", "C"],
+        ["5", "C"],
+    ]
+    selected = calculate_mann_whitney(
+        rows,
+        _response_column(),
+        _group_column(),
+        group_1_value="A",
+        group_2_value="C",
+        method="exact",
+    )
+    direct = calculate_mann_whitney(
+        [row for row in rows if row[1] in {"A", "C"}],
+        _response_column(),
+        _group_column(),
+        method="exact",
+    )
+
+    assert selected["selected_group_values"] == ["A", "C"]
+    assert selected["n_excluded_unselected_groups"] == 2
+    assert selected["test"] == direct["test"]
+    assert selected["groups"] == direct["groups"]
+
+
+def test_mann_whitney_unstacked_uses_available_cases_by_sample() -> None:
+    result = calculate_mann_whitney_unstacked(
+        [
+            ["1", "10"],
+            ["", "11"],
+            ["3", ""],
+            ["bad", "12"],
+            ["4", "13"],
+        ],
+        _sample_column("Brand A", 0),
+        _sample_column("Brand B", 1),
+        method="exact",
+    )
+
+    assert result["input_layout"] == "unstacked"
+    assert result["missing_policy"] == "available_case_by_sample"
+    assert result["n_total"] == 10
+    assert result["n_used"] == 7
+    assert [sample["n_used"] for sample in result["samples"]] == [3, 4]
+    assert [sample["n_excluded_missing"] for sample in result["samples"]] == [1, 1]
+    assert [sample["n_excluded_non_numeric"] for sample in result["samples"]] == [1, 0]
+    assert [group["n"] for group in result["groups"]] == [3, 4]
+
+
+def test_mann_whitney_stacked_and_unstacked_results_match() -> None:
+    stacked = calculate_mann_whitney(
+        [["1", "A"], ["2", "A"], ["3", "A"], ["4", "B"], ["5", "B"]],
+        _response_column(),
+        _group_column(),
+        method="exact",
+    )
+    unstacked = calculate_mann_whitney_unstacked(
+        [["1", "4"], ["2", "5"], ["3", ""]],
+        _sample_column("A", 0),
+        _sample_column("B", 1),
+        method="exact",
+    )
+
+    assert unstacked["test"] == stacked["test"]
+    assert unstacked["groups"] == stacked["groups"]
+
+
 def _rows_from_case(case: dict[str, object]) -> list[list[str]]:
     groups = case["groups"]
     assert isinstance(groups, dict)
@@ -183,5 +258,17 @@ def _group_column() -> MannWhitneyGroupColumn:
         data_type="text",
         measurement_level="nominal",
         role="group",
+        unit=None,
+    )
+
+
+def _sample_column(name: str, index: int) -> MannWhitneyResponseColumn:
+    return MannWhitneyResponseColumn(
+        column_id=name.lower().replace(" ", "-"),
+        column_index=index,
+        display_name=name,
+        data_type="decimal",
+        measurement_level="continuous",
+        role="input",
         unit=None,
     )

@@ -55,6 +55,7 @@ import { AppChrome } from "./AppChrome";
 import type { AnalysisShellProps } from "./AnalysisShell";
 import type { DescriptiveQuickGraphState } from "./DescriptiveAnalysisPanel";
 import type { OneWayAnovaExecutionOptions } from "./OneWayAnovaPanel";
+import type { MannWhitneyExecutionOptions } from "./MannWhitneyPanel";
 import type { PlsRunConfig } from "./PlsRegressionPanel";
 import type { TwoSampleEquivalenceExecutionOptions } from "./TwoSampleEquivalencePanel";
 import {
@@ -2532,23 +2533,38 @@ export default function App() {
     }
   }
 
-  async function handleRunMannWhitneyAnalysis() {
+  async function handleRunMannWhitneyAnalysis(options: MannWhitneyExecutionOptions) {
     if (
       version === null ||
       selectedMethod === null ||
-      selectedMethod.method_id !== "hypothesis.mann_whitney" ||
-      selectedMannWhitneyResponseColumnId === null ||
-      selectedMannWhitneyGroupColumnId === null
+      selectedMethod.method_id !== "hypothesis.mann_whitney"
     ) {
       setFlowError("mann_whitney_columns_required");
       return;
     }
-    if (selectedMannWhitneyResponseColumnId === selectedMannWhitneyGroupColumnId) {
-      setFlowError("mann_whitney_same_response_and_group");
-      return;
-    }
     if (mannWhitneyAlpha <= 0 || mannWhitneyAlpha >= 1) {
       setFlowError("invalid_mann_whitney_alpha");
+      return;
+    }
+    if (
+      options.inputLayout === "stacked" &&
+      (selectedMannWhitneyResponseColumnId === null ||
+        selectedMannWhitneyGroupColumnId === null ||
+        selectedMannWhitneyResponseColumnId === selectedMannWhitneyGroupColumnId ||
+        !options.group1Value ||
+        !options.group2Value ||
+        options.group1Value === options.group2Value)
+    ) {
+      setFlowError("mann_whitney_stacked_selection_required");
+      return;
+    }
+    if (
+      options.inputLayout === "unstacked" &&
+      (!options.sample1ColumnId ||
+        !options.sample2ColumnId ||
+        options.sample1ColumnId === options.sample2ColumnId)
+    ) {
+      setFlowError("mann_whitney_sample_columns_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
@@ -2571,18 +2587,36 @@ export default function App() {
           expression_version: 1,
           conditions: filterConditions,
         },
-        roles: {
-          response: selectedMannWhitneyResponseColumnId,
-          group: selectedMannWhitneyGroupColumnId,
-        },
-        options: {
-          response_column_id: selectedMannWhitneyResponseColumnId,
-          group_column_id: selectedMannWhitneyGroupColumnId,
-          alpha: mannWhitneyAlpha,
-          alternative: mannWhitneyAlternative,
-          method: mannWhitneyMethod,
-          missing_policy: "complete_case",
-        },
+        roles: options.inputLayout === "stacked"
+          ? {
+              response: selectedMannWhitneyResponseColumnId as string,
+              group: selectedMannWhitneyGroupColumnId as string,
+            }
+          : {
+              sample_1: options.sample1ColumnId as string,
+              sample_2: options.sample2ColumnId as string,
+            },
+        options: options.inputLayout === "stacked"
+          ? {
+              input_layout: "stacked",
+              response_column_id: selectedMannWhitneyResponseColumnId,
+              group_column_id: selectedMannWhitneyGroupColumnId,
+              group_1_value: options.group1Value,
+              group_2_value: options.group2Value,
+              alpha: mannWhitneyAlpha,
+              alternative: mannWhitneyAlternative,
+              method: mannWhitneyMethod,
+              missing_policy: "complete_case_selected_groups",
+            }
+          : {
+              input_layout: "unstacked",
+              sample_1_column_id: options.sample1ColumnId,
+              sample_2_column_id: options.sample2ColumnId,
+              alpha: mannWhitneyAlpha,
+              alternative: mannWhitneyAlternative,
+              method: mannWhitneyMethod,
+              missing_policy: "available_case_by_sample",
+            },
       });
       setAnalysisResult(response);
     } catch (error) {
@@ -4237,8 +4271,8 @@ export default function App() {
     onRunKruskalWallisAnalysis: () => {
       void handleRunKruskalWallisAnalysis();
     },
-    onRunMannWhitneyAnalysis: () => {
-      void handleRunMannWhitneyAnalysis();
+    onRunMannWhitneyAnalysis: (options) => {
+      void handleRunMannWhitneyAnalysis(options);
     },
     onRunNormalityAnalysis: () => {
       void handleRunNormalityAnalysis();

@@ -22,7 +22,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "hypothesis.two_sample_equivalence_tost": METHOD_VERSION,
     "hypothesis.paired_equivalence_tost": METHOD_VERSION,
     "hypothesis.one_sample_wilcoxon": METHOD_VERSION,
-    "hypothesis.mann_whitney": METHOD_VERSION,
+    "hypothesis.mann_whitney": "0.2.0",
     "hypothesis.kruskal_wallis": METHOD_VERSION,
     "categorical.one_proportion": METHOD_VERSION,
     "categorical.two_proportion": METHOD_VERSION,
