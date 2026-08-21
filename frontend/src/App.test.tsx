@@ -1257,6 +1257,9 @@ describe("App", () => {
     expect(html).toContain('class="doe-compact-section"');
     expect(html).toContain('class="result-table doe-settings-table');
     expect(html).toContain("doe-factor-editor");
+    expect(html).toContain("요인 유형");
+    expect(html).toContain("범주형");
+    expect(html).toContain("센터점 run 미리보기");
     expect(html).toContain('class="doe-action-bar"');
     expect(html).not.toContain("doe-settings-matrix");
     expect(html).not.toContain('class="doe-form-section"');

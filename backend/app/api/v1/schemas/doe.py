@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
@@ -33,11 +33,41 @@ class DoeFactorRequest(BaseModel):
         return self
 
 
+class TwoLevelNumericFactorRequest(DoeFactorRequest):
+    factor_kind: Literal["numeric"] = "numeric"
+
+
+class TwoLevelCategoricalFactorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    factor_kind: Literal["categorical"]
+    name: str = Field(min_length=1, max_length=80)
+    low_label: str = Field(min_length=1, max_length=120)
+    high_label: str = Field(min_length=1, max_length=120)
+    unit: str | None = Field(default=None, max_length=40)
+
+    @model_validator(mode="after")
+    def validate_labels(self) -> TwoLevelCategoricalFactorRequest:
+        low = self.low_label.strip()
+        high = self.high_label.strip()
+        if not low or not high or low == high:
+            raise ValueError("categorical low/high labels must be nonempty and distinct")
+        if any(ord(character) < 32 for character in f"{low}{high}"):
+            raise ValueError("categorical labels cannot contain control characters")
+        return self
+
+
+TwoLevelFactorRequest = Annotated[
+    TwoLevelNumericFactorRequest | TwoLevelCategoricalFactorRequest,
+    Field(discriminator="factor_kind"),
+]
+
+
 class FactorialDesignCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(default="2-level full factorial design", min_length=1, max_length=120)
-    factors: list[DoeFactorRequest] = Field(min_length=2, max_length=6)
+    factors: list[TwoLevelFactorRequest] = Field(min_length=2, max_length=6)
     replicates: int = Field(default=1, ge=1, le=16)
     center_points: int = Field(default=0, ge=0, le=32)
     randomize: bool = True
@@ -45,6 +75,22 @@ class FactorialDesignCreateRequest(BaseModel):
     block_count: int = Field(default=1, ge=1, le=64)
     design_type: Literal["two_level_full", "two_level_fractional"] = "two_level_full"
     fraction_id: str | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_numeric_factors(cls, value: object) -> object:
+        if not isinstance(value, dict) or not isinstance(value.get("factors"), list):
+            return value
+        normalized = dict(value)
+        normalized["factors"] = [
+            (
+                {**factor, "factor_kind": "numeric"}
+                if isinstance(factor, dict) and "factor_kind" not in factor
+                else factor
+            )
+            for factor in value["factors"]
+        ]
+        return normalized
 
     @model_validator(mode="after")
     def validate_fraction_selection(self) -> FactorialDesignCreateRequest:
@@ -85,6 +131,26 @@ class DoeFactorResponse(BaseModel):
         return self
 
 
+class TwoLevelNumericFactorResponse(DoeFactorResponse):
+    factor_kind: Literal["numeric"] = "numeric"
+
+
+class TwoLevelCategoricalFactorResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    factor_kind: Literal["categorical"]
+    name: str
+    low_label: str
+    high_label: str
+    unit: str | None
+    level_count: Literal[2] = 2
+
+TwoLevelFactorResponse = Annotated[
+    TwoLevelNumericFactorResponse | TwoLevelCategoricalFactorResponse,
+    Field(discriminator="factor_kind"),
+]
+
+
 class FactorialDesignOptionsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -122,7 +188,7 @@ class FactorialDesignRunResponse(BaseModel):
     replicate_index: int = Field(ge=1)
     center_point: bool
     block_index: int | None = Field(default=None, ge=1)
-    factor_levels: dict[str, float]
+    factor_levels: dict[str, float | str]
     coded_levels: dict[str, int]
 
 
@@ -228,7 +294,7 @@ class FactorialDesignResponse(BaseModel):
     created_at: str
     updated_at: str
     app_version: str
-    factors: list[DoeFactorResponse]
+    factors: list[TwoLevelFactorResponse]
     options: FactorialDesignOptionsResponse
     run_count: int = Field(ge=1)
     design_sha256: str
@@ -1212,3 +1278,4 @@ class ResponseOptimizerResponse(BaseModel):
     build_commit: str | None
     package_versions: dict[str, str]
     result: ResponseOptimizerResult
+    factor_kind: Literal["numeric"] = "numeric"

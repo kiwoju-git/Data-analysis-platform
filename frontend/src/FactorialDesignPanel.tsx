@@ -33,6 +33,7 @@ import { GeneralFactorialDesignPanel } from "./GeneralFactorialDesignPanel";
 
 interface FactorDraft extends DoeFactorDomainDraft {
   id: string;
+  factorKind: "numeric" | "categorical";
   name: string;
   low: string;
   high: string;
@@ -60,6 +61,7 @@ interface ValidationResult {
   message: string | null;
   request: FactorialDesignCreateRequest | null;
   runCount: number;
+  centerRunCount: number;
 }
 
 interface ResponseValidationResult {
@@ -113,11 +115,11 @@ export function FactorialDesignPanel({
   const [name, setName] = useState("2-level screening design");
   const [factors, setFactors] = useState<FactorDraft[]>([
     {
-      id: "factor-1", name: "Temperature", low: "60", high: "80", unit: "C",
+      id: "factor-1", factorKind: "numeric", name: "Temperature", low: "60", high: "80", unit: "C",
       ...continuousFactorDomainDraft,
     },
     {
-      id: "factor-2", name: "Pressure", low: "5", high: "15", unit: "bar",
+      id: "factor-2", factorKind: "numeric", name: "Pressure", low: "5", high: "15", unit: "bar",
       ...continuousFactorDomainDraft,
     },
   ]);
@@ -355,6 +357,7 @@ export function FactorialDesignPanel({
                 ...current,
                 {
                   id: `factor-${Date.now()}`,
+                  factorKind: "numeric",
                   name: `Factor ${current.length + 1}`,
                   low: "0",
                   high: "1",
@@ -373,6 +376,7 @@ export function FactorialDesignPanel({
         <table className="result-table doe-factor-table">
           <colgroup>
             <col className="doe-factor-name-column" />
+            <col className="doe-factor-domain-column" />
             <col className="doe-factor-bound-column" />
             <col className="doe-factor-bound-column" />
             <col className="doe-factor-domain-column" />
@@ -384,8 +388,9 @@ export function FactorialDesignPanel({
           <thead>
             <tr>
               <th>요인</th>
-              <th>하한</th>
-              <th>상한</th>
+              <th>요인 유형</th>
+              <th>낮은 수준</th>
+              <th>높은 수준</th>
               <th>설정 방식</th>
               <th>실행 간격</th>
               <th>표시 자리수</th>
@@ -406,9 +411,21 @@ export function FactorialDesignPanel({
                   />
                 </td>
                 <td>
+                  <select
+                    aria-label={`${factor.name || `factor ${index + 1}`} 요인 유형`}
+                    value={factor.factorKind}
+                    onChange={(event) => {
+                      updateFactor(factor.id, "factorKind", event.currentTarget.value, setFactors);
+                    }}
+                  >
+                    <option value="numeric">숫자형</option>
+                    <option value="categorical">범주형</option>
+                  </select>
+                </td>
+                <td>
                   <input
                     aria-label={`${factor.name || `factor ${index + 1}`} low`}
-                    inputMode="decimal"
+                    inputMode={factor.factorKind === "numeric" ? "decimal" : "text"}
                     value={factor.low}
                     onChange={(event) => {
                       updateFactor(factor.id, "low", event.currentTarget.value, setFactors);
@@ -418,7 +435,7 @@ export function FactorialDesignPanel({
                 <td>
                   <input
                     aria-label={`${factor.name || `factor ${index + 1}`} high`}
-                    inputMode="decimal"
+                    inputMode={factor.factorKind === "numeric" ? "decimal" : "text"}
                     value={factor.high}
                     onChange={(event) => {
                       updateFactor(factor.id, "high", event.currentTarget.value, setFactors);
@@ -428,19 +445,26 @@ export function FactorialDesignPanel({
                 <td>
                   <select
                     aria-label={`${factor.name || `factor ${index + 1}`} 설정 방식`}
+                    disabled={factor.factorKind === "categorical"}
                     value={factor.domainKind ?? "continuous"}
                     onChange={(event) => {
                       updateFactor(factor.id, "domainKind", event.currentTarget.value, setFactors);
                     }}
                   >
-                    <option value="continuous">연속형</option>
-                    <option value="discrete_numeric">일정 간격 숫자</option>
+                    {factor.factorKind === "categorical" ? (
+                      <option value="continuous">2수준 범주형</option>
+                    ) : (
+                      <>
+                        <option value="continuous">연속형</option>
+                        <option value="discrete_numeric">일정 간격 숫자</option>
+                      </>
+                    )}
                   </select>
                 </td>
                 <td>
                   <input
                     aria-label={`${factor.name || `factor ${index + 1}`} 실행 간격`}
-                    disabled={(factor.domainKind ?? "continuous") === "continuous"}
+                    disabled={factor.factorKind === "categorical" || (factor.domainKind ?? "continuous") === "continuous"}
                     inputMode="decimal"
                     placeholder="-"
                     value={factor.step ?? ""}
@@ -452,6 +476,7 @@ export function FactorialDesignPanel({
                 <td>
                   <input
                     aria-label={`${factor.name || `factor ${index + 1}`} 표시 자리수`}
+                    disabled={factor.factorKind === "categorical"}
                     inputMode="numeric"
                     placeholder="자동"
                     value={factor.displayDecimals ?? ""}
@@ -489,6 +514,16 @@ export function FactorialDesignPanel({
       </DoeFactorEditor>
       {validation.message !== null ? (
         <div className="notice-box notice-warning">{validation.message}</div>
+      ) : null}
+      {Number(centerPoints) > 0 ? (
+        <div className="metadata-grid" aria-label="센터점 run 미리보기">
+          <span>입력 센터점 수</span>
+          <strong>{centerPoints}</strong>
+          <span>범주형 수준 조합</span>
+          <strong>{2 ** factors.filter((factor) => factor.factorKind === "categorical").length}</strong>
+          <span>실제 추가 센터 run</span>
+          <strong>{validation.centerRunCount.toLocaleString()}</strong>
+        </div>
       ) : null}
       <DoeActionBar summary={`예상 실험 ${validation.runCount.toLocaleString()}개`}>
         <button
@@ -676,10 +711,7 @@ export function FactorialDesignPreview({
                 <td>{run.center_point ? "yes" : "no"}</td>
                 {design.factors.map((factor) => (
                   <td key={factor.name}>
-                    {formatDoeFactorValue(
-                      Number(run.factor_levels[factor.name]),
-                      factor.display_decimals,
-                    )}
+                    {formatFactorialRunLevel(run.factor_levels[factor.name], factor)}
                   </td>
                 ))}
                 <td>{formatCodedLevels(run.coded_levels)}</td>
@@ -743,10 +775,7 @@ export function FactorialDesignPreview({
                 <td>{run.standard_order}</td>
                 {design.factors.map((factor) => (
                   <td key={factor.name}>
-                    {formatDoeFactorValue(
-                      Number(run.factor_levels[factor.name]),
-                      factor.display_decimals,
-                    )}
+                    {formatFactorialRunLevel(run.factor_levels[factor.name], factor)}
                   </td>
                 ))}
                 <td>
@@ -975,7 +1004,7 @@ export function FactorialDesignPreview({
             </button>
           </div>
           {matchingAnalysis !== null ? (
-            <FactorialAnalysisResultView analysis={matchingAnalysis} />
+            <FactorialAnalysisResultView analysis={matchingAnalysis} design={design} />
           ) : null}
         </>
       ) : null}
@@ -985,8 +1014,10 @@ export function FactorialDesignPreview({
 
 function FactorialAnalysisResultView({
   analysis,
+  design,
 }: {
   analysis: DoeFactorialAnalysisResponse;
+  design: FactorialDesignResponse;
 }) {
   const { result } = analysis;
   const terms = result.terms.filter((term) => term.kind !== "intercept");
@@ -1052,7 +1083,7 @@ function FactorialAnalysisResultView({
           <tbody>
             {terms.map((term) => (
               <tr key={term.term_id}>
-                <td>{term.label}</td>
+                <td>{factorialTermDisplayLabel(term, design)}</td>
                 <td>{term.kind}</td>
                 <td>{formatMetric(term.coefficient)}</td>
                 <td>{formatMetric(term.effect)}</td>
@@ -1122,6 +1153,20 @@ function FactorialAnalysisResultView({
       ))}
     </section>
   );
+}
+
+function factorialTermDisplayLabel(
+  term: DoeFactorialAnalysisResponse["result"]["terms"][number],
+  design: FactorialDesignResponse,
+): string {
+  if (term.factor_names.length !== 1) {
+    return term.label;
+  }
+  const factor = design.factors.find((candidate) => candidate.name === term.factor_names[0]);
+  if (factor?.factor_kind !== "categorical") {
+    return term.label;
+  }
+  return `${factor.name}: ${factor.high_label} - ${factor.low_label}`;
 }
 
 function FactorialEffectChart({ analysis }: { analysis: DoeFactorialAnalysisResponse }) {
@@ -1303,8 +1348,6 @@ function validateFactorialDesignDraft({
   const names = new Set<string>();
   for (const factor of factors) {
     const factorName = factor.name.trim();
-    const low = Number(factor.low);
-    const high = Number(factor.high);
     if (factorName.length === 0) {
       return validationError("비어 있는 요인 이름이 있습니다.", 0);
     }
@@ -1313,6 +1356,23 @@ function validateFactorialDesignDraft({
       return validationError("요인 이름은 중복될 수 없습니다.", 0);
     }
     names.add(normalizedName);
+    if (factor.factorKind === "categorical") {
+      const lowLabel = factor.low.trim();
+      const highLabel = factor.high.trim();
+      if (lowLabel.length === 0 || highLabel.length === 0 || lowLabel === highLabel) {
+        return validationError(`${factorName}의 두 범주 수준을 확인하세요.`, 0);
+      }
+      parsedFactors.push({
+        factor_kind: "categorical",
+        name: factorName,
+        low_label: lowLabel,
+        high_label: highLabel,
+        unit: factor.unit.trim().length > 0 ? factor.unit.trim() : null,
+      });
+      continue;
+    }
+    const low = Number(factor.low);
+    const high = Number(factor.high);
     if (!Number.isFinite(low) || !Number.isFinite(high) || low >= high) {
       return validationError(`${factorName}의 low/high를 확인하세요.`, 0);
     }
@@ -1321,6 +1381,7 @@ function validateFactorialDesignDraft({
       return validationError(`${factorName}의 실행 간격 또는 표시 자리수를 확인하세요.`, 0);
     }
     parsedFactors.push({
+      factor_kind: "numeric",
       name: factorName,
       low,
       high,
@@ -1340,6 +1401,15 @@ function validateFactorialDesignDraft({
   }
   if (parsedCenterPoints === null || parsedCenterPoints < 0 || parsedCenterPoints > 32) {
     return validationError("센터점 수는 0 이상 32 이하입니다.", 0);
+  }
+  const categoricalCount = parsedFactors.filter(
+    (factor) => factor.factor_kind === "categorical",
+  ).length;
+  if (parsedCenterPoints > 0 && categoricalCount === parsedFactors.length) {
+    return validationError(
+      "모든 요인이 범주형이면 센터점으로 곡률을 평가할 수 없습니다. 반복을 추가하세요.",
+      0,
+    );
   }
   if (parsedSeed === null || parsedSeed < 0) {
     return validationError("Seed는 0 이상의 정수입니다.", 0);
@@ -1364,7 +1434,8 @@ function validateFactorialDesignDraft({
     return validationError("현재 요인 수에 맞는 검증된 부분요인 설계를 선택하세요.", 0);
   }
   const baseRunCount = 2 ** (parsedFactors.length - fractionExponent);
-  const runCount = baseRunCount * parsedReplicates + parsedCenterPoints;
+  const centerRunCount = parsedCenterPoints * parsedBlockCount * (2 ** categoricalCount);
+  const runCount = baseRunCount * parsedReplicates + centerRunCount;
   if (runCount > maxRunCount) {
     return validationError(`현재 설계 제한은 ${maxRunCount.toLocaleString()} runs입니다.`, runCount);
   }
@@ -1386,6 +1457,7 @@ function validateFactorialDesignDraft({
       fraction_id: designType === "two_level_fractional" ? fractionId : null,
     },
     runCount,
+    centerRunCount,
   };
 }
 
@@ -1395,6 +1467,7 @@ function validationError(message: string, runCount: number): ValidationResult {
     message,
     request: null,
     runCount,
+    centerRunCount: 0,
   };
 }
 
@@ -1452,6 +1525,14 @@ function formatCodedLevels(levels: Record<string, number>): string {
   return Object.entries(levels)
     .map(([name, level]) => `${name}:${level}`)
     .join(", ");
+}
+
+function formatFactorialRunLevel(
+  value: number | string,
+  factor: FactorialDesignResponse["factors"][number],
+): string {
+  if (factor.factor_kind === "categorical") return String(value);
+  return formatDoeFactorValue(Number(value), factor.display_decimals);
 }
 
 function formatResolution(value: number): string {

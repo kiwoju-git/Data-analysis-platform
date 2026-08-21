@@ -2,6 +2,7 @@ import hashlib
 import json
 import random
 from dataclasses import dataclass
+from itertools import product
 from math import isfinite
 from typing import Any
 
@@ -12,7 +13,7 @@ from app.statistics.doe_factor_domain import (
     validate_factor_domain,
 )
 
-FACTORIAL_DESIGN_SCHEMA_VERSION = 1
+FACTORIAL_DESIGN_SCHEMA_VERSION = 2
 FRACTIONAL_FACTORIAL_DESIGN_SCHEMA_VERSION = 2
 FACTORIAL_DESIGN_FAMILY = "two_level_full_factorial"
 FRACTIONAL_FACTORIAL_DESIGN_FAMILY = "two_level_regular_fractional_factorial"
@@ -30,9 +31,10 @@ class FactorialDesignError(ValueError):
 @dataclass(frozen=True)
 class FactorialFactor:
     name: str
-    low: float
-    high: float
+    low: float | str
+    high: float | str
     unit: str | None = None
+    factor_kind: str = "numeric"
     domain_kind: str = "continuous"
     step: float | None = None
     display_decimals: int | None = None
@@ -71,7 +73,7 @@ class FactorialDesignRun:
     replicate_index: int
     center_point: bool
     block_index: int | None
-    factor_levels: dict[str, float]
+    factor_levels: dict[str, float | str]
     coded_levels: dict[str, int]
 
 
@@ -151,26 +153,10 @@ def generate_two_level_full_factorial_design(
     _validate_factors(factors)
     _validate_options(options)
     if options.center_points > 0:
-        for factor in factors:
-            domain = DoeFactorDomain(
-                low=factor.low,
-                high=factor.high,
-                domain_kind=factor.domain_kind,  # type: ignore[arg-type]
-                step=factor.step,
-                display_decimals=factor.display_decimals,
-            )
-            if domain.domain_kind == "discrete_numeric" and not domain.is_executable(
-                (factor.low + factor.high) / 2
-            ):
-                raise FactorialDesignError(
-                    code="doe_factorial_center_not_executable",
-                    message=(
-                        f"현재 실행 간격에서는 {factor.name} 센터점을 실행할 수 없습니다. "
-                        "센터점을 제거하거나 요인 범위와 간격을 조정하세요."
-                    ),
-                )
+        _validate_executable_centers(factors)
     base_run_count = 2 ** len(factors)
-    run_count = base_run_count * options.replicates + options.center_points
+    center_specs = _center_run_specs(factors, options)
+    run_count = base_run_count * options.replicates + len(center_specs)
     if run_count > MAX_FACTORIAL_RUNS:
         raise FactorialDesignError(
             code="doe_factorial_run_count_exceeds_limit",
@@ -197,16 +183,19 @@ def generate_two_level_full_factorial_design(
                 ),
             )
 
-    for center_index in range(1, options.center_points + 1):
+    for center_index, (levels, coded, block_index) in enumerate(center_specs, start=1):
         rows.append(
             FactorialDesignRun(
                 standard_order=base_run_count + center_index,
                 run_order=0,
-                replicate_index=center_index,
+                replicate_index=(
+                    (center_index - 1) // max(1, _categorical_combination_count(factors))
+                )
+                + 1,
                 center_point=True,
-                block_index=None,
-                factor_levels={factor.name: (factor.low + factor.high) / 2 for factor in factors},
-                coded_levels={factor.name: 0 for factor in factors},
+                block_index=block_index,
+                factor_levels=levels,
+                coded_levels=coded,
             ),
         )
 
@@ -221,7 +210,11 @@ def generate_two_level_full_factorial_design(
             run_order=run_order,
             replicate_index=row.replicate_index,
             center_point=row.center_point,
-            block_index=_block_index(run_order, options.block_count),
+            block_index=(
+                row.block_index
+                if row.center_point
+                else _block_index(run_order, options.block_count)
+            ),
             factor_levels=row.factor_levels,
             coded_levels=row.coded_levels,
         )
@@ -269,7 +262,8 @@ def generate_two_level_fractional_factorial_design(
             message="요인 수에 맞는 검증된 부분요인 설계를 선택하세요.",
         )
     base_run_count = 2**entry.base_factor_count
-    run_count = base_run_count * options.replicates + options.center_points
+    center_specs = _center_run_specs(factors, options)
+    run_count = base_run_count * options.replicates + len(center_specs)
     if run_count > MAX_FACTORIAL_RUNS:
         raise FactorialDesignError(
             code="doe_factorial_run_count_exceeds_limit",
@@ -299,16 +293,19 @@ def generate_two_level_fractional_factorial_design(
                     coded_levels=coded,
                 )
             )
-    for center_index in range(1, options.center_points + 1):
+    for center_index, (levels, coded, block_index) in enumerate(center_specs, start=1):
         rows.append(
             FactorialDesignRun(
                 standard_order=base_run_count + center_index,
                 run_order=0,
-                replicate_index=center_index,
+                replicate_index=(
+                    (center_index - 1) // max(1, _categorical_combination_count(factors))
+                )
+                + 1,
                 center_point=True,
-                block_index=None,
-                factor_levels={factor.name: (factor.low + factor.high) / 2 for factor in factors},
-                coded_levels={factor.name: 0 for factor in factors},
+                block_index=block_index,
+                factor_levels=levels,
+                coded_levels=coded,
             )
         )
     order = list(range(len(rows)))
@@ -320,7 +317,11 @@ def generate_two_level_fractional_factorial_design(
             run_order=run_order,
             replicate_index=row.replicate_index,
             center_point=row.center_point,
-            block_index=_block_index(run_order, options.block_count),
+            block_index=(
+                row.block_index
+                if row.center_point
+                else _block_index(run_order, options.block_count)
+            ),
             factor_levels=row.factor_levels,
             coded_levels=row.coded_levels,
         )
@@ -360,23 +361,32 @@ def canonical_factorial_design_payload(
         "schema_version": schema_version,
         "family": family,
         "factors": [factor_to_payload(factor) for factor in factors],
-        "options": options_to_payload(options),
+        "options": options_to_payload(options, schema_version=schema_version),
         "runs": [run_to_payload(run) for run in sorted(runs, key=lambda run: run.run_order)],
     }
 
 
 def factor_to_payload(factor: FactorialFactor) -> dict[str, Any]:
+    if factor.factor_kind == "categorical":
+        return {
+            "factor_kind": "categorical",
+            "name": factor.name,
+            "low_label": str(factor.low),
+            "high_label": str(factor.high),
+            "unit": factor.unit,
+        }
+    low, high = _numeric_bounds(factor)
     domain = DoeFactorDomain(
-        low=factor.low,
-        high=factor.high,
+        low=low,
+        high=high,
         domain_kind=factor.domain_kind,  # type: ignore[arg-type]
         step=factor.step,
         display_decimals=factor.display_decimals,
     )
     payload = {
         "name": factor.name,
-        "low": factor.low,
-        "high": factor.high,
+        "low": low,
+        "high": high,
         "unit": factor.unit,
     }
     if (
@@ -388,7 +398,11 @@ def factor_to_payload(factor: FactorialFactor) -> dict[str, Any]:
     return payload
 
 
-def options_to_payload(options: FactorialDesignOptions) -> dict[str, Any]:
+def options_to_payload(
+    options: FactorialDesignOptions,
+    *,
+    schema_version: int | None = None,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "replicates": options.replicates,
         "center_points": options.center_points,
@@ -396,12 +410,21 @@ def options_to_payload(options: FactorialDesignOptions) -> dict[str, Any]:
         "randomization_seed": options.randomization_seed,
         "block_count": options.block_count,
     }
-    if options.design_type != "two_level_full" or options.fraction_id is not None:
+    resolved_schema_version = (
+        FRACTIONAL_FACTORIAL_DESIGN_SCHEMA_VERSION
+        if schema_version is None and options.design_type == "two_level_fractional"
+        else (1 if schema_version is None else schema_version)
+    )
+    if (
+        options.design_type != "two_level_full"
+        or options.fraction_id is not None
+        or resolved_schema_version != 1
+    ):
         payload.update(
             {
                 "design_type": options.design_type,
                 "fraction_id": options.fraction_id,
-                "design_schema_version": FRACTIONAL_FACTORIAL_DESIGN_SCHEMA_VERSION,
+                "design_schema_version": resolved_schema_version,
             }
         )
     return payload
@@ -441,14 +464,34 @@ def _validate_factors(factors: list[FactorialFactor]) -> None:
                 message="DOE 요인 이름은 중복될 수 없습니다.",
             )
         seen.add(normalized)
-        if not isfinite(factor.low) or not isfinite(factor.high) or factor.low >= factor.high:
+        if factor.factor_kind == "categorical":
+            low_label = str(factor.low).strip()
+            high_label = str(factor.high).strip()
+            if (
+                not low_label
+                or not high_label
+                or low_label == high_label
+                or any(ord(character) < 32 for character in f"{low_label}{high_label}")
+            ):
+                raise FactorialDesignError(
+                    code="doe_factorial_categorical_levels_invalid",
+                    message="범주형 DOE 요인의 두 수준은 비어 있지 않고 서로 달라야 합니다.",
+                )
+            continue
+        if factor.factor_kind != "numeric":
+            raise FactorialDesignError(
+                code="doe_factorial_factor_kind_invalid",
+                message="지원하지 않는 DOE 요인 유형입니다.",
+            )
+        low, high = _numeric_bounds(factor)
+        if not isfinite(low) or not isfinite(high) or low >= high:
             raise FactorialDesignError(
                 code="doe_factorial_factor_range_invalid",
                 message="DOE 요인의 low/high 수준은 유한한 숫자이며 low < high 여야 합니다.",
             )
         domain = DoeFactorDomain(
-            low=factor.low,
-            high=factor.high,
+            low=low,
+            high=high,
             domain_kind=factor.domain_kind,  # type: ignore[arg-type]
             step=factor.step,
             display_decimals=factor.display_decimals,
@@ -483,16 +526,23 @@ def _validate_options(options: FactorialDesignOptions) -> None:
 
 
 def _validate_executable_centers(factors: list[FactorialFactor]) -> None:
-    for factor in factors:
+    numeric_factors = [factor for factor in factors if factor.factor_kind == "numeric"]
+    if not numeric_factors:
+        raise FactorialDesignError(
+            code="doe_factorial_center_requires_numeric_factor",
+            message="모든 요인이 범주형이면 센터점으로 곡률을 평가할 수 없습니다.",
+        )
+    for factor in numeric_factors:
+        low, high = _numeric_bounds(factor)
         domain = DoeFactorDomain(
-            low=factor.low,
-            high=factor.high,
+            low=low,
+            high=high,
             domain_kind=factor.domain_kind,  # type: ignore[arg-type]
             step=factor.step,
             display_decimals=factor.display_decimals,
         )
         if domain.domain_kind == "discrete_numeric" and not domain.is_executable(
-            (factor.low + factor.high) / 2
+            (low + high) / 2
         ):
             raise FactorialDesignError(
                 code="doe_factorial_center_not_executable",
@@ -591,7 +641,7 @@ def _effect_label(effect: frozenset[int], factors: list[FactorialFactor]) -> str
 def _factor_levels_for_standard_order(
     factors: list[FactorialFactor],
     standard_order: int,
-) -> dict[str, float]:
+) -> dict[str, float | str]:
     coded_levels = _coded_levels_for_standard_order(factors, standard_order)
     return {
         factor.name: factor.low if coded_levels[factor.name] == -1 else factor.high
@@ -614,3 +664,53 @@ def _block_index(run_order: int, block_count: int) -> int | None:
     if block_count <= 1:
         return None
     return ((run_order - 1) % block_count) + 1
+
+
+def _numeric_bounds(factor: FactorialFactor) -> tuple[float, float]:
+    try:
+        return float(factor.low), float(factor.high)
+    except (TypeError, ValueError) as exc:
+        raise FactorialDesignError(
+            code="doe_factorial_factor_range_invalid",
+            message="숫자형 DOE 요인의 low/high 수준을 확인하세요.",
+        ) from exc
+
+
+def _categorical_combination_count(factors: list[FactorialFactor]) -> int:
+    return 2 ** sum(factor.factor_kind == "categorical" for factor in factors)
+
+
+def _center_run_specs(
+    factors: list[FactorialFactor],
+    options: FactorialDesignOptions,
+) -> list[tuple[dict[str, float | str], dict[str, int], int | None]]:
+    if options.center_points == 0:
+        return []
+    categorical_factors = [factor for factor in factors if factor.factor_kind == "categorical"]
+    sign_combinations = list(product((-1, 1), repeat=len(categorical_factors)))
+    specs: list[tuple[dict[str, float | str], dict[str, int], int | None]] = []
+    for block_index in range(1, options.block_count + 1):
+        for _center_index in range(options.center_points):
+            for signs in sign_combinations:
+                categorical_signs = {
+                    factor.name: signs[index] for index, factor in enumerate(categorical_factors)
+                }
+                levels: dict[str, float | str] = {}
+                coded: dict[str, int] = {}
+                for factor in factors:
+                    if factor.factor_kind == "categorical":
+                        sign = categorical_signs[factor.name]
+                        levels[factor.name] = factor.low if sign == -1 else factor.high
+                        coded[factor.name] = sign
+                    else:
+                        low, high = _numeric_bounds(factor)
+                        levels[factor.name] = (low + high) / 2
+                        coded[factor.name] = 0
+                specs.append(
+                    (
+                        levels,
+                        coded,
+                        None if options.block_count == 1 else block_index,
+                    )
+                )
+    return specs

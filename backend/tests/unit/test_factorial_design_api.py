@@ -58,6 +58,163 @@ def test_fractional_factorial_api_rejects_unvalidated_generator_choice(tmp_path)
     assert response.json()["error"]["code"] == "doe_fractional_catalog_entry_invalid"
 
 
+def test_two_level_factorial_supports_categorical_pseudo_centers(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "mixed two-level factorial",
+                "factors": [
+                    {
+                        "factor_kind": "numeric",
+                        "name": "Temperature",
+                        "low": 60,
+                        "high": 80,
+                        "unit": "C",
+                    },
+                    {
+                        "factor_kind": "categorical",
+                        "name": "Material",
+                        "low_label": "A",
+                        "high_label": "B",
+                    },
+                ],
+                "replicates": 1,
+                "center_points": 1,
+                "randomize": False,
+                "randomization_seed": 17,
+                "block_count": 1,
+            },
+        )
+        assert response.status_code == 201, response.text
+        payload = response.json()
+        restored = client.get(f"/api/v1/doe-designs/{payload['design_id']}")
+
+    assert payload["method_version"] == "0.6.0"
+    assert payload["design_schema_version"] == 2
+    assert payload["run_count"] == 6
+    assert payload["factors"][0]["factor_kind"] == "numeric"
+    assert payload["factors"][1] == {
+        "factor_kind": "categorical",
+        "name": "Material",
+        "low_label": "A",
+        "high_label": "B",
+        "unit": None,
+        "level_count": 2,
+    }
+    center_runs = [run for run in payload["runs"] if run["center_point"]]
+    assert [run["factor_levels"] for run in center_runs] == [
+        {"Temperature": 70.0, "Material": "A"},
+        {"Temperature": 70.0, "Material": "B"},
+    ]
+    assert [run["coded_levels"]["Material"] for run in center_runs] == [-1, 1]
+    assert all(run["coded_levels"]["Temperature"] == 0 for run in center_runs)
+    assert restored.status_code == 200
+    assert restored.json() == payload
+
+
+def test_categorical_fraction_keeps_generator_and_alias_structure(tmp_path) -> None:
+    factors = [
+        {"factor_kind": "numeric", "name": "A", "low": -1, "high": 1},
+        {"factor_kind": "numeric", "name": "B", "low": -1, "high": 1},
+        {"factor_kind": "numeric", "name": "C", "low": -1, "high": 1},
+        {
+            "factor_kind": "categorical",
+            "name": "Material",
+            "low_label": "Low grade",
+            "high_label": "High grade",
+        },
+    ]
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "mixed half fraction",
+                "design_type": "two_level_fractional",
+                "fraction_id": "4-factor-half-r4",
+                "factors": factors,
+                "replicates": 1,
+                "center_points": 0,
+                "randomize": False,
+                "randomization_seed": 3,
+                "block_count": 1,
+            },
+        )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["run_count"] == 8
+    assert payload["fractional"]["generators"] == ["D=ABC"]
+    assert payload["fractional"]["resolution"] == 4
+    assert {run["factor_levels"]["Material"] for run in payload["runs"]} == {
+        "Low grade",
+        "High grade",
+    }
+
+
+def test_all_categorical_factorial_rejects_center_points(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "all categorical",
+                "factors": [
+                    {
+                        "factor_kind": "categorical",
+                        "name": "Material",
+                        "low_label": "A",
+                        "high_label": "B",
+                    },
+                    {
+                        "factor_kind": "categorical",
+                        "name": "Supplier",
+                        "low_label": "S1",
+                        "high_label": "S2",
+                    },
+                ],
+                "replicates": 1,
+                "center_points": 1,
+                "randomize": False,
+                "randomization_seed": 3,
+                "block_count": 1,
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "doe_factorial_center_requires_numeric_factor"
+
+
+def test_categorical_pseudo_centers_expand_within_each_block(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "blocked mixed factorial",
+                "factors": [
+                    {"factor_kind": "numeric", "name": "Temperature", "low": 60, "high": 80},
+                    {
+                        "factor_kind": "categorical",
+                        "name": "Material",
+                        "low_label": "A",
+                        "high_label": "B",
+                    },
+                ],
+                "replicates": 1,
+                "center_points": 1,
+                "randomize": False,
+                "randomization_seed": 5,
+                "block_count": 2,
+            },
+        )
+
+    assert response.status_code == 201, response.text
+    center_runs = [run for run in response.json()["runs"] if run["center_point"]]
+    assert len(center_runs) == 4
+    assert [run["block_index"] for run in center_runs] == [1, 1, 2, 2]
+    assert [run["factor_levels"]["Material"] for run in center_runs] == ["A", "B", "A", "B"]
+    assert all(run["factor_levels"]["Temperature"] == 70 for run in center_runs)
+
+
 def test_general_factorial_api_creates_three_level_design_and_analyzes_response(
     tmp_path,
 ) -> None:

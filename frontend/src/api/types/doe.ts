@@ -1,4 +1,5 @@
-export interface DoeFactorRequest {
+export interface TwoLevelNumericFactorRequest {
+  factor_kind: "numeric";
   name: string;
   low: number;
   high: number;
@@ -8,9 +9,23 @@ export interface DoeFactorRequest {
   display_decimals?: number | null;
 }
 
+export interface TwoLevelCategoricalFactorRequest {
+  factor_kind: "categorical";
+  name: string;
+  low_label: string;
+  high_label: string;
+  unit?: string | null;
+}
+
+export type TwoLevelFactorRequest =
+  | TwoLevelNumericFactorRequest
+  | TwoLevelCategoricalFactorRequest;
+
+export type DoeFactorRequest = Omit<TwoLevelNumericFactorRequest, "factor_kind">;
+
 export interface FactorialDesignCreateRequest {
   name: string;
-  factors: DoeFactorRequest[];
+  factors: TwoLevelFactorRequest[];
   replicates: number;
   center_points: number;
   randomize: boolean;
@@ -20,7 +35,8 @@ export interface FactorialDesignCreateRequest {
   fraction_id?: string | null;
 }
 
-export interface DoeFactorResponse {
+export interface TwoLevelNumericFactorResponse {
+  factor_kind?: "numeric";
   name: string;
   low: number;
   high: number;
@@ -30,6 +46,21 @@ export interface DoeFactorResponse {
   display_decimals?: number | null;
   level_count?: number | null;
 }
+
+export interface TwoLevelCategoricalFactorResponse {
+  factor_kind: "categorical";
+  name: string;
+  low_label: string;
+  high_label: string;
+  unit: string | null;
+  level_count: 2;
+}
+
+export type TwoLevelFactorResponse =
+  | TwoLevelNumericFactorResponse
+  | TwoLevelCategoricalFactorResponse;
+
+export type DoeFactorResponse = Omit<TwoLevelNumericFactorResponse, "factor_kind">;
 
 export interface FactorialDesignOptionsResponse {
   replicates: number;
@@ -48,7 +79,7 @@ export interface FactorialDesignRunResponse {
   replicate_index: number;
   center_point: boolean;
   block_index: number | null;
-  factor_levels: Record<string, number>;
+  factor_levels: Record<string, number | string>;
   coded_levels: Record<string, number>;
 }
 
@@ -64,7 +95,7 @@ export interface FactorialDesignResponse {
   created_at: string;
   updated_at: string;
   app_version: string;
-  factors: DoeFactorResponse[];
+  factors: TwoLevelFactorResponse[];
   options: FactorialDesignOptionsResponse;
   run_count: number;
   design_sha256: string;

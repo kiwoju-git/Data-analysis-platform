@@ -15,13 +15,15 @@ from app.api.v1.schemas.doe import (
     DoeDesignResponsesUpsertRequest,
     DoeDesignResponseValue,
     DoeFactorialAnalysisResponse,
-    DoeFactorResponse,
     DoeResponseRevisionCreateRequest,
     FactorialDesignCreateRequest,
     FactorialDesignOptionsResponse,
     FactorialDesignResponse,
     FactorialDesignRunResponse,
     FractionalFactorialMetadataResponse,
+    TwoLevelCategoricalFactorResponse,
+    TwoLevelFactorResponse,
+    TwoLevelNumericFactorResponse,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -81,12 +83,29 @@ def create_factorial_design(
     factors = [
         FactorialFactor(
             name=factor.name.strip(),
-            low=float(factor.low),
-            high=float(factor.high),
+            low=(
+                factor.low_label.strip()
+                if factor.factor_kind == "categorical"
+                else float(factor.low)
+            ),
+            high=(
+                factor.high_label.strip()
+                if factor.factor_kind == "categorical"
+                else float(factor.high)
+            ),
             unit=None if factor.unit is None else factor.unit.strip() or None,
-            domain_kind=factor.domain_kind,
-            step=None if factor.step is None else float(factor.step),
-            display_decimals=factor.display_decimals,
+            factor_kind=factor.factor_kind,
+            domain_kind=(
+                "continuous" if factor.factor_kind == "categorical" else factor.domain_kind
+            ),
+            step=(
+                None
+                if factor.factor_kind == "categorical" or factor.step is None
+                else float(factor.step)
+            ),
+            display_decimals=(
+                None if factor.factor_kind == "categorical" else factor.display_decimals
+            ),
         )
         for factor in body.factors
     ]
@@ -124,7 +143,9 @@ def create_factorial_design(
         design_id=str(design_id),
         version_number=1,
         factors_json=_json_dumps([factor_to_payload(factor) for factor in generated.factors]),
-        options_json=_json_dumps(options_to_payload(generated.options)),
+        options_json=_json_dumps(
+            options_to_payload(generated.options, schema_version=generated.schema_version)
+        ),
         run_count=len(generated.runs),
         design_sha256=generated.design_sha256,
         created_at=created_at,
@@ -306,7 +327,7 @@ def _factorial_design_response(
         created_at=design.created_at,
         updated_at=design.updated_at,
         app_version=design.app_version,
-        factors=[DoeFactorResponse.model_validate(factor) for factor in factors],
+        factors=[_factor_response_payload(factor) for factor in factors],
         options=FactorialDesignOptionsResponse.model_validate(options),
         run_count=version.run_count,
         design_sha256=version.design_sha256,
@@ -325,19 +346,7 @@ def _fractional_metadata_response(
         return None
     try:
         factor_specs = [
-            FactorialFactor(
-                name=str(factor["name"]),
-                low=float(factor["low"]),
-                high=float(factor["high"]),
-                unit=None if factor.get("unit") is None else str(factor["unit"]),
-                domain_kind=str(factor.get("domain_kind", "continuous")),
-                step=None if factor.get("step") is None else float(factor["step"]),
-                display_decimals=(
-                    None
-                    if factor.get("display_decimals") is None
-                    else int(factor["display_decimals"])
-                ),
-            )
+            _factorial_factor_from_payload(factor)
             for factor in factors
             if isinstance(factor, dict)
         ]
@@ -432,8 +441,8 @@ def _factorial_design_html_report_bytes(
     factor_markup = "\n".join(
         "<tr>"
         f"<td>{_html_text(factor.name)}</td>"
-        f"<td>{_html_text(_report_cell(factor.low))}</td>"
-        f"<td>{_html_text(_report_cell(factor.high))}</td>"
+        f"<td>{_html_text(_report_cell(_factor_low_level(factor)))}</td>"
+        f"<td>{_html_text(_report_cell(_factor_high_level(factor)))}</td>"
         f"<td>{_html_text(_report_cell(factor.unit))}</td>"
         "</tr>"
         for factor in design.factors
@@ -718,6 +727,58 @@ def _html_text(value: object) -> str:
     return escape(str(value), quote=True)
 
 
+def _factorial_factor_from_payload(factor: dict[str, Any]) -> FactorialFactor:
+    if factor.get("factor_kind") == "categorical" or "low_label" in factor:
+        return FactorialFactor(
+            name=str(factor["name"]),
+            low=str(factor["low_label"]),
+            high=str(factor["high_label"]),
+            unit=None if factor.get("unit") is None else str(factor["unit"]),
+            factor_kind="categorical",
+        )
+    return FactorialFactor(
+        name=str(factor["name"]),
+        low=float(factor["low"]),
+        high=float(factor["high"]),
+        unit=None if factor.get("unit") is None else str(factor["unit"]),
+        factor_kind="numeric",
+        domain_kind=str(factor.get("domain_kind", "continuous")),
+        step=None if factor.get("step") is None else float(factor["step"]),
+        display_decimals=(
+            None if factor.get("display_decimals") is None else int(factor["display_decimals"])
+        ),
+    )
+
+
+def _factor_response_payload(factor: object) -> TwoLevelFactorResponse:
+    if not isinstance(factor, dict):
+        raise ApiError(
+            code="doe_design_metadata_invalid",
+            message="저장된 DOE 요인 metadata 형식이 올바르지 않습니다.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if factor.get("factor_kind") == "categorical" or "low_label" in factor:
+        return TwoLevelCategoricalFactorResponse.model_validate(
+            {
+                "factor_kind": "categorical",
+                "name": factor.get("name"),
+                "low_label": factor.get("low_label"),
+                "high_label": factor.get("high_label"),
+                "unit": factor.get("unit"),
+                "level_count": 2,
+            }
+        )
+    return TwoLevelNumericFactorResponse.model_validate({"factor_kind": "numeric", **factor})
+
+
+def _factor_low_level(factor: object) -> object:
+    return getattr(factor, "low", getattr(factor, "low_label", ""))
+
+
+def _factor_high_level(factor: object) -> object:
+    return getattr(factor, "high", getattr(factor, "high_label", ""))
+
+
 def _verify_design_sha256(
     *,
     expected_sha256: str,
@@ -731,21 +792,7 @@ def _verify_design_sha256(
         for factor in factors:
             if not isinstance(factor, dict):
                 raise TypeError("DOE factor metadata must be a JSON object")
-            factor_specs.append(
-                FactorialFactor(
-                    name=str(factor["name"]),
-                    low=float(factor["low"]),
-                    high=float(factor["high"]),
-                    unit=None if factor.get("unit") is None else str(factor["unit"]),
-                    domain_kind=str(factor.get("domain_kind", "continuous")),
-                    step=None if factor.get("step") is None else float(factor["step"]),
-                    display_decimals=(
-                        None
-                        if factor.get("display_decimals") is None
-                        else int(factor["display_decimals"])
-                    ),
-                ),
-            )
+            factor_specs.append(_factorial_factor_from_payload(factor))
         option_spec = FactorialDesignOptions(
             replicates=int(options["replicates"]),
             center_points=int(options["center_points"]),
