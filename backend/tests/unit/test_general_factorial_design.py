@@ -38,6 +38,80 @@ def test_three_by_three_by_three_design_has_27_unique_runs() -> None:
     }
 
 
+@pytest.mark.parametrize("level_count", [2, 4, 10])
+def test_general_factorial_supports_explicit_level_counts_and_preserves_order(
+    level_count: int,
+) -> None:
+    levels = tuple(float(index) for index in range(level_count, 0, -1))
+    design = generate_general_full_factorial_design(
+        [
+            GeneralFactorialFactor("Dose", levels),
+            GeneralFactorialFactor("Material", ("B", "A")),
+        ],
+        GeneralFactorialOptions(1, False, 3, 2),
+    )
+
+    assert len(design.runs) == level_count * 2
+    assert design.factors[0].levels == levels
+    assert design.runs[0].factor_levels == {"Dose": float(level_count), "Material": "B"}
+
+
+def test_general_factorial_mixed_two_by_three_by_five_has_30_runs() -> None:
+    design = generate_general_full_factorial_design(
+        [
+            GeneralFactorialFactor("A", (10.0, 20.0)),
+            GeneralFactorialFactor("B", ("C", "A", "B")),
+            GeneralFactorialFactor("C", (1.0, 2.0, 3.0, 4.0, 5.0)),
+        ],
+        GeneralFactorialOptions(1, False, 19, 3),
+    )
+
+    assert len(design.runs) == 30
+    assert design.runs[0].factor_levels == {"A": 10.0, "B": "C", "C": 1.0}
+
+
+def test_general_factorial_rejects_mixed_numeric_and_text_levels_within_factor() -> None:
+    with pytest.raises(GeneralFactorialDesignError) as error:
+        generate_general_full_factorial_design(
+            [
+                GeneralFactorialFactor("Mixed", (1.0, "High")),
+                GeneralFactorialFactor("B", ("x", "y")),
+            ],
+            GeneralFactorialOptions(1, False, 1, 2),
+        )
+
+    assert error.value.code == "doe_general_factorial_level_types_mixed"
+
+
+@pytest.mark.parametrize(
+    ("levels", "expected_code"),
+    [
+        (("", "A"), "doe_general_factorial_level_invalid"),
+        ((1.0, 1.0), "doe_general_factorial_levels_not_unique"),
+    ],
+)
+def test_general_factorial_rejects_blank_or_duplicate_levels(
+    levels: tuple[float | str, ...],
+    expected_code: str,
+) -> None:
+    with pytest.raises(GeneralFactorialDesignError) as error:
+        generate_general_full_factorial_design(
+            [GeneralFactorialFactor("A", levels), GeneralFactorialFactor("B", ("x", "y"))],
+            GeneralFactorialOptions(1, False, 1, 2),
+        )
+
+    assert error.value.code == expected_code
+
+
+def test_general_factorial_accepts_exact_256_run_boundary() -> None:
+    design = generate_general_full_factorial_design(
+        [GeneralFactorialFactor(f"F{index}", (0.0, 1.0, 2.0, 3.0)) for index in range(4)],
+        GeneralFactorialOptions(1, False, 1, 2),
+    )
+
+    assert len(design.runs) == 256
+
+
 def test_general_factorial_run_limit_is_rejected() -> None:
     with pytest.raises(GeneralFactorialDesignError) as error:
         generate_general_full_factorial_design(

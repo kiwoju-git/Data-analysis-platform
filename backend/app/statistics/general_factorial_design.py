@@ -163,6 +163,7 @@ def _validate(factors: list[GeneralFactorialFactor], options: GeneralFactorialOp
                 "Each factor must define between 2 and 10 levels.",
             )
         canonical_levels: set[tuple[str, str]] = set()
+        level_kinds: set[str] = set()
         for level in factor.levels:
             if isinstance(level, bool):
                 canonical = ("text", str(level))
@@ -181,12 +182,18 @@ def _validate(factors: list[GeneralFactorialFactor], options: GeneralFactorialOp
                         "Text levels must contain between 1 and 80 characters.",
                     )
                 canonical = ("text", value.casefold())
+            level_kinds.add(canonical[0])
             if canonical in canonical_levels:
                 raise GeneralFactorialDesignError(
                     "doe_general_factorial_levels_not_unique",
                     "Levels must be unique within each factor.",
                 )
             canonical_levels.add(canonical)
+        if len(level_kinds) > 1:
+            raise GeneralFactorialDesignError(
+                "doe_general_factorial_level_types_mixed",
+                "A factor cannot mix numeric and text levels.",
+            )
     if options.replicates < 1 or options.randomization_seed < 0:
         raise GeneralFactorialDesignError(
             "doe_general_factorial_options_invalid",

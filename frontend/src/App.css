@@ -6024,6 +6024,72 @@ td select {
   min-width: 0;
 }
 
+.doe-factor-detail-row > td {
+  background: #f7f9fc;
+  padding: 14px;
+}
+
+.general-factorial-level-editor {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.general-factorial-level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.general-factorial-level-field,
+.general-factorial-paste-editor {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.general-factorial-level-field label,
+.general-factorial-paste-editor label {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.general-factorial-level-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  align-items: center;
+  gap: 4px;
+}
+
+.general-factorial-level-control input,
+.general-factorial-paste-editor textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.general-factorial-level-control .icon-button {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border: 1px solid var(--brand-blue-border);
+  border-radius: 6px;
+  background: var(--surface-panel);
+  color: var(--brand-logo-blue);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.general-factorial-level-control .icon-button:disabled {
+  background: #f0f2f5;
+  color: #7a8494;
+  cursor: not-allowed;
+}
+
+.compact-actions {
+  align-items: center;
+}
+
 .project-dashboard-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
