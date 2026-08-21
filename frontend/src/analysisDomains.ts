@@ -198,10 +198,10 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
     descriptionKey: "analysisDomains.doe.description",
     directMethodIds: [
       "doe.factorial_design",
-      "doe.general_factorial_design",
       "doe.response_surface",
       "doe.response_optimizer",
     ],
+    directContextualMethodIds: ["doe.general_factorial_design"],
     families: [],
   },
   {

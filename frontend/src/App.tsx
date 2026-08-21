@@ -65,6 +65,7 @@ import {
 } from "./analysisFilters";
 import {
   buildAnalysisPath,
+  legacyGeneralFactorialRedirectLocation,
   legacyResponseOptimizerRedirectLocation,
 } from "./analysisNavigation";
 import { useAnalysisSelection } from "./analysisSelection";
@@ -725,7 +726,16 @@ export default function App() {
       window.location.search,
       window.location.hash,
     );
-    if (redirect !== null) replaceAppLocation(redirect);
+    if (redirect !== null) {
+      replaceAppLocation(redirect);
+      return;
+    }
+    const generalFactorialRedirect = legacyGeneralFactorialRedirectLocation(
+      window.location.pathname,
+      window.location.search,
+      window.location.hash,
+    );
+    if (generalFactorialRedirect !== null) replaceAppLocation(generalFactorialRedirect);
   }, [appRoute]);
 
   useEffect(() => {

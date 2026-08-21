@@ -86,7 +86,7 @@ describe("analysis domain navigation", () => {
       "variance-comparison",
     );
     expect(analysisFamilyForMethod("eda.descriptive")).toBeNull();
-    expect(analysisMethodPlacement("doe.general_factorial_design")?.contextual).toBe(false);
+    expect(analysisMethodPlacement("doe.general_factorial_design")?.contextual).toBe(true);
   });
 
   it("uses metadata-driven flat and grouped presentation modes", () => {

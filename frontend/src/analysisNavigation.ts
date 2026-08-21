@@ -16,6 +16,16 @@ const legacyResponseOptimizerSelection: AnalysisSelection = {
   methodId: "regression.response_optimizer",
 };
 
+const generalFactorialSelection: AnalysisSelection = {
+  moduleId: "doe",
+  methodId: "doe.general_factorial_design",
+};
+
+const factorialWorkspaceSelection: AnalysisSelection = {
+  moduleId: "doe",
+  methodId: "doe.factorial_design",
+};
+
 const moduleIds = new Set<string>([
   "exploration",
   "hypothesis",
@@ -113,10 +123,37 @@ export function legacyResponseOptimizerRedirectLocation(
   )}${search}`;
 }
 
+export function legacyGeneralFactorialRedirectLocation(
+  pathname: string,
+  search: string,
+  hash: string,
+): string | null {
+  const pathSelection = parseRawAnalysisPath(pathname);
+  const hashSelection = parseRawAnalysisHash(hash);
+  if (
+    !isGeneralFactorialSelection(pathSelection) &&
+    !isGeneralFactorialSelection(hashSelection)
+  ) {
+    return null;
+  }
+  const query = new URLSearchParams(search);
+  query.set("design_kind", "general");
+  const serialized = query.toString();
+  return `${buildAnalysisPath(
+    factorialWorkspaceSelection.moduleId,
+    factorialWorkspaceSelection.methodId,
+  )}${serialized.length > 0 ? `?${serialized}` : ""}`;
+}
+
 function canonicalAnalysisSelection(selection: AnalysisSelection): AnalysisSelection {
-  return isLegacyResponseOptimizerSelection(selection)
-    ? CURRENT_RESPONSE_OPTIMIZER_SELECTION
-    : selection;
+  if (isLegacyResponseOptimizerSelection(selection)) {
+    return CURRENT_RESPONSE_OPTIMIZER_SELECTION;
+  }
+  return isGeneralFactorialSelection(selection) ? factorialWorkspaceSelection : selection;
+}
+
+function isGeneralFactorialSelection(selection: AnalysisSelection | null): boolean {
+  return selection?.moduleId === "doe" && selection.methodId === generalFactorialSelection.methodId;
 }
 
 function isLegacyResponseOptimizerSelection(

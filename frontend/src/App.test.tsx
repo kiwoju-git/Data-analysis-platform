@@ -125,6 +125,7 @@ import {
   analysisMethodDisplayLabel,
   buildAnalysisHash,
   buildAnalysisPath,
+  legacyGeneralFactorialRedirectLocation,
   legacyResponseOptimizerRedirectLocation,
   parseAnalysisHash,
   parseAnalysisLocation,
@@ -260,6 +261,18 @@ describe("App", () => {
       ),
     ).toBe(
       "/analysis/doe/doe.response_optimizer?analysis_id=analysis-1",
+    );
+    expect(
+      parseAnalysisPath("/analysis/doe/doe.general_factorial_design"),
+    ).toEqual({ moduleId: "doe", methodId: "doe.factorial_design" });
+    expect(
+      legacyGeneralFactorialRedirectLocation(
+        "/analysis/doe/doe.general_factorial_design",
+        "?design_id=general-1&dataset_version_id=version-1",
+        "",
+      ),
+    ).toBe(
+      "/analysis/doe/doe.factorial_design?design_id=general-1&dataset_version_id=version-1&design_kind=general",
     );
     expect(
       analysisMethodDisplayLabel(
