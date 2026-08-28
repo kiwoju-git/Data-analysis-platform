@@ -9,8 +9,7 @@ from playwright.sync_api import sync_playwright
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--full-url", required=True)
-    parser.add_argument("--core-url", required=True)
-    parser.add_argument("--regression-url", required=True)
+    parser.add_argument("--preview-url", required=True)
     parser.add_argument("--diagnostics-root", required=True)
     return parser.parse_args()
 
@@ -30,12 +29,14 @@ def main() -> int:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(viewport={"width": 1440, "height": 900})
+        context.add_init_script(
+            "window.localStorage.setItem('statistical-twin.locale', 'ko')"
+        )
 
         full_page = context.new_page()
         full_page.goto(args.full_url, wait_until="networkidle")
         full_page.get_by_role("heading", name="Statistical Twin 대시보드").wait_for()
-        full_labels = sidebar_labels(full_page)
-        assert full_labels == [
+        assert sidebar_labels(full_page) == [
             "홈",
             "데이터셋",
             "분석",
@@ -43,70 +44,45 @@ def main() -> int:
             "리포트",
             "관리",
             "도움말",
-        ], full_labels
-        assert full_page.get_by_text("발표용 기능 미리보기").count() == 0
-        full_page.screenshot(path=diagnostics / "full-home.png", full_page=True)
-
-        core_page = context.new_page()
-        core_page.goto(args.core_url, wait_until="networkidle")
-        core_page.get_by_role(
-            "heading", name="Statistical Twin 대시보드"
-        ).wait_for()
-        core_labels = sidebar_labels(core_page)
-        assert core_labels == ["홈", "데이터셋", "분석"], core_labels
-        core_page.get_by_text("발표용 기능 미리보기", exact=True).wait_for()
-        core_page.get_by_text(
-            "공개 시연 범위: 홈 · 데이터셋 · 탐색적 분석 · 가설 검정",
-            exact=True,
-        ).wait_for()
-        assert core_page.locator(".home-quick-card").count() == 2
-        core_page.screenshot(
-            path=diagnostics / "presentation-core-home.png",
-            full_page=True,
-        )
-
-        core_page.get_by_role("button", name="분석", exact=True).click()
-        core_module_labels = core_page.locator(
-            "#sidebar-submenu-analysis > li > .sidebar-submenu-button > span",
-        ).all_text_contents()
-        assert [label.strip() for label in core_module_labels] == [
-            "탐색적 분석",
-            "가설 검정",
         ]
-        core_page.screenshot(
-            path=diagnostics / "presentation-core-analysis-modules.png",
-            full_page=True,
-        )
 
-        core_page.goto(
-            f"{args.core_url}/manage", wait_until="networkidle"
-        )
-        core_page.get_by_role(
-            "heading", name="Statistical Twin 대시보드"
-        ).wait_for()
-        assert core_page.get_by_role("heading", name="자산 관리").count() == 0
+        preview_page = context.new_page()
+        preview_page.goto(args.preview_url, wait_until="networkidle")
+        preview_page.get_by_role("heading", name="Statistical Twin 대시보드").wait_for()
+        assert sidebar_labels(preview_page) == ["홈", "데이터셋", "분석"]
+        preview_page.get_by_text("발표용 기능 미리보기", exact=True).wait_for()
+        preview_page.goto(f"{args.preview_url}/analysis", wait_until="networkidle")
 
-        regression_page = context.new_page()
-        regression_page.goto(args.regression_url, wait_until="networkidle")
-        regression_page.get_by_role(
-            "heading", name="Statistical Twin 대시보드"
-        ).wait_for()
-        assert sidebar_labels(regression_page) == ["홈", "데이터셋", "분석"]
-        regression_page.get_by_text(
-            "공개 시연 범위: 홈 · 데이터셋 · 탐색적 분석 · 가설 검정 · 상관관계 및 회귀분석",
-            exact=True,
-        ).wait_for()
-        regression_page.get_by_role("button", name="분석", exact=True).click()
-        regression_module_labels = regression_page.locator(
-            "#sidebar-submenu-analysis > li > .sidebar-submenu-button > span",
-        ).all_text_contents()
-        assert [label.strip() for label in regression_module_labels] == [
-            "탐색적 분석",
-            "가설 검정",
-            "상관관계 및 회귀분석",
+        cards = preview_page.locator(".analysis-domain-card")
+        assert cards.count() == 8
+        assert preview_page.locator("button.analysis-domain-card").count() == 4
+        assert (
+            preview_page.locator("article.analysis-domain-card.is-planned").count() == 4
+        )
+        expected_domains = [
+            "기초통계·탐색",
+            "평균비교·동등성",
+            "비율·범주형 데이터",
+            "상관·회귀·예측",
+            "실험계획·최적화",
+            "AI/ML 실험설계",
+            "품질·공정 모니터링",
+            "측정시스템·변동성",
         ]
-        regression_page.screenshot(
-            path=diagnostics / "presentation-regression-analysis-modules.png",
+        assert cards.locator("strong").all_text_contents() == expected_domains
+
+        preview_page.get_by_role("button", name="분석", exact=True).click()
+        domain_buttons = preview_page.locator(
+            "#sidebar-submenu-analysis > li > .sidebar-submenu-button"
+        )
+        assert domain_buttons.count() == 8
+        for index in range(4):
+            assert domain_buttons.nth(index).is_enabled()
+        for index in range(4, 8):
+            assert domain_buttons.nth(index).is_disabled()
+
+        preview_page.screenshot(
+            path=diagnostics / "presentation-four-domains-analysis.png",
             full_page=True,
         )
 
@@ -115,18 +91,17 @@ def main() -> int:
         comparison_page.set_content(
             f"""
             <!doctype html><html><body style="margin:0;font-family:Arial,sans-serif">
-              <h1 style="font-size:18px;margin:10px">Full, Core preview, and Regression preview</h1>
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px">
+              <h1 style="font-size:18px;margin:10px">Full and four-domain preview</h1>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px">
                 <iframe title="Full application" src="{args.full_url}" style="width:100%;height:820px;border:1px solid #888"></iframe>
-                <iframe title="Core preview" src="{args.core_url}" style="width:100%;height:820px;border:1px solid #888"></iframe>
-                <iframe title="Regression preview" src="{args.regression_url}" style="width:100%;height:820px;border:1px solid #888"></iframe>
+                <iframe title="Four-domain preview" src="{args.preview_url}" style="width:100%;height:820px;border:1px solid #888"></iframe>
               </div>
             </body></html>
             """,
             wait_until="networkidle",
         )
         comparison_page.screenshot(
-            path=diagnostics / "full-core-regression-concurrent.png",
+            path=diagnostics / "full-and-four-domain-preview-concurrent.png",
             full_page=True,
         )
         browser.close()

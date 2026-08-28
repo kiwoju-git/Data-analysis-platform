@@ -157,6 +157,24 @@ describe("analysis domain navigation", () => {
     expect(familyHtml).not.toContain(">Two Variances</button>");
     expect(familyHtml).toContain("등분산 검정");
   });
+
+  it("renders the last four domains as non-interactive planned cards in the preview", () => {
+    const html = renderToString(
+      <AnalysisDomainLanding
+        catalog={testCatalog()}
+        domain={null}
+        profile="presentation-four-domains"
+        selectedMethodId={null}
+        onOpenDomain={() => undefined}
+        onSelectMethod={() => undefined}
+      />,
+    );
+
+    expect(html.match(/<button class="analysis-domain-card"/gu)).toHaveLength(4);
+    expect(html.match(/aria-disabled="true"/gu)).toHaveLength(4);
+    expect(html).toContain("실험계획·최적화");
+    expect(html).toContain("이 미리보기에서는 계획됨");
+  });
 });
 
 function testCatalog(): AnalysisMethodListResponse {

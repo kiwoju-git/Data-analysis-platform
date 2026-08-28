@@ -179,6 +179,31 @@ describe("sidebar navigation model", () => {
     expect(ai?.children?.find((item) => item.id === "planned-gaussian-process-surrogate")?.disabled).toBe(true);
   });
 
+  it("keeps the first four preview domains active and marks the rest planned", () => {
+    const groups = createSidebarNavigationGroups({
+      ...catalogOptions,
+      profile: "presentation-four-domains",
+      activeAnalysisDomainId: null,
+      activePage: "analysis",
+      canOpenAnalysis: true,
+      query: new URLSearchParams(),
+      onOpenAnalysisDomain: vi.fn(),
+      onOpenDatasetSection: vi.fn(),
+      onOpenHelpSection: vi.fn(),
+      onOpenGraphs: vi.fn(),
+      onOpenManageTab: vi.fn(),
+      onOpenProject: vi.fn(),
+      onOpenReportTab: vi.fn(),
+    });
+
+    expect(groups.map((group) => group.id)).toEqual(["home", "dataset", "analysis"]);
+    const domains = groups.find((group) => group.id === "analysis")?.children ?? [];
+    expect(domains.slice(0, 4).every((domain) => !domain.disabled)).toBe(true);
+    expect(domains.slice(4).every((domain) => domain.disabled)).toBe(true);
+    expect(domains.slice(4).every((domain) => domain.children?.length === 0)).toBe(true);
+    expect(domains.slice(4).every((domain) => domain.label.endsWith("· 계획됨"))).toBe(true);
+  });
+
   it("keeps only registration and preview dataset shortcuts", () => {
     const groups = createSidebarNavigationGroups({
       ...catalogOptions,

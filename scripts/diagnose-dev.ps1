@@ -21,7 +21,12 @@ Write-Host "Node: $(& node --version 2>$null)"
 foreach ($port in @($BackendPort, $FrontendPort)) {
     $owner = Get-DevPortOwner -Port $port
     if ($null -eq $owner) {
-        Write-Host "Port ${port}: available"
+        if (Test-DevLoopbackPortBindable -Port $port) {
+            Write-Host "Port ${port}: available"
+        }
+        else {
+            Write-Host "Port ${port}: unavailable or reserved by Windows (no listening process)"
+        }
     }
     else {
         Write-Host "Port ${port}: $(Format-DevPortOwner -Owner $owner)"

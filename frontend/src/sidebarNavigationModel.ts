@@ -14,7 +14,12 @@ import { methodLabel } from "./i18n/catalogLabels";
 import { getCurrentLocale } from "./i18n/store";
 import { t } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
-import { isPresentationProfile } from "./productProfile";
+import {
+  isAnalysisDomainAvailableInProfile,
+  isPresentationProductProfile,
+  statisticalTwinProfile,
+  type StatisticalTwinProfile,
+} from "./productProfile";
 
 export interface SidebarNavigationItem {
   active: boolean;
@@ -37,6 +42,7 @@ export interface SidebarNavigationGroup {
 export type DatasetSidebarSection = "dataset-intake" | "dataset-version";
 
 interface SidebarNavigationOptions {
+  profile?: StatisticalTwinProfile;
   locale?: AppLocale;
   activeAnalysisDomainId?: AnalysisDomainId | null;
   activeAnalysisModuleId?: string;
@@ -61,6 +67,7 @@ interface SidebarNavigationOptions {
 }
 
 export function createSidebarNavigationGroups({
+  profile = statisticalTwinProfile,
   locale = getCurrentLocale(),
   activeAnalysisDomainId,
   activeAnalysisMethodId,
@@ -120,9 +127,10 @@ export function createSidebarNavigationGroups({
       active: activePage === "analysis",
       children: ANALYSIS_DOMAINS.map((domain) => {
         const active = activePage === "analysis" && resolvedActiveDomainId === domain.id;
+        const domainAvailable = isAnalysisDomainAvailableInProfile(domain.id, profile);
         return {
           active,
-          children: analysisDomainSidebarChildren({
+          children: domainAvailable ? analysisDomainSidebarChildren({
             activeAnalysisMethodId,
             activePage,
             analysisCatalog,
@@ -130,11 +138,13 @@ export function createSidebarNavigationGroups({
             domain,
             locale,
             onOpenAnalysisMethod,
-          }),
-          disabled: !canOpenAnalysis,
+          }) : [],
+          disabled: !canOpenAnalysis || !domainAvailable,
           id: domain.id,
-          label: t(domain.labelKey, {}, locale),
-          onActivate: () => onOpenAnalysisDomain(domain),
+          label: domainAvailable
+            ? t(domain.labelKey, {}, locale)
+            : `${t(domain.labelKey, {}, locale)} · ${t("analysisPlanned.label", {}, locale)}`,
+          onActivate: domainAvailable ? () => onOpenAnalysisDomain(domain) : undefined,
         };
       }),
       id: "analysis",
@@ -205,7 +215,7 @@ export function createSidebarNavigationGroups({
       label: "도움말",
     },
   ];
-  return isPresentationProfile
+  return isPresentationProductProfile(profile)
     ? groups.filter((group) => ["home", "dataset", "analysis"].includes(group.id))
     : groups;
 }

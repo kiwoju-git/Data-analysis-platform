@@ -67,6 +67,17 @@
   outline-offset: 2px;
 }
 
+.analysis-domain-card.is-planned {
+  border-style: dashed;
+  background: #f7f8fa;
+  color: #5f6875;
+}
+
+.analysis-domain-card.is-planned:hover {
+  border-color: var(--border-default);
+  background: #f7f8fa;
+}
+
 .analysis-domain-order {
   width: 28px;
   height: 28px;
@@ -5896,6 +5907,10 @@ td select {
 
 body[data-statistical-twin-profile="presentation"] .home-quick-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body[data-statistical-twin-profile="presentation-four-domains"] .home-quick-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .asset-filter-table {

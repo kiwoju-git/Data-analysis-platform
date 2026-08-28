@@ -109,6 +109,10 @@ import {
   analysisDomainById,
   analysisDomainForMethod,
 } from "./analysisDomainMapping";
+import {
+  isAnalysisDomainAvailableInProfile,
+  statisticalTwinProfile,
+} from "./productProfile";
 
 type HealthState =
   | { kind: "checking" }
@@ -3962,7 +3966,7 @@ export default function App() {
     setAppRoute({ page: "analysis", selection: null });
   }
 
-  const requestedAnalysisDomain =
+  const requestedAnalysisDomainCandidate =
     appRoute.page !== "analysis"
       ? null
       : appRoute.selection !== null
@@ -3972,6 +3976,14 @@ export default function App() {
               ? null
               : new URLSearchParams(window.location.search).get("domain"),
           );
+  const requestedAnalysisDomain =
+    requestedAnalysisDomainCandidate !== null &&
+    isAnalysisDomainAvailableInProfile(
+      requestedAnalysisDomainCandidate.id,
+      statisticalTwinProfile,
+    )
+      ? requestedAnalysisDomainCandidate
+      : null;
   const analysisPageProps = {
     activeAnalysisDomain: requestedAnalysisDomain,
     analysisCatalog,

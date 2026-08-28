@@ -43,6 +43,28 @@ function Format-DevPortOwner {
     return "PID $($Owner.ProcessId) ($($Owner.Name)): $($Owner.CommandLine)"
 }
 
+function Test-DevLoopbackPortBindable {
+    param([Parameter(Mandatory = $true)][int] $Port)
+
+    $listener = $null
+    try {
+        $listener = [System.Net.Sockets.TcpListener]::new(
+            [System.Net.IPAddress]::Loopback,
+            $Port
+        )
+        $listener.Start()
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        if ($null -ne $listener) {
+            $listener.Stop()
+        }
+    }
+}
+
 function Get-DevRuntimeInfo {
     param(
         [int] $BackendPort = 8000,

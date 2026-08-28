@@ -11,6 +11,7 @@ import {
 } from "./datasetColumnComposition";
 import { analysisMethodDisplayLabel } from "./analysisNavigation";
 import { formatLocalDateTime } from "./dateFormat";
+import { useI18n } from "./i18n/LocaleProvider";
 import {
   useProjectOverviewState,
   type ProjectResourceState,
@@ -46,6 +47,7 @@ export function ProjectOverviewPage({
   onOpenReports,
   workspaceAssetRevision = 0,
 }: ProjectOverviewPageProps) {
+  const { locale } = useI18n();
   const state = useProjectOverviewState(workspaceAssetRevision);
   const composition =
     currentDatasetVersion === null
@@ -66,7 +68,7 @@ export function ProjectOverviewPage({
 
         {isPresentationProfile ? (
           <p className="presentation-profile-scope">
-            {presentationScopeText(statisticalTwinProfile)}
+            {presentationScopeText(statisticalTwinProfile, locale)}
           </p>
         ) : null}
 

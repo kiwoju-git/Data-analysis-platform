@@ -1,6 +1,6 @@
 param(
-    [ValidateSet("presentation", "presentation-regression")]
-    [string]$Profile = "presentation",
+    [ValidateSet("presentation", "presentation-regression", "presentation-four-domains")]
+    [string]$Profile = "presentation-four-domains",
     [int]$BackendPort = 0,
     [int]$FrontendPort = 0,
     [string]$WorkspaceRoot = ""
@@ -11,15 +11,19 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $IsRegressionProfile = $Profile -eq "presentation-regression"
+$IsFourDomainProfile = $Profile -eq "presentation-four-domains"
 if ($BackendPort -eq 0) {
-    $BackendPort = if ($IsRegressionProfile) { 8002 } else { 8001 }
+    $BackendPort = if ($IsFourDomainProfile) { 8002 } elseif ($IsRegressionProfile) { 8002 } else { 8001 }
 }
 if ($FrontendPort -eq 0) {
-    $FrontendPort = if ($IsRegressionProfile) { 8702 } else { 8701 }
+    $FrontendPort = if ($IsFourDomainProfile) { 8602 } elseif ($IsRegressionProfile) { 8702 } else { 8701 }
 }
 if ($WorkspaceRoot -eq "") {
     $LocalRoot = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { $env:TEMP }
-    $WorkspaceName = if ($IsRegressionProfile) {
+    $WorkspaceName = if ($IsFourDomainProfile) {
+        "StatisticalTwinPresentationFourDomains"
+    }
+    elseif ($IsRegressionProfile) {
         "StatisticalTwinPresentationRegression"
     }
     else {

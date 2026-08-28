@@ -13,6 +13,11 @@ import {
   PlannedDomainMethodCard,
 } from "./AnalysisDomainMethodCard";
 import { useI18n } from "./i18n/LocaleProvider";
+import {
+  isAnalysisDomainAvailableInProfile,
+  statisticalTwinProfile,
+  type StatisticalTwinProfile,
+} from "./productProfile";
 
 interface AnalysisDomainLandingProps {
   catalog: AnalysisMethodListResponse;
@@ -20,6 +25,7 @@ interface AnalysisDomainLandingProps {
   selectedMethodId: string | null;
   onOpenDomain: (domain: AnalysisDomainDefinition) => void;
   onSelectMethod: (method: AnalysisMethodDescriptor) => void;
+  profile?: StatisticalTwinProfile;
 }
 
 export function AnalysisDomainLanding({
@@ -28,6 +34,7 @@ export function AnalysisDomainLanding({
   selectedMethodId,
   onOpenDomain,
   onSelectMethod,
+  profile = statisticalTwinProfile,
 }: AnalysisDomainLandingProps) {
   const { t } = useI18n();
   const mappingErrors = validateAnalysisDomainCatalog(catalog);
@@ -43,10 +50,38 @@ export function AnalysisDomainLanding({
         <div className="analysis-domain-grid">
           {ANALYSIS_DOMAINS.map((candidate) => {
             const methods = domainCatalogMethods(catalog, candidate);
+            const domainAvailable = isAnalysisDomainAvailableInProfile(candidate.id, profile);
             const planned = candidate.families.reduce(
               (count, family) => count + (family.plannedWorkflows?.length ?? 0),
               candidate.directPlannedWorkflows?.length ?? 0,
             );
+            if (!domainAvailable) {
+              return (
+                <article
+                  aria-disabled="true"
+                  className="analysis-domain-card is-planned"
+                  key={candidate.id}
+                >
+                  <span className="analysis-domain-order">{candidate.order}</span>
+                  <strong>{t(candidate.labelKey)}</strong>
+                  <span className="analysis-domain-card-description">
+                    {t(candidate.descriptionKey)}
+                  </span>
+                  <span className="analysis-domain-card-families">
+                    {candidate.families
+                      .slice(0, 4)
+                      .map((family) => t(family.labelKey))
+                      .join(" · ")}
+                  </span>
+                  <span className="analysis-domain-card-meta">
+                    {t("profile.domainPlanned")}
+                  </span>
+                  <span className="analysis-domain-card-action">
+                    {t("analysisPlanned.label")}
+                  </span>
+                </article>
+              );
+            }
             return (
               <button
                 className="analysis-domain-card"

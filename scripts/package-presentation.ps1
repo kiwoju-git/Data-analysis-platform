@@ -1,6 +1,6 @@
 param(
-    [ValidateSet("presentation", "presentation-regression")]
-    [string]$Profile = "presentation",
+    [ValidateSet("presentation-four-domains")]
+    [string]$Profile = "presentation-four-domains",
     [string]$OutputDirectory = ".\.tmp\releases"
 )
 
@@ -11,16 +11,10 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $SourceCommit = (Get-Content -LiteralPath (Join-Path $RepoRoot "SOURCE_COMMIT.txt") -Raw).Trim()
 $ShortCommit = $SourceCommit.Substring(0, 8)
 $DateStamp = Get-Date -Format "yyyyMMdd"
-$IsRegressionProfile = $Profile -eq "presentation-regression"
-$ProfileSlug = if ($IsRegressionProfile) { "regression" } else { "core" }
-$ReadmeTemplate = if ($IsRegressionProfile) {
-    "PRESENTATION_README_REGRESSION.md"
-}
-else {
-    "PRESENTATION_README_CORE.md"
-}
-$BackendPort = if ($IsRegressionProfile) { 8002 } else { 8001 }
-$FrontendPort = if ($IsRegressionProfile) { 8702 } else { 8701 }
+$ProfileSlug = "four-domains"
+$ReadmeTemplate = "PRESENTATION_README_FOUR_DOMAINS.md"
+$BackendPort = 8002
+$FrontendPort = 8602
 $OutputRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDirectory))
 $StagingRoot = Join-Path $OutputRoot "presentation-$ProfileSlug-staging-$ShortCommit"
 $ZipPath = Join-Path $OutputRoot "statistical-twin-presentation-$ProfileSlug-$DateStamp-$ShortCommit.zip"
@@ -49,20 +43,27 @@ try {
     foreach ($path in @(
         "PRESENTATION_README_CORE.md",
         "PRESENTATION_README_REGRESSION.md",
+        "PRESENTATION_README_FOUR_DOMAINS.md",
         "START_PRESENTATION.ps1",
-        "START_PRESENTATION_REGRESSION.ps1"
+        "START_PRESENTATION_REGRESSION.ps1",
+        "START_PRESENTATION_FOUR_DOMAINS.ps1"
     )) {
         $stagedPath = Join-Path $StagingRoot $path
         if (Test-Path -LiteralPath $stagedPath) { Remove-Item -LiteralPath $stagedPath -Force }
     }
     $launcher = @"
+param(
+    [int]`$BackendPort = $BackendPort,
+    [int]`$FrontendPort = $FrontendPort
+)
+
 Set-StrictMode -Version Latest
 `$ErrorActionPreference = "Stop"
 `$RepoRoot = Split-Path -Parent `$MyInvocation.MyCommand.Path
 & (Join-Path `$RepoRoot "scripts\dev-presentation.ps1") ``
     -Profile "$Profile" ``
-    -BackendPort $BackendPort ``
-    -FrontendPort $FrontendPort
+    -BackendPort `$BackendPort ``
+    -FrontendPort `$FrontendPort
 "@
     [System.IO.File]::WriteAllText(
         (Join-Path $StagingRoot "START_HERE.ps1"),

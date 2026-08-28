@@ -1,5 +1,6 @@
 import { parseAnalysisLocation, type AnalysisSelection } from "./analysisNavigation";
 import {
+  isAnalysisMethodAvailableInProfile,
   isAnalysisModuleAvailableInProfile,
   isPresentationProfile,
   statisticalTwinProfile,
@@ -54,7 +55,8 @@ export function parseAppRoute(pathname: string, hash: string): AppRoute {
   if (analysisSelection !== null) {
     if (
       isPresentationProfile &&
-      !isAnalysisModuleAvailableInProfile(analysisSelection.moduleId, statisticalTwinProfile)
+      (!isAnalysisModuleAvailableInProfile(analysisSelection.moduleId, statisticalTwinProfile) ||
+        !isAnalysisMethodAvailableInProfile(analysisSelection.methodId, statisticalTwinProfile))
     ) {
       return { page: "home" };
     }

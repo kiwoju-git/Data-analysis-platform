@@ -14,7 +14,12 @@ def default_workspace_root() -> Path:
     return Path.home() / ".datalabstudio"
 
 
-ProductProfile = Literal["full", "presentation", "presentation-regression"]
+ProductProfile = Literal[
+    "full",
+    "presentation",
+    "presentation-regression",
+    "presentation-four-domains",
+]
 
 
 def default_product_profile() -> ProductProfile:
@@ -23,6 +28,8 @@ def default_product_profile() -> ProductProfile:
         return "presentation"
     if requested == "presentation-regression":
         return "presentation-regression"
+    if requested == "presentation-four-domains":
+        return "presentation-four-domains"
     return "full"
 
 

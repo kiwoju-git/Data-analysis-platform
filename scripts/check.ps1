@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+$PreviousPythonPath = $env:PYTHONPATH
 
 function Invoke-CheckedCommand {
     param(
@@ -20,6 +21,7 @@ function Invoke-CheckedCommand {
 
 Push-Location $RepoRoot
 try {
+    $env:PYTHONPATH = Join-Path $RepoRoot "backend"
     Invoke-CheckedCommand "tutorial Markdown sync" { & $Python .\scripts\render_tutorial_results.py --check }
     Invoke-CheckedCommand "backend ruff check" { & $Python -m ruff check .\backend }
     Invoke-CheckedCommand "backend ruff format check" { & $Python -m ruff format --check .\backend }
@@ -32,5 +34,6 @@ try {
     Invoke-CheckedCommand "frontend build" { npm --prefix .\frontend run build }
 }
 finally {
+    $env:PYTHONPATH = $PreviousPythonPath
     Pop-Location
 }
