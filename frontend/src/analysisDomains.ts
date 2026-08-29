@@ -177,6 +177,7 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
       "regression.xy_correlation",
       "regression.linear_model",
       "regression.partial_least_squares",
+      "regression.gaussian_process",
     ],
     directContextualMethodIds: ["regression.predict"],
     directContextualWorkflows: [

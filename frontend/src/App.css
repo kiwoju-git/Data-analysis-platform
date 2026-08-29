@@ -6727,6 +6727,148 @@ td select {
   width: 100%;
 }
 
+.gp-regression-panel,
+.gp-results {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.gp-predictor-field .checkbox-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.gp-predictor-field .checkbox-grid label {
+  align-items: center;
+  min-width: 0;
+}
+
+.gp-predictor-field .checkbox-grid span {
+  overflow-wrap: break-word;
+}
+
+.gp-settings-table .doe-table-toggle {
+  min-height: 38px;
+}
+
+.gp-fixed-noise-field {
+  display: grid;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.gp-advanced-grid {
+  margin-top: 12px;
+}
+
+.gp-chart-grid,
+.gp-chart-grid > .result-section,
+.gp-profile-chart {
+  min-width: 0;
+}
+
+.gp-chart-grid .interactive-chart,
+.gp-surface-chart {
+  width: 100%;
+  min-height: 260px;
+}
+
+.gp-chart-point,
+.gp-profile-point {
+  fill: #1769aa;
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+
+.gp-uncertainty-point {
+  fill: #7a3ea1;
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+
+.gp-chart-point:focus,
+.gp-profile-point:focus,
+.gp-uncertainty-point:focus,
+.gp-surface-cell:focus {
+  outline: none;
+  stroke: #111827;
+  stroke-width: 3;
+}
+
+.gp-profile-chart {
+  margin: 0;
+}
+
+.gp-profile-chart figcaption {
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.gp-profile-band {
+  fill: #dbeafe;
+  opacity: 0.85;
+}
+
+.gp-profile-line {
+  stroke: #b91c1c;
+  stroke-width: 2.5;
+}
+
+.gp-surface-cell {
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 0.4;
+}
+
+.gp-surface-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr)) max-content;
+  gap: 10px;
+  align-items: end;
+  margin: 10px 0;
+}
+
+.gp-surface-controls label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.gp-surface-controls button {
+  white-space: nowrap;
+}
+
+.gp-hyperparameter-table th,
+.gp-hyperparameter-table td,
+.gp-prediction-grid th,
+.gp-prediction-grid td {
+  white-space: nowrap;
+}
+
+.gp-prediction-grid {
+  min-width: max-content;
+}
+
+.gp-prediction-grid input {
+  min-width: 120px;
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .gp-predictor-field .checkbox-grid,
+  .gp-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gp-surface-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .gp-chart-grid .interactive-chart,
+  .gp-surface-chart {
+    min-height: 220px;
+  }
+}
+
 @media (max-width: 760px) {
   .pls-predictor-field .checkbox-grid,
   .pls-chart-grid,

@@ -31,6 +31,7 @@ import {
   type GageRrPreflightResponse,
   type GageRrResult,
   type GageRunChartResult,
+  type GaussianProcessRegressionResult,
   type GraphicalSummaryResult,
   type HealthResponse,
   type IndividualsChartResult,
@@ -57,6 +58,7 @@ import type { DescriptiveQuickGraphState } from "./DescriptiveAnalysisPanel";
 import type { OneWayAnovaExecutionOptions } from "./OneWayAnovaPanel";
 import type { MannWhitneyExecutionOptions } from "./MannWhitneyPanel";
 import type { PlsRunConfig } from "./PlsRegressionPanel";
+import type { GaussianProcessRunConfig } from "./GaussianProcessRegressionPanel";
 import type { TwoSampleEquivalenceExecutionOptions } from "./TwoSampleEquivalencePanel";
 import {
   serializeAnalysisFilterDrafts,
@@ -1024,6 +1026,10 @@ export default function App() {
     displayedAnalysisResult?.method_id === "regression.partial_least_squares"
       ? displayedAnalysisResult
       : null;
+  const gaussianProcessAnalysisResult =
+    displayedAnalysisResult?.method_id === "regression.gaussian_process"
+      ? displayedAnalysisResult
+      : null;
   const attributeControlChartAnalysisResult =
     displayedAnalysisResult?.method_id === "quality.attribute_control_chart"
       ? displayedAnalysisResult
@@ -1104,6 +1110,11 @@ export default function App() {
     : null;
   const plsResult = isPlsRegressionResult(plsAnalysisResult?.result)
     ? plsAnalysisResult.result
+    : null;
+  const gaussianProcessResult = isGaussianProcessRegressionResult(
+    gaussianProcessAnalysisResult?.result,
+  )
+    ? gaussianProcessAnalysisResult.result
     : null;
   const attributeControlChartResult = isAttributeControlChartResult(
     attributeControlChartAnalysisResult?.result,
@@ -3834,6 +3845,67 @@ export default function App() {
     }
   }
 
+  async function handleRunGaussianProcessAnalysis(config: GaussianProcessRunConfig) {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "regression.gaussian_process"
+    ) {
+      setFlowError("gp_response_required");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: { expression_version: 1, conditions: filterConditions },
+        roles: {
+          response: config.responseColumnId,
+          predictors: config.predictorColumnIds.join(","),
+        },
+        options: {
+          response_column_id: config.responseColumnId,
+          predictor_column_ids: config.predictorColumnIds,
+          missing_policy: "complete_case",
+          kernel_preset: config.kernelPreset,
+          noise_mode: config.noiseMode,
+          fixed_noise_standard_deviation: config.fixedNoiseStandardDeviation,
+          standardize_predictors: config.standardizePredictors,
+          normalize_response: config.normalizeResponse,
+          jitter: config.jitter,
+          optimizer_restarts: config.optimizerRestarts,
+          cv_optimizer_restarts: config.cvOptimizerRestarts,
+          cv: {
+            method: config.validationMethod,
+            folds: config.cvFolds,
+            shuffle: config.cvShuffle,
+            seed: config.randomSeed,
+          },
+          plot_point_limit: config.plotPointLimit,
+          profile_points: config.profilePoints,
+          surface_grid_size: config.surfaceGridSize,
+          time_budget_seconds: config.timeBudgetSeconds,
+        },
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
   function handleOpenDatasetPage(
     section: DatasetSidebarSection = "dataset-intake",
   ) {
@@ -4160,6 +4232,7 @@ export default function App() {
     linearModelAlpha,
     linearModelAnalysisResult,
     plsAnalysisResult,
+    gaussianProcessAnalysisResult,
     linearModelConfidenceLevel,
     linearModelSelectionMethod,
     linearModelAlphaToRemove,
@@ -4178,6 +4251,7 @@ export default function App() {
     linearModelResponseColumns,
     linearModelResult,
     plsResult,
+    gaussianProcessResult,
     isRunningLinearModelPrediction,
     isRunningLinearModelPredictionPreflight,
     profile,
@@ -4331,6 +4405,9 @@ export default function App() {
     },
     onRunPlsAnalysis: (config) => {
       void handleRunPlsAnalysis(config);
+    },
+    onRunGaussianProcessAnalysis: (config) => {
+      void handleRunGaussianProcessAnalysis(config);
     },
     onLinearModelSelectionMethodChange: setLinearModelSelectionMethod,
     onLinearModelAlphaToRemoveChange: setLinearModelAlphaToRemove,
@@ -5693,6 +5770,19 @@ function isPlsRegressionResult(
     typeof candidate.model_summary === "object" &&
     candidate.model_summary !== null &&
     Array.isArray(candidate.coefficients)
+  );
+}
+
+function isGaussianProcessRegressionResult(
+  value: AnalysisResultEnvelope["result"] | null | undefined,
+): value is GaussianProcessRegressionResult {
+  if (value === null || value === undefined || typeof value !== "object") return false;
+  const candidate = value as Partial<GaussianProcessRegressionResult>;
+  return (
+    candidate.schema_version === 1 &&
+    candidate.summary_type === "gaussian_process_regression" &&
+    candidate.model_summary !== undefined &&
+    candidate.kernel !== undefined
   );
 }
 

@@ -78,6 +78,7 @@ REGRESSION_PREDICTION_ROWS_ARTIFACT_KIND = "regression_prediction_rows"
 REGRESSION_MODEL_METHOD_IDS = {
     "regression.linear_model",
     "regression.partial_least_squares",
+    "regression.gaussian_process",
 }
 REGRESSION_PREDICTION_ROWS_MEDIA_TYPE = "application/x-ndjson"
 
@@ -233,7 +234,11 @@ def list_regression_models(
                 source_analysis_id=UUID(record.analysis_id),
                 source_dataset_version_id=UUID(record.dataset_version_id),
                 method_id=cast(
-                    Literal["regression.linear_model", "regression.partial_least_squares"],
+                    Literal[
+                        "regression.linear_model",
+                        "regression.partial_least_squares",
+                        "regression.gaussian_process",
+                    ],
                     record.method_id,
                 ),
                 method_version=record.method_version,

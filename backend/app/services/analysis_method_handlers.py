@@ -130,6 +130,11 @@ METHOD_EXECUTION_HANDLER_SPECS: tuple[MethodExecutionHandlerSpec, ...] = (
         result_summary_type="partial_least_squares_regression",
     ),
     MethodExecutionHandlerSpec(
+        method_id="regression.gaussian_process",
+        method_version=METHOD_VERSIONS["regression.gaussian_process"],
+        result_summary_type="gaussian_process_regression",
+    ),
+    MethodExecutionHandlerSpec(
         method_id="quality.attribute_control_chart",
         method_version=METHOD_VERSIONS["quality.attribute_control_chart"],
         result_summary_type="attribute_control_chart",

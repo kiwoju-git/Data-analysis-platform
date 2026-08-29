@@ -554,6 +554,55 @@ class PlsRegressionOptions(BaseModel):
         return self
 
 
+class GaussianProcessCrossValidationOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["k_fold", "leave_one_out", "none"] = "k_fold"
+    folds: int = Field(default=5, ge=2, le=10)
+    shuffle: bool = True
+    seed: int = 20260829
+
+
+class GaussianProcessRegressionOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response_column_id: str = Field(min_length=1)
+    predictor_column_ids: list[str] = Field(min_length=1, max_length=12)
+    missing_policy: Literal["complete_case"] = "complete_case"
+    kernel_preset: Literal[
+        "matern_5_2_ard",
+        "matern_3_2_ard",
+        "rbf_ard",
+        "rational_quadratic",
+    ] = "matern_5_2_ard"
+    noise_mode: Literal["estimate", "fixed", "near_noiseless"] = "estimate"
+    fixed_noise_standard_deviation: float | None = Field(default=None, gt=0.0)
+    standardize_predictors: bool = True
+    normalize_response: bool = True
+    jitter: float = Field(default=1e-8, ge=1e-12, le=1e-3)
+    optimizer_restarts: int = Field(default=3, ge=0, le=10)
+    cv_optimizer_restarts: int = Field(default=0, ge=0, le=1)
+    cv: GaussianProcessCrossValidationOptions = Field(
+        default_factory=GaussianProcessCrossValidationOptions
+    )
+    plot_point_limit: int = Field(default=1000, ge=100, le=2000)
+    profile_points: int = Field(default=50, ge=10, le=80)
+    surface_grid_size: int = Field(default=25, ge=10, le=40)
+    time_budget_seconds: float = Field(default=120.0, ge=5.0, le=600.0)
+
+    @model_validator(mode="after")
+    def validate_gaussian_process_options(self) -> "GaussianProcessRegressionOptions":
+        if len(set(self.predictor_column_ids)) != len(self.predictor_column_ids):
+            raise ValueError("gp_duplicate_predictor")
+        if self.response_column_id in self.predictor_column_ids:
+            raise ValueError("gp_response_in_predictors")
+        if self.noise_mode == "fixed" and self.fixed_noise_standard_deviation is None:
+            raise ValueError("gp_noise_value_invalid")
+        if self.noise_mode != "fixed" and self.fixed_noise_standard_deviation is not None:
+            raise ValueError("gp_noise_value_invalid")
+        return self
+
+
 class GageRrOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1657,7 +1706,11 @@ class RegressionModelCatalogItem(BaseModel):
     model_id: UUID
     source_analysis_id: UUID
     source_dataset_version_id: UUID
-    method_id: Literal["regression.linear_model", "regression.partial_least_squares"]
+    method_id: Literal[
+        "regression.linear_model",
+        "regression.partial_least_squares",
+        "regression.gaussian_process",
+    ]
     method_version: str
     schema_hash: str
     response: RegressionModelCatalogResponseColumn | None
@@ -1731,6 +1784,51 @@ class PlsPointPredictionResponse(BaseModel):
     row_count: int = Field(ge=1)
     intervals_supported: Literal[False] = False
     rows: list[PlsPointPredictionRow]
+
+
+class GaussianProcessPointPredictionInputRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    client_row_id: str = Field(min_length=1, max_length=120)
+    values: dict[str, float]
+
+
+class GaussianProcessPointPredictionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_model_manifest_sha256: str = Field(min_length=64, max_length=64)
+    rows: list[GaussianProcessPointPredictionInputRow] = Field(min_length=1, max_length=2000)
+
+
+class GaussianProcessPredictionInterval(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lower: float
+    upper: float
+
+
+class GaussianProcessPointPredictionRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    client_row_id: str
+    predicted_mean: float
+    latent_standard_deviation: float = Field(ge=0.0)
+    latent_interval_95: GaussianProcessPredictionInterval
+    predictive_standard_deviation: float = Field(ge=0.0)
+    predictive_interval_95: GaussianProcessPredictionInterval
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GaussianProcessPointPredictionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: UUID
+    model_manifest_sha256: str
+    response_column_id: str
+    row_count: int = Field(ge=1)
+    interval_kind: Literal["latent_and_new_observation"] = "latent_and_new_observation"
+    confidence_level: float = Field(default=0.95, ge=0.95, le=0.95)
+    rows: list[GaussianProcessPointPredictionRow]
 
 
 class RegressionResponseOptimizationGoal(BaseModel):
@@ -1835,8 +1933,8 @@ class RegressionModelDeletionCounts(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     regression_model_count: Literal[1]
-    manifest_artifact_count: Literal[1]
-    manifest_file_count: Literal[1]
+    manifest_artifact_count: int = Field(ge=1)
+    manifest_file_count: int = Field(ge=1)
     manifest_file_bytes: int = Field(ge=0)
     metadata_record_count: int = Field(ge=2)
     dependent_prediction_count: int = Field(ge=0)
@@ -1884,7 +1982,11 @@ class RegressionModelDeletionPreflightResponse(BaseModel):
     preflight_schema_version: Literal[3]
     model_id: UUID
     source_analysis_id: UUID
-    method_id: Literal["regression.linear_model", "regression.partial_least_squares"]
+    method_id: Literal[
+        "regression.linear_model",
+        "regression.partial_least_squares",
+        "regression.gaussian_process",
+    ]
     method_version: str
     deletion_ready: bool
     cascade_deletion_ready: bool

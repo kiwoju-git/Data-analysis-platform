@@ -38,6 +38,9 @@ from app.services.analysis_run_results import get_analysis_run_result
 from app.services.analysis_runner_attribute_control_chart import (
     run_attribute_control_chart_analysis,
 )
+from app.services.analysis_runner_gaussian_process import (
+    run_gaussian_process_regression_analysis,
+)
 from app.services.analysis_runner_pls import run_pls_regression_analysis
 from app.services.analysis_runners_categorical import (
     run_chi_square_association_analysis,
@@ -171,6 +174,7 @@ _METHOD_EXECUTION_HANDLERS: dict[str, MethodExecutionHandler] = build_method_exe
         "regression.xy_correlation": run_xy_correlation_analysis,
         "regression.linear_model": run_linear_model_analysis,
         "regression.partial_least_squares": run_pls_regression_analysis,
+        "regression.gaussian_process": run_gaussian_process_regression_analysis,
         "quality.attribute_control_chart": run_attribute_control_chart_analysis,
         "quality.individuals_chart": run_individuals_chart_analysis,
         "quality.subgroup_chart": run_subgroup_chart_analysis,

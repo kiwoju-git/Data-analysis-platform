@@ -3,6 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, status
 
 from app.api.v1.schemas.analyses import (
+    GaussianProcessPointPredictionRequest,
+    GaussianProcessPointPredictionResponse,
     PlsPointPredictionRequest,
     PlsPointPredictionResponse,
     RegressionModelCatalogResponse,
@@ -29,6 +31,9 @@ from app.api.v1.schemas.analyses import (
     RegressionResponseOptimizationResponse,
 )
 from app.services.analysis_run_exports import create_regression_prediction_csv_export
+from app.services.gaussian_process_predictions import (
+    create_gaussian_process_point_predictions,
+)
 from app.services.pls_predictions import create_pls_point_predictions
 from app.services.regression_models import (
     create_regression_predictions,
@@ -216,6 +221,22 @@ def create_pls_point_predictions_route(
 ) -> PlsPointPredictionResponse:
     return create_pls_point_predictions(
         settings=request.app.state.settings,
+        model_id=model_id,
+        body=body,
+    )
+
+
+@router.post(
+    "/{model_id}/gaussian-process-predictions",
+    response_model=GaussianProcessPointPredictionResponse,
+)
+def create_gaussian_process_point_predictions_route(
+    request: Request,
+    model_id: UUID,
+    body: GaussianProcessPointPredictionRequest,
+) -> GaussianProcessPointPredictionResponse:
+    return create_gaussian_process_point_predictions(
+        request.app.state.settings,
         model_id=model_id,
         body=body,
     )

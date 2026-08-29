@@ -37,6 +37,10 @@ import {
   PlsRegressionPanel,
   type PlsRunConfig,
 } from "./PlsRegressionPanel";
+import {
+  GaussianProcessRegressionPanel,
+  type GaussianProcessRunConfig,
+} from "./GaussianProcessRegressionPanel";
 import { TwoSampleTPanel } from "./TwoSampleTPanel";
 import {
   TwoSampleEquivalencePanel,
@@ -86,6 +90,7 @@ import type {
   GageRrResult,
   GageRunChartResult,
   GraphicalSummaryResult,
+  GaussianProcessRegressionResult,
   IndividualsChartResult,
   KruskalWallisResult,
   LinearModelResult,
@@ -136,6 +141,7 @@ interface AnalysisResultByMethod {
   xyCorrelationAnalysisResult: AnalysisResultEnvelope | null;
   linearModelAnalysisResult: AnalysisResultEnvelope | null;
   plsAnalysisResult: AnalysisResultEnvelope | null;
+  gaussianProcessAnalysisResult: AnalysisResultEnvelope | null;
   attributeControlChartAnalysisResult: AnalysisResultEnvelope | null;
   individualsChartAnalysisResult: AnalysisResultEnvelope | null;
   subgroupChartAnalysisResult: AnalysisResultEnvelope | null;
@@ -264,6 +270,8 @@ export interface AnalysisShellProps {
   linearModelResult?: LinearModelResult | null;
   plsAnalysisResult?: AnalysisResultEnvelope | null;
   plsResult?: PlsRegressionResult | null;
+  gaussianProcessAnalysisResult?: AnalysisResultEnvelope | null;
+  gaussianProcessResult?: GaussianProcessRegressionResult | null;
   isRunningLinearModelPrediction?: boolean;
   isRunningLinearModelPredictionPreflight?: boolean;
   mannWhitneyAlpha: number;
@@ -424,6 +432,7 @@ export interface AnalysisShellProps {
   onRunKruskalWallisAnalysis: () => void;
   onRunLinearModelAnalysis?: () => void;
   onRunPlsAnalysis?: (config: PlsRunConfig) => void;
+  onRunGaussianProcessAnalysis?: (config: GaussianProcessRunConfig) => void;
   onLinearModelSelectionMethodChange?: (method: "none" | "backward_elimination") => void;
   onLinearModelAlphaToRemoveChange?: (alpha: number) => void;
   onRunLinearModelPrediction?: () => void;
@@ -627,6 +636,7 @@ export function AnalysisShell({
   linearModelAlpha = 0.05,
   linearModelAnalysisResult = null,
   plsAnalysisResult = null,
+  gaussianProcessAnalysisResult = null,
   linearModelConfidenceLevel = 0.95,
   linearModelInteractionKeys = [],
   linearModelSelectionMethod = "none",
@@ -665,6 +675,7 @@ export function AnalysisShell({
   linearModelResponseColumns = [],
   linearModelResult = null,
   plsResult = null,
+  gaussianProcessResult = null,
   isRunningLinearModelPrediction = false,
   isRunningLinearModelPredictionPreflight = false,
   mannWhitneyAlpha,
@@ -825,6 +836,7 @@ export function AnalysisShell({
   onRunKruskalWallisAnalysis,
   onRunLinearModelAnalysis = () => undefined,
   onRunPlsAnalysis = () => undefined,
+  onRunGaussianProcessAnalysis = () => undefined,
   onLinearModelSelectionMethodChange = () => undefined,
   onLinearModelAlphaToRemoveChange = () => undefined,
   onRunLinearModelPrediction = () => undefined,
@@ -960,6 +972,7 @@ export function AnalysisShell({
           xyCorrelationAnalysisResult,
           linearModelAnalysisResult,
           plsAnalysisResult,
+          gaussianProcessAnalysisResult,
           attributeControlChartAnalysisResult,
           individualsChartAnalysisResult,
           subgroupChartAnalysisResult,
@@ -1521,6 +1534,22 @@ export function AnalysisShell({
               );
             }
             if (
+              method.method_id === "regression.gaussian_process" &&
+              method.availability === "available"
+            ) {
+              return (
+                <GaussianProcessRegressionPanel
+                  analysisResult={gaussianProcessAnalysisResult}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  methodId={method.method_id}
+                  onRun={onRunGaussianProcessAnalysis}
+                  result={gaussianProcessResult}
+                  version={version}
+                />
+              );
+            }
+            if (
               method.method_id === "regression.predict" &&
               method.availability === "available"
             ) {
@@ -1879,6 +1908,8 @@ function selectedAnalysisResultForMethod(
       return results.linearModelAnalysisResult;
     case "regression.partial_least_squares":
       return results.plsAnalysisResult;
+    case "regression.gaussian_process":
+      return results.gaussianProcessAnalysisResult;
     case "quality.attribute_control_chart":
       return results.attributeControlChartAnalysisResult;
     case "quality.individuals_chart":

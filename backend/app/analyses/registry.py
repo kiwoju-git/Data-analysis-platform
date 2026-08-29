@@ -31,6 +31,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "regression.xy_correlation": METHOD_VERSION,
     "regression.linear_model": "0.2.0",
     "regression.partial_least_squares": "0.1.0",
+    "regression.gaussian_process": "0.1.0",
     "regression.linear_model_optimizer": "0.1.0",
     "regression.predict": "0.2.0",
     "regression.predict_pasted": "0.1.0",
@@ -331,6 +332,13 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_ko="PLS 회귀",
         label_en="Partial Least Squares Regression",
         order=35,
+    ),
+    _available(
+        method_id="regression.gaussian_process",
+        module_id=AnalysisModuleId.REGRESSION,
+        label_ko="Gaussian Process 회귀",
+        label_en="Gaussian Process Regression",
+        order=37,
     ),
     _available(
         method_id="regression.predict",

@@ -392,6 +392,32 @@ export const analysisMethodGuidance = {
     ],
     plainLanguage: translationToken("pls.description"),
   },
+  "regression.gaussian_process": {
+    methodId: "regression.gaussian_process",
+    roleRequirements: [
+      required(
+        translationToken("gp.guidance.responseRole"),
+        translationToken("gp.guidance.responseDetail"),
+      ),
+      required(
+        translationToken("gp.guidance.predictorRole"),
+        translationToken("gp.guidance.predictorDetail"),
+      ),
+    ],
+    optionChecklist: [
+      translationToken("gp.guidance.kernel"),
+      translationToken("gp.guidance.validation"),
+    ],
+    preflightChecks: [
+      translationToken("gp.guidance.responseDetail"),
+      translationToken("gp.guidance.predictorDetail"),
+    ],
+    resultFocus: [
+      translationToken("gp.guidance.uncertainty"),
+      translationToken("gp.guidance.persistence"),
+    ],
+    plainLanguage: translationToken("gp.description"),
+  },
   "regression.predict": {
     methodId: "regression.predict",
     roleRequirements: [required("모델", "앱이 생성한 회귀 모델"), required("예측 데이터", "학습 스키마와 호환되는 데이터셋")],

@@ -1,4 +1,4 @@
-$script:ExpectedApiContractVersion = 15
+$script:ExpectedApiContractVersion = 16
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",
     "dataset_version_metadata",

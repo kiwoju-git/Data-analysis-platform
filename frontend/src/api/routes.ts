@@ -544,6 +544,10 @@ export const apiRoutes = {
     return apiUrl(`/regression-models/${pathId(modelId)}/pls-point-predictions`);
   },
 
+  gaussianProcessPredictions(modelId: string): string {
+    return apiUrl(`/regression-models/${pathId(modelId)}/gaussian-process-predictions`);
+  },
+
   regressionModelDependentPredictions(
     modelId: string,
     offset: number,

@@ -439,7 +439,7 @@ function RegressionModelManagementPanel({
                   <Fragment key={`${item.model_id}-${item.metadata_updated_at ?? "none"}`}>
                     <tr className={isSelected ? "asset-catalog-row-selected" : ""}>
                       <td><strong>{item.user_label ?? fallback}</strong></td>
-                      <td>predictor {item.predictor_count ?? "?"}개</td>
+                      <td>{regressionModelKindLabel(item.method_id)} · predictor {item.predictor_count ?? "?"}개</td>
                       <td>{availabilityLabel(item.availability)}</td>
                       <td>{item.pinned ? "고정" : "-"}</td>
                       <td className="asset-catalog-action-column">
@@ -535,6 +535,7 @@ function ModelAssetEditor({
         <span className="status-pill">{availabilityLabel(item.availability)}</span>
       </div>
       <div className="metadata-grid">
+        <span>{regressionModelKindLabel(item.method_id)}</span>
         <span>{item.method_id}</span>
         <span>v{item.method_version}</span>
         <span>{item.predictor_count ?? "?"} predictors</span>
@@ -549,7 +550,7 @@ function ModelAssetEditor({
         onPinnedChange={setPinned}
       />
       <div className="button-row">
-        <a className="secondary-button link-button" href={`/analysis/regression/regression.predict?model_id=${encodeURIComponent(item.model_id)}`}>
+        <a className="secondary-button link-button" href={regressionModelPredictionUrl(item)}>
           예측 입력 열기
         </a>
         <button
@@ -1119,6 +1120,23 @@ function selectManageTab(
   const url = new URL(window.location.href);
   url.searchParams.set("tab", tab);
   pushAppLocation(`${url.pathname}${url.search}`);
+}
+
+function regressionModelKindLabel(methodId: RegressionModelCatalogItem["method_id"]): string {
+  if (methodId === "regression.partial_least_squares") return "PLS Regression";
+  if (methodId === "regression.gaussian_process") return "Gaussian Process Regression";
+  return "OLS Regression";
+}
+
+function regressionModelPredictionUrl(item: RegressionModelCatalogItem): string {
+  const params = new URLSearchParams({ model_id: item.model_id });
+  if (item.method_id !== "regression.linear_model") {
+    params.set("analysis_id", item.source_analysis_id);
+    params.set("section", "prediction");
+  }
+  const methodId =
+    item.method_id === "regression.linear_model" ? "regression.predict" : item.method_id;
+  return `/analysis/regression/${methodId}?${params.toString()}`;
 }
 
 function availabilityLabel(value: RegressionModelCatalogItem["availability"]) {

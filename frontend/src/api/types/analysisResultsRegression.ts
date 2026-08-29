@@ -516,3 +516,131 @@ export interface PlsRegressionResult {
   warnings: string[];
   model_manifest?: LinearModelManifestPointer;
 }
+
+export interface GaussianProcessInterval {
+  lower: number;
+  upper: number;
+}
+
+export interface GaussianProcessDiagnosticPoint {
+  row_index: number;
+  observed: number;
+  fitted: number;
+  residual: number;
+  latent_standard_deviation: number;
+  predictive_standard_deviation: number;
+  predictive_interval_95: GaussianProcessInterval;
+  cross_validated_fitted: number | null;
+  cross_validated_residual: number | null;
+  cross_validated_predictive_standard_deviation: number | null;
+  standardized_predictive_residual: number | null;
+}
+
+export interface GaussianProcessProfilePoint {
+  value: number;
+  predicted_mean: number;
+  latent_standard_deviation: number;
+  latent_interval_95: GaussianProcessInterval;
+  predictive_standard_deviation: number;
+  predictive_interval_95: GaussianProcessInterval;
+}
+
+export interface GaussianProcessRegressionResult {
+  schema_version: 1;
+  summary_type: "gaussian_process_regression";
+  method: {
+    name: string;
+    engine: string;
+    engine_version: string;
+    kernel_preset: "matern_5_2_ard" | "matern_3_2_ard" | "rbf_ard" | "rational_quadratic";
+    noise_mode: "estimate" | "fixed" | "near_noiseless";
+    standardize_predictors: boolean;
+    normalize_response: boolean;
+    jitter: number;
+    optimizer_restarts: number;
+    cv_optimizer_restarts: number;
+    random_seed: number;
+    validation_method: "k_fold" | "leave_one_out" | "none";
+    cv_folds: number;
+    cv_shuffle: boolean;
+    missing_policy: "complete_case";
+    execution_mode: "bounded_inline";
+    elapsed_seconds: number;
+  };
+  response: LinearModelColumnRef;
+  predictors: LinearModelColumnRef[];
+  sample: {
+    n_total: number;
+    n_used: number;
+    n_excluded: number;
+    n_excluded_missing: number;
+    n_excluded_non_numeric: number;
+    predictor_count: number;
+  };
+  model_summary: {
+    training_r_squared: number;
+    training_rmse: number;
+    training_mae: number;
+    predicted_r_squared: number | null;
+    press: number | null;
+    cv_rmse: number | null;
+    cv_mae: number | null;
+    negative_log_predictive_density: number | null;
+    interval_coverage_95: number | null;
+    mean_predictive_interval_width: number | null;
+    log_marginal_likelihood: number;
+    fitted_noise_standard_deviation: number;
+  };
+  kernel: {
+    preset: string;
+    fitted_kernel: string;
+    signal_kernel: Record<string, unknown>;
+    observation_noise_variance: number;
+    observation_noise_standard_deviation: number;
+    log_marginal_likelihood: number;
+    converged: boolean;
+    parameters: Array<{
+      parameter: string;
+      column_id: string | null;
+      estimate: number;
+      lower_bound: number | null;
+      upper_bound: number | null;
+      near_bound: boolean;
+    }>;
+  };
+  diagnostics: {
+    point_limit: number;
+    point_count_total: number;
+    truncated: boolean;
+    points: GaussianProcessDiagnosticPoint[];
+  };
+  conditional_profiles: Array<{
+    column_id: string;
+    display_name: string;
+    fixed_values: number[];
+    points: GaussianProcessProfilePoint[];
+  }>;
+  two_predictor_surface: {
+    x_column_id: string;
+    x_display_name: string;
+    y_column_id: string;
+    y_display_name: string;
+    grid_size: number;
+    fixed_values: number[];
+    points: Array<{
+      x: number;
+      y: number;
+      predicted_mean: number;
+      predictive_standard_deviation: number;
+    }>;
+  } | null;
+  training_ranges: Array<{
+    column_id: string;
+    display_name: string;
+    minimum: number;
+    maximum: number;
+    median: number;
+  }>;
+  warnings: string[];
+  model_manifest?: LinearModelManifestPointer;
+}

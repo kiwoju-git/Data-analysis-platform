@@ -133,13 +133,15 @@ def _open_target(record: WorkspaceAssetCatalogRecord) -> WorkspaceAssetOpenTarge
             path=f"/reports?analysis_id={record.asset_id}", label="리포트에서 열기"
         )
     if record.asset_type == "regression_model":
-        method_id = (
-            "regression.partial_least_squares"
-            if record.method_id == "regression.partial_least_squares"
-            else "regression.linear_model"
-        )
+        method_id = {
+            "regression.partial_least_squares": "regression.partial_least_squares",
+            "regression.gaussian_process": "regression.gaussian_process",
+        }.get(record.method_id or "", "regression.linear_model")
+        parameters = f"model_id={record.asset_id}"
+        if record.source_analysis_id is not None:
+            parameters += f"&analysis_id={record.source_analysis_id}&section=prediction"
         return WorkspaceAssetOpenTarget(
-            path=f"/analysis/regression/{method_id}?model_id={record.asset_id}",
+            path=f"/analysis/regression/{method_id}?{parameters}",
             label="예측 입력 열기",
         )
     if record.asset_type == "bayesian_study":

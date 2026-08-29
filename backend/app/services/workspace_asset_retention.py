@@ -76,9 +76,12 @@ ATTRIBUTE_CONTROL_LIMIT_SET_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[1] = 1
 ATTRIBUTE_CONTROL_LIMIT_SET_DELETION_SCHEMA_VERSION: Literal[1] = 1
 _MODEL_ARTIFACT_KIND = "regression_model_manifest"
 _MODEL_MEDIA_TYPE = "application/json"
+_GP_NUMERIC_ARTIFACT_KIND = "gaussian_process_model_numeric_state"
+_GP_NUMERIC_MEDIA_TYPE = "application/x-npz"
 _REGRESSION_MODEL_METHOD_IDS = {
     "regression.linear_model",
     "regression.partial_least_squares",
+    "regression.gaussian_process",
 }
 _MODEL_QUARANTINE_PATTERN = re.compile(r"^\.delete-m-([0-9a-fA-F-]{36})-([0-9a-f]{16})\.q$")
 _LIMIT_SET_QUARANTINE_PATTERN = re.compile(r"^\.delete-l-([0-9a-fA-F-]{36})-([0-9a-f]{16})\.q$")
@@ -96,8 +99,10 @@ class _RegressionModelDeletionContext:
     model: RegressionModelRecord
     source_run: AnalysisRunRecord
     artifact: AnalysisArtifactRecord
+    additional_artifacts: tuple[AnalysisArtifactRecord, ...]
     path: Path
     size_bytes: int
+    additional_files: tuple[_OwnedFile, ...]
     blockers: list[str]
     counts: RegressionModelDeletionCounts
     deletion_manifest_sha256: str
@@ -177,7 +182,18 @@ def delete_stored_regression_model(
         return _delete_model_and_predictions(settings, context, expected_manifest)
 
     quarantine = context.path.with_name(f".delete-m-{context.model.model_id}-{uuid4().hex[:16]}.q")
+    moved_additional: list[tuple[_OwnedFile, Path]] = []
     try:
+        for owned_file in context.additional_files:
+            additional_quarantine = _analysis_quarantine_path(
+                UUID(context.model.analysis_id), owned_file
+            )
+            os.replace(owned_file.path, additional_quarantine)
+            moved_additional.append((owned_file, additional_quarantine))
+            if not _analysis_file_matches(
+                additional_quarantine, owned_file.sha256, owned_file.size_bytes
+            ):
+                raise _model_conflict()
         os.replace(context.path, quarantine)
         if not _file_matches(quarantine, context.model.manifest_sha256, context.size_bytes):
             raise _model_conflict()
@@ -186,9 +202,11 @@ def delete_stored_regression_model(
             expected_model=context.model,
             expected_source_run=context.source_run,
             expected_artifact=context.artifact,
+            expected_additional_artifacts=list(context.additional_artifacts),
         )
     except WorkspaceAssetStorageConflict as exc:
         _restore_file(quarantine, context.path)
+        _restore_analysis_files(moved_additional)
         code = (
             "regression_model_deletion_blocked"
             if exc.code == "regression_model_deletion_blocked"
@@ -201,6 +219,7 @@ def delete_stored_regression_model(
         ) from exc
     except OSError as exc:
         _restore_file(quarantine, context.path)
+        _restore_analysis_files(moved_additional)
         raise ApiError(
             code="regression_model_quarantine_failed",
             message="회귀 모델 파일을 안전한 삭제 대기 상태로 옮길 수 없습니다.",
@@ -208,8 +227,14 @@ def delete_stored_regression_model(
         ) from exc
     except Exception:
         _restore_file(quarantine, context.path)
+        _restore_analysis_files(moved_additional)
         raise
     cleanup_status = _cleanup_quarantine(quarantine)
+    for _, additional_quarantine in moved_additional:
+        try:
+            additional_quarantine.unlink()
+        except OSError:
+            cleanup_status = "quarantined_pending_cleanup"
     return RegressionModelDeleteResponse(
         deletion_schema_version=REGRESSION_MODEL_DELETION_SCHEMA_VERSION,
         model_id=model_id,
@@ -233,6 +258,12 @@ def _delete_model_and_predictions(
     )
     model_moved = False
     try:
+        for owned_file in context.additional_files:
+            quarantine = _analysis_quarantine_path(UUID(context.model.analysis_id), owned_file)
+            os.replace(owned_file.path, quarantine)
+            moved_predictions.append((owned_file, quarantine))
+            if not _analysis_file_matches(quarantine, owned_file.sha256, owned_file.size_bytes):
+                raise _model_conflict()
         for prediction_context in context.prediction_contexts:
             for owned_file in prediction_context.files:
                 quarantine = _analysis_quarantine_path(
@@ -253,6 +284,7 @@ def _delete_model_and_predictions(
             expected_model=context.model,
             expected_source_run=context.source_run,
             expected_model_artifact=context.artifact,
+            expected_additional_model_artifacts=list(context.additional_artifacts),
             expected_predictions=[
                 (item.run, item.artifacts) for item in context.prediction_contexts
             ],
@@ -436,11 +468,8 @@ def _regression_model_context(
         or source_run.status != "succeeded"
     ):
         raise _model_artifact_error("regression_model_source_analysis_invalid")
-    artifacts = [
-        item
-        for item in list_analysis_artifact_records(settings.workspace_root, record.analysis_id)
-        if item.kind == _MODEL_ARTIFACT_KIND
-    ]
+    source_artifacts = list_analysis_artifact_records(settings.workspace_root, record.analysis_id)
+    artifacts = [item for item in source_artifacts if item.kind == _MODEL_ARTIFACT_KIND]
     if len(artifacts) != 1:
         raise _model_artifact_error("regression_model_artifact_mismatch")
     artifact = artifacts[0]
@@ -489,6 +518,50 @@ def _regression_model_context(
         record.manifest_sha256,
         "regression_model_artifact_mismatch",
     )
+    additional_artifacts: list[AnalysisArtifactRecord] = []
+    additional_files: list[_OwnedFile] = []
+    if record.method_id == "regression.gaussian_process":
+        numeric_artifacts = [
+            item for item in source_artifacts if item.kind == _GP_NUMERIC_ARTIFACT_KIND
+        ]
+        prediction_state = manifest.get("prediction_state")
+        numeric_contract = (
+            prediction_state.get("numeric_artifact") if isinstance(prediction_state, dict) else None
+        )
+        if len(numeric_artifacts) != 1 or not isinstance(numeric_contract, dict):
+            raise _model_artifact_error("regression_model_artifact_mismatch")
+        numeric_artifact = numeric_artifacts[0]
+        numeric_relative_value = numeric_contract.get("path")
+        numeric_sha = numeric_contract.get("sha256")
+        if not isinstance(numeric_relative_value, str) or not isinstance(numeric_sha, str):
+            raise _model_artifact_error("regression_model_artifact_mismatch")
+        numeric_relative = Path(numeric_relative_value)
+        if not (
+            numeric_artifact.analysis_id == record.analysis_id
+            and numeric_artifact.path == numeric_relative.as_posix()
+            and numeric_artifact.sha256 == numeric_sha
+            and numeric_artifact.media_type == _GP_NUMERIC_MEDIA_TYPE
+            and numeric_contract.get("kind") == _GP_NUMERIC_ARTIFACT_KIND
+        ):
+            raise _model_artifact_error("regression_model_artifact_mismatch")
+        numeric_path, numeric_size = _validated_file(
+            settings.workspace_root,
+            numeric_artifact.path,
+            numeric_relative,
+            numeric_artifact.sha256,
+            "regression_model_artifact_mismatch",
+        )
+        additional_artifacts.append(numeric_artifact)
+        additional_files.append(
+            _OwnedFile(
+                key=f"artifact:{numeric_artifact.artifact_id}",
+                kind=numeric_artifact.kind,
+                path=numeric_path,
+                sha256=numeric_artifact.sha256,
+                size_bytes=numeric_size,
+                artifact_id=numeric_artifact.artifact_id,
+            )
+        )
     prediction_records = list_regression_prediction_records_by_source(
         settings.workspace_root,
         source_analysis_id=record.analysis_id,
@@ -547,9 +620,9 @@ def _regression_model_context(
     cascade_blockers = sorted(set(cascade_blockers))
     counts = RegressionModelDeletionCounts(
         regression_model_count=1,
-        manifest_artifact_count=1,
-        manifest_file_count=1,
-        manifest_file_bytes=size_bytes,
+        manifest_artifact_count=1 + len(additional_artifacts),
+        manifest_file_count=1 + len(additional_files),
+        manifest_file_bytes=size_bytes + sum(item.size_bytes for item in additional_files),
         metadata_record_count=2
         + sum(item.counts.metadata_record_count for item in prediction_contexts),
         dependent_prediction_count=dependent_count,
@@ -567,14 +640,24 @@ def _regression_model_context(
         "preflight_schema_version": REGRESSION_MODEL_DELETION_PREFLIGHT_SCHEMA_VERSION,
         "model": record.__dict__,
         "source_run": source_run.__dict__,
-        "artifact": artifact.__dict__,
+        "artifacts": [artifact.__dict__, *(item.__dict__ for item in additional_artifacts)],
         "blockers": blockers,
         "counts": counts.model_dump(mode="json"),
-        "file": {
-            "relative_path": record.manifest_path,
-            "sha256": record.manifest_sha256,
-            "size_bytes": size_bytes,
-        },
+        "files": [
+            {
+                "relative_path": record.manifest_path,
+                "sha256": record.manifest_sha256,
+                "size_bytes": size_bytes,
+            },
+            *(
+                {
+                    "relative_path": item.path.relative_to(settings.workspace_root).as_posix(),
+                    "sha256": item.sha256,
+                    "size_bytes": item.size_bytes,
+                }
+                for item in additional_files
+            ),
+        ],
     }
     deletion_manifest_sha256 = hashlib.sha256(canonical_json_bytes(manifest_payload)).hexdigest()
     cascade_manifest_payload = {
@@ -601,8 +684,10 @@ def _regression_model_context(
         model=record,
         source_run=source_run,
         artifact=artifact,
+        additional_artifacts=tuple(additional_artifacts),
         path=path,
         size_bytes=size_bytes,
+        additional_files=tuple(additional_files),
         blockers=blockers,
         counts=counts,
         deletion_manifest_sha256=deletion_manifest_sha256,
@@ -745,7 +830,11 @@ def _regression_model_preflight_response(
         model_id=UUID(context.model.model_id),
         source_analysis_id=UUID(context.model.analysis_id),
         method_id=cast(
-            Literal["regression.linear_model", "regression.partial_least_squares"],
+            Literal[
+                "regression.linear_model",
+                "regression.partial_least_squares",
+                "regression.gaussian_process",
+            ],
             context.model.method_id,
         ),
         method_version=context.model.method_version,

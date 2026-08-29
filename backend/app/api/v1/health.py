@@ -30,6 +30,7 @@ class RuntimeCapabilities(BaseModel):
     regression_model_deletion: bool
     dedicated_predict: bool
     dedicated_response_optimizer: bool
+    gaussian_process_regression: bool
     bayesian_optimization: bool
     graph_builder_preview: bool
     dataset_cell_correction: bool

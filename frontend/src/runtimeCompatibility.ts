@@ -1,6 +1,6 @@
 import type { RuntimeCapabilities, RuntimeInfoResponse } from "./api";
 
-export const EXPECTED_API_CONTRACT_VERSION = 15;
+export const EXPECTED_API_CONTRACT_VERSION = 16;
 export const MINIMUM_METADATA_SCHEMA_VERSION = 19;
 
 export const REQUIRED_RUNTIME_CAPABILITIES = [
@@ -14,6 +14,7 @@ export const REQUIRED_RUNTIME_CAPABILITIES = [
   "regression_model_deletion",
   "dedicated_predict",
   "dedicated_response_optimizer",
+  "gaussian_process_regression",
   "bayesian_optimization",
   "graph_builder_preview",
   "dataset_cell_correction",

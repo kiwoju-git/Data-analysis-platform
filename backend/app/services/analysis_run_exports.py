@@ -1299,6 +1299,14 @@ def _analysis_method_report_label(method_id: str, locale: ReportLocale = "en") -
         "eda.normality": ("Normality Test", "정규성 검정"),
         "eda.equal_variances": ("Test for Equal Variances", "등분산 검정"),
         "regression.linear_model": ("Fit Regression Model", "회귀모형 적합"),
+        "regression.partial_least_squares": (
+            "Partial Least Squares Regression",
+            "PLS 회귀",
+        ),
+        "regression.gaussian_process": (
+            "Gaussian Process Regression",
+            "Gaussian Process 회귀",
+        ),
     }
     label = labels.get(method_id)
     if label is None:
@@ -1340,6 +1348,7 @@ def _analysis_result_method_specific_report_section(
         "graphical_summary": _graphical_summary_report_section_v2,
         "normality_test": _normality_report_section,
         "equal_variances_test": _equal_variances_report_section_v2,
+        "gaussian_process_regression": _gaussian_process_report_section,
     }
     renderer = renderers.get(str(summary_type))
     if renderer is not None:
@@ -2120,6 +2129,184 @@ def _regression_report_section(
   </table>
 {pairs_markup}
 {coefficients_markup}
+"""
+
+
+def _gaussian_process_report_section(
+    payload: dict[str, object], locale: ReportLocale = "en"
+) -> str:
+    summary = payload.get("model_summary")
+    kernel = payload.get("kernel")
+    diagnostics = payload.get("diagnostics")
+    if not isinstance(summary, dict) or not isinstance(kernel, dict):
+        return ""
+    heading = report_text(
+        locale,
+        en="Gaussian Process Model Summary",
+        ko="Gaussian Process 모형 요약",
+    )
+    description = report_text(
+        locale,
+        en=(
+            "Predictive intervals are conditional on the fitted kernel and its " "hyperparameters."
+        ),
+        ko="예측구간은 적합된 kernel과 hyperparameter에 조건부입니다.",
+    )
+    metrics = "\n".join(
+        row
+        for row in (
+            _report_metric_row(
+                report_text(locale, en="Training R squared", ko="학습 R 제곱"),
+                summary.get("training_r_squared"),
+            ),
+            _report_metric_row("Training RMSE", summary.get("training_rmse")),
+            _report_metric_row(
+                report_text(locale, en="Predicted R squared", ko="예측 R 제곱"),
+                summary.get("predicted_r_squared"),
+            ),
+            _report_metric_row("PRESS", summary.get("press")),
+            _report_metric_row("CV RMSE", summary.get("cv_rmse")),
+            _report_metric_row("CV MAE", summary.get("cv_mae")),
+            _report_metric_row(
+                report_text(
+                    locale,
+                    en="Negative log predictive density",
+                    ko="음의 로그 예측밀도",
+                ),
+                summary.get("negative_log_predictive_density"),
+            ),
+            _report_metric_row(
+                report_text(locale, en="95% interval coverage", ko="95% 구간 포함률"),
+                summary.get("interval_coverage_95"),
+            ),
+            _report_metric_row(
+                report_text(
+                    locale,
+                    en="Mean predictive interval width",
+                    ko="평균 예측구간 폭",
+                ),
+                summary.get("mean_predictive_interval_width"),
+            ),
+            _report_metric_row(
+                report_text(locale, en="Log marginal likelihood", ko="로그 주변우도"),
+                summary.get("log_marginal_likelihood"),
+            ),
+            _report_metric_row(
+                report_text(locale, en="Fitted kernel", ko="적합 kernel"),
+                kernel.get("fitted_kernel"),
+            ),
+            _report_metric_row(
+                report_text(
+                    locale,
+                    en="Observation noise standard deviation",
+                    ko="관측 noise 표준편차",
+                ),
+                kernel.get("observation_noise_standard_deviation"),
+            ),
+        )
+        if row
+    )
+    parameter_rows = _gp_parameter_report_rows(kernel.get("parameters"), locale)
+    chart = _gp_observed_fitted_report_svg(diagnostics, locale)
+    metric_header = report_text(locale, en="Metric", ko="지표")
+    value_header = report_text(locale, en="Value", ko="값")
+    parameter_header = report_text(locale, en="Parameter", ko="항목")
+    predictor_header = report_text(locale, en="Predictor", ko="예측변수")
+    estimate_header = report_text(locale, en="Estimate", ko="추정값")
+    bounds_header = report_text(locale, en="Bounds", ko="경계")
+    status_header = report_text(locale, en="Status", ko="상태")
+    return f"""
+  <h2>{_html_text(heading)}</h2>
+  <p>{_html_text(description)}</p>
+  <table>
+    <thead><tr><th>{_html_text(metric_header)}</th><th>{_html_text(value_header)}</th></tr></thead>
+    <tbody>{metrics}</tbody>
+  </table>
+  <h3>{_html_text(
+      report_text(locale, en="Kernel Hyperparameters", ko="Kernel hyperparameter")
+  )}</h3>
+  <table>
+    <thead><tr><th>{_html_text(parameter_header)}</th><th>{_html_text(predictor_header)}</th><th>{_html_text(estimate_header)}</th><th>{_html_text(bounds_header)}</th><th>{_html_text(status_header)}</th></tr></thead>
+    <tbody>{parameter_rows}</tbody>
+  </table>
+  {chart}
+"""
+
+
+def _gp_parameter_report_rows(value: object, locale: ReportLocale) -> str:
+    if not isinstance(value, list):
+        return ""
+    rows: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        bounds = (
+            f"{_report_cell_value(item.get('lower_bound'))} .. "
+            f"{_report_cell_value(item.get('upper_bound'))}"
+        )
+        status_label = (
+            report_text(locale, en="near bound", ko="경계 근접")
+            if item.get("near_bound")
+            else report_text(locale, en="within bounds", ko="경계 안")
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{_html_text(_report_cell_value(item.get('parameter')))}</td>"
+            f"<td>{_html_text(_report_cell_value(item.get('column_id')))}</td>"
+            f"<td>{_html_text(_report_cell_value(item.get('estimate')))}</td>"
+            f"<td>{_html_text(bounds)}</td>"
+            f"<td>{_html_text(status_label)}</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
+
+
+def _gp_observed_fitted_report_svg(
+    diagnostics: object,
+    locale: ReportLocale,
+) -> str:
+    points_value = diagnostics.get("points") if isinstance(diagnostics, dict) else None
+    if not isinstance(points_value, list):
+        return ""
+    points = [
+        item
+        for item in points_value
+        if isinstance(item, dict)
+        and isinstance(item.get("observed"), int | float)
+        and isinstance(item.get("fitted"), int | float)
+    ]
+    if not points:
+        return ""
+    values = [float(item[key]) for item in points for key in ("observed", "fitted")]
+    lower = min(values)
+    upper = max(values)
+    span = upper - lower or 1.0
+
+    def coordinate(value: object) -> float:
+        return 45.0 + (float(cast(float, value)) - lower) / span * 500.0
+
+    circles = "".join(
+        (
+            f'<circle cx="{coordinate(item["observed"]):.4f}" '
+            f'cy="{555.0 - coordinate(item["fitted"]):.4f}" r="3.5">'
+            f'<title>{_html_text(item.get("row_index"))}</title></circle>'
+        )
+        for item in points
+    )
+    title = report_text(locale, en="Observed versus Fitted", ko="관측값 대 적합값")
+    desc = report_text(
+        locale,
+        en="Saved observed and fitted values with a 45-degree reference line.",
+        ko="저장된 관측값과 적합값 및 45도 기준선입니다.",
+    )
+    return f"""
+  <h3>{_html_text(title)}</h3>
+  <svg role="img" viewBox="0 0 600 600" aria-labelledby="gp-report-title gp-report-desc">
+    <title id="gp-report-title">{_html_text(title)}</title>
+    <desc id="gp-report-desc">{_html_text(desc)}</desc>
+    <line class="interval" x1="45" x2="545" y1="510" y2="10" />
+    <g class="estimate">{circles}</g>
+  </svg>
 """
 
 

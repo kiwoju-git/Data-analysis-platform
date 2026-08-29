@@ -200,6 +200,7 @@ class WorkspaceAssetCatalogRecord:
     note: str | None
     metadata_updated_at: str | None
     dependency_count: int
+    source_analysis_id: str | None
 
 
 @dataclass(frozen=True)
@@ -2610,7 +2611,8 @@ def list_workspace_asset_catalog_records(
             metadata.updated_at AS metadata_updated_at,
             (SELECT COUNT(*) FROM analysis_runs analysis
              WHERE analysis.dataset_version_id = version.version_id)
-                AS dependency_count
+                AS dependency_count,
+            NULL AS source_analysis_id
         FROM dataset_versions version
         JOIN datasets dataset ON dataset.dataset_id = version.dataset_id
         LEFT JOIN dataset_version_user_metadata metadata ON metadata.version_id = version.version_id
@@ -2631,7 +2633,8 @@ def list_workspace_asset_catalog_records(
             metadata.note,
             metadata.updated_at,
             (SELECT COUNT(*) FROM analysis_artifacts artifact
-             WHERE artifact.analysis_id = analysis.analysis_id)
+             WHERE artifact.analysis_id = analysis.analysis_id),
+            analysis.analysis_id
         FROM analysis_runs analysis
         LEFT JOIN workspace_asset_user_metadata metadata
             ON metadata.owner_type = 'analysis_run' AND metadata.owner_id = analysis.analysis_id
@@ -2652,7 +2655,8 @@ def list_workspace_asset_catalog_records(
             COALESCE(metadata.pinned, 0),
             metadata.note,
             metadata.updated_at,
-            0
+            0,
+            model.analysis_id
         FROM regression_models model
         JOIN analysis_runs analysis ON analysis.analysis_id = model.analysis_id
         LEFT JOIN regression_model_user_metadata metadata ON metadata.model_id = model.model_id
@@ -2684,7 +2688,8 @@ def list_workspace_asset_catalog_records(
                 JOIN experiment_design_versions version
                     ON version.design_version_id = revision.design_version_id
                 WHERE version.design_id = design.design_id
-            )
+            ),
+            NULL
         FROM experiment_designs design
         LEFT JOIN workspace_asset_user_metadata metadata
             ON metadata.owner_type = 'doe_design' AND metadata.owner_id = design.design_id
@@ -2715,7 +2720,8 @@ def list_workspace_asset_catalog_records(
             metadata.updated_at,
             (SELECT COUNT(*) FROM bayesian_study_versions version
              JOIN bayesian_trials trial ON trial.study_version_id = version.study_version_id
-             WHERE version.study_id = study.study_id)
+             WHERE version.study_id = study.study_id),
+            NULL
         FROM bayesian_studies study
         LEFT JOIN workspace_asset_user_metadata metadata
             ON metadata.owner_type = 'bayesian_study' AND metadata.owner_id = study.study_id
@@ -2767,7 +2773,7 @@ def list_workspace_asset_catalog_records(
             WITH assets AS ({catalog_sql})
             SELECT asset_id, asset_type, subtype, method_id, display_name,
                    secondary_text, status, created_at, updated_at, pinned,
-                   note, metadata_updated_at, dependency_count
+                   note, metadata_updated_at, dependency_count, source_analysis_id
             FROM assets{where_clause}
             ORDER BY {order_clause}
             LIMIT ? OFFSET ?;
@@ -2789,6 +2795,7 @@ def list_workspace_asset_catalog_records(
             note=None if row[10] is None else str(row[10]),
             metadata_updated_at=None if row[11] is None else str(row[11]),
             dependency_count=int(row[12]),
+            source_analysis_id=None if row[13] is None else str(row[13]),
         )
         for row in rows
     ]
@@ -4733,6 +4740,7 @@ def delete_regression_model_record(
     expected_model: RegressionModelRecord,
     expected_source_run: AnalysisRunRecord,
     expected_artifact: AnalysisArtifactRecord,
+    expected_additional_artifacts: list[AnalysisArtifactRecord] | None = None,
 ) -> None:
     connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
     try:
@@ -4757,20 +4765,22 @@ def delete_regression_model_record(
             """,
             (expected_model.analysis_id,),
         ).fetchone()
-        artifact_row = connection.execute(
+        expected_artifacts = [expected_artifact, *(expected_additional_artifacts or [])]
+        artifact_rows = connection.execute(
             """
             SELECT artifact_id, analysis_id, kind, path, sha256, media_type, created_at
-            FROM analysis_artifacts
-            WHERE analysis_id = ? AND artifact_id = ?;
+            FROM analysis_artifacts WHERE analysis_id = ?
+            ORDER BY created_at DESC, rowid DESC;
             """,
-            (expected_artifact.analysis_id, expected_artifact.artifact_id),
-        ).fetchone()
-        if model_row is None or run_row is None or artifact_row is None:
+            (expected_artifact.analysis_id,),
+        ).fetchall()
+        current_artifacts = [_analysis_artifact_from_row(row) for row in artifact_rows]
+        if model_row is None or run_row is None:
             raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
         if (
             _regression_model_from_row(model_row) != expected_model
             or _analysis_run_from_row(run_row) != expected_source_run
-            or _analysis_artifact_from_row(artifact_row) != expected_artifact
+            or any(item not in current_artifacts for item in expected_artifacts)
         ):
             raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
         if _connection_regression_prediction_count(
@@ -4779,15 +4789,17 @@ def delete_regression_model_record(
             model_id=expected_model.model_id,
         ):
             raise WorkspaceAssetStorageConflict("regression_model_deletion_blocked")
-        artifact_deleted = connection.execute(
-            "DELETE FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;",
-            (expected_artifact.analysis_id, expected_artifact.artifact_id),
-        )
+        artifact_deleted_count = 0
+        for artifact in expected_artifacts:
+            artifact_deleted_count += connection.execute(
+                "DELETE FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;",
+                (artifact.analysis_id, artifact.artifact_id),
+            ).rowcount
         model_deleted = connection.execute(
             "DELETE FROM regression_models WHERE model_id = ?;",
             (expected_model.model_id,),
         )
-        if artifact_deleted.rowcount != 1 or model_deleted.rowcount != 1:
+        if artifact_deleted_count != len(expected_artifacts) or model_deleted.rowcount != 1:
             raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
         connection.commit()
     except Exception:
@@ -4803,6 +4815,7 @@ def delete_regression_model_with_prediction_records(
     expected_model: RegressionModelRecord,
     expected_source_run: AnalysisRunRecord,
     expected_model_artifact: AnalysisArtifactRecord,
+    expected_additional_model_artifacts: list[AnalysisArtifactRecord] | None = None,
     expected_predictions: list[tuple[AnalysisRunRecord, list[AnalysisArtifactRecord]]],
 ) -> None:
     connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
@@ -4826,19 +4839,25 @@ def delete_regression_model_with_prediction_records(
             """,
             (expected_source_run.analysis_id,),
         ).fetchone()
-        artifact_row = connection.execute(
+        expected_model_artifacts = [
+            expected_model_artifact,
+            *(expected_additional_model_artifacts or []),
+        ]
+        artifact_rows = connection.execute(
             """
             SELECT artifact_id, analysis_id, kind, path, sha256, media_type, created_at
-            FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;
+            FROM analysis_artifacts WHERE analysis_id = ?
+            ORDER BY created_at DESC, rowid DESC;
             """,
-            (expected_model_artifact.analysis_id, expected_model_artifact.artifact_id),
-        ).fetchone()
-        if model_row is None or source_row is None or artifact_row is None:
+            (expected_model_artifact.analysis_id,),
+        ).fetchall()
+        current_model_artifacts = [_analysis_artifact_from_row(row) for row in artifact_rows]
+        if model_row is None or source_row is None:
             raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
         if (
             _regression_model_from_row(model_row) != expected_model
             or _analysis_run_from_row(source_row) != expected_source_run
-            or _analysis_artifact_from_row(artifact_row) != expected_model_artifact
+            or any(item not in current_model_artifacts for item in expected_model_artifacts)
         ):
             raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
 
@@ -4903,15 +4922,17 @@ def delete_regression_model_with_prediction_records(
             if deleted.rowcount != 1:
                 raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
 
-        artifact_deleted = connection.execute(
-            "DELETE FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;",
-            (expected_model_artifact.analysis_id, expected_model_artifact.artifact_id),
-        )
+        artifact_deleted_count = 0
+        for artifact in expected_model_artifacts:
+            artifact_deleted_count += connection.execute(
+                "DELETE FROM analysis_artifacts WHERE analysis_id = ? AND artifact_id = ?;",
+                (artifact.analysis_id, artifact.artifact_id),
+            ).rowcount
         model_deleted = connection.execute(
             "DELETE FROM regression_models WHERE model_id = ?;",
             (expected_model.model_id,),
         )
-        if artifact_deleted.rowcount != 1 or model_deleted.rowcount != 1:
+        if artifact_deleted_count != len(expected_model_artifacts) or model_deleted.rowcount != 1:
             raise WorkspaceAssetStorageConflict("regression_model_deletion_conflict")
         connection.commit()
     except Exception:

@@ -118,7 +118,10 @@ export interface RegressionModelCatalogItem {
   model_id: string;
   source_analysis_id: string;
   source_dataset_version_id: string;
-  method_id: "regression.linear_model" | "regression.partial_least_squares";
+  method_id:
+    | "regression.linear_model"
+    | "regression.partial_least_squares"
+    | "regression.gaussian_process";
   method_version: string;
   schema_hash: string;
   response: RegressionModelCatalogResponseColumn | null;
@@ -178,10 +181,36 @@ export interface PlsPointPredictionResponse {
   }>;
 }
 
+export interface GaussianProcessPointPredictionRequest {
+  expected_model_manifest_sha256: string;
+  rows: Array<{
+    client_row_id: string;
+    values: Record<string, number>;
+  }>;
+}
+
+export interface GaussianProcessPointPredictionResponse {
+  model_id: string;
+  model_manifest_sha256: string;
+  response_column_id: string;
+  row_count: number;
+  interval_kind: "latent_and_new_observation";
+  confidence_level: number;
+  rows: Array<{
+    client_row_id: string;
+    predicted_mean: number;
+    latent_standard_deviation: number;
+    latent_interval_95: { lower: number; upper: number };
+    predictive_standard_deviation: number;
+    predictive_interval_95: { lower: number; upper: number };
+    warnings: string[];
+  }>;
+}
+
 export interface RegressionModelDeletionCounts {
   regression_model_count: 1;
-  manifest_artifact_count: 1;
-  manifest_file_count: 1;
+  manifest_artifact_count: number;
+  manifest_file_count: number;
   manifest_file_bytes: number;
   metadata_record_count: number;
   dependent_prediction_count: number;
@@ -223,7 +252,10 @@ export interface RegressionModelDeletionPreflightResponse {
   preflight_schema_version: 3;
   model_id: string;
   source_analysis_id: string;
-  method_id: "regression.linear_model";
+  method_id:
+    | "regression.linear_model"
+    | "regression.partial_least_squares"
+    | "regression.gaussian_process";
   method_version: string;
   deletion_ready: boolean;
   cascade_deletion_ready: boolean;

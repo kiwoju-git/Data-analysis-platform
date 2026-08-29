@@ -1,6 +1,8 @@
 import { apiErrorCode, apiRequestError, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type {
+  GaussianProcessPointPredictionRequest,
+  GaussianProcessPointPredictionResponse,
   PlsPointPredictionRequest,
   PlsPointPredictionResponse,
   RegressionModelDeleteRequest,
@@ -26,6 +28,21 @@ import type {
   RegressionResponseOptimizationRequest,
   RegressionResponseOptimizationResponse,
 } from "./types";
+
+export async function createGaussianProcessPointPredictions(
+  modelId: string,
+  request: GaussianProcessPointPredictionRequest,
+): Promise<GaussianProcessPointPredictionResponse> {
+  const response = await fetchApi(apiRoutes.gaussianProcessPredictions(modelId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiRequestError(response, "gp_prediction_failed");
+  }
+  return (await response.json()) as GaussianProcessPointPredictionResponse;
+}
 
 export async function createPlsPointPredictions(
   modelId: string,
