@@ -17,7 +17,9 @@ import {
   type GeneralFactorialDesignResponse,
 } from "./api";
 import { DoeActionBar, DoeFormSection } from "./doe/DoeFormPrimitives";
+import { DoeFactorCountControl } from "./doe/DoeFactorCountControl";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
+import { DOE_FACTOR_CAPABILITIES } from "./doe/factorCapabilities";
 import {
   parsePastedLevels,
   threeLevelPresetLevels,
@@ -236,6 +238,13 @@ export function GeneralFactorialDesignPanel({
             <p>요인마다 2~10개의 숫자 또는 문자 수준을 입력 순서대로 지정합니다.</p>
           </div>
           <div className="button-row compact-actions">
+            <DoeFactorCountControl
+              count={factors.length}
+              factorLabels={factors.map((factor) => factor.name)}
+              maximum={DOE_FACTOR_CAPABILITIES.generalFactorialAuthoring}
+              minimum={2}
+              onResize={(count) => setFactors((current) => resizeGeneralFactors(current, count))}
+            />
             <button
               className="secondary-button"
               onClick={() => applyThreeLevelPreset(factors, setFactors)}
@@ -245,21 +254,8 @@ export function GeneralFactorialDesignPanel({
             </button>
             <button
               className="secondary-button"
-              disabled={factors.length >= 6}
-              onClick={() =>
-                setFactors((current) => [
-                  ...current,
-                  {
-                    id: `general-factor-${Date.now()}`,
-                    name: `Factor ${current.length + 1}`,
-                    levelType: "categorical",
-                    levels: ["Low", "Middle", "High"],
-                    unit: "",
-                    expanded: true,
-                    pasteDraft: "",
-                  },
-                ])
-              }
+              disabled={factors.length >= DOE_FACTOR_CAPABILITIES.generalFactorialAuthoring}
+              onClick={() => setFactors((current) => resizeGeneralFactors(current, current.length + 1))}
               type="button"
             >
               요인 추가
@@ -418,6 +414,28 @@ export function GeneralFactorialDesignPanel({
       ) : null}
     </div>
   );
+}
+
+function resizeGeneralFactors(
+  current: GeneralFactorDraft[],
+  count: number,
+): GeneralFactorDraft[] {
+  if (count <= current.length) return current.slice(0, count);
+  const next = [...current];
+  const seed = Date.now();
+  while (next.length < count) {
+    const index = next.length + 1;
+    next.push({
+      id: `general-factor-${seed}-${index}`,
+      name: `Factor ${index}`,
+      levelType: "categorical",
+      levels: ["Low", "Middle", "High"],
+      unit: "",
+      expanded: true,
+      pasteDraft: "",
+    });
+  }
+  return next;
 }
 
 function GeneralFactorLevelEditor({

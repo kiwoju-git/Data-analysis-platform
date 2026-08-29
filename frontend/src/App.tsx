@@ -46,6 +46,7 @@ import {
   type PairedTResult,
   type PearsonCorrelationResult,
   type PlsRegressionResult,
+  type PrincipalComponentsResult,
   type RunChartResult,
   type SubgroupChartResult,
   type TwoSampleTResult,
@@ -58,6 +59,7 @@ import type { DescriptiveQuickGraphState } from "./DescriptiveAnalysisPanel";
 import type { OneWayAnovaExecutionOptions } from "./OneWayAnovaPanel";
 import type { MannWhitneyExecutionOptions } from "./MannWhitneyPanel";
 import type { PlsRunConfig } from "./PlsRegressionPanel";
+import type { PrincipalComponentsRunConfig } from "./PrincipalComponentsPanel";
 import type { GaussianProcessRunConfig } from "./GaussianProcessRegressionPanel";
 import type { TwoSampleEquivalenceExecutionOptions } from "./TwoSampleEquivalencePanel";
 import {
@@ -68,6 +70,7 @@ import {
 import {
   buildAnalysisPath,
   legacyGeneralFactorialRedirectLocation,
+  legacyMultivariateReviewRedirectLocation,
   legacyResponseOptimizerRedirectLocation,
 } from "./analysisNavigation";
 import { useAnalysisSelection } from "./analysisSelection";
@@ -737,7 +740,16 @@ export default function App() {
       window.location.search,
       window.location.hash,
     );
-    if (generalFactorialRedirect !== null) replaceAppLocation(generalFactorialRedirect);
+    if (generalFactorialRedirect !== null) {
+      replaceAppLocation(generalFactorialRedirect);
+      return;
+    }
+    const pcaRedirect = legacyMultivariateReviewRedirectLocation(
+      window.location.pathname,
+      window.location.search,
+      window.location.hash,
+    );
+    if (pcaRedirect !== null) replaceAppLocation(pcaRedirect);
   }, [appRoute]);
 
   useEffect(() => {
@@ -994,6 +1006,10 @@ export default function App() {
     displayedAnalysisResult !== null && isEquivalenceMethodId(displayedAnalysisResult.method_id)
       ? displayedAnalysisResult
       : null;
+  const principalComponentsAnalysisResult =
+    displayedAnalysisResult?.method_id === "eda.principal_components"
+      ? displayedAnalysisResult
+      : null;
   const pairedTAnalysisResult =
     displayedAnalysisResult?.method_id === "hypothesis.paired_t" ? displayedAnalysisResult : null;
   const oneSampleWilcoxonAnalysisResult =
@@ -1110,6 +1126,11 @@ export default function App() {
     : null;
   const plsResult = isPlsRegressionResult(plsAnalysisResult?.result)
     ? plsAnalysisResult.result
+    : null;
+  const principalComponentsResult = isPrincipalComponentsResult(
+    principalComponentsAnalysisResult?.result,
+  )
+    ? principalComponentsAnalysisResult.result
     : null;
   const gaussianProcessResult = isGaussianProcessRegressionResult(
     gaussianProcessAnalysisResult?.result,
@@ -3845,6 +3866,51 @@ export default function App() {
     }
   }
 
+  async function handleRunPrincipalComponentsAnalysis(config: PrincipalComponentsRunConfig) {
+    if (
+      version === null ||
+      selectedMethod === null ||
+      selectedMethod.method_id !== "eda.principal_components"
+    ) {
+      setFlowError("pca_variable_count_invalid");
+      return;
+    }
+    if (analysisFilterValidationError !== null) {
+      setFlowError(analysisFilterValidationError);
+      return;
+    }
+    setIsRunningAnalysis(true);
+    setFlowError(null);
+    try {
+      const filterConditions = serializeAnalysisFilterDrafts(
+        analysisFilterDrafts,
+        version.columns,
+      );
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id,
+        method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: { expression_version: 1, conditions: filterConditions },
+        roles: { variables: config.columnIds.join(",") },
+        options: {
+          column_ids: config.columnIds,
+          matrix_type: config.matrixType,
+          component_selection: config.componentSelection,
+          component_count: config.componentCount,
+          cumulative_threshold: config.cumulativeThreshold,
+          outlier_alpha: config.outlierAlpha,
+          plot_point_limit: config.plotPointLimit,
+          missing_policy: "complete_case",
+        },
+      });
+      setAnalysisResult(response);
+    } catch (error) {
+      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  }
+
   async function handleRunGaussianProcessAnalysis(config: GaussianProcessRunConfig) {
     if (
       version === null ||
@@ -4232,6 +4298,7 @@ export default function App() {
     linearModelAlpha,
     linearModelAnalysisResult,
     plsAnalysisResult,
+    principalComponentsAnalysisResult,
     gaussianProcessAnalysisResult,
     linearModelConfidenceLevel,
     linearModelSelectionMethod,
@@ -4251,6 +4318,7 @@ export default function App() {
     linearModelResponseColumns,
     linearModelResult,
     plsResult,
+    principalComponentsResult,
     gaussianProcessResult,
     isRunningLinearModelPrediction,
     isRunningLinearModelPredictionPreflight,
@@ -4405,6 +4473,9 @@ export default function App() {
     },
     onRunPlsAnalysis: (config) => {
       void handleRunPlsAnalysis(config);
+    },
+    onRunPrincipalComponentsAnalysis: (config) => {
+      void handleRunPrincipalComponentsAnalysis(config);
     },
     onRunGaussianProcessAnalysis: (config) => {
       void handleRunGaussianProcessAnalysis(config);
@@ -5770,6 +5841,19 @@ function isPlsRegressionResult(
     typeof candidate.model_summary === "object" &&
     candidate.model_summary !== null &&
     Array.isArray(candidate.coefficients)
+  );
+}
+
+function isPrincipalComponentsResult(
+  value: AnalysisResultEnvelope["result"] | undefined,
+): value is PrincipalComponentsResult {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<PrincipalComponentsResult>;
+  return (
+    candidate.schema_version === 1 &&
+    candidate.summary_type === "principal_components_analysis" &&
+    Array.isArray(candidate.eigenanalysis) &&
+    Array.isArray(candidate.scores)
   );
 }
 

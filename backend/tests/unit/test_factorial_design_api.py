@@ -1,7 +1,88 @@
 from fastapi.testclient import TestClient
+import hashlib
+
+import numpy as np
 
 from app.core.config import Settings
 from app.main import create_app
+from app.statistics.factorial_design import (
+    PLACKETT_BURMAN_12_MATRIX_SHA256,
+    plackett_burman_12_matrix,
+)
+
+
+def test_plackett_burman_catalog_is_balanced_orthogonal_and_full_rank() -> None:
+    matrix = np.asarray(plackett_burman_12_matrix(), dtype=np.int8)
+
+    assert matrix.shape == (12, 11)
+    assert set(np.unique(matrix)) == {-1, 1}
+    assert np.array_equal(matrix.sum(axis=0), np.zeros(11, dtype=int))
+    assert np.array_equal(matrix.T @ matrix, 12 * np.eye(11, dtype=int))
+    assert np.linalg.matrix_rank(np.column_stack((np.ones(12), matrix))) == 12
+    assert hashlib.sha256(matrix.tobytes()).hexdigest() == PLACKETT_BURMAN_12_MATRIX_SHA256
+
+
+def test_plackett_burman_api_supports_ten_mixed_factors_and_restore(tmp_path) -> None:
+    factors = [
+        {"factor_kind": "numeric", "name": f"X{index}", "low": -1, "high": 1}
+        for index in range(1, 10)
+    ] + [
+        {
+            "factor_kind": "categorical",
+            "name": "Material",
+            "low_label": "A",
+            "high_label": "B",
+        }
+    ]
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "ten factor screening",
+                "design_type": "plackett_burman_screening",
+                "screening_catalog_id": "pb-12-run-v1",
+                "factors": factors,
+                "replicates": 1,
+                "center_points": 0,
+                "randomize": False,
+                "randomization_seed": 9,
+                "block_count": 1,
+            },
+        )
+        assert response.status_code == 201, response.text
+        payload = response.json()
+        restored = client.get(f"/api/v1/doe-designs/{payload['design_id']}")
+
+    assert payload["family"] == "plackett_burman_screening"
+    assert payload["design_schema_version"] == 3
+    assert payload["run_count"] == 12
+    assert payload["screening"]["used_columns"] == 10
+    assert payload["screening"]["matrix_sha256"] == PLACKETT_BURMAN_12_MATRIX_SHA256
+    assert {run["factor_levels"]["Material"] for run in payload["runs"]} == {"A", "B"}
+    assert restored.status_code == 200
+    assert restored.json() == payload
+
+
+def test_ten_factor_full_factorial_is_rejected_before_materialization(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        response = client.post(
+            "/api/v1/doe-designs/factorial",
+            json={
+                "name": "infeasible full factorial",
+                "factors": [
+                    {"factor_kind": "numeric", "name": f"X{index}", "low": 0, "high": 1}
+                    for index in range(10)
+                ],
+                "replicates": 1,
+                "center_points": 0,
+                "randomize": False,
+                "randomization_seed": 1,
+                "block_count": 1,
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "doe_factorial_run_count_exceeds_limit"
 
 
 def test_fractional_factorial_api_persists_catalog_and_alias_metadata(tmp_path) -> None:
@@ -90,7 +171,7 @@ def test_two_level_factorial_supports_categorical_pseudo_centers(tmp_path) -> No
         payload = response.json()
         restored = client.get(f"/api/v1/doe-designs/{payload['design_id']}")
 
-    assert payload["method_version"] == "0.6.0"
+    assert payload["method_version"] == "0.7.0"
     assert payload["design_schema_version"] == 2
     assert payload["run_count"] == 6
     assert payload["factors"][0]["factor_kind"] == "numeric"
@@ -255,7 +336,7 @@ def test_general_factorial_api_creates_three_level_design_and_analyzes_response(
         )
 
     assert design["method_id"] == "doe.general_factorial_design"
-    assert design["method_version"] == "0.1.0"
+    assert design["method_version"] == "0.2.0"
     assert design["run_count"] == 12
     assert saved.status_code == 200, saved.text
     assert analysis.status_code == 201, analysis.text

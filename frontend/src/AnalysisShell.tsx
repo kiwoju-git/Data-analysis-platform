@@ -38,6 +38,10 @@ import {
   type PlsRunConfig,
 } from "./PlsRegressionPanel";
 import {
+  PrincipalComponentsPanel,
+  type PrincipalComponentsRunConfig,
+} from "./PrincipalComponentsPanel";
+import {
   GaussianProcessRegressionPanel,
   type GaussianProcessRunConfig,
 } from "./GaussianProcessRegressionPanel";
@@ -103,6 +107,7 @@ import type {
   PairedTResult,
   PearsonCorrelationResult,
   PlsRegressionResult,
+  PrincipalComponentsResult,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
   RunChartResult,
@@ -141,6 +146,7 @@ interface AnalysisResultByMethod {
   xyCorrelationAnalysisResult: AnalysisResultEnvelope | null;
   linearModelAnalysisResult: AnalysisResultEnvelope | null;
   plsAnalysisResult: AnalysisResultEnvelope | null;
+  principalComponentsAnalysisResult: AnalysisResultEnvelope | null;
   gaussianProcessAnalysisResult: AnalysisResultEnvelope | null;
   attributeControlChartAnalysisResult: AnalysisResultEnvelope | null;
   individualsChartAnalysisResult: AnalysisResultEnvelope | null;
@@ -270,6 +276,8 @@ export interface AnalysisShellProps {
   linearModelResult?: LinearModelResult | null;
   plsAnalysisResult?: AnalysisResultEnvelope | null;
   plsResult?: PlsRegressionResult | null;
+  principalComponentsAnalysisResult?: AnalysisResultEnvelope | null;
+  principalComponentsResult?: PrincipalComponentsResult | null;
   gaussianProcessAnalysisResult?: AnalysisResultEnvelope | null;
   gaussianProcessResult?: GaussianProcessRegressionResult | null;
   isRunningLinearModelPrediction?: boolean;
@@ -432,6 +440,7 @@ export interface AnalysisShellProps {
   onRunKruskalWallisAnalysis: () => void;
   onRunLinearModelAnalysis?: () => void;
   onRunPlsAnalysis?: (config: PlsRunConfig) => void;
+  onRunPrincipalComponentsAnalysis?: (config: PrincipalComponentsRunConfig) => void;
   onRunGaussianProcessAnalysis?: (config: GaussianProcessRunConfig) => void;
   onLinearModelSelectionMethodChange?: (method: "none" | "backward_elimination") => void;
   onLinearModelAlphaToRemoveChange?: (alpha: number) => void;
@@ -636,6 +645,7 @@ export function AnalysisShell({
   linearModelAlpha = 0.05,
   linearModelAnalysisResult = null,
   plsAnalysisResult = null,
+  principalComponentsAnalysisResult = null,
   gaussianProcessAnalysisResult = null,
   linearModelConfidenceLevel = 0.95,
   linearModelInteractionKeys = [],
@@ -675,6 +685,7 @@ export function AnalysisShell({
   linearModelResponseColumns = [],
   linearModelResult = null,
   plsResult = null,
+  principalComponentsResult = null,
   gaussianProcessResult = null,
   isRunningLinearModelPrediction = false,
   isRunningLinearModelPredictionPreflight = false,
@@ -836,6 +847,7 @@ export function AnalysisShell({
   onRunKruskalWallisAnalysis,
   onRunLinearModelAnalysis = () => undefined,
   onRunPlsAnalysis = () => undefined,
+  onRunPrincipalComponentsAnalysis = () => undefined,
   onRunGaussianProcessAnalysis = () => undefined,
   onLinearModelSelectionMethodChange = () => undefined,
   onLinearModelAlphaToRemoveChange = () => undefined,
@@ -956,6 +968,7 @@ export function AnalysisShell({
           analysisResult,
           graphicalSummaryAnalysisResult,
           normalityAnalysisResult,
+          principalComponentsAnalysisResult,
           equalVariancesAnalysisResult,
           oneSampleTAnalysisResult,
           equivalenceTostAnalysisResult,
@@ -1518,6 +1531,22 @@ export function AnalysisShell({
               );
             }
             if (
+              method.method_id === "eda.principal_components" &&
+              method.availability === "available"
+            ) {
+              return (
+                <PrincipalComponentsPanel
+                  analysisResult={principalComponentsAnalysisResult}
+                  filterValidationError={analysisFilterValidationError}
+                  isRunningAnalysis={isRunningAnalysis}
+                  methodId={method.method_id}
+                  onRun={onRunPrincipalComponentsAnalysis}
+                  result={principalComponentsResult}
+                  version={version}
+                />
+              );
+            }
+            if (
               method.method_id === "regression.partial_least_squares" &&
               method.availability === "available"
             ) {
@@ -1908,6 +1937,8 @@ function selectedAnalysisResultForMethod(
       return results.linearModelAnalysisResult;
     case "regression.partial_least_squares":
       return results.plsAnalysisResult;
+    case "eda.principal_components":
+      return results.principalComponentsAnalysisResult;
     case "regression.gaussian_process":
       return results.gaussianProcessAnalysisResult;
     case "quality.attribute_control_chart":

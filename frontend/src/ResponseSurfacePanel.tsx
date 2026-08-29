@@ -17,7 +17,9 @@ import {
   DoeFactorEditor,
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
+import { DoeFactorCountControl } from "./doe/DoeFactorCountControl";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
+import { DOE_FACTOR_CAPABILITIES } from "./doe/factorCapabilities";
 import {
   continuousFactorDomainDraft,
   formatDoeFactorValue,
@@ -34,7 +36,7 @@ interface FactorDraft extends DoeFactorDomainDraft {
   unit: string;
 }
 
-const maxFactorCount = 5;
+const maxFactorCount = DOE_FACTOR_CAPABILITIES.responseSurfaceCcd;
 
 export function ResponseSurfacePanel() {
   const [name, setName] = useState("Central composite process window");
@@ -76,6 +78,25 @@ export function ResponseSurfacePanel() {
     const center = Number.parseInt(centerPoints, 10);
     return Number.isInteger(center) ? 2 ** factors.length + 2 * factors.length + center : 0;
   }, [centerPoints, factors.length]);
+
+  function resizeFactors(count: number) {
+    setFactors((current) => {
+      if (count <= current.length) return current.slice(0, count);
+      const next = [...current];
+      while (next.length < count) {
+        const id = nextFactorId.current++;
+        next.push({
+          id,
+          name: `Factor ${next.length + 1}`,
+          low: "-1",
+          high: "1",
+          unit: "",
+          ...continuousFactorDomainDraft,
+        });
+      }
+      return next;
+    });
+  }
 
   const createDesign = async () => {
     const request = designRequest({
@@ -288,25 +309,29 @@ export function ResponseSurfacePanel() {
 
       <DoeFactorEditor
         action={
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={factors.length >= maxFactorCount}
-            onClick={() => {
-              const id = nextFactorId.current++;
-              setFactors((current) => [
-                ...current,
-                {
-                  id, name: `Factor ${id}`, low: "-1", high: "1", unit: "",
-                  ...continuousFactorDomainDraft,
-                },
-              ]);
-            }}
-          >
-            요인 추가
-          </button>
+          <div className="doe-factor-editor-actions">
+            <DoeFactorCountControl
+              count={factors.length}
+              factorLabels={factors.map((factor) => factor.name)}
+              maximum={maxFactorCount}
+              minimum={2}
+              onResize={resizeFactors}
+            />
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={factors.length >= maxFactorCount}
+              onClick={() => resizeFactors(factors.length + 1)}
+            >
+              요인 추가
+            </button>
+          </div>
         }
       >
+      <div className="notice-box">
+        현재 Central Composite Design은 최대 5개의 연속형 요인을 지원합니다.
+        더 많은 요인은 Screening Design 또는 LHS로 먼저 탐색한 뒤 중요 요인을 선택하세요.
+      </div>
       <div className="table-wrap">
         <table className="result-table doe-factor-table">
           <colgroup>

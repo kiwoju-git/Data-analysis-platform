@@ -52,7 +52,7 @@ The response contains no workspace path, filename, or raw data. Existing
 
 ## Frontend Gate
 
-The frontend expects API contract `16`, schema 19 or later, and every required
+The frontend expects API contract `17`, schema 19 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management
@@ -88,6 +88,14 @@ contracts. New two-level factorial writes use design schema 2 and can store
 actual text levels while retaining the existing coded `-1/+1` matrix. Metadata
 schema 19 remains sufficient because factors and runs are already stored as
 checksummed JSON; no SQLite migration or legacy artifact rewrite is performed.
+
+Contract 16 adds standalone Gaussian Process Regression and its safe model
+artifact/prediction contracts. Contract 17 adds executable
+`eda.principal_components`, raises validated LHS and Bayesian factor definitions
+to ten, exposes ten-factor factorial/general-factorial authoring with explicit
+run feasibility, and adds the catalog-backed 12-run Plackett-Burman screening
+design. Metadata remains schema 19 because all new meanings fit existing
+checksummed JSON artifacts; existing results and checksums are not rewritten.
 
 Contract 16 adds the available `regression.gaussian_process` catalog method,
 typed analysis result, safe model-owned numeric artifact, and probabilistic

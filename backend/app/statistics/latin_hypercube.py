@@ -8,6 +8,7 @@ import scipy  # type: ignore[import-untyped]
 from scipy.spatial.distance import pdist  # type: ignore[import-untyped]
 from scipy.stats import qmc  # type: ignore[import-untyped]
 
+from app.core.doe_capabilities import LATIN_HYPERCUBE_FACTOR_LIMIT
 from app.statistics.doe_factor_domain import (
     DoeFactorDomain,
     DoeFactorDomainError,
@@ -321,7 +322,7 @@ def _validate(
     factors: list[LatinHypercubeFactor],
     options: LatinHypercubeOptions,
 ) -> None:
-    if not 1 <= len(factors) <= 6:
+    if not 1 <= len(factors) <= LATIN_HYPERCUBE_FACTOR_LIMIT:
         raise LatinHypercubeError("lhs_factor_count_invalid")
     names = [factor.name for factor in factors]
     if len(set(names)) != len(names) or any(not name.strip() for name in names):
@@ -346,6 +347,8 @@ def _validate(
             raise LatinHypercubeError(exc.code) from exc
     if not 2 <= options.run_count <= 200:
         raise LatinHypercubeError("lhs_run_count_invalid")
+    if options.run_count < len(factors) + 1:
+        raise LatinHypercubeError("lhs_run_count_below_dimension_minimum")
     if options.seed < 0 or options.run_order_seed < 0:
         raise LatinHypercubeError("lhs_seed_invalid")
     if options.optimization not in {"random_cd", "none"}:

@@ -40,6 +40,11 @@ METHOD_EXECUTION_HANDLER_SPECS: tuple[MethodExecutionHandlerSpec, ...] = (
         result_summary_type="normality_test",
     ),
     MethodExecutionHandlerSpec(
+        method_id="eda.principal_components",
+        method_version=METHOD_VERSIONS["eda.principal_components"],
+        result_summary_type="principal_components_analysis",
+    ),
+    MethodExecutionHandlerSpec(
         method_id="eda.equal_variances",
         method_version=METHOD_VERSIONS["eda.equal_variances"],
         result_summary_type="equal_variances_test",

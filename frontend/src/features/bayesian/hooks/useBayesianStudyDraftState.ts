@@ -7,6 +7,7 @@ import {
   type ConstraintDraft,
   type FactorDraft,
 } from "../../../bayesianStudyDraft";
+import { DOE_FACTOR_CAPABILITIES } from "../../../doe/factorCapabilities";
 
 export function useBayesianStudyDraftState() {
   const [studyName, setStudyName] = useState("Sequential process study");
@@ -50,6 +51,7 @@ export function useBayesianStudyDraftState() {
   }, [factors.length]);
 
   function addFactor() {
+    if (factors.length >= DOE_FACTOR_CAPABILITIES.bayesianStudy) return;
     const key = nextFactorKey.current++;
     setFactors((current) => [
       ...current,
@@ -68,7 +70,51 @@ export function useBayesianStudyDraftState() {
   }
 
   function removeFactor(key: number) {
+    if (isFactorReferenced(key)) return;
     setFactors((current) => current.filter((item) => item.key !== key));
+  }
+
+  function isFactorReferenced(key: number): boolean {
+    return constraints.some((constraint) => {
+      const coefficient = constraint.coefficients[key];
+      return coefficient !== undefined && coefficient.trim() !== "" && Number(coefficient) !== 0;
+    });
+  }
+
+  function disabledReasonForFactorCount(count: number): string | null {
+    if (count < 1 || count > DOE_FACTOR_CAPABILITIES.bayesianStudy) {
+      return "요인 수가 지원 범위를 벗어났습니다.";
+    }
+    const removed = factors.slice(count);
+    return removed.some((factor) => isFactorReferenced(factor.key))
+      ? "제거하려는 요인을 참조하는 제약조건이 있습니다. 먼저 해당 제약조건을 수정하거나 삭제하세요."
+      : null;
+  }
+
+  function resizeFactors(count: number) {
+    if (disabledReasonForFactorCount(count) !== null) return;
+    if (count <= factors.length) {
+      setFactors((current) => current.slice(0, count));
+      return;
+    }
+    setFactors((current) => {
+      const next = [...current];
+      while (next.length < count) {
+        const key = nextFactorKey.current++;
+        next.push({
+          key,
+          factorId: `x${key}`,
+          name: `Input ${key}`,
+          low: "-1",
+          high: "1",
+          unit: "",
+          domainKind: "continuous",
+          step: "",
+          displayDecimals: "",
+        });
+      }
+      return next;
+    });
   }
 
   function updateFactor(key: number, field: keyof Omit<FactorDraft, "key">, value: string) {
@@ -207,12 +253,14 @@ export function useBayesianStudyDraftState() {
     buildRequest,
     cancelSuccessor,
     constraints,
+    disabledReasonForFactorCount,
     goalType,
     factors,
     generateNewSeed,
     initialDesignSeed,
     initialDesignPolicy,
     initialDesignSize,
+    isFactorReferenced,
     minimumInitialDesignSize: minimumBayesianInitialDesignSize(factors.length),
     objectiveName,
     objectiveUnit,
@@ -221,6 +269,7 @@ export function useBayesianStudyDraftState() {
     prepareSuccessor,
     removeConstraint,
     removeFactor,
+    resizeFactors,
     sameSeedAsPredecessor:
       predecessorSeed !== null && Number(initialDesignSeed) === predecessorSeed,
     setGoalType,

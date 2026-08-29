@@ -3087,6 +3087,7 @@ FRONTEND_RESULT_TYPE_FILE_CONTRACTS = [
                 "graphical_summary",
                 "normality_test",
                 "equal_variances_test",
+                "principal_components_analysis",
             }
         ),
     ),

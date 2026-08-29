@@ -172,8 +172,7 @@ family card 구성:
 
 | Presentation domain | Family | Current method / workflow | 상태 |
 |---|---|---|---|
-| 기초통계·탐색 | Direct | `eda.descriptive`, `eda.graphical_summary`, `eda.normality` | Available |
-| 기초통계·탐색 | Direct | `eda.multivariate_review` (PCA 기반 다변량 검토) | Planned |
+| 기초통계·탐색 | Direct | `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.principal_components` | Available |
 | 평균비교·동등성 | t-검정 | `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.two_sample_t` | Available |
 | 평균비교·동등성 | ANOVA | `hypothesis.one_way_anova` | Available |
 | 평균비교·동등성 | 동등성 검정 | 1-sample, paired, 2-sample TOST | Available |
@@ -186,7 +185,7 @@ family card 구성:
 | 상관·회귀·예측 | 예측·최적화 | saved-model prediction, regression optimizer | Contextual |
 | 상관·회귀·예측 | 잠재변수 회귀 | PLS Regression | Available (`regression.partial_least_squares` v0.1.0) |
 | 상관·회귀·예측 | 비선형 확률적 회귀 | Gaussian Process Regression | Available (`regression.gaussian_process` v0.1.0) |
-| 실험계획·최적화 | 요인배치 설계 | two-level full/fractional, general full factorial | Available |
+| 실험계획·최적화 | 요인배치 설계 | two-level full/fractional, Plackett-Burman screening, general full factorial | Available within method-specific run limits |
 | 실험계획·최적화 | 반응표면 | RSM | Available |
 | 실험계획·최적화 | 최적화 | Response Optimizer | Available |
 | AI/ML 실험설계 | 초기 공간 탐색 | LHS | Available |
@@ -297,34 +296,38 @@ UI 변경:
 - `정규성 가정 유지 가능 / Normality assumption may be retained`
 - 검정 하나로 다음 분석을 자동 변경하지 않는 경고
 
-## 7.4 Planned — Exploratory Multivariate Review
+## 7.4 Principal Components Analysis
 
-이 method를 실제로 구현하기 전까지 `Available`로 표시하지 않는다.
-
-권장 future ID:
+PCA 기반 다변량 검토는 실행 가능한 method다.
 
 ```text
-eda.multivariate_review
+eda.principal_components
 ```
 
-P0 입력:
+계약은 `docs/principal_components_method_contract.md`를 따른다.
 
-- 수치형 변수 2개 이상
-- 권장 상한 20개, 실제 상한은 contract에서 확정
+입력:
+
+- 수치형 변수 2~50개
 - scaling:
   - Standardized / correlation matrix
   - Original scale / covariance matrix
-- missing policy:
-  - complete case 기본
-- confidence ellipse와 outlier threshold는 고급 설정
+- complete-case missing policy
+- response 변수 없음
 
-P0 결과:
+결과:
 
-- correlation heatmap
 - PCA eigenvalues
 - scree plot
 - cumulative explained variance
 - score plot
+- loading plot
+- biplot
+- exploratory Mahalanobis distance/outlier plot
+- full score CSV와 localized HTML report
+
+PCA는 `X`의 분산/상관 구조를 요약하는 비지도 분석이다. 반응변수를
+사용해 예측 성분을 만드는 PLS Regression과 합치지 않는다.
 - loading plot
 - selected component table
 - T² 또는 score-distance 진단은 명확한 정의가 있을 때만 제공
@@ -918,6 +921,7 @@ LHS와 Bayesian은 이 도메인에서 중복 표시하지 않는다.
 
 - two-level full factorial
 - tested regular two-level fractional catalog
+- verified 12-run Plackett-Burman screening for 7~10 factors
 
 기본 설정:
 
@@ -928,7 +932,7 @@ LHS와 Bayesian은 이 도메인에서 중복 표시하지 않는다.
 
 factor 설정:
 
-- 2~6 numeric or two-level categorical factors for two-level designs
+- 2~10 numeric or two-level categorical factors for authoring
 - name
 - numeric low/high or categorical low/high labels
 - domain kind
@@ -941,6 +945,8 @@ factor 설정:
 - randomization seed
 - block count
 - fractional design 선택 시 fraction ID, resolution, generator preview
+- full/general factorial은 실제 예상 run 수가 256을 넘으면 생성 전 차단
+- 10요인 full factorial은 corner run만 1,024개이므로 screening 안내
 
 분석 설정:
 
@@ -966,7 +972,7 @@ factor 설정:
 - 일반 navigation에는 독립 card로 중복 표시하지 않고
   `doe.factorial_design` workspace의 General Full 설계 종류로 연다.
 - 기존 method ID, API, 저장 설계와 direct URL reader는 유지한다.
-- factor 2~6개
+- factor 2~10개 authoring
 - each factor 2~10 numeric or text levels
 - explicit level type/count editor; levels preserve entered order
 - all-factors three-level preset; 3-level full factorial is a special case of General Full
@@ -998,6 +1004,11 @@ factor 설정:
   - face-centered
 - center points
 - randomization/seed
+
+현재 CCD는 5요인을 초과하지 않는다. 고요인은 Plackett-Burman 또는
+다른 screening으로 중요 요인을 줄인 후 RSM을 수행한다. 향후
+D-Optimal Response Surface Design은 candidate set, 명시적 reduced/full
+quadratic model, model-rank와 optimality 기준을 가진 별도 planned contract다.
 
 분석:
 
@@ -1093,12 +1104,13 @@ Gaussian Process는 별도 가짜 method button이 아니다.
 
 factor:
 
-- 1~6 factors
+- 1~10 factors
 - low/high
 - continuous or discrete numeric
 - step
 - display decimals
 - unit
+- run count는 최소 `d + 1`; 약 `3d`를 제품 시작 가이드로 표시
 
 고급:
 
@@ -1142,7 +1154,7 @@ Study 기본:
 
 초기 설계:
 
-- factor 1~6개
+- factor 1~10개
 - continuous or fixed-step numeric
 - bounds/domain/step/unit
 - initial design size
@@ -1151,6 +1163,10 @@ Study 기본:
   - feasible uniform policy for linear constraints
 - seed
 - actual-unit linear constraints up to current cap
+
+8개 이상 요인에서는 high-dimensional Study 경고를 표시한다. 최소 완료
+관측 수는 `d + 1`, 10요인 권장 초기 실험 안내는 약 30개다. 이는
+보장이 아니며 사용자가 입력한 초기 설계를 조용히 바꾸지 않는다.
 
 관측:
 

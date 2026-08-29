@@ -227,6 +227,13 @@ export function BayesianStudyBuilder({
           초기설계로 변경하거나 선형 제약을 제거하세요.
         </div>
       ) : null}
+      {draft.factors.length >= 8 ? (
+        <div className="warning-box" role="status">
+          요인 수가 많으면 Gaussian Process와 acquisition search가 충분한 실제 관측 없이
+          불안정할 수 있습니다. 최소 {draft.minimumInitialDesignSize}개가 필요하며, 권장 시작은
+          약 {3 * draft.factors.length}개입니다. screening 또는 더 큰 초기설계를 검토하세요.
+        </div>
+      ) : null}
       </DoeFormSection>
       {draft.predecessorStudyId !== null ? (
         <BayesianSuccessorSeedNotice

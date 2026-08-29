@@ -2,12 +2,21 @@
 
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.2.0`,
-`doe.factorial_design` is `0.6.0`, `doe.response_optimizer` is `0.4.0`, and
-`doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.5.0`,
+`doe.factorial_design` is `0.7.0`, `doe.response_optimizer` is `0.4.0`, and
+`doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.6.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
 `eda.descriptive`, `eda.graphical_summary`, and `eda.equal_variances` are
 `0.2.0`. `quality.run_chart` and `hypothesis.mann_whitney` are `0.2.0`;
-`doe.latin_hypercube` is `0.2.0` and the other stable IDs remain on `0.1.0`.
+`doe.latin_hypercube` is `0.3.0`, `doe.general_factorial_design` is `0.2.0`,
+and new `eda.principal_components` is `0.1.0`; other stable IDs remain on their
+recorded versions.
+
+API contract `17` adds typed PCA execution/result fields and method-specific
+ten-factor DOE capability. Factorial `0.7.0` adds the verified PB design and
+design schema 3. General Factorial `0.2.0`, LHS `0.3.0`, and Bayesian `0.6.0`
+expand their validated factor-definition contracts without rewriting legacy
+artifacts. Response Surface remains `0.3.0` and CCD remains limited to five
+factors. Metadata schema stays 19.
 
 `doe.general_factorial_design` starts at `0.1.0`. API contract `11` adds its
 dedicated design/response/analysis routes, regular fractional-factorial fields,

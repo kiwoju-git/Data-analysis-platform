@@ -310,11 +310,11 @@ def _response(
     version: ExperimentDesignVersionRecord,
     records: list[ExperimentRunRecord],
 ) -> LatinHypercubeDesignResponse:
-    method_version: Literal["0.1.0", "0.2.0"]
+    method_version: Literal["0.1.0", "0.2.0", "0.3.0"]
     if design.method_version == "0.1.0":
         method_version = "0.1.0"
-    elif design.method_version == "0.2.0":
-        method_version = "0.2.0"
+    elif design.method_version in {"0.2.0", "0.3.0"}:
+        method_version = design.method_version
     else:
         raise _metadata_error()
     factors_payload = _list(version.factors_json)
@@ -542,10 +542,13 @@ def _metadata_error() -> ApiError:
 
 def _lhs_error_message(code: str) -> str:
     return {
-        "lhs_factor_count_invalid": "연속형 요인은 1개부터 6개까지 지원합니다.",
+        "lhs_factor_count_invalid": "숫자형 요인은 1개부터 10개까지 지원합니다.",
         "lhs_factor_name_invalid": "요인 이름은 비어 있거나 중복될 수 없습니다.",
         "lhs_factor_bounds_invalid": "각 요인의 범위는 유한한 low < high여야 합니다.",
         "lhs_run_count_invalid": "실험 수는 2개부터 200개까지 지원합니다.",
+        "lhs_run_count_below_dimension_minimum": (
+            "실험 수는 요인 수 + 1 이상이어야 합니다."
+        ),
     }.get(code, "LHS 공간충전 설계를 생성할 수 없습니다.")
 
 

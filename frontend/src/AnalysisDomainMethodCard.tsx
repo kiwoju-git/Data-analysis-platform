@@ -64,7 +64,7 @@ export function ContextualDomainMethodCard({
     <article className="analysis-domain-method-card is-contextual">
       <strong>{t(workflow.labelKey)}</strong>
       <span>{t(workflow.descriptionKey)}</span>
-      <small>{t("analysisContext.label")}</small>
+      <small>{t(workflow.statusKey ?? "analysisContext.label")}</small>
     </article>
   );
 }

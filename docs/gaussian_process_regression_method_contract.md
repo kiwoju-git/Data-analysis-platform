@@ -16,7 +16,12 @@ This is a standalone supervised regression workflow. It is not the Gaussian Proc
 surrogate workflow owned by Bayesian Optimization. Both workflows may use the same
 statistical family, but they have distinct user intent, configuration, results, model
 assets, and version contracts. Adding this method does not change
-`doe.bayesian_optimization` `0.5.0`.
+`doe.bayesian_optimization` `0.6.0`.
+
+The AI/ML domain labels that surrogate as `Used by Bayesian Optimization` and
+does not count it as available or planned work. It has no separate route or
+method ID. The optional link opens this standalone regression method rather
+than creating a duplicate GP implementation.
 
 PLS Regression remains `regression.partial_least_squares` `0.1.0`. It is already an
 available method and is not reimplemented by this change.

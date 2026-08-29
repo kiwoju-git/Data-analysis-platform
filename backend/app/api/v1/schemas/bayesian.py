@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
+from app.core.doe_capabilities import BAYESIAN_STUDY_FACTOR_LIMIT
 from app.statistics.doe_factor_domain import DoeFactorDomain, validate_factor_domain
 
 MAX_BAYESIAN_TRIALS: Final = 200
@@ -85,7 +86,10 @@ class BayesianLinearConstraintRequest(BaseModel):
 
     constraint_id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
     name: str = Field(min_length=1, max_length=80)
-    terms: list[BayesianConstraintTermRequest] = Field(min_length=1, max_length=6)
+    terms: list[BayesianConstraintTermRequest] = Field(
+        min_length=1,
+        max_length=BAYESIAN_STUDY_FACTOR_LIMIT,
+    )
     relation: Literal["less_than_or_equal", "greater_than_or_equal"]
     bound: FiniteFloat
 
@@ -94,7 +98,10 @@ class BayesianStudyCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(default="Bayesian study", min_length=1, max_length=120)
-    factors: list[BayesianFactorRequest] = Field(min_length=1, max_length=6)
+    factors: list[BayesianFactorRequest] = Field(
+        min_length=1,
+        max_length=BAYESIAN_STUDY_FACTOR_LIMIT,
+    )
     objective: BayesianObjectiveRequest
     constraints: list[BayesianLinearConstraintRequest] = Field(default_factory=list, max_length=16)
     initial_design_seed: int = Field(ge=0, le=2_147_483_647)
@@ -362,7 +369,10 @@ class BayesianStudyResponse(BaseModel):
     trials: list[BayesianTrialResponse]
     surrogate_available: bool
     recommendation_available: bool
-    recommendation_minimum_completed_observations: int = Field(ge=2, le=7)
+    recommendation_minimum_completed_observations: int = Field(
+        ge=2,
+        le=BAYESIAN_STUDY_FACTOR_LIMIT + 1,
+    )
     recommendation_hard_trial_limit: int = Field(ge=1)
     recommendation_blockers: list[
         Literal[

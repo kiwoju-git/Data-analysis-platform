@@ -20,6 +20,7 @@ const expectedRegistryMethodIds = [
   "eda.descriptive",
   "eda.graphical_summary",
   "eda.normality",
+  "eda.principal_components",
   "eda.equal_variances",
   "hypothesis.one_sample_t",
   "hypothesis.paired_t",
@@ -189,7 +190,12 @@ function descriptor(methodId: string, order: number): AnalysisMethodDescriptor {
     disabled_reason: null,
     execution_mode: methodId.startsWith("doe.") ? "dedicated" : "inline",
     label_en: methodId,
-    label_ko: methodId === "eda.equal_variances" ? "등분산 검정" : methodId,
+    label_ko:
+      methodId === "eda.equal_variances"
+        ? "등분산 검정"
+        : methodId === "eda.principal_components"
+          ? "PCA 기반 다변량 검토"
+          : methodId,
     method_id: methodId,
     method_version: "0.1.0",
     module_id: moduleId,

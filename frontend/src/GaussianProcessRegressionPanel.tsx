@@ -9,6 +9,7 @@ import type {
 } from "./api";
 import { createGaussianProcessPointPredictions } from "./api/regression";
 import { CompactSettingsTable } from "./components/CompactSettingsTable";
+import { NumericColumnPicker } from "./components/NumericColumnPicker";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
 import { useI18n } from "./i18n/LocaleProvider";
 
@@ -147,30 +148,18 @@ export function GaussianProcessRegressionPanel({
                 ))}
               </select>
             </label>
-            <fieldset className="checkbox-field gp-predictor-field">
-              <legend>{t("gp.predictors")}</legend>
-              <small>{t("gp.predictorsHelp")}</small>
-              <div className="checkbox-grid">
-                {numericColumns
-                  .filter((column) => column.column_id !== responseColumnId)
-                  .map((column) => (
-                    <label key={column.column_id}>
-                      <input
-                        checked={predictorColumnIds.includes(column.column_id)}
-                        disabled={
-                          !predictorColumnIds.includes(column.column_id) &&
-                          predictorColumnIds.length >= 12
-                        }
-                        onChange={(event) =>
-                          togglePredictor(column.column_id, event.currentTarget.checked)
-                        }
-                        type="checkbox"
-                      />
-                      <span>{column.display_name}</span>
-                    </label>
-                  ))}
-              </div>
-            </fieldset>
+            <NumericColumnPicker
+              className="gp-predictor-field"
+              columns={numericColumns}
+              excludedColumnIds={responseColumnId ? [responseColumnId] : []}
+              helpText={t("gp.predictorsHelp")}
+              legend={t("gp.predictors")}
+              maximumSelection={12}
+              minimumSelection={1}
+              onClear={() => setPredictorColumnIds([])}
+              onToggle={togglePredictor}
+              selectedColumnIds={predictorColumnIds}
+            />
           </div>
 
           <CompactSettingsTable

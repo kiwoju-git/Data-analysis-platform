@@ -70,6 +70,24 @@ def test_general_factorial_mixed_two_by_three_by_five_has_30_runs() -> None:
     assert design.runs[0].factor_levels == {"A": 10.0, "B": "C", "C": 1.0}
 
 
+def test_general_factorial_allows_eight_two_level_factors_at_run_cap() -> None:
+    design = generate_general_full_factorial_design(
+        [GeneralFactorialFactor(f"X{index}", (0.0, 1.0)) for index in range(8)],
+        GeneralFactorialOptions(1, False, 7, 1),
+    )
+    assert len(design.runs) == 256
+
+
+@pytest.mark.parametrize("factor_count", [9, 10])
+def test_general_factorial_blocks_level_product_above_run_cap(factor_count: int) -> None:
+    with pytest.raises(GeneralFactorialDesignError) as error:
+        generate_general_full_factorial_design(
+            [GeneralFactorialFactor(f"X{index}", (0.0, 1.0)) for index in range(factor_count)],
+            GeneralFactorialOptions(1, False, 7, 1),
+        )
+    assert error.value.code == "doe_general_factorial_run_count_exceeds_limit"
+
+
 def test_general_factorial_rejects_mixed_numeric_and_text_levels_within_factor() -> None:
     with pytest.raises(GeneralFactorialDesignError) as error:
         generate_general_full_factorial_design(

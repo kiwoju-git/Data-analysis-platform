@@ -3,6 +3,7 @@ import type {
   EqualVariancesResult,
   GraphicalSummaryResult,
   NormalityResult,
+  PrincipalComponentsResult,
 } from "./analysisResultsExploration";
 import type {
   ChiSquareAssociationResult,
@@ -142,6 +143,7 @@ export interface AnalysisResultEnvelope {
     | DescriptiveStatisticsResult
     | GraphicalSummaryResult
     | NormalityResult
+    | PrincipalComponentsResult
     | EqualVariancesResult
     | OneSampleTResult
     | EquivalenceTostResult

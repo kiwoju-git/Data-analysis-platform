@@ -793,7 +793,7 @@ def test_bayesian_missing_resources_return_stable_errors(tmp_path) -> None:
     assert history_response.json()["error"]["code"] == ("bayesian_observation_history_not_found")
 
 
-@pytest.mark.parametrize("factor_count", [1, 2, 6])
+@pytest.mark.parametrize("factor_count", [1, 2, 6, 10])
 def test_bayesian_initial_design_minimum_matches_factor_count(
     tmp_path,
     factor_count: int,

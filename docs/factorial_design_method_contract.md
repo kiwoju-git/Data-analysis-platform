@@ -1,14 +1,14 @@
 # DOE Factorial Design and Analysis Contract
 
-Last updated: 2026-08-21
+Last updated: 2026-08-29
 
 ## Scope and Versions
 
 `doe.factorial_design` is available through dedicated DOE APIs rather than the
 generic analysis-run endpoint.
 
-- Method version: `0.6.0` for new two-level writes; legacy `0.4.0` and `0.5.0` remain readable.
-- Design manifest schema: `2` for new full/fractional designs; schema `1` legacy numeric full designs remain readable.
+- Method version: `0.7.0` for new writes; legacy `0.4.0` through `0.6.0` remain readable.
+- Design manifest schema: `3` for Plackett-Burman writes, `2` for mixed full/fractional designs, and `1` for legacy numeric full designs.
 - Analysis envelope schema: `2`.
 - Analysis config schema: `2`.
 - Analysis result schema: `1`.
@@ -36,9 +36,15 @@ record, API envelope, UI, and this document must agree.
 
 Implemented:
 
-- 2-level full factorial design generation for 2 to 6 numeric and/or categorical factors.
+- Factor authoring for 2 to 10 numeric and/or categorical factors, with actual
+  design feasibility checked before matrix allocation.
+- 2-level full factorial generation only when corner, replicate, block, and
+  center runs stay within the 256-run product cap. Ten factors require at least
+  1,024 corner runs and are therefore rejected with screening guidance.
 - Regular 2-level fractional factorial catalog entries for 3 to 6 factors,
   including half, quarter, and eighth fractions where a tested entry exists.
+- A verified 12-run Plackett-Burman main-effect screening design for 7 to 10
+  factors. See `docs/plackett_burman_design_contract.md`.
 - Replicates, center points, fixed blocks, deterministic randomization seed,
   standard order, and run order.
 - Immutable design/version/run metadata and canonical `design_sha256`.
@@ -68,7 +74,7 @@ categorical low/high combination. With `q` categorical factors this produces
 must use zero center points; replication supplies pure-error information.
 Discrete numeric midpoints must remain executable on their declared grid.
 
-The contextual `doe.general_factorial_design` `0.1.0` contract supports 2 to 6
+The contextual `doe.general_factorial_design` `0.2.0` contract supports 2 to 10
 factors with 2 to 10 numeric or text levels, up to 256 runs. It uses treatment
 coding, categorical term blocks, and partial sums of squares. Numeric values
 are explicitly treated as categorical levels; it does not reuse `-1/+1`
@@ -80,8 +86,8 @@ with the design ID and general-design mode preserved.
 Out of scope:
 
 - Automatic term selection or a quiet switch to another model.
-- Arbitrary user-supplied generators, foldover construction, Plackett-Burman,
-  and claiming resolution-III screening contrasts are independent effects.
+- Arbitrary user-supplied generators, foldover construction, and claiming
+  Plackett-Burman screening contrasts are independent interaction effects.
 - CCD, Box-Behnken, RSM, contour/surface plots, and response optimization.
 - Chart image export and any claim of causal effects or a guaranteed optimum.
 
@@ -105,10 +111,11 @@ POST /api/v1/doe-designs/{design_id}/response-revisions/{response_revision_id}/a
 GET  /api/v1/doe-designs/{design_id}/report.html
 ```
 
-The two-level design request accepts `name`, 2 to 6 `factors`, `replicates`,
+The two-level design request accepts `name`, 2 to 10 `factors`, `replicates`,
 `center_points`, `randomize`, `randomization_seed`, and `block_count`. A response
 request may additionally select `design_type=two_level_fractional` and one
-tested `fraction_id`; arbitrary generator strings are rejected. The general
+tested `fraction_id`, or the catalog-backed `plackett_burman_screening`;
+arbitrary generator strings are rejected. The general
 request accepts ordered factor `levels`, replicates, randomization settings,
 and a maximum interaction order. A response
 upsert must provide exactly one finite numeric value for every persisted

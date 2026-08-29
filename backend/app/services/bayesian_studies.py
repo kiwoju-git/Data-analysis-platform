@@ -50,6 +50,7 @@ from app.api.v1.schemas.bayesian import (
     minimum_bayesian_initial_design_size,
 )
 from app.core.config import Settings
+from app.core.doe_capabilities import BAYESIAN_STUDY_FACTOR_LIMIT
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import (
     APP_VERSION,
@@ -110,7 +111,7 @@ BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
 BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[4]] = 4
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
 SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
-    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0", "0.5.0"}
+    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0", "0.5.0", "0.6.0"}
 )
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
 BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[2]] = 2
@@ -1478,7 +1479,7 @@ def _validate_factor_and_constraint_metadata(
     expected_order = list(range(1, len(factors) + 1))
     constraint_ids = [item.constraint_id for item in constraints]
     if (
-        not 1 <= len(factors) <= 6
+        not 1 <= len(factors) <= BAYESIAN_STUDY_FACTOR_LIMIT
         or len(ids) != len(set(ids))
         or len(names) != len(set(names))
         or [item.order for item in factors] != expected_order

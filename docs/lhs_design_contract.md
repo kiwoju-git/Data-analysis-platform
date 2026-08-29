@@ -1,10 +1,10 @@
 # Latin Hypercube Design Contract
 
-Last updated: 2026-08-05
+Last updated: 2026-08-29
 
 ## Method And Purpose
 
-`doe.latin_hypercube` version `0.2.0` is a dedicated, dataset-independent
+`doe.latin_hypercube` version `0.3.0` is a dedicated, dataset-independent
 space-filling design method. Continuous-only designs retain the installed
 SciPy 1.15.3 `LatinHypercube(random-cd)` numerical path. Mixed designs use the
 versioned `mixed_lhs_balanced_discrete_v1` policy and design schema `2`.
@@ -14,7 +14,7 @@ factorial effects, an optimum, or an observed response.
 
 ## Factor Domains
 
-Each of one to six factors stores `low`, `high`, optional `unit`,
+Each of one to ten factors stores `low`, `high`, optional `unit`,
 `domain_kind`, `step`, and optional `display_decimals`.
 
 - `continuous`: any finite value within `low < high`; `step` must be null.
@@ -31,6 +31,12 @@ arbitrary constrained LHS remain outside this contract.
 
 Inputs are two to 200 runs, explicit design and run-order seeds,
 `scramble=true`, strength 1, and `random_cd` or `none` optimization.
+
+The run count must be at least `d + 1`, where `d` is the factor count. The UI
+labels `max(8, 3d)` as a practical product starting guide and `min(200, 10d)`
+as a stronger space-filling guide. These are not statistical guarantees. A
+run count below `3d` produces visible guidance; no points are silently sampled
+and `random_cd` is never changed to another policy to meet a budget.
 
 Continuous dimensions use the existing SciPy strata. A discrete dimension is
 assigned from its LHS rank to legal levels so per-level counts differ by at
@@ -51,6 +57,10 @@ Quality includes centered discrepancy, minimum normalized pairwise distance,
 maximum absolute correlation, per-factor strata, `continuous_strata_valid`,
 discrete level counts, duplicate count, and executable point count. These are
 diagnostics, not proof of an optimal design.
+
+Version `0.3.0` expands the validated factor contract from six to ten and adds
+the dimension-aware run preflight. For one through six factors, the same
+seed/configuration continues through the previous SciPy generation path.
 
 CSV export contains actual values formatted with `display_decimals`, full
 normalized coordinates, order columns, and saved responses. Formatting does

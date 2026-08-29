@@ -65,7 +65,7 @@ DOE_GENERAL_FACTORIAL_METHOD_ID: Literal["doe.general_factorial_design"] = (
     "doe.general_factorial_design"
 )
 DOE_GENERAL_FACTORIAL_METHOD_VERSION = cast(
-    Literal["0.1.0"], METHOD_VERSIONS[DOE_GENERAL_FACTORIAL_METHOD_ID]
+    Literal["0.2.0"], METHOD_VERSIONS[DOE_GENERAL_FACTORIAL_METHOD_ID]
 )
 
 

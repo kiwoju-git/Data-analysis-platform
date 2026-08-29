@@ -9,6 +9,7 @@ import type {
 } from "./api";
 import { createPlsPointPredictions } from "./api/regression";
 import { CompactSettingsTable } from "./components/CompactSettingsTable";
+import { NumericColumnPicker } from "./components/NumericColumnPicker";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
 import { useI18n } from "./i18n/LocaleProvider";
 
@@ -143,26 +144,18 @@ export function PlsRegressionPanel({
                 ))}
               </select>
             </label>
-            <fieldset className="checkbox-field pls-predictor-field">
-              <legend>{t("pls.predictors")}</legend>
-              <small>{t("pls.predictorsHelp")}</small>
-              <div className="checkbox-grid">
-                {numericColumns
-                  .filter((column) => column.column_id !== responseColumnId)
-                  .map((column) => (
-                    <label key={column.column_id}>
-                      <input
-                        checked={predictorColumnIds.includes(column.column_id)}
-                        onChange={(event) =>
-                          togglePredictor(column.column_id, event.currentTarget.checked)
-                        }
-                        type="checkbox"
-                      />
-                      <span>{column.display_name}</span>
-                    </label>
-                  ))}
-              </div>
-            </fieldset>
+            <NumericColumnPicker
+              className="pls-predictor-field"
+              columns={numericColumns}
+              excludedColumnIds={responseColumnId ? [responseColumnId] : []}
+              helpText={t("pls.predictorsHelp")}
+              legend={t("pls.predictors")}
+              maximumSelection={100}
+              minimumSelection={2}
+              onClear={() => setPredictorColumnIds([])}
+              onToggle={togglePredictor}
+              selectedColumnIds={predictorColumnIds}
+            />
           </div>
 
           <CompactSettingsTable

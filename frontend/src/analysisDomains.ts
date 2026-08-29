@@ -16,6 +16,7 @@ export interface AnalysisPlannedWorkflow {
   labelKey: TranslationKey;
   presentation?: "card" | "notice";
   showInSidebar?: boolean;
+  statusKey?: TranslationKey;
 }
 
 export type AnalysisContextualWorkflow = AnalysisPlannedWorkflow;
@@ -60,14 +61,11 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
     sidebarMode: "flat_methods",
     labelKey: "analysisDomains.basic.label",
     descriptionKey: "analysisDomains.basic.description",
-    directMethodIds: ["eda.descriptive", "eda.graphical_summary", "eda.normality"],
-    directPlannedWorkflows: [
-      {
-        id: "eda.multivariate_review",
-        labelKey: "analysisPlanned.multivariateReview.label",
-        descriptionKey: "analysisPlanned.multivariateReview.description",
-        showInSidebar: true,
-      },
+    directMethodIds: [
+      "eda.descriptive",
+      "eda.graphical_summary",
+      "eda.normality",
+      "eda.principal_components",
     ],
     families: [],
   },
@@ -219,7 +217,8 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
         labelKey: "analysisContext.gaussianProcess.label",
         descriptionKey: "analysisContext.gaussianProcess.description",
         presentation: "card",
-        showInSidebar: true,
+        showInSidebar: false,
+        statusKey: "analysisContext.gaussianProcess.status",
       },
     ],
     families: [],

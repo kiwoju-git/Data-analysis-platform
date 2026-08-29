@@ -26,6 +26,7 @@ const analysisCatalog: AnalysisMethodListResponse = {
     ["eda.descriptive", "기술통계", "exploration"],
     ["eda.graphical_summary", "그래프 요약", "exploration"],
     ["eda.normality", "정규성 검정", "exploration"],
+    ["eda.principal_components", "PCA 기반 다변량 검토", "exploration"],
     ["eda.equal_variances", "등분산 검정", "exploration"],
     ["hypothesis.one_way_anova", "일원분산분석", "hypothesis"],
     ["categorical.chi_square_association", "카이제곱 독립성 검정", "categorical"],
@@ -144,7 +145,7 @@ describe("sidebar navigation model", () => {
       "eda.descriptive",
       "eda.graphical_summary",
       "eda.normality",
-      "planned-eda.multivariate_review",
+      "eda.principal_components",
     ]);
     expect(basic?.children?.some((item) => item.id.includes("distribution-summary"))).toBe(false);
     basic?.onActivate?.();
@@ -176,7 +177,7 @@ describe("sidebar navigation model", () => {
     const quality = analysis?.children.find((item) => item.id === "quality-process-monitoring");
     expect(quality?.children?.find((item) => item.id === "quality.run_chart")?.label).toBe("시계열 패턴");
     const ai = analysis?.children.find((item) => item.id === "ai-ml-experimental-design");
-    expect(ai?.children?.find((item) => item.id === "planned-gaussian-process-surrogate")?.disabled).toBe(true);
+    expect(ai?.children?.find((item) => item.id.includes("gaussian-process-surrogate"))).toBeUndefined();
   });
 
   it("keeps only registration and preview dataset shortcuts", () => {

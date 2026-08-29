@@ -8,6 +8,7 @@ from importlib.metadata import version
 from typing import Any, Final, Literal
 
 from app.api.v1.schemas.bayesian import MAX_COMPLETED_OBSERVATIONS
+from app.core.doe_capabilities import BAYESIAN_STUDY_FACTOR_LIMIT
 from app.statistics.doe_factor_domain import (
     DoeFactorDomain,
     DoeFactorDomainError,
@@ -153,6 +154,8 @@ def calculate_bayesian_recommendation(payload: dict[str, Any]) -> dict[str, Any]
     objective_mean = float(np.mean(transformed))
     objective_scale = float(np.std(transformed))
     warning_codes: list[str] = []
+    if len(factors) >= 8:
+        warning_codes.append("bayesian_high_dimensional_study")
     if objective_scale <= max(1e-12, abs(objective_mean) * 1e-12):
         objective_scale = 1.0
         warning_codes.append("bayesian_optimization_constant_objective")
@@ -418,7 +421,7 @@ def bayesian_worker_entry(output_queue: Any, payload: dict[str, Any]) -> None:
 
 
 def _validated_factors(value: object) -> list[dict[str, Any]]:
-    if not isinstance(value, list) or not 1 <= len(value) <= 6:
+    if not isinstance(value, list) or not 1 <= len(value) <= BAYESIAN_STUDY_FACTOR_LIMIT:
         raise BayesianOptimizationError("bayesian_optimization_factor_space_invalid")
     result: list[dict[str, Any]] = []
     ids: set[str] = set()

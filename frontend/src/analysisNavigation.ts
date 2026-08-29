@@ -26,6 +26,16 @@ const factorialWorkspaceSelection: AnalysisSelection = {
   methodId: "doe.factorial_design",
 };
 
+const legacyMultivariateReviewSelection: AnalysisSelection = {
+  moduleId: "exploration",
+  methodId: "eda.multivariate_review",
+};
+
+const principalComponentsSelection: AnalysisSelection = {
+  moduleId: "exploration",
+  methodId: "eda.principal_components",
+};
+
 const moduleIds = new Set<string>([
   "exploration",
   "hypothesis",
@@ -145,11 +155,40 @@ export function legacyGeneralFactorialRedirectLocation(
   )}${serialized.length > 0 ? `?${serialized}` : ""}`;
 }
 
+export function legacyMultivariateReviewRedirectLocation(
+  pathname: string,
+  search: string,
+  hash: string,
+): string | null {
+  const pathSelection = parseRawAnalysisPath(pathname);
+  const hashSelection = parseRawAnalysisHash(hash);
+  if (
+    !isLegacyMultivariateReviewSelection(pathSelection) &&
+    !isLegacyMultivariateReviewSelection(hashSelection)
+  ) {
+    return null;
+  }
+  return `${buildAnalysisPath(
+    principalComponentsSelection.moduleId,
+    principalComponentsSelection.methodId,
+  )}${search}`;
+}
+
 function canonicalAnalysisSelection(selection: AnalysisSelection): AnalysisSelection {
   if (isLegacyResponseOptimizerSelection(selection)) {
     return CURRENT_RESPONSE_OPTIMIZER_SELECTION;
   }
-  return isGeneralFactorialSelection(selection) ? factorialWorkspaceSelection : selection;
+  if (isGeneralFactorialSelection(selection)) return factorialWorkspaceSelection;
+  return isLegacyMultivariateReviewSelection(selection)
+    ? principalComponentsSelection
+    : selection;
+}
+
+function isLegacyMultivariateReviewSelection(selection: AnalysisSelection | null): boolean {
+  return (
+    selection?.moduleId === legacyMultivariateReviewSelection.moduleId &&
+    selection.methodId === legacyMultivariateReviewSelection.methodId
+  );
 }
 
 function isGeneralFactorialSelection(selection: AnalysisSelection | null): boolean {

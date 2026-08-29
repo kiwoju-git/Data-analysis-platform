@@ -1,6 +1,6 @@
 from typing import Final
 
-API_CONTRACT_VERSION: Final = 16
+API_CONTRACT_VERSION: Final = 17
 
 RUNTIME_CAPABILITIES: Final[dict[str, bool]] = {
     "asset_management": True,

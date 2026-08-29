@@ -31,8 +31,9 @@ export interface FactorialDesignCreateRequest {
   randomize: boolean;
   randomization_seed: number;
   block_count: number;
-  design_type?: "two_level_full" | "two_level_fractional";
+  design_type?: "two_level_full" | "two_level_fractional" | "plackett_burman_screening";
   fraction_id?: string | null;
+  screening_catalog_id?: string | null;
 }
 
 export interface TwoLevelNumericFactorResponse {
@@ -68,8 +69,9 @@ export interface FactorialDesignOptionsResponse {
   randomize: boolean;
   randomization_seed: number;
   block_count: number;
-  design_type?: "two_level_full" | "two_level_fractional";
+  design_type?: "two_level_full" | "two_level_fractional" | "plackett_burman_screening";
   fraction_id?: string | null;
+  screening_catalog_id?: string | null;
   design_schema_version?: number;
 }
 
@@ -114,6 +116,15 @@ export interface FactorialDesignResponse {
     non_estimable_terms: string[];
     principal_fraction: boolean;
   } | null;
+  screening?: {
+    catalog_entry_id: "pb-12-run-v1";
+    run_count: 12;
+    available_columns: 11;
+    used_columns: number;
+    unused_column_indices: number[];
+    matrix_sha256: string;
+    resolution: 3;
+  } | null;
 }
 
 export interface GeneralFactorialFactorRequest {
@@ -137,7 +148,7 @@ export interface GeneralFactorialDesignResponse {
   design_version_id: string;
   version_number: 1;
   method_id: "doe.general_factorial_design";
-  method_version: "0.1.0";
+  method_version: "0.1.0" | "0.2.0";
   family: "general_full_factorial";
   name: string;
   status: string;
@@ -168,7 +179,7 @@ export interface GeneralFactorialAnalysisResponse {
   design_version_id: string;
   design_version_number: number;
   method_id: "doe.general_factorial_design";
-  method_version: "0.1.0";
+  method_version: "0.1.0" | "0.2.0";
   analysis_schema_version: 1;
   design_sha256: string;
   response_revision_id: string;
@@ -250,7 +261,7 @@ export interface LatinHypercubeDesignResponse {
   design_version_id: string;
   version_number: 1;
   method_id: "doe.latin_hypercube";
-  method_version: "0.1.0" | "0.2.0";
+  method_version: "0.1.0" | "0.2.0" | "0.3.0";
   family: "latin_hypercube_space_filling";
   name: string;
   status: string;

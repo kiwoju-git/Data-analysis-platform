@@ -53,6 +53,35 @@ def test_latin_hypercube_seed_and_run_order_policies_are_explicit() -> None:
     assert [item.run_order for item in ordered.runs] == list(range(1, 11))
 
 
+@pytest.mark.parametrize("run_count", [30, 100, 200])
+def test_latin_hypercube_supports_ten_factors(run_count: int) -> None:
+    factors = [LatinHypercubeFactor(f"x{index}", 0.0, 1.0) for index in range(10)]
+    options = LatinHypercubeOptions(
+        run_count=run_count,
+        seed=123,
+        randomize_run_order=False,
+        run_order_seed=456,
+        optimization="random_cd",
+    )
+
+    first = generate_latin_hypercube_design(factors, options)
+    second = generate_latin_hypercube_design(factors, options)
+
+    assert first.design_sha256 == second.design_sha256
+    assert len(first.runs) == run_count
+    assert len(first.factors) == 10
+    assert first.quality.strata_valid is True
+
+
+def test_latin_hypercube_requires_at_least_dimension_plus_one_runs() -> None:
+    factors = [LatinHypercubeFactor(f"x{index}", 0.0, 1.0) for index in range(10)]
+    with pytest.raises(LatinHypercubeError, match="lhs_run_count_below_dimension_minimum"):
+        generate_latin_hypercube_design(
+            factors,
+            LatinHypercubeOptions(10, 1, False, 1, "none"),
+        )
+
+
 @pytest.mark.parametrize(
     ("factors", "options", "code"),
     [

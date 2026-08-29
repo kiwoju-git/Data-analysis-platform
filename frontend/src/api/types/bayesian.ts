@@ -176,7 +176,7 @@ export interface BayesianStudyResponse {
   study_id: string;
   study_version_id: string;
   version_number: number;
-  study_schema_version: 1 | 2 | 3;
+  study_schema_version: 1 | 2 | 3 | 4;
   method_id: "doe.bayesian_optimization";
   method_version: string;
   name: string;

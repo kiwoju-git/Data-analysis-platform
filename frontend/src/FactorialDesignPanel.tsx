@@ -22,7 +22,9 @@ import {
   DoeFactorEditor,
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
+import { DoeFactorCountControl } from "./doe/DoeFactorCountControl";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
+import { DOE_FACTOR_CAPABILITIES, DOE_RUN_CAPABILITIES } from "./doe/factorCapabilities";
 import {
   continuousFactorDomainDraft,
   formatDoeFactorValue,
@@ -70,9 +72,13 @@ interface ResponseValidationResult {
   request: DoeDesignResponsesUpsertRequest | null;
 }
 
-const maxFactorCount = 6;
-const maxRunCount = 256;
-type FactorialDesignType = "two_level_full" | "two_level_fractional" | "general_factorial";
+const maxFactorCount = DOE_FACTOR_CAPABILITIES.factorialAuthoring;
+const maxRunCount = DOE_RUN_CAPABILITIES.factorial;
+type FactorialDesignType =
+  | "two_level_full"
+  | "two_level_fractional"
+  | "plackett_burman_screening"
+  | "general_factorial";
 
 const fractionalOptionsByFactorCount: Record<number, Array<{ id: string; label: string }>> = {
   3: [{ id: "3-factor-half-r3", label: "4 runs · 1/2 fraction · Resolution III" }],
@@ -171,6 +177,8 @@ export function FactorialDesignPanel({
         setDesignType(
           fetchedDesign.options.design_type === "two_level_fractional"
             ? "two_level_fractional"
+            : fetchedDesign.options.design_type === "plackett_burman_screening"
+              ? "plackett_burman_screening"
             : "two_level_full",
         );
       })
@@ -197,13 +205,17 @@ export function FactorialDesignPanel({
           {([
             ["two_level_full", "2수준 완전요인"],
             ["two_level_fractional", "2수준 부분요인"],
+            ["plackett_burman_screening", "Screening Design"],
             ["general_factorial", "일반 완전요인"],
           ] as const).map(([value, label]) => (
             <label key={value}>
               <input
                 checked={designType === value}
                 name="factorial-design-type"
-                onChange={() => setDesignType(value)}
+                onChange={() => {
+                  setDesignType(value);
+                  if (value === "plackett_burman_screening") setCenterPoints("0");
+                }}
                 type="radio"
               />
               <span>{label}</span>
@@ -260,6 +272,7 @@ export function FactorialDesignPanel({
                   id="factorial-center-points"
                   inputMode="numeric"
                   value={centerPoints}
+                  disabled={designType === "plackett_burman_screening"}
                   onChange={(event) => setCenterPoints(event.currentTarget.value)}
                 />
               ),
@@ -346,30 +359,35 @@ export function FactorialDesignPanel({
           </p>
           </>
         ) : null}
+        {designType === "plackett_burman_screening" ? (
+          <div className="notice-box notice-warning">
+            <strong>12-run Plackett-Burman 주효과 screening</strong>
+            <p>
+              7~10개 2수준 요인을 적은 run으로 선별합니다. 주효과는 여러 2요인
+              상호작용과 부분적으로 섞일 수 있으며, 10요인에서는 검정력이 특히 제한됩니다.
+            </p>
+          </div>
+        ) : null}
       </DoeFormSection>
       <DoeFactorEditor
         action={
-          <button
-            className="secondary-button"
-            disabled={factors.length >= maxFactorCount}
-            onClick={() => {
-              setFactors((current) => [
-                ...current,
-                {
-                  id: `factor-${Date.now()}`,
-                  factorKind: "numeric",
-                  name: `Factor ${current.length + 1}`,
-                  low: "0",
-                  high: "1",
-                  unit: "",
-                  ...continuousFactorDomainDraft,
-                },
-              ]);
-            }}
-            type="button"
-          >
-            요인 추가
-          </button>
+          <div className="doe-factor-editor-actions">
+            <DoeFactorCountControl
+              count={factors.length}
+              factorLabels={factors.map((factor) => factor.name)}
+              maximum={maxFactorCount}
+              minimum={2}
+              onResize={(count) => setFactors((current) => resizeFactorialFactors(current, count))}
+            />
+            <button
+              className="secondary-button"
+              disabled={factors.length >= maxFactorCount}
+              onClick={() => setFactors((current) => resizeFactorialFactors(current, current.length + 1))}
+              type="button"
+            >
+              요인 추가
+            </button>
+          </div>
         }
       >
       <div className="table-wrap">
@@ -543,7 +561,11 @@ export function FactorialDesignPanel({
         <span>예상 run</span>
         <strong>{validation.runCount.toLocaleString()}</strong>
         <span>Family</span>
-        <strong>{designType === "two_level_fractional" ? "two_level_regular_fractional_factorial" : "two_level_full_factorial"}</strong>
+        <strong>{designType === "two_level_fractional"
+          ? "two_level_regular_fractional_factorial"
+          : designType === "plackett_burman_screening"
+            ? "plackett_burman_screening"
+            : "two_level_full_factorial"}</strong>
         <span>Response</span>
         <strong>run별 저장 지원</strong>
         <span>Analysis</span>
@@ -606,8 +628,15 @@ export function FactorialDesignPreview({
   const [isSavingRevision, setIsSavingRevision] = useState(false);
   const revisionRequest = useRef(0);
   const [maxInteractionOrder, setMaxInteractionOrder] = useState(
-    Math.min(2, design.factors.length),
+    design.screening !== null && design.screening !== undefined
+      ? 1
+      : Math.min(2, design.factors.length),
   );
+  useEffect(() => {
+    if (design.screening !== null && design.screening !== undefined) {
+      setMaxInteractionOrder(1);
+    }
+  }, [design.screening]);
   useEffect(() => {
     revisionRequest.current += 1;
     const nextValues: Record<number, string> = {};
@@ -961,6 +990,7 @@ export function FactorialDesignPreview({
               <span>최대 상호작용 차수</span>
               <select
                 aria-label="최대 상호작용 차수"
+                disabled={design.screening !== null && design.screening !== undefined}
                 value={maxInteractionOrder}
                 onChange={(event) => {
                   setMaxInteractionOrder(Number(event.currentTarget.value));
@@ -1300,6 +1330,10 @@ function factorialWarningMessage(code: string): string {
       "절대 표준화 잔차가 3을 넘는 run이 있어 입력과 실행조건을 확인해야 합니다.",
     doe_factorial_influential_run_detected:
       "Cook's distance가 큰 run이 있어 잔차 진단을 확인해야 합니다.",
+    doe_plackett_burman_main_effects_confounding:
+      "Plackett-Burman 주효과는 여러 2요인 상호작용과 부분적으로 섞일 수 있습니다.",
+    doe_plackett_burman_low_power_ten_factors:
+      "10요인 12-run screening은 검정력이 제한됩니다. 중요한 요인은 후속 설계로 확인하세요.",
   };
   return messages[code] ?? code;
 }
@@ -1313,6 +1347,25 @@ function updateFactor(
   setFactors((current) =>
     current.map((factor) => (factor.id === factorId ? { ...factor, [field]: value } : factor)),
   );
+}
+
+function resizeFactorialFactors(current: FactorDraft[], count: number): FactorDraft[] {
+  if (count <= current.length) return current.slice(0, count);
+  const next = [...current];
+  const seed = Date.now();
+  while (next.length < count) {
+    const index = next.length + 1;
+    next.push({
+      id: `factor-${seed}-${index}`,
+      factorKind: "numeric",
+      name: `Factor ${index}`,
+      low: "0",
+      high: "1",
+      unit: "",
+      ...continuousFactorDomainDraft,
+    });
+  }
+  return next;
 }
 
 function validateFactorialDesignDraft({
@@ -1341,7 +1394,7 @@ function validateFactorialDesignDraft({
     return validationError("설계 이름을 입력하세요.", 0);
   }
   if (factors.length < 2 || factors.length > maxFactorCount) {
-    return validationError("요인은 2개 이상 6개 이하입니다.", 0);
+    return validationError("요인은 2개 이상 10개 이하입니다.", 0);
   }
 
   const parsedFactors: FactorialDesignCreateRequest["factors"] = [];
@@ -1402,6 +1455,9 @@ function validateFactorialDesignDraft({
   if (parsedCenterPoints === null || parsedCenterPoints < 0 || parsedCenterPoints > 32) {
     return validationError("센터점 수는 0 이상 32 이하입니다.", 0);
   }
+  if (designType === "plackett_burman_screening" && parsedCenterPoints !== 0) {
+    return validationError("현재 Screening Design은 센터점을 지원하지 않습니다.", 0);
+  }
   const categoricalCount = parsedFactors.filter(
     (factor) => factor.factor_kind === "categorical",
   ).length;
@@ -1433,10 +1489,24 @@ function validateFactorialDesignDraft({
   ) {
     return validationError("현재 요인 수에 맞는 검증된 부분요인 설계를 선택하세요.", 0);
   }
-  const baseRunCount = 2 ** (parsedFactors.length - fractionExponent);
+  if (
+    designType === "plackett_burman_screening" &&
+    (parsedFactors.length < 7 || parsedFactors.length > 10)
+  ) {
+    return validationError("Screening Design은 7개 이상 10개 이하 요인이 필요합니다.", 0);
+  }
+  const baseRunCount = designType === "plackett_burman_screening"
+    ? 12
+    : 2 ** (parsedFactors.length - fractionExponent);
   const centerRunCount = parsedCenterPoints * parsedBlockCount * (2 ** categoricalCount);
   const runCount = baseRunCount * parsedReplicates + centerRunCount;
   if (runCount > maxRunCount) {
+    if (designType === "two_level_full") {
+      return validationError(
+        `${parsedFactors.length}요인 완전요인은 최소 ${baseRunCount.toLocaleString()}개의 corner run이 필요합니다. Screening Design 또는 부분요인을 사용하세요.`,
+        runCount,
+      );
+    }
     return validationError(`현재 설계 제한은 ${maxRunCount.toLocaleString()} runs입니다.`, runCount);
   }
   if (parsedBlockCount > runCount) {
@@ -1453,8 +1523,10 @@ function validateFactorialDesignDraft({
       randomize,
       randomization_seed: parsedSeed,
       block_count: parsedBlockCount,
-      design_type: designType === "two_level_fractional" ? designType : "two_level_full",
+      design_type: designType === "general_factorial" ? "two_level_full" : designType,
       fraction_id: designType === "two_level_fractional" ? fractionId : null,
+      screening_catalog_id:
+        designType === "plackett_burman_screening" ? "pb-12-run-v1" : null,
     },
     runCount,
     centerRunCount,

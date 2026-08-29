@@ -13,6 +13,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "eda.descriptive": "0.2.0",
     "eda.graphical_summary": "0.2.0",
     "eda.normality": "0.2.0",
+    "eda.principal_components": "0.1.0",
     "eda.equal_variances": "0.2.0",
     "hypothesis.one_sample_t": METHOD_VERSION,
     "hypothesis.paired_t": METHOD_VERSION,
@@ -43,12 +44,12 @@ METHOD_VERSIONS: dict[str, str] = {
     "quality.capability": METHOD_VERSION,
     "quality.gage_rr": METHOD_VERSION,
     "quality.gage_run_chart": METHOD_VERSION,
-    "doe.factorial_design": "0.6.0",
-    "doe.general_factorial_design": "0.1.0",
-    "doe.latin_hypercube": "0.2.0",
+    "doe.factorial_design": "0.7.0",
+    "doe.general_factorial_design": "0.2.0",
+    "doe.latin_hypercube": "0.3.0",
     "doe.response_surface": "0.3.0",
     "doe.response_optimizer": "0.4.0",
-    "doe.bayesian_optimization": "0.5.0",
+    "doe.bayesian_optimization": "0.6.0",
 }
 
 LEGACY_METHOD_ID_ALIASES: dict[str, str] = {
@@ -206,6 +207,13 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_ko="정규성 검정",
         label_en="Normality Test",
         order=30,
+    ),
+    _available(
+        method_id="eda.principal_components",
+        module_id=AnalysisModuleId.EXPLORATION,
+        label_ko="PCA 기반 다변량 검토",
+        label_en="Principal Components Analysis",
+        order=35,
     ),
     _available(
         method_id="eda.equal_variances",

@@ -1297,6 +1297,10 @@ def _analysis_method_report_label(method_id: str, locale: ReportLocale = "en") -
         "eda.descriptive": ("Descriptive Statistics", "기술통계"),
         "eda.graphical_summary": ("Graphical Summary", "그래프 요약"),
         "eda.normality": ("Normality Test", "정규성 검정"),
+        "eda.principal_components": (
+            "Principal Components Analysis",
+            "PCA 기반 다변량 검토",
+        ),
         "eda.equal_variances": ("Test for Equal Variances", "등분산 검정"),
         "regression.linear_model": ("Fit Regression Model", "회귀모형 적합"),
         "regression.partial_least_squares": (
@@ -1348,6 +1352,7 @@ def _analysis_result_method_specific_report_section(
         "graphical_summary": _graphical_summary_report_section_v2,
         "normality_test": _normality_report_section,
         "equal_variances_test": _equal_variances_report_section_v2,
+        "principal_components_analysis": _principal_components_report_section,
         "gaussian_process_regression": _gaussian_process_report_section,
     }
     renderer = renderers.get(str(summary_type))
@@ -1408,6 +1413,213 @@ def _descriptive_statistics_report_section(
 {row_markup}
     </tbody>
   </table>
+"""
+
+
+def _principal_components_report_section(
+    payload: dict[str, object], locale: ReportLocale = "en"
+) -> str:
+    sample = payload.get("sample")
+    selection = payload.get("component_selection")
+    preprocessing = payload.get("preprocessing")
+    eigenanalysis = payload.get("eigenanalysis")
+    loadings = payload.get("loadings")
+    plot = payload.get("plot")
+    outliers = payload.get("outliers")
+    if not isinstance(sample, dict) or not isinstance(eigenanalysis, list):
+        return ""
+    heading = report_text(
+        locale,
+        en="Principal Components Analysis",
+        ko="PCA 기반 다변량 검토",
+    )
+    description = report_text(
+        locale,
+        en=(
+            "All tables and charts below are rendered from the saved PCA result "
+            "without recalculation."
+        ),
+        ko="아래 표와 그래프는 분석을 재실행하지 않고 저장된 PCA 결과로 생성했습니다.",
+    )
+    matrix_type = preprocessing.get("matrix_type") if isinstance(preprocessing, dict) else None
+    selected_components = (
+        selection.get("selected_components") if isinstance(selection, dict) else None
+    )
+    cumulative = (
+        selection.get("selected_cumulative_proportion") if isinstance(selection, dict) else None
+    )
+    metric_rows = "\n".join(
+        row
+        for row in (
+            _report_metric_row(report_text(locale, en="Matrix type", ko="행렬 종류"), matrix_type),
+            _report_metric_row(
+                report_text(locale, en="Used rows", ko="사용 행"), sample.get("n_used")
+            ),
+            _report_metric_row(
+                report_text(locale, en="Excluded rows", ko="제외 행"),
+                sample.get("n_excluded"),
+            ),
+            _report_metric_row(
+                report_text(locale, en="Variables", ko="변수 수"),
+                sample.get("variable_count"),
+            ),
+            _report_metric_row(
+                report_text(locale, en="Selected components", ko="선택 성분 수"),
+                selected_components,
+            ),
+            _report_metric_row(
+                report_text(locale, en="Cumulative proportion", ko="누적 비율"),
+                cumulative,
+            ),
+        )
+        if row
+    )
+    eigen_rows = "\n".join(
+        "<tr>"
+        f"<td>PC{_html_text(item.get('component'))}</td>"
+        f"<td>{_html_text(_report_cell_value(item.get('eigenvalue')))}</td>"
+        f"<td>{_html_text(_report_cell_value(item.get('proportion')))}</td>"
+        f"<td>{_html_text(_report_cell_value(item.get('cumulative_proportion')))}</td>"
+        "</tr>"
+        for item in eigenanalysis
+        if isinstance(item, dict)
+    )
+    loading_rows = _pca_loading_report_rows(loadings)
+    charts = _pca_report_svgs(eigenanalysis, plot, outliers, locale)
+    metric_header = report_text(locale, en="Metric", ko="지표")
+    value_header = report_text(locale, en="Value", ko="값")
+    component_header = report_text(locale, en="Component", ko="성분")
+    eigenvalue_header = report_text(locale, en="Eigenvalue", ko="고유값")
+    proportion_header = report_text(locale, en="Proportion", ko="설명 비율")
+    cumulative_header = report_text(locale, en="Cumulative", ko="누적 비율")
+    variable_header = report_text(locale, en="Variable", ko="변수")
+    loadings_header = report_text(locale, en="Component loadings", ko="성분 적재량")
+    return f"""
+  <h2>{_html_text(heading)}</h2>
+  <p>{_html_text(description)}</p>
+  <table><thead><tr><th>{_html_text(metric_header)}</th><th>{_html_text(value_header)}</th></tr></thead><tbody>{metric_rows}</tbody></table>
+  <h3>{_html_text(report_text(locale, en="Eigenanalysis", ko="고유값 분석"))}</h3>
+  <table><thead><tr>
+    <th>{_html_text(component_header)}</th><th>{_html_text(eigenvalue_header)}</th>
+    <th>{_html_text(proportion_header)}</th><th>{_html_text(cumulative_header)}</th>
+  </tr></thead><tbody>{eigen_rows}</tbody></table>
+  <h3>{_html_text(report_text(locale, en="Loadings", ko="적재량"))}</h3>
+  <table><thead><tr><th>{_html_text(variable_header)}</th>
+    <th>{_html_text(loadings_header)}</th></tr></thead><tbody>{loading_rows}</tbody></table>
+  {charts}
+"""
+
+
+def _pca_loading_report_rows(value: object) -> str:
+    if not isinstance(value, list):
+        return ""
+    rows: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        values = item.get("values")
+        formatted = (
+            ", ".join(
+                f"PC{index + 1}={_report_cell_value(component)}"
+                for index, component in enumerate(values)
+            )
+            if isinstance(values, list)
+            else ""
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{_html_text(_report_cell_value(item.get('display_name')))}</td>"
+            f"<td>{_html_text(formatted)}</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
+
+
+def _pca_report_svgs(
+    eigenanalysis: list[object],
+    plot: object,
+    outliers: object,
+    locale: ReportLocale,
+) -> str:
+    eigen_rows = [item for item in eigenanalysis if isinstance(item, dict)]
+    if not eigen_rows:
+        return ""
+    maximum = (
+        max(
+            (
+                float(item["eigenvalue"])
+                for item in eigen_rows
+                if isinstance(item.get("eigenvalue"), int | float)
+            ),
+            default=1.0,
+        )
+        or 1.0
+    )
+    count = len(eigen_rows)
+    circle_rows: list[str] = []
+    for index, item in enumerate(eigen_rows):
+        x = 45 + index / max(1, count - 1) * 500
+        y = 245 - float(item.get("eigenvalue", 0)) / maximum * 190
+        circle_rows.append(
+            f'<circle cx="{x:.3f}" cy="{y:.3f}" r="4">'
+            f"<title>PC{index + 1}: {_html_text(item.get('eigenvalue'))}</title></circle>"
+        )
+    circles = "".join(circle_rows)
+    scree_title = report_text(locale, en="Scree Plot", ko="스크리 그림")
+    score_title = report_text(locale, en="Score Plot", ko="점수 그림")
+    points_value = plot.get("points") if isinstance(plot, dict) else None
+    score_points = (
+        [item for item in points_value if isinstance(item, dict)]
+        if isinstance(points_value, list)
+        else []
+    )
+    score_pairs = [
+        (item, item.get("scores"))
+        for item in score_points
+        if isinstance(item.get("scores"), list) and len(item["scores"]) >= 2
+    ]
+    values = [
+        float(value)
+        for _item, scores in score_pairs
+        for value in scores[:2]
+        if isinstance(value, int | float)
+    ]
+    bound = max((abs(value) for value in values), default=1.0) or 1.0
+    score_circle_rows: list[str] = []
+    for item, scores in score_pairs:
+        x = 295 + float(scores[0]) / bound * 240
+        y = 145 - float(scores[1]) / bound * 105
+        score_circle_rows.append(
+            f'<circle cx="{x:.3f}" cy="{y:.3f}" r="3.5">'
+            f"<title>{_html_text(item.get('source_row_number'))}</title></circle>"
+        )
+    score_circles = "".join(score_circle_rows)
+    outlier_count = outliers.get("count") if isinstance(outliers, dict) else None
+    outlier_summary = report_text(
+        locale,
+        en=f"Outlier count: {_report_cell_value(outlier_count)}",
+        ko=f"이상치 수: {_report_cell_value(outlier_count)}",
+    )
+    return f"""
+  <div class="chart-grid">
+    <figure><svg role="img" viewBox="0 0 590 280"
+      aria-labelledby="pca-scree-title pca-scree-desc">
+      <title id="pca-scree-title">{_html_text(scree_title)}</title>
+      <desc id="pca-scree-desc">{_html_text(scree_title)}</desc>
+      <line class="axis" x1="45" x2="545" y1="245" y2="245"/>
+      <line class="axis" x1="45" x2="45" y1="45" y2="245"/>
+      <g class="estimate">{circles}</g></svg>
+      <figcaption>{_html_text(scree_title)}</figcaption></figure>
+    <figure><svg role="img" viewBox="0 0 590 280"
+      aria-labelledby="pca-score-title pca-score-desc">
+      <title id="pca-score-title">{_html_text(score_title)}</title>
+      <desc id="pca-score-desc">{_html_text(score_title)}</desc>
+      <line class="axis" x1="45" x2="545" y1="145" y2="145"/>
+      <line class="axis" x1="295" x2="295" y1="40" y2="250"/>
+      <g class="estimate">{score_circles}</g></svg>
+      <figcaption>{_html_text(score_title)}. {_html_text(outlier_summary)}</figcaption>
+    </figure>
+  </div>
 """
 
 

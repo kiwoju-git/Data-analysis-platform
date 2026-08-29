@@ -290,3 +290,85 @@ export interface EqualVariancesResult {
   levene?: EqualVarianceTestResult;
   additional_tests?: EqualVarianceTestResult[];
 }
+
+export interface PrincipalComponentsEigenanalysisRow {
+  component: number;
+  eigenvalue: number;
+  proportion: number;
+  cumulative_proportion: number;
+  selected: boolean;
+}
+
+export interface PrincipalComponentsVectorRow {
+  column_id: string;
+  display_name: string;
+  values: number[];
+}
+
+export interface PrincipalComponentsScoreRow {
+  source_row_number: number;
+  scores: number[];
+  mahalanobis_distance_squared: number;
+  outlier: boolean;
+}
+
+export interface PrincipalComponentsResult {
+  schema_version: 1;
+  summary_type: "principal_components_analysis";
+  method: string;
+  missing_policy: "complete_case";
+  sample: {
+    n_total: number;
+    n_used: number;
+    n_excluded: number;
+    n_excluded_missing: number;
+    n_excluded_non_numeric: number;
+    variable_count: number;
+  };
+  variables: Array<{
+    column_id: string;
+    display_name: string;
+    unit: string | null;
+    mean: number;
+    sample_standard_deviation: number;
+  }>;
+  preprocessing: {
+    matrix_type: "correlation" | "covariance";
+    centered: true;
+    standardized: boolean;
+    degrees_of_freedom: 1;
+  };
+  matrix: number[][];
+  component_selection: {
+    mode: "all" | "fixed" | "cumulative_threshold";
+    requested_component_count: number | null;
+    cumulative_threshold: number;
+    maximum_components: number;
+    selected_components: number;
+    selected_cumulative_proportion: number;
+  };
+  eigenanalysis: PrincipalComponentsEigenanalysisRow[];
+  eigenvectors: PrincipalComponentsVectorRow[];
+  loadings: PrincipalComponentsVectorRow[];
+  scores: PrincipalComponentsScoreRow[];
+  plot: {
+    point_limit: number;
+    point_count: number;
+    sampled: boolean;
+    sampling_policy: string;
+    points: PrincipalComponentsScoreRow[];
+  };
+  outliers: {
+    alpha: number;
+    method: string;
+    degrees_of_freedom: number;
+    reference_value: number;
+    count: number;
+  };
+  warnings: string[];
+  provenance: {
+    algorithm: string;
+    sign_policy: string;
+    score_equation: string;
+  };
+}

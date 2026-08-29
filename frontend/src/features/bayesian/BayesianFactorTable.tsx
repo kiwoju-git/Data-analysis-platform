@@ -1,5 +1,7 @@
 import type { useBayesianStudyDraftState } from "./hooks/useBayesianStudyDraftState";
 import { DoeFactorEditor } from "../../doe/DoeFormPrimitives";
+import { DoeFactorCountControl } from "../../doe/DoeFactorCountControl";
+import { DOE_FACTOR_CAPABILITIES } from "../../doe/factorCapabilities";
 
 type DraftState = ReturnType<typeof useBayesianStudyDraftState>;
 
@@ -9,14 +11,24 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
       title="요인 범위"
       description="최적화할 연속형 요인의 식별자, 표시 이름과 실제 단위 범위를 입력합니다."
       action={
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={draft.factors.length >= 6}
-          onClick={draft.addFactor}
-        >
-          요인 추가
-        </button>
+        <div className="doe-factor-editor-actions">
+          <DoeFactorCountControl
+            count={draft.factors.length}
+            disabledReasonForCount={draft.disabledReasonForFactorCount}
+            factorLabels={draft.factors.map((factor) => factor.name)}
+            maximum={DOE_FACTOR_CAPABILITIES.bayesianStudy}
+            minimum={1}
+            onResize={draft.resizeFactors}
+          />
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={draft.factors.length >= DOE_FACTOR_CAPABILITIES.bayesianStudy}
+            onClick={draft.addFactor}
+          >
+            요인 추가
+          </button>
+        </div>
       }
     >
       <div className="table-wrap">
@@ -135,7 +147,10 @@ export function BayesianFactorTable({ draft }: { draft: DraftState }) {
                     type="button"
                     className="secondary-button compact-button"
                     aria-label={`${factor.name} 요인 삭제`}
-                    disabled={draft.factors.length === 1}
+                    disabled={draft.factors.length === 1 || draft.isFactorReferenced(factor.key)}
+                    title={draft.isFactorReferenced(factor.key)
+                      ? "이 요인을 참조하는 제약조건을 먼저 수정하거나 삭제하세요."
+                      : undefined}
                     onClick={() => draft.removeFactor(factor.key)}
                   >
                     삭제

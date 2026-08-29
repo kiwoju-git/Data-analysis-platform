@@ -222,6 +222,36 @@ class NormalityOptions(BaseModel):
         return value
 
 
+class PrincipalComponentsOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    column_ids: list[str] = Field(min_length=2, max_length=50)
+    matrix_type: Literal["correlation", "covariance"] = "correlation"
+    component_selection: Literal["all", "fixed", "cumulative_threshold"] = "all"
+    component_count: int | None = Field(default=None, ge=1, le=50)
+    cumulative_threshold: float = Field(default=0.9, gt=0, le=1)
+    outlier_alpha: float = Field(default=0.05, gt=0, lt=1)
+    plot_point_limit: int = Field(default=5000, ge=100, le=5000)
+    missing_policy: Literal["complete_case"] = "complete_case"
+
+    @field_validator("column_ids", mode="before")
+    @classmethod
+    def require_unique_column_ids(cls, value: object) -> object:
+        if not isinstance(value, list) or not 2 <= len(value) <= 50:
+            raise ValueError("must contain 2 to 50 column IDs")
+        if any(not isinstance(column_id, str) or not column_id for column_id in value):
+            raise ValueError("must contain non-empty string column IDs")
+        if len(set(value)) != len(value):
+            raise ValueError("column IDs must be unique")
+        return value
+
+    @model_validator(mode="after")
+    def validate_component_configuration(self) -> "PrincipalComponentsOptions":
+        if self.component_selection == "fixed" and self.component_count is None:
+            raise ValueError("component_count is required for fixed selection")
+        return self
+
+
 class EqualVariancesOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -23,7 +23,9 @@ import {
   DoeFactorEditor,
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
+import { DoeFactorCountControl } from "./doe/DoeFactorCountControl";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
+import { DOE_FACTOR_CAPABILITIES } from "./doe/factorCapabilities";
 import {
   continuousFactorDomainDraft,
   formatDoeFactorValue,
@@ -213,26 +215,23 @@ export function LatinHypercubePanel() {
       <DoeFactorEditor
         title="연속형 요인 범위"
         action={
-          <button
-            className="secondary-button"
-            disabled={factors.length >= 6}
-            type="button"
-            onClick={() =>
-              setFactors((current) => [
-                ...current,
-                {
-                  key: Math.max(...current.map((item) => item.key)) + 1,
-                  name: `factor_${current.length + 1}`,
-                  low: "0",
-                  high: "1",
-                  unit: "",
-                  ...continuousFactorDomainDraft,
-                },
-              ])
-            }
-          >
-            요인 추가
-          </button>
+          <div className="doe-factor-editor-actions">
+            <DoeFactorCountControl
+              count={factors.length}
+              factorLabels={factors.map((factor) => factor.name)}
+              maximum={DOE_FACTOR_CAPABILITIES.latinHypercube}
+              minimum={1}
+              onResize={(count) => setFactors((current) => resizeLhsFactors(current, count))}
+            />
+            <button
+              className="secondary-button"
+              disabled={factors.length >= DOE_FACTOR_CAPABILITIES.latinHypercube}
+              type="button"
+              onClick={() => setFactors((current) => resizeLhsFactors(current, current.length + 1))}
+            >
+              요인 추가
+            </button>
+          </div>
         }
       >
         <div className="table-wrap">
@@ -600,6 +599,7 @@ function buildRequest(input: {
     !Number.isInteger(runCount) ||
     runCount < 2 ||
     runCount > 200 ||
+    runCount < factors.length + 1 ||
     !Number.isInteger(seed) ||
     seed < 0 ||
     !Number.isInteger(runOrderSeed) ||
@@ -646,6 +646,24 @@ function updateFactor(
       item.key === key ? { ...item, [field]: value } : item,
     ),
   );
+}
+
+function resizeLhsFactors(current: FactorDraft[], count: number): FactorDraft[] {
+  if (count <= current.length) return current.slice(0, count);
+  const next = [...current];
+  let key = current.reduce((maximum, factor) => Math.max(maximum, factor.key), 0) + 1;
+  while (next.length < count) {
+    next.push({
+      key,
+      name: `factor_${next.length + 1}`,
+      low: "0",
+      high: "1",
+      unit: "",
+      ...continuousFactorDomainDraft,
+    });
+    key += 1;
+  }
+  return next;
 }
 
 function Metric({ label, value }: { label: string; value: number }) {

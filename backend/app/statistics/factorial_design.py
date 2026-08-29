@@ -6,6 +6,10 @@ from itertools import product
 from math import isfinite
 from typing import Any
 
+from app.core.doe_capabilities import (
+    FACTORIAL_AUTHORING_FACTOR_LIMIT,
+    FACTORIAL_RUN_LIMIT,
+)
 from app.statistics.doe_factor_domain import (
     DoeFactorDomain,
     DoeFactorDomainError,
@@ -15,11 +19,13 @@ from app.statistics.doe_factor_domain import (
 
 FACTORIAL_DESIGN_SCHEMA_VERSION = 2
 FRACTIONAL_FACTORIAL_DESIGN_SCHEMA_VERSION = 2
+SCREENING_FACTORIAL_DESIGN_SCHEMA_VERSION = 3
 FACTORIAL_DESIGN_FAMILY = "two_level_full_factorial"
 FRACTIONAL_FACTORIAL_DESIGN_FAMILY = "two_level_regular_fractional_factorial"
-MAX_FACTORIAL_FACTORS = 6
+PLACKETT_BURMAN_DESIGN_FAMILY = "plackett_burman_screening"
+MAX_FACTORIAL_FACTORS = FACTORIAL_AUTHORING_FACTOR_LIMIT
 MIN_FACTORIAL_FACTORS = 2
-MAX_FACTORIAL_RUNS = 256
+MAX_FACTORIAL_RUNS = FACTORIAL_RUN_LIMIT
 
 
 class FactorialDesignError(ValueError):
@@ -49,6 +55,7 @@ class FactorialDesignOptions:
     block_count: int = 1
     design_type: str = "two_level_full"
     fraction_id: str | None = None
+    screening_catalog_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +71,17 @@ class FractionalFactorialMetadata:
     estimable_terms: tuple[str, ...]
     non_estimable_terms: tuple[str, ...]
     principal_fraction: bool = True
+
+
+@dataclass(frozen=True)
+class PlackettBurmanMetadata:
+    catalog_entry_id: str
+    run_count: int
+    available_columns: int
+    used_columns: int
+    unused_column_indices: tuple[int, ...]
+    matrix_sha256: str
+    resolution: int = 3
 
 
 @dataclass(frozen=True)
@@ -86,6 +104,7 @@ class FactorialDesign:
     runs: tuple[FactorialDesignRun, ...]
     design_sha256: str
     fractional: FractionalFactorialMetadata | None = None
+    screening: PlackettBurmanMetadata | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +124,12 @@ FRACTIONAL_CATALOG: tuple[FractionalCatalogEntry, ...] = (
     FractionalCatalogEntry("6-factor-half-r6", 6, 5, 6, ((0, 1, 2, 3, 4),)),
     FractionalCatalogEntry("6-factor-quarter-r4", 6, 4, 4, ((0, 1, 2), (1, 2, 3))),
     FractionalCatalogEntry("6-factor-eighth-r3", 6, 3, 3, ((0, 1), (0, 2), (1, 2))),
+)
+
+PLACKETT_BURMAN_12_CATALOG_ID = "pb-12-run-v1"
+PLACKETT_BURMAN_12_GENERATOR = (1, 1, -1, 1, 1, 1, -1, -1, -1, 1, -1)
+PLACKETT_BURMAN_12_MATRIX_SHA256 = (
+    "522ef6b2765c94450f588bb478a7dee94f652fb899d74b86ef6f833dccd2b193"
 )
 
 
@@ -140,9 +165,119 @@ def generate_two_level_factorial_design(
         return generate_two_level_full_factorial_design(factors, options)
     if options.design_type == "two_level_fractional":
         return generate_two_level_fractional_factorial_design(factors, options)
+    if options.design_type == "plackett_burman_screening":
+        return generate_plackett_burman_design(factors, options)
     raise FactorialDesignError(
         code="doe_factorial_design_type_invalid",
         message="지원하지 않는 factorial 설계 종류입니다.",
+    )
+
+
+def plackett_burman_12_matrix() -> tuple[tuple[int, ...], ...]:
+    generator = PLACKETT_BURMAN_12_GENERATOR
+    rows = tuple(
+        tuple(generator[(column - shift) % len(generator)] for column in range(len(generator)))
+        for shift in range(len(generator))
+    )
+    return (*rows, tuple(-1 for _column in generator))
+
+
+def generate_plackett_burman_design(
+    factors: list[FactorialFactor],
+    options: FactorialDesignOptions,
+) -> FactorialDesign:
+    _validate_factors(factors)
+    _validate_options(options)
+    if not 7 <= len(factors) <= 10:
+        raise FactorialDesignError(
+            code="doe_plackett_burman_factor_count_out_of_range",
+            message="Plackett-Burman screening은 7개 이상 10개 이하 요인을 지원합니다.",
+        )
+    if options.screening_catalog_id != PLACKETT_BURMAN_12_CATALOG_ID:
+        raise FactorialDesignError(
+            code="doe_plackett_burman_catalog_entry_invalid",
+            message="검증된 12-run Plackett-Burman catalog를 선택하세요.",
+        )
+    if options.fraction_id is not None or options.center_points != 0:
+        raise FactorialDesignError(
+            code="doe_plackett_burman_options_invalid",
+            message="현재 Plackett-Burman screening은 center point를 지원하지 않습니다.",
+        )
+    matrix = plackett_burman_12_matrix()
+    run_count = len(matrix) * options.replicates
+    if run_count > MAX_FACTORIAL_RUNS:
+        raise FactorialDesignError(
+            code="doe_factorial_run_count_exceeds_limit",
+            message="생성할 DOE run 수가 현재 제한을 초과합니다.",
+        )
+    if options.block_count > run_count:
+        raise FactorialDesignError(
+            code="doe_factorial_block_count_exceeds_run_count",
+            message="블록 수는 전체 run 수보다 클 수 없습니다.",
+        )
+
+    rows: list[FactorialDesignRun] = []
+    for replicate_index in range(1, options.replicates + 1):
+        for matrix_index, matrix_row in enumerate(matrix, start=1):
+            coded = {
+                factor.name: matrix_row[index]
+                for index, factor in enumerate(factors)
+            }
+            rows.append(
+                FactorialDesignRun(
+                    standard_order=matrix_index,
+                    run_order=0,
+                    replicate_index=replicate_index,
+                    center_point=False,
+                    block_index=None,
+                    factor_levels={
+                        factor.name: factor.low if coded[factor.name] == -1 else factor.high
+                        for factor in factors
+                    },
+                    coded_levels=coded,
+                )
+            )
+    order = list(range(len(rows)))
+    if options.randomize:
+        random.Random(options.randomization_seed).shuffle(order)
+    runs = tuple(
+        FactorialDesignRun(
+            standard_order=row.standard_order,
+            run_order=run_order,
+            replicate_index=row.replicate_index,
+            center_point=False,
+            block_index=_block_index(run_order, options.block_count),
+            factor_levels=row.factor_levels,
+            coded_levels=row.coded_levels,
+        )
+        for run_order, row in enumerate((rows[index] for index in order), start=1)
+    )
+    metadata = PlackettBurmanMetadata(
+        catalog_entry_id=PLACKETT_BURMAN_12_CATALOG_ID,
+        run_count=12,
+        available_columns=11,
+        used_columns=len(factors),
+        unused_column_indices=tuple(range(len(factors) + 1, 12)),
+        matrix_sha256=PLACKETT_BURMAN_12_MATRIX_SHA256,
+    )
+    payload = canonical_factorial_design_payload(
+        family=PLACKETT_BURMAN_DESIGN_FAMILY,
+        factors=factors,
+        options=options,
+        runs=runs,
+        schema_version=SCREENING_FACTORIAL_DESIGN_SCHEMA_VERSION,
+    )
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return FactorialDesign(
+        schema_version=SCREENING_FACTORIAL_DESIGN_SCHEMA_VERSION,
+        family=PLACKETT_BURMAN_DESIGN_FAMILY,
+        factors=tuple(factors),
+        options=options,
+        runs=runs,
+        design_sha256=hashlib.sha256(encoded).hexdigest(),
+        screening=metadata,
     )
 
 
@@ -413,7 +548,11 @@ def options_to_payload(
     resolved_schema_version = (
         FRACTIONAL_FACTORIAL_DESIGN_SCHEMA_VERSION
         if schema_version is None and options.design_type == "two_level_fractional"
-        else (1 if schema_version is None else schema_version)
+        else (
+            SCREENING_FACTORIAL_DESIGN_SCHEMA_VERSION
+            if schema_version is None and options.design_type == "plackett_burman_screening"
+            else (1 if schema_version is None else schema_version)
+        )
     )
     if (
         options.design_type != "two_level_full"
@@ -424,6 +563,7 @@ def options_to_payload(
             {
                 "design_type": options.design_type,
                 "fraction_id": options.fraction_id,
+                "screening_catalog_id": options.screening_catalog_id,
                 "design_schema_version": resolved_schema_version,
             }
         )
@@ -446,7 +586,7 @@ def _validate_factors(factors: list[FactorialFactor]) -> None:
     if not MIN_FACTORIAL_FACTORS <= len(factors) <= MAX_FACTORIAL_FACTORS:
         raise FactorialDesignError(
             code="doe_factorial_factor_count_out_of_range",
-            message="2-level factorial 설계는 현재 2개 이상 6개 이하의 요인을 지원합니다.",
+            message="2-level factorial 설계는 현재 2개 이상 10개 이하의 요인을 지원합니다.",
         )
 
     seen: set[str] = set()

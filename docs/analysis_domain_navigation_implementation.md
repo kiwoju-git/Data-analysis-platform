@@ -34,14 +34,15 @@ therefore open their existing method without another disclosure level.
 
 Basic Statistics no longer exposes Distribution & Summary or Multivariate
 Exploration headings. Its four same-level cards are Descriptive Statistics,
-Graphical Summary, Normality Test, and planned PCA-Based Multivariate Review.
-The PCA card has no executable action and no backend registry entry.
+Graphical Summary, Normality Test, and available Principal Components
+Analysis. PCA uses `eda.principal_components`; the former planned-only
+`eda.multivariate_review` route is replace-redirected to it.
 
 ## Domain mapping
 
 | Presentation domain | Family | Existing executable methods | Contextual or planned |
 | --- | --- | --- | --- |
-| Basic Statistics & Exploration | Flat methods | `eda.descriptive`, `eda.graphical_summary`, `eda.normality` | planned PCA-based `eda.multivariate_review` |
+| Basic Statistics & Exploration | Flat methods | `eda.descriptive`, `eda.graphical_summary`, `eda.normality`, `eda.principal_components` | none |
 | Mean Comparison & Equivalence | t-Tests | `hypothesis.one_sample_t`, `hypothesis.paired_t`, `hypothesis.two_sample_t` | Two-Sample Comparison guide |
 | Mean Comparison & Equivalence | ANOVA | `hypothesis.one_way_anova` | ANOVA is a family, not a duplicate method |
 | Mean Comparison & Equivalence | Equivalence Tests | `hypothesis.equivalence_tost`, `hypothesis.paired_equivalence_tost`, `hypothesis.two_sample_equivalence_tost` | none |
@@ -51,7 +52,7 @@ The PCA card has no executable action and no backend registry entry.
 | Proportions & Categorical Data | Categorical Association | `categorical.chi_square_association` | none |
 | Correlation, Regression & Prediction | Flat methods | `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `regression.partial_least_squares`, `regression.gaussian_process` | contextual OLS prediction/optimizer; PLS point prediction and GP probabilistic prediction are available from fitted results |
 | DOE & Optimization | Flat methods | `doe.factorial_design`, `doe.response_surface`, `doe.response_optimizer` | contextual `doe.general_factorial_design` opens inside the factorial workspace |
-| AI/ML Experimental Design | Flat methods | `doe.latin_hypercube`, `doe.bayesian_optimization` | Gaussian Process shown as disabled BO-internal context |
+| AI/ML Experimental Design | Flat methods | `doe.latin_hypercube`, `doe.bayesian_optimization` | Gaussian Process Surrogate shown as non-executable `Used by Bayesian Optimization` context |
 | Quality & Process Monitoring | Control Charts | `quality.attribute_control_chart`, `quality.subgroup_chart`, `quality.individuals_chart` | none |
 | Quality & Process Monitoring | Process Behavior | `quality.run_chart` | none |
 | Quality & Process Monitoring | Process Capability | `quality.capability` | none |
@@ -115,19 +116,20 @@ factorial workspace with `design_kind=general` and its `design_id` preserved.
 - Comparability Assessment is planned because it must coordinate multiple CQAs and tests.
 - PLS Regression is available as a distinct PLS1 regression method. PLS-Based
   Monitoring remains planned and is not presented as the same calculation.
-- Two Variances, multivariate review, comparability, and multivariate
+- Two Variances, comparability, and multivariate
   monitoring require their own later statistical contracts and PRs.
 
 ## Version and migration decision
 
-- Phase A API contract: unchanged. Phase B API contract: `13` to `14` for the
-  PLS option/result and point-prediction contracts.
+- The ten-factor DOE/PCA update advances API contract `16` to `17` for PCA and
+  expanded typed DOE limits.
 - Existing statistical method versions are unchanged. New
   `regression.partial_least_squares` writes use method version `0.1.0`.
 - Existing result schemas are unchanged. PLS result schema and safe JSON model
   manifest schema both start at `1`. Standalone GP uses result schema 1 and a
   checksummed JSON manifest plus model-owned non-object NPZ state. The existing
-  Bayesian recommendation path remains unchanged at method v0.5.0.
+  Bayesian recommendation calculation path remains numerically compatible;
+  its factor-definition contract is v0.6.0.
 - Metadata schema: unchanged.
 - SQLite migration: none.
 - Existing saved artifacts and checksums: not rewritten.

@@ -5,6 +5,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
+from app.core.doe_capabilities import (
+    FACTORIAL_AUTHORING_FACTOR_LIMIT,
+    GENERAL_FACTORIAL_AUTHORING_FACTOR_LIMIT,
+    LATIN_HYPERCUBE_FACTOR_LIMIT,
+)
 from app.statistics.doe_factor_domain import DoeFactorDomain, validate_factor_domain
 
 
@@ -67,14 +72,22 @@ class FactorialDesignCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(default="2-level full factorial design", min_length=1, max_length=120)
-    factors: list[TwoLevelFactorRequest] = Field(min_length=2, max_length=6)
+    factors: list[TwoLevelFactorRequest] = Field(
+        min_length=2,
+        max_length=FACTORIAL_AUTHORING_FACTOR_LIMIT,
+    )
     replicates: int = Field(default=1, ge=1, le=16)
     center_points: int = Field(default=0, ge=0, le=32)
     randomize: bool = True
     randomization_seed: int = Field(ge=0, le=2_147_483_647)
     block_count: int = Field(default=1, ge=1, le=64)
-    design_type: Literal["two_level_full", "two_level_fractional"] = "two_level_full"
+    design_type: Literal[
+        "two_level_full",
+        "two_level_fractional",
+        "plackett_burman_screening",
+    ] = "two_level_full"
     fraction_id: str | None = Field(default=None, max_length=80)
+    screening_catalog_id: str | None = Field(default=None, max_length=80)
 
     @model_validator(mode="before")
     @classmethod
@@ -96,8 +109,14 @@ class FactorialDesignCreateRequest(BaseModel):
     def validate_fraction_selection(self) -> FactorialDesignCreateRequest:
         if self.design_type == "two_level_fractional" and not self.fraction_id:
             raise ValueError("fraction_id is required for a fractional factorial design")
-        if self.design_type == "two_level_full" and self.fraction_id is not None:
+        if self.design_type != "two_level_fractional" and self.fraction_id is not None:
             raise ValueError("fraction_id is only valid for a fractional factorial design")
+        if self.design_type == "plackett_burman_screening" and not self.screening_catalog_id:
+            raise ValueError("screening_catalog_id is required for Plackett-Burman")
+        if self.design_type != "plackett_burman_screening" and self.screening_catalog_id is not None:
+            raise ValueError("screening_catalog_id is only valid for Plackett-Burman")
+        if self.design_type == "plackett_burman_screening" and self.center_points != 0:
+            raise ValueError("Plackett-Burman P0 does not support center points")
         return self
 
 
@@ -160,8 +179,13 @@ class FactorialDesignOptionsResponse(BaseModel):
     randomize: bool
     randomization_seed: int = Field(ge=0)
     block_count: int = Field(ge=1)
-    design_type: Literal["two_level_full", "two_level_fractional"] = "two_level_full"
+    design_type: Literal[
+        "two_level_full",
+        "two_level_fractional",
+        "plackett_burman_screening",
+    ] = "two_level_full"
     fraction_id: str | None = None
+    screening_catalog_id: str | None = None
     design_schema_version: int = Field(default=1, ge=1)
 
 
@@ -179,6 +203,18 @@ class FractionalFactorialMetadataResponse(BaseModel):
     estimable_terms: list[str]
     non_estimable_terms: list[str]
     principal_fraction: bool
+
+
+class PlackettBurmanMetadataResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    catalog_entry_id: Literal["pb-12-run-v1"]
+    run_count: Literal[12]
+    available_columns: Literal[11]
+    used_columns: int = Field(ge=7, le=10)
+    unused_column_indices: list[int]
+    matrix_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    resolution: Literal[3]
 
 
 class FactorialDesignRunResponse(BaseModel):
@@ -302,6 +338,7 @@ class FactorialDesignResponse(BaseModel):
     runs: list[FactorialDesignRunResponse]
     design_schema_version: int = Field(default=1, ge=1)
     fractional: FractionalFactorialMetadataResponse | None = None
+    screening: PlackettBurmanMetadataResponse | None = None
 
 
 class GeneralFactorialFactorRequest(BaseModel):
@@ -316,7 +353,10 @@ class GeneralFactorialDesignCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(default="General full factorial design", min_length=1, max_length=120)
-    factors: list[GeneralFactorialFactorRequest] = Field(min_length=2, max_length=6)
+    factors: list[GeneralFactorialFactorRequest] = Field(
+        min_length=2,
+        max_length=GENERAL_FACTORIAL_AUTHORING_FACTOR_LIMIT,
+    )
     replicates: int = Field(default=1, ge=1, le=16)
     randomize: bool = True
     randomization_seed: int = Field(ge=0, le=2_147_483_647)
@@ -358,7 +398,7 @@ class GeneralFactorialDesignResponse(BaseModel):
     design_version_id: UUID
     version_number: Literal[1]
     method_id: Literal["doe.general_factorial_design"]
-    method_version: Literal["0.1.0"]
+    method_version: Literal["0.1.0", "0.2.0"]
     family: Literal["general_full_factorial"]
     name: str
     status: str
@@ -388,7 +428,7 @@ class GeneralFactorialAnalysisResponse(BaseModel):
     design_version_id: UUID
     design_version_number: int = Field(ge=1)
     method_id: Literal["doe.general_factorial_design"]
-    method_version: Literal["0.1.0"]
+    method_version: Literal["0.1.0", "0.2.0"]
     analysis_schema_version: Literal[1]
     design_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     response_revision_id: UUID
@@ -442,7 +482,10 @@ class LatinHypercubeDesignCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(default="LHS space-filling design", min_length=1, max_length=120)
-    factors: list[DoeFactorRequest] = Field(min_length=1, max_length=6)
+    factors: list[DoeFactorRequest] = Field(
+        min_length=1,
+        max_length=LATIN_HYPERCUBE_FACTOR_LIMIT,
+    )
     run_count: int = Field(ge=2, le=200)
     seed: int = Field(ge=0, le=2_147_483_647)
     randomize_run_order: bool = True
@@ -502,7 +545,7 @@ class LatinHypercubeDesignResponse(BaseModel):
     design_version_id: UUID
     version_number: Literal[1]
     method_id: Literal["doe.latin_hypercube"]
-    method_version: Literal["0.1.0", "0.2.0"]
+    method_version: Literal["0.1.0", "0.2.0", "0.3.0"]
     family: Literal["latin_hypercube_space_filling"]
     name: str
     status: str
@@ -748,6 +791,7 @@ class DoeFactorialAnalysisResult(BaseModel):
     plots: DoeFactorialPlotsResponse
     warnings: list[str]
     fractional_design: FractionalFactorialMetadataResponse | None = None
+    screening_design: PlackettBurmanMetadataResponse | None = None
 
 
 class DoeFactorialAnalysisResponse(BaseModel):

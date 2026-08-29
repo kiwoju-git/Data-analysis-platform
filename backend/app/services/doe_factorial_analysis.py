@@ -39,7 +39,7 @@ from app.storage.metadata import (
 
 DOE_FACTORIAL_ANALYSIS_SCHEMA_VERSION = 2
 DOE_FACTORIAL_ANALYSIS_CONFIG_SCHEMA_VERSION = 2
-SUPPORTED_FACTORIAL_METHOD_VERSIONS = {"0.4.0", "0.5.0", "0.6.0"}
+SUPPORTED_FACTORIAL_METHOD_VERSIONS = {"0.4.0", "0.5.0", "0.6.0", "0.7.0"}
 
 
 def create_factorial_analysis(
@@ -73,6 +73,7 @@ def create_factorial_analysis(
     ]
     try:
         fractional_design = design.fractional
+        screening_design = design.screening
         result_payload = calculate_factorial_analysis(
             calculation_runs,
             [factor.name for factor in design.factors],
@@ -82,7 +83,9 @@ def create_factorial_analysis(
             response_name=response_name,
             response_unit=unit,
             max_interaction_order=(
-                1 if fractional_design is not None else body.max_interaction_order
+                1
+                if fractional_design is not None or screening_design is not None
+                else body.max_interaction_order
             ),
             confidence_level=float(body.confidence_level),
             point_limit=body.point_limit,
@@ -98,6 +101,19 @@ def create_factorial_analysis(
                     "표시된 주효과 계수는 alias group 전체의 추정 contrast이며 "
                     "독립 효과가 아닙니다."
                 ),
+            ]
+        if screening_design is not None:
+            result_payload["method"] = "plackett_burman_main_effects_ols"
+            result_payload["screening_design"] = screening_design.model_dump(mode="json")
+            existing_warnings = result_payload.get("warnings")
+            warning_codes = [
+                "doe_plackett_burman_main_effects_confounding",
+            ]
+            if screening_design.used_columns == 10:
+                warning_codes.append("doe_plackett_burman_low_power_ten_factors")
+            result_payload["warnings"] = [
+                *(existing_warnings if isinstance(existing_warnings, list) else []),
+                *warning_codes,
             ]
         result = DoeFactorialAnalysisResult.model_validate(result_payload)
     except FactorialAnalysisError as exc:

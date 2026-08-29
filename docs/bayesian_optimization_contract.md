@@ -1,11 +1,11 @@
 # Bayesian Optimization Contract
 
-Last updated: 2026-07-30
+Last updated: 2026-08-29
 
 ## Current Status
 
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
-`0.5.0`. New studies use study schema `4`; readers retain study schemas `1`,
+`0.6.0`. New studies use study schema `4`; readers retain study schemas `1`,
 `2`, and `3` and their recorded method versions without rewriting checksums.
 Legacy definition verification reconstructs the schema-specific factor and
 initial-design field set; schema-4 defaults are never injected into a schema-1
@@ -82,7 +82,7 @@ and reset their loading flags when selection changes.
 
 ## Lifecycle And Inputs
 
-1. Create one immutable study with one to six continuous or fixed-step numeric
+1. Create one immutable study with one to ten continuous or fixed-step numeric
    factors, finite actual
    low/high bounds, one numeric maximize, minimize, or match-target objective,
    and up to 16 known
@@ -112,6 +112,19 @@ stored as an observation.
 Standalone LHS is not automatically imported into a Bayesian Study. The
 future atomic import contract is documented in
 `docs/bayesian_initial_observation_import_contract.md`.
+
+For `d >= 8`, the result includes `bayesian_high_dimensional_study`. The UI
+shows `d + 1` as the calculation minimum, about `3d` (30 for ten factors) as a
+product starting recommendation, and explains that enough real observations
+are required before GP/acquisition results are stable enough for practical
+use. This warning does not silently alter the initial design or block a valid
+study. Exact-GP and candidate-search budgets remain explicit and bounded.
+
+The Gaussian Process Surrogate shown in the AI/ML design domain is a contextual
+stage of this Study lifecycle. It is not a second executable Gaussian Process
+Regression method. Standalone `regression.gaussian_process` owns supervised
+model fitting, diagnostics, model storage, and new-condition prediction; the
+Bayesian surrogate owns acquisition and next-experiment recommendations.
 6. Record one finite user-observed value for each pending trial or explicitly
    abandon it. Completed and abandoned trials are terminal.
 7. Append an immutable ordered observation-history revision. No completed trial

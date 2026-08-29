@@ -1,4 +1,5 @@
 import type { GeneralFactorialDesignCreateRequest } from "./api";
+import { DOE_FACTOR_CAPABILITIES } from "./doe/factorCapabilities";
 
 export interface GeneralFactorDraft {
   id: string;
@@ -52,6 +53,8 @@ export function validateGeneralDraft(
     };
   }
   if (
+    factors.length < 2 ||
+    factors.length > DOE_FACTOR_CAPABILITIES.generalFactorialAuthoring ||
     new Set(parsed.map((factor) => factor.name.trim().toLocaleLowerCase())).size !==
       parsed.length ||
     parsed.some(

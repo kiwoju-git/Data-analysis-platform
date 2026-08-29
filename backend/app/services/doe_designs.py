@@ -21,6 +21,7 @@ from app.api.v1.schemas.doe import (
     FactorialDesignResponse,
     FactorialDesignRunResponse,
     FractionalFactorialMetadataResponse,
+    PlackettBurmanMetadataResponse,
     TwoLevelCategoricalFactorResponse,
     TwoLevelFactorResponse,
     TwoLevelNumericFactorResponse,
@@ -30,6 +31,9 @@ from app.core.errors import ApiError
 from app.services.doe_response_revisions import create_response_revision
 from app.statistics.factorial_design import (
     FRACTIONAL_FACTORIAL_DESIGN_FAMILY,
+    PLACKETT_BURMAN_12_CATALOG_ID,
+    PLACKETT_BURMAN_12_MATRIX_SHA256,
+    PLACKETT_BURMAN_DESIGN_FAMILY,
     FactorialDesignError,
     FactorialDesignOptions,
     FactorialDesignRun,
@@ -117,6 +121,7 @@ def create_factorial_design(
         block_count=body.block_count,
         design_type=body.design_type,
         fraction_id=body.fraction_id,
+        screening_catalog_id=body.screening_catalog_id,
     )
     try:
         generated = generate_two_level_factorial_design(factors, options)
@@ -334,6 +339,25 @@ def _factorial_design_response(
         runs=[FactorialDesignRunResponse.model_validate(run) for run in run_payloads],
         design_schema_version=int(options.get("design_schema_version", 1)),
         fractional=_fractional_metadata_response(design, factors, options),
+        screening=_screening_metadata_response(design, factors),
+    )
+
+
+def _screening_metadata_response(
+    design: ExperimentDesignRecord,
+    factors: list[object],
+) -> PlackettBurmanMetadataResponse | None:
+    if design.family != PLACKETT_BURMAN_DESIGN_FAMILY:
+        return None
+    used_columns = len(factors)
+    return PlackettBurmanMetadataResponse(
+        catalog_entry_id=PLACKETT_BURMAN_12_CATALOG_ID,
+        run_count=12,
+        available_columns=11,
+        used_columns=used_columns,
+        unused_column_indices=list(range(used_columns + 1, 12)),
+        matrix_sha256=PLACKETT_BURMAN_12_MATRIX_SHA256,
+        resolution=3,
     )
 
 
@@ -799,6 +823,11 @@ def _verify_design_sha256(
             block_count=int(options["block_count"]),
             design_type=str(options.get("design_type", "two_level_full")),
             fraction_id=None if options.get("fraction_id") is None else str(options["fraction_id"]),
+            screening_catalog_id=(
+                None
+                if options.get("screening_catalog_id") is None
+                else str(options["screening_catalog_id"])
+            ),
         )
         run_specs = [FactorialDesignRunResponse.model_validate(run) for run in runs]
     except (KeyError, TypeError, ValueError) as exc:

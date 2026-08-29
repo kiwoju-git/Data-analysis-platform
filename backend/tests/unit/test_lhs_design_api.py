@@ -44,7 +44,7 @@ def test_lhs_design_create_restore_response_revision_and_csv(tmp_path) -> None:
     assert restored_response.status_code == 200
     assert restored_response.json() == created
     assert created["method_id"] == "doe.latin_hypercube"
-    assert created["method_version"] == "0.2.0"
+    assert created["method_version"] == "0.3.0"
     assert created["quality"]["strata_valid"] is True
     assert len(created["runs"]) == 10
     assert saved_response.status_code == 200
