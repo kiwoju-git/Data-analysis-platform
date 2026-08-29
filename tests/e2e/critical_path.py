@@ -721,6 +721,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_linear_model_fit_and_prediction(page, diagnostics)
             diagnostics.step("verify PLS regression and point prediction")
             verify_pls_regression_and_prediction(page, diagnostics)
+            diagnostics.step("verify Gaussian Process regression and uncertainty prediction")
+            verify_gaussian_process_regression_and_prediction(page, diagnostics)
             diagnostics.step("verify attribute control chart")
             verify_attribute_control_chart(page)
             diagnostics.step("verify reporting summary variance and fixed-Y scatter")
@@ -1018,13 +1020,22 @@ def select_option_by_label_without_retry(select: Locator, label: str) -> None:
     )
 
 
-def select_method_card(page: Page, module_label: str, method_label: str) -> None:
+def select_method_card(
+    page: Page,
+    module_label: str,
+    method_label: str,
+    *,
+    diagnostics: E2EDiagnostics | None = None,
+    capture_name: str | None = None,
+) -> None:
     existing_method = page.locator(
         ".analysis-domain-method-list, .analysis-domain-method-grid"
     ).get_by_role(
         "button", name=method_label, exact=True
     )
     if existing_method.count() > 0 and existing_method.first.is_visible():
+        if diagnostics is not None and capture_name is not None:
+            diagnostics.capture_page(page, capture_name)
         existing_method.first.click()
         return
 
@@ -1060,6 +1071,10 @@ def select_method_card(page: Page, module_label: str, method_label: str) -> None
         "button", name=method_label, exact=True
     )
     method_button.wait_for(state="visible", timeout=15_000)
+    if diagnostics is not None and capture_name is not None:
+        expect(method_button).to_be_enabled()
+        expect(method_button).not_to_contain_text("계획됨")
+        diagnostics.capture_page(page, capture_name)
     method_button.click()
 
 
@@ -2604,7 +2619,13 @@ def verify_pls_regression_and_prediction(
     expect_dataset_context_counts(page, row_label="16행", column_label="3컬럼")
 
     open_primary_navigation(page, "분석")
-    select_method_card(page, "상관관계 및 회귀분석", "PLS 회귀")
+    select_method_card(
+        page,
+        "상관관계 및 회귀분석",
+        "PLS 회귀",
+        diagnostics=diagnostics,
+        capture_name="pls-available-card.png",
+    )
     expect(page.locator("#workbench-title")).to_have_text("PLS 회귀")
     expect_lazy_analysis_module(page, "RegressionAnalysisPanels")
 
@@ -2658,6 +2679,115 @@ def verify_pls_regression_and_prediction(
     expect(prediction.locator("tbody tr").first).to_contain_text("준비됨")
     if prediction.locator("tbody tr td").nth(3).inner_text().strip() == "-":
         raise AssertionError("PLS point prediction did not render a numeric value")
+
+
+def verify_gaussian_process_regression_and_prediction(
+    page: Page, diagnostics: E2EDiagnostics
+) -> None:
+    open_primary_navigation(page, "분석")
+    select_method_card(page, "상관관계 및 회귀분석", "Gaussian Process 회귀")
+    expect(page.locator("#workbench-title")).to_have_text("Gaussian Process 회귀")
+    expect_lazy_analysis_module(page, "RegressionAnalysisPanels")
+
+    panel = page.locator(".gp-regression-panel")
+    panel.get_by_label("반응 변수").select_option(label="yield_pct")
+    predictors = panel.get_by_role("group", name="예측변수")
+    predictors.get_by_role("checkbox", name="temperature_c").check()
+    predictors.get_by_role("checkbox", name="pressure_bar").check()
+    expect(panel.get_by_label("Gaussian Process 설정")).to_be_visible()
+    panel.get_by_label("Fold 수").fill("2")
+    panel.get_by_text("고급 설정", exact=True).click()
+    panel.get_by_label("최종 모형 restart 수").fill("0")
+    panel.get_by_label("CV restart 수").fill("0")
+    panel.get_by_label("Profile 점 수").fill("10")
+    panel.get_by_label("Surface grid 크기").fill("10")
+    diagnostics.capture_page(page, "gp-input.png")
+    diagnostics.capture_page(page, "gp-kernel-settings.png")
+
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/api/v1/analysis-runs"),
+        timeout=120_000,
+    ) as result_info:
+        panel.get_by_role("button", name="Gaussian Process 회귀 실행").click()
+    if not result_info.value.ok:
+        raise AssertionError(f"GP analysis failed: {result_info.value.text()}")
+
+    expect(panel.get_by_role("heading", name="모형 요약", exact=True)).to_be_visible(
+        timeout=120_000
+    )
+    expect(panel).to_contain_text("예측 R²")
+    expect(panel).to_contain_text("PRESS")
+    expect(panel).to_contain_text("음의 로그 예측밀도")
+    diagnostics.capture_page(page, "gp-model-summary.png")
+
+    kernel_table = panel.locator(".gp-hyperparameter-table")
+    expect(kernel_table).to_be_visible()
+    expect(kernel_table).to_contain_text("length_scale")
+    diagnostics.capture_page(page, "gp-hyperparameters.png")
+
+    expect(panel.get_by_role("heading", name="관측값 대 적합값")).to_be_visible()
+    expect(panel.locator(".gp-scatter-chart").first).to_be_visible()
+    diagnostics.capture_page(page, "gp-observed-predicted.png")
+    diagnostics.capture_page(page, "gp-validation.png")
+
+    expect(panel.get_by_role("heading", name="조건부 예측변수 Profile")).to_be_visible()
+    expect(panel.locator(".gp-profile-chart")).to_have_count(2)
+    diagnostics.capture_page(page, "gp-conditional-profile.png")
+
+    surface = panel.locator(".gp-surface-chart")
+    expect(surface).to_be_visible()
+    expect(panel.get_by_label("X 예측변수").locator("option:checked")).to_have_text(
+        "temperature_c"
+    )
+    expect(panel.get_by_label("Y 예측변수").locator("option:checked")).to_have_text(
+        "pressure_bar"
+    )
+    diagnostics.capture_page(page, "gp-mean-surface.png")
+    panel.get_by_role("button", name="예측 불확실성").click()
+    diagnostics.capture_page(page, "gp-uncertainty-surface.png")
+
+    prediction = panel.locator(".gp-point-prediction")
+    expect(prediction.get_by_role("heading", name="새 조건 예측")).to_be_visible()
+    prediction.get_by_label("temperature_c 1").fill("75")
+    prediction.get_by_label("pressure_bar 1").fill("8")
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/gaussian-process-predictions")
+    ) as prediction_info:
+        prediction.get_by_role("button", name="예측 실행").click()
+    if not prediction_info.value.ok:
+        raise AssertionError(f"GP prediction failed: {prediction_info.value.text()}")
+    expect(prediction.locator("tbody tr").first).to_contain_text("준비됨")
+    if prediction.locator("tbody tr td").nth(3).inner_text().strip() == "-":
+        raise AssertionError("GP point prediction did not render a numeric mean")
+    diagnostics.capture_page(page, "gp-prediction.png")
+
+    page.set_viewport_size({"width": 390, "height": 844})
+    page_overflow = int(
+        page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
+    )
+    if page_overflow > 1:
+        raise AssertionError(f"GP mobile page overflowed by {page_overflow}px")
+    diagnostics.capture_page(page, "gp-mobile.png")
+    page.set_viewport_size({"width": 1440, "height": 900})
+
+    home = page.locator(".sidebar-group-control").filter(has_text=re.compile("^홈$"))
+    home.click()
+    analysis_quick_card = page.locator(".home-quick-card").filter(
+        has=page.get_by_text("분석", exact=True)
+    )
+    analysis_quick_card.wait_for(state="visible", timeout=15_000)
+    analysis_quick_card.click()
+    ai_domain = page.locator(".analysis-domain-card").filter(has_text="AI/ML 실험설계")
+    ai_domain.wait_for(state="visible", timeout=15_000)
+    ai_domain.click()
+    contextual_gp = page.locator(".analysis-domain-method-card.is-contextual").filter(
+        has_text="Gaussian Process 대리모형"
+    )
+    expect(contextual_gp).to_be_visible()
+    expect(contextual_gp).to_contain_text("Bayesian Optimization")
+    diagnostics.capture_page(page, "bayesian-gp-context.png")
 
 
 def verify_attribute_control_chart(page: Page) -> None:

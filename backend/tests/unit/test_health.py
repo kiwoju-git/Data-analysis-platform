@@ -45,7 +45,7 @@ def test_runtime_info_reports_current_contract_without_workspace_details(tmp_pat
     assert response.json() == {
         "service": "datalab-studio-api",
         "app_version": "0.1.0",
-        "api_contract_version": 15,
+        "api_contract_version": 16,
         "metadata_schema_version": 19,
         "build_commit": "unknown",
         "capabilities": {
@@ -59,6 +59,7 @@ def test_runtime_info_reports_current_contract_without_workspace_details(tmp_pat
             "regression_model_deletion": True,
             "dedicated_predict": True,
             "dedicated_response_optimizer": True,
+            "gaussian_process_regression": True,
             "bayesian_optimization": True,
             "graph_builder_preview": True,
             "dataset_cell_correction": True,

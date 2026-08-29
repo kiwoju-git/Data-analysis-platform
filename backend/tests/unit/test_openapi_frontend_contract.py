@@ -815,6 +815,15 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="gaussianProcessPredictions",
+        method="post",
+        path="/api/v1/regression-models/{model_id}/gaussian-process-predictions",
+        success_status="200",
+        response_schema="GaussianProcessPointPredictionResponse",
+        parameters=frozenset({("model_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="regressionModelMetadata",
         method="patch",
         path="/api/v1/regression-models/{model_id}/metadata",
@@ -1709,6 +1718,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "regression_model_deletion",
                 "dedicated_predict",
                 "dedicated_response_optimizer",
+                "gaussian_process_regression",
                 "bayesian_optimization",
                 "graph_builder_preview",
                 "dataset_cell_correction",
@@ -1730,6 +1740,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "regression_model_deletion",
                 "dedicated_predict",
                 "dedicated_response_optimizer",
+                "gaussian_process_regression",
                 "bayesian_optimization",
                 "graph_builder_preview",
                 "dataset_cell_correction",
@@ -2703,7 +2714,13 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         property_enums=(
             (
                 "method_id",
-                frozenset({"regression.linear_model", "regression.partial_least_squares"}),
+                frozenset(
+                    {
+                        "regression.linear_model",
+                        "regression.partial_least_squares",
+                        "regression.gaussian_process",
+                    }
+                ),
             ),
         ),
     ),
@@ -3102,6 +3119,7 @@ FRONTEND_RESULT_TYPE_FILE_CONTRACTS = [
                 "xy_correlation_matrix",
                 "linear_model",
                 "partial_least_squares_regression",
+                "gaussian_process_regression",
             }
         ),
     ),

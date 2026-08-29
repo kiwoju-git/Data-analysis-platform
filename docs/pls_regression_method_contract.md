@@ -1,10 +1,14 @@
 # PLS Regression Method Contract
 
-Status: P0 implementation contract  
+Status: P0 implemented and available in the full profile
 Method ID: `regression.partial_least_squares`  
 Method version: `0.1.0`  
 Result schema: `1`  
 Model manifest kind/schema: `pls_model_manifest` / `1`
+
+The method is an executable item in the Correlation, Regression & Prediction
+domain. It is not a planned workflow and remains distinct from planned
+PLS-based process monitoring.
 
 ## 1. Purpose and scope
 

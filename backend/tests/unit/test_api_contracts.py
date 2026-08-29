@@ -156,7 +156,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
     ]
 
     method_ids = [method.method_id for method in METHODS]
-    assert len(method_ids) == 35
+    assert len(method_ids) == 36
     assert len(set(method_ids)) == len(method_ids)
     assert method_ids[:4] == [
         "eda.descriptive",
@@ -196,6 +196,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "regression.xy_correlation",
         "regression.linear_model",
         "regression.partial_least_squares",
+        "regression.gaussian_process",
         "regression.predict",
         "quality.attribute_control_chart",
         "quality.subgroup_chart",
@@ -249,6 +250,7 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         "regression.xy_correlation": "xy_correlation_matrix",
         "regression.linear_model": "linear_model",
         "regression.partial_least_squares": "partial_least_squares_regression",
+        "regression.gaussian_process": "gaussian_process_regression",
         "quality.attribute_control_chart": "attribute_control_chart",
         "quality.individuals_chart": "individuals_chart",
         "quality.subgroup_chart": "subgroup_chart",
@@ -436,7 +438,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     catalog = analysis_method_catalog()
 
     assert len(catalog.modules) == 6
-    assert len(catalog.methods) == 35
+    assert len(catalog.methods) == 36
     assert {method.availability.value for method in catalog.methods} == {"available"}
     assert catalog.methods[0].method_id == "eda.descriptive"
     assert catalog.methods[0].availability == MethodAvailability.AVAILABLE
@@ -640,7 +642,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
     assert response.status_code == 200
     payload = response.json()
     assert len(payload["modules"]) == 6
-    assert len(payload["methods"]) == 35
+    assert len(payload["methods"]) == 36
     assert {method["availability"] for method in payload["methods"]} == {"available"}
     available = [
         method["method_id"]
@@ -669,6 +671,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "regression.xy_correlation",
         "regression.linear_model",
         "regression.partial_least_squares",
+        "regression.gaussian_process",
         "regression.predict",
         "quality.attribute_control_chart",
         "quality.subgroup_chart",

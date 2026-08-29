@@ -49,7 +49,7 @@ The PCA card has no executable action and no backend registry entry.
 | Mean Comparison & Equivalence | Nonparametric Tests | `hypothesis.one_sample_wilcoxon`, `hypothesis.mann_whitney`, `hypothesis.kruskal_wallis` | none |
 | Proportions & Categorical Data | Proportion Tests | `categorical.one_proportion`, `categorical.two_proportion` | none |
 | Proportions & Categorical Data | Categorical Association | `categorical.chi_square_association` | none |
-| Correlation, Regression & Prediction | Flat methods | `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `regression.partial_least_squares` | contextual OLS prediction/optimizer; PLS point prediction is available from its fitted result |
+| Correlation, Regression & Prediction | Flat methods | `regression.pearson`, `regression.xy_correlation`, `regression.linear_model`, `regression.partial_least_squares`, `regression.gaussian_process` | contextual OLS prediction/optimizer; PLS point prediction and GP probabilistic prediction are available from fitted results |
 | DOE & Optimization | Flat methods | `doe.factorial_design`, `doe.response_surface`, `doe.response_optimizer` | contextual `doe.general_factorial_design` opens inside the factorial workspace |
 | AI/ML Experimental Design | Flat methods | `doe.latin_hypercube`, `doe.bayesian_optimization` | Gaussian Process shown as disabled BO-internal context |
 | Quality & Process Monitoring | Control Charts | `quality.attribute_control_chart`, `quality.subgroup_chart`, `quality.individuals_chart` | none |
@@ -108,7 +108,10 @@ factorial workspace with `design_kind=general` and its `design_id` preserved.
 
 - ANOVA remains a family containing One-Way ANOVA; there is no duplicate ANOVA leaf.
 - Two-Sample Comparison is guidance across existing methods, not a calculation.
-- Gaussian Process remains Bayesian Optimization surrogate information.
+- Gaussian Process Surrogate remains contextual Bayesian Optimization
+  information. Standalone `regression.gaussian_process` is one executable
+  method in Correlation, Regression & Prediction and is not duplicated in the
+  AI/ML domain.
 - Comparability Assessment is planned because it must coordinate multiple CQAs and tests.
 - PLS Regression is available as a distinct PLS1 regression method. PLS-Based
   Monitoring remains planned and is not presented as the same calculation.
@@ -122,7 +125,9 @@ factorial workspace with `design_kind=general` and its `design_id` preserved.
 - Existing statistical method versions are unchanged. New
   `regression.partial_least_squares` writes use method version `0.1.0`.
 - Existing result schemas are unchanged. PLS result schema and safe JSON model
-  manifest schema both start at `1`.
+  manifest schema both start at `1`. Standalone GP uses result schema 1 and a
+  checksummed JSON manifest plus model-owned non-object NPZ state. The existing
+  Bayesian recommendation path remains unchanged at method v0.5.0.
 - Metadata schema: unchanged.
 - SQLite migration: none.
 - Existing saved artifacts and checksums: not rewritten.

@@ -1362,3 +1362,27 @@ After push, verify these items in GitHub UI:
   under `.tmp/e2e-diagnostics-domain-pls/screenshots`.
 - Vite retains the existing informational warning for chunks over 500 kB; no
   new production dependency was added.
+
+### Gaussian Process Regression Validation (2026-08-29)
+
+- Base: `a943bfd7d67c8984c57757c965d5bf768f3b94e0`.
+- Existing PLS Regression remained method version `0.1.0`, result schema 1,
+  and model manifest schema 1. Its analysis, model save, and point-prediction
+  workflows passed without numerical contract changes.
+- Focused Gaussian Process checks passed: 17 core/reference tests and 4 API,
+  persistence, prediction, retention, and localized HTML report tests.
+- Final `scripts/test.ps1`: backend 1,027 passed in 1,160.99 seconds and
+  frontend 38 files / 287 tests passed.
+- Final `scripts/check.ps1`: tutorial synchronization, Ruff lint/format for
+  220 Python files, mypy for 136 source files, backend 1,027 tests,
+  localization audit for 2,971 frontend source strings and 3,387 translation
+  keys, ESLint, strict TypeScript, frontend 287 tests, and production build all
+  passed in 1,242.6 seconds.
+- Chromium E2E passed in 170.5 seconds, including PLS availability, PLS model
+  save and prediction, Gaussian Process analysis, uncertainty diagnostics,
+  conditional profiles, two-predictor surfaces, model persistence, point
+  prediction, the mobile layout, and the Bayesian GP contextual card.
+  Diagnostics are under
+  `.tmp/e2e-diagnostics-gaussian-process/screenshots`.
+- Vite retains the existing informational warning for chunks over 500 kB. No
+  new production dependency or metadata migration was introduced.

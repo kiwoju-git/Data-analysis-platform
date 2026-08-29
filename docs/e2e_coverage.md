@@ -487,6 +487,7 @@ browser critical path.
 - `verify schema stale behavior`
 - `verify linear model fit and prediction`
 - `verify PLS regression and point prediction`
+- `verify Gaussian Process regression and uncertainty prediction`
 - `verify attribute control chart`
 - `verify reporting summary variance and fixed-Y scatter`
 - `verify DOE factorial analysis`
@@ -697,6 +698,22 @@ editors produce 3-level and mixed 2-by-3-by-5 designs. The two-level path mixes
 a numeric factor with a categorical A/B factor and checks coded corners,
 expanded categorical pseudo-centers, response entry, and analysis. Requested
 diagnostics use `.tmp/e2e-diagnostics-mann-whitney-factorial`.
+
+## PLS Visibility And Gaussian Process Regression Coverage
+
+The API-contract-16 workflow verifies that the existing PLS Regression method
+remains available in the full profile, has no duplicate planned card, and still
+supports analysis, safe-model persistence, and point prediction without a
+method or result-schema change.
+
+The standalone Gaussian Process path uses a synthetic numeric response and
+predictors to exercise the Matérn 5/2 ARD default, estimated noise, leakage-free
+K-fold validation, model/uncertainty summaries, conditional profiles, selectable
+two-predictor surfaces, checksum-verified model persistence, and latent plus
+new-observation point-prediction intervals. It also checks that the AI/ML domain
+keeps Gaussian Process Surrogate as contextual Bayesian Optimization guidance,
+not as a second executable GP method. Requested diagnostics use
+`.tmp/e2e-diagnostics-gaussian-process`.
 
 ## Maintenance Checklist
 

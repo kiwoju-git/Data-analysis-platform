@@ -484,6 +484,22 @@ analysis, artifact, and regression-model records safely distinguish PLS by
 method ID and manifest kind, so no relational migration or legacy checksum
 rewrite is required.
 
+## Gaussian Process Regression Decision
+
+`regression.gaussian_process` starts at method version `0.1.0`, result schema
+`1`, and `gaussian_process_model_manifest` schema `1`. API contract `16` adds
+its typed analysis request/result, model-owned numeric artifact, model catalog
+support, and probabilistic point-prediction route. The artifact is an
+application-owned NPZ loaded with `allow_pickle=False`; manifest and artifact
+SHA-256 values are checked independently.
+
+Metadata schema remains `19` because generic model and artifact relations
+already supply ownership and transactional retention. This addition does not
+change `regression.partial_least_squares` `0.1.0` or
+`doe.bayesian_optimization` `0.5.0`. Standalone GP Regression and the Bayesian
+surrogate remain distinct workflows, and existing stored results are not
+rewritten.
+
 ## Mann-Whitney And Categorical Factorial Decision
 
 `hypothesis.mann_whitney` moves from `0.1.0`/result schema `1` to `0.2.0`/

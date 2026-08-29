@@ -253,7 +253,7 @@ Gate D2 now includes the dedicated response-surface and bounded response-optimiz
 
 Current stabilization update:
 
-- Current catalog count: 35 stable catalog IDs, 35 available IDs, and 28
+- Current catalog count: 36 stable catalog IDs, 36 available IDs, and 29
   generic `MethodExecutionHandler` entries. The remaining seven are dedicated
   workflows and are rejected by generic analysis-run.
 - `regression.partial_least_squares` v0.1 is the fourth generic regression

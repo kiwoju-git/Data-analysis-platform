@@ -76,6 +76,7 @@ def test_only_statistical_worker_modules_reference_sklearn_and_startup_does_not_
     assert matches == [
         app_root / "statistics" / "bayesian_batch.py",
         app_root / "statistics" / "bayesian_optimization.py",
+        app_root / "statistics" / "gaussian_process_regression.py",
         app_root / "statistics" / "pls_regression.py",
     ]
 

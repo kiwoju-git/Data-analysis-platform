@@ -185,6 +185,7 @@ family card 구성:
 | 상관·회귀·예측 | 회귀 모형 | Fit Regression Model | Available |
 | 상관·회귀·예측 | 예측·최적화 | saved-model prediction, regression optimizer | Contextual |
 | 상관·회귀·예측 | 잠재변수 회귀 | PLS Regression | Available (`regression.partial_least_squares` v0.1.0) |
+| 상관·회귀·예측 | 비선형 확률적 회귀 | Gaussian Process Regression | Available (`regression.gaussian_process` v0.1.0) |
 | 실험계획·최적화 | 요인배치 설계 | two-level full/fractional, general full factorial | Available |
 | 실험계획·최적화 | 반응표면 | RSM | Available |
 | 실험계획·최적화 | 최적화 | Response Optimizer | Available |
@@ -692,6 +693,7 @@ Family 2: `범주형 관련성 / Categorical Association`
 
 ```text
 [Pearson Correlation] [X–Y Correlation Matrix] [Fit Regression Model] [PLS Regression]
+[Gaussian Process Regression]
 ```
 
 Prediction과 regression optimizer는 contextual workflow다. OLS card 아래 안내만 표시하고 일반
@@ -860,15 +862,26 @@ P0 결과:
 
 PLS를 관리도로 부르지 않는다.
 
-## 10.8 Gaussian Process 판단
+## 10.8 Available — Gaussian Process Regression
 
-Standalone GPR이 향후 필요하면 ID는 다음을 검토한다.
+`regression.gaussian_process` is an available standalone regression method in
+this domain. It fits one numeric response from one to twelve numeric predictors
+using bounded exact Gaussian Process Regression. P0 includes kernel/noise
+presets, fold-local scaling and hyperparameter fitting, K-fold/LOO validation,
+latent and new-observation uncertainty, conditional profiles, a two-predictor
+surface, safe model persistence, and probabilistic new-condition prediction.
 
-```text
-regression.gaussian_process
-```
+The canonical calculation contract is
+`docs/gaussian_process_regression_method_contract.md`. Exact fitting is rejected
+above 500 usable rows and is never silently sampled. ARD length scale is not
+presented as causal feature importance.
 
-이 경우 배치는 이 도메인이다. 현재 AI/ML Experimental Design에는 BO 내부 surrogate 단계만 표시한다.
+## 10.9 Gaussian Process 역할 구분
+
+Standalone GP Regression has one primary executable placement here. AI/ML
+Experimental Design continues to show Gaussian Process Surrogate only as a
+contextual stage inside Bayesian Optimization; it is not counted or routed as a
+second executable method.
 
 ---
 

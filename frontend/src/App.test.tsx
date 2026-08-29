@@ -339,8 +339,8 @@ describe("App", () => {
     });
   });
 
-  it("defines guidance for all 34 documented six-module methods", () => {
-    expect(analysisMethodGuidanceIds).toHaveLength(34);
+  it("defines guidance for all 35 documented six-module workflows", () => {
+    expect(analysisMethodGuidanceIds).toHaveLength(35);
     expect(getAnalysisMethodGuidance("eda.descriptive").roleRequirements[0]).toMatchObject({
       label: "분석 변수",
       required: true,

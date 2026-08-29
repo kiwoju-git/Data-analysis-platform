@@ -38,6 +38,7 @@ const expectedRegistryMethodIds = [
   "regression.xy_correlation",
   "regression.linear_model",
   "regression.partial_least_squares",
+  "regression.gaussian_process",
   "regression.predict",
   "quality.attribute_control_chart",
   "quality.subgroup_chart",
@@ -87,6 +88,14 @@ describe("analysis domain navigation", () => {
     );
     expect(analysisFamilyForMethod("eda.descriptive")).toBeNull();
     expect(analysisMethodPlacement("doe.general_factorial_design")?.contextual).toBe(true);
+    const regressionMethods = ANALYSIS_DOMAINS.find(
+      (domain) => domain.id === "correlation-regression-prediction",
+    )?.directMethodIds;
+    expect(regressionMethods).toContain("regression.partial_least_squares");
+    expect(regressionMethods).toContain("regression.gaussian_process");
+    expect(ANALYSIS_DOMAINS.flatMap((domain) => domain.directPlannedWorkflows ?? [])).not.toContainEqual(
+      expect.objectContaining({ id: "regression.partial_least_squares" }),
+    );
   });
 
   it("uses metadata-driven flat and grouped presentation modes", () => {

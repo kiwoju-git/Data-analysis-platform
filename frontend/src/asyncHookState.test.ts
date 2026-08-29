@@ -580,7 +580,7 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 15,
+    api_contract_version: 16,
     metadata_schema_version: 19,
     build_commit: "unknown",
     capabilities: {
@@ -601,6 +601,7 @@ function runtimeInfo(
       bayesian_lhs_initial_design: true,
       bayesian_batch_recommendation: true,
       bayesian_objective_goal_modes: true,
+      gaussian_process_regression: true,
     },
     ...overrides,
   };

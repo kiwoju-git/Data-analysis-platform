@@ -1,6 +1,6 @@
 # Runtime Compatibility Contract
 
-Last updated: 2026-08-21
+Last updated: 2026-08-29
 
 ## Purpose
 
@@ -37,21 +37,22 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `15`);
+- `api_contract_version` (currently `16`);
 - the actual metadata schema constant (currently `19`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
   deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and
   Graph Builder preview, immutable dataset cell correction, standalone LHS
   design, Bayesian LHS initial design, typed Bayesian objective goals, and
-  atomic Bayesian recommendation batches.
+  atomic Bayesian recommendation batches, and standalone Gaussian Process
+  Regression.
 
 The response contains no workspace path, filename, or raw data. Existing
 `GET /api/v1/health` retains its liveness/readiness meaning.
 
 ## Frontend Gate
 
-The frontend expects API contract `15`, schema 19 or later, and every required
+The frontend expects API contract `16`, schema 19 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management
@@ -87,6 +88,12 @@ contracts. New two-level factorial writes use design schema 2 and can store
 actual text levels while retaining the existing coded `-1/+1` matrix. Metadata
 schema 19 remains sufficient because factors and runs are already stored as
 checksummed JSON; no SQLite migration or legacy artifact rewrite is performed.
+
+Contract 16 adds the available `regression.gaussian_process` catalog method,
+typed analysis result, safe model-owned numeric artifact, and probabilistic
+point-prediction route. Metadata schema stays at 19 because the existing
+generic regression-model and artifact ownership records cover the JSON
+manifest and NPZ state. PLS and Bayesian calculation contracts are unchanged.
 
 Build commit `unknown` is not treated as proof of a mismatch. When both commits
 are known, they must match for this strict local runtime.
