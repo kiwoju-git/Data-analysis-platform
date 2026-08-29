@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass
 from itertools import product
 from math import isfinite
-from typing import Any
+from typing import Any, Literal
 
 from app.core.doe_capabilities import (
     FACTORIAL_AUTHORING_FACTOR_LIMIT,
@@ -126,7 +126,7 @@ FRACTIONAL_CATALOG: tuple[FractionalCatalogEntry, ...] = (
     FractionalCatalogEntry("6-factor-eighth-r3", 6, 3, 3, ((0, 1), (0, 2), (1, 2))),
 )
 
-PLACKETT_BURMAN_12_CATALOG_ID = "pb-12-run-v1"
+PLACKETT_BURMAN_12_CATALOG_ID: Literal["pb-12-run-v1"] = "pb-12-run-v1"
 PLACKETT_BURMAN_12_GENERATOR = (1, 1, -1, 1, 1, 1, -1, -1, -1, 1, -1)
 PLACKETT_BURMAN_12_MATRIX_SHA256 = (
     "522ef6b2765c94450f588bb478a7dee94f652fb899d74b86ef6f833dccd2b193"
@@ -219,10 +219,7 @@ def generate_plackett_burman_design(
     rows: list[FactorialDesignRun] = []
     for replicate_index in range(1, options.replicates + 1):
         for matrix_index, matrix_row in enumerate(matrix, start=1):
-            coded = {
-                factor.name: matrix_row[index]
-                for index, factor in enumerate(factors)
-            }
+            coded = {factor.name: matrix_row[index] for index, factor in enumerate(factors)}
             rows.append(
                 FactorialDesignRun(
                     standard_order=matrix_index,
@@ -563,10 +560,11 @@ def options_to_payload(
             {
                 "design_type": options.design_type,
                 "fraction_id": options.fraction_id,
-                "screening_catalog_id": options.screening_catalog_id,
                 "design_schema_version": resolved_schema_version,
             }
         )
+    if options.design_type == "plackett_burman_screening":
+        payload["screening_catalog_id"] = options.screening_catalog_id
     return payload
 
 

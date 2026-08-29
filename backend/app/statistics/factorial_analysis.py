@@ -233,10 +233,9 @@ def _validate_inputs(
     confidence_level: float,
     point_limit: int,
 ) -> None:
-    if (
-        not 2 <= len(factor_names) <= FACTORIAL_AUTHORING_FACTOR_LIMIT
-        or len(set(factor_names)) != len(factor_names)
-    ):
+    if not 2 <= len(factor_names) <= FACTORIAL_AUTHORING_FACTOR_LIMIT or len(
+        set(factor_names)
+    ) != len(factor_names):
         raise FactorialAnalysisError("doe_factorial_analysis_factors_invalid")
     if isinstance(max_interaction_order, bool) or not 1 <= max_interaction_order <= min(
         3, len(factor_names)

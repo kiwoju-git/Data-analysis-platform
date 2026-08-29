@@ -1,8 +1,31 @@
 # CI Status
 
-Last updated: 2026-08-21
+Last updated: 2026-08-29
 
 ## Local Validation
+
+- The ten-factor DOE and PCA work is based on main
+  `6c17b0062f2aba8d764070dcad2387e933352eb3`. It advances API contract 16 to
+  17; Factorial/LHS/Bayesian methods to 0.7.0/0.3.0/0.6.0; and General Full to
+  0.2.0. New `eda.principal_components` is method 0.1.0/result schema 1 and the
+  Plackett-Burman design uses Factorial design schema 3. Metadata schema remains
+  19, RSM remains 0.3.0 with a five-factor CCD limit, and GP/PLS versions and
+  numerical contracts are unchanged. No SQLite migration or immutable artifact
+  rewrite is used.
+- Focused backend validation passed 316 tests. Final `scripts/test.ps1` passed
+  backend pytest 1048/1048 in 1176.08 seconds and frontend Vitest 289/289 across
+  39 files in 16.40 seconds. Final `scripts/check.ps1` completed in 1265 seconds
+  with 18 tutorial blocks, Ruff lint/format over 225 Python files, mypy over 139
+  source modules, backend pytest 1048/1048 in 1185.88 seconds, localization
+  coverage for 2986 source strings and 3467 keys, frontend lint/typecheck,
+  Vitest 289/289, and the production build all passing. The existing Vite
+  chunk-size warning remains informational.
+- The isolated Chromium critical path passed in 175.3 seconds with diagnostics
+  under `.tmp/e2e-diagnostics-ten-factor-pca`. It verifies 10-factor LHS and
+  Bayesian authoring, the 1,024-run full-factorial blocker, 12-run
+  Plackett-Burman screening, the General Full run cap, RSM guidance, the shared
+  GP/PLS picker, the contextual Bayesian surrogate, and complete PCA
+  eigenanalysis/diagnostic/export flows on desktop and mobile.
 
 - The Mann-Whitney input and factorial DOE parity work is based on main
   `2e06e20cf05e84d86ea9ad05216073aad4034dd9`. It advances API contract 14

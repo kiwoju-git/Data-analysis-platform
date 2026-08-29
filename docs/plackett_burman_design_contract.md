@@ -1,7 +1,9 @@
 # Plackett-Burman screening design contract
 
-Status: P0 implementation contract  
-Method: `doe.factorial_design`  
+Status: P0 implementation contract
+
+Method: `doe.factorial_design`
+
 Design type: `plackett_burman_screening`
 
 ## Purpose and scope
@@ -97,4 +99,3 @@ Required tests cover the official generator row, full matrix SHA, balance,
 orthogonality, rank, 7/8/9/10 factor projections, numeric/categorical mapping,
 replicates, deterministic randomization, main-effects-only analysis, warnings,
 CSV/export, and legacy full/fractional parity.
-

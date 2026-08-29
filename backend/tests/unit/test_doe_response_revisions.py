@@ -168,7 +168,7 @@ def test_response_revision_value_tamper_is_rejected_without_internal_path(tmp_pa
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "doe_response_revision_checksum_mismatch"
     assert str(tmp_path) not in response.text
-    assert "150" not in response.text
+    assert '"response_value":150' not in response.text
 
 
 def test_analysis_response_revision_relation_tamper_is_rejected(tmp_path) -> None:

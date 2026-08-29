@@ -137,12 +137,8 @@ def test_pca_matches_independent_sklearn_svd_reference(matrix_type: str) -> None
             reference_components[:, component_index] *= -1
             reference_scores[:, component_index] *= -1
 
-    actual_vectors = np.asarray(
-        [row["values"] for row in production["eigenvectors"]], dtype=float
-    )
-    actual_scores = np.asarray(
-        [row["scores"] for row in production["scores"]], dtype=float
-    )
+    actual_vectors = np.asarray([row["values"] for row in production["eigenvectors"]], dtype=float)
+    actual_scores = np.asarray([row["scores"] for row in production["scores"]], dtype=float)
     assert [row["eigenvalue"] for row in production["eigenanalysis"]] == pytest.approx(
         reference.explained_variance_, abs=1e-12
     )

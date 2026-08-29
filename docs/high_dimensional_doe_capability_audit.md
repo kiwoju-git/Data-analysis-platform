@@ -1,7 +1,9 @@
 # High-dimensional DOE capability audit
 
-Status: implementation contract  
-Reviewed: 2026-08-29  
+Status: implementation contract
+
+Reviewed: 2026-08-29
+
 Product authoring limit: 10 factors
 
 ## Decision
@@ -114,4 +116,3 @@ explicit and tested.
 - SciPy 1.15, [`scipy.stats.qmc.LatinHypercube`](https://docs.scipy.org/doc/scipy-1.15.3/reference/generated/scipy.stats.qmc.LatinHypercube.html)
 - JMP, [Example of Creating a Latin Hypercube Design](https://www.jmp.com/support/help/en/19.1/jmp/example-of-creating-a-latin-hypercube-design.shtml)
 - scikit-learn, [Gaussian Processes user guide](https://scikit-learn.org/1.7/modules/gaussian_process.html)
-

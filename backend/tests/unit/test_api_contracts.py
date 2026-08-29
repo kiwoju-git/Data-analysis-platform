@@ -156,12 +156,13 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
     ]
 
     method_ids = [method.method_id for method in METHODS]
-    assert len(method_ids) == 36
+    assert len(method_ids) == 37
     assert len(set(method_ids)) == len(method_ids)
-    assert method_ids[:4] == [
+    assert method_ids[:5] == [
         "eda.descriptive",
         "eda.graphical_summary",
         "eda.normality",
+        "eda.principal_components",
         "eda.equal_variances",
     ]
     assert "regression.response_optimizer" not in method_ids
@@ -178,6 +179,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "eda.descriptive",
         "eda.graphical_summary",
         "eda.normality",
+        "eda.principal_components",
         "eda.equal_variances",
         "hypothesis.one_sample_t",
         "hypothesis.paired_t",
@@ -232,6 +234,7 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         "eda.descriptive": "descriptive_statistics",
         "eda.graphical_summary": "graphical_summary",
         "eda.normality": "normality_test",
+        "eda.principal_components": "principal_components_analysis",
         "eda.equal_variances": "equal_variances_test",
         "hypothesis.one_sample_t": "one_sample_t_test",
         "hypothesis.paired_t": "paired_t_test",
@@ -438,14 +441,15 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     catalog = analysis_method_catalog()
 
     assert len(catalog.modules) == 6
-    assert len(catalog.methods) == 36
+    assert len(catalog.methods) == 37
     assert {method.availability.value for method in catalog.methods} == {"available"}
     assert catalog.methods[0].method_id == "eda.descriptive"
     assert catalog.methods[0].availability == MethodAvailability.AVAILABLE
-    assert [method.method_id for method in catalog.methods[:4]] == [
+    assert [method.method_id for method in catalog.methods[:5]] == [
         "eda.descriptive",
         "eda.graphical_summary",
         "eda.normality",
+        "eda.principal_components",
         "eda.equal_variances",
     ]
     normality = next(method for method in catalog.methods if method.method_id == "eda.normality")
@@ -642,7 +646,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
     assert response.status_code == 200
     payload = response.json()
     assert len(payload["modules"]) == 6
-    assert len(payload["methods"]) == 36
+    assert len(payload["methods"]) == 37
     assert {method["availability"] for method in payload["methods"]} == {"available"}
     available = [
         method["method_id"]
@@ -653,6 +657,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "eda.descriptive",
         "eda.graphical_summary",
         "eda.normality",
+        "eda.principal_components",
         "eda.equal_variances",
         "hypothesis.one_sample_t",
         "hypothesis.paired_t",
@@ -846,7 +851,7 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
     payload = response.json()
     FactorialDesignResponse.model_validate(payload)
     assert payload["method_id"] == "doe.factorial_design"
-    assert payload["method_version"] == "0.6.0"
+    assert payload["method_version"] == "0.7.0"
     assert payload["family"] == "two_level_full_factorial"
     assert payload["status"] == "designed"
     assert payload["name"] == "screening design"
@@ -860,6 +865,7 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
         "block_count": 1,
         "design_type": "two_level_full",
         "fraction_id": None,
+        "screening_catalog_id": None,
         "design_schema_version": 2,
     }
     assert [factor["name"] for factor in payload["factors"]] == ["Temperature", "Pressure"]
@@ -1023,7 +1029,7 @@ def test_factorial_analysis_api_persists_effects_anova_diagnostics_and_provenanc
     assert analysis_response.status_code == 201
     DoeFactorialAnalysisResponse.model_validate(analysis)
     assert analysis["method_id"] == "doe.factorial_design"
-    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.6.0"
+    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.7.0"
     assert analysis["analysis_schema_version"] == 2
     assert analysis["design_version_id"] == design["design_version_id"]
     assert analysis["design_sha256"] == design["design_sha256"]

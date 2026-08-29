@@ -721,8 +721,12 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_linear_model_fit_and_prediction(page, diagnostics)
             diagnostics.step("verify PLS regression and point prediction")
             verify_pls_regression_and_prediction(page, diagnostics)
-            diagnostics.step("verify Gaussian Process regression and uncertainty prediction")
+            diagnostics.step(
+                "verify Gaussian Process regression and uncertainty prediction"
+            )
             verify_gaussian_process_regression_and_prediction(page, diagnostics)
+            diagnostics.step("verify Principal Components Analysis and diagnostics")
+            verify_principal_components_analysis(page, diagnostics)
             diagnostics.step("verify attribute control chart")
             verify_attribute_control_chart(page)
             diagnostics.step("verify reporting summary variance and fixed-Y scatter")
@@ -1030,9 +1034,7 @@ def select_method_card(
 ) -> None:
     existing_method = page.locator(
         ".analysis-domain-method-list, .analysis-domain-method-grid"
-    ).get_by_role(
-        "button", name=method_label, exact=True
-    )
+    ).get_by_role("button", name=method_label, exact=True)
     if existing_method.count() > 0 and existing_method.first.is_visible():
         if diagnostics is not None and capture_name is not None:
             diagnostics.capture_page(page, capture_name)
@@ -1067,9 +1069,7 @@ def select_method_card(
     domain_card.click()
     method_button = page.locator(
         ".analysis-domain-method-list, .analysis-domain-method-grid"
-    ).get_by_role(
-        "button", name=method_label, exact=True
-    )
+    ).get_by_role("button", name=method_label, exact=True)
     method_button.wait_for(state="visible", timeout=15_000)
     if diagnostics is not None and capture_name is not None:
         expect(method_button).to_be_enabled()
@@ -1101,9 +1101,7 @@ def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> 
         raise AssertionError(
             f"t-test and ANOVA cards differed by {height_difference:.2f}px"
         )
-    equivalence = families.filter(
-        has=page.get_by_role("heading", name="동등성 검정")
-    )
+    equivalence = families.filter(has=page.get_by_role("heading", name="동등성 검정"))
     expect(equivalence.get_by_role("button")).to_have_text(
         ["1-표본 동등성 검정", "2-표본 동등성 검정", "대응표본 동등성 검정"]
     )
@@ -1193,15 +1191,19 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     exploration_control.click()
     expect(exploration_control).to_have_attribute("aria-expanded", "true")
     expect(page).to_have_url(re.compile(r"/analysis\?[^#]*domain=basic-exploration"))
-    expect(page.locator(".analysis-domain-method-grid .analysis-domain-method-card")).to_have_count(4)
-    expect(page.get_by_text("PCA 기반 다변량 검토", exact=True)).to_be_visible()
+    expect(
+        page.locator(".analysis-domain-method-grid .analysis-domain-method-card")
+    ).to_have_count(4)
+    expect(
+        page.locator(".analysis-domain-method-grid .analysis-domain-method-card")
+        .filter(has_text="PCA 기반 다변량 검토")
+        .first
+    ).to_be_visible()
     diagnostics.capture_page(page, "basic-domain-flat-cards.png")
-    methods = exploration.locator(
-        ".sidebar-method-list > li > .sidebar-method-button"
-    )
+    methods = exploration.locator(".sidebar-method-list > li > .sidebar-method-button")
     expect(methods).to_have_count(4)
     expect(methods).to_contain_text(
-        ["기술통계", "그래프 요약", "정규성 검정", "PCA 기반 다변량 검토 · 계획됨"]
+        ["기술통계", "그래프 요약", "정규성 검정", "PCA 기반 다변량 검토"]
     )
     methods.filter(has_text=re.compile("^정규성 검정$")).click()
     expect(page).to_have_url(re.compile(r"/analysis/exploration/eda\.normality"))
@@ -1359,9 +1361,7 @@ def verify_graph_builder_box_plot(page: Page, diagnostics: E2EDiagnostics) -> No
         raise AssertionError(f"unexpected graph preview title: {chart_title!r}")
     note_text = result.locator(".interpretation-note").text_content() or ""
     diagnostics.step("verify graph builder preview note")
-    expected_note = (
-        "이 결과는 미리보기이며 저장 분석 이력, result artifact 또는 export를 만들지 않습니다."
-    )
+    expected_note = "이 결과는 미리보기이며 저장 분석 이력, result artifact 또는 export를 만들지 않습니다."
     if note_text.strip() != expected_note:
         raise AssertionError(f"unexpected graph preview note: {note_text!r}")
 
@@ -1456,9 +1456,9 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     expect(page.locator("#workbench-title")).to_have_text("Mann-Whitney U")
     page.get_by_label("반응 변수", exact=True).select_option(label="yield_pct")
     page.get_by_label("그룹 변수", exact=True).select_option(label="production_line")
-    expect(page.get_by_text("비교할 그룹 수준 2개를 선택하세요", exact=False)).to_be_visible(
-        timeout=20_000
-    )
+    expect(
+        page.get_by_text("비교할 그룹 수준 2개를 선택하세요", exact=False)
+    ).to_be_visible(timeout=20_000)
     page.get_by_label("그룹 1", exact=True).select_option(label="A (N 4)")
     page.get_by_label("그룹 2", exact=True).select_option(label="C (N 4)")
     page.get_by_role("button", name="Mann-Whitney U 실행").click()
@@ -2656,13 +2656,17 @@ def verify_pls_regression_and_prediction(
 
     expect(panel.get_by_role("heading", name="반응 그림")).to_be_visible()
     expect(panel.locator(".pls-scatter-chart").first).to_be_visible()
-    expect(panel.locator(".pls-scatter-chart").first.locator(".chart-reference-line")).to_have_count(1)
+    expect(
+        panel.locator(".pls-scatter-chart").first.locator(".chart-reference-line")
+    ).to_have_count(1)
     diagnostics.capture_page(page, "pls-response-plot.png")
 
     expect(panel.get_by_role("heading", name="점수")).to_be_visible()
     expect(panel.get_by_role("heading", name="적재량")).to_be_visible()
     expect(panel.locator(".pls-loading-chart")).to_be_visible()
-    expect(panel.locator(".pls-scatter-chart").nth(1).locator(".chart-reference-line")).to_have_count(0)
+    expect(
+        panel.locator(".pls-scatter-chart").nth(1).locator(".chart-reference-line")
+    ).to_have_count(0)
     diagnostics.capture_page(page, "pls-score-loading.png")
 
     prediction = panel.locator(".pls-point-prediction")
@@ -2694,6 +2698,8 @@ def verify_gaussian_process_regression_and_prediction(
     predictors = panel.get_by_role("group", name="예측변수")
     predictors.get_by_role("checkbox", name="temperature_c").check()
     predictors.get_by_role("checkbox", name="pressure_bar").check()
+    diagnostics.capture_locator(predictors, "gp-predictor-picker.png")
+    diagnostics.capture_locator(predictors, "pls-gp-picker-parity.png")
     expect(panel.get_by_label("Gaussian Process 설정")).to_be_visible()
     panel.get_by_label("Fold 수").fill("2")
     panel.get_by_text("고급 설정", exact=True).click()
@@ -2787,7 +2793,57 @@ def verify_gaussian_process_regression_and_prediction(
     )
     expect(contextual_gp).to_be_visible()
     expect(contextual_gp).to_contain_text("Bayesian Optimization")
+    expect(contextual_gp).to_contain_text("BO 내부 단계")
+    expect(contextual_gp).not_to_contain_text("계획됨")
     diagnostics.capture_page(page, "bayesian-gp-context.png")
+    diagnostics.capture_page(page, "gp-surrogate-contextual-card.png")
+
+
+def verify_principal_components_analysis(
+    page: Page, diagnostics: E2EDiagnostics
+) -> None:
+    open_primary_navigation(page, "분석")
+    select_method_card(page, "탐색적 분석", "PCA 기반 다변량 검토")
+    expect(page.locator("#workbench-title")).to_have_text("PCA 기반 다변량 검토")
+
+    panel = page.locator(".pca-panel")
+    variables = panel.get_by_role("group", name="변수")
+    for name in ("yield_pct", "temperature_c", "pressure_bar"):
+        variables.get_by_role("checkbox", name=name).check()
+    expect(panel.get_by_label("주성분 분석 설정")).to_be_visible()
+    expect(panel.get_by_label("행렬 종류")).to_have_value("correlation")
+    diagnostics.capture_page(page, "pca-input.png")
+
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/api/v1/analysis-runs")
+    ) as result_info:
+        panel.get_by_role("button", name="분석 실행").click()
+    if not result_info.value.ok:
+        raise AssertionError(f"PCA analysis failed: {result_info.value.text()}")
+
+    expect(panel.get_by_role("heading", name="고유값 분석")).to_be_visible(
+        timeout=30_000
+    )
+    expect(panel.locator(".pca-scree-line")).to_be_visible()
+    expect(panel.get_by_role("heading", name="점수 그림")).to_be_visible()
+    diagnostics.capture_page(page, "pca-eigenanalysis.png")
+    diagnostics.capture_page(page, "pca-scree-score.png")
+    expect(panel.get_by_role("heading", name="적재량 그림")).to_be_visible()
+    expect(panel.get_by_role("heading", name="바이플롯")).to_be_visible()
+    diagnostics.capture_page(page, "pca-loading-biplot.png")
+    expect(panel.get_by_role("heading", name="이상치 그림")).to_be_visible()
+    expect(panel).to_contain_text("마할라노비스 거리 제곱")
+    diagnostics.capture_page(page, "pca-outlier.png")
+
+    page.set_viewport_size({"width": 390, "height": 844})
+    overflow = int(
+        page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
+    )
+    if overflow > 1:
+        raise AssertionError(f"PCA mobile page overflowed by {overflow}px")
+    diagnostics.capture_page(page, "pca-mobile.png")
+    page.set_viewport_size({"width": 1440, "height": 900})
 
 
 def verify_attribute_control_chart(page: Page) -> None:
@@ -2929,6 +2985,36 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     )
     assert_doe_table_visual_consistency(factorial_root, diagnostics, "factorial")
     diagnostics.capture_page(page, "doe-factorial-table-ui.png")
+
+    factor_count = factorial_root.get_by_label("요인 수")
+    factor_count.select_option("10")
+    factorial_root.get_by_role("button", name="적용", exact=True).click()
+    expect(factorial_root.get_by_label("factor 10 name")).to_be_visible()
+    expect(factorial_root.get_by_role("button", name="DOE 설계 생성")).to_be_disabled()
+    expect(factorial_root).to_contain_text("1,024")
+    diagnostics.capture_page(page, "factorial-full-run-blocker-10.png")
+
+    factorial_root.get_by_role("radio", name="Screening Design").check()
+    screening_create = factorial_root.get_by_role("button", name="DOE 설계 생성")
+    expect(screening_create).to_be_enabled()
+    screening_create.click()
+    screening_summary = factorial_root.get_by_label("DOE 설계 결과 요약")
+    expect(screening_summary).to_be_visible(timeout=20_000)
+    expect(screening_summary).to_contain_text("12")
+    expect(factorial_root).to_contain_text("Plackett-Burman")
+    diagnostics.capture_page(page, "factorial-plackett-burman-10.png")
+
+    origin = page.evaluate("window.location.origin")
+    active_version_id = page.locator("#active-dataset-version").input_value()
+    page.goto(
+        f"{origin}/analysis/doe/doe.factorial_design"
+        f"?dataset_version_id={active_version_id}",
+        wait_until="networkidle",
+    )
+    factorial_root = page.locator(
+        '.analysis-run-panel[data-analysis-execution="doe.factorial_design"]'
+    )
+    expect(factorial_root).to_be_visible(timeout=20_000)
     page.get_by_label("반복", exact=True).fill("2")
     page.get_by_label("센터점", exact=True).fill("1")
     page.get_by_label("factor 2 name", exact=True).fill("Material")
@@ -2969,7 +3055,7 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
     expect(page.get_by_role("img", name="주효과 평균 차트")).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
-    expect(page.locator(".analysis-result-section")).to_contain_text("0.6.0")
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.7.0")
     expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
     expect(page.get_by_label("run 1 response")).to_be_disabled()
     expect(page.get_by_role("button", name="분석 후 반응 잠금")).to_be_disabled()
@@ -3010,7 +3096,19 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     page.reload(wait_until="networkidle")
     expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
     page.get_by_role("radio", name="일반 완전요인").check()
-    expect(page.get_by_role("button", name="모든 요인을 3수준으로 설정")).to_be_visible()
+    general_factor_count = page.get_by_label("요인 수")
+    general_factor_count.select_option("9")
+    page.get_by_role("button", name="적용", exact=True).click()
+    expect(page.get_by_text("예상 실험 수 19,683개", exact=False)).to_be_visible()
+    expect(page.get_by_role("button", name="일반 완전요인 설계 생성")).to_be_disabled()
+    diagnostics.capture_page(page, "general-factorial-run-cap.png")
+
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#workbench-title")).to_have_text("실험 계획 생성")
+    page.get_by_role("radio", name="일반 완전요인").check()
+    expect(
+        page.get_by_role("button", name="모든 요인을 3수준으로 설정")
+    ).to_be_visible()
     expect(page.get_by_role("columnheader", name="수준 유형")).to_be_visible()
     page.get_by_role("button", name="요인 추가", exact=True).click()
     expect(page.get_by_text("예상 실험 수 27개", exact=False)).to_be_visible()
@@ -3065,8 +3163,13 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
         wait_until="networkidle",
     )
     expect(page).to_have_url(re.compile(r"/analysis/doe/doe\.factorial_design\?"))
-    if f"design_id={created_general_id}" not in page.url or "design_kind=general" not in page.url:
-        raise AssertionError(f"legacy General Full redirect lost query state: {page.url}")
+    if (
+        f"design_id={created_general_id}" not in page.url
+        or "design_kind=general" not in page.url
+    ):
+        raise AssertionError(
+            f"legacy General Full redirect lost query state: {page.url}"
+        )
     expect(page.get_by_role("heading", name="일반 완전요인 설계")).to_be_visible(
         timeout=20_000
     )
@@ -3173,6 +3276,13 @@ def verify_doe_response_surface_analysis(
         '.analysis-run-panel[aria-label="반응표면법 설계와 분석 입력"]'
     )
     assert_doe_table_visual_consistency(rsm_root, diagnostics, "response-surface")
+    expect(
+        rsm_root.get_by_text(
+            "현재 Central Composite Design은 최대 5개의 연속형 요인을 지원합니다.",
+            exact=False,
+        )
+    ).to_be_visible()
+    diagnostics.capture_page(page, "rsm-factor-limit-guidance.png")
     diagnostics.capture_page(page, "doe-rsm-table-ui.png")
 
     page.locator("details.doe-advanced-settings > summary").click()
@@ -3381,6 +3491,17 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
     assert_doe_table_visual_consistency(workspace, diagnostics, "latin-hypercube")
     diagnostics.capture_page(page, "lhs-settings-aligned.png")
     diagnostics.capture_page(page, "doe-lhs-table-ui.png")
+    factor_count = workspace.get_by_label("요인 수")
+    factor_count.select_option("10")
+    workspace.get_by_role("button", name="적용", exact=True).click()
+    expect(workspace.get_by_label("요인 10 이름")).to_be_visible()
+    diagnostics.capture_page(page, "lhs-factor-count-10.png")
+    factor_count.select_option("2")
+    workspace.get_by_role("button", name="적용", exact=True).click()
+    dialog = page.get_by_role("dialog", name="요인을 제거하시겠습니까?")
+    expect(dialog).to_contain_text("8개 요인이 제거됩니다.")
+    dialog.get_by_role("button", name="요인 제거").click()
+    expect(workspace.get_by_label("요인 2 이름")).to_be_visible()
     page.get_by_label("factor_1 하한").fill("1")
     page.get_by_label("factor_1 상한").fill("10")
     page.get_by_label("factor_1 설정 방식").select_option("discrete_numeric")
@@ -3436,6 +3557,22 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
         page.get_by_text("앱은 목적함수를 실행하지 않습니다", exact=False)
     ).to_be_visible()
 
+    bayesian_root = page.locator(
+        '.analysis-run-panel[aria-label="Bayesian 최적화 Study 작업"]'
+    )
+    factor_count = bayesian_root.get_by_label("요인 수")
+    factor_count.select_option("10")
+    bayesian_root.get_by_role("button", name="적용", exact=True).click()
+    expect(bayesian_root.get_by_label("요인 10 이름")).to_be_visible()
+    expect(bayesian_root).to_contain_text("권장 시작")
+    diagnostics.capture_page(page, "bayesian-factor-count-10.png")
+    factor_count.select_option("1")
+    bayesian_root.get_by_role("button", name="적용", exact=True).click()
+    dialog = page.get_by_role("dialog", name="요인을 제거하시겠습니까?")
+    expect(dialog).to_contain_text("9개 요인이 제거됩니다.")
+    dialog.get_by_role("button", name="요인 제거").click()
+    page.get_by_label("초기 실험 수").fill("2")
+
     page.get_by_label("초기 설계 방식").select_option(
         "sha256_counter_uniform_feasible_v1"
     )
@@ -3443,9 +3580,6 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     page.get_by_label("제약 1 x 계수").fill("1")
     page.get_by_label("제약 1 우변").fill("0.75")
     expect(page.locator(".doe-form-section")).to_have_count(0)
-    bayesian_root = page.locator(
-        '.analysis-run-panel[aria-label="Bayesian 최적화 Study 작업"]'
-    )
     assert_doe_table_visual_consistency(bayesian_root, diagnostics, "bayesian")
     diagnostics.capture_page(page, "bayesian-study-builder-aligned.png")
     diagnostics.capture_page(page, "doe-bayesian-table-ui.png")

@@ -7,7 +7,7 @@ from math import isfinite
 from typing import Literal
 
 import numpy as np
-from scipy.stats import chi2
+from scipy.stats import chi2  # type: ignore[import-untyped]
 
 MatrixType = Literal["correlation", "covariance"]
 ComponentSelection = Literal["all", "fixed", "cumulative_threshold"]

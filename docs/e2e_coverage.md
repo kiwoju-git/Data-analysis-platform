@@ -6,6 +6,30 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-08-29 ten-factor DOE, shared GP/PLS picker, and PCA run additionally:
+
+- resizes LHS and Bayesian Optimization drafts to 10 factors without changing
+  existing rows, then restores the legacy-size workflows through the accessible
+  removal confirmation;
+- blocks a 10-factor full factorial at its 1,024 corner runs, generates the
+  verified 12-run Plackett-Burman screening design, and shows the General Full
+  256-run cap before allocation;
+- keeps Central Composite RSM at five continuous factors and displays the
+  screening/LHS guidance rather than offering an invalid high-dimensional CCD;
+- verifies the shared compact numeric-column picker used by PLS and standalone
+  GP Regression, while the Bayesian GP surrogate remains a contextual internal
+  stage rather than a duplicate executable method; and
+- executes correlation-matrix PCA and verifies eigenanalysis, scree, score,
+  loading, biplot, outlier, export, and 390 px responsive result workflows.
+
+The isolated Chromium run passed in 175.3 seconds with diagnostics under
+`.tmp/e2e-diagnostics-ten-factor-pca`. Requested screenshots include
+`lhs-factor-count-10.png`, `bayesian-factor-count-10.png`,
+`factorial-full-run-blocker-10.png`, `factorial-plackett-burman-10.png`,
+`general-factorial-run-cap.png`, `rsm-factor-limit-guidance.png`,
+`gp-predictor-picker.png`, `pls-gp-picker-parity.png`,
+`gp-surrogate-contextual-card.png`, and the `pca-*.png` diagnostics.
+
 The 2026-08-08 reporting/summary/variance/assets/scatter run additionally:
 
 - renders asset filters with the shared compact settings-table component and

@@ -493,7 +493,7 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
   max interaction order 2 > 분석 실행.
 - **실행 전 확인:** UI run order와 파일의 factor coordinates/replicate를 함께 확인한다.
 <!-- TUTORIAL_RESULT:doe.factorial_design:start -->
-- **검증 source:** `doe.factorial_design` v0.6.0 · input SHA-256 `ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73`
+- **검증 source:** `doe.factorial_design` v0.7.0 · input SHA-256 `ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73`
 - **예상 실제 결과 (표시 반올림):**
   - N=16, residual df=9, selected interaction `factor_1:factor_2`
   - effect order: `factor_1` 6.8707, `factor_2` 3.9555, `factor_1:factor_2` 3.3892, `factor_3` 0.8814
@@ -568,7 +568,7 @@ URL의 `design_id`, `analysis_id`, `optimization_id`는 reload 후 checksum-vali
   objective를 직접 입력하거나 붙여넣기 > 입력한 관측 일괄 저장 > 추천 요청.
 - **실행 전 확인:** objective value와 coordinates, 저장 후 수정 불가, pending trial 없음 확인.
 <!-- TUTORIAL_RESULT:doe.bayesian_optimization:start -->
-- **검증 source:** `doe.bayesian_optimization` v0.5.0 · input SHA-256 `a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91`
+- **검증 source:** `doe.bayesian_optimization` v0.6.0 · input SHA-256 `a73e97ca660d4a87588ddb2aee2344b921205f4c3daf9a17ce6f876348290b91`
 - **예상 실제 결과 (표시 반올림):**
   - completed observations=5, recommended temperature=61.2818, pressure=11.4636
   - predicted mean=83.9666, posterior SD=4.2736, EI=0.2677, trial `pending`

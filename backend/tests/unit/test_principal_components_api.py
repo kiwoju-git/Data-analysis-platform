@@ -64,9 +64,7 @@ def test_principal_components_analysis_runs_and_restores(tmp_path) -> None:
         )
         assert response.status_code == 201, response.text
         result = response.json()["result"]
-        restored = client.get(
-            f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result"
-        )
+        restored = client.get(f"/api/v1/analysis-runs/{response.json()['analysis_id']}/result")
 
     assert result["schema_version"] == 1
     assert result["summary_type"] == "principal_components_analysis"
@@ -144,9 +142,7 @@ def test_principal_components_html_report_uses_saved_result_in_both_locales(tmp_
             )
             for export in exports
         ]
-        csv_export = client.post(
-            f"/api/v1/analysis-runs/{analysis['analysis_id']}/exports/csv"
-        )
+        csv_export = client.post(f"/api/v1/analysis-runs/{analysis['analysis_id']}/exports/csv")
         csv_download = client.get(
             f"/api/v1/analysis-runs/{analysis['analysis_id']}/exports/"
             f"{csv_export.json()['export_id']}/download"
@@ -159,7 +155,7 @@ def test_principal_components_html_report_uses_saved_result_in_both_locales(tmp_
     assert "Eigenanalysis" in english
     assert "Scree Plot" in english
     assert "Score Plot" in english
-    assert '<script' not in english
+    assert "<script" not in english
     assert "https://" not in english
     assert '<html lang="ko">' in korean
     assert "PCA 기반 다변량 검토" in korean

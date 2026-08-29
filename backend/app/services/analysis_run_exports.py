@@ -1573,11 +1573,11 @@ def _pca_report_svgs(
         if isinstance(points_value, list)
         else []
     )
-    score_pairs = [
-        (item, item.get("scores"))
-        for item in score_points
-        if isinstance(item.get("scores"), list) and len(item["scores"]) >= 2
-    ]
+    score_pairs: list[tuple[dict[str, Any], list[Any]]] = []
+    for item in score_points:
+        scores = item.get("scores")
+        if isinstance(scores, list) and len(scores) >= 2:
+            score_pairs.append((item, scores))
     values = [
         float(value)
         for _item, scores in score_pairs

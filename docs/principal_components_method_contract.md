@@ -1,8 +1,11 @@
 # Principal Components Analysis method contract
 
-Status: P0 implementation contract  
-Method ID: `eda.principal_components`  
-Method version: `0.1.0`  
+Status: P0 implementation contract
+
+Method ID: `eda.principal_components`
+
+Method version: `0.1.0`
+
 Result schema: `1`
 
 ## Statistical purpose
@@ -149,4 +152,3 @@ and PCA-based process monitoring remain unavailable.
 - Minitab, [Interpret all statistics and graphs for PCA](https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/multivariate/how-to/principal-components/interpret-the-results/all-statistics-and-graphs/)
 - scikit-learn 1.7, [PCA API](https://scikit-learn.org/1.7/modules/generated/sklearn.decomposition.PCA.html)
 - scikit-learn 1.7, [Decomposing signals in components](https://scikit-learn.org/1.7/modules/decomposition.html#pca)
-

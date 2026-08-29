@@ -113,7 +113,10 @@ class FactorialDesignCreateRequest(BaseModel):
             raise ValueError("fraction_id is only valid for a fractional factorial design")
         if self.design_type == "plackett_burman_screening" and not self.screening_catalog_id:
             raise ValueError("screening_catalog_id is required for Plackett-Burman")
-        if self.design_type != "plackett_burman_screening" and self.screening_catalog_id is not None:
+        if (
+            self.design_type != "plackett_burman_screening"
+            and self.screening_catalog_id is not None
+        ):
             raise ValueError("screening_catalog_id is only valid for Plackett-Burman")
         if self.design_type == "plackett_burman_screening" and self.center_points != 0:
             raise ValueError("Plackett-Burman P0 does not support center points")

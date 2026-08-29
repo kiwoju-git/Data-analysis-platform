@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-29
 
-This matrix records the current implementation and QA state for the 36 stable,
+This matrix records the current implementation and QA state for the 37 stable,
 available method IDs in the six-module registry. It is an audit artifact, not
 permission to make planned workflows executable.
 

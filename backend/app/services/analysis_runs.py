@@ -41,8 +41,8 @@ from app.services.analysis_runner_attribute_control_chart import (
 from app.services.analysis_runner_gaussian_process import (
     run_gaussian_process_regression_analysis,
 )
-from app.services.analysis_runner_pls import run_pls_regression_analysis
 from app.services.analysis_runner_pca import run_principal_components_analysis
+from app.services.analysis_runner_pls import run_pls_regression_analysis
 from app.services.analysis_runners_categorical import (
     run_chi_square_association_analysis,
     run_one_proportion_analysis,

@@ -1,7 +1,7 @@
-from fastapi.testclient import TestClient
 import hashlib
 
 import numpy as np
+from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app

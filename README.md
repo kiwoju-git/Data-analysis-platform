@@ -41,6 +41,10 @@ designs; General Full supports 2 to 10 ordered numeric or text levels per factor
 The regression domain includes OLS, PLS Regression, and bounded exact Gaussian
 Process Regression with cross-validation, uncertainty diagnostics, safe model
 storage, and new-condition prediction.
+PCA is available under Basic Statistics & Exploration. LHS and Bayesian
+Optimization accept up to 10 factors. Full/general factorial designs still
+enforce the 256-run cap; use the 12-run Plackett-Burman screening option for
+7-10 two-level factors. Central Composite RSM remains limited to 5 factors.
 
 Guides: [English tutorial](docs/statistical_twin_end_to_end_tutorial_en.md), [한국어 튜토리얼](docs/statistical_twin_end_to_end_tutorial_ko.md), and [synthetic tutorial data](examples/tutorial/README.md).
 
