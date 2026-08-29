@@ -20,6 +20,11 @@ Last updated: 2026-08-29
   coverage for 2986 source strings and 3467 keys, frontend lint/typecheck,
   Vitest 289/289, and the production build all passing. The existing Vite
   chunk-size warning remains informational.
+- A supplemental official-Minitab PCA reference test passed 1/1 after the full
+  suite. It uses the published `LoanApplicant.MWX` correlation-PCA data and
+  output table; covariance mode retains the hand calculation and independent
+  scikit-learn full-SVD parity because that Minitab example does not publish a
+  covariance output table.
 - The isolated Chromium critical path passed in 175.3 seconds with diagnostics
   under `.tmp/e2e-diagnostics-ten-factor-pca`. It verifies 10-factor LHS and
   Bayesian authoring, the 1,024-run full-factorial blocker, 12-run

@@ -140,6 +140,16 @@ SVG titles, descriptions, axes, point details, table headings, warnings, and
 empty states are localized in Korean and English. Dataset column names and row
 labels are user data and are not translated.
 
+## Reference fixtures
+
+The official Minitab `LoanApplicant.MWX` correlation-matrix example is stored
+as a static JSON fixture with the published eigenvalues, proportions, and
+eigenvectors. The reference test aligns the arbitrary sign of each component
+before applying tolerances based on Minitab's published decimal precision.
+Covariance-mode values are checked against the hand-computable case and an
+independent scikit-learn full-SVD implementation; the official Minitab page
+does not publish a covariance-mode output table for this sample.
+
 ## Unsupported P0 scope
 
 Categorical PCA, kernel PCA, sparse or robust PCA, imputation, rotation, factor
@@ -149,6 +159,7 @@ and PCA-based process monitoring remain unavailable.
 ## Official references
 
 - Minitab, [Methods and formulas for Principal Components Analysis](https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/multivariate/how-to/principal-components/methods-and-formulas/methods-and-formulas/)
+- Minitab, [Loan applicant PCA example](https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/multivariate/how-to/principal-components/before-you-start/example/)
 - Minitab, [Interpret all statistics and graphs for PCA](https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/multivariate/how-to/principal-components/interpret-the-results/all-statistics-and-graphs/)
 - scikit-learn 1.7, [PCA API](https://scikit-learn.org/1.7/modules/generated/sklearn.decomposition.PCA.html)
 - scikit-learn 1.7, [Decomposing signals in components](https://scikit-learn.org/1.7/modules/decomposition.html#pca)
