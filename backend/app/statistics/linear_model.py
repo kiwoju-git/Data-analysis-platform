@@ -164,7 +164,7 @@ def calculate_linear_model(
     x_rows = parsed.x_rows
 
     n_used = len(y_values)
-    initial_design_matrix = _build_design_matrix(
+    initial_design_matrix = build_linear_model_design_matrix(
         x_rows,
         predictor_columns,
         interaction_terms=interaction_terms or (),
@@ -1091,7 +1091,7 @@ def _parse_rows(
     )
 
 
-def _build_design_matrix(
+def build_linear_model_design_matrix(
     x_rows: Sequence[Sequence[float | str]],
     predictor_columns: Sequence[LinearModelColumn],
     *,
