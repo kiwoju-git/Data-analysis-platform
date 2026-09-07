@@ -5,7 +5,7 @@ import { LinearModelFitResults } from "./LinearModelFitResults";
 import { RegressionManualPredictionPanel } from "./RegressionManualPredictionPanel";
 import { RegressionPastedPredictionPanel } from "./RegressionPastedPredictionPanel";
 import { parseRegressionPastedPredictionPreview } from "./regressionPastedPredictionPreview";
-import type { LinearModelResult } from "./api";
+import type { OlsLinearModelResult as LinearModelResult } from "./api";
 
 function resultFixture(): LinearModelResult {
   return {

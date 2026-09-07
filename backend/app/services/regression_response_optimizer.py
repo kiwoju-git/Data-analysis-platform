@@ -39,7 +39,7 @@ from app.storage.metadata import (
 APP_VERSION = "0.1.0"
 METHOD_ID: Final[Literal["regression.linear_model_optimizer"]] = "regression.linear_model_optimizer"
 METHOD_VERSION = get_method_version(METHOD_ID)
-CONFIG_SCHEMA_VERSION = 1
+CONFIG_SCHEMA_VERSION = 2
 
 
 def create_regression_response_optimization(
@@ -100,6 +100,14 @@ def create_regression_response_optimization(
     created_at = _utc_now()
     result.update(
         {
+            "schema_version": 2,
+            "model_kind": model.manifest.get("model_kind", "ols"),
+            "regularization": {
+                key: model.manifest.get("regularization", {}).get(key)
+                for key in ("selected_alpha", "selected_l1_ratio")
+            }
+            if "regularization" in model.manifest
+            else None,
             "optimization_id": str(optimization_id),
             "model_id": str(model_id),
             "source_analysis_id": str(model.analysis_id),
@@ -289,15 +297,16 @@ def _validate_restore_relationship(
     config_sha = hashlib.sha256(_canonical_bytes(config_copy)).hexdigest()
     result_sha = hashlib.sha256(_canonical_bytes(response.result)).hexdigest()
     if not (
-        config_copy.get("config_schema_version") == CONFIG_SCHEMA_VERSION
+        (config_copy.get("config_schema_version"), config_copy.get("method_version"))
+        in {(1, "0.1.0"), (2, "0.2.0")}
         and config_copy.get("optimization_id") == str(optimization_id)
         and config_copy.get("model_id") == str(model_id)
         and config_copy.get("method_id") == METHOD_ID
-        and config_copy.get("method_version") == METHOD_VERSION
+        and config_copy.get("method_version") == response.method_version
         and response.optimization_id == optimization_id
         and response.model_id == model_id
         and response.method_id == METHOD_ID
-        and response.method_version == METHOD_VERSION
+        and response.method_version in {"0.1.0", "0.2.0"}
         and response.config_sha256 == config_sha
         and response.result_sha256 == result_sha
         and response.result.get("optimization_id") == str(optimization_id)

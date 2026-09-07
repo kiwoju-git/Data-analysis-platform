@@ -10,6 +10,7 @@ import {
   fetchRegressionPastedPredictionPreflight,
 } from "./api/regression";
 import { RegressionPredictionResultsTable } from "./RegressionPredictionResultsTable";
+import { useI18n } from "./i18n/LocaleProvider";
 
 interface ManualRow {
   id: string;
@@ -25,6 +26,7 @@ export function RegressionManualPredictionPanel({
   modelAvailable = true,
   modelResult,
 }: Props) {
+  const { t } = useI18n();
   const nextRowId = useRef(2);
   const [rows, setRows] = useState<ManualRow[]>([emptyRow("manual-row-1", modelResult)]);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -142,8 +144,8 @@ export function RegressionManualPredictionPanel({
         })),
         expected_model_manifest_sha256: manifest.manifest_sha256,
         expected_normalized_input_sha256: preflight.normalized_input_sha256,
-        confidence_level: modelResult.confidence_level,
-        include_intervals: true,
+        confidence_level: "confidence_level" in modelResult ? modelResult.confidence_level : 0.95,
+        include_intervals: !("regularization" in modelResult),
       });
       if (response.row_count_predicted !== rows.length) {
         setError("일부 행만 예측된 응답은 저장 결과로 표시하지 않습니다.");
@@ -278,15 +280,18 @@ export function RegressionManualPredictionPanel({
       {error ? <div className="error-box" role="alert">{error}</div> : null}
       {preflight ? <div className={canPredict ? "success-box" : "error-box"} role="status">사용 가능 {preflight.row_count_usable.toLocaleString()} / 전체 {preflight.row_count_total.toLocaleString()}행</div> : null}
       {prediction ? <ManualPredictionResults prediction={prediction} /> : null}
-      <div className="notice-box">입력한 값은 데이터셋 목록에 등록되지 않습니다. 학습 범위 밖 예측과 OLS 가정을 함께 확인하세요.</div>
+      {"regularization" in modelResult ? <div className="notice-box">{t("reg.pointOnly")} {t("reg.assumptions")}</div> :
+        <div className="notice-box">입력한 값은 데이터셋 목록에 등록되지 않습니다. 학습 범위 밖 예측과 OLS 가정을 함께 확인하세요.</div>}
     </section>
   );
 }
 
 function ManualPredictionResults({ prediction }: { prediction: RegressionPastedPredictionResponse }) {
+  const { t } = useI18n();
   return (
     <section aria-labelledby="regression-manual-results-title">
       <h4 id="regression-manual-results-title">예측 결과</h4>
+      {prediction.prediction_uncertainty_kind === "point_only" ? <p className="notice-box">{t("reg.pointOnly")}</p> : null}
       <RegressionPredictionResultsTable mappings={prediction.mappings} rows={prediction.rows} />
     </section>
   );

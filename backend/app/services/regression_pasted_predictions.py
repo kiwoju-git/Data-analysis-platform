@@ -6,7 +6,7 @@ import io
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from math import isfinite, sqrt
+from math import isfinite
 from pathlib import Path
 from typing import Any, Final, Literal
 from uuid import UUID, uuid4
@@ -37,8 +37,9 @@ from app.services.regression_models import (
     _coefficient_estimates,
     _design_vector_for_manifest,
     _dot,
-    _prediction_interval,
-    _quadratic_form,
+    _PointPredictionBasis,
+    _prediction_intervals,
+    _prediction_model_metadata,
     _validated_prediction_basis,
     get_regression_model_manifest,
 )
@@ -124,8 +125,10 @@ def create_regression_pasted_prediction(
         )
     basis = _validated_prediction_basis(state.manifest)
     coefficients = _coefficient_estimates(state.manifest)
-    t_critical = float(
-        stats.t.ppf(1.0 - ((1.0 - body.confidence_level) / 2.0), df=basis.df_residual)
+    t_critical = (
+        0.0
+        if isinstance(basis, _PointPredictionBasis)
+        else float(stats.t.ppf(1.0 - ((1.0 - body.confidence_level) / 2.0), df=basis.df_residual))
     )
     if not isfinite(t_critical):
         raise _error(
@@ -138,22 +141,14 @@ def create_regression_pasted_prediction(
             values_by_source_column_id=values,
         )
         predicted = _dot(vector, coefficients)
-        leverage = max(0.0, _quadratic_form(vector, basis.xtx_inverse))
-        mean_interval = None
-        observation_interval = None
-        if body.include_intervals:
-            mean_interval = _prediction_interval(
-                center=predicted,
-                standard_error=sqrt(basis.sigma_squared * leverage),
-                t_critical=t_critical,
-                confidence_level=body.confidence_level,
-            )
-            observation_interval = _prediction_interval(
-                center=predicted,
-                standard_error=sqrt(basis.sigma_squared * (1.0 + leverage)),
-                t_critical=t_critical,
-                confidence_level=body.confidence_level,
-            )
+        mean_interval, observation_interval = _prediction_intervals(
+            basis,
+            vector,
+            predicted,
+            body.confidence_level,
+            t_critical,
+            body.include_intervals,
+        )
         warnings = _row_extrapolation_warnings(state.manifest, values)
         all_rows.append(
             RegressionPastedPredictionRow(
@@ -168,6 +163,8 @@ def create_regression_pasted_prediction(
     prediction_id = uuid4()
     created_at = _utc_now()
     response = RegressionPastedPredictionResponse(
+        schema_version=2,
+        **_prediction_model_metadata(state.manifest, body.include_intervals),
         prediction_id=prediction_id,
         input_kind="pasted_table",
         model_id=model_id,

@@ -115,6 +115,7 @@ export interface RegressionModelCatalogResponseColumn {
 }
 
 export interface RegressionModelCatalogItem {
+  model_kind?: "ols" | "ridge" | "lasso" | "elastic_net" | "pls" | "gaussian_process";
   model_id: string;
   source_analysis_id: string;
   source_dataset_version_id: string;
@@ -306,6 +307,9 @@ export interface RegressionPredictionProvenance extends AnalysisProvenance {
 }
 
 export interface RegressionPredictionResponse {
+  model_kind?: "ols" | "ridge" | "lasso" | "elastic_net";
+  prediction_uncertainty_kind?: "classical_ols" | "point_only";
+  interval_unavailability_reason?: string | null;
   prediction_id: string;
   model_id: string;
   analysis_id: string;
@@ -409,6 +413,10 @@ export interface RegressionPastedPredictionRow extends RegressionPredictionRow {
 }
 
 export interface RegressionPastedPredictionResponse {
+  schema_version?: 1 | 2;
+  model_kind?: "ols" | "ridge" | "lasso" | "elastic_net";
+  prediction_uncertainty_kind?: "classical_ols" | "point_only";
+  interval_unavailability_reason?: string | null;
   prediction_id: string;
   input_kind: "pasted_table";
   model_id: string;

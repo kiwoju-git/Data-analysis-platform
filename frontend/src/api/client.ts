@@ -8,6 +8,7 @@ export function getApiBaseUrl(): string {
 
 import { getCurrentLocale } from "../i18n/store";
 import { resolveLocalizedText, t, translateKnownSource } from "../i18n/translate";
+import { regularizedWarningKeys } from "../i18n/regularizedMessages";
 
 export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = localeHeaders(init?.headers);
@@ -59,7 +60,8 @@ export function localizeApiPayload(
     typeof record.code === "string" &&
     typeof record.message === "string"
   ) {
-    localized.message = locale === "ko"
+    const regularizedKey = regularizedWarningKeys[record.code];
+    localized.message = regularizedKey !== undefined ? t(regularizedKey, {}, locale) : locale === "ko"
       ? record.message
       : translateKnownSource(record.message, locale) ?? t("warnings.generic", {}, locale);
   }

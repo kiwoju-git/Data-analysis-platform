@@ -37,6 +37,7 @@ import {
   type IndividualsChartResult,
   type KruskalWallisResult,
   type LinearModelResult,
+  type LinearEstimatorRunConfig,
   type MannWhitneyResult,
   type NormalityResult,
   type OneProportionResult,
@@ -3722,7 +3723,7 @@ export default function App() {
     }
   }
 
-  async function handleRunLinearModelAnalysis() {
+  async function handleRunLinearModelAnalysis(config: LinearEstimatorRunConfig = { estimator: "ols" }) {
     if (
       version === null ||
       selectedMethod === null ||
@@ -3740,16 +3741,16 @@ export default function App() {
       setFlowError("linear_model_response_predictor_overlap");
       return;
     }
-    if (linearModelAlpha <= 0 || linearModelAlpha >= 1) {
+    if (config.estimator === "ols" && (linearModelAlpha <= 0 || linearModelAlpha >= 1)) {
       setFlowError("invalid_linear_model_alpha");
       return;
     }
-    if (linearModelConfidenceLevel <= 0 || linearModelConfidenceLevel >= 1) {
+    if (config.estimator === "ols" && (linearModelConfidenceLevel <= 0 || linearModelConfidenceLevel >= 1)) {
       setFlowError("invalid_linear_model_confidence_level");
       return;
     }
     if (
-      linearModelSelectionMethod === "backward_elimination" &&
+      config.estimator === "ols" && linearModelSelectionMethod === "backward_elimination" &&
       (linearModelAlphaToRemove <= 0 || linearModelAlphaToRemove >= 1)
     ) {
       setFlowError("invalid_linear_model_alpha_to_remove");
@@ -3790,16 +3791,17 @@ export default function App() {
               right_column_id: rightColumnId,
             };
           }),
-          alpha: linearModelAlpha,
-          confidence_level: linearModelConfidenceLevel,
           missing_policy: "complete_case",
           include_intercept: true,
-          covariance_type: "standard",
-          model_selection: {
+          ...(config.estimator === "ols" ? {
+            estimator: "ols", alpha: linearModelAlpha,
+            confidence_level: linearModelConfidenceLevel, covariance_type: "standard",
+            model_selection: {
             method: linearModelSelectionMethod,
             alpha_to_remove: linearModelAlphaToRemove,
             hierarchy_policy: "strong",
-          },
+            },
+          } : config),
         },
       });
       setAnalysisResult(response);
@@ -4468,8 +4470,8 @@ export default function App() {
     onRunGageRunChartAnalysis: () => {
       void handleGageRunChartAnalysis();
     },
-    onRunLinearModelAnalysis: () => {
-      void handleRunLinearModelAnalysis();
+    onRunLinearModelAnalysis: (config?: LinearEstimatorRunConfig) => {
+      void handleRunLinearModelAnalysis(config);
     },
     onRunPlsAnalysis: (config) => {
       void handleRunPlsAnalysis(config);

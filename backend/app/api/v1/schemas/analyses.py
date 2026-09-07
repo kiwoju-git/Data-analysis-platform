@@ -514,20 +514,24 @@ class XyCorrelationOptions(BaseModel):
         return value
 
 
-class LinearModelOptions(BaseModel):
+class LinearModelCommonOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     response_column_id: str = Field(min_length=1)
     predictor_column_ids: list[str] = Field(min_length=1)
     quadratic_terms: list[str] | None = None
     interaction_terms: list[LinearModelInteractionTermOption] | None = None
+    missing_policy: Literal["complete_case"] = "complete_case"
+    include_intercept: Literal[True] = True
+
+
+class OlsLinearModelOptions(LinearModelCommonOptions):
+    estimator: Literal["ols"] = "ols"
     model_selection: LinearModelSelectionOptions = Field(
         default_factory=LinearModelSelectionOptions
     )
     alpha: float = 0.05
     confidence_level: float = 0.95
-    missing_policy: str = "complete_case"
-    include_intercept: bool = True
     covariance_type: str = "standard"
 
     @field_validator("alpha", "confidence_level", mode="before")
@@ -545,6 +549,84 @@ class LinearModelOptions(BaseModel):
         if not isinstance(value, bool):
             raise ValueError("must be a boolean")
         return value
+
+
+class RegularizationCvOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    mode: Literal["automatic_cv", "fixed"] = "automatic_cv"
+    validation: Literal["k_fold", "leave_one_out", "none"] = "k_fold"
+    outer_folds: int = Field(default=5, ge=2, le=10)
+    inner_folds: int = Field(default=5, ge=2, le=10)
+    shuffle: bool = True
+    random_seed: int = Field(default=20260907, ge=0, le=4294967295)
+    alpha_candidates: int = Field(default=49, ge=2, le=100)
+    alpha_min: float = Field(default=1e-6, gt=0)
+    alpha_max: float = Field(default=1e6, gt=0)
+    max_iter: int = Field(default=10000, ge=1, le=100000)
+    tolerance: float = Field(default=1e-6, gt=0, le=0.1)
+    time_budget_seconds: float = Field(default=120, gt=0, le=300)
+
+    @model_validator(mode="after")
+    def validate_search(self) -> "RegularizationCvOptions":
+        if self.alpha_min >= self.alpha_max:
+            raise ValueError("regularized_model_alpha_invalid")
+        if self.mode == "automatic_cv" and self.validation == "none":
+            raise ValueError("regularized_model_cv_folds_invalid")
+        return self
+
+
+class RegularizedLinearModelOptions(LinearModelCommonOptions):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    regularization: RegularizationCvOptions = Field(default_factory=RegularizationCvOptions)
+    fixed_alpha: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_fixed_alpha(self) -> "RegularizedLinearModelOptions":
+        if self.regularization.mode == "fixed" and self.fixed_alpha is None:
+            raise ValueError("regularized_model_alpha_invalid")
+        return self
+
+
+class RidgeLinearModelOptions(RegularizedLinearModelOptions):
+    estimator: Literal["ridge"]
+
+
+class LassoLinearModelOptions(RegularizedLinearModelOptions):
+    estimator: Literal["lasso"]
+    regularization: RegularizationCvOptions = Field(
+        default_factory=lambda: RegularizationCvOptions(alpha_candidates=50, alpha_max=10)
+    )
+
+
+class ElasticNetLinearModelOptions(RegularizedLinearModelOptions):
+    estimator: Literal["elastic_net"]
+    regularization: RegularizationCvOptions = Field(
+        default_factory=lambda: RegularizationCvOptions(alpha_candidates=50, alpha_max=10)
+    )
+    l1_ratio_selection: Literal["automatic_cv", "fixed"] = "automatic_cv"
+    fixed_l1_ratio: float | None = Field(default=None, gt=0, lt=1)
+    l1_ratio_candidates: list[Annotated[float, Field(gt=0, lt=1)]] = Field(
+        default_factory=lambda: [0.1, 0.5, 0.7, 0.9, 0.95, 0.99], min_length=1, max_length=10
+    )
+
+    @model_validator(mode="after")
+    def validate_fixed_ratio(self) -> "ElasticNetLinearModelOptions":
+        if (
+            self.regularization.mode == "fixed" or self.l1_ratio_selection == "fixed"
+        ) and self.fixed_l1_ratio is None:
+            raise ValueError("regularized_model_l1_ratio_invalid")
+        return self
+
+
+LinearModelOptions = Annotated[
+    OlsLinearModelOptions
+    | RidgeLinearModelOptions
+    | LassoLinearModelOptions
+    | ElasticNetLinearModelOptions,
+    Field(discriminator="estimator"),
+]
 
 
 class PlsCrossValidationOptions(BaseModel):
@@ -1731,6 +1813,7 @@ class RegressionModelCatalogResponseColumn(BaseModel):
 
 
 class RegressionModelCatalogItem(BaseModel):
+    model_kind: Literal["ols", "ridge", "lasso", "elastic_net", "pls", "gaussian_process"] = "ols"
     model_config = ConfigDict(extra="forbid")
 
     model_id: UUID
@@ -2166,6 +2249,9 @@ class RegressionPredictionRow(BaseModel):
 
 
 class RegressionPredictionResponse(BaseModel):
+    model_kind: Literal["ols", "ridge", "lasso", "elastic_net"] = "ols"
+    prediction_uncertainty_kind: Literal["classical_ols", "point_only"] = "classical_ols"
+    interval_unavailability_reason: str | None = None
     model_config = ConfigDict(extra="forbid")
 
     prediction_id: UUID
@@ -2290,6 +2376,10 @@ class RegressionPastedPredictionRow(RegressionPredictionRow):
 
 
 class RegressionPastedPredictionResponse(BaseModel):
+    schema_version: Literal[1, 2] = 1
+    model_kind: Literal["ols", "ridge", "lasso", "elastic_net"] = "ols"
+    prediction_uncertainty_kind: Literal["classical_ols", "point_only"] = "classical_ols"
+    interval_unavailability_reason: str | None = None
     model_config = ConfigDict(extra="forbid")
 
     prediction_id: UUID

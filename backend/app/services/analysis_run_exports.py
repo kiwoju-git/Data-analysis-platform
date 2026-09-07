@@ -38,6 +38,10 @@ from app.services.regression_models import (
     iter_regression_prediction_rows,
     validate_regression_prediction_consistency,
 )
+from app.services.regularized_model_report import (
+    regularized_warning_text,
+    render_regularized_report,
+)
 from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
@@ -1108,10 +1112,16 @@ def _analysis_result_html_report_bytes(
     locale: ReportLocale = "en",
 ) -> bytes:
     del rows
+
+    def warning_text(code: str, message: str) -> str:
+        if isinstance((result.result or {}).get("regularization"), dict):
+            return regularized_warning_text(code, locale)
+        return message if locale == "ko" else "Review this analysis warning."
+
     warning_markup = "\n".join(
         "<li>"
         f"<strong>{_html_text(warning.code)}</strong>: "
-        f"{_html_text(warning.message if locale == 'ko' else 'Review this analysis warning.')} "
+        f"{_html_text(warning_text(warning.code, warning.message))} "
         f"<span>{_html_text(warning.severity)}</span>"
         "</li>"
         for warning in result.warnings
@@ -2316,6 +2326,8 @@ def _categorical_observed_cells_text(cells: object) -> str:
 def _regression_report_section(
     payload: dict[str, object], summary_type: str, locale: ReportLocale = "en"
 ) -> str:
+    if isinstance(payload.get("regularization"), dict):
+        return render_regularized_report(payload, locale)
     metric_markup = "\n".join(_regression_metric_report_rows(payload, summary_type))
     pairs_markup = _regression_pairs_report_markup(payload.get("pairs"), locale)
     coefficients_markup = _linear_model_coefficients_report_markup(

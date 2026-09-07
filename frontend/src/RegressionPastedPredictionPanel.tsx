@@ -15,6 +15,7 @@ import {
   type RegressionPredictionDelimiter,
 } from "./regressionPastedPredictionPreview";
 import { RegressionPredictionResultsTable } from "./RegressionPredictionResultsTable";
+import { useI18n } from "./i18n/LocaleProvider";
 
 interface RegressionPastedPredictionPanelProps {
   modelResult: LinearModelResult;
@@ -121,8 +122,8 @@ export function RegressionPastedPredictionPanel({
         column_mappings: mappings(),
         expected_model_manifest_sha256: manifest.manifest_sha256,
         expected_normalized_input_sha256: preflight.normalized_input_sha256,
-        confidence_level: modelResult.confidence_level,
-        include_intervals: true,
+        confidence_level: "confidence_level" in modelResult ? modelResult.confidence_level : 0.95,
+        include_intervals: !("regularization" in modelResult),
       });
       setPrediction(result);
     } catch (caught) {
@@ -349,14 +350,16 @@ function PastedPreflightSummary({
 }
 
 function PastedPredictionResults({ prediction }: { prediction: RegressionPastedPredictionResponse }) {
+  const { t } = useI18n();
   return (
     <>
       <h4>붙여넣기 예측 결과</h4>
       <div className="metadata-grid">
         <span>예측</span><strong>{prediction.row_count_predicted.toLocaleString()}행</strong>
         <span>제외</span><strong>{prediction.row_count_excluded.toLocaleString()}행</strong>
-        <span>신뢰수준</span><strong>{(prediction.confidence_level * 100).toFixed(1)}%</strong>
+        {prediction.prediction_uncertainty_kind !== "point_only" ? <><span>신뢰수준</span><strong>{(prediction.confidence_level * 100).toFixed(1)}%</strong></> : null}
       </div>
+      {prediction.prediction_uncertainty_kind === "point_only" ? <p className="notice-box">{t("reg.pointOnly")}</p> : null}
       <RegressionPredictionResultsTable mappings={prediction.mappings} rows={prediction.rows} />
       {prediction.truncated ? <div className="notice-box">화면에는 앞 {prediction.row_limit.toLocaleString()}행만 표시합니다.</div> : null}
       {prediction.warnings.map((warning) => <div className="notice-box" key={warning.code}>{warning.message}</div>)}

@@ -388,7 +388,8 @@ export interface LinearModelManifestPointer {
   manifest_sha256: string;
 }
 
-export interface LinearModelResult {
+export interface OlsLinearModelResult {
+  estimator?: { kind: "ols"; penalty: "none" };
   schema_version: number;
   summary_type: "linear_model";
   method: string;
@@ -425,6 +426,64 @@ export interface LinearModelResult {
   training_domain?: LinearModelTrainingDomain;
   model_manifest?: LinearModelManifestPointer;
 }
+
+export type RegularizedEstimator = "ridge" | "lasso" | "elastic_net";
+export type LinearModelEstimator = "ols" | RegularizedEstimator;
+export interface RegularizationCvOptions {
+  mode: "automatic_cv" | "fixed";
+  validation: "k_fold" | "leave_one_out" | "none";
+  outer_folds: number;
+  inner_folds: number;
+  shuffle: boolean;
+  random_seed: number;
+  alpha_candidates: number;
+  alpha_min: number;
+  alpha_max: number;
+  max_iter: number;
+  tolerance: number;
+  time_budget_seconds: number;
+}
+export interface RegularizedRunConfig {
+  estimator: RegularizedEstimator;
+  regularization: RegularizationCvOptions;
+  fixed_alpha: number | null;
+  l1_ratio_selection?: "automatic_cv" | "fixed";
+  fixed_l1_ratio?: number | null;
+  l1_ratio_candidates?: number[];
+}
+export type LinearEstimatorRunConfig = { estimator: "ols" } | RegularizedRunConfig;
+export interface RegularizedLinearModelResult extends Pick<OlsLinearModelResult,
+  "summary_type" | "method" | "missing_policy" | "response" | "predictors" |
+  "model_specification" | "equation" | "training_domain" | "model_manifest" |
+  "warnings" | "package_versions"> {
+  schema_version: 6;
+  estimator: { kind: RegularizedEstimator; penalty: "l1" | "l2" | "elastic_net" };
+  sample: { n_total: number; n_used: number; n_excluded_missing: number;
+    n_excluded_non_numeric: number; feature_count: number };
+  fit: { r_squared: number; sse: number; tss: number; rmse: number; mae: number };
+  coefficients: Array<Pick<LinearModelCoefficient,
+    "term" | "term_kind" | "column_id" | "source_column_ids" | "estimate" |
+    "level" | "reference_level" | "coding"> & { standardized_estimate: number; is_zero: boolean }>;
+  validation: null | { method: string; nested: boolean; outer_folds: number;
+    inner_folds: number | null; shuffle: boolean; random_seed: number; press: number;
+    predicted_r_squared: number; rmse: number; mae: number; row_indices: number[];
+    oof_predictions: number[] };
+  regularization: { mode: "automatic_cv" | "fixed"; selected_alpha: number;
+    selected_l1_ratio: number | null; standardization: string; response_scale: string;
+    scaler_means: number[]; scaler_scales: number[]; alpha_min: number; alpha_max: number;
+    alpha_candidates: number; cv_curve: Array<{ alpha: number; l1_ratio: number | null;
+      mean_squared_error: number; fold_error_sd: number }>;
+    coefficient_path: Array<{ alpha: number; l1_ratio: number | null; standardized_coefficients: number[] }>;
+    feature_order: string[]; zero_coefficient_count: number; max_iter: number; tolerance: number;
+    converged: boolean; iterations: number | null; dual_gap: number | null; elapsed_seconds: number;
+    estimated_fit_count: number; completed_fit_count: number; time_budget_seconds: number };
+  diagnostics: { points: Array<{ row_index: number; observed: number; fitted: number;
+    residual: number; oof_predicted: number | null; oof_residual: number | null }>;
+    point_count_total: number; truncated: boolean;
+    histogram: { bins: Array<{ lower: number; upper: number; count: number }> };
+    qq_plot: { points: Array<{ theoretical_quantile: number; residual: number; row_index: number }> } };
+}
+export type LinearModelResult = OlsLinearModelResult | RegularizedLinearModelResult;
 
 export interface PlsModelSelectionRow {
   components: number;

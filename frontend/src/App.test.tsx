@@ -2828,7 +2828,7 @@ describe("App", () => {
     expect(html).toContain("회귀모형 적합 실행");
     expect(html).toContain("반응 변수");
     expect(html).toContain("예측변수");
-    expect(html).toContain("treatment coding");
+    expect(html).toContain("Ridge");
     expect(html).toContain("숫자형 2차항");
     expect(html).toContain("숫자형 상호작용");
     expect(html).toContain("최대 Cook");

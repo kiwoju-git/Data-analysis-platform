@@ -38,6 +38,7 @@ from app.api.v1.schemas.analyses import (
     RegressionPredictionRowsPageResponse,
     RegressionPredictionWarning,
 )
+from app.api.v1.schemas.linear_model_manifests import LINEAR_MODEL_MANIFEST_ADAPTER
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import runtime_build_provenance
@@ -70,8 +71,8 @@ from app.storage.metadata import (
 APP_VERSION = "0.1.0"
 REGRESSION_PREDICTION_METHOD_ID = "regression.predict"
 REGRESSION_PREDICTION_METHOD_VERSION = get_method_version(REGRESSION_PREDICTION_METHOD_ID)
-REGRESSION_PREDICTION_SCHEMA_VERSION = 2
-REGRESSION_PREDICTION_CONFIG_SCHEMA_VERSION = 3
+REGRESSION_PREDICTION_SCHEMA_VERSION = 3
+REGRESSION_PREDICTION_CONFIG_SCHEMA_VERSION = 4
 REGRESSION_PREDICTION_ROWS_SCHEMA_VERSION = 2
 MAX_REGRESSION_PREDICTION_INLINE_ROWS = 1000
 REGRESSION_PREDICTION_ROWS_ARTIFACT_KIND = "regression_prediction_rows"
@@ -135,7 +136,7 @@ class RegressionPredictionConsistencyContext:
 class _PredictionStoredConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    config_schema_version: Literal[3]
+    config_schema_version: Literal[3, 4]
     prediction_id: UUID
     analysis_id: UUID
     method_id: Literal["regression.predict"]
@@ -207,6 +208,10 @@ def list_regression_models(
         availability_code: str | None = None
         response_column: RegressionModelCatalogResponseColumn | None = None
         predictor_count: int | None = None
+        model_kind: Any = {
+            "regression.partial_least_squares": "pls",
+            "regression.gaussian_process": "gaussian_process",
+        }.get(record.method_id, "ols")
         if (
             record.method_id not in REGRESSION_MODEL_METHOD_IDS
             or catalog_record.source_analysis_status != AnalysisRunState.SUCCEEDED.value
@@ -222,6 +227,7 @@ def list_regression_models(
                 response_column, predictor_count = _regression_model_catalog_metadata(
                     manifest_response.manifest,
                 )
+                model_kind = manifest_response.manifest.get("model_kind", model_kind)
             except (ApiError, ValueError):
                 availability = "integrity_error"
                 availability_code = "regression_model_integrity_error"
@@ -230,6 +236,7 @@ def list_regression_models(
             availability_code = "regression_prediction_source_model_stale"
         items.append(
             RegressionModelCatalogItem(
+                model_kind=model_kind,
                 model_id=UUID(record.model_id),
                 source_analysis_id=UUID(record.analysis_id),
                 source_dataset_version_id=UUID(record.dataset_version_id),
@@ -373,6 +380,14 @@ def get_regression_model_manifest(
             message="저장된 회귀모델 manifest 형식이 올바르지 않습니다.",
             status_code=status.HTTP_409_CONFLICT,
         )
+
+    if manifest.get("manifest_schema_version") == 4:
+        _validated_prediction_basis(manifest)
+        try:
+            LINEAR_MODEL_MANIFEST_ADAPTER.validate_python(manifest)
+        except ValidationError as exc:
+            raise _regularized_manifest_error() from exc
+        _coefficient_estimates(manifest)
 
     return RegressionModelManifestResponse(
         model_id=UUID(record.model_id),
@@ -634,7 +649,7 @@ def validate_regression_prediction_consistency(
             "회귀 예측 source model metadata를 찾을 수 없습니다.",
         )
 
-    current_method_version = get_method_version(REGRESSION_PREDICTION_METHOD_ID)
+    supported_method_versions = {"0.2.0", "0.3.0"}
     if not (
         record.analysis_id == str(prediction_id)
         and config.prediction_id == prediction_id
@@ -647,12 +662,12 @@ def validate_regression_prediction_consistency(
             "회귀 예측 result와 config의 prediction ID가 일치하지 않습니다.",
         )
     if not (
-        record.method_version == current_method_version
-        and config.method_version == current_method_version
+        record.method_version in supported_method_versions
+        and config.method_version == record.method_version
         and stored.envelope.method_id == REGRESSION_PREDICTION_METHOD_ID
-        and stored.envelope.method_version == current_method_version
+        and stored.envelope.method_version == record.method_version
         and provenance.method_id == REGRESSION_PREDICTION_METHOD_ID
-        and provenance.method_version == current_method_version
+        and provenance.method_version == record.method_version
     ):
         raise _prediction_consistency_error(
             "regression_prediction_result_config_mismatch",
@@ -766,10 +781,9 @@ def validate_regression_prediction_consistency(
             "회귀 예측 row count metadata가 일치하지 않습니다.",
         )
     if not (
-        provenance.prediction_schema_version
-        == config.prediction_schema_version
-        == REGRESSION_PREDICTION_SCHEMA_VERSION
-        and config.config_schema_version == REGRESSION_PREDICTION_CONFIG_SCHEMA_VERSION
+        provenance.prediction_schema_version == config.prediction_schema_version
+        and (record.method_version, config.prediction_schema_version, config.config_schema_version)
+        in {("0.2.0", 2, 3), ("0.3.0", 3, 4)}
         and config.rows_artifact_schema_version == REGRESSION_PREDICTION_ROWS_SCHEMA_VERSION
         and prediction.confidence_level == config.confidence_level
         and provenance.confidence_level == config.confidence_level
@@ -878,7 +892,10 @@ def _build_prediction_preflight_state(
 ) -> _PredictionPreflightState:
     model_response = get_regression_model_manifest(settings, model_id)
     manifest = model_response.manifest
-    if manifest.get("model_family") != "linear_regression_ols":
+    if manifest.get("model_family") not in {
+        "linear_regression_ols",
+        "linear_regression_regularized",
+    }:
         raise ApiError(
             code="regression_model_family_unsupported",
             message="현재 회귀 예측 사전점검은 OLS 회귀모델 manifest만 지원합니다.",
@@ -1127,7 +1144,14 @@ class _PredictionBasis:
     df_residual: int
 
 
-def _validated_prediction_basis(manifest: dict[str, Any]) -> _PredictionBasis:
+@dataclass(frozen=True)
+class _PointPredictionBasis:
+    coefficient_order: list[str]
+
+
+def _validated_prediction_basis(
+    manifest: dict[str, Any],
+) -> _PredictionBasis | _PointPredictionBasis:
     basis = manifest.get("prediction_basis")
     if not isinstance(basis, dict):
         raise ApiError(
@@ -1137,6 +1161,39 @@ def _validated_prediction_basis(manifest: dict[str, Any]) -> _PredictionBasis:
         )
 
     coefficient_order_value = basis.get("coefficient_order")
+    if manifest.get("model_family") == "linear_regression_regularized":
+        tuning = manifest.get("regularization")
+        if (
+            manifest.get("manifest_schema_version") != 4
+            or manifest.get("model_kind") not in {"ridge", "lasso", "elastic_net"}
+            or basis.get("kind") != "point_only"
+            or basis.get("basis_schema_version") != 2
+            or not isinstance(coefficient_order_value, list)
+            or not coefficient_order_value
+            or not all(isinstance(term, str) for term in coefficient_order_value)
+            or not isinstance(tuning, dict)
+        ):
+            raise _regularized_manifest_error()
+        means, scales = tuning.get("scaler_means"), tuning.get("scaler_scales")
+        alpha = tuning.get("selected_alpha")
+        if (
+            not isinstance(alpha, int | float)
+            or not isfinite(alpha)
+            or alpha <= 0
+            or not isinstance(means, list)
+            or not isinstance(scales, list)
+            or len(means) != len(coefficient_order_value) - 1
+            or len(scales) != len(means)
+            or any(not isinstance(x, int | float) or not isfinite(x) for x in means)
+            or any(not isinstance(x, int | float) or not isfinite(x) or x <= 0 for x in scales)
+        ):
+            raise _regularized_manifest_error()
+        ratio = tuning.get("selected_l1_ratio")
+        if manifest["model_kind"] == "elastic_net" and (
+            not isinstance(ratio, int | float) or not isfinite(ratio) or not 0 < ratio < 1
+        ):
+            raise _regularized_manifest_error()
+        return _PointPredictionBasis(coefficient_order=list(coefficient_order_value))
     xtx_inverse_value = basis.get("xtx_inverse")
     sigma_squared_value = basis.get("sigma_squared")
     df_residual_value = basis.get("df_residual")
@@ -1196,6 +1253,61 @@ def _validated_prediction_basis(manifest: dict[str, Any]) -> _PredictionBasis:
     )
 
 
+def _regularized_manifest_error() -> ApiError:
+    return ApiError(
+        code="regression_prediction_manifest_invalid",
+        message="The regularized model manifest is invalid.",
+        status_code=409,
+    )
+
+
+def _prediction_intervals(
+    basis: _PredictionBasis | _PointPredictionBasis,
+    vector: list[float],
+    predicted_mean: float,
+    confidence_level: float,
+    t_critical: float,
+    include_intervals: bool,
+) -> tuple[RegressionPredictionInterval | None, RegressionPredictionInterval | None]:
+    if isinstance(basis, _PointPredictionBasis):
+        return None, None
+    leverage = _quadratic_form(vector, basis.xtx_inverse)
+    if -1e-12 < leverage < 0:
+        leverage = 0.0
+    if leverage < 0 or not isfinite(leverage):
+        raise _regularized_manifest_error()
+    if not include_intervals:
+        return None, None
+    return (
+        _prediction_interval(
+            center=predicted_mean,
+            standard_error=sqrt(basis.sigma_squared * leverage),
+            t_critical=t_critical,
+            confidence_level=confidence_level,
+        ),
+        _prediction_interval(
+            center=predicted_mean,
+            standard_error=sqrt(basis.sigma_squared * (1.0 + leverage)),
+            t_critical=t_critical,
+            confidence_level=confidence_level,
+        ),
+    )
+
+
+def _prediction_model_metadata(manifest: dict[str, Any], include_intervals: bool) -> dict[str, Any]:
+    kind = manifest.get("model_kind", "ols")
+    regularized = kind in {"ridge", "lasso", "elastic_net"}
+    return {
+        "model_kind": kind,
+        "prediction_uncertainty_kind": "point_only"
+        if regularized or not include_intervals
+        else "classical_ols",
+        "interval_unavailability_reason": "regularized_model_prediction_interval_unavailable"
+        if regularized
+        else None,
+    }
+
+
 def _coefficient_estimates(manifest: dict[str, Any]) -> list[float]:
     coefficients = manifest.get("coefficients")
     if not isinstance(coefficients, list) or not coefficients:
@@ -1244,7 +1356,7 @@ def _coefficient_estimates(manifest: dict[str, Any]) -> list[float]:
 
 def _validate_prediction_dimensions(
     *,
-    basis: _PredictionBasis,
+    basis: _PredictionBasis | _PointPredictionBasis,
     coefficient_count: int,
 ) -> None:
     if len(basis.coefficient_order) != coefficient_count:
@@ -1263,12 +1375,16 @@ def _calculate_prediction_response(
     request: RegressionPredictionRequest,
     preflight: RegressionPredictionPreflightResponse,
     state: _PredictionPreflightState,
-    basis: _PredictionBasis,
+    basis: _PredictionBasis | _PointPredictionBasis,
     coefficient_estimates: list[float],
     row_sink: Callable[[RegressionPredictionRow], None],
 ) -> RegressionPredictionResponse:
-    t_critical = float(
-        stats.t.ppf(1.0 - ((1.0 - request.confidence_level) / 2.0), df=basis.df_residual),
+    t_critical = (
+        0.0
+        if isinstance(basis, _PointPredictionBasis)
+        else float(
+            stats.t.ppf(1.0 - ((1.0 - request.confidence_level) / 2.0), df=basis.df_residual),
+        )
     )
     if not isfinite(t_critical):
         raise ApiError(
@@ -1305,33 +1421,14 @@ def _calculate_prediction_response(
                 status_code=status.HTTP_409_CONFLICT,
             )
         predicted_mean = _dot(design_vector, coefficient_estimates)
-        leverage = _quadratic_form(design_vector, basis.xtx_inverse)
-        if leverage < 0.0 and leverage > -1e-12:
-            leverage = 0.0
-        if leverage < 0.0 or not isfinite(leverage):
-            raise ApiError(
-                code="regression_prediction_manifest_invalid",
-                message="저장된 회귀모델 manifest의 예측 분산 계산 정보가 올바르지 않습니다.",
-                status_code=status.HTTP_409_CONFLICT,
-            )
-
-        mean_interval: RegressionPredictionInterval | None = None
-        prediction_interval: RegressionPredictionInterval | None = None
-        if request.include_intervals:
-            mean_standard_error = sqrt(basis.sigma_squared * leverage)
-            prediction_standard_error = sqrt(basis.sigma_squared * (1.0 + leverage))
-            mean_interval = _prediction_interval(
-                center=predicted_mean,
-                standard_error=mean_standard_error,
-                t_critical=t_critical,
-                confidence_level=request.confidence_level,
-            )
-            prediction_interval = _prediction_interval(
-                center=predicted_mean,
-                standard_error=prediction_standard_error,
-                t_critical=t_critical,
-                confidence_level=request.confidence_level,
-            )
+        mean_interval, prediction_interval = _prediction_intervals(
+            basis,
+            design_vector,
+            predicted_mean,
+            request.confidence_level,
+            t_critical,
+            request.include_intervals,
+        )
 
         row_count_predicted += 1
         for code in set(row_warning_codes):
@@ -1367,7 +1464,21 @@ def _calculate_prediction_response(
         row_count_omitted=row_count_omitted,
         row_warning_counts=warning_counts,
     )
+    if isinstance(basis, _PointPredictionBasis):
+        warnings = [
+            item for item in warnings if item.code != "regression_prediction_intervals_assumption"
+        ]
+        warnings.append(
+            RegressionPredictionWarning(
+                code="regularized_model_prediction_interval_unavailable",
+                severity="info",
+                message=(
+                    "Regularized models provide point predictions, not classical OLS intervals."
+                ),
+            )
+        )
     return RegressionPredictionResponse(
+        **_prediction_model_metadata(state.model_response.manifest, request.include_intervals),
         prediction_id=prediction_id,
         model_id=preflight.model_id,
         analysis_id=preflight.analysis_id,
@@ -1407,7 +1518,7 @@ def _calculate_prediction_response(
             ),
             missing_policy=request.missing_policy,
             confidence_level=request.confidence_level,
-            include_intervals=request.include_intervals,
+            include_intervals=request.include_intervals and isinstance(basis, _PredictionBasis),
             source_canonical_artifact_sha256=state.source_context.canonical_rows_artifact.sha256,
             target_canonical_artifact_sha256=(state.target_context.canonical_rows_artifact.sha256),
             created_at=created_at,
@@ -1751,7 +1862,7 @@ def _persist_prediction_response(
 
 def _prediction_config_json(response: RegressionPredictionResponse) -> str:
     payload = _PredictionStoredConfig(
-        config_schema_version=3,
+        config_schema_version=4,
         prediction_id=response.prediction_id,
         analysis_id=response.prediction_id,
         method_id="regression.predict",

@@ -438,7 +438,7 @@ export interface AnalysisShellProps {
   onRunGageRunChartAnalysis?: () => void;
   onRunIndividualsChartAnalysis?: () => void;
   onRunKruskalWallisAnalysis: () => void;
-  onRunLinearModelAnalysis?: () => void;
+  onRunLinearModelAnalysis?: (config?: import("./api").LinearEstimatorRunConfig) => void;
   onRunPlsAnalysis?: (config: PlsRunConfig) => void;
   onRunPrincipalComponentsAnalysis?: (config: PrincipalComponentsRunConfig) => void;
   onRunGaussianProcessAnalysis?: (config: GaussianProcessRunConfig) => void;
@@ -996,14 +996,14 @@ export function AnalysisShell({
         });
   return (
     <section className="analysis-shell" aria-labelledby="analysis-modules-title">
-      <div className="analysis-heading">
+      <div className="analysis-heading analysis-domain-compact-heading">
         <div>
           <h2 id="analysis-modules-title">
             {resolvedAnalysisDomain === null
               ? t("analysisDomains.title")
               : t(resolvedAnalysisDomain.labelKey)}
           </h2>
-          <p>
+          <p className="analysis-domain-compact-description">
             {resolvedAnalysisDomain === null
               ? t("analysisDomains.subtitle")
               : t(resolvedAnalysisDomain.descriptionKey)}

@@ -15,6 +15,7 @@ import {
   type InteractiveScatterPoint,
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { useI18n } from "./i18n/LocaleProvider";
 
 interface RegressionResponseOptimizerPanelProps {
   modelAvailable: boolean;
@@ -27,6 +28,7 @@ export function RegressionResponseOptimizerPanel({
   modelAvailable,
   result,
 }: RegressionResponseOptimizerPanelProps) {
+  const { t } = useI18n();
   const model = result.model_manifest;
   const domains = useMemo(
     () => result.training_domain?.predictors ?? [],
@@ -124,10 +126,11 @@ export function RegressionResponseOptimizerPanel({
       </div>
       {!modelAvailable || !model || domains.length === 0 ? (
         <div className="notice-box">
-          schema 5 manifest가 사용 가능한 저장 모델에서 최적화를 실행할 수 있습니다.
+          {t("reg.optimizerUnavailable")}
         </div>
       ) : (
         <>
+          {"regularization" in result ? <p className="notice-box">{t("reg.pointOnly")} {t("reg.selectedAlpha")}: {result.regularization.selected_alpha}{result.regularization.selected_l1_ratio === null ? "" : `; ${t("reg.selectedRatio")}: ${result.regularization.selected_l1_ratio}`}</p> : null}
           <div className="option-grid option-grid-wide">
             <label>
               <span>목표 유형</span>

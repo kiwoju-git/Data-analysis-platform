@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import type {
   LinearModelResidualScatter,
-  LinearModelResult,
+  OlsLinearModelResult as LinearModelResult,
 } from "./api";
 import { InteractiveHistogramChart } from "./charts/InteractiveHistogramChart";
 import {

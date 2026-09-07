@@ -251,7 +251,7 @@ def _fit_model(client: TestClient) -> tuple[dict[str, object], str, str]:
         "/api/v1/analysis-runs",
         json={
             "method_id": "regression.linear_model",
-            "method_version": "0.2.0",
+            "method_version": "0.3.0",
             "dataset_version_id": version["version_id"],
             "roles": {"response": response_id, "predictors": ",".join(predictor_ids)},
             "options": {

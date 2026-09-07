@@ -6,7 +6,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import status
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from app.api.v1.schemas.analyses import (
     AnalysisResultEnvelope,
@@ -17,6 +17,7 @@ from app.api.v1.schemas.analyses import (
     PearsonOptions,
     XyCorrelationOptions,
 )
+from app.api.v1.schemas.linear_model_manifests import LINEAR_MODEL_MANIFEST_ADAPTER
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import (
@@ -82,7 +83,7 @@ from app.storage.metadata import (
     insert_analysis_run_record_with_artifacts_and_regression_model,
 )
 
-REGRESSION_MODEL_MANIFEST_SCHEMA_VERSION = 3
+REGRESSION_MODEL_MANIFEST_SCHEMA_VERSION = 4
 REGRESSION_MODEL_ARTIFACT_KIND = "regression_model_manifest"
 REGRESSION_MODEL_MEDIA_TYPE = "application/json"
 MAX_LINEAR_MODEL_PREDICTORS = 20
@@ -652,14 +653,16 @@ def run_linear_model_analysis(
     options = _validate_linear_model_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     response_column, predictor_columns = _selected_linear_model_columns(context, options)
-    alpha = _linear_model_alpha(options)
-    confidence_level = _linear_model_confidence_level(options)
+    is_ols = options["estimator"] == "ols"
+    alpha = _linear_model_alpha(options) if is_ols else 0.05
+    confidence_level = _linear_model_confidence_level(options) if is_ols else 0.95
     quadratic_terms = _linear_model_quadratic_terms(options, predictor_columns)
     interaction_terms = _linear_model_interaction_terms(options, predictor_columns)
-    model_selection = options["model_selection"]
+    model_selection = options.get("model_selection")
     _linear_model_missing_policy(options)
     _linear_model_include_intercept(options)
-    _linear_model_covariance_type(options)
+    if is_ols:
+        _linear_model_covariance_type(options)
     analysis_id = uuid4()
     completed_at = _utc_now()
     row_snapshot = _create_row_snapshot_artifact(
@@ -671,20 +674,36 @@ def run_linear_model_analysis(
     )
     try:
         try:
-            result = calculate_linear_model(
-                _iter_rows_for_snapshot(context, row_snapshot),
-                response_column,
-                predictor_columns,
-                decimal=context.parsing.decimal,
-                thousands=context.parsing.thousands,
-                alpha=alpha,
-                confidence_level=confidence_level,
-                quadratic_terms=quadratic_terms,
-                interaction_terms=interaction_terms,
-                model_selection_method=str(model_selection["method"]),
-                alpha_to_remove=float(model_selection["alpha_to_remove"]),
-                hierarchy_policy=str(model_selection["hierarchy_policy"]),
-            )
+            if not is_ols:
+                from app.services.regularized_model_worker import run_regularized_worker
+
+                result = run_regularized_worker(
+                    context,
+                    row_snapshot,
+                    response_column,
+                    list(predictor_columns),
+                    options,
+                    list(quadratic_terms),
+                    list(interaction_terms),
+                )
+            else:
+                assert isinstance(model_selection, dict)
+                result = calculate_linear_model(
+                    _iter_rows_for_snapshot(context, row_snapshot),
+                    response_column,
+                    predictor_columns,
+                    decimal=context.parsing.decimal,
+                    thousands=context.parsing.thousands,
+                    alpha=alpha,
+                    confidence_level=confidence_level,
+                    quadratic_terms=quadratic_terms,
+                    interaction_terms=interaction_terms,
+                    model_selection_method=str(model_selection["method"]),
+                    alpha_to_remove=float(model_selection["alpha_to_remove"]),
+                    hierarchy_policy=str(model_selection["hierarchy_policy"]),
+                )
+                result["schema_version"] = 6
+                result["estimator"] = {"kind": "ols", "penalty": "none"}
         except LinearModelError as exc:
             raise _linear_model_api_error(exc.code) from exc
         warnings = _linear_model_warnings(result)
@@ -705,7 +724,11 @@ def run_linear_model_analysis(
 
 def _validate_linear_model_options(options: dict[str, Any]) -> dict[str, Any]:
     try:
-        return LinearModelOptions.model_validate(options).model_dump()
+        return (
+            TypeAdapter[Any](LinearModelOptions)
+            .validate_python({"estimator": "ols", **options})
+            .model_dump()
+        )
     except ValidationError as exc:
         raise ApiError(
             code="invalid_linear_model_options",
@@ -1201,6 +1224,15 @@ def _linear_model_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
     if not isinstance(warning_codes, list):
         return []
 
+    if isinstance(result.get("regularization"), dict):
+        from app.services.regularized_model_messages import WARNING_MESSAGES
+
+        return [
+            AnalysisWarning(code=code, severity="warning", message=WARNING_MESSAGES[code])
+            for code in warning_codes
+            if isinstance(code, str) and code in WARNING_MESSAGES
+        ]
+
     messages = {
         "linear_model_not_causation": (
             "회귀계수는 관찰 데이터만으로 인과 효과를 의미하지 않습니다."
@@ -1291,11 +1323,16 @@ def _linear_model_manifest_payload(
     row_snapshot: _RowSnapshotArtifact,
     created_at: str,
 ) -> dict[str, Any]:
-    return {
+    estimator = result.get("estimator")
+    kind = estimator.get("kind", "ols") if isinstance(estimator, dict) else "ols"
+    payload = {
         "manifest_schema_version": REGRESSION_MODEL_MANIFEST_SCHEMA_VERSION,
         "model_id": model_id,
         "analysis_id": analysis_id,
-        "model_family": "linear_regression_ols",
+        "model_family": "linear_regression_ols"
+        if kind == "ols"
+        else "linear_regression_regularized",
+        "model_kind": kind,
         "method_id": request.method_id,
         "method_version": request.method_version,
         "app_version": APP_VERSION,
@@ -1327,13 +1364,34 @@ def _linear_model_manifest_payload(
         "package_versions": result.get("package_versions"),
         "limitations": [
             "This manifest stores only app-created JSON model metadata, not pickle or joblib.",
-            "Prediction is limited to schema-checked app-created OLS manifests.",
+            "Prediction is limited to schema-checked app-created linear model manifests.",
             (
                 "Regression coefficients from observational data must not be interpreted "
                 "as causal effects."
             ),
         ],
     }
+    if kind != "ols":
+        payload["regularization"] = result.get("regularization")
+        payload["validation_summary"] = _copy_without_keys(
+            result.get("validation"), {"oof_predictions", "row_indices", "folds"}
+        )
+        payload["limitations"] = [
+            "Point prediction only; classical OLS inference and intervals are unavailable.",
+            "Coefficients are predictive, not causal or classical significance estimates.",
+            "Dummy features are penalized individually; strong hierarchy is not enforced.",
+        ]
+        for field in (
+            "alpha",
+            "confidence_level",
+            "anova",
+            "model_selection",
+            "initial_model_specification",
+            "diagnostics_summary",
+        ):
+            payload.pop(field, None)
+    LINEAR_MODEL_MANIFEST_ADAPTER.validate_python(payload)
+    return payload
 
 
 def _linear_model_manifest_diagnostics(value: object) -> dict[str, object] | None:

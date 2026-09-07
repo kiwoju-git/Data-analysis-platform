@@ -14,6 +14,7 @@ import type { RegressionPredictionExportState } from "./useRegressionPredictionE
 import type { RegressionPredictionTargetState } from "./useRegressionPredictionTargetState";
 import { RegressionManualPredictionPanel } from "./RegressionManualPredictionPanel";
 import { RegressionPredictionResultsTable } from "./RegressionPredictionResultsTable";
+import { useI18n } from "./i18n/LocaleProvider";
 
 export interface RegressionPredictionRowsState {
   error: string | null;
@@ -63,6 +64,7 @@ export function RegressionPredictionPanel({
   onRunPrediction,
   onRunPreflight,
 }: RegressionPredictionPanelProps) {
+  const { t } = useI18n();
   const selectedTargetVersionId = predictionTargetState.selectedTargetVersionId;
   const canRunPreflight =
     expectedModelId !== null &&
@@ -212,8 +214,7 @@ export function RegressionPredictionPanel({
         </div>
       ) : null}
       <div className="notice-box">
-        예측은 저장된 OLS 모델이 선택한 데이터셋 버전에 적용한 추정값입니다. 원인·효과나
-        확정값으로 해석하지 말고 학습 범위 밖 값과 OLS 가정을 확인해야 합니다.
+        {t("reg.predictionGuidance")}
       </div>
       {predictionPreflightError !== null ? (
         <div className="error-box" role="alert">오류 코드: {predictionPreflightError}</div>
@@ -337,7 +338,7 @@ export function RegressionPredictionPanel({
             <span>예측 행</span><strong>{prediction.row_count_predicted.toLocaleString()} / {prediction.row_count_total.toLocaleString()}</strong>
             <span>제외 행</span><strong>{prediction.row_count_excluded.toLocaleString()}개</strong>
             <span>응답 생략</span><strong>{prediction.row_count_omitted.toLocaleString()}개</strong>
-            <span>신뢰수준</span><strong>{(prediction.confidence_level * 100).toFixed(1)}%</strong>
+            {prediction.prediction_uncertainty_kind !== "point_only" ? <><span>신뢰수준</span><strong>{(prediction.confidence_level * 100).toFixed(1)}%</strong></> : null}
           </div>
           <div className="button-row" aria-label="전체 예측 CSV export">
             <button
@@ -367,6 +368,7 @@ export function RegressionPredictionPanel({
             <div className="panel-heading"><div><h4>예측 구간 차트</h4><p>Predicted mean · mean CI · prediction interval</p></div></div>
             <div className="chart-grid chart-grid-single"><PredictionIntervalChart rows={previewRows} /></div>
           </div>
+          {prediction.prediction_uncertainty_kind === "point_only" ? <p className="notice-box">{t("reg.pointOnly")}</p> : null}
           <RegressionPredictionResultsTable rowNumberOffset={-1} rows={previewRows} />
           {predictionRowsState.error !== null ? <div className="error-box" role="alert">예측 행 조회 실패: {predictionRowsState.error}</div> : null}
           {activePage !== null ? (

@@ -293,7 +293,8 @@ function modelLabel(model: RegressionModelCatalogItem): string {
   const label =
     model.user_label ??
     `${response} · predictor ${model.predictor_count ?? "?"}개 · ${formatCreatedAt(model.created_at)}`;
-  return `${label} · ${state} · ${shortId(model.model_id)}`;
+  const kind = { ols: "OLS", ridge: "Ridge", lasso: "Lasso", elastic_net: "Elastic Net", pls: "PLS", gaussian_process: "Gaussian Process" }[model.model_kind ?? "ols"];
+  return `${kind} · ${label} · ${state} · ${shortId(model.model_id)}`;
 }
 
 function formatCreatedAt(value: string): string {

@@ -46,10 +46,9 @@
 
 .analysis-domain-card {
   display: grid;
-  grid-template-rows: auto auto 1fr auto auto auto;
+  grid-template-rows: auto 1fr auto;
   min-width: 0;
-  min-height: 220px;
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--border-default);
   border-radius: 6px;
   background: #fff;
@@ -120,7 +119,7 @@
 .analysis-domain-family-card {
   height: 100%;
   min-width: 0;
-  padding: 16px;
+  padding: 12px;
   border: 1px solid var(--border-default);
   border-radius: 6px;
   background: #fff;
@@ -242,18 +241,17 @@
 
 .analysis-domain-method-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
   gap: 12px;
   align-items: stretch;
 }
 
 .analysis-domain-method-card {
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 10px;
+  align-content: start;
+  gap: 8px;
   min-width: 0;
-  min-height: 132px;
-  padding: 15px;
+  padding: 12px;
   border: 1px solid var(--border-default);
   border-radius: 6px;
   background: #fff;
@@ -320,10 +318,43 @@ button.analysis-domain-method-card.is-active {
 }
 
 @media (max-width: 1360px) {
-  .analysis-domain-grid,
-  .analysis-domain-method-grid {
+  .analysis-domain-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.analysis-domain-compact-heading { margin-bottom: 8px; }
+.analysis-domain-compact-description { margin: 5px 0 0; font-size: 0.9rem; line-height: 1.4; }
+.analysis-domain-guide { margin-top: 14px; padding: 8px 0; border-top: 1px solid var(--border-default); }
+.analysis-domain-guide summary { width: fit-content; cursor: pointer; color: var(--brand-nav-blue); }
+.analysis-domain-guide p, .analysis-domain-guide li { font-size: 0.9rem; line-height: 1.5; }
+.analysis-domain-planned-notice { margin-top: 8px; font-size: 0.85rem; }
+.analysis-domain-planned-notice .analysis-domain-workflow-row { margin: 0; padding: 8px; border: 0; background: #f5f6f7; }
+.analysis-method-compact-tags { display: flex; flex-wrap: wrap; gap: 5px; font-size: 0.78rem; }
+.analysis-method-compact-tags > span { padding: 2px 5px; background: #f2f4f7; border-radius: 3px; }
+.analysis-method-subtitle { font-size: 0.82rem; }
+.analysis-panel-intro { margin: 0 0 12px; font-size: 0.9rem; }
+.regression-estimator-selector { margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+.regression-estimator-selector legend { margin-bottom: 7px; font-weight: 600; }
+.regression-estimator-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.regression-estimator-options label { display: flex; align-items: center; gap: 7px; border: 1px solid var(--border-default); padding: 8px 12px; border-radius: 4px; white-space: nowrap; cursor: pointer; }
+.regression-estimator-options label.is-selected { border: 2px solid var(--brand-nav-blue); padding: 7px 11px; background: var(--brand-blue-soft); }
+.regression-estimator-options label:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.regression-estimator-options input { width: 16px; height: 16px; margin: 0; }
+.regularization-settings { min-width: 0; margin: 12px 0; }
+.regularization-settings .option-grid > label { align-content: start; }
+.regularization-settings .checkbox-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.regularization-settings .checkbox-grid label { display: flex; align-items: center; gap: 7px; }
+.regularization-settings .checkbox-grid input { width: 16px; height: 16px; margin: 0; }
+.analysis-run-panel[data-analysis-execution="regression.linear_model"] .result-section { grid-template-columns: minmax(0, 1fr); }
+.regularization-settings details { margin: 10px 0; }
+.regularization-settings details > .table-wrap { margin-top: 10px; }
+.regularized-results, .regularized-results .result-section { min-width: 0; }
+.regularized-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.regularized-equation { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .regularized-chart-grid { grid-template-columns: minmax(0, 1fr); }
+  .regression-estimator-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {

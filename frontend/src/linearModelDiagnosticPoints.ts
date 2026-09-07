@@ -1,4 +1,4 @@
-import type { LinearModelResult } from "./api";
+import type { OlsLinearModelResult as LinearModelResult } from "./api";
 
 export interface ObservedDiagnosticPoint {
   fitted: number;

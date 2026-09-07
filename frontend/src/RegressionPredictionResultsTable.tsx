@@ -83,18 +83,18 @@ function SummaryPredictionTable({
   rows: PredictionResultRow[];
 }) {
   const hasInputs = mappings.length > 0;
+  const hasIntervals = rows.some((row) => row.mean_confidence_interval !== null || row.prediction_interval !== null);
   return (
     <div className="table-wrap regression-prediction-results-wrap">
       <table className="result-table regression-prediction-results-table is-summary">
         <colgroup>
           <col className="regression-prediction-row-column" />
           <col className="regression-prediction-mean-column" />
-          <col className="regression-prediction-interval-column" />
-          <col className="regression-prediction-interval-column" />
+          {hasIntervals ? <><col className="regression-prediction-interval-column" /><col className="regression-prediction-interval-column" /></> : null}
           <col className="regression-prediction-status-column" />
           {hasInputs ? <col className="regression-prediction-detail-column" /> : null}
         </colgroup>
-        <thead><tr><th scope="col">입력 행</th><th scope="col">예측 평균</th><th scope="col">평균 신뢰구간</th><th scope="col">개별 예측구간</th><th scope="col">상태</th>{hasInputs ? <th scope="col">입력 조건</th> : null}</tr></thead>
+        <thead><tr><th scope="col">입력 행</th><th scope="col">예측 평균</th>{hasIntervals ? <><th scope="col">평균 신뢰구간</th><th scope="col">개별 예측구간</th></> : null}<th scope="col">상태</th>{hasInputs ? <th scope="col">입력 조건</th> : null}</tr></thead>
         <tbody>
           {rows.map((row) => {
             const expanded = expandedRows.has(row.row_index);
@@ -103,6 +103,7 @@ function SummaryPredictionTable({
               <PredictionSummaryRows
                 expanded={expanded}
                 hasInputs={hasRowInputs}
+                hasIntervals={hasIntervals}
                 key={row.row_index}
                 mappings={mappings}
                 row={row}
@@ -117,9 +118,10 @@ function SummaryPredictionTable({
   );
 }
 
-function PredictionSummaryRows({ expanded, hasInputs, mappings, onToggle, row, rowNumber }: {
+function PredictionSummaryRows({ expanded, hasInputs, hasIntervals, mappings, onToggle, row, rowNumber }: {
   expanded: boolean;
   hasInputs: boolean;
+  hasIntervals: boolean;
   mappings: RegressionPastedPredictionMapping[];
   onToggle: () => void;
   row: PredictionResultRow;
@@ -130,13 +132,12 @@ function PredictionSummaryRows({ expanded, hasInputs, mappings, onToggle, row, r
       <tr>
         <td>{rowNumber.toLocaleString()}</td>
         <td className="regression-prediction-number">{formatNumber(row.predicted_mean)}</td>
-        <td className="regression-prediction-interval">{formatInterval(row.mean_confidence_interval)}</td>
-        <td className="regression-prediction-interval">{formatInterval(row.prediction_interval)}</td>
+        {hasIntervals ? <><td className="regression-prediction-interval">{formatInterval(row.mean_confidence_interval)}</td><td className="regression-prediction-interval">{formatInterval(row.prediction_interval)}</td></> : null}
         <td className="regression-prediction-status">{statusLabel(row.warnings)}</td>
         {mappings.length > 0 ? <td>{hasInputs ? <button aria-expanded={expanded} className="secondary-button compact-button" onClick={onToggle} type="button">{expanded ? "조건 닫기" : "조건 보기"}</button> : "-"}</td> : null}
       </tr>
       {hasInputs && expanded ? (
-        <tr className="regression-prediction-detail-row"><td colSpan={6}>
+        <tr className="regression-prediction-detail-row"><td colSpan={hasIntervals ? 6 : 4}>
           <dl className="regression-prediction-input-details">
             {mappings.map((mapping) => <div key={mapping.source_column_id}><dt>{mapping.display_name}</dt><dd>{String(row.predictor_values?.[mapping.source_column_id] ?? "-")}</dd></div>)}
           </dl>
@@ -151,23 +152,24 @@ function FullPredictionTable({ mappings, rowNumberOffset, rows }: {
   rowNumberOffset: number;
   rows: PredictionResultRow[];
 }) {
-  const minWidth = 70 + mappings.reduce((total, mapping) => total + (mapping.predictor_kind === "categorical" ? 170 : 140), 0) + 610;
+  const hasIntervals = rows.some((row) => row.mean_confidence_interval !== null || row.prediction_interval !== null);
+  const minWidth = 70 + mappings.reduce((total, mapping) => total + (mapping.predictor_kind === "categorical" ? 170 : 140), 0) + (hasIntervals ? 610 : 290);
   return (
     <div className="table-wrap regression-prediction-results-wrap">
       <table className="result-table regression-prediction-results-table is-full" style={{ minWidth: `${minWidth}px` }}>
         <colgroup>
           <col className="regression-prediction-row-column" />
           {mappings.map((mapping) => <col className={`regression-prediction-input-column is-${mapping.predictor_kind}`} key={mapping.source_column_id} />)}
-          <col className="regression-prediction-mean-column" /><col className="regression-prediction-interval-column" /><col className="regression-prediction-interval-column" /><col className="regression-prediction-status-column" />
+          <col className="regression-prediction-mean-column" />{hasIntervals ? <><col className="regression-prediction-interval-column" /><col className="regression-prediction-interval-column" /></> : null}<col className="regression-prediction-status-column" />
         </colgroup>
         <thead>
-          <tr className="regression-prediction-header-groups"><th rowSpan={2} scope="col">입력 행</th><th colSpan={mappings.length} scope="colgroup">입력 조건</th><th colSpan={4} scope="colgroup">예측 결과</th></tr>
-          <tr>{mappings.map((mapping) => <th key={mapping.source_column_id} scope="col">{mapping.display_name}</th>)}<th scope="col">예측 평균</th><th scope="col">평균 신뢰구간</th><th scope="col">개별 예측구간</th><th scope="col">상태</th></tr>
+          <tr className="regression-prediction-header-groups"><th rowSpan={2} scope="col">입력 행</th><th colSpan={mappings.length} scope="colgroup">입력 조건</th><th colSpan={hasIntervals ? 4 : 2} scope="colgroup">예측 결과</th></tr>
+          <tr>{mappings.map((mapping) => <th key={mapping.source_column_id} scope="col">{mapping.display_name}</th>)}<th scope="col">예측 평균</th>{hasIntervals ? <><th scope="col">평균 신뢰구간</th><th scope="col">개별 예측구간</th></> : null}<th scope="col">상태</th></tr>
         </thead>
         <tbody>{rows.map((row) => <tr key={row.row_index}>
           <td>{(row.row_index + rowNumberOffset + 1).toLocaleString()}</td>
           {mappings.map((mapping) => <td className="regression-prediction-input-value" key={mapping.source_column_id}>{String(row.predictor_values?.[mapping.source_column_id] ?? "-")}</td>)}
-          <td className="regression-prediction-number">{formatNumber(row.predicted_mean)}</td><td className="regression-prediction-interval">{formatInterval(row.mean_confidence_interval)}</td><td className="regression-prediction-interval">{formatInterval(row.prediction_interval)}</td><td className="regression-prediction-status">{statusLabel(row.warnings)}</td>
+          <td className="regression-prediction-number">{formatNumber(row.predicted_mean)}</td>{hasIntervals ? <><td className="regression-prediction-interval">{formatInterval(row.mean_confidence_interval)}</td><td className="regression-prediction-interval">{formatInterval(row.prediction_interval)}</td></> : null}<td className="regression-prediction-status">{statusLabel(row.warnings)}</td>
         </tr>)}</tbody>
       </table>
     </div>

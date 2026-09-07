@@ -5,6 +5,10 @@ import type {
   DatasetColumnResponse,
   DatasetVersionResponse,
   LinearModelResult,
+  LinearModelEstimator,
+  LinearEstimatorRunConfig,
+  RegularizedEstimator,
+  RegularizedRunConfig,
   RegressionPredictionPreflightResponse,
   RegressionPredictionResponse,
 } from "./api";
@@ -18,6 +22,9 @@ import {
   type RegressionPredictionRowsState,
 } from "./RegressionPredictionPanel";
 import { LinearModelFitResults } from "./LinearModelFitResults";
+import { RegularizedLinearModelResults } from "./RegularizedLinearModelResults";
+import { RegularizationSettingsPanel, regularizationDefaults, regularizationValid } from "./RegularizationSettingsPanel";
+import { useI18n } from "./i18n/LocaleProvider";
 import { RegressionResponseOptimizerPanel } from "./RegressionResponseOptimizerPanel";
 import { updateRegressionModelMetadata } from "./api/regression";
 import {
@@ -58,7 +65,7 @@ interface LinearModelPanelProps {
   onAlphaToRemoveChange: (alpha: number) => void;
   onModelSelectionMethodChange: (method: "none" | "backward_elimination") => void;
   onResponseColumnChange: (columnId: string) => void;
-  onRun: () => void;
+  onRun: (config?: LinearEstimatorRunConfig) => void;
   onRunPrediction: () => void;
   onRunPredictionPreflight: () => void;
   onToggleInteractionTerm: (key: string, checked: boolean) => void;
@@ -104,7 +111,18 @@ export function LinearModelPanel({
   onTogglePredictorColumn,
   onToggleQuadraticColumn,
 }: LinearModelPanelProps) {
+  const { t } = useI18n();
+  const [estimator, setEstimator] = useState<LinearModelEstimator>("ols");
+  const [regularizedDrafts, setRegularizedDrafts] = useState<Record<RegularizedEstimator, RegularizedRunConfig>>(() => ({
+    ridge: regularizationDefaults("ridge"), lasso: regularizationDefaults("lasso"),
+    elastic_net: regularizationDefaults("elastic_net"),
+  }));
+  const regularizedConfig = estimator === "ols" ? null : regularizedDrafts[estimator];
   const modelId = result?.model_manifest?.model_id ?? null;
+  const restoredEstimator = result?.estimator?.kind ?? "ols";
+  useEffect(() => {
+    if (modelId !== null) setEstimator(restoredEstimator);
+  }, [modelId, restoredEstimator]);
   const modelRetentionState = useRegressionModelRetentionState(modelId);
   const [modelDeletionConfirmed, setModelDeletionConfirmed] = useState(false);
   const [modelName, setModelName] = useState("");
@@ -128,11 +146,11 @@ export function LinearModelPanel({
     responseColumnId !== null &&
     predictorColumnIds.length > 0 &&
     !predictorColumnIds.includes(responseColumnId) &&
-    alpha > 0 &&
+    (estimator === "ols" ? (alpha > 0 &&
     alpha < 1 &&
     confidenceLevel > 0 &&
     confidenceLevel < 1 &&
-    (modelSelectionMethod === "none" || (alphaToRemove > 0 && alphaToRemove < 1)) &&
+    (modelSelectionMethod === "none" || (alphaToRemove > 0 && alphaToRemove < 1))) : regularizationValid(regularizedDrafts[estimator])) &&
     filterValidationError === null;
   const selectedNumericPredictors = predictorColumns.filter(
     (column) => predictorColumnIds.includes(column.column_id) && isNumericLinearModelPredictor(column),
@@ -144,12 +162,14 @@ export function LinearModelPanel({
         <div className="notice-box">데이터셋 버전 생성 후 실행할 수 있습니다.</div>
       ) : (
         <>
-          <div className="notice-box">
-            현재 slice는 숫자형 반응 변수 1개와 숫자형/범주형 main effect 예측변수를
-            OLS로 계산합니다. 숫자형 predictor는 선택적으로 2차항과 숫자형끼리의
-            상호작용 항을 추가할 수 있습니다. 범주형 예측변수는 첫 수준을 기준으로
-            treatment coding하며, 관찰 데이터만으로 원인이라고 해석하지 않습니다.
-          </div>
+          <p className="analysis-panel-intro">{t("reg.intro")}</p>
+          <fieldset className="regression-estimator-selector"><legend>{t("reg.estimator")}</legend>
+            <div className="regression-estimator-options">{(["ols", "ridge", "lasso", "elastic_net"] as const).map((kind) =>
+              <label key={kind} className={kind === estimator ? "is-selected" : ""}>
+                <input type="radio" name="regression-estimator" value={kind} checked={kind === estimator}
+                  onChange={() => setEstimator(kind)} /><span>{t(`reg.${kind}`)}</span>
+              </label>)}</div>
+          </fieldset>
           <div className="option-grid option-grid-wide">
             <label>
               <span>반응 변수</span>
@@ -190,7 +210,7 @@ export function LinearModelPanel({
                 ))}
               </div>
             </div>
-            <label>
+            {estimator === "ols" ? <><label>
               <span>유의수준 alpha</span>
               <input
                 max="0.5"
@@ -215,7 +235,7 @@ export function LinearModelPanel({
                   onConfidenceLevelChange(Number(event.currentTarget.value));
                 }}
               />
-            </label>
+            </label></> : null}
           </div>
           {selectedNumericPredictors.length > 0 ? (
             <div className="option-grid option-grid-wide">
@@ -262,7 +282,7 @@ export function LinearModelPanel({
               </div>
             </div>
           ) : null}
-          <div className="option-grid option-grid-wide">
+          {estimator === "ols" ? <div className="option-grid option-grid-wide">
             <label>
               <span>모형 선택 방법</span>
               <select
@@ -294,18 +314,19 @@ export function LinearModelPanel({
                 </small>
               </label>
             ) : null}
-          </div>
+          </div> : regularizedConfig !== null ? <RegularizationSettingsPanel config={regularizedConfig} rowCount={version.row_count}
+            onChange={(config) => setRegularizedDrafts((drafts) => ({ ...drafts, [config.estimator]: config }))} /> : null}
           <button
             className="primary-button"
             disabled={isRunningAnalysis || !canRun}
             onClick={() => {
-              onRun();
+              onRun(regularizedConfig ?? { estimator: "ols" });
             }}
             type="button"
           >
             {isRunningAnalysis ? "실행 중" : "회귀모형 적합 실행"}
           </button>
-          {analysisResult?.warnings.length ? (
+          {analysisResult?.warnings.length && !(result && "regularization" in result) ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
                 <li key={`${warning.code}-${index}`}>{warning.message}</li>
@@ -314,7 +335,7 @@ export function LinearModelPanel({
           ) : null}
           {result !== null ? (
             <>
-              <LinearModelFitResults result={result} />
+              {"regularization" in result ? <RegularizedLinearModelResults key={result.model_manifest?.model_id} result={result} /> : <LinearModelFitResults result={result} />}
               {result.model_manifest ? (
                 <section className="result-section" aria-labelledby="linear-model-retention-title">
                   <div className="panel-heading">

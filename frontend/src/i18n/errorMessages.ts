@@ -1,6 +1,7 @@
 import { ApiRequestError } from "../api/client";
 import { t, type TranslationKey } from "./translate";
 import type { AppLocale } from "./types";
+import { regularizedErrorKeys } from "./regularizedMessages";
 
 export interface LocalizedErrorDisplay {
   code: string;
@@ -9,6 +10,7 @@ export interface LocalizedErrorDisplay {
 }
 
 const errorKeys: Readonly<Record<string, TranslationKey>> = {
+  ...regularizedErrorKeys,
   api_unreachable: "errors.apiUnreachable",
   invalid_gaussian_process_options: "errors.gpGeneric",
   gp_response_required: "errors.gpResponseRequired",
