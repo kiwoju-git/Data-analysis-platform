@@ -13,6 +13,7 @@ import {
   PlannedDomainMethodCard,
 } from "./AnalysisDomainMethodCard";
 import { useI18n } from "./i18n/LocaleProvider";
+import { methodLabel } from "./i18n/catalogLabels";
 
 interface AnalysisDomainLandingProps {
   catalog: AnalysisMethodListResponse;
@@ -29,7 +30,7 @@ export function AnalysisDomainLanding({
   onOpenDomain,
   onSelectMethod,
 }: AnalysisDomainLandingProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const mappingErrors = validateAnalysisDomainCatalog(catalog);
   const mappingNotice = mappingErrors.length > 0 ? (
     <div className="error-box" role="alert">
@@ -43,10 +44,6 @@ export function AnalysisDomainLanding({
         <div className="analysis-domain-grid">
           {ANALYSIS_DOMAINS.map((candidate) => {
             const methods = domainCatalogMethods(catalog, candidate);
-            const planned = candidate.families.reduce(
-              (count, family) => count + (family.plannedWorkflows?.length ?? 0),
-              candidate.directPlannedWorkflows?.length ?? 0,
-            );
             return (
               <button
                 className="analysis-domain-card"
@@ -54,24 +51,14 @@ export function AnalysisDomainLanding({
                 onClick={() => onOpenDomain(candidate)}
                 type="button"
               >
-                <span className="analysis-domain-order">{candidate.order}</span>
                 <strong>{t(candidate.labelKey)}</strong>
                 <span className="analysis-domain-card-description">
                   {t(candidate.descriptionKey)}
                 </span>
                 <span className="analysis-domain-card-families">
-                  {candidate.families.slice(0, 4).map((family) => t(family.labelKey)).join(" · ")}
-                </span>
-                <span className="analysis-domain-card-meta">
-                  {t("analysisDomains.availableCount", {
-                    count: methods.filter((method) => method.availability === "available").length,
-                  })}
-                  {planned > 0
-                    ? ` · ${t("analysisDomains.plannedCount", { count: planned })}`
-                    : ""}
-                </span>
-                <span className="analysis-domain-card-action">
-                  {t("analysisDomains.open")}
+                  {candidate.landingMode === "flat_methods"
+                    ? methods.slice(0, 3).map((method) => methodLabel(method, locale)).join(" · ")
+                    : candidate.families.slice(0, 3).map((family) => t(family.labelKey)).join(" · ")}
                 </span>
               </button>
             );
@@ -82,17 +69,7 @@ export function AnalysisDomainLanding({
   }
 
   return (
-    <section aria-label={t(domain.labelKey)}>
-      <div className="analysis-domain-intro">
-        <div className="notice-box analysis-domain-guidance">
-          {t(domainGuidanceKey(domain.id))}
-        </div>
-        {(domain.selectionGuideKeys?.length ?? 0) > 0 ? (
-          <ul className="analysis-domain-selection-guide">
-            {domain.selectionGuideKeys?.map((key) => <li key={key}>{t(key)}</li>)}
-          </ul>
-        ) : null}
-      </div>
+    <section className="analysis-domain-landing" aria-label={t(domain.labelKey)}>
       {mappingNotice}
       {domain.landingMode === "flat_methods" ? (
         <>
@@ -122,7 +99,7 @@ export function AnalysisDomainLanding({
         </>
       ) : (
         <div className="analysis-domain-family-grid">
-          {domain.families.map((family) => (
+          {domain.families.filter((family) => family.methodIds.length > 0).map((family) => (
             <AnalysisDomainFamilyCard
               catalog={catalog}
               family={family}
@@ -133,6 +110,16 @@ export function AnalysisDomainLanding({
           ))}
         </div>
       )}
+      <details className="analysis-domain-guide">
+        <summary>{t("domain.compactGuide")}</summary>
+        <p>{t(domainGuidanceKey(domain.id))}</p>
+        {(domain.selectionGuideKeys?.length ?? 0) > 0 ? <ul>
+          {domain.selectionGuideKeys?.map((key) => <li key={key}>{t(key)}</li>)}
+        </ul> : null}
+      </details>
+      {domain.landingMode === "family_cards" ? domain.families.filter((family) => family.methodIds.length === 0).map((family) =>
+        <AnalysisDomainFamilyCard key={family.id} family={family} catalog={catalog}
+          selectedMethodId={selectedMethodId} onSelectMethod={onSelectMethod} />) : null}
     </section>
   );
 }

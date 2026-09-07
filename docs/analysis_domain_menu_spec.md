@@ -1,5 +1,23 @@
 # Statistical Twin 분석 도메인 메뉴 및 UI 상세 명세
 
+## 2026-09-07 Compact Selection And Regression Extension
+
+This update supersedes the earlier always-expanded domain guidance presentation,
+not the eight-domain taxonomy or method mapping. Domain headings are compact;
+method/family grids appear before a native, initially closed selection guide.
+Root cards omit order badges and repeated open/count text. Planned-only families
+are neutral notices below executable cards. Flat cards show name, availability
+and up to three selection tags, without the technical method ID or long prose.
+Root layout remains 4x2 on wide desktop, two columns on laptop and one on mobile.
+
+`regression.linear_model` remains a single Fit Regression Model card and sidebar
+leaf. OLS (default), Ridge, Lasso and Elastic Net are mutually exclusive estimator
+options within that panel; each run fits and stores one estimator. PCA, PLS,
+Gaussian Process, DOE and Bayesian entries are retained. Numerical and lifecycle
+requirements are defined in [regularized linear model contract](regularized_linear_model_contract.md).
+Only the selection density of historical commit `fb07c684` was consulted; no
+repository reset, old-file replacement, or return to six presentation modules occurred.
+
 Status: implementation specification
 Suggested repository path: `docs/analysis_domain_menu_spec.md`
 Baseline reviewed: `fb07c68405e0038e2a694a35d806a1a191b2cfda`

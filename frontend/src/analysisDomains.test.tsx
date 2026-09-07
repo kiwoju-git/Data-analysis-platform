@@ -163,6 +163,12 @@ describe("analysis domain navigation", () => {
     expect(basicHtml.match(/analysis-domain-method-card/gu)).toHaveLength(4);
     expect(basicHtml).toContain("PCA 기반 다변량 검토");
     expect(basicHtml).not.toContain("analysis-domain-family-card");
+    expect(rootHtml).not.toContain("analysis-domain-order");
+    expect(rootHtml).not.toContain("analysis-domain-counts");
+    expect(basicHtml).not.toContain("analysis-domain-guidance");
+    expect(basicHtml).toContain('<details class="analysis-domain-guide">');
+    expect(basicHtml.indexOf("analysis-domain-method-grid")).toBeLessThan(basicHtml.indexOf("analysis-domain-guide\""));
+    expect(familyHtml).toContain('<details class="analysis-domain-guide">');
     expect(familyHtml).toContain("Two Variances");
     expect(familyHtml).not.toContain(">Two Variances</button>");
     expect(familyHtml).toContain("등분산 검정");

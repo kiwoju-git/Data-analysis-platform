@@ -1,5 +1,19 @@
 # Analysis Domain Navigation Implementation
 
+## Compact Selection Update (2026-09-07)
+
+Eight domains, primary method placement, contextual methods, direct URLs,
+sidebar activation and PCA/PLS/GP/DOE/Bayesian workflows are retained. Only
+selection density references commit `fb07c68405e0038e2a694a35d806a1a191b2cfda`;
+no old files were restored or the repository reset.
+
+Root cards omit order badges, duplicated status counts and repeated open text.
+Flat method cards use names, availability and up to three guidance tags.
+Method/family grids precede a native, initially closed selection-guide details.
+Planned-only families appear as compact neutral notices, not executable cards.
+The regression domain retains five methods; OLS/Ridge/Lasso/Elastic Net are
+options inside Fit Regression Model, not additional method cards.
+
 ## Scope and compatibility
 
 The presentation layer keeps the eight-domain taxonomy while refining how each

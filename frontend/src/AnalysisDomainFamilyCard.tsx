@@ -25,10 +25,10 @@ export function AnalysisDomainFamilyCard({
 
   return (
     <section
-      className={`analysis-domain-family-card analysis-domain-family-${family.layout ?? "compact"}${family.columnSpan === 2 ? " analysis-domain-family-span-2" : ""}`}
+      className={`${methods.length === 0 ? "analysis-domain-planned-notice" : "analysis-domain-family-card"} analysis-domain-family-${family.layout ?? "compact"}${family.columnSpan === 2 ? " analysis-domain-family-span-2" : ""}`}
     >
       <div className="analysis-domain-family-heading">
-        <h3>{t(family.labelKey)}</h3>
+        {methods.length > 0 ? <h3>{t(family.labelKey)}</h3> : null}
       </div>
       {methods.length > 0 ? (
         <div className={`analysis-domain-method-list${methods.length === 3 ? " has-three-methods" : ""}`}>
@@ -56,8 +56,6 @@ export function AnalysisDomainFamilyCard({
         <div className="analysis-domain-workflow-row" key={workflow.id}>
           <span>
             <strong>{t(workflow.labelKey)}</strong>
-            {" "}
-            {t(workflow.descriptionKey)}
           </span>
           <small>{t("analysisContext.label")}</small>
         </div>
@@ -66,8 +64,6 @@ export function AnalysisDomainFamilyCard({
         <div className="analysis-domain-workflow-row is-planned" key={workflow.id}>
           <span>
             <strong>{t(workflow.labelKey)}</strong>
-            {" "}
-            {t(workflow.descriptionKey)}
           </span>
           <small>{t("analysisPlanned.label")}</small>
         </div>
