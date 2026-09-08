@@ -1,5 +1,15 @@
 # Statistical Twin
 
+Fit Regression Model now offers OLS, Ridge, Lasso and Elastic Net in one panel.
+Regularized models use training-fold standardization and nested cross-validation,
+save checksummed JSON manifests, and support point prediction and response
+optimization within the training domain. They do not provide classical OLS
+p-values, ANOVA or prediction intervals. The eight analysis domains retain all
+current methods with more compact selection cards and initially collapsed guides.
+See [the statistical contract](docs/regularized_linear_model_contract.md).
+This release requires matching frontend/backend API contract 18 and metadata
+schema 19; existing saved artifacts are not rewritten.
+
 Statistical Twin is a local-first statistical analysis application for Windows. It provides dataset preparation, statistical analysis, interactive charts, reports, asset management, regression, quality tools, DOE, and Bayesian optimization. The interface supports English and Korean; English is the default.
 
 ## Requirements

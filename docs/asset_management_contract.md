@@ -1,5 +1,15 @@
 # Local Workspace Asset Management Contract
 
+## Regularized Regression Assets (2026-09-07)
+
+The regression-model catalog now exposes `model_kind` for OLS, Ridge, Lasso,
+Elastic Net, PLS and Gaussian Process. The first four share the existing
+`regression.linear_model` identity and JSON model ownership. Schema-4 linear
+manifests are typed and checksummed; mutable names, notes and pins do not
+rewrite them. Prediction dependencies, deletion preflight and owned-artifact
+cleanup reuse the existing lifecycle. No new SQLite column or migration is
+needed. Legacy OLS manifest bytes remain unchanged on read and prediction.
+
 Last updated: 2026-08-06
 
 ## Current Scope

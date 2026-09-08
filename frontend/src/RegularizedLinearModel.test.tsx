@@ -9,6 +9,13 @@ import type { RegularizedEstimator, RegularizedLinearModelResult } from "./api";
 afterEach(() => setCurrentLocale("ko"));
 
 describe("regularized model controls", () => {
+  it("shows a zero equation when every coefficient including the intercept is zero", () => {
+    const result = regularizedFixture("lasso");
+    result.coefficients = result.coefficients.map((coefficient) => ({ ...coefficient,
+      estimate: 0, standardized_estimate: 0, is_zero: true }));
+    const html = renderToStaticMarkup(<RegularizedLinearModelResults result={result} />);
+    expect(html).toContain('<p class="regularized-equation">y = 0</p>');
+  });
   it.each(["ridge", "lasso", "elastic_net"] as const)("renders %s diagnostics without classical inference", (kind) => {
     for (const locale of ["en", "ko"] as const) {
       setCurrentLocale(locale);

@@ -1,5 +1,19 @@
 # Statistical Method Audit Matrix
 
+## Regularized Linear Regression (2026-09-07)
+
+| Method/estimator | Supported calculation | Inference limit | Reference gate |
+|---|---|---|---|
+| regression.linear_model / OLS | Existing least squares, backward elimination, ANOVA, PRESS, intervals | Existing OLS assumptions and post-selection caveat | Unchanged core tests and API tutorial numerics |
+| regression.linear_model / Ridge | L2, fixed or nested-CV alpha, fold-local scaling | No classical coefficient inference or intervals | Static sklearn reference plus closed-form ridge |
+| regression.linear_model / Lasso | L1, cyclic coordinate descent, exact zeros, fixed/nested CV | Levelwise penalty; no strong hierarchy or classical inference | Hand-checkable orthogonal shrinkage and static reference |
+| regression.linear_model / Elastic Net | L1/L2, fixed/nested alpha and ratio | Strict 0 < ratio < 1; no grouped/hierarchical selection | Hand-checkable shrinkage and independent GridSearchCV reference |
+
+All four use the same validated treatment/quadratic/interaction design matrix,
+JSON model catalog, preflight, prediction and training-domain optimizer.
+Automatic performance uses outer-fold OOF predictions, not the tuning curve.
+Full specification: [regularized linear models](regularized_linear_model_contract.md).
+
 Last updated: 2026-08-29
 
 This matrix records the current implementation and QA state for the 37 stable,

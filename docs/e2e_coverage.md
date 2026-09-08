@@ -6,6 +6,41 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The 2026-09-08 regularized-regression and compact-domain run additionally:
+
+- verifies OLS remains the default and estimator-specific drafts survive
+  OLS/Ridge/Lasso switches, without exposing backward elimination for penalties;
+- executes actual nested-CV Ridge, Lasso and Elastic Net analysis requests,
+  checks the returned estimator and saved model, and rejects accidental OLS
+  ANOVA or coefficient p-values in penalized payloads;
+- verifies CV-error and coefficient-path SVGs, English result markup without
+  untranslated Korean, 390 px overflow bounds, and manual atomic point-only
+  prediction for all three estimators;
+- refreshes and restores the saved Elastic Net result and selected estimator;
+- retains all eight domain cards, verifies default-closed selection guides and
+  absence of the old large domain notice, and checks regression/DOE/mean domain
+  layouts in English and Korean at 1440x900, 1280x800, 1024x768 and 390x844;
+  all five regression method titles are above the fold at 1440x900; and
+- continues through the existing OLS, PLS, GP, PCA, DOE, Bayesian, asset,
+  upload, report, graph and lazy-route recovery critical path.
+
+The complete final Chromium run passed with exit code 0 using backend 18625
+and frontend 18713, after the zero-equation and estimator-help refinements:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -BackendPort 18625 -FrontendPort 18713 -DiagnosticsRoot .\.tmp\e2e-diagnostics-regularized-regression-final-pass
+```
+
+Diagnostics include `regression-estimator-selector.png`,
+`regression-ols-settings.png`, `regression-ridge-settings.png`,
+`regression-lasso-result.png`, `regression-elastic-net-result.png`,
+`regularization-cv-curve.png`, `regularization-coefficient-path.png`,
+`compact-regression-domain-en-1440.png`, `compact-doe-domain-ko-1440.png`,
+`compact-mean-domain-ko-390.png` and the `compact-domain-root/mobile-*.png`
+variants. Earlier failed attempts are retained in separate diagnostics under
+`.tmp/e2e-diagnostics-regularized-regression` and its `-final` variant;
+the complete `-final-pass` run is the final passing gate.
+
 The 2026-08-29 ten-factor DOE, shared GP/PLS picker, and PCA run additionally:
 
 - resizes LHS and Bayesian Optimization drafts to 10 factors without changing
@@ -510,8 +545,10 @@ browser critical path.
 - `delete one stored analysis run`
 - `verify schema stale behavior`
 - `verify linear model fit and prediction`
+- `verify regularized regression and compact domains`
 - `verify PLS regression and point prediction`
 - `verify Gaussian Process regression and uncertainty prediction`
+- `verify Principal Components Analysis and diagnostics`
 - `verify attribute control chart`
 - `verify reporting summary variance and fixed-Y scatter`
 - `verify DOE factorial analysis`

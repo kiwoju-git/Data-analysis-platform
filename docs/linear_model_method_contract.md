@@ -162,7 +162,11 @@ The prediction calculation and pasted-input contracts are tracked in
 `docs/regression_prediction_contract.md`. General-regression optimization is
 tracked in `docs/regression_response_optimizer_contract.md`.
 
-Current method version: `0.2.0`.
+Current method version: `0.3.0`. New result schema: `6`; model manifest: `4`.
+The OLS calculation and classical inference described below are unchanged.
+Ridge, Lasso and Elastic Net share this method's design-matrix and lifecycle;
+their normative contract is [Regularized Linear Models](regularized_linear_model_contract.md).
+Existing result schemas 4/5 and manifest schemas 2/3 remain readable without rewriting.
 Current result payload `schema_version`: `5`.
 Current model manifest `manifest_schema_version`: `3`.
 

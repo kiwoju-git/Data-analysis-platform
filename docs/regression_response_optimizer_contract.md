@@ -1,5 +1,16 @@
 # General Regression Response Optimizer Contract
 
+## Contract 18 Extension (2026-09-07)
+
+OLS, Ridge, Lasso and Elastic Net reuse the existing original-scale equation
+adapter and bounded desirability search. No fitting or synthetic uncertainty
+is added. New service results/configs use schema 2 and method 0.2.0, recording
+`model_kind`, selected alpha and selected l1_ratio. The numerical search core
+is unchanged. Legacy method 0.1.0/config 1 results are read without rewriting.
+Regularized zero coefficients can yield flat profiles; they do not identify
+causal factors. Searches stay within training bounds and known category levels.
+See [regularized model contract](regularized_linear_model_contract.md).
+
 Last updated: 2026-08-04
 
 ## Scope

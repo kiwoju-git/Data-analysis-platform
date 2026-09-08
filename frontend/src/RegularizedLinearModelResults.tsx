@@ -48,7 +48,7 @@ export function RegularizedLinearModelResults({ result }: { result: RegularizedL
       </tr>)}</tbody></table></div>
       <h4>{t("reg.equation")}</h4><p className="regularized-equation">
         {result.response.display_name} = {result.coefficients.filter((c) => !c.is_zero).map((c, i) =>
-          `${i > 0 && c.estimate >= 0 ? "+ " : ""}${fmt(c.estimate)}${c.term_kind === "intercept" ? "" : ` * ${c.term}`}`).join(" ")}
+          `${i > 0 && c.estimate >= 0 ? "+ " : ""}${fmt(c.estimate)}${c.term_kind === "intercept" ? "" : ` * ${c.term}`}`).join(" ") || fmt(0)}
       </p>
     </section>
     <div className="chart-grid regularized-chart-grid">

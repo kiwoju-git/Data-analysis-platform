@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveLocalizedText } from "./i18n/translate";
 
 import {
   getAnalysisMethodGuidance,
@@ -6,6 +7,19 @@ import {
 } from "./analysisMethodGuidance";
 
 describe("analysis method card guidance", () => {
+  it("separates OLS inference from penalty-model guidance in both locales", () => {
+    const guidance = getAnalysisMethodGuidance("regression.linear_model");
+    for (const locale of ["en", "ko"] as const) {
+      const description = resolveLocalizedText(guidance.plainLanguage ?? "", locale);
+      expect(description).toContain("Ridge");
+      expect(description).toContain("Lasso");
+      expect(description).toContain("Elastic Net");
+      const inference = resolveLocalizedText(guidance.resultFocus[1], locale);
+      expect(inference).toContain(locale === "en" ? "OLS only" : "OLS 전용");
+      const options = guidance.optionChecklist.map((text) => resolveLocalizedText(text, locale)).join(" ");
+      expect(options).toContain(locale === "en" ? "nested CV" : "중첩 CV");
+    }
+  });
   it("keeps concise selection tags for every grouped hypothesis method", () => {
     const hypothesisMethodIds = [
       "hypothesis.one_sample_t",

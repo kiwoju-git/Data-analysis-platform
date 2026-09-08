@@ -152,8 +152,10 @@ error curve, coefficient path, observed/fitted and observed/OOF plots, residual
 vs fitted/order, histogram and Q-Q. They do not contain OLS coefficient SE/t/p/CI,
 ANOVA, VIF, adjusted R-squared, leverage or Cook's D presented as penalized
 inference. At most 500 diagnostic observations are displayed deterministically;
-the fit uses all usable rows. Default path display selects 20 largest absolute
-final coefficients, with full path retained for table inspection.
+the fit uses all usable rows. The interactive path defaults to one feature,
+with a selector covering every feature and a full path table. This avoids
+overlapping lines on mobile without dropping any fitted features. HTML embeds
+up to 20 feature paths and retains the full numeric path table.
 
 Lasso/EN do not enforce strong hierarchy. Each treatment-coded category level
 is penalized separately, not as a whole factor. Zero coefficients do not imply
@@ -177,7 +179,7 @@ atomic result/manifest persistence use the current regression-model catalog.
 The manual grid and dataset prediction retain current validation, atomic manual
 input policy, category checks, source freshness, and manifest SHA checks.
 Regularized prediction returns point estimates; interval fields are null with
-`prediction_uncertainty_kind=none` and a localized unavailability reason.
+`prediction_uncertainty_kind=point_only` and a localized unavailability reason.
 OLS mean-response CI and individual prediction intervals retain their meaning.
 The existing optimizer evaluates the same original-scale design vector and
 coefficients, with no refit, within training bounds/known levels. It records
@@ -186,13 +188,29 @@ profiles. No optimizer uncertainty or global guarantee is invented.
 
 ## Versions And Compatibility
 
-Planned new writes: API 18; `regression.linear_model` 0.3.0/result 6;
-regression manifest 4; dataset prediction 0.3.0 with an explicitly versioned
-point-only extension; pasted prediction and optimizer receive version/schema
-increments if their wire meanings change. Concrete schema values must be
-synchronized in runtime, startup script, OpenAPI, frontend readers and tests.
+New writes: API 18; `regression.linear_model` 0.3.0/result 6;
+regression manifest 4; `regression.predict` 0.3.0/result 3/config 4/rows 2;
+`regression.predict_pasted` 0.2.0/response 2 (owned input artifacts remain 1);
+`regression.linear_model_optimizer` 0.2.0/result 2/config 2. The unchanged
+optimizer calculation core still emits schema 1 internally; the service adds
+model-kind and selected-penalty metadata to the schema-2 stored envelope.
+Runtime, startup script, typed schemas, frontend readers and tests are synchronized.
 Metadata stays 19: existing JSON artifacts/ownership cover this extension.
 PCA/PLS/GP/DOE/Bayesian calculations, IDs, routes and checksums are untouched.
+
+Schema-4 model metadata is validated as a Pydantic discriminated union on write
+and read. Read validation does not serialize or rewrite the stored JSON. The
+regularized prediction basis has no covariance matrix or residual degrees of
+freedom. Legacy manifest 2/3 and dataset-prediction 0.2.0/result 2/config 3/rows 2
+use the existing validation path.
+
+Input scan is bounded at 100,000 rows, with 5-10,000 complete usable rows and
+at most 200 derived features. No row is silently sampled for fitting. The
+existing synchronous FastAPI route dispatches regularized CPU work to a
+spawned, single-capacity process with a parent deadline and cleanup. It remains
+catalog `inline`, not a fictitious queued job. Results travel as bounded JSON;
+no sklearn object is serialized. Hard limits are 10,000 solver fits and 300
+seconds, with a default 120-second budget plus 20-second process startup allowance.
 
 ## Verification And Deferred Scope
 

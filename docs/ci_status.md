@@ -1,8 +1,36 @@
 # CI Status
 
-Last updated: 2026-08-29
+Last updated: 2026-09-08
 
 ## Local Validation
+
+- The regularized-regression and compact-domain work is based on main
+  `019c73f66fc177cf5de303dedd920a45048739b1`. API contract is 18 and metadata
+  schema remains 19. `regression.linear_model` is 0.3.0/result 6 with JSON
+  manifest 4. OLS arithmetic, legacy manifest 2/3 readers and the existing
+  PCA/PLS/GP/DOE/Bayesian calculations are retained without artifact rewrites.
+- Final Node 22.23.2 `scripts/test.ps1` passed backend pytest 1076/1076 in
+  1702.42 seconds and frontend Vitest 298/298 across 40 files in 26.88 seconds.
+  The final combined `scripts/check.ps1` completed every gate: 18 tutorial
+  blocks, Ruff lint/format over 234 files, mypy over 144 source modules, backend
+  pytest 1076/1076 in 1515.96 seconds, localization for 2976 source strings and
+  3579 keys, frontend lint/typecheck, Vitest 300/300 across 40 files in 21.83
+  seconds, and production build in 3.30 seconds. Two Fast Refresh lint warnings
+  and Vite's existing chunk-size/plugin-timing warnings are non-failing.
+  Complete stdout/stderr logs were recovered after a conversation interruption;
+  the terminal session's final exit-code item was not retained.
+- Final Chromium critical path passed with exit code 0 and backend port
+  18625/frontend port 18713. Diagnostics are under
+  `.tmp/e2e-diagnostics-regularized-regression-final-pass`. It runs
+  real nested-CV Ridge/Lasso/Elastic Net fits, checks request/result estimator
+  identity, saves models, performs atomic manual point prediction, restores
+  the saved Elastic Net analysis, and verifies en/ko compact domains at four
+  viewport sizes. The same run retains OLS, PLS, GP, PCA, factorial, RSM, LHS,
+  Bayesian, upload, graph, report, asset and recovery coverage.
+- Independent static reference tests, legacy OLS compatibility, manifest
+  tampering, localized HTML reports and response optimization are covered by
+  backend tests. See [the implementation record](regularized_regression_implementation.md)
+  for exact commands, intermediate failures, benchmarks and known limits.
 
 - The ten-factor DOE and PCA work is based on main
   `6c17b0062f2aba8d764070dcad2387e933352eb3`. It advances API contract 16 to

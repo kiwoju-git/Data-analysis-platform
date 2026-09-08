@@ -1,5 +1,20 @@
 # Regression Prediction Contract
 
+## Contract 18 Extension (2026-09-07)
+
+The source model may now be OLS, Ridge, Lasso or Elastic Net under the existing
+`regression.linear_model` identity. The OLS-only wording in earlier sections
+describes the legacy inference branch. Regularized models use the same design
+vector, category preflight, atomic manual input policy, source freshness checks,
+training-range warnings and SHA-256 verification, but return point predictions.
+Both interval fields are null and `prediction_uncertainty_kind=point_only`
+has an explicit `interval_unavailability_reason`. OLS intervals are unchanged.
+
+New dataset predictions: method 0.3.0, result 3, config 4, rows artifact 2.
+New pasted/manual predictions: method 0.2.0, response 2, owned artifacts 1.
+Legacy dataset prediction 0.2.0/result 2/config 3/rows 2 remains readable.
+See [regularized model contract](regularized_linear_model_contract.md).
+
 Last updated: 2026-08-04
 
 ## Scope

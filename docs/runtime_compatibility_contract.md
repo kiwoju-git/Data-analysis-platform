@@ -37,7 +37,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `16`);
+- `api_contract_version` (currently `18`);
 - the actual metadata schema constant (currently `19`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
@@ -52,7 +52,13 @@ The response contains no workspace path, filename, or raw data. Existing
 
 ## Frontend Gate
 
-The frontend expects API contract `17`, schema 19 or later, and every required
+Contract 18 adds OLS/Ridge/Lasso/Elastic Net options under the existing
+`regression.linear_model`, discriminated schema-4 JSON manifests, point-only
+regularized prediction and model-kind optimizer metadata. Metadata schema 19
+and existing artifact ownership remain sufficient; no migration or stored
+checksum rewrite is performed. Exact frontend/backend matching is required.
+
+The frontend expects API contract `18`, schema 19 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

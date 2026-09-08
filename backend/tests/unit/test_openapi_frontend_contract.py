@@ -3601,7 +3601,7 @@ def test_e2e_coverage_doc_tracks_current_smoke_step_markers() -> None:
     )
 
     code_step_markers = re.findall(
-        r'diagnostics\.step\("([^"]+)"\)',
+        r'diagnostics\.step\(\s*"([^"]+)"\s*,?\s*\)',
         critical_path_text,
     )
     section_match = re.search(

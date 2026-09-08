@@ -26,6 +26,7 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 from playwright.sync_api import expect, sync_playwright
+from regularized_regression import verify_regularized_regression
 
 
 SAMPLE_DATA = """Group\tValue
@@ -719,6 +720,10 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_schema_stale_behavior(page)
             diagnostics.step("verify linear model fit and prediction")
             verify_linear_model_fit_and_prediction(page, diagnostics)
+            diagnostics.step("verify regularized regression and compact domains")
+            verify_regularized_regression(
+                page, diagnostics, open_primary_navigation, paste_plain_text, select_method_card
+            )
             diagnostics.step("verify PLS regression and point prediction")
             verify_pls_regression_and_prediction(page, diagnostics)
             diagnostics.step(
@@ -1081,16 +1086,16 @@ def select_method_card(
 def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> None:
     family_grid = page.locator(".analysis-domain-family-grid")
     families = family_grid.locator(".analysis-domain-family-card")
-    expect(families).to_have_count(5)
+    expect(families).to_have_count(4)
     expect(family_grid.get_by_role("button")).to_have_count(10)
     for family_label in (
         "t-검정",
         "동등성 검정",
         "ANOVA",
         "비모수 비교",
-        "비교성 평가",
     ):
         expect(family_grid).to_contain_text(family_label)
+    expect(page.locator(".analysis-domain-planned-notice")).to_contain_text("Comparability")
     assert_children_do_not_overlap(family_grid, families, "hypothesis families")
     t_card = families.filter(has=page.get_by_role("heading", name="t-검정"))
     anova_card = families.filter(has=page.get_by_role("heading", name="ANOVA"))
@@ -1125,6 +1130,14 @@ def open_primary_navigation(page: Page, label: str) -> None:
         control.click()
     active_method = group.locator('.sidebar-method-button[aria-current="page"]')
     if active_method.count() > 0:
+        for _ in range(3):
+            if active_method.first.is_visible():
+                break
+            collapsed_ancestors = group.locator('button.is-active[aria-expanded="false"]')
+            visible_ancestors = [button for button in collapsed_ancestors.all() if button.is_visible()]
+            if not visible_ancestors:
+                break
+            visible_ancestors[0].click()
         active_method.first.click()
         return
     active_leaf = group.locator('.sidebar-submenu-button[aria-current="page"]')
@@ -3460,15 +3473,23 @@ def verify_dataset_cell_correction(page: Page) -> None:
     dialog.locator(".primary-button").click()
 
     expect(page.locator("#version-title")).to_contain_text("v2", timeout=20_000)
+    expect(page.locator(".canonical-preview-section .success-box")).to_contain_text("v2", timeout=20_000)
     child_version_id = selector.input_value()
     if child_version_id == parent_version_id:
         raise AssertionError("cell correction did not activate a child dataset version")
 
-    page.locator(".canonical-preview-grid tbody tr").first.locator("td").nth(1).click()
+    corrected_cell = page.locator(".canonical-preview-grid tbody tr").first.locator("td").nth(1)
+    expect(corrected_cell).to_contain_text("18", timeout=20_000)
+    page.wait_for_load_state("networkidle")
+    selector.focus()
+    corrected_cell.click()
     expect(page.locator(".cell-inspector-value")).to_contain_text("18")
 
     selector.select_option(parent_version_id)
     expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
+    expect(page.locator(".canonical-preview-grid tbody tr").first.locator("td").nth(1)).to_contain_text("10", timeout=20_000)
+    page.wait_for_load_state("networkidle")
+    selector.focus()
     page.locator(".canonical-preview-grid tbody tr").first.locator("td").nth(1).click()
     expect(page.locator(".cell-inspector-value")).to_contain_text("10")
 

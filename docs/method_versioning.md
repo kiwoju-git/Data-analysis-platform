@@ -1,7 +1,23 @@
 # Method Versioning Policy
 
+## Regularized Regression New Writes (2026-09-07)
+
+API contract 18 introduces estimator-discriminated requests under the existing
+`regression.linear_model` method, now 0.3.0/result 6/manifest 4. OLS numerical
+semantics remain unchanged. Ridge/Lasso/Elastic Net add fold-local feature
+standardization, nested tuning and point-only prediction, so this is a minor
+method change rather than three new sidebar methods.
+
+`regression.predict` is 0.3.0/result 3/config 4/rows 2;
+`regression.predict_pasted` is 0.2.0/response 2/owned artifacts 1;
+`regression.linear_model_optimizer` is 0.2.0/result 2/config 2. Legacy OLS
+result 4/5, manifest 2/3, dataset prediction 0.2.0 and optimizer 0.1.0 remain
+readable without reserialization. Metadata stays 19. Historical sections below
+record earlier releases; this section governs current linear-model new writes.
+PLS, GP, PCA, DOE and Bayesian versions/calculations are not changed by this work.
+
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
-receive a method-version bump. `regression.predict` is `0.2.0`,
+receive a method-version bump. `regression.predict` is `0.3.0`,
 `doe.factorial_design` is `0.7.0`, `doe.response_optimizer` is `0.4.0`, and
 `doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.6.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
