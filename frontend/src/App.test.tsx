@@ -5259,7 +5259,7 @@ describe("App", () => {
     expect(html).toContain("Statistical Twin");
     expect(html).not.toContain("DataLab Studio");
     expect(html).toContain('aria-label="주요 메뉴"');
-    expect(html.match(/class="sidebar-group(?: sidebar-group-active)?"/g)).toHaveLength(7);
+    expect(html.match(/class="sidebar-group(?: sidebar-group-active)?(?: is-collapsed)?"/g)).toHaveLength(7);
     expect(html).toContain('aria-current="page"');
     expect(html).not.toContain("로컬 분석 작업대");
     expect(html).toContain("데이터셋");

@@ -27,6 +27,7 @@ from playwright.sync_api import (
 )
 from playwright.sync_api import expect, sync_playwright
 from regularized_regression import verify_regularized_regression
+from refined_ui import verify_refined_ui
 
 
 SAMPLE_DATA = """Group\tValue
@@ -493,6 +494,9 @@ def verify_localization_shell(
             "Help",
         ):
             expect(page.get_by_text(label, exact=True).first).to_be_visible()
+        analysis_control = page.locator(".sidebar-group-control").filter(has_text=re.compile("^Analysis$"))
+        expect(analysis_control).to_have_attribute("aria-expanded", "false")
+        analysis_control.click()
         for domain_label in (
             "Basic Statistics & Exploration",
             "Mean Comparison & Equivalence",
@@ -504,6 +508,7 @@ def verify_localization_shell(
             "Measurement Systems & Variability",
         ):
             expect(page.get_by_text(domain_label, exact=True).first).to_be_visible()
+        analysis_control.click()
 
         visible_hangul = page.evaluate(
             """() => {
@@ -783,6 +788,8 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_lazy_panel_direct_routes(page, frontend_base_url)
             diagnostics.step("verify lazy panel error boundary")
             verify_lazy_panel_error_boundary(context, frontend_base_url)
+            diagnostics.step("verify refined UI, compact navigation and preserved drafts")
+            verify_refined_ui(browser, frontend_base_url, diagnostics.root / "refined-ui")
         except PlaywrightTimeoutError as exc:
             message = (
                 f"Playwright wait timed out during '{diagnostics.current_step_label}': "
@@ -1084,6 +1091,9 @@ def select_method_card(
 
 
 def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> None:
+    navigation = page.locator(".analysis-method-navigation")
+    if navigation.count() and navigation.get_attribute("open") is None:
+        navigation.locator("summary").first.click()
     family_grid = page.locator(".analysis-domain-family-grid")
     families = family_grid.locator(".analysis-domain-family-card")
     expect(families).to_have_count(4)
@@ -1114,6 +1124,8 @@ def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> 
         family_grid,
         "hypothesis-family-cards.png",
     )
+    if navigation.count():
+        navigation.locator("summary").first.click()
 
 
 def open_primary_navigation(page: Page, label: str) -> None:
@@ -1165,11 +1177,11 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
         has=page.locator(".sidebar-group-control").filter(has_text=re.compile("^분석$"))
     )
     control = group.locator(".sidebar-group-control")
-    expect(control).to_have_attribute("aria-expanded", "true")
     page.locator(".brand-home-link").click()
     page.locator(".home-quick-card").filter(
         has=page.get_by_text("분석", exact=True)
     ).click()
+    expect(control).to_have_attribute("aria-expanded", "true")
     domain_grid = page.locator(".analysis-domain-grid")
     expect(domain_grid.locator(".analysis-domain-card")).to_have_count(8)
     assert_children_do_not_overlap(

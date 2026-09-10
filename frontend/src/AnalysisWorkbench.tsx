@@ -2,6 +2,7 @@ import { startTransition, useRef, useState, type ReactNode } from "react";
 
 import { AnalysisPanelBoundary } from "./AnalysisPanelBoundary";
 import { AnalysisDomainLanding } from "./AnalysisDomainLanding";
+import { AnalysisMethodNavigation } from "./AnalysisMethodNavigation";
 import { AnalysisResultExportPanel } from "./AnalysisResultExportPanel";
 import { CompactAnalysisHistoryPanel } from "./CompactAnalysisHistoryPanel";
 import { MethodHelpDrawer } from "./MethodHelpDrawer";
@@ -223,21 +224,25 @@ export function AnalysisWorkbench({
 
   return (
     <>
-      <div className="analysis-help-links" aria-label="분석 선택 도움말">
-        <button className="text-button" onClick={() => onOpenHelp("purpose")} type="button">
-          분석 선택 도움말
-        </button>
-        <button className="text-button" onClick={() => onOpenHelp("roles")} type="button">
-          역할 사전
-        </button>
-      </div>
-      <AnalysisDomainLanding
-        catalog={catalog}
-        domain={resolvedDomain}
+      <AnalysisMethodNavigation
         selectedMethodId={showSelectedMethod ? selectedMethod?.method_id ?? null : null}
-        onOpenDomain={onOpenDomain}
-        onSelectMethod={(method) => selectMethod(method.module_id, method.method_id)}
-      />
+      >
+        <div className="analysis-help-links" aria-label="분석 선택 도움말">
+          <button className="text-button" onClick={() => onOpenHelp("purpose")} type="button">
+            분석 선택 도움말
+          </button>
+          <button className="text-button" onClick={() => onOpenHelp("roles")} type="button">
+            역할 사전
+          </button>
+        </div>
+        <AnalysisDomainLanding
+          catalog={catalog}
+          domain={resolvedDomain}
+          selectedMethodId={showSelectedMethod ? selectedMethod?.method_id ?? null : null}
+          onOpenDomain={onOpenDomain}
+          onSelectMethod={(method) => selectMethod(method.module_id, method.method_id)}
+        />
+      </AnalysisMethodNavigation>
       {showSelectedMethod && selectedMethod !== null ? (
         <section className="analysis-workbench" aria-labelledby="workbench-title">
           <div className="panel-heading workbench-heading">

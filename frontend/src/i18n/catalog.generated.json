@@ -1,6 +1,7 @@
 {
   "version": 1,
   "en": {
+    "uiRefinement.changeAnalysis": "Change analysis",
     "reg.guidance.olsOptions": "OLS only: confidence level and backward elimination",
     "reg.guidance.penaltyOptions": "Ridge/Lasso/Elastic Net: positive alpha, fold-local scaling and nested CV",
     "reg.guidance.sampleBudget": "Usable rows, CV fold sizes and solver-fit budget",
@@ -3582,6 +3583,7 @@
     "ui.1cae1dee80ac2a2f": "Screening Design requires between 7 and 10 factors."
   },
   "ko": {
+    "uiRefinement.changeAnalysis": "분석 변경",
     "reg.guidance.olsOptions": "OLS 전용: 신뢰수준과 후진 제거",
     "reg.guidance.penaltyOptions": "Ridge/Lasso/Elastic Net: 양의 alpha, fold별 표준화와 중첩 CV",
     "reg.guidance.sampleBudget": "사용 행 수, CV fold 크기와 solver 적합 예산",

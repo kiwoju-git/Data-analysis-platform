@@ -1,5 +1,15 @@
 # Statistical Twin 분석 도메인 메뉴 및 UI 상세 명세
 
+## 2026-09-11 Compact Workbench Navigation
+
+Root/domain landings keep their methods, compact descriptions and guidance tags.
+Once a method is selected, its repeated selection catalog is initially closed
+under **Change analysis / 분석 변경**. The selected method's help, input/design
+tags, filters, form, results and lifecycle actions stay outside that disclosure.
+Inactive top-level sidebar groups initially collapse; active routes open their
+existing chain. Manual expansion remains available. No domain mapping, method,
+route, data, calculation or artifact format changes accompany this UI refinement.
+
 ## 2026-09-07 Compact Selection And Regression Extension
 
 This update supersedes the earlier always-expanded domain guidance presentation,

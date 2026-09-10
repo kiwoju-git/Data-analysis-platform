@@ -70,7 +70,7 @@ export function SidebarNavigation({
     <nav className="sidebar-navigation" aria-label="주요 메뉴">
       <ul className="sidebar-groups">
         {groups.map((group) => {
-          const expanded = expandedGroups[group.id] ?? true;
+          const expanded = expandedGroups[group.id] ?? group.active;
           const submenuId = `sidebar-submenu-${group.id}`;
           if (group.direct) {
             return (
@@ -95,7 +95,7 @@ export function SidebarNavigation({
                 aria-controls={submenuId}
                 aria-expanded={expanded}
                 className="sidebar-group-control"
-                onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !(current[group.id] ?? true) }))}
+                onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !(current[group.id] ?? group.active) }))}
                 type="button"
               >
                 <span>{group.label}</span>

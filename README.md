@@ -10,6 +10,12 @@ See [the statistical contract](docs/regularized_linear_model_contract.md).
 This release requires matching frontend/backend API contract 18 and metadata
 schema 19; existing saved artifacts are not rewritten.
 
+The refined UI uses Graph Builder's selection blue with compact, neutral
+navigation. Inactive sidebar groups start collapsed; an open analysis keeps its
+method catalog under **Change analysis / 분석 변경**, without closing the current
+form or results. Short guidance and statistical warnings are retained. See the
+[UI design and verification record](docs/refined_ui_design.md).
+
 Statistical Twin is a local-first statistical analysis application for Windows. It provides dataset preparation, statistical analysis, interactive charts, reports, asset management, regression, quality tools, DOE, and Bayesian optimization. The interface supports English and Korean; English is the default.
 
 ## Requirements

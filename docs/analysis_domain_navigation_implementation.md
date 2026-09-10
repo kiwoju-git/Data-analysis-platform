@@ -1,5 +1,20 @@
 # Analysis Domain Navigation Implementation
 
+## Refined Workbench Update (2026-09-11)
+
+The eight-domain landing remains visible until a method is chosen. An open
+method now puts the repeated catalog in the initially closed native **Change
+analysis** disclosure. Only navigation is inside this disclosure; the input,
+filter, result, history and export panels remain mounted outside it. Locale and
+disclosure changes retain current drafts and dataset selection. Method help and
+short design tags remain visible. Sidebar groups initially open only for the
+active page; explicit user expansion is retained and a newly active group opens
+automatically. Mobile drawer behavior and all routes are unchanged.
+
+Selection color comes from Graph Builder (`#225AA7`). Navigation surfaces are
+neutral, shared analytical sections are unframed and compact, and active controls
+retain non-color state cues. See [design and validation record](refined_ui_design.md).
+
 ## Compact Selection Update (2026-09-07)
 
 Eight domains, primary method placement, contextual methods, direct URLs,

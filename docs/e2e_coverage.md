@@ -6,6 +6,25 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The refined UI suite (`tests/e2e/refined_ui.py`) is included at the end of the
+Chromium critical path. It visits home/datasets/analysis/graphs/reports/manage/help
+and representative flat/family domains in both locales, checks 1440/1280/1024/390
+px layouts, selected Graph Builder blue, native keyboard disclosures, preserved
+alpha/dataset/route across locale switches, two-row method headers, mobile drawer
+Escape/focus return and absence of page-level overflow. Catalog screenshot tests
+explicitly open **Change analysis** before measuring cards. Sidebar tests account
+for initially collapsed inactive groups. Screenshots and bounding-box measurements
+are stored under the chosen diagnostics root's `refined-ui/` directory.
+
+Read-only recheck against an already running instance (requires a registered
+dataset, does not fit models or modify stored data):
+
+```powershell
+.\.venv\Scripts\python.exe .\tests\e2e\refined_ui.py --url http://127.0.0.1:8600 --diagnostics .\.tmp\refined-ui\verified
+```
+
+See [the UI record](refined_ui_design.md) for this change's exact final checks.
+
 The 2026-09-08 regularized-regression and compact-domain run additionally:
 
 - verifies OLS remains the default and estimator-specific drafts survive
@@ -578,6 +597,7 @@ browser critical path.
 - `verify grouped graphs and hypothesis extensions`
 - `verify lazy panel direct routes`
 - `verify lazy panel error boundary`
+- `verify refined UI, compact navigation and preserved drafts`
 - `verify graph builder page heading`
 - `verify graph builder result heading`
 - `verify graph builder provenance`

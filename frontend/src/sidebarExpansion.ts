@@ -5,7 +5,7 @@ export type SidebarExpansionState = Record<string, boolean>;
 export function createSidebarExpansionState(
   groups: SidebarNavigationGroup[],
 ): SidebarExpansionState {
-  return Object.fromEntries(groups.map((group) => [group.id, true]));
+  return Object.fromEntries(groups.map((group) => [group.id, group.active]));
 }
 
 export function reconcileSidebarExpansionState(
@@ -17,7 +17,7 @@ export function reconcileSidebarExpansionState(
   const next = { ...current };
   for (const group of groups) {
     if (!(group.id in next)) {
-      next[group.id] = true;
+      next[group.id] = group.active;
       changed = true;
     }
   }

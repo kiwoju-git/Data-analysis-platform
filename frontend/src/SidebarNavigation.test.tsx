@@ -9,23 +9,24 @@ import { SidebarNavigation } from "./SidebarNavigation";
 import type { SidebarNavigationGroup } from "./sidebarNavigationModel";
 
 describe("SidebarNavigation", () => {
-  it("renders every group expanded with stable accessible submenu controls", () => {
+  it("expands the active group and keeps inactive submenus hidden", () => {
     const groups = navigationGroups("analysis");
     const html = renderToString(<SidebarNavigation groups={groups} />);
 
-    expect((html.match(/aria-expanded="true"/g) ?? [])).toHaveLength(3);
+    expect((html.match(/aria-expanded="true"/g) ?? [])).toHaveLength(1);
+    expect((html.match(/hidden=""/g) ?? [])).toHaveLength(2);
     expect(html).toContain('aria-controls="sidebar-submenu-analysis"');
     expect(html).toContain('id="sidebar-submenu-analysis"');
     expect(html).toContain('aria-current="page"');
     expect(html).not.toContain("파싱·스키마");
   });
 
-  it("initializes new groups as expanded", () => {
+  it("initializes only the active group as expanded", () => {
     const groups = navigationGroups("dataset");
     expect(createSidebarExpansionState(groups)).toEqual({
-      home: true,
+      home: false,
       dataset: true,
-      analysis: true,
+      analysis: false,
     });
   });
 

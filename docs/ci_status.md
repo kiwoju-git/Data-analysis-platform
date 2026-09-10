@@ -1,8 +1,25 @@
 # CI Status
 
-Last updated: 2026-09-08
+Last updated: 2026-09-11
 
 ## Local Validation
+
+- Refined analysis UI is based on main `d6251458e6aa63763d7160028dc582f21d24b46c`.
+  API 18, metadata 19, statistics, stored artifacts and dependencies are unchanged.
+  Focused frontend validation passed 303 tests across 41 files, strict typecheck,
+  lint (the same two existing Fast Refresh warnings), production build and
+  localization (2,976 source strings / 3,580 keys). Chromium's complete critical
+  path passed with backend 18631/frontend 18721; diagnostics are under
+  `.tmp/e2e-diagnostics-refined-ui-pass3/`. The final independent UI recheck also
+  passed KOR/ENG, four viewports, keyboard/disclosure focus and unchanged drafts;
+  58 screenshots are under `.tmp/refined-ui/final/`. See the
+  [design and verification record](refined_ui_design.md) for full-project results,
+  exact commands, earlier corrected failures and host limitations.
+  The full backend run completed 1,075 passes and one E2E-documentation marker
+  failure in 1,401.28 seconds. After adding the missing marker, the related
+  contract file passed 201/201 and `--last-failed` passed the sole failed case.
+  The full suite was not rerun for that doc-only fix; frontend checks were run
+  separately after `check.ps1` stopped, with final Vitest 303/303 and build passing.
 
 - The regularized-regression and compact-domain work is based on main
   `019c73f66fc177cf5de303dedd920a45048739b1`. API contract is 18 and metadata
