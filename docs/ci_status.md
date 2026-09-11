@@ -4,12 +4,25 @@ Last updated: 2026-09-12
 
 ## Local Validation
 
-- Factorial final-model workflow is under final validation on
+- Factorial final-model workflow passed local release validation on
   `feat/factorial-model-selection-prediction-plots` from `7e9a814`.
-  The expanded Factorial Chromium flow passed, including immutable revision
-  restore, predictions, managed HTML, English and mobile layouts. Full project
-  and release gates are still pending. See `factorial_model_workflow_validation.md`
-  for exact counts, corrected failures and the eventual verified release SHA.
+  API 19 / metadata 20 and the PowerShell/frontend minimum schema boundary agree.
+  Final `check.ps1` returned process exit 0: backend 1,137 passed in 1,747.34s,
+  frontend 328 tests / 43 files in 19.95s, Ruff lint/format over 249 files, mypy
+  over 152 source files, localization (2,969 sources / 3,734 keys), ESLint,
+  strict TypeScript and production build (3.29s) passed. Final `test.ps1` also
+  returned exit 0: backend 1,137 passed in 1,774.06s and frontend 328 in 24.72s.
+  Focused backend validation passed 316 tests in 220.13s. The latest complete
+  Chromium E2E returned exit 0, covering immutable revisions, model selection,
+  predictions, managed HTML, legacy restore, English/mobile layouts and all
+  prior critical paths. Diagnostics: `.tmp/e2e-diagnostics-factorial-model-workflow-release`.
+  The actual host is Windows 10 Home 19045 / PowerShell 5.1 / Python 3.10.11 /
+  Node 22.23.2; a separate Windows 11 client run was not performed here.
+  Two existing Fast Refresh warnings and Vite chunk/plugin-timing warnings
+  remain non-failing. Earlier log-redirection and fixture failures are documented,
+  not counted as passes. See `factorial_model_workflow_validation.md` for exact
+  commands, source inventory and limitations. Remote Actions status is checked
+  separately after publication and reported with the immutable main SHA.
 
 - Refined analysis UI is based on main `d6251458e6aa63763d7160028dc582f21d24b46c`.
   API 18, metadata 19, statistics, stored artifacts and dependencies are unchanged.

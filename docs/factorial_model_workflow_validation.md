@@ -1,7 +1,9 @@
 # Factorial Final-Model Workflow Validation
 
-Status: implementation complete; full-suite and release gates are still running.
-Do not interpret this working record as main-push approval.
+Status: implementation and local release gates passed, including explicit
+process exit code 0 for `test.ps1`, `check.ps1` and the full Chromium E2E.
+The immutable publication SHA and observed remote CI state are recorded in the
+delivery report rather than as a self-referencing SHA inside this commit.
 
 ## Acceptance and Risk Gates
 
@@ -84,19 +86,21 @@ one numerical thread, 15 pair plots, 100 assets per analysis and 16 MiB per asse
     Production changes are scoped to DOE workflow, its asset lifecycle, contracts,
     localization and tests. No regression/PLS/GP/Bayesian computation is replaced.
 30. Exact validation commands are listed below.
-31. Backend: baseline 1,076 passed. Focused gate: 314 passed in 207.89s.
-    Full runs passed 1,135 tests in 1,756.17s and 1,756.92s. A final startup
-    boundary correction adds two cases; clean 1,137-test reruns remain pending.
-32. Frontend: 43 files / 328 tests passed in both full scripts (23.00s / 30.98s).
-33. Strict TypeScript, mypy, Ruff, lint and production build passed. The outer
-    PowerShell log-redirection invocation reported exit 1 for a Vite warning;
-    an unambiguous process-exit verification remains required before release.
+31. Backend: baseline 1,076 passed. Latest focused gate: 316 passed in 220.13s.
+    Final `check.ps1`: 1,137 passed in 1,747.34s. Final `test.ps1`: 1,137 passed
+    in 1,774.06s. Both complete processes returned exit code 0.
+32. Frontend: final 43 files / 328 tests passed in both full scripts
+    (`check.ps1`: 19.95s; `test.ps1`: 24.72s).
+33. Strict TypeScript, mypy (152 source files), Ruff lint/format (249 files),
+    ESLint and production build passed. Build: 3.29s. Two pre-existing Fast
+    Refresh warnings and Vite chunk/plugin-timing warnings remain non-failing.
 34. Localization passed: 2,969 source strings / 3,734 keys.
 35. Expanded Factorial Chromium workflow and post-rebase full critical path passed.
+    The subsequent startup-boundary release run also passed with process exit 0.
 36. Screenshots and bounding checks are described below.
 37. Minitab binary/reference execution was not run; independent statsmodels static
     reference is used instead. Fetch/rebase found origin/main unchanged at the
-    base SHA; final main publication remains pending full-suite completion.
+    base SHA before the final complete checks; no rebase conflict was present.
     The actual local host reports Windows 10 Home build 19045, not Windows 11.
     A separate Windows 11 client execution was not available on this machine;
     Windows-compatible PowerShell/Python code and Windows CI remain required.
@@ -110,13 +114,15 @@ one numerical thread, 15 pair plots, 100 assets per analysis and 16 MiB per asse
     `69c7ddc` (workflow coverage/docs), `8cabcbb` (legacy migration assertions).
     `6cd9f39` aligns the startup helper's metadata minimum with the frontend and
     adds schema 19 rejection / schema 20 acceptance tests (10 startup tests passed).
-    Final release SHA will be reported after all gates and main publication.
+    `8e86877` records the validation follow-up. The final validation/documentation
+    commit includes only this record, CI notes and a test-string formatting fix.
 40. Feature branch: `feat/factorial-model-selection-prediction-plots`.
-41. Final local main SHA: pending.
-42. Final origin/main SHA: pending.
-43. Main push: pending; no force push permitted.
-44. Commit URL: pending release.
-45. GitHub CI: pending release.
+41. Final local main SHA: supplied in the delivery report after publication.
+42. Final origin/main SHA: independently fetched and compared in that report.
+43. Publication policy: fast-forward main only after the gates above; no force.
+44. Immutable GitHub commit URL: supplied with the final publication SHA.
+45. GitHub CI: observed separately after publication; local checks are not
+    represented as a completed remote Actions run.
 
 ## Commands and Evidence
 
@@ -136,10 +142,10 @@ npm --prefix frontend run build
 node scripts/check_frontend_localization.mjs
 powershell -ExecutionPolicy Bypass -File scripts/test.ps1
 powershell -ExecutionPolicy Bypass -File scripts/check.ps1
-powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 18011 -FrontendPort 18599 -DiagnosticsRoot .tmp/e2e-diagnostics-factorial-model-workflow-final
+powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 18011 -FrontendPort 18599 -DiagnosticsRoot .tmp/e2e-diagnostics-factorial-model-workflow-release
 ```
 
-The combined focused command above completed after fetch/rebase: 314 passed.
+The combined focused command above completed after fetch/rebase: 316 passed.
 During implementation, subsets of these files were also run repeatedly.
 No Python localization checker exists here;
 the repository's actual checker is JavaScript. No DOE-specific retention test
@@ -166,15 +172,37 @@ frontend requires 20. It now shares that boundary explicitly, with executable
 PowerShell tests. The previous complete test stages passed, but the wrapper's
 exit status is not claimed successful. A subsequent rerun was deliberately
 stopped before applying this correction and is not counted as a pass.
-Final process logging separates stdout/stderr using `Start-Process -WindowStyle
+Final successful process logging separates stdout/stderr using `Start-Process -WindowStyle
 Hidden -RedirectStandardOutput ... -RedirectStandardError ... -PassThru -Wait`,
 then checks the returned process `ExitCode`; Vite warnings remain in stderr.
+The new startup-test fixture also needed a line-length/line-ending-only Ruff
+correction. Its PowerShell command and assertions are unchanged by that formatting.
+
+Exact final check-process invocation (the test and E2E invocations use the same
+process pattern and the script arguments listed above):
+
+```powershell
+$process = Start-Process powershell.exe -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1' -WorkingDirectory $PWD -WindowStyle Hidden -RedirectStandardOutput "$PWD\.tmp\factorial-workflow-release-check-final.stdout.log" -RedirectStandardError "$PWD\.tmp\factorial-workflow-release-check-final.stderr.log" -PassThru -Wait
+Write-Output "check.ps1 process exit code: $($process.ExitCode)"
+exit $process.ExitCode
+```
+
+Release rerun evidence uses `.tmp/factorial-workflow-release-focused.log`,
+`.tmp/factorial-workflow-release-test.{stdout,stderr}.log`,
+`.tmp/factorial-workflow-release-check-final.{stdout,stderr}.log` and
+`.tmp/factorial-workflow-release-e2e.{stdout,stderr}.log`.
+The local 8000/8600 preview was restarted with API 19 / metadata 20 and matching
+source identity. Chromium confirmed a rendered DOE landing without runtime
+mismatch or page errors. A SQLite API backup was made before migration;
+all pre-existing table contents compared equal afterwards. Workspace-specific
+backup details and user data are deliberately excluded from Git.
 
 ## Screenshot Diagnostics
 
 Expanded focused run: `.tmp/e2e-diagnostics-factorial-model-workflow-focused/`.
 Full run: `.tmp/e2e-diagnostics-factorial-model-workflow/`.
 Post-rebase full run: `.tmp/e2e-diagnostics-factorial-model-workflow-final/`.
+Startup-boundary release run: `.tmp/e2e-diagnostics-factorial-model-workflow-release/`.
 These local synthetic diagnostics are excluded from Git.
 
 - factorial-backward-settings.png
