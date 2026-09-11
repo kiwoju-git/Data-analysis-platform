@@ -1,5 +1,16 @@
 # Method Versioning Policy
 
+## Factorial Model Workflow New Writes (2026-09-12)
+
+API contract 19 adds explicit hierarchical DOE model selection and a final-model
+prediction basis. `doe.factorial_design` is 0.8.0, analysis config 3, result 2,
+envelope 2. General Full is 0.3.0, analysis config 2, result 2, envelope 1.
+Design generation schemas and response revision schema 1 are unchanged.
+Readers preserve earlier result/config bytes and validate their original SHA.
+The DOE-only term-block engine does not change OLS/regularized regression.
+See `factorial_model_selection_contract.md` and
+`factorial_prediction_and_plots_contract.md` for the release contract.
+
 ## Regularized Regression New Writes (2026-09-07)
 
 API contract 18 introduces estimator-discriminated requests under the existing
@@ -18,12 +29,12 @@ PLS, GP, PCA, DOE and Bayesian versions/calculations are not changed by this wor
 
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.3.0`,
-`doe.factorial_design` is `0.7.0`, `doe.response_optimizer` is `0.4.0`, and
+`doe.factorial_design` is `0.8.0`, `doe.response_optimizer` is `0.4.0`, and
 `doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.6.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
 `eda.descriptive`, `eda.graphical_summary`, and `eda.equal_variances` are
 `0.2.0`. `quality.run_chart` and `hypothesis.mann_whitney` are `0.2.0`;
-`doe.latin_hypercube` is `0.3.0`, `doe.general_factorial_design` is `0.2.0`,
+`doe.latin_hypercube` is `0.3.0`, `doe.general_factorial_design` is `0.3.0`,
 and new `eda.principal_components` is `0.1.0`; other stable IDs remain on their
 recorded versions.
 

@@ -1,5 +1,17 @@
 # Local Workspace Asset Management Contract
 
+## Factorial Analysis Ownership (Metadata 20)
+
+The catalog includes `doe_analysis`, `doe_prediction`, `doe_analysis_report`.
+Analysis links preserve design and analysis IDs in the canonical Factorial
+workspace, including General Full. Source-bound predictions and locale-specific
+HTML reports are immutable owned assets, separately downloadable/deletable.
+Analysis/design deletion preflights count both kinds and bind a deletion
+manifest. Creating an asset after preflight invalidates the plan; transactional
+cascade deletes dependents without deleting the source response revision alone.
+No source bytes or hashes are rewritten. See `storage.md` for the dedicated
+bounded BLOB relation and `factorial_prediction_and_plots_contract.md` for APIs.
+
 ## Regularized Regression Assets (2026-09-07)
 
 The regression-model catalog now exposes `model_kind` for OLS, Ridge, Lasso,

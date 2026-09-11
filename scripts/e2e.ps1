@@ -4,7 +4,8 @@ param(
     [string]$WorkspaceRoot = "",
     [string]$DiagnosticsRoot = "",
     [switch]$InstallBrowsers,
-    [switch]$KeepWorkspace
+    [switch]$KeepWorkspace,
+    [switch]$FactorialWorkflowOnly
 )
 
 Set-StrictMode -Version Latest
@@ -46,6 +47,9 @@ try {
     }
     if ($KeepWorkspace) {
         $Args += "--keep-workspace"
+    }
+    if ($FactorialWorkflowOnly) {
+        $Args += "--factorial-workflow-only"
     }
 
     & $Python @Args

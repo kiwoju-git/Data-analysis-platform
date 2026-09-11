@@ -1,5 +1,16 @@
 # Interactive Chart Contract
 
+## Factorial Final-Model Diagnostics
+
+Raw/standardized four-in-one plots reuse interactive scatter/histogram
+components: Q-Q/reference, full-N histogram, residual versus fit, residual
+versus actual run order. Display limiting never changes histogram or PRESS N.
+Fitted/data mean views are distinct. Main/interaction SVG points and square/
+cube vertices support keyboard focus/detail and title/description. Pair views
+are bounded to 15, cube to 2/3 factors with explicit remaining settings.
+Desktop charts use two columns; mobile one. Analysis HTML uses saved payload
+inline SVG, not screenshots, scripts, external assets or analysis refitting.
+
 Last updated: 2026-07-21
 
 ## Scope And Invariants

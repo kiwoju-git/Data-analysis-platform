@@ -1,5 +1,15 @@
 # Statistical Method Audit Matrix
 
+## Factorial Final-Model Gate
+
+`doe.factorial_design` 0.8.0 and `doe.general_factorial_design` 0.3.0 share
+hierarchical term-block selection; existing OLS/regularized/GP/PLS calculations
+are untouched. Reference: committed independent statsmodels 0.14.5 fixtures,
+explicit absolute 1e-9/relative 1e-8 tolerances, existing NIST/full/fraction/PB
+fixtures, whole-block General tests and deletion/tamper tests. See
+`factorial_model_workflow_validation.md` for actually executed release checks.
+Pooling uses adjusted SS without p-values; selected inference is exploratory.
+
 ## Regularized Linear Regression (2026-09-07)
 
 | Method/estimator | Supported calculation | Inference limit | Reference gate |

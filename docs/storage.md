@@ -1,5 +1,16 @@
 # Storage and Migration Notes
 
+## Metadata 20: Factorial Analysis Assets
+
+`experiment_design_analysis_assets` references `experiment_design_analyses`
+with cascade deletion. Columns store asset ID, kind, schema 1, locale, source
+analysis SHA, artifact SHA/media/size, creation time and bounded numeric JSON
+or static HTML BLOB. Limit 16 MiB/artifact and 100 artifacts/analysis. SQLite
+transactions provide atomic source-check/write and delete rollback; no external
+path, pickle, orphan file or new raw-data export is introduced.
+Analysis/design deletion snapshots include dependent IDs/hashes/counts.
+The 19-to-20 upgrade creates this relation only and preserves old payload bytes.
+
 Gate A introduced a minimal SQLite metadata store skeleton.
 Gate B0 extends it with immutable dataset-version metadata and analysis run/job metadata contracts.
 
@@ -119,7 +130,7 @@ Gate B0 extends it with immutable dataset-version metadata and analysis run/job 
 - `POST /api/v1/regression-models/{model_id}/prediction-preflight` validates the same manifest checksum, reads the source row snapshot when deriving numeric training ranges, and scans only the target dataset version's validated canonical rows. It returns schema/column/range/category issue counts without raw cell samples or absolute paths.
 - `POST /api/v1/regression-models/{model_id}/predictions` reuses that validation path, stores a `regression.predict` result envelope under the analysis workspace with SHA-256 metadata, caps inline prediction rows, and omits raw target cell values from the response and stored config.
 - `doe.factorial_design` design creation stores design/version/run metadata in SQLite and response entry stores only the app-entered numeric response series in `experiment_run_responses`; it does not create DOE effects, OLS, ANOVA, or fake analysis result artifacts.
-- `GET /api/v1/doe-designs/{design_id}/report.html` renders a checksum-verified, self-contained static HTML report from the stored DOE design metadata and entered response series. It does not create an analysis-run artifact, does not compute DOE effects/OLS/ANOVA/diagnostics, and does not expose internal workspace paths.
+- `GET /api/v1/doe-designs/{design_id}/report.html` renders checksum-verified design/response data and the latest stored analysis, when present (coefficients/effects, ANOVA and diagnostic summary). It does not refit or create an artifact and exposes no workspace paths. New analysis-specific managed HTML is a separate endpoint and immutable asset.
 - The current filter expression engine supports conjunctions of `is_missing`, `is_not_missing`, `eq`, `ne`, and numeric `gt`/`gte`/`lt`/`lte` conditions. Unsupported or invalid filters fail before row snapshot or result artifacts are written.
 - Parquet remains the preferred higher-performance canonical data format candidate for later slices.
 - Current Windows Python 3.10 environment check on 2026-06-24 found `pyarrow_available=False`.

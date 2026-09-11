@@ -1,6 +1,15 @@
 # Runtime Compatibility Contract
 
-Last updated: 2026-08-29
+Last updated: 2026-09-12
+
+API contract 19 governs factorial model selection, typed final-model diagnostics,
+and analysis-owned prediction/report workflows. Backend, frontend and PowerShell
+startup checks use the same contract value. Historical release notes below keep
+their original version numbers; they are not current handshake requirements.
+
+Minimum metadata schema is 20. Migration 20 adds an analysis-owned prediction/
+HTML artifact relation; generic analysis-run artifacts cannot reference DOE
+analyses safely. Existing design/result/revision data are not rewritten.
 
 ## Purpose
 

@@ -6,6 +6,16 @@ statistical-method expansion plan.
 
 ## Current Usability Slice Coverage
 
+The Factorial stored-model workflow (`tests/e2e/factorial_model_workflow.py`)
+is part of the Chromium critical path. It covers draft-only response paste,
+explicit run mapping and immutable correction revisions; none/backward fits,
+saturated SS pooling, final coefficients, raw/standardized four-in-one plots,
+stored predictions/intervals, fitted/data means, interaction pairs, 2D/3D cubes,
+managed HTML reports and asset restore, General Full multi-DF selection,
+curvature-domain rejection, English semantic labels and 1440/1280/390 layouts.
+`scripts/e2e.ps1 -FactorialWorkflowOnly` runs this bounded synthetic workflow
+independently. See `factorial_model_workflow_validation.md` for actual results.
+
 The refined UI suite (`tests/e2e/refined_ui.py`) is included at the end of the
 Chromium critical path. It visits home/datasets/analysis/graphs/reports/manage/help
 and representative flat/family domains in both locales, checks 1440/1280/1024/390

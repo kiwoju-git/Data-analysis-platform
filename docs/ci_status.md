@@ -1,8 +1,15 @@
 # CI Status
 
-Last updated: 2026-09-11
+Last updated: 2026-09-12
 
 ## Local Validation
+
+- Factorial final-model workflow is under final validation on
+  `feat/factorial-model-selection-prediction-plots` from `7e9a814`.
+  The expanded Factorial Chromium flow passed, including immutable revision
+  restore, predictions, managed HTML, English and mobile layouts. Full project
+  and release gates are still pending. See `factorial_model_workflow_validation.md`
+  for exact counts, corrected failures and the eventual verified release SHA.
 
 - Refined analysis UI is based on main `d6251458e6aa63763d7160028dc582f21d24b46c`.
   API 18, metadata 19, statistics, stored artifacts and dependencies are unchanged.

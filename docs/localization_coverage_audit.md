@@ -1,5 +1,13 @@
 # Localization Coverage Audit
 
+## English Factorial Workflow Audit
+
+See `english_ui_translation_audit.md` for whole-catalog structural checks,
+47 manually corrected ambiguous statistical/contextual entries and the
+`차 -> tea` root cause. The checker is JavaScript:
+`node scripts/check_frontend_localization.mjs`, not a nonexistent Python script.
+New workflow controls use named `doe.*` keys; existing KOR/ENG state is retained.
+
 Last updated: 2026-08-12
 
 ## Contract

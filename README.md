@@ -1,5 +1,15 @@
 # Statistical Twin
 
+### Factorial Final-Model Workflow
+
+Full two-level and General Full analyses support explicit hierarchical backward
+elimination and disclosed saturated error pooling. Response paste previews into
+the draft; saving creates one immutable revision. Final equations, coefficients,
+VIF/PRESS, interactive residual/factorial plots, domain-bounded stored-model
+prediction and managed KOR/ENG HTML analysis reports share the existing DOE
+workspace. Fractional/PB automated selection is intentionally unavailable.
+See [contracts and validation](docs/factorial_model_workflow_validation.md).
+
 Fit Regression Model now offers OLS, Ridge, Lasso and Elastic Net in one panel.
 Regularized models use training-fold standardization and nested cross-validation,
 save checksummed JSON manifests, and support point prediction and response

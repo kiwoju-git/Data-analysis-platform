@@ -1,5 +1,15 @@
 # Factorial Design Extension Audit
 
+## Final-Model Extension
+
+The 2026-09-12 extension retains existing effects/SE/t/p/residual calculations
+and connects them to final-model selection and UI. OLS regression selection
+was deliberately not extracted: DOE needs three-way hierarchy, multi-DF blocks,
+fixed curvature and saturated pooling. A bounded neutral DOE term-block engine
+serves two-level full and General Full. See
+`factorial_model_reduction_prediction_plots_audit.md` for code inventory,
+official sources and the correction to legacy report documentation.
+
 ## Scope and decision
 
 This audit compares the current `doe.factorial_design` implementation with

@@ -1,5 +1,26 @@
 # DOE Factorial Design and Analysis Contract
 
+## Final-Model Workflow (2026-09-12)
+
+Method 0.8.0 adds explicit full-factorial backward elimination, mandatory strong
+hierarchy and disclosed saturated adjusted-SS pooling. Default remains `none`.
+Fractional/PB automatic selection is rejected. Final coefficients, coded
+equation, column VIF, PRESS/predicted R-squared and raw/standardized diagnostics
+use the selected matrix. General Full 0.3.0 removes whole multi-DF term blocks.
+See [selection contract](factorial_model_selection_contract.md) and
+[prediction/plots/report contract](factorial_prediction_and_plots_contract.md).
+
+Response paste changes the draft, not the stored revision. Stored-analysis
+prediction is domain-bounded, with conditional t intervals only when residual
+variance/DF exist. Curvature accepts corners or actual centers, not arbitrary
+interior points. Fitted main/interaction/cube plots never refit the response.
+Selection inference is exploratory; pooled effects are not proven zero.
+Design/revision schemas and existing stored bytes/hashes remain unchanged.
+
+The legacy `/{design_id}/report.html` already includes the latest stored
+analysis when present, without fitting. New managed HTML is tied to a specific
+analysis ID and includes the complete final-model workflow.
+
 Last updated: 2026-08-29
 
 ## Scope and Versions

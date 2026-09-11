@@ -28,6 +28,7 @@ from playwright.sync_api import (
 from playwright.sync_api import expect, sync_playwright
 from regularized_regression import verify_regularized_regression
 from refined_ui import verify_refined_ui
+from factorial_model_workflow import verify_factorial_model_workflow
 
 
 SAMPLE_DATA = """Group\tValue
@@ -196,6 +197,7 @@ def main() -> int:
     parser.add_argument("--workspace-root", type=Path, default=None)
     parser.add_argument("--diagnostics-root", type=Path, default=None)
     parser.add_argument("--keep-workspace", action="store_true")
+    parser.add_argument("--factorial-workflow-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -294,7 +296,7 @@ def main() -> int:
         wait_for_url(
             frontend_base_url, "frontend dev server", managed_processes, diagnostics
         )
-        run_browser_flow(frontend_base_url, diagnostics)
+        run_browser_flow(frontend_base_url, diagnostics, backend_base_url, args.factorial_workflow_only)
         print("E2E critical path passed")
         return 0
     except Exception as exc:
@@ -585,7 +587,8 @@ def assert_mobile_locale_controls(page: Page, language: str, api_status: str) ->
     assert api_box["y"] < language_box["y"] + language_box["height"]
 
 
-def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> None:
+def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics,
+                     backend_base_url: str, factorial_only: bool = False) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
@@ -605,6 +608,9 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
                 page.get_by_role("heading", name="Statistical Twin", exact=True)
             ).to_be_visible()
             expect(page.get_by_text("API 준비됨")).to_be_visible(timeout=15_000)
+            if factorial_only:
+                verify_factorial_model_workflow(page, diagnostics, backend_base_url)
+                return
             expect(page).to_have_url(re.compile(r"/(?:home)?(?:\?|$)"))
             expect(
                 page.get_by_role(
@@ -743,6 +749,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
             verify_reporting_summary_variance_and_scatter(page, diagnostics)
             diagnostics.step("verify DOE factorial analysis")
             verify_doe_factorial_analysis(page, diagnostics)
+            verify_factorial_model_workflow(page, diagnostics, backend_base_url)
             diagnostics.step("verify DOE response surface analysis and optimization")
             verify_doe_response_surface_analysis(page, diagnostics)
             diagnostics.step("verify standalone LHS design and response revision")
@@ -796,6 +803,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics) -> Non
                 f"{describe_page(page)}"
             )
             diagnostics.record(f"[e2e] {message}")
+            diagnostics.record(str(exc))
             diagnostics.capture_page_failure(page)
             raise AssertionError(message) from exc
         except Exception:
@@ -3078,9 +3086,9 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
         timeout=20_000
     )
     expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
-    expect(page.get_by_role("img", name="주효과 평균 차트")).to_be_visible()
+    expect(page.locator(".factorial-plots .chart-grid").first.locator("svg").first).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
-    expect(page.locator(".analysis-result-section")).to_contain_text("0.7.0")
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.8.0")
     expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
     expect(page.get_by_label("run 1 response")).to_be_disabled()
     expect(page.get_by_role("button", name="분석 후 반응 잠금")).to_be_disabled()

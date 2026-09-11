@@ -1,5 +1,15 @@
 # Factorial DOE And Mann-Whitney Parity Audit
 
+## Model Workflow Extension (2026-09-12)
+
+Full-design backward elimination, strong hierarchy, explicit saturated pooling,
+final coded/treatment coefficients, VIF/PRESS, 4-in-1 residual plots, prediction,
+fitted factorial plots and managed analysis HTML are covered by the new
+`factorial_model_selection_contract.md` and `factorial_prediction_and_plots_contract.md`.
+This is not complete Minitab parity. Alias-aware selection, Lenth PSE,
+studentized deleted residuals, arbitrary generators and continuous interpolation
+of General Full levels remain unsupported. Fractional/PB retain existing fits.
+
 Last reviewed: 2026-08-21
 
 ## Scope and decision

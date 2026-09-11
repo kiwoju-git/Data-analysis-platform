@@ -45,8 +45,10 @@ block levels. Curvature indicator is zero for corners. Persist the bounded
 cell table (at most 256 treatment combinations); derive plots from saved cells,
 never refit. Data means remain separate and explicitly labelled.
 
-Pair view supports chosen X/trace factors or all pairs (at most 45 for the
-product's ten-factor authoring cap). Default focuses on final model pairs.
+Pair view supports chosen X/trace factors or a bounded all-pairs view (15 plots
+per view). Every pair remains selectable individually. A final-model-only
+filter is explicit; the default selected pair remains useful even after its
+interaction has been removed.
 Missing interactions in a selected model can yield parallel fitted lines.
 General Full supports main/interaction plots but no two-level cube.
 
@@ -83,7 +85,7 @@ main/interactions/cube, warnings and collapsed technical provenance.
 Inline SVG, escaped user text, no scripts or external resource/CDN. Print-safe.
 
 Metadata 20 uses a dedicated analysis-owned table for bounded HTML/JSON BLOBs
-(16 MiB per artifact), since generic analysis-run artifacts have the wrong
+(16 MiB per artifact, 100 artifacts per source analysis), since generic analysis-run artifacts have the wrong
 foreign-key owner. SHA-checked BLOB writes and cascade deletion are transactional;
 no filesystem path is exposed or required. Export and prediction schemas start
 at 1. List metadata only, download verified bytes, explicit delete preflight.

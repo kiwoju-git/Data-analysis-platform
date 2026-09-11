@@ -1,5 +1,23 @@
 # Statistical Twin Localization Glossary
 
+## DOE Semantic Terms
+
+| Korean | English |
+|---|---|
+| 효과 / 요인배치 효과 | Effect / Factorial effect |
+| 상호작용 차수 | Interaction order |
+| 주효과만 | Main effects only |
+| 2차 / 3차 상호작용 | Two-way / Three-way interaction |
+| Coded 계수 | Coded coefficient |
+| 풀링 오차 | Pooled error |
+| 모형 축소 | Model reduction |
+| 적합 평균 | Fitted mean |
+| 큐브 그림 | Cube plot |
+| 실행 순서 / 표준 순서 | Run order / Standard order |
+
+Never translate the ordinal suffix `차` independently when building an option.
+Use whole semantic keys. `Effectiveness` is not the factorial effect statistic.
+
 Last updated: 2026-08-12
 
 This glossary is the terminology source of truth for application-owned text.
