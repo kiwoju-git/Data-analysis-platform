@@ -1,4 +1,5 @@
 $script:ExpectedApiContractVersion = 19
+$script:MinimumMetadataSchemaVersion = 20
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",
     "dataset_version_metadata",
@@ -69,7 +70,7 @@ function Test-DevRuntimeCompatibility {
     if ([int]$RuntimeInfo.api_contract_version -ne $script:ExpectedApiContractVersion) {
         return $false
     }
-    if ([int]$RuntimeInfo.metadata_schema_version -lt 19) { return $false }
+    if ([int]$RuntimeInfo.metadata_schema_version -lt $script:MinimumMetadataSchemaVersion) { return $false }
     foreach ($capability in $script:RequiredRuntimeCapabilities) {
         $property = $RuntimeInfo.capabilities.PSObject.Properties[$capability]
         if ($null -eq $property -or $property.Value -ne $true) { return $false }

@@ -81,6 +81,11 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$script:ExpectedApiContractVersion = 19" in helper_text
+    assert "$script:MinimumMetadataSchemaVersion = 20" in helper_text
+    frontend_runtime = (repo_root / "frontend/src/runtimeCompatibility.ts").read_text(
+        encoding="utf-8"
+    )
+    assert "MINIMUM_METADATA_SCHEMA_VERSION = 20" in frontend_runtime
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
     assert '"graph_builder_preview"' in helper_text
@@ -94,6 +99,32 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "[int]$FrontendPort = 8600" in dev_text
     assert "[int]$FrontendPort = 8600" in diagnostics_text
     assert "port: 8600" in vite_text
+
+
+@pytest.mark.parametrize("schema,expected", [(19, "False"), (20, "True")])
+def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expected: str) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    command = (
+        f". '{repo_root / 'scripts/dev_runtime_helpers.ps1'}'; "
+        "$capabilities = @{}; "
+        "foreach ($name in $script:RequiredRuntimeCapabilities) { $capabilities[$name] = $true }; "
+        "$runtime = [pscustomobject]@{ service='datalab-studio-api'; "
+        f"api_contract_version=19; metadata_schema_version={schema}; "
+        "capabilities=[pscustomobject]$capabilities; build_commit='test' }; "
+        "Test-DevRuntimeCompatibility -RuntimeInfo $runtime -ExpectedBuildId test -RequireExactCommit"
+    )
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == expected
 
 
 def test_dev_runtime_helper_returns_the_repository_commit() -> None:
