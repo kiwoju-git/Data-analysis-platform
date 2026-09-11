@@ -17,11 +17,16 @@ import {
 import { pushAppLocation } from "./browserNavigation";
 import { CompactSettingsTable } from "./components/CompactSettingsTable";
 import { formatLocalDateTime } from "./dateFormat";
+import { FactorialAnalysisAssetsPanel } from "./FactorialAnalysisAssetsPanel";
+import { deleteFactorialAnalysis, deleteFactorialAsset, preflightFactorialAnalysisDeletion, preflightFactorialAssetDeletion } from "./api/factorialWorkflow";
+import type { DoeAnalysisAssetDescriptor, DoeAnalysisDeletionPreflight } from "./api/types/doeModelWorkflow";
+import { t } from "./i18n/translate";
 
 interface PendingAssetDeletion {
   item: WorkspaceAssetDescriptor;
   manifestSha256: string;
   message: string;
+  factorial?: { designId: string; analysisId: string; asset?: DoeAnalysisAssetDescriptor; analysis?: DoeAnalysisDeletionPreflight };
 }
 
 export function UnifiedAssetCatalogPanel({
@@ -150,6 +155,10 @@ export function UnifiedAssetCatalogPanel({
           confirmation_study_id: target.asset_id,
           expected_deletion_manifest_sha256: pendingDeletion.manifestSha256,
         });
+      } else if (pendingDeletion.factorial) {
+        const source = pendingDeletion.factorial;
+        if (source.analysis) await deleteFactorialAnalysis(source.designId, source.analysis);
+        else if (source.asset) await deleteFactorialAsset(source.designId, source.analysisId, source.asset);
       }
       setPendingDeletion(null);
       setSelectedKey(null);
@@ -276,9 +285,10 @@ export function UnifiedAssetCatalogPanel({
                             />
                           ) : null}
                           <div className="button-row asset-detail-actions">
-                            <button className="primary-button" onClick={() => pushAppLocation(item.open_target.path)} type="button">{item.open_target.label}</button>
+                            <button className="primary-button" onClick={() => pushAppLocation(item.open_target.path)} type="button">{isFactorialAnalysisAsset(item.asset_type) ? t("doe.report.analysis") : item.open_target.label}</button>
                             {isManagedDeletionType(item.asset_type) ? <button className="danger-button" disabled={deleting} onClick={() => void requestDeleteSelected()} type="button">{deleting ? "확인 중" : "삭제 영향 확인"}</button> : null}
                           </div>
+                          {isFactorialAnalysisAsset(item.asset_type) ? <FactorialAnalysisAssetsPanel designId={factorialAssetSource(item).designId} analysisId={factorialAssetSource(item).analysisId} /> : null}
                           {item.asset_type === "dataset_version" || item.asset_type === "regression_model" ? <p className="compact-note">이름, 메모, 고정과 파일 정리 작업은 해당 자산 종류 탭의 선택 상세에서 변경합니다.</p> : null}
                           <details><summary>기술 정보</summary><dl className="asset-detail-grid"><div><dt>Asset ID</dt><dd className="technical-value">{item.asset_id}</dd></div><div><dt>Subtype</dt><dd>{item.subtype}</dd></div></dl></details>
                         </section>
@@ -310,6 +320,17 @@ export function UnifiedAssetCatalogPanel({
 }
 
 async function prepareDeletion(item: WorkspaceAssetDescriptor): Promise<PendingAssetDeletion> {
+  if (isFactorialAnalysisAsset(item.asset_type)) {
+    const source = factorialAssetSource(item);
+    if (item.asset_type === "doe_analysis") {
+      const analysis = await preflightFactorialAnalysisDeletion(source.designId, source.analysisId);
+      return { item, manifestSha256: analysis.deletion_manifest_sha256,
+        message: `${t("doe.report.analysis")}: 1; ${t("doe.report.prediction")}: ${analysis.prediction_count}; ${t("doe.report.html")}: ${analysis.report_count}`,
+        factorial: { ...source, analysis } };
+    }
+    const asset = await preflightFactorialAssetDeletion(source.designId, source.analysisId, item.asset_id);
+    return { item, manifestSha256: asset.sha256, message: t("doe.report.confirm"), factorial: { ...source, asset } };
+  }
   if (item.asset_type === "analysis_run") {
     const preflight = await fetchAnalysisRunDeletionPreflight(item.asset_id);
     if (!preflight.deletion_ready) throw new Error(preflight.blockers.join(", "));
@@ -317,7 +338,7 @@ async function prepareDeletion(item: WorkspaceAssetDescriptor): Promise<PendingA
   }
   if (item.asset_type === "doe_design") {
     const preflight = await fetchDoeDesignDeletionPreflight(item.asset_id);
-    return { item, manifestSha256: preflight.deletion_manifest_sha256, message: `설계 ${preflight.counts.version_count}개 버전, run ${preflight.counts.run_count}개, 반응 revision ${preflight.counts.response_revision_count}개, 분석 ${preflight.counts.analysis_count}개를 함께 삭제합니다.` };
+    return { item, manifestSha256: preflight.deletion_manifest_sha256, message: `${t("doe.report.analysis")}: ${preflight.counts.analysis_count}; ${t("doe.report.prediction")}: ${preflight.counts.prediction_count ?? 0}; ${t("doe.report.html")}: ${preflight.counts.report_count ?? 0}. ` + `설계 ${preflight.counts.version_count}개 버전, run ${preflight.counts.run_count}개, 반응 revision ${preflight.counts.response_revision_count}개, 분석 ${preflight.counts.analysis_count}개를 함께 삭제합니다.` };
   }
   if (item.asset_type === "bayesian_study") {
     const preflight = await fetchBayesianStudyDeletionPreflight(item.asset_id);
@@ -340,6 +361,9 @@ function detailButtonId(item: WorkspaceAssetDescriptor): string {
 }
 
 function assetTypeLabel(type: WorkspaceAssetDescriptor["asset_type"], subtype: string): string {
+  if (type === "doe_analysis") return t("doe.report.analysis");
+  if (type === "doe_prediction") return t("doe.report.prediction");
+  if (type === "doe_analysis_report") return t("doe.report.html");
   if (type === "dataset_version") return "데이터셋";
   if (type === "analysis_run") return subtype.includes("predict") ? "예측 결과" : "분석 결과";
   if (type === "regression_model") return "회귀모델";
@@ -351,7 +375,15 @@ function assetTypeLabel(type: WorkspaceAssetDescriptor["asset_type"], subtype: s
 }
 
 function isManagedDeletionType(type: WorkspaceAssetDescriptor["asset_type"]): boolean {
-  return type === "analysis_run" || type === "doe_design" || type === "bayesian_study";
+  return type === "analysis_run" || type === "doe_design" || type === "bayesian_study" || isFactorialAnalysisAsset(type);
+}
+
+function isFactorialAnalysisAsset(type: WorkspaceAssetDescriptor["asset_type"]): boolean {
+  return type === "doe_analysis" || type === "doe_prediction" || type === "doe_analysis_report";
+}
+function factorialAssetSource(item: WorkspaceAssetDescriptor): { designId: string; analysisId: string } {
+  const query = new URLSearchParams(item.open_target.path.split("?")[1] ?? "");
+  return { designId: query.get("design_id") ?? "", analysisId: query.get("analysis_id") ?? "" };
 }
 
 function isGenericMetadataType(

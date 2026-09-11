@@ -94,6 +94,24 @@ function runCheck() {
     throw new Error(`Localization catalog is missing: ${catalogPath}`);
   }
   const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+  const statisticalRegressions = [
+    ["차", /^tea$/iu], ["검정", /^black$/iu], ["기타 검정", /guitar/iu],
+    ["열", /^heat$/iu], ["항", /^port$/iu], ["센터점", /branch/iu],
+    ["절대 효과 순위", /effectiveness/iu], ["절대 효과 순위 차트", /effectiveness/iu],
+    ["헤더처럼", /heather/iu],
+  ];
+  for (const [source, invalid] of statisticalRegressions) {
+    const key = catalog.sourceToKey[source] ?? localizationKeyForSource(source);
+    if (invalid.test(catalog.en[key] ?? "")) {
+      throw new Error(`Statistical translation regression: ${source} (${key})`);
+    }
+  }
+  for (const filename of ["FactorialDesignPanel.tsx", "GeneralFactorialDesignPanel.tsx"]) {
+    const content = fs.readFileSync(path.join(frontendRoot, filename), "utf8");
+    if (/\b[123]tea\b/iu.test(content) || /\{order\}\s*차/u.test(content)) {
+      throw new Error(`Interaction-order labels must use complete semantic keys: ${filename}`);
+    }
+  }
   const enKeys = Object.keys(catalog.en).sort();
   const koKeys = Object.keys(catalog.ko).sort();
   if (!sameItems(enKeys, koKeys)) {

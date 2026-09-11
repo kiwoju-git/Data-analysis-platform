@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { t } from "./i18n/translate";
 
 import {
   createDoeResponseRevision,
@@ -23,6 +24,15 @@ import {
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
 import { DoeFactorCountControl } from "./doe/DoeFactorCountControl";
+import { DoeResponsePasteDialog } from "./doe/DoeResponsePasteDialog";
+import { DoeModelSelectionSettings } from "./doe/DoeModelSelectionSettings";
+import { defaultDoeSelection, interactionOrderLabel } from "./doe/factorialWorkflowPresentation";
+import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
+import { FactorialResidualPlots } from "./FactorialResidualPlots";
+import { FactorialPlotsPanel } from "./FactorialPlotsPanel";
+import { FactorialStoredModelWorkflow } from "./FactorialStoredModelWorkflow";
+import { fetchStoredFactorialAnalysis } from "./api/factorialWorkflow";
+import { appLocationChangeEvent } from "./browserNavigation";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
 import { DOE_FACTOR_CAPABILITIES, DOE_RUN_CAPABILITIES } from "./doe/factorCapabilities";
 import {
@@ -109,7 +119,13 @@ export function FactorialDesignPanel({
   responseError,
   responses,
 }: FactorialDesignPanelProps) {
-  const designLocation = useMemo(designLocationFromWindow, []);
+  const [designLocation, setDesignLocation] = useState(designLocationFromWindow);
+  useEffect(() => {
+    const sync = () => setDesignLocation(designLocationFromWindow());
+    window.addEventListener("popstate", sync);
+    window.addEventListener(appLocationChangeEvent, sync);
+    return () => { window.removeEventListener("popstate", sync); window.removeEventListener(appLocationChangeEvent, sync); };
+  }, []);
   const [designType, setDesignType] = useState<FactorialDesignType>(
     designLocation.kind === "general" ? "general_factorial" : "two_level_full",
   );
@@ -117,6 +133,9 @@ export function FactorialDesignPanel({
   const [restoredResponses, setRestoredResponses] =
     useState<DoeDesignResponsesResponse | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [restoredAnalysis, setRestoredAnalysis] = useState<DoeFactorialAnalysisResponse | null>(null);
+  const [preferRestored, setPreferRestored] = useState(Boolean(designLocation.designId));
+  const [useRestoredAnalysis, setUseRestoredAnalysis] = useState(true);
   const [fractionId, setFractionId] = useState("");
   const [name, setName] = useState("2-level screening design");
   const [factors, setFactors] = useState<FactorDraft[]>([
@@ -159,21 +178,27 @@ export function FactorialDesignPanel({
       replicates,
     ],
   );
-  const displayedDesign = design ?? restoredDesign;
-  const displayedResponses = responses ?? restoredResponses;
+  const displayedDesign = preferRestored ? restoredDesign : design ?? restoredDesign;
+  const displayedResponses = responses?.design_id === displayedDesign?.design_id ? responses : restoredResponses;
 
   useEffect(() => {
     if (designLocation.designId === null || designLocation.kind === "general") return;
     let current = true;
     setRestoreError(null);
+    setPreferRestored(true);
+    setUseRestoredAnalysis(true);
+    setRestoredDesign(null);
+    setRestoredAnalysis(null);
     void Promise.all([
       fetchFactorialDesign(designLocation.designId),
       fetchFactorialDesignResponses(designLocation.designId).catch(() => null),
+      designLocation.analysisId ? fetchStoredFactorialAnalysis(designLocation.designId, designLocation.analysisId) : Promise.resolve(null),
     ])
-      .then(([fetchedDesign, fetchedResponses]) => {
+      .then(([fetchedDesign, fetchedResponses, fetchedAnalysis]) => {
         if (!current) return;
         setRestoredDesign(fetchedDesign);
         setRestoredResponses(fetchedResponses);
+        setRestoredAnalysis(fetchedAnalysis);
         setDesignType(
           fetchedDesign.options.design_type === "two_level_fractional"
             ? "two_level_fractional"
@@ -192,7 +217,7 @@ export function FactorialDesignPanel({
     return () => {
       current = false;
     };
-  }, [designLocation.designId, designLocation.kind]);
+  }, [designLocation.designId, designLocation.kind, designLocation.analysisId]);
 
   return (
     <section className="analysis-run-panel" data-analysis-execution={methodId}>
@@ -228,7 +253,7 @@ export function FactorialDesignPanel({
         </p>
       </DoeFormSection>
       {designType === "general_factorial" ? (
-        <GeneralFactorialDesignPanel initialDesignId={designLocation.designId} />
+        <GeneralFactorialDesignPanel initialDesignId={designLocation.designId} initialAnalysisId={designLocation.analysisId} />
       ) : (
         <>
       <DoeFormSection
@@ -549,6 +574,8 @@ export function FactorialDesignPanel({
           disabled={isCreating || validation.kind === "error"}
           onClick={() => {
             if (validation.request !== null) {
+              setPreferRestored(false);
+              setUseRestoredAnalysis(false);
               onCreateDesign(validation.request);
             }
           }}
@@ -575,13 +602,13 @@ export function FactorialDesignPanel({
       {restoreError !== null ? <div className="error-box">오류 코드: {restoreError}</div> : null}
       {displayedDesign !== null ? (
         <FactorialDesignPreview
-          analysis={analysis}
+          analysis={preferRestored && useRestoredAnalysis ? restoredAnalysis : analysis?.design_id === displayedDesign.design_id ? analysis : restoredAnalysis}
           analysisError={analysisError}
           design={displayedDesign}
           isRunningAnalysis={isRunningAnalysis}
           isSavingResponses={isSavingResponses}
           onSaveResponses={onSaveResponses}
-          onRunAnalysis={onRunAnalysis}
+          onRunAnalysis={(id, request) => { setUseRestoredAnalysis(false); onRunAnalysis(id, request); }}
           responseError={responseError}
           responses={displayedResponses}
         />
@@ -626,6 +653,8 @@ export function FactorialDesignPreview({
     useState<DoeResponseRevisionHistoryResponse | null>(null);
   const [revisionError, setRevisionError] = useState<string | null>(null);
   const [isSavingRevision, setIsSavingRevision] = useState(false);
+  const [modelSelection, setModelSelection] = useState(defaultDoeSelection);
+  const [confidence, setConfidence] = useState(0.95);
   const revisionRequest = useRef(0);
   const [maxInteractionOrder, setMaxInteractionOrder] = useState(
     design.screening !== null && design.screening !== undefined
@@ -665,6 +694,7 @@ export function FactorialDesignPreview({
     [design.runs, responseName, responseUnit, responseValues],
   );
   const matchingAnalysis = analysis?.design_id === design.design_id ? analysis : null;
+  const aliased = Boolean(design.fractional || design.screening);
   const effectiveStatus =
     matchingAnalysis !== null ? "analyzed" : (matchingResponses?.status ?? design.status);
   const responsesLocked = effectiveStatus === "analyzed" && !correctionMode;
@@ -763,6 +793,11 @@ export function FactorialDesignPreview({
           {matchingResponses?.responses.length ? "저장됨" : "입력 대기"}
         </span>
       </div>
+      <DoeResponsePasteDialog
+        disabled={responsesLocked || isSavingResponses || isSavingRevision}
+        runOrders={design.runs.map((run) => run.run_order)}
+        onApply={setResponseValues}
+      />
       <div className="option-grid">
         <label>
           <span>반응 이름</span>
@@ -999,33 +1034,31 @@ export function FactorialDesignPreview({
                 {Array.from({ length: Math.min(3, design.factors.length) }, (_, index) => index + 1).map(
                   (order) => (
                     <option key={order} value={order}>
-                      {order}차
+                      {interactionOrderLabel(order)}
                     </option>
                   ),
                 )}
               </select>
             </label>
-            <div className="metadata-grid compact-metadata" aria-label="DOE 분석 정책">
-              <span>Confidence</span>
-              <strong>95%</strong>
-              <span>Selection</span>
-              <strong>자동 선택 없음</strong>
-            </div>
           </div>
+          <DoeModelSelectionSettings value={aliased ? { ...modelSelection, method: "none" } : modelSelection}
+            onChange={setModelSelection} confidence={confidence} onConfidenceChange={setConfidence} aliased={aliased} disabled={isRunningAnalysis} />
           {analysisError !== null ? (
             <div className="error-box">오류 코드: {analysisError}</div>
           ) : null}
           <div className="button-row">
             <button
               className="primary-button"
-              disabled={isRunningAnalysis}
+              disabled={isRunningAnalysis || correctionMode || !(confidence > 0 && confidence < 1) ||
+                (!aliased && modelSelection.method === "backward_elimination" && !(modelSelection.alpha_to_remove > 0 && modelSelection.alpha_to_remove < 1))}
               onClick={() => {
                 onRunAnalysis(design.design_id, {
                   response_name: firstResponse.response_name,
                   response_revision_id: activeRevisionId,
                   max_interaction_order: maxInteractionOrder,
-                  confidence_level: 0.95,
+                  confidence_level: confidence,
                   point_limit: 256,
+                  model_selection: aliased ? { ...modelSelection, method: "none" } : modelSelection,
                 });
               }}
               type="button"
@@ -1063,7 +1096,9 @@ function FactorialAnalysisResultView({
         </div>
         <span className="status-pill status-ready">검증 저장됨</span>
       </div>
-      <div className="metadata-grid" aria-label="DOE 분석 적합 요약">
+      {result.final_model && result.model_selection ? <FactorialModelSelectionResults
+        selection={result.model_selection} model={result.final_model} fit={result.fit} n={result.sample.n_observations} /> : null}
+      {!result.final_model ? <div className="metadata-grid" aria-label="DOE 분석 적합 요약">
         <span>N / residual df</span>
         <strong>
           {result.sample.n_observations} / {result.sample.df_residual}
@@ -1086,18 +1121,18 @@ function FactorialAnalysisResultView({
         <strong>r{analysis.response_revision_number}</strong>
         <span>Analysis ID</span>
         <strong>{analysis.analysis_id}</strong>
-      </div>
+      </div> : null}
       <div className="chart-grid">
         <div className="chart-panel">
           <span className="chart-panel-title">절대 효과 순위</span>
           <FactorialEffectChart analysis={analysis} />
         </div>
-        <div className="chart-panel">
+        {!result.final_model ? <div className="chart-panel">
           <span className="chart-panel-title">주효과 평균</span>
           <FactorialMainEffectsChart analysis={analysis} />
-        </div>
+        </div> : null}
       </div>
-      <div className="table-wrap">
+      {!result.final_model ? <div className="table-wrap">
         <table className="result-table">
           <thead>
             <tr>
@@ -1124,7 +1159,7 @@ function FactorialAnalysisResultView({
             ))}
           </tbody>
         </table>
-      </div>
+      </div> : null}
       <div className="table-wrap">
         <table className="result-table">
           <thead>
@@ -1181,6 +1216,11 @@ function FactorialAnalysisResultView({
           {factorialWarningMessage(warning)}
         </div>
       ))}
+      {result.final_model ? <>
+        <FactorialResidualPlots plots={result.final_model.residual_plots} />
+        <FactorialPlotsPanel model={result.final_model} design={design} />
+      </> : null}
+      <FactorialStoredModelWorkflow design={design} analysisId={analysis.analysis_id} model={result.final_model} />
     </section>
   );
 }
@@ -1308,6 +1348,10 @@ function formatInterval(
 }
 
 function factorialWarningMessage(code: string): string {
+  if (code.includes("post_selection")) return t("doe.selection.exploratory");
+  if (code.includes("initial_pooling")) return t("doe.selection.poolingWarning");
+  if (code.includes("press_unavailable")) return t("doe.model.pressUnavailable");
+  if (code.includes("vif_unavailable")) return t("doe.model.unavailable");
   const messages: Record<string, string> = {
     doe_factorial_randomization_and_independence_not_proven:
       "랜덤화와 관측 독립성은 결과만으로 증명되지 않으므로 실험 실행 기록을 확인해야 합니다.",
@@ -1613,14 +1657,16 @@ function formatResolution(value: number): string {
 
 function designLocationFromWindow(): {
   designId: string | null;
+  analysisId: string | null;
   kind: "general" | "two_level";
 } {
   if (typeof window === "undefined") {
-    return { designId: null, kind: "two_level" };
+    return { designId: null, analysisId: null, kind: "two_level" };
   }
   const query = new URLSearchParams(window.location.search);
   return {
     designId: query.get("design_id"),
+    analysisId: query.get("analysis_id"),
     kind: query.get("design_kind") === "general" ? "general" : "two_level",
   };
 }

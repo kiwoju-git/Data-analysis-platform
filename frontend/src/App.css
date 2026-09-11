@@ -7069,3 +7069,43 @@ td select {
     flex: 1;
   }
 }
+
+.doe-model-selection {
+  min-inline-size: 0;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--border-color, #d6e0eb);
+  border-radius: 6px;
+}
+.doe-model-selection legend { padding: 0 6px; font-size: 14px; font-weight: 600; }
+.doe-model-selection .notice-box { margin-block: 10px; }
+.factorial-equation-text { overflow-wrap: anywhere; line-height: 1.65; font-variant-numeric: tabular-nums; }
+.factorial-selection-steps { min-inline-size: 1080px; }
+.factorial-coded-coefficients { min-inline-size: 700px; }
+.factorial-selection-steps details { max-inline-size: 300px; }
+.factorial-selection-steps pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.factorial-residual-plots > summary,
+.factorial-prediction-paste > summary { cursor: pointer; font-weight: 600; padding-block: 10px; }
+.factorial-inline-select { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-block: 12px; }
+.factorial-inline-select select, .factorial-inline-select input { inline-size: auto; max-inline-size: 100%; }
+.factorial-residual-plots .chart-grid, .factorial-plots .chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.factorial-plots .chart-panel, .factorial-residual-plots .chart-panel { min-inline-size: 0; }
+.factorial-plots h4, .factorial-residual-plots h4 { font-size: 14px; overflow-wrap: anywhere; }
+.factorial-plot-legend { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; }
+.factorial-plot-legend li { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; min-inline-size: 0; }
+.factorial-plot-legend li > span { inline-size: 12px; block-size: 3px; flex: 0 0 auto; }
+.factorial-point-detail { min-block-size: 2.8em; font-size: 12px; overflow-wrap: anywhere; }
+.factorial-cube-chart { max-inline-size: 680px; margin-top: 12px; }
+.factorial-prediction-input input, .factorial-prediction-input select { min-inline-size: 120px; }
+.factorial-prediction-input small { display: block; margin-top: 4px; color: #526477; font-size: 11px; }
+.factorial-prediction-paste textarea, .doe-response-paste textarea { inline-size: 100%; box-sizing: border-box; }
+.factorial-paste-preview { max-block-size: 300px; overflow: auto; }
+.factorial-prediction-results { min-inline-size: 760px; }
+.factorial-analysis-assets .button-row { flex-wrap: wrap; }
+.factorial-analysis-assets button, .doe-model-selection label > span { white-space: nowrap; }
+.factorial-analysis-assets code, .factorial-prediction code { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .factorial-residual-plots .chart-grid, .factorial-plots .chart-grid { grid-template-columns: minmax(0, 1fr); }
+  .factorial-plots .option-grid, .doe-model-selection .option-grid { grid-template-columns: minmax(0, 1fr); }
+  .factorial-analysis-assets .panel-heading { align-items: flex-start; flex-direction: column; }
+}

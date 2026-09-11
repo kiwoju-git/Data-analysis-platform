@@ -9,16 +9,26 @@ import {
 
 import {
   createGeneralFactorialAnalysis,
+  createDoeResponseRevision,
   createGeneralFactorialDesign,
   fetchGeneralFactorialDesign,
   fetchGeneralFactorialResponses,
   saveGeneralFactorialResponses,
   type GeneralFactorialAnalysisResponse,
   type GeneralFactorialDesignResponse,
+  type DoeDesignResponsesResponse,
 } from "./api";
 import { DoeActionBar, DoeFormSection } from "./doe/DoeFormPrimitives";
 import { DoeFactorCountControl } from "./doe/DoeFactorCountControl";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
+import { DoeResponsePasteDialog } from "./doe/DoeResponsePasteDialog";
+import { DoeModelSelectionSettings } from "./doe/DoeModelSelectionSettings";
+import { defaultDoeSelection, interactionOrderLabel, factorialWorkflowMessage } from "./doe/factorialWorkflowPresentation";
+import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
+import { FactorialResidualPlots } from "./FactorialResidualPlots";
+import { FactorialPlotsPanel } from "./FactorialPlotsPanel";
+import { FactorialStoredModelWorkflow } from "./FactorialStoredModelWorkflow";
+import { fetchStoredGeneralFactorialAnalysis } from "./api/factorialWorkflow";
 import { DOE_FACTOR_CAPABILITIES } from "./doe/factorCapabilities";
 import {
   parsePastedLevels,
@@ -26,12 +36,14 @@ import {
   validateGeneralDraft,
   type GeneralFactorDraft,
 } from "./generalFactorialDraft";
-import { resolveLocalizedText } from "./i18n/translate";
+import { resolveLocalizedText, t } from "./i18n/translate";
 
 export function GeneralFactorialDesignPanel({
   initialDesignId = null,
+  initialAnalysisId = null,
 }: {
   initialDesignId?: string | null;
+  initialAnalysisId?: string | null;
 }) {
   const [name, setName] = useState("3-level general factorial design");
   const [replicates, setReplicates] = useState("1");
@@ -63,6 +75,10 @@ export function GeneralFactorialDesignPanel({
   const [responseName, setResponseName] = useState("Yield");
   const [responseUnit, setResponseUnit] = useState("");
   const [analysis, setAnalysis] = useState<GeneralFactorialAnalysisResponse | null>(null);
+  const [savedResponses, setSavedResponses] = useState<DoeDesignResponsesResponse | null>(null);
+  const [correctionMode, setCorrectionMode] = useState(false);
+  const [modelSelection, setModelSelection] = useState(defaultDoeSelection);
+  const [confidence, setConfidence] = useState(0.95);
   const [pending, setPending] = useState<"create" | "save" | "analysis" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,10 +94,14 @@ export function GeneralFactorialDesignPanel({
     void Promise.all([
       fetchGeneralFactorialDesign(initialDesignId),
       fetchGeneralFactorialResponses(initialDesignId).catch(() => null),
+      initialAnalysisId ? fetchStoredGeneralFactorialAnalysis(initialDesignId, initialAnalysisId) : Promise.resolve(null),
     ])
-      .then(([restoredDesign, restoredResponseCollection]) => {
+      .then(([restoredDesign, restoredResponseCollection, restoredAnalysis]) => {
         if (!current) return;
         setDesign(restoredDesign);
+        setAnalysis(restoredAnalysis);
+        setSavedResponses(restoredResponseCollection);
+        setCorrectionMode(false);
         setName(restoredDesign.name);
         setReplicates(String(restoredDesign.options.replicates));
         setSeed(String(restoredDesign.options.randomization_seed));
@@ -123,7 +143,7 @@ export function GeneralFactorialDesignPanel({
     return () => {
       current = false;
     };
-  }, [initialDesignId]);
+  }, [initialDesignId, initialAnalysisId]);
 
   async function onCreate() {
     if (validation.request === null) return;
@@ -134,6 +154,8 @@ export function GeneralFactorialDesignPanel({
       setDesign(created);
       setResponses(Object.fromEntries(created.runs.map((run) => [run.run_order, ""])));
       setAnalysis(null);
+      setSavedResponses(null);
+      setCorrectionMode(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "doe_general_factorial_design_failed");
     } finally {
@@ -147,18 +169,26 @@ export function GeneralFactorialDesignPanel({
       run_order: run.run_order,
       value: Number(responses[run.run_order]),
     }));
-    if (values.some((item) => !Number.isFinite(item.value))) {
-      setError("모든 run의 반응값을 유한한 숫자로 입력하세요.");
+    if (values.some((item) => !Number.isFinite(item.value) || !responses[item.run_order]?.trim())) {
+      setError(t("doe.response.invalid"));
       return;
     }
     setPending("save");
     setError(null);
     try {
-      await saveGeneralFactorialResponses(design.design_id, {
+      const request = {
         response_name: responseName.trim(),
         unit: responseUnit.trim() || null,
         values,
-      });
+      };
+      if (correctionMode) {
+        await createDoeResponseRevision(design.design_id, { ...request,
+          supersedes_response_revision_id: savedResponses?.responses[0]?.response_revision_id ?? null });
+        setSavedResponses(await fetchGeneralFactorialResponses(design.design_id));
+      } else {
+        setSavedResponses(await saveGeneralFactorialResponses(design.design_id, request));
+      }
+      setCorrectionMode(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "doe_general_factorial_responses_failed");
     } finally {
@@ -175,6 +205,10 @@ export function GeneralFactorialDesignPanel({
         await createGeneralFactorialAnalysis(design.design_id, {
           response_name: responseName.trim(),
           max_interaction_order: Number(interactionOrder),
+          response_revision_id: savedResponses?.responses[0]?.response_revision_id ?? null,
+          model_selection: modelSelection,
+          confidence_level: confidence,
+          point_limit: 256,
         }),
       );
     } catch (caught) {
@@ -211,9 +245,7 @@ export function GeneralFactorialDesignPanel({
               controlId: "general-factorial-interaction",
               control: (
                 <select id="general-factorial-interaction" value={interactionOrder} onChange={(event) => setInteractionOrder(event.currentTarget.value)}>
-                  <option value="1">주효과</option>
-                  <option value="2">2차 상호작용까지</option>
-                  <option value="3">3차 상호작용까지</option>
+                  {[1, 2, 3].map((order) => <option key={order} value={order}>{interactionOrderLabel(order)}</option>)}
                 </select>
               ),
             },
@@ -399,6 +431,13 @@ export function GeneralFactorialDesignPanel({
       {design !== null ? (
         <GeneralFactorialResult
           analysis={analysis}
+          locked={(analysis !== null || savedResponses?.status === "analyzed") && !correctionMode}
+          correctionMode={correctionMode}
+          onCorrection={() => setCorrectionMode(true)}
+          analysisSettings={<DoeModelSelectionSettings value={modelSelection} onChange={setModelSelection}
+            confidence={confidence} onConfidenceChange={setConfidence} disabled={pending !== null} />}
+          canAnalyze={savedResponses !== null && !correctionMode && confidence > 0 && confidence < 1 &&
+            (modelSelection.method === "none" || (modelSelection.alpha_to_remove > 0 && modelSelection.alpha_to_remove < 1))}
           design={design}
           interactionOrder={Number(interactionOrder)}
           onAnalyze={() => void onAnalyze()}
@@ -552,7 +591,12 @@ function GeneralFactorLevelEditor({
   );
 }
 
-function GeneralFactorialResult({ analysis, design, onAnalyze, onSave, pending, responseName, responseUnit, responses, setResponseName, setResponses, setResponseUnit }: {
+function GeneralFactorialResult({ analysis, design, onAnalyze, onSave, pending, responseName, responseUnit, responses, setResponseName, setResponses, setResponseUnit, locked, correctionMode, onCorrection, analysisSettings, canAnalyze }: {
+  locked: boolean;
+  correctionMode: boolean;
+  onCorrection: () => void;
+  analysisSettings: import("react").ReactNode;
+  canAnalyze: boolean;
   analysis: GeneralFactorialAnalysisResponse | null;
   design: GeneralFactorialDesignResponse;
   interactionOrder: number;
@@ -570,21 +614,28 @@ function GeneralFactorialResult({ analysis, design, onAnalyze, onSave, pending, 
     <h3>일반 완전요인 설계</h3>
     <div className="metadata-grid"><span>설계</span><strong>{design.name}</strong><span>실험 수</span><strong>{design.run_count}</strong><span>분석 coding</span><strong>Treatment coding</strong><span>범위</span><strong>숫자·문자 범주 수준</strong></div>
     <div className="table-wrap"><table className="result-table"><thead><tr><th>Run</th><th>Standard</th><th>Rep</th>{design.factors.map((factor) => <th key={factor.name}>{factor.name}</th>)}</tr></thead><tbody>{design.runs.map((run) => <tr key={run.run_order}><td>{run.run_order}</td><td>{run.standard_order}</td><td>{run.replicate_index}</td>{design.factors.map((factor) => <td key={factor.name}>{String(run.factor_levels[factor.name])}</td>)}</tr>)}</tbody></table></div>
+    <DoeResponsePasteDialog runOrders={design.runs.map((run) => run.run_order)} disabled={locked || pending !== null} onApply={setResponses} />
     <DoeSettingsTable ariaLabel="일반 완전요인 반응 설정" fields={[
-      { key: "response", label: "반응 이름", controlId: "general-factorial-response", control: <input id="general-factorial-response" value={responseName} onChange={(event) => setResponseName(event.currentTarget.value)} /> },
-      { key: "unit", label: "반응 단위", controlId: "general-factorial-response-unit", control: <input id="general-factorial-response-unit" value={responseUnit} onChange={(event) => setResponseUnit(event.currentTarget.value)} /> },
+      { key: "response", label: "반응 이름", controlId: "general-factorial-response", control: <input id="general-factorial-response" disabled={locked || correctionMode} value={responseName} onChange={(event) => setResponseName(event.currentTarget.value)} /> },
+      { key: "unit", label: "반응 단위", controlId: "general-factorial-response-unit", control: <input id="general-factorial-response-unit" disabled={locked} value={responseUnit} onChange={(event) => setResponseUnit(event.currentTarget.value)} /> },
     ]} />
-    <div className="table-wrap"><table className="result-table"><thead><tr><th>Run</th>{design.factors.map((factor) => <th key={factor.name}>{factor.name}</th>)}<th>반응</th></tr></thead><tbody>{design.runs.map((run) => <tr key={run.run_order}><td>{run.run_order}</td>{design.factors.map((factor) => <td key={factor.name}>{String(run.factor_levels[factor.name])}</td>)}<td><input aria-label={`run ${run.run_order} 반응`} inputMode="decimal" value={responses[run.run_order] ?? ""} onChange={(event) => {
+    <div className="table-wrap"><table className="result-table"><thead><tr><th>Run</th>{design.factors.map((factor) => <th key={factor.name}>{factor.name}</th>)}<th>반응</th></tr></thead><tbody>{design.runs.map((run) => <tr key={run.run_order}><td>{run.run_order}</td>{design.factors.map((factor) => <td key={factor.name}>{String(run.factor_levels[factor.name])}</td>)}<td><input aria-label={`run ${run.run_order} 반응`} disabled={locked} inputMode="decimal" value={responses[run.run_order] ?? ""} onChange={(event) => {
       const value = event.currentTarget.value;
       setResponses((current) => ({ ...current, [run.run_order]: value }));
     }} /></td></tr>)}</tbody></table></div>
-    <DoeActionBar summary="반응 저장 후 범주형 term-block ANOVA를 실행합니다."><button className="secondary-button" disabled={pending !== null} onClick={onSave} type="button">{pending === "save" ? "저장 중" : "반응 저장"}</button><button className="primary-button" disabled={pending !== null} onClick={onAnalyze} type="button">{pending === "analysis" ? "분석 중" : "일반 완전요인 ANOVA"}</button></DoeActionBar>
+    {locked ? <><p className="notice-box notice-warning">{t("doe.response.locked")}</p><button className="secondary-button" type="button" disabled={pending !== null} onClick={onCorrection}>{t("doe.response.correct")}</button></> : null}
+    {correctionMode ? <p className="notice-box notice-warning">{t("doe.response.draft")}</p> : null}
+    {analysisSettings}
+    <DoeActionBar summary="반응 저장 후 범주형 term-block ANOVA를 실행합니다."><button className="secondary-button" disabled={pending !== null || locked} onClick={onSave} type="button">{pending === "save" ? "저장 중" : "반응 저장"}</button><button className="primary-button" disabled={pending !== null || !canAnalyze} onClick={onAnalyze} type="button">{pending === "analysis" ? "분석 중" : "일반 완전요인 ANOVA"}</button></DoeActionBar>
+    {analysis?.result.final_model && analysis.result.model_selection ? <FactorialModelSelectionResults selection={analysis.result.model_selection} model={analysis.result.final_model} fit={analysis.result.fit} n={analysis.result.sample.n_observations} /> : null}
     {analysis !== null ? <GeneralFactorialAnalysisView analysis={analysis} /> : null}
+    {analysis?.result.final_model ? <><FactorialResidualPlots plots={analysis.result.final_model.residual_plots} /><FactorialPlotsPanel model={analysis.result.final_model} design={design} /></> : null}
+    {analysis ? <FactorialStoredModelWorkflow design={design} analysisId={analysis.analysis_id} model={analysis.result.final_model} /> : null}
   </section>;
 }
 
 function GeneralFactorialAnalysisView({ analysis }: { analysis: GeneralFactorialAnalysisResponse }) {
-  return <section className="result-section"><h3>분산분석</h3><div className="metadata-grid"><span>R²</span><strong>{(analysis.result.fit.r_squared * 100).toFixed(2)}%</strong><span>Adjusted R²</span><strong>{analysis.result.fit.adjusted_r_squared === null ? "-" : `${(analysis.result.fit.adjusted_r_squared * 100).toFixed(2)}%`}</strong><span>Residual DF</span><strong>{analysis.result.sample.df_residual}</strong><span>Coding</span><strong>Treatment</strong></div><div className="table-wrap"><table className="result-table"><thead><tr><th>Source</th><th>DF</th><th>Adj SS</th><th>Adj MS</th><th>F</th><th>P</th></tr></thead><tbody>{analysis.result.anova.rows.map((row) => <tr key={row.term_id}><td>{row.source}</td><td>{row.df}</td><td>{formatNumber(row.adjusted_sum_squares)}</td><td>{formatNumber(row.adjusted_mean_square)}</td><td>{formatNumber(row.f_statistic)}</td><td>{formatNumber(row.p_value)}</td></tr>)}</tbody></table></div>{analysis.result.warnings.map((warning) => <div className="notice-box notice-warning" key={warning}>{warning}</div>)}</section>;
+  return <section className="result-section"><h3>분산분석</h3><div className="metadata-grid"><span>R²</span><strong>{(analysis.result.fit.r_squared * 100).toFixed(2)}%</strong><span>Adjusted R²</span><strong>{analysis.result.fit.adjusted_r_squared === null ? "-" : `${(analysis.result.fit.adjusted_r_squared * 100).toFixed(2)}%`}</strong><span>Residual DF</span><strong>{analysis.result.sample.df_residual}</strong><span>Coding</span><strong>Treatment</strong></div><div className="table-wrap"><table className="result-table"><thead><tr><th>Source</th><th>DF</th><th>Adj SS</th><th>Adj MS</th><th>F</th><th>P</th></tr></thead><tbody>{analysis.result.anova.rows.map((row) => <tr key={row.term_id}><td>{row.source}</td><td>{row.df}</td><td>{formatNumber(row.adjusted_sum_squares)}</td><td>{formatNumber(row.adjusted_mean_square)}</td><td>{formatNumber(row.f_statistic)}</td><td>{formatNumber(row.p_value)}</td></tr>)}</tbody></table></div>{analysis.result.warnings.map((warning) => <div className="notice-box notice-warning" key={warning}>{factorialWorkflowMessage(warning)}</div>)}</section>;
 }
 
 function updateGeneralFactor(
