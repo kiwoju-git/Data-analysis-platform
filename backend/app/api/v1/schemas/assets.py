@@ -8,6 +8,9 @@ WorkspaceAssetType = Literal[
     "regression_model",
     "doe_design",
     "bayesian_study",
+    "doe_analysis",
+    "doe_prediction",
+    "doe_analysis_report",
 ]
 
 

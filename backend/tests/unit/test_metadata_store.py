@@ -963,7 +963,7 @@ def test_initialize_metadata_store_upgrades_v17_with_batch_tables(
             ).fetchall()
         }
 
-    assert user_version == 19
+    assert user_version == 20
     assert batch_table == ("bayesian_recommendation_batches",)
     assert item_table == ("bayesian_recommendation_batch_items",)
     assert "latest_recommendation_batch_id" in lifecycle_columns
@@ -1168,7 +1168,7 @@ def test_initialize_metadata_store_upgrades_v16_with_empty_dataset_lineage(
 
     assert table == ("dataset_version_lineage",)
     assert count == 0
-    assert user_version == 19
+    assert user_version == 20
 
 
 def test_attribute_control_limit_set_metadata_round_trip_and_filters(tmp_path) -> None:

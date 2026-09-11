@@ -11,6 +11,13 @@ import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
 from app.core.doe_capabilities import FACTORIAL_AUTHORING_FACTOR_LIMIT
+from app.statistics.factorial_model_workflow import FactorialFeature, final_model_workflow
+from app.statistics.term_block_model_selection import (
+    DoeSelectionOptions,
+    ModelSelectionTermBlock,
+    TermBlockSelectionError,
+    select_term_blocks,
+)
 
 MAX_FACTORIAL_ANALYSIS_POINTS = 256
 
@@ -50,6 +57,7 @@ def calculate_factorial_analysis(
     max_interaction_order: int = 2,
     confidence_level: float = 0.95,
     point_limit: int = MAX_FACTORIAL_ANALYSIS_POINTS,
+    model_selection: DoeSelectionOptions | None = None,
 ) -> dict[str, object]:
     _validate_inputs(
         runs,
@@ -70,6 +78,27 @@ def calculate_factorial_analysis(
         max_interaction_order=max_interaction_order,
     )
     design_matrix = np.column_stack([term.values for term in terms])
+    selection_result = None
+    if model_selection is not None:
+        selection_blocks = [
+            ModelSelectionTermBlock(
+                term.term_id,
+                term.label,
+                term.factor_names,
+                (index,),
+                term.kind in {"intercept", "block", "curvature"},
+            )
+            for index, term in enumerate(terms)
+        ]
+        try:
+            columns, selection_result = select_term_blocks(
+                design_matrix, response, selection_blocks, model_selection
+            )
+        except TermBlockSelectionError as exc:
+            raise FactorialAnalysisError(exc.code) from exc
+        if columns != list(range(len(terms))):
+            terms = [terms[index] for index in columns]
+            design_matrix = design_matrix[:, columns]
     rank = int(np.linalg.matrix_rank(design_matrix))
     if rank != design_matrix.shape[1]:
         raise FactorialAnalysisError("doe_factorial_model_rank_deficient")
@@ -142,8 +171,8 @@ def calculate_factorial_analysis(
         1.0 - ((sse / df_residual) / (total_ss / (n_observations - 1))) if df_residual > 0 else None
     )
 
-    return {
-        "schema_version": 1,
+    result: dict[str, Any] = {
+        "schema_version": 1 if model_selection is None else 2,
         "summary_type": "factorial_analysis",
         "method": "hierarchical_ols_two_level_full_factorial",
         "response": {"name": response_name, "unit": response_unit},
@@ -157,7 +186,8 @@ def calculate_factorial_analysis(
         "model_policy": {
             "hierarchy_enforced": True,
             "max_interaction_order": max_interaction_order,
-            "automatic_term_selection": False,
+            "automatic_term_selection": model_selection is not None
+            and model_selection.method != "none",
             "center_curvature_included": any(run.center_point for run in ordered_runs),
             "block_fixed_effects_included": len(_block_levels(ordered_runs)) > 1,
             "sum_of_squares": "partial_drop_one",
@@ -222,6 +252,43 @@ def calculate_factorial_analysis(
         },
         "warnings": warnings,
     }
+    if selection_result is not None:
+        result["model_selection"] = selection_result
+        result["final_model"] = final_model_workflow(
+            design_matrix,
+            response,
+            coefficients,
+            [
+                FactorialFeature(
+                    term.term_id,
+                    term.label,
+                    "center_curvature" if term.kind == "curvature" else term.kind,
+                    term.factor_names,
+                    block_index=int(term.term_id.removeprefix("block_"))
+                    if term.kind == "block"
+                    else None,
+                )
+                for term in terms
+            ],
+            response_name=response_name,
+            run_orders=[run.run_order for run in ordered_runs],
+            factor_levels={name: [-1.0, 1.0] for name in factor_names},
+            observed_settings=[
+                {name: float(value) for name, value in run.coded_levels.items()}
+                for run in ordered_runs
+            ],
+            center_points=[run.center_point for run in ordered_runs],
+            block_indices=[run.block_index for run in ordered_runs],
+            coding="coded",
+            confidence_level=confidence_level,
+            point_limit=point_limit,
+        )
+        warnings.extend(result["final_model"]["warnings"])
+        if selection_result["method"] != "none":
+            warnings.append("doe_factorial_post_selection_inference_exploratory")
+        if selection_result["pooled_term_ids"]:
+            warnings.append("doe_factorial_initial_pooling_assumption")
+    return result
 
 
 def _validate_inputs(

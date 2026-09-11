@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 19
+SCHEMA_VERSION: Final = 20
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -201,6 +201,7 @@ class WorkspaceAssetCatalogRecord:
     metadata_updated_at: str | None
     dependency_count: int
     source_analysis_id: str | None
+    source_design_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -212,6 +213,9 @@ class ExperimentDesignDeletionSnapshot:
     response_count: int
     response_revision_count: int
     analysis_count: int
+    prediction_count: int
+    report_count: int
+    analysis_assets_sha256: str
 
 
 @dataclass(frozen=True)
@@ -1345,6 +1349,28 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
             DELETE FROM workspace_asset_user_metadata
             WHERE owner_type = 'bayesian_study' AND owner_id = OLD.study_id;
         END;
+        """,
+    ),
+    Migration(
+        version=20,
+        name="create_factorial_analysis_owned_assets",
+        sql="""
+        CREATE TABLE experiment_design_analysis_assets (
+            asset_id TEXT PRIMARY KEY,
+            analysis_id TEXT NOT NULL
+                REFERENCES experiment_design_analyses(analysis_id) ON DELETE CASCADE,
+            kind TEXT NOT NULL CHECK (kind IN ('prediction', 'html_report')),
+            schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+            locale TEXT CHECK (locale IS NULL OR locale IN ('en', 'ko')),
+            source_analysis_sha256 TEXT NOT NULL CHECK (length(source_analysis_sha256) = 64),
+            sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+            media_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 16777216),
+            content BLOB NOT NULL CHECK (typeof(content) = 'blob' AND length(content) = size_bytes),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_experiment_analysis_assets
+        ON experiment_design_analysis_assets(analysis_id, kind, created_at, asset_id);
         """,
     ),
 )
@@ -2696,6 +2722,34 @@ def list_workspace_asset_catalog_records(
 
         UNION ALL
 
+        SELECT analysis.analysis_id, 'doe_analysis', analysis.method_id, analysis.method_id,
+            design.name || ' / ' || analysis.response_name, 'Stored factorial analysis',
+            'available', analysis.created_at, analysis.created_at, 0, NULL, NULL,
+            (SELECT COUNT(*) FROM experiment_design_analysis_assets asset
+                WHERE asset.analysis_id=analysis.analysis_id), analysis.analysis_id
+        FROM experiment_design_analyses analysis
+        JOIN experiment_design_versions version
+            ON version.design_version_id=analysis.design_version_id
+        JOIN experiment_designs design ON design.design_id=version.design_id
+        WHERE analysis.method_id IN ('doe.factorial_design', 'doe.general_factorial_design')
+
+        UNION ALL
+
+        SELECT asset.asset_id,
+            CASE WHEN asset.kind='prediction' THEN 'doe_prediction' ELSE 'doe_analysis_report' END,
+            asset.kind, analysis.method_id,
+            design.name || ' / ' || analysis.response_name,
+            CASE WHEN asset.kind='prediction' THEN 'Factorial prediction'
+                 ELSE 'HTML analysis report' END,
+            'available', asset.created_at, asset.created_at, 0, NULL, NULL, 0, analysis.analysis_id
+        FROM experiment_design_analysis_assets asset
+        JOIN experiment_design_analyses analysis ON analysis.analysis_id=asset.analysis_id
+        JOIN experiment_design_versions version
+            ON version.design_version_id=analysis.design_version_id
+        JOIN experiment_designs design ON design.design_id=version.design_id
+
+        UNION ALL
+
         SELECT
             study.study_id,
             'bayesian_study',
@@ -2731,7 +2785,7 @@ def list_workspace_asset_catalog_records(
     if category is not None:
         category_types = {
             "datasets": ("dataset_version",),
-            "analyses": ("analysis_run",),
+            "analyses": ("analysis_run", "doe_analysis", "doe_prediction", "doe_analysis_report"),
             "models": ("regression_model",),
             "designs": ("doe_design", "bayesian_study"),
         }.get(category)
@@ -2773,7 +2827,11 @@ def list_workspace_asset_catalog_records(
             WITH assets AS ({catalog_sql})
             SELECT asset_id, asset_type, subtype, method_id, display_name,
                    secondary_text, status, created_at, updated_at, pinned,
-                   note, metadata_updated_at, dependency_count, source_analysis_id
+                   note, metadata_updated_at, dependency_count, source_analysis_id,
+                   (SELECT version.design_id FROM experiment_design_analyses analysis
+                    JOIN experiment_design_versions version
+                        ON version.design_version_id=analysis.design_version_id
+                    WHERE analysis.analysis_id=assets.source_analysis_id) AS source_design_id
             FROM assets{where_clause}
             ORDER BY {order_clause}
             LIMIT ? OFFSET ?;
@@ -2796,6 +2854,7 @@ def list_workspace_asset_catalog_records(
             metadata_updated_at=None if row[11] is None else str(row[11]),
             dependency_count=int(row[12]),
             source_analysis_id=None if row[13] is None else str(row[13]),
+            source_design_id=None if row[14] is None else str(row[14]),
         )
         for row in rows
     ]
@@ -2814,7 +2873,8 @@ def delete_experiment_design_record(
     *,
     design_id: str,
     expected_design_sha256: str,
-    expected_counts: tuple[int, int, int, int, int],
+    expected_counts: tuple[int, int, int, int, int, int, int],
+    expected_analysis_assets_sha256: str,
 ) -> ExperimentDesignDeletionSnapshot:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
@@ -2829,8 +2889,14 @@ def delete_experiment_design_record(
             snapshot.response_count,
             snapshot.response_revision_count,
             snapshot.analysis_count,
+            snapshot.prediction_count,
+            snapshot.report_count,
         )
-        if snapshot.design_sha256 != expected_design_sha256 or actual_counts != expected_counts:
+        if (
+            snapshot.design_sha256 != expected_design_sha256
+            or actual_counts != expected_counts
+            or snapshot.analysis_assets_sha256 != expected_analysis_assets_sha256
+        ):
             connection.rollback()
             raise WorkspaceAssetStorageConflict("doe_design_deletion_conflict")
         version_ids = [
@@ -2950,6 +3016,15 @@ def _experiment_design_deletion_snapshot(
     ).fetchone()
     if counts is None or version is None:
         raise WorkspaceAssetStorageConflict("doe_design_deletion_conflict")
+    assets = connection.execute(
+        """SELECT asset.asset_id, asset.kind, asset.sha256
+        FROM experiment_design_analysis_assets asset
+        JOIN experiment_design_analyses analysis ON analysis.analysis_id = asset.analysis_id
+        JOIN experiment_design_versions version
+            ON version.design_version_id = analysis.design_version_id
+        WHERE version.design_id = ? ORDER BY asset.asset_id""",
+        (design_id,),
+    ).fetchall()
     return ExperimentDesignDeletionSnapshot(
         design=_experiment_design_from_row(row),
         design_sha256=str(version[0]),
@@ -2958,6 +3033,11 @@ def _experiment_design_deletion_snapshot(
         response_count=int(counts[2]),
         response_revision_count=int(counts[3]),
         analysis_count=int(counts[4]),
+        prediction_count=sum(row[1] == "prediction" for row in assets),
+        report_count=sum(row[1] == "html_report" for row in assets),
+        analysis_assets_sha256=hashlib.sha256(
+            json.dumps(assets, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
     )
 
 

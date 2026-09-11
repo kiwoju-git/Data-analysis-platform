@@ -32,7 +32,7 @@ class SchemaComponentContract:
     property_any_of_refs: tuple[tuple[str, frozenset[str]], ...] = ()
     array_item_refs: tuple[tuple[str, str], ...] = ()
     property_consts: tuple[tuple[str, object], ...] = ()
-    property_enums: tuple[tuple[str, frozenset[str]], ...] = ()
+    property_enums: tuple[tuple[str, frozenset[object]], ...] = ()
     additional_properties: bool | None = False
 
 
@@ -997,6 +997,127 @@ FRONTEND_ROUTE_CONTRACTS = [
         response_schema="AttributeControlMonitoringPreflightResponse",
         request_media_types=frozenset({"application/json"}),
         parameters=frozenset({("limit_set_id", "path")}),
+    ),
+]
+
+
+FRONTEND_ROUTE_CONTRACTS += [
+    OperationContract(
+        route_name="factorialPredictionPreflight",
+        method="post",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/prediction-preflight",
+        success_status="200",
+        response_schema="DoePredictionPreflightResponse",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="factorialPredictions",
+        method="post",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/predictions",
+        success_status="201",
+        response_schema="DoePredictionResponse",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="factorialPredictions",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/predictions",
+        success_status="200",
+        response_schema="DoeAnalysisAssetList",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="factorialPrediction",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/predictions/{prediction_id}",
+        success_status="200",
+        response_schema="DoePredictionResponse",
+        parameters=frozenset(
+            {("design_id", "path"), ("analysis_id", "path"), ("prediction_id", "path")}
+        ),
+    ),
+    OperationContract(
+        route_name="factorialAnalysisExports",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/exports",
+        success_status="200",
+        response_schema="DoeAnalysisAssetList",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="factorialAnalysisHtmlExport",
+        method="post",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/exports/html",
+        success_status="201",
+        response_schema="DoeAnalysisAssetDescriptor",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="factorialAnalysisAsset",
+        method="delete",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/exports/{asset_id}",
+        success_status="200",
+        response_schema="DoeAnalysisAssetDeleteResponse",
+        parameters=frozenset(
+            {("design_id", "path"), ("analysis_id", "path"), ("asset_id", "path")}
+        ),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="factorialAnalysisAssetDownload",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/exports/{asset_id}/download",
+        success_status="200",
+        response_schema=None,
+        parameters=frozenset(
+            {("design_id", "path"), ("analysis_id", "path"), ("asset_id", "path")}
+        ),
+    ),
+    OperationContract(
+        route_name="factorialAnalysisAssetDeletionPreflight",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/exports/{asset_id}/deletion-preflight",
+        success_status="200",
+        response_schema="DoeAnalysisAssetDescriptor",
+        parameters=frozenset(
+            {("design_id", "path"), ("analysis_id", "path"), ("asset_id", "path")}
+        ),
+    ),
+    OperationContract(
+        route_name="factorialAnalysisDeletionPreflight",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}/deletion-preflight",
+        success_status="200",
+        response_schema="DoeAnalysisDeletionPreflight",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="factorialAnalysisDelete",
+        method="delete",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}",
+        success_status="200",
+        response_schema="DoeAnalysisDeletionPreflight",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="factorialAnalysisDelete",
+        method="get",
+        path="/api/v1/doe-designs/{design_id}/analyses/{analysis_id}",
+        success_status="200",
+        response_schema="DoeFactorialAnalysisResponse",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
+    ),
+    OperationContract(
+        route_name="generalFactorialAnalysis",
+        method="get",
+        path="/api/v1/doe-designs/general-factorial/{design_id}/analyses/{analysis_id}",
+        success_status="200",
+        response_schema="GeneralFactorialAnalysisResponse",
+        parameters=frozenset({("design_id", "path"), ("analysis_id", "path")}),
     ),
 ]
 
@@ -2212,7 +2333,12 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "warnings",
             }
         ),
-        property_consts=(("schema_version", 1), ("summary_type", "factorial_analysis")),
+        property_consts=(("summary_type", "factorial_analysis"),),
+        property_enums=(("schema_version", frozenset({1, 2})),),
+        property_any_of_refs=(
+            ("model_selection", frozenset({"DoeModelSelectionResult"})),
+            ("final_model", frozenset({"DoeFinalModelWorkflow"})),
+        ),
     ),
     SchemaComponentContract(
         name="ResponseSurfaceDesignCreateRequest",

@@ -28,6 +28,7 @@ from app.statistics.factorial_analysis import (
     FactorialAnalysisRun,
     calculate_factorial_analysis,
 )
+from app.statistics.term_block_model_selection import DoeSelectionOptions
 from app.storage.metadata import (
     ExperimentDesignAnalysisRecord,
     ExperimentRunRecord,
@@ -38,8 +39,8 @@ from app.storage.metadata import (
 )
 
 DOE_FACTORIAL_ANALYSIS_SCHEMA_VERSION = 2
-DOE_FACTORIAL_ANALYSIS_CONFIG_SCHEMA_VERSION = 2
-SUPPORTED_FACTORIAL_METHOD_VERSIONS = {"0.4.0", "0.5.0", "0.6.0", "0.7.0"}
+DOE_FACTORIAL_ANALYSIS_CONFIG_SCHEMA_VERSION = 3
+SUPPORTED_FACTORIAL_METHOD_VERSIONS = {"0.4.0", "0.5.0", "0.6.0", "0.7.0", "0.8.0"}
 
 
 def create_factorial_analysis(
@@ -48,6 +49,12 @@ def create_factorial_analysis(
     body: DoeFactorialAnalysisCreateRequest,
 ) -> DoeFactorialAnalysisResponse:
     design = get_factorial_design(settings, design_id)
+    if body.model_selection.method != "none" and (
+        design.fractional is not None or design.screening is not None
+    ):
+        raise _factorial_analysis_api_error(
+            "doe_factorial_model_selection_unsupported_for_aliased_design"
+        )
     response_name = body.response_name.strip()
     dependency = load_response_revision_dependency(
         settings,
@@ -89,6 +96,7 @@ def create_factorial_analysis(
             ),
             confidence_level=float(body.confidence_level),
             point_limit=body.point_limit,
+            model_selection=DoeSelectionOptions(**body.model_selection.model_dump()),
         )
         if fractional_design is not None:
             result_payload["method"] = "regular_fractional_factorial_alias_contrast_ols"
@@ -147,7 +155,6 @@ def create_factorial_analysis(
         result=result,
         **runtime_build_provenance(settings),
     )
-    result_json = _json_dumps(response.model_dump(mode="json"))
     config_json = _json_dumps(
         {
             "schema_version": DOE_FACTORIAL_ANALYSIS_CONFIG_SCHEMA_VERSION,
@@ -162,6 +169,8 @@ def create_factorial_analysis(
             "response_name": response_name,
         }
     )
+    response.result.config_sha256 = hashlib.sha256(config_json.encode("utf-8")).hexdigest()
+    result_json = _json_dumps(response.model_dump(mode="json"))
     record = ExperimentDesignAnalysisRecord(
         analysis_id=str(analysis_id),
         design_version_id=str(design.design_version_id),
@@ -236,7 +245,7 @@ def _validated_analysis_response(
     if not isinstance(config, dict):
         raise _metadata_error("doe_factorial_analysis_metadata_invalid")
     expected_config = {
-        "schema_version": DOE_FACTORIAL_ANALYSIS_CONFIG_SCHEMA_VERSION,
+        "schema_version": 3 if response.result.schema_version == 2 else 2,
         "design_id": str(design.design_id),
         "design_version_id": str(design.design_version_id),
         "design_sha256": design.design_sha256,
@@ -248,6 +257,12 @@ def _validated_analysis_response(
     }
     if any(config.get(key) != value for key, value in expected_config.items()):
         raise _metadata_error("doe_factorial_analysis_dependency_mismatch")
+    if (
+        response.result.schema_version == 2
+        and response.result.config_sha256
+        != hashlib.sha256(record.config_json.encode("utf-8")).hexdigest()
+    ):
+        raise _metadata_error("doe_factorial_analysis_config_checksum_mismatch")
     if (
         response.analysis_id != UUID(record.analysis_id)
         or response.design_id != design.design_id

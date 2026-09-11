@@ -124,6 +124,18 @@ def update_workspace_asset_metadata(
 
 
 def _open_target(record: WorkspaceAssetCatalogRecord) -> WorkspaceAssetOpenTarget:
+    if record.asset_type in {"doe_analysis", "doe_prediction", "doe_analysis_report"}:
+        design_kind = (
+            "general" if record.method_id == "doe.general_factorial_design" else "two_level"
+        )
+        return WorkspaceAssetOpenTarget(
+            path=(
+                f"/analysis/doe/doe.factorial_design?design_id={record.source_design_id}"
+                f"&design_kind={design_kind}&analysis_id={record.source_analysis_id}"
+                f"&asset_id={record.asset_id}"
+            ),
+            label="Open factorial analysis",
+        )
     if record.asset_type == "dataset_version":
         return WorkspaceAssetOpenTarget(
             path=f"/datasets?version_id={record.asset_id}", label="데이터셋에서 열기"

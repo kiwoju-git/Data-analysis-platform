@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Request, Response, status
 
+from app.api.v1.factorial_model_workflow import router as workflow_router
 from app.api.v1.schemas.doe import (
     DoeDesignDeleteRequest,
     DoeDesignDeleteResponse,
@@ -79,6 +80,7 @@ from app.services.response_surface_designs import (
 )
 
 router = APIRouter(prefix="/doe-designs", tags=["doe-designs"])
+router.include_router(workflow_router)
 
 
 @router.get(

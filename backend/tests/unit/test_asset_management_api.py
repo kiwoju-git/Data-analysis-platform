@@ -107,6 +107,7 @@ def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
         connection.execute("DROP TRIGGER cleanup_doe_design_user_metadata")
         connection.execute("DROP TRIGGER cleanup_bayesian_study_user_metadata")
         connection.execute("DROP TABLE workspace_asset_user_metadata")
+        connection.execute("DROP TABLE experiment_design_analysis_assets")
         connection.execute("DELETE FROM schema_migrations WHERE version >= 15")
         connection.execute("PRAGMA user_version = 14")
 
@@ -126,7 +127,8 @@ def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
     assert "dataset_version_lineage" in tables
     assert "bayesian_recommendation_batches" in tables
     assert "bayesian_recommendation_batch_items" in tables
-    assert user_version == 19
+    assert "experiment_design_analysis_assets" in tables
+    assert user_version == 20
 
 
 def test_dataset_archive_visibility_round_trip_and_schema_15_upgrade(tmp_path) -> None:

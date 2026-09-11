@@ -603,4 +603,37 @@ export const apiRoutes = {
   gageRrPreflight(): string {
     return apiUrl("/quality/gage-rr/preflight");
   },
+  factorialPredictionPreflight(designId: string, analysisId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/prediction-preflight`);
+  },
+  factorialPredictions(designId: string, analysisId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/predictions`);
+  },
+  factorialPrediction(designId: string, analysisId: string, predictionId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/predictions/${pathId(predictionId)}`);
+  },
+  factorialAnalysisExports(designId: string, analysisId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/exports`);
+  },
+  factorialAnalysisHtmlExport(designId: string, analysisId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/exports/html`);
+  },
+  factorialAnalysisAsset(designId: string, analysisId: string, assetId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/exports/${pathId(assetId)}`);
+  },
+  factorialAnalysisAssetDownload(designId: string, analysisId: string, assetId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/exports/${pathId(assetId)}/download`);
+  },
+  factorialAnalysisAssetDeletionPreflight(designId: string, analysisId: string, assetId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/exports/${pathId(assetId)}/deletion-preflight`);
+  },
+  factorialAnalysisDeletionPreflight(designId: string, analysisId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}/deletion-preflight`);
+  },
+  factorialAnalysisDelete(designId: string, analysisId: string): string {
+    return apiUrl(`/doe-designs/${pathId(designId)}/analyses/${pathId(analysisId)}`);
+  },
+  generalFactorialAnalysis(designId: string, analysisId: string): string {
+    return apiUrl(`/doe-designs/general-factorial/${pathId(designId)}/analyses/${pathId(analysisId)}`);
+  },
 };

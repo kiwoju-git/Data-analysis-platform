@@ -3,6 +3,9 @@ export type WorkspaceAssetType =
   | "analysis_run"
   | "regression_model"
   | "doe_design"
+  | "doe_analysis"
+  | "doe_prediction"
+  | "doe_analysis_report"
   | "bayesian_study";
 
 export type WorkspaceAssetCategory = "datasets" | "analyses" | "models" | "designs";

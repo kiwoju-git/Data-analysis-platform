@@ -1,5 +1,6 @@
 import { apiErrorCode, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
+import type { DoeModelSelectionOptions } from "./types/doeModelWorkflow";
 import type {
   DoeDesignResponsesResponse,
   DoeDesignResponsesUpsertRequest,
@@ -111,7 +112,8 @@ export async function saveGeneralFactorialResponses(
 
 export async function createGeneralFactorialAnalysis(
   designId: string,
-  request: { response_name: string; max_interaction_order: number },
+  request: { response_name: string; max_interaction_order: number; response_revision_id?: string | null;
+    confidence_level?: number; point_limit?: number; model_selection?: DoeModelSelectionOptions },
 ): Promise<GeneralFactorialAnalysisResponse> {
   const response = await fetchApi(apiRoutes.doeGeneralFactorialAnalyses(designId), {
     method: "POST",

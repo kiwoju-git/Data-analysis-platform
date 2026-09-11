@@ -9,6 +9,14 @@ from typing import Any
 import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
+from app.statistics.factorial_model_workflow import FactorialFeature, final_model_workflow
+from app.statistics.term_block_model_selection import (
+    DoeSelectionOptions,
+    ModelSelectionTermBlock,
+    TermBlockSelectionError,
+    select_term_blocks,
+)
+
 
 class GeneralFactorialAnalysisError(ValueError):
     def __init__(self, code: str) -> None:
@@ -39,6 +47,9 @@ def calculate_general_factorial_analysis(
     response_name: str,
     response_unit: str | None,
     max_interaction_order: int,
+    model_selection: DoeSelectionOptions | None = None,
+    confidence_level: float = 0.95,
+    point_limit: int = 256,
 ) -> dict[str, Any]:
     factor_names = tuple(factor_levels)
     _validate(runs, factor_levels, max_interaction_order)
@@ -50,6 +61,30 @@ def calculate_general_factorial_analysis(
     blocks = _term_blocks(ordered, factor_levels, max_interaction_order)
     intercept = np.ones((len(ordered), 1), dtype=float)
     matrix = np.column_stack([intercept, *(block.columns for block in blocks)])
+    selection_result = None
+    if model_selection is not None:
+        selection_blocks = [ModelSelectionTermBlock("intercept", "Intercept", (), (0,), True)]
+        offset = 1
+        for block in blocks:
+            width = block.columns.shape[1]
+            selection_blocks.append(
+                ModelSelectionTermBlock(
+                    block.term_id,
+                    block.label,
+                    block.factor_names,
+                    tuple(range(offset, offset + width)),
+                )
+            )
+            offset += width
+        try:
+            columns, selection_result = select_term_blocks(
+                matrix, y, selection_blocks, model_selection
+            )
+        except TermBlockSelectionError as exc:
+            raise GeneralFactorialAnalysisError(exc.code) from exc
+        blocks = [block for block in blocks if block.term_id in selection_result["final_term_ids"]]
+        if columns != list(range(matrix.shape[1])):
+            matrix = matrix[:, columns]
     rank = int(np.linalg.matrix_rank(matrix))
     if rank != matrix.shape[1]:
         raise GeneralFactorialAnalysisError("doe_general_factorial_model_rank_deficient")
@@ -132,8 +167,8 @@ def calculate_general_factorial_analysis(
     if not lack_of_fit["available"]:
         warnings.append(str(lack_of_fit["reason"]))
 
-    return {
-        "schema_version": 1,
+    result: dict[str, Any] = {
+        "schema_version": 1 if model_selection is None else 2,
         "summary_type": "general_factorial_analysis",
         "method": "categorical_treatment_coding_partial_f_tests",
         "response": {"name": response_name, "unit": response_unit},
@@ -144,7 +179,8 @@ def calculate_general_factorial_analysis(
         },
         "model_policy": {
             "max_interaction_order": max_interaction_order,
-            "automatic_term_selection": False,
+            "automatic_term_selection": model_selection is not None
+            and model_selection.method != "none",
             "sum_of_squares": "partial_drop_term_block",
         },
         "sample": {
@@ -187,6 +223,51 @@ def calculate_general_factorial_analysis(
         "diagnostics": {"points": diagnostic_points},
         "warnings": warnings,
     }
+    if selection_result is not None:
+        features = [FactorialFeature("intercept", "Intercept", "intercept")]
+        for block in blocks:
+            for indices in product(
+                *(range(1, len(factor_levels[name])) for name in block.factor_names)
+            ):
+                label = " * ".join(
+                    f"{name}[{factor_levels[name][level]}]"
+                    for name, level in zip(block.factor_names, indices, strict=True)
+                )
+                features.append(
+                    FactorialFeature(
+                        block.term_id,
+                        label,
+                        "main_effect" if len(indices) == 1 else "interaction",
+                        block.factor_names,
+                        indices,
+                    )
+                )
+        result["model_selection"] = selection_result
+        result["final_model"] = final_model_workflow(
+            matrix,
+            y,
+            coefficients,
+            features,
+            response_name=response_name,
+            run_orders=[run.run_order for run in ordered],
+            factor_levels={
+                name: list(range(len(levels))) for name, levels in factor_levels.items()
+            },
+            observed_settings=[
+                {name: float(value) for name, value in run.level_indices.items()} for run in ordered
+            ],
+            center_points=[False] * n,
+            block_indices=[None] * n,
+            coding="treatment",
+            confidence_level=confidence_level,
+            point_limit=point_limit,
+        )
+        warnings.extend(result["final_model"]["warnings"])
+        if selection_result["method"] != "none":
+            warnings.append("doe_factorial_post_selection_inference_exploratory")
+        if selection_result["pooled_term_ids"]:
+            warnings.append("doe_factorial_initial_pooling_assumption")
+    return result
 
 
 def _validate(

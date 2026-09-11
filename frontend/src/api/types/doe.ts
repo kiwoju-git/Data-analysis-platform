@@ -1,3 +1,5 @@
+import type { DoeFinalModelWorkflow, DoeModelSelectionOptions, DoeModelSelectionResult } from "./doeModelWorkflow";
+
 export interface TwoLevelNumericFactorRequest {
   factor_kind: "numeric";
   name: string;
@@ -148,7 +150,7 @@ export interface GeneralFactorialDesignResponse {
   design_version_id: string;
   version_number: 1;
   method_id: "doe.general_factorial_design";
-  method_version: "0.1.0" | "0.2.0";
+  method_version: "0.1.0" | "0.2.0" | "0.3.0";
   family: "general_full_factorial";
   name: string;
   status: string;
@@ -179,7 +181,7 @@ export interface GeneralFactorialAnalysisResponse {
   design_version_id: string;
   design_version_number: number;
   method_id: "doe.general_factorial_design";
-  method_version: "0.1.0" | "0.2.0";
+  method_version: "0.1.0" | "0.2.0" | "0.3.0";
   analysis_schema_version: 1;
   design_sha256: string;
   response_revision_id: string;
@@ -189,6 +191,8 @@ export interface GeneralFactorialAnalysisResponse {
   created_at: string;
   app_version: string;
   result: {
+    model_selection?: DoeModelSelectionResult | null;
+    final_model?: DoeFinalModelWorkflow | null;
     coding: { policy: "treatment"; reference_levels: Record<string, number | string> };
     sample: { n_observations: number; df_model: number; df_residual: number };
     fit: {
@@ -221,6 +225,8 @@ export interface GeneralFactorialAnalysisResponse {
 }
 
 export interface DoeDesignDeletionCounts {
+  prediction_count?: number;
+  report_count?: number;
   version_count: number;
   run_count: number;
   response_count: number;
@@ -375,6 +381,7 @@ export interface DoeResponseRevisionHistoryResponse {
 }
 
 export interface DoeFactorialAnalysisCreateRequest {
+  model_selection?: DoeModelSelectionOptions;
   response_name: string;
   response_revision_id?: string | null;
   max_interaction_order: number;
@@ -425,7 +432,10 @@ export interface DoeFactorialDiagnosticPoint {
 }
 
 export interface DoeFactorialAnalysisResult {
-  schema_version: 1;
+  schema_version: 1 | 2;
+  model_selection?: DoeModelSelectionResult | null;
+  final_model?: DoeFinalModelWorkflow | null;
+  config_sha256?: string | null;
   summary_type: "factorial_analysis";
   method: string;
   response: { name: string; unit: string | null };

@@ -851,7 +851,7 @@ def test_factorial_design_api_creates_and_reads_seeded_design_asset(tmp_path) ->
     payload = response.json()
     FactorialDesignResponse.model_validate(payload)
     assert payload["method_id"] == "doe.factorial_design"
-    assert payload["method_version"] == "0.7.0"
+    assert payload["method_version"] == "0.8.0"
     assert payload["family"] == "two_level_full_factorial"
     assert payload["status"] == "designed"
     assert payload["name"] == "screening design"
@@ -1029,7 +1029,7 @@ def test_factorial_analysis_api_persists_effects_anova_diagnostics_and_provenanc
     assert analysis_response.status_code == 201
     DoeFactorialAnalysisResponse.model_validate(analysis)
     assert analysis["method_id"] == "doe.factorial_design"
-    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.7.0"
+    assert analysis["method_version"] == METHOD_VERSIONS["doe.factorial_design"] == "0.8.0"
     assert analysis["analysis_schema_version"] == 2
     assert analysis["design_version_id"] == design["design_version_id"]
     assert analysis["design_sha256"] == design["design_sha256"]

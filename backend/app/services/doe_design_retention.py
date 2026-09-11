@@ -55,6 +55,8 @@ def delete_doe_design(
         snapshot.response_count,
         snapshot.response_revision_count,
         snapshot.analysis_count,
+        snapshot.prediction_count,
+        snapshot.report_count,
     )
     try:
         deleted = delete_experiment_design_record(
@@ -62,6 +64,7 @@ def delete_doe_design(
             design_id=str(design_id),
             expected_design_sha256=snapshot.design_sha256,
             expected_counts=counts_tuple,
+            expected_analysis_assets_sha256=snapshot.analysis_assets_sha256,
         )
     except WorkspaceAssetStorageConflict as exc:
         raise _conflict() from exc
@@ -81,6 +84,8 @@ def _counts(snapshot: ExperimentDesignDeletionSnapshot) -> DoeDesignDeletionCoun
         response_count=snapshot.response_count,
         response_revision_count=snapshot.response_revision_count,
         analysis_count=snapshot.analysis_count,
+        prediction_count=snapshot.prediction_count,
+        report_count=snapshot.report_count,
     )
 
 
@@ -92,6 +97,7 @@ def _manifest(snapshot: ExperimentDesignDeletionSnapshot) -> str:
         "method_id": snapshot.design.method_id,
         "status": snapshot.design.status,
         "counts": _counts(snapshot).model_dump(mode="json"),
+        "analysis_assets_sha256": snapshot.analysis_assets_sha256,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

@@ -171,7 +171,7 @@ def test_two_level_factorial_supports_categorical_pseudo_centers(tmp_path) -> No
         payload = response.json()
         restored = client.get(f"/api/v1/doe-designs/{payload['design_id']}")
 
-    assert payload["method_version"] == "0.7.0"
+    assert payload["method_version"] == "0.8.0"
     assert payload["design_schema_version"] == 2
     assert payload["run_count"] == 6
     assert payload["factors"][0]["factor_kind"] == "numeric"
@@ -336,7 +336,7 @@ def test_general_factorial_api_creates_three_level_design_and_analyzes_response(
         )
 
     assert design["method_id"] == "doe.general_factorial_design"
-    assert design["method_version"] == "0.2.0"
+    assert design["method_version"] == "0.3.0"
     assert design["run_count"] == 12
     assert saved.status_code == 200, saved.text
     assert analysis.status_code == 201, analysis.text

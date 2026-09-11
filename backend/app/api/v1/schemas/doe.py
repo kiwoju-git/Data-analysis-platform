@@ -5,6 +5,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
+from app.api.v1.schemas.doe_model_workflow import (
+    DoeFinalModelWorkflow,
+    DoeModelSelectionOptions,
+    DoeModelSelectionResult,
+)
 from app.core.doe_capabilities import (
     FACTORIAL_AUTHORING_FACTOR_LIMIT,
     GENERAL_FACTORIAL_AUTHORING_FACTOR_LIMIT,
@@ -401,7 +406,7 @@ class GeneralFactorialDesignResponse(BaseModel):
     design_version_id: UUID
     version_number: Literal[1]
     method_id: Literal["doe.general_factorial_design"]
-    method_version: Literal["0.1.0", "0.2.0"]
+    method_version: Literal["0.1.0", "0.2.0", "0.3.0"]
     family: Literal["general_full_factorial"]
     name: str
     status: str
@@ -417,6 +422,9 @@ class GeneralFactorialDesignResponse(BaseModel):
 
 class GeneralFactorialAnalysisCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    model_selection: DoeModelSelectionOptions = Field(default_factory=DoeModelSelectionOptions)
+    confidence_level: FiniteFloat = Field(default=0.95, gt=0, lt=1)
+    point_limit: int = Field(default=256, ge=1, le=256)
 
     response_name: str = Field(min_length=1, max_length=80)
     response_revision_id: UUID | None = None
@@ -431,7 +439,7 @@ class GeneralFactorialAnalysisResponse(BaseModel):
     design_version_id: UUID
     design_version_number: int = Field(ge=1)
     method_id: Literal["doe.general_factorial_design"]
-    method_version: Literal["0.1.0", "0.2.0"]
+    method_version: Literal["0.1.0", "0.2.0", "0.3.0"]
     analysis_schema_version: Literal[1]
     design_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     response_revision_id: UUID
@@ -444,6 +452,8 @@ class GeneralFactorialAnalysisResponse(BaseModel):
 
 
 class DoeDesignDeletionCounts(BaseModel):
+    prediction_count: int = Field(default=0, ge=0)
+    report_count: int = Field(default=0, ge=0)
     model_config = ConfigDict(extra="forbid")
 
     version_count: int = Field(ge=1)
@@ -565,6 +575,7 @@ class LatinHypercubeDesignResponse(BaseModel):
 
 class DoeFactorialAnalysisCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    model_selection: DoeModelSelectionOptions = Field(default_factory=DoeModelSelectionOptions)
 
     response_name: str = Field(min_length=1, max_length=80)
     response_revision_id: UUID | None = None
@@ -778,7 +789,10 @@ class DoeFactorialPlotsResponse(BaseModel):
 class DoeFactorialAnalysisResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
+    model_selection: DoeModelSelectionResult | None = None
+    final_model: DoeFinalModelWorkflow | None = None
+    config_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     summary_type: Literal["factorial_analysis"]
     method: str
     response: DoeFactorialResponseMetadata
@@ -795,6 +809,12 @@ class DoeFactorialAnalysisResult(BaseModel):
     warnings: list[str]
     fractional_design: FractionalFactorialMetadataResponse | None = None
     screening_design: PlackettBurmanMetadataResponse | None = None
+
+    @model_validator(mode="after")
+    def validate_final_model(self) -> DoeFactorialAnalysisResult:
+        if self.schema_version == 2 and (self.model_selection is None or self.final_model is None):
+            raise ValueError("doe_factorial_final_model_missing")
+        return self
 
 
 class DoeFactorialAnalysisResponse(BaseModel):

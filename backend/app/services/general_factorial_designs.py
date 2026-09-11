@@ -24,6 +24,7 @@ from app.api.v1.schemas.doe import (
     GeneralFactorialOptionsResponse,
     GeneralFactorialRunResponse,
 )
+from app.api.v1.schemas.doe_model_workflow import DoeFinalModelWorkflow, DoeModelSelectionResult
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import APP_VERSION, utc_now
@@ -46,6 +47,7 @@ from app.statistics.general_factorial_design import (
     generate_general_full_factorial_design,
     options_to_payload,
 )
+from app.statistics.term_block_model_selection import DoeSelectionOptions
 from app.storage.metadata import (
     ExperimentDesignAnalysisRecord,
     ExperimentDesignRecord,
@@ -65,7 +67,7 @@ DOE_GENERAL_FACTORIAL_METHOD_ID: Literal["doe.general_factorial_design"] = (
     "doe.general_factorial_design"
 )
 DOE_GENERAL_FACTORIAL_METHOD_VERSION = cast(
-    Literal["0.2.0"], METHOD_VERSIONS[DOE_GENERAL_FACTORIAL_METHOD_ID]
+    Literal["0.3.0"], METHOD_VERSIONS[DOE_GENERAL_FACTORIAL_METHOD_ID]
 )
 
 
@@ -245,11 +247,22 @@ def create_general_factorial_analysis(
             response_name=body.response_name.strip(),
             response_unit=next(iter(units)),
             max_interaction_order=body.max_interaction_order,
+            model_selection=DoeSelectionOptions(**body.model_selection.model_dump()),
+            confidence_level=body.confidence_level,
+            point_limit=body.point_limit,
         )
     except GeneralFactorialAnalysisError as exc:
         raise ApiError(
             code=exc.code, message=str(exc), status_code=status.HTTP_409_CONFLICT
         ) from exc
+    result["final_model"] = DoeFinalModelWorkflow.model_validate(result["final_model"]).model_dump(
+        mode="json"
+    )
+    result["model_selection"] = DoeModelSelectionResult.model_validate(
+        result["model_selection"]
+    ).model_dump(mode="json")
+    config_json = _json_dumps({"schema_version": 2, **body.model_dump(mode="json")})
+    result["config_sha256"] = hashlib.sha256(config_json.encode("utf-8")).hexdigest()
     analysis_id = uuid4()
     now = utc_now()
     response = GeneralFactorialAnalysisResponse(
@@ -276,7 +289,7 @@ def create_general_factorial_analysis(
         response_name=response.response_name,
         method_id=DOE_GENERAL_FACTORIAL_METHOD_ID,
         method_version=response.method_version,
-        config_json=_json_dumps({"schema_version": 1, **body.model_dump(mode="json")}),
+        config_json=config_json,
         result_json=result_json,
         result_sha256=hashlib.sha256(result_json.encode("utf-8")).hexdigest(),
         response_sha256=dependency.revision.response_sha256,
@@ -304,8 +317,40 @@ def get_general_factorial_analysis(
     if hashlib.sha256(record.result_json.encode("utf-8")).hexdigest() != record.result_sha256:
         raise _metadata_error("doe_general_factorial_analysis_checksum_mismatch")
     try:
-        return GeneralFactorialAnalysisResponse.model_validate_json(record.result_json)
-    except ValidationError as exc:
+        response = GeneralFactorialAnalysisResponse.model_validate_json(record.result_json)
+        config = json.loads(record.config_json)
+        if response.result.get("schema_version") == 2:
+            DoeFinalModelWorkflow.model_validate(response.result.get("final_model"))
+            DoeModelSelectionResult.model_validate(response.result.get("model_selection"))
+            if (
+                config.get("schema_version") != 2
+                or response.result.get("config_sha256")
+                != hashlib.sha256(record.config_json.encode("utf-8")).hexdigest()
+            ):
+                raise _metadata_error("doe_factorial_analysis_config_checksum_mismatch")
+        if (
+            response.design_sha256 != design.design_sha256
+            or response.design_id != design.design_id
+            or response.design_version_id != design.design_version_id
+            or str(response.analysis_id) != record.analysis_id
+            or response.method_id != record.method_id
+            or response.method_version != record.method_version
+            or response.response_name != record.response_name
+            or str(response.response_revision_id) != record.response_revision_id
+            or response.response_revision_sha256 != record.response_sha256
+            or record.response_revision_sha256 != record.response_sha256
+        ):
+            raise _metadata_error("doe_factorial_analysis_dependency_mismatch")
+        dependency = load_response_revision_dependency(
+            settings,
+            design_version_id=design.design_version_id,
+            response_name=response.response_name,
+            response_revision_id=response.response_revision_id,
+        )
+        if dependency.revision.response_sha256 != record.response_sha256:
+            raise _metadata_error("doe_factorial_analysis_response_mismatch")
+        return response
+    except (ValidationError, json.JSONDecodeError) as exc:
         raise _metadata_error("doe_general_factorial_analysis_metadata_invalid") from exc
 
 
@@ -380,8 +425,8 @@ def _response(
         design_version_id=UUID(version.design_version_id),
         version_number=1,
         method_id=DOE_GENERAL_FACTORIAL_METHOD_ID,
-        method_version=DOE_GENERAL_FACTORIAL_METHOD_VERSION,
         family="general_full_factorial",
+        method_version=cast(Literal["0.1.0", "0.2.0", "0.3.0"], design.method_version),
         name=design.name,
         status=design.status,
         created_at=design.created_at,
