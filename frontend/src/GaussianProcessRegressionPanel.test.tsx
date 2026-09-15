@@ -7,9 +7,41 @@ import type {
   GaussianProcessRegressionResult,
 } from "./api";
 import { GaussianProcessRegressionPanel } from "./GaussianProcessRegressionPanel";
+import { GpKernelSelectionSettings, gpOptimizerStarts, gpPresets } from "./GpKernelSelectionSettings";
 import { setCurrentLocale } from "./i18n/store";
 
 describe("GaussianProcessRegressionPanel", () => {
+  it("keeps candidate selection, WhiteKernel noise and the optimizer budget distinct", () => {
+    for (const locale of ["en", "ko"] as const) {
+      setCurrentLocale(locale);
+      const value = { mode: "compare" as const, kernel_candidates: [...gpPresets], criterion: "cv_nlpd" as const, retain_candidate_details: true };
+      const html = renderToString(<GpKernelSelectionSettings value={value} onChange={() => undefined} onModeChange={() => undefined} noiseMode="estimate" disabled={false} />);
+      expect(html.match(/type="checkbox"/g)).toHaveLength(5);
+      expect(html).toContain("WhiteKernel");
+      expect(html).toContain("RBF ARD");
+      expect(gpOptimizerStarts(value, 10, 5, 10)).toBe(284);
+      expect(gpOptimizerStarts({ ...value, retain_candidate_details: false }, 10, 5, 10)).toBe(251);
+      const fixed = renderToString(<GpKernelSelectionSettings value={value} onChange={() => undefined} onModeChange={() => undefined} noiseMode="fixed" disabled={false} />);
+      expect(fixed).not.toContain("+ WhiteKernel");
+    }
+  });
+
+  it("renders comparison failures without metrics and only selected-model prediction", () => {
+    setCurrentLocale("en");
+    const result = resultFixture();
+    result.schema_version = 2;
+    result.kernel_selection = { mode: "compare", criterion: "cv_nlpd", candidate_presets: ["matern_5_2_ard", "rbf_ard"], selected_preset: "matern_5_2_ard", retain_candidate_details: true, selection_is_external_validation: false, optimizer_starts: 20, tie_break_policy: "stable" };
+    result.kernel_candidates = [
+      { preset: "matern_5_2_ard", composed_kernel: "Constant * Matern + WhiteKernel", status: "succeeded", selected: true, selection_rank: 1, failure_code: null, elapsed_seconds: 1, converged_folds: 5, warnings: [], metrics: { predicted_r_squared: .8, press: 2, rmse: .4, mae: .3, nlpd: .7, interval_coverage_95: .95, mean_interval_width: 1 }, details: result },
+      { preset: "rbf_ard", composed_kernel: "Constant * RBF + WhiteKernel", status: "failed", selected: false, selection_rank: null, failure_code: "gp_time_budget_exhausted", elapsed_seconds: 2, converged_folds: 0, warnings: [], metrics: null, details: null },
+    ];
+    const html = renderToString(<GaussianProcessRegressionPanel analysisResult={analysisEnvelope()} filterValidationError={null} isRunningAnalysis={false} methodId="regression.gaussian_process" result={result} version={datasetVersion()} onRun={() => undefined} />);
+    expect(html).toContain("Kernel Comparison");
+    expect(html).toContain("Candidate Failed");
+    expect(html).toContain("independent");
+    expect(html).not.toContain("NaN");
+  });
+
   it("renders bounded numeric roles, kernels, noise, and validation controls", () => {
     setCurrentLocale("en");
     const html = renderToString(

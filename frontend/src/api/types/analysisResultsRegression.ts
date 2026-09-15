@@ -604,8 +604,25 @@ export interface GaussianProcessProfilePoint {
   predictive_interval_95: GaussianProcessInterval;
 }
 
+export type GpKernelPreset = "matern_5_2_ard" | "matern_3_2_ard" | "rbf_ard" | "rational_quadratic";
+export type GpKernelSelection = { mode: "single"; kernel_preset: GpKernelPreset } | {
+  mode: "compare"; kernel_candidates: GpKernelPreset[]; criterion: "cv_nlpd" | "cv_rmse" | "cv_mae"; retain_candidate_details: boolean;
+};
+export interface GpKernelCandidate {
+  preset: GpKernelPreset; composed_kernel: string; status: "succeeded" | "failed";
+  selected: boolean; selection_rank: number | null; failure_code: string | null;
+  elapsed_seconds: number; converged_folds: number; warnings: string[]; details_failure_code?: string | null;
+  metrics: { predicted_r_squared: number; press: number; rmse: number; mae: number; nlpd: number;
+    interval_coverage_95: number; mean_interval_width: number } | null;
+  details: Pick<GaussianProcessRegressionResult, "method" | "kernel" | "model_summary" | "diagnostics" | "warnings"> | null;
+}
 export interface GaussianProcessRegressionResult {
-  schema_version: 1;
+  schema_version: 1 | 2;
+  kernel_selection?: { mode: "single" | "compare"; criterion: "cv_nlpd" | "cv_rmse" | "cv_mae" | null;
+    candidate_presets: GpKernelPreset[]; selected_preset: GpKernelPreset; retain_candidate_details: boolean;
+    selection_is_external_validation: false; optimizer_starts: number; tie_break_policy: string | null;
+    cv_split_sha256?: string; cv_validation_row_indices?: number[][]; base_seed?: number };
+  kernel_candidates?: GpKernelCandidate[];
   summary_type: "gaussian_process_regression";
   method: {
     name: string;

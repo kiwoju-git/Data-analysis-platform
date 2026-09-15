@@ -3,6 +3,8 @@ import type { DoeFinalModelWorkflow, DoeModelSelectionResult } from "./api/types
 import { t, type TranslationKey } from "./i18n/translate";
 
 import { factorialNumber } from "./doe/factorialWorkflowPresentation";
+import { DoeSelectionStepMatrix } from "./doe/DoeSelectionStepMatrix";
+import { doeTermLabel } from "./doe/DoeTermSelection";
 
 const stopKeys: Record<string, TranslationKey> = {
   residual_variance_unavailable: "doe.selection.stop.residual_variance_unavailable",
@@ -22,6 +24,8 @@ export function FactorialModelSelectionResults({ selection, model, fit, n }: {
   n: number;
 }) {
   const [copied, setCopied] = useState(false);
+  const termLabels = new Map(selection.term_catalog?.map((term) => [term.term_id, doeTermLabel(term)]));
+  const termList = (ids: readonly string[]) => ids.map((id) => termLabels.get(id) ?? id).join(", ") || "-";
   const equation = [String(model.equation.intercept), ...model.equation.terms
     .filter((term) => term.kind !== "intercept")
     .map((term) => `${term.coefficient < 0 ? "-" : "+"} ${Math.abs(term.coefficient)} * ${term.label}`)].join(" ");
@@ -43,9 +47,17 @@ export function FactorialModelSelectionResults({ selection, model, fit, n }: {
           <div><dt>{t("doe.selection.finalDf")}</dt><dd>{model.prediction_basis.residual_df}</dd></div>
         </> : null}
       </dl>
+      {selection.term_catalog ? <dl className="doe-term-summary">{([
+        ["doe.terms.candidates", selection.candidate_term_ids ?? selection.initial_term_ids],
+        ["doe.terms.userExcluded", selection.initially_excluded_term_ids ?? []],
+        ["doe.terms.forced", selection.fixed_term_ids],
+        ["doe.selection.removed", [...selection.pooled_term_ids, ...selection.removed_term_ids]],
+        ["doe.selection.final", selection.final_term_ids],
+      ] as const).map(([key, ids]) => <div key={key}><dt>{t(key)}</dt><dd>{termList(ids)}</dd></div>)}</dl> : null}
       {selection.initial_model_saturated && selection.method !== "none" ? <p className="notice-box notice-warning">{t("doe.selection.poolingPolicy")} {selection.pooled_term_ids.join(", ")}</p> : null}
       {selection.method !== "none" ? <p className="notice-box notice-warning">{t("doe.selection.exploratory")}</p> : null}
-      {selection.method !== "none" && selection.steps.length > 0 ? <div className="table-wrap"><table className="result-table factorial-selection-steps">
+      {selection.method !== "none" && selection.display_step_details && selection.steps[0]?.term_statistics?.length ? <DoeSelectionStepMatrix selection={selection} multiDf={model.equation.scale === "treatment"} /> : null}
+      {selection.method !== "none" && selection.steps.length > 0 && !selection.steps[0]?.term_statistics?.length ? <div className="table-wrap"><table className="result-table factorial-selection-steps">
         <thead><tr><th>#</th><th>{t("doe.selection.phase")}</th><th>{t("doe.selection.removed")}</th><th>Adj SS</th><th>P</th><th>DF</th><th>S</th><th>R²</th><th>Adj R²</th><th>Pred R²</th><th>PRESS</th><th>{t("doe.selection.active")}</th></tr></thead>
         <tbody>{selection.steps.map((step) => <tr key={step.step}>
           <td>{step.step}</td><td>{t(`doe.selection.phase.${step.phase}`)}</td><td>{step.removed_term_id ?? "-"}</td>

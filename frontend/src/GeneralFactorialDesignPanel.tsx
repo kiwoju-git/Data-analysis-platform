@@ -23,6 +23,7 @@ import { DoeFactorCountControl } from "./doe/DoeFactorCountControl";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
 import { DoeResponsePasteDialog } from "./doe/DoeResponsePasteDialog";
 import { DoeModelSelectionSettings } from "./doe/DoeModelSelectionSettings";
+import { DoeTermSelection, useDoeTermCatalog } from "./doe/DoeTermSelection";
 import { defaultDoeSelection, interactionOrderLabel, factorialWorkflowMessage } from "./doe/factorialWorkflowPresentation";
 import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
 import { FactorialResidualPlots } from "./FactorialResidualPlots";
@@ -78,6 +79,8 @@ export function GeneralFactorialDesignPanel({
   const [savedResponses, setSavedResponses] = useState<DoeDesignResponsesResponse | null>(null);
   const [correctionMode, setCorrectionMode] = useState(false);
   const [modelSelection, setModelSelection] = useState(defaultDoeSelection);
+  useEffect(() => { setModelSelection(defaultDoeSelection); }, [design?.design_id]);
+  const termCatalog = useDoeTermCatalog(design?.design_id ?? null, Number(interactionOrder), modelSelection);
   const [confidence, setConfidence] = useState(0.95);
   const [pending, setPending] = useState<"create" | "save" | "analysis" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -206,7 +209,7 @@ export function GeneralFactorialDesignPanel({
           response_name: responseName.trim(),
           max_interaction_order: Number(interactionOrder),
           response_revision_id: savedResponses?.responses[0]?.response_revision_id ?? null,
-          model_selection: modelSelection,
+        model_selection: termCatalog.options,
           confidence_level: confidence,
           point_limit: 256,
         }),
@@ -434,9 +437,10 @@ export function GeneralFactorialDesignPanel({
           locked={(analysis !== null || savedResponses?.status === "analyzed") && !correctionMode}
           correctionMode={correctionMode}
           onCorrection={() => setCorrectionMode(true)}
-          analysisSettings={<DoeModelSelectionSettings value={modelSelection} onChange={setModelSelection}
-            confidence={confidence} onConfidenceChange={setConfidence} disabled={pending !== null} />}
-          canAnalyze={savedResponses !== null && !correctionMode && confidence > 0 && confidence < 1 &&
+          analysisSettings={<><DoeModelSelectionSettings value={modelSelection} onChange={setModelSelection}
+            confidence={confidence} onConfidenceChange={setConfidence} disabled={pending !== null} />
+            <DoeTermSelection state={termCatalog} value={modelSelection} onChange={setModelSelection} disabled={pending !== null} /></>}
+          canAnalyze={termCatalog.ready && savedResponses !== null && !correctionMode && confidence > 0 && confidence < 1 &&
             (modelSelection.method === "none" || (modelSelection.alpha_to_remove > 0 && modelSelection.alpha_to_remove < 1))}
           design={design}
           interactionOrder={Number(interactionOrder)}

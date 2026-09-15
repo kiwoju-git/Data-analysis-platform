@@ -12,11 +12,15 @@ import { CompactSettingsTable } from "./components/CompactSettingsTable";
 import { NumericColumnPicker } from "./components/NumericColumnPicker";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
 import { useI18n } from "./i18n/LocaleProvider";
+import type { GpKernelSelection } from "./api/types/analysisResultsRegression";
+import { GpKernelSelectionSettings, gpOptimizerStarts, gpKernelName } from "./GpKernelSelectionSettings";
+import { MAX_GP_OPTIMIZER_STARTS } from "./gpCapabilities";
 
 export interface GaussianProcessRunConfig {
   responseColumnId: string;
   predictorColumnIds: string[];
   kernelPreset: "matern_5_2_ard" | "matern_3_2_ard" | "rbf_ard" | "rational_quadratic";
+  kernelSelection: GpKernelSelection;
   noiseMode: "estimate" | "fixed" | "near_noiseless";
   fixedNoiseStandardDeviation: number | null;
   standardizePredictors: boolean;
@@ -50,6 +54,8 @@ interface PredictionRowDraft {
 }
 
 const warningKeys = {
+  gp_kernel_selection_not_external_validation: "gp.selection.bias",
+  gp_kernel_candidate_failed: "gp.selection.failedWarning",
   missing_values_excluded: "gp.warning.missing",
   gp_hyperparameter_near_bound: "gp.warning.bound",
   gp_length_scale_near_bound: "gp.warning.bound",
@@ -82,6 +88,10 @@ export function GaussianProcessRegressionPanel({
     "matern_5_2_ard",
   );
   const [noiseMode, setNoiseMode] = useState<GaussianProcessRunConfig["noiseMode"]>("estimate");
+  const [kernelSelectionMode, setKernelSelectionMode] = useState<GpKernelSelection["mode"]>("single");
+  const [candidateSelection, setCandidateSelection] = useState<Extract<GpKernelSelection, { mode: "compare" }>>({
+    mode: "compare", kernel_candidates: ["matern_5_2_ard", "rbf_ard"], criterion: "cv_nlpd", retain_candidate_details: false,
+  });
   const [fixedNoiseStandardDeviation, setFixedNoiseStandardDeviation] = useState(0.1);
   const [standardizePredictors, setStandardizePredictors] = useState(true);
   const [normalizeResponse, setNormalizeResponse] = useState(true);
@@ -103,12 +113,17 @@ export function GaussianProcessRegressionPanel({
     setPredictorColumnIds([]);
   }, [version?.version_id]);
 
+  const kernelSelection: GpKernelSelection = kernelSelectionMode === "single" ? { mode: "single", kernel_preset: kernelPreset } : candidateSelection;
+  const estimatedStarts = gpOptimizerStarts(kernelSelection, validationMethod === "none" ? 0 : validationMethod === "leave_one_out" ? version?.row_count ?? 0 : cvFolds, cvOptimizerRestarts, optimizerRestarts);
   const canRun =
     version !== null &&
     responseColumnId.length > 0 &&
     predictorColumnIds.length >= 1 &&
     predictorColumnIds.length <= 12 &&
     !predictorColumnIds.includes(responseColumnId) &&
+    (kernelSelection.mode === "single" || (kernelSelection.kernel_candidates.length >= 2 && validationMethod !== "none")) &&
+    Number.isInteger(cvOptimizerRestarts) && cvOptimizerRestarts >= 0 && cvOptimizerRestarts <= 5 &&
+    (validationMethod === "leave_one_out" || estimatedStarts <= MAX_GP_OPTIMIZER_STARTS) &&
     (noiseMode !== "fixed" || fixedNoiseStandardDeviation > 0) &&
     filterValidationError === null &&
     !isRunningAnalysis;
@@ -162,11 +177,12 @@ export function GaussianProcessRegressionPanel({
             />
           </div>
 
+          <GpKernelSelectionSettings value={kernelSelection} onChange={setCandidateSelection} onModeChange={setKernelSelectionMode} noiseMode={noiseMode} disabled={isRunningAnalysis} />
           <CompactSettingsTable
             ariaLabel={t("gp.basicSettings")}
             className="gp-settings-table"
             fields={[
-              {
+              ...(kernelSelectionMode === "single" ? [{
                 key: "kernel",
                 label: t("gp.kernel"),
                 control: (
@@ -182,7 +198,7 @@ export function GaussianProcessRegressionPanel({
                     <option value="rational_quadratic">{t("gp.kernel.rq")}</option>
                   </select>
                 ),
-              },
+              }] : []),
               {
                 key: "noise",
                 label: t("gp.noiseMode"),
@@ -258,7 +274,7 @@ export function GaussianProcessRegressionPanel({
               >
                 <option value="k_fold">{t("gp.validation.kFold")}</option>
                 <option value="leave_one_out">{t("gp.validation.loo")}</option>
-                <option value="none">{t("gp.validation.none")}</option>
+                <option value="none" disabled={kernelSelectionMode === "compare"}>{t("gp.validation.none")}</option>
               </select>
             </label>
             <label>
@@ -296,13 +312,18 @@ export function GaussianProcessRegressionPanel({
             <div className="option-grid option-grid-wide gp-advanced-grid">
               <NumberField label={t("gp.jitter")} min={1e-12} step="any" value={jitter} onChange={setJitter} />
               <NumberField label={t("gp.finalRestarts")} max={10} min={0} value={optimizerRestarts} onChange={setOptimizerRestarts} />
-              <NumberField label={t("gp.cvRestarts")} max={1} min={0} value={cvOptimizerRestarts} onChange={setCvOptimizerRestarts} />
+              <NumberField label={t("gp.cvRestarts")} max={5} min={0} value={cvOptimizerRestarts} onChange={setCvOptimizerRestarts} />
               <NumberField label={t("gp.plotLimit")} max={2000} min={100} value={plotPointLimit} onChange={setPlotPointLimit} />
               <NumberField label={t("gp.profilePoints")} max={80} min={10} value={profilePoints} onChange={setProfilePoints} />
               <NumberField label={t("gp.surfaceGrid")} max={40} min={10} value={surfaceGridSize} onChange={setSurfaceGridSize} />
               <NumberField label={t("gp.timeBudget")} max={600} min={5} value={timeBudgetSeconds} onChange={setTimeBudgetSeconds} />
             </div>
           </details>
+          <p className="field-help">{t("gp.selection.restartHelp", { starts: 1 + cvOptimizerRestarts })}</p>
+          <p className="gp-optimizer-starts">{t("gp.selection.starts")}: {estimatedStarts}
+            {validationMethod === "leave_one_out" ? <small> {t("gp.selection.looEstimate")}</small> : null}</p>
+          {estimatedStarts > MAX_GP_OPTIMIZER_STARTS ? <p role="alert" className="error-box gp-search-budget-warning">{t("gp.selection.budget")} ({MAX_GP_OPTIMIZER_STARTS})</p> : null}
+          {kernelSelectionMode === "compare" && validationMethod === "none" ? <p role="alert" className="error-box">{t("gp.selection.validationRequired")}</p> : null}
 
           {filterValidationError !== null ? (
             <div className="notice-box error">{filterValidationError}</div>
@@ -316,6 +337,7 @@ export function GaussianProcessRegressionPanel({
                   responseColumnId,
                   predictorColumnIds,
                   kernelPreset,
+                  kernelSelection,
                   noiseMode,
                   fixedNoiseStandardDeviation:
                     noiseMode === "fixed" ? fixedNoiseStandardDeviation : null,
@@ -383,6 +405,7 @@ function GaussianProcessResults({ result }: { result: GaussianProcessRegressionR
     value === null ? "-" : formatNumber(value, { maximumSignificantDigits: 7 });
   return (
     <div className="gp-results">
+      {result.kernel_selection?.mode === "compare" ? <GpKernelComparison result={result} /> : null}
       <section className="result-section">
         <h4>{t("gp.method")}</h4>
         <dl className="result-definition-grid">
@@ -476,6 +499,50 @@ function GaussianProcessResults({ result }: { result: GaussianProcessRegressionR
       {result.model_manifest !== undefined ? <GaussianProcessPrediction result={result} /> : null}
     </div>
   );
+}
+
+export function GpKernelComparison({ result }: { result: GaussianProcessRegressionResult }) {
+  const { t, formatNumber } = useI18n();
+  const candidates = result.kernel_candidates ?? [];
+  const [preset, setPreset] = useState(result.kernel_selection?.selected_preset);
+  const chosen = candidates.find((candidate) => candidate.preset === preset) ?? candidates.find((candidate) => candidate.selected);
+  const details = chosen?.details;
+  const number = (value: number | null | undefined) => value == null ? "-" : formatNumber(value, { maximumSignificantDigits: 6 });
+  const detailedResult = details ? { ...result, ...details } : null;
+  return <section className="result-section gp-kernel-comparison">
+    <h4>{t("gp.selection.comparison")}</h4>
+    <p className="notice-box notice-warning">{t("gp.selection.bias")}</p>
+    <p>{t("gp.selection.selected")}: <strong>{gpKernelName(result.kernel_selection?.selected_preset ?? result.method.kernel_preset)}</strong></p>
+    <p className="field-help">{t("gp.selection.starts")}: {result.kernel_selection?.optimizer_starts}</p>
+    <div className="table-wrap" tabIndex={0} aria-label={t("gp.selection.comparison")}><table className="result-table"><thead><tr>
+      <th>{t("gp.kernel")}</th><th>{t("gp.selection.combined")}</th><th>{t("gp.status")}</th><th>CV NLPD</th><th>CV RMSE</th><th>CV MAE</th><th>R²(pred)</th><th>{t("gp.coverage")}</th><th>{t("gp.selection.convergedFolds")}</th><th>{t("gp.elapsed")}</th>
+    </tr></thead><tbody>{candidates.map((candidate) => <tr key={candidate.preset} aria-selected={candidate.selected}>
+      <th scope="row">{gpKernelName(candidate.preset)}{candidate.selected ? <span className="status-badge">{t("gp.selection.selected")}</span> : null}</th>
+      <td>{candidate.composed_kernel}</td><td>{candidate.status === "failed" ? <span>{t("gp.selection.failed")}<small className="cell-subtle">{candidate.failure_code}</small></span> : t("gp.selection.succeeded")}</td>
+      {[candidate.metrics?.nlpd, candidate.metrics?.rmse, candidate.metrics?.mae, candidate.metrics?.predicted_r_squared, candidate.metrics?.interval_coverage_95].map((value, index) => <td key={index}>{number(value)}</td>)}
+      <td>{candidate.converged_folds} / {result.method.cv_folds}</td><td>{number(candidate.elapsed_seconds)} s</td>
+    </tr>)}</tbody></table></div>
+    {result.kernel_selection?.retain_candidate_details ? <>
+      <fieldset className="gp-candidate-detail-selector"><legend>{t("gp.selection.details")}</legend><div className="segmented-control">
+        {candidates.map((candidate) => <label key={candidate.preset}><input type="radio" name="gp-candidate-details" checked={chosen?.preset === candidate.preset}
+          onChange={() => setPreset(candidate.preset)} /><span>{gpKernelName(candidate.preset)}</span></label>)}
+      </div></fieldset>
+      {!details ? <p role="status">{t("gp.selection.detailsUnavailable")} {chosen?.details_failure_code ?? chosen?.failure_code}</p> : <>
+        <p>{details.kernel.fitted_kernel}</p>
+        <dl className="result-definition-grid"><Metric label={t("gp.lml")} value={number(details.kernel.log_marginal_likelihood)} />
+          <Metric label={t("gp.selection.noiseVariance")} value={number(details.kernel.observation_noise_variance)} />
+          <Metric label={t("gp.trainingR")} value={number(details.model_summary.training_r_squared)} />
+          <Metric label={t("gp.cvRmse")} value={number(details.model_summary.cv_rmse)} />
+        </dl>
+        <div className="table-wrap"><table className="result-table"><thead><tr><th>{t("gp.parameter")}</th><th>{t("gp.estimate")}</th><th>{t("gp.status")}</th></tr></thead>
+          <tbody>{details.kernel.parameters.map((parameter, index) => <tr key={index}><th scope="row">{parameter.column_id ? `${result.predictors.find((column) => column.column_id === parameter.column_id)?.display_name ?? parameter.column_id}: ` : ""}{parameter.parameter}</th>
+            <td>{number(parameter.estimate)}</td><td>{t(parameter.near_bound ? "gp.nearBound" : "gp.inRange")}</td></tr>)}</tbody></table></div>
+        {detailedResult ? <div className="chart-grid gp-chart-grid"><section><h5>{t("gp.observedCv")}</h5><GpScatter result={detailedResult} mode="cv" /></section>
+          <section><h5>{t("gp.residualDiagnostics")}</h5><GpResidualChart result={detailedResult} /></section></div> : null}
+        <ul className="warning-list">{details.warnings.map((warning) => <li key={warning}>{t(warningKeys[warning as keyof typeof warningKeys] ?? "gp.warning.generic")} <span className="cell-subtle">{warning}</span></li>)}</ul>
+      </>}
+    </> : null}
+  </section>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

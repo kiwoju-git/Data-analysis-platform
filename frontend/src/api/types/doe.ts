@@ -150,7 +150,7 @@ export interface GeneralFactorialDesignResponse {
   design_version_id: string;
   version_number: 1;
   method_id: "doe.general_factorial_design";
-  method_version: "0.1.0" | "0.2.0" | "0.3.0";
+  method_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   family: "general_full_factorial";
   name: string;
   status: string;
@@ -181,7 +181,7 @@ export interface GeneralFactorialAnalysisResponse {
   design_version_id: string;
   design_version_number: number;
   method_id: "doe.general_factorial_design";
-  method_version: "0.1.0" | "0.2.0" | "0.3.0";
+  method_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   analysis_schema_version: 1;
   design_sha256: string;
   response_revision_id: string;
@@ -432,7 +432,7 @@ export interface DoeFactorialDiagnosticPoint {
 }
 
 export interface DoeFactorialAnalysisResult {
-  schema_version: 1 | 2;
+  schema_version: 1 | 2 | 3;
   model_selection?: DoeModelSelectionResult | null;
   final_model?: DoeFinalModelWorkflow | null;
   config_sha256?: string | null;
@@ -493,6 +493,8 @@ export interface DoeFactorialAnalysisResult {
       unique_design_point_count: number;
       pure_error: DoeFactorialAnovaRow;
       lack_of_fit: DoeFactorialAnovaRow;
+      curvature_in_error?: DoeFactorialAnovaRow | null;
+      non_curvature_lack_of_fit?: DoeFactorialAnovaRow | null;
       residual_df: number;
     };
   };

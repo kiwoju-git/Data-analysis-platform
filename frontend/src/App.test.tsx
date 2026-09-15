@@ -1437,7 +1437,10 @@ describe("App", () => {
     expect(analyzedHtml).toContain("Response revision");
     expect((analyzedHtml.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(7);
     expect(completedHtml).toContain("분석을 실행하면 현재 설계의 반응값이 잠깁니다");
-    expect(completedHtml).not.toContain('role="status"');
+    expect(completedHtml).not.toContain("읽기 전용입니다");
+    const input = completedHtml.match(/<input[^>]*aria-label="run 1 response"[^>]*>/)?.[0];
+    expect(input).toBeDefined();
+    expect(input).not.toContain("disabled");
   });
 
   it("shows analysis run errors under the selected execution panel with a readable action", () => {

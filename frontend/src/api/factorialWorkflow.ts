@@ -1,7 +1,7 @@
 import { apiErrorCode, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type { DoeFactorialAnalysisResponse, GeneralFactorialAnalysisResponse } from "./types/doe";
-import type { DoeAnalysisAssetDescriptor, DoeAnalysisAssetList, DoeAnalysisDeletionPreflight, DoePredictionPreflightRequest, DoePredictionPreflightResponse, DoePredictionResponse } from "./types/doeModelWorkflow";
+import type { DoeAnalysisTermCatalog, DoeAnalysisAssetDescriptor, DoeAnalysisAssetList, DoeAnalysisDeletionPreflight, DoePredictionPreflightRequest, DoePredictionPreflightResponse, DoePredictionResponse } from "./types/doeModelWorkflow";
 
 async function workflowJson<T>(url: string, method = "GET", body?: unknown): Promise<T> {
   const response = await fetchApi(url, { method, headers: { Accept: "application/json", "Content-Type": "application/json" },
@@ -12,6 +12,8 @@ async function workflowJson<T>(url: string, method = "GET", body?: unknown): Pro
 
 export const preflightFactorialPrediction = (design: string, analysis: string, body: DoePredictionPreflightRequest) =>
   workflowJson<DoePredictionPreflightResponse>(apiRoutes.factorialPredictionPreflight(design, analysis), "POST", body);
+export const fetchDoeTermCatalog = (design: string, order: number) =>
+  workflowJson<DoeAnalysisTermCatalog>(apiRoutes.factorialTermCatalog(design, order));
 export const createFactorialPrediction = (design: string, analysis: string, body: DoePredictionPreflightRequest & { expected_preflight_sha256: string }) =>
   workflowJson<DoePredictionResponse>(apiRoutes.factorialPredictions(design, analysis), "POST", body);
 export const fetchFactorialPrediction = (design: string, analysis: string, prediction: string) =>

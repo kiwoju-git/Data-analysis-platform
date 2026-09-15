@@ -26,6 +26,7 @@ import {
 import { DoeFactorCountControl } from "./doe/DoeFactorCountControl";
 import { DoeResponsePasteDialog } from "./doe/DoeResponsePasteDialog";
 import { DoeModelSelectionSettings } from "./doe/DoeModelSelectionSettings";
+import { DoeTermSelection, useDoeTermCatalog } from "./doe/DoeTermSelection";
 import { defaultDoeSelection, interactionOrderLabel } from "./doe/factorialWorkflowPresentation";
 import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
 import { FactorialResidualPlots } from "./FactorialResidualPlots";
@@ -654,6 +655,7 @@ export function FactorialDesignPreview({
   const [revisionError, setRevisionError] = useState<string | null>(null);
   const [isSavingRevision, setIsSavingRevision] = useState(false);
   const [modelSelection, setModelSelection] = useState(defaultDoeSelection);
+  useEffect(() => { setModelSelection(defaultDoeSelection); }, [design.design_id]);
   const [confidence, setConfidence] = useState(0.95);
   const revisionRequest = useRef(0);
   const [maxInteractionOrder, setMaxInteractionOrder] = useState(
@@ -695,6 +697,7 @@ export function FactorialDesignPreview({
   );
   const matchingAnalysis = analysis?.design_id === design.design_id ? analysis : null;
   const aliased = Boolean(design.fractional || design.screening);
+  const termCatalog = useDoeTermCatalog(design.design_id, maxInteractionOrder, modelSelection, !aliased);
   const effectiveStatus =
     matchingAnalysis !== null ? "analyzed" : (matchingResponses?.status ?? design.status);
   const responsesLocked = effectiveStatus === "analyzed" && !correctionMode;
@@ -1043,13 +1046,14 @@ export function FactorialDesignPreview({
           </div>
           <DoeModelSelectionSettings value={aliased ? { ...modelSelection, method: "none" } : modelSelection}
             onChange={setModelSelection} confidence={confidence} onConfidenceChange={setConfidence} aliased={aliased} disabled={isRunningAnalysis} />
+          {!aliased ? <DoeTermSelection state={termCatalog} value={modelSelection} onChange={setModelSelection} disabled={isRunningAnalysis} /> : null}
           {analysisError !== null ? (
             <div className="error-box">오류 코드: {analysisError}</div>
           ) : null}
           <div className="button-row">
             <button
               className="primary-button"
-              disabled={isRunningAnalysis || correctionMode || !(confidence > 0 && confidence < 1) ||
+              disabled={isRunningAnalysis || correctionMode || !termCatalog.ready || !(confidence > 0 && confidence < 1) ||
                 (!aliased && modelSelection.method === "backward_elimination" && !(modelSelection.alpha_to_remove > 0 && modelSelection.alpha_to_remove < 1))}
               onClick={() => {
                 onRunAnalysis(design.design_id, {
@@ -1058,7 +1062,7 @@ export function FactorialDesignPreview({
                   max_interaction_order: maxInteractionOrder,
                   confidence_level: confidence,
                   point_limit: 256,
-                  model_selection: aliased ? { ...modelSelection, method: "none" } : modelSelection,
+                  model_selection: aliased ? { ...modelSelection, method: "none", term_policies: [] } : termCatalog.options,
                 });
               }}
               type="button"
@@ -1177,7 +1181,10 @@ function FactorialAnalysisResultView({
               ["Model", result.anova.model],
               ["Residual", result.anova.residual],
               ["Pure error", lackOfFit.pure_error],
-              ["Lack of fit", lackOfFit.lack_of_fit],
+              ...(lackOfFit.curvature_in_error && lackOfFit.non_curvature_lack_of_fit ? [
+                [t("doe.terms.curvatureError"), lackOfFit.curvature_in_error] as const,
+                [t("doe.terms.otherLackOfFit"), lackOfFit.non_curvature_lack_of_fit] as const,
+              ] : [["Lack of fit", lackOfFit.lack_of_fit] as const]),
               ["Total", result.anova.total],
             ] as const).map(([label, row]) => (
               <tr key={label}>

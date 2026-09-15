@@ -1,9 +1,26 @@
+export type DoeTermDisposition = "candidate" | "forced" | "excluded";
+export interface DoeTermPolicy { term_id: string; disposition: DoeTermDisposition }
+export interface DoeAnalysisTerm {
+  term_id: string; label: string; kind: string; order: number;
+  hierarchy_role: "factorial_term" | "independent_term" | "structural_term";
+  factor_ids: string[]; hierarchy_dependencies: string[];
+  default_disposition: DoeTermDisposition; df: number; estimable: boolean;
+}
+export interface DoeAnalysisTermCatalog {
+  catalog_schema_version: 1; design_id: string; max_interaction_order: number; terms: DoeAnalysisTerm[];
+}
+export interface DoeStepTermStatistic {
+  term_id: string; label: string; status: "active" | "forced" | "retained_for_hierarchy" | "removed_this_step";
+  coefficient: number | null; df: number; p_value: number | null;
+  coefficients: Array<{ column_index: number; label?: string | null; coefficient: number; p_value?: number | null }>;
+}
 export interface DoeModelSelectionOptions {
   method: "none" | "backward_elimination";
   alpha_to_remove: number;
   hierarchy_policy: "strong";
   saturated_start_policy: "pool_smallest_adjusted_ss";
   display_step_details: boolean;
+  term_policies?: DoeTermPolicy[];
 }
 
 export interface DoeModelSelectionStep {
@@ -11,6 +28,10 @@ export interface DoeModelSelectionStep {
   phase: "initial_full_model" | "initial_pooling" | "backward_elimination";
   active_term_ids: string[];
   removed_term_id: string | null;
+  removed_term_label?: string | null;
+  term_statistics?: DoeStepTermStatistic[];
+  mallows_cp?: number | null;
+  mallows_cp_unavailable_reason?: string | null;
   removal_df: number | null;
   removal_adjusted_ss: number | null;
   removal_p_value: number | null;
@@ -36,6 +57,9 @@ export interface DoeModelSelectionResult extends DoeModelSelectionOptions {
   removed_term_ids: string[];
   final_term_ids: string[];
   fixed_term_ids: string[];
+  term_catalog?: DoeAnalysisTerm[];
+  candidate_term_ids?: string[];
+  initially_excluded_term_ids?: string[];
   stop_reason: string;
   steps: DoeModelSelectionStep[];
   post_selection_inference: "exploratory" | "not_selected";

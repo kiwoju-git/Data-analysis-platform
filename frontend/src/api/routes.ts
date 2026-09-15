@@ -37,6 +37,10 @@ export interface AttributeControlLimitSetsRouteParams {
 }
 
 export const apiRoutes = {
+  factorialTermCatalog: (designId: string, order: number) => urlWithQuery(
+    `/doe-designs/${pathId(designId)}/analysis-term-catalog`,
+    new URLSearchParams({ max_interaction_order: String(order) }),
+  ),
   workspaceAssets(
     filters: import("./types").WorkspaceAssetFilters,
     offset: number,

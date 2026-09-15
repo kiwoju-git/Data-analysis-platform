@@ -7109,3 +7109,30 @@ td select {
   .factorial-plots .option-grid, .doe-model-selection .option-grid { grid-template-columns: minmax(0, 1fr); }
   .factorial-analysis-assets .panel-heading { align-items: flex-start; flex-direction: column; }
 }
+.doe-term-selection { min-width: 0; margin: 12px 0; }
+.doe-term-selection .table-wrap { max-height: 360px; overflow: auto; }
+.doe-term-selection select { min-width: 120px; }
+.doe-term-selection .button-row button { white-space: nowrap; }
+.doe-term-summary { display: grid; gap: 6px; font-size: 13px; }
+.doe-term-summary > div { display: grid; grid-template-columns: minmax(100px, 180px) minmax(0, 1fr); gap: 12px; }
+.doe-term-summary dd { margin: 0; overflow-wrap: anywhere; }
+.doe-step-removed { display: block; font-weight: normal; white-space: normal; max-width: 220px; }
+.doe-step-desktop { overflow-x: auto; }
+.doe-step-desktop table { min-width: 640px; }
+.doe-step-mobile { display: none; }
+@media (max-width: 600px) {
+  .doe-step-desktop { display: none; }
+  .doe-step-mobile { display: grid; gap: 8px; min-width: 0; }
+  .doe-term-summary > div { grid-template-columns: 1fr; gap: 2px; }
+}
+.gp-kernel-selection { min-width: 0; margin: 12px 0; }
+.gp-kernel-selection .segmented-control, .gp-candidate-detail-selector .segmented-control { display: flex; flex-wrap: wrap; gap: 8px; }
+.gp-kernel-selection .segmented-control label, .gp-candidate-detail-selector .segmented-control label { display: inline-flex; align-items: center; gap: 7px; }
+.gp-kernel-candidates { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin: 10px 0; }
+.gp-kernel-candidates label { display: flex; align-items: center; gap: 7px; }
+.gp-kernel-composition { margin: 10px 0; font-size: 13px; }
+.gp-kernel-composition dd { margin: 4px 0; overflow-wrap: anywhere; }
+.gp-kernel-comparison .table-wrap { max-width: 100%; overflow-x: auto; }
+.gp-kernel-comparison tr[aria-selected="true"] { background: #edf5fd; }
+.gp-kernel-comparison .status-badge { display: inline-block; margin: 4px; }
+.gp-candidate-detail-selector { min-width: 0; margin: 12px 0; }
