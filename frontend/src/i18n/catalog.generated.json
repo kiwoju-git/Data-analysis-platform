@@ -1,6 +1,7 @@
 {
   "version": 1,
   "en": {
+    "doe.terms.selectAll": "Select all terms",
     "gp.selection.timeout": "The GP time budget was exhausted. Reduce search settings or increase the explicit time budget.",
     "gp.selection.allFailed": "All kernel candidates failed. Review their configuration and the available time budget.",
     "doe.terms.curvatureError": "Curvature in error",
@@ -3793,6 +3794,7 @@
     "ui.1cae1dee80ac2a2f": "Screening Design requires between 7 and 10 factors."
   },
   "ko": {
+    "doe.terms.selectAll": "모두 선택",
     "gp.selection.timeout": "GP 계산 시간 예산을 초과했습니다. 탐색 설정을 줄이거나 시간 예산을 늘리세요.",
     "gp.selection.allFailed": "모든 kernel 후보가 실패했습니다. 설정과 시간 예산을 확인하세요.",
     "doe.terms.curvatureError": "오차에 포함된 곡률",

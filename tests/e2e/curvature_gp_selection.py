@@ -79,6 +79,9 @@ def verify_curvature_selection(page, diagnostics, backend):
     terms.get_by_label("pH * Glucose", exact=True).select_option("excluded")
     manual = analyze()
     assert manual["result"]["model_selection"]["initially_excluded_term_ids"] == ["factor_2:factor_3"]
+    terms.get_by_role("button", name="모두 선택", exact=True).click()
+    expect(terms.get_by_label("pH * Glucose", exact=True)).to_have_value("candidate")
+    expect(terms.get_by_label("Center curvature", exact=True)).to_have_value("forced")
     assert api("GET", base)["design_sha256"] == design["design_sha256"]
     page.locator(".language-switcher button").filter(has_text="ENG").click()
     assert not re.search(r"[가-힣]", terms.inner_text())

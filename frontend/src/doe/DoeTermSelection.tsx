@@ -55,6 +55,7 @@ export function DoeTermSelection({ state, value, onChange, disabled = false }: {
     <p id={`${id}-help`} className="field-help">{t("doe.terms.policy")}</p>
     {state.error ? <p role="alert" className="error-box">{t("doe.terms.loadFailed")}</p> : !state.ready ? <p role="status">{t("doe.terms.loading")}</p> : <>
       <div className="button-row"><button type="button" className="secondary-button" onClick={() => bulk(false)}>{t("doe.terms.reset")}</button>
+        <button type="button" className="secondary-button" onClick={() => update(new Map(state.terms.map((term) => [term.term_id, dispositions.get(term.term_id) === "forced" ? "forced" : "candidate"])))}>{t("doe.terms.selectAll")}</button>
         <button type="button" className="secondary-button" onClick={() => bulk(true)}>{t("doe.terms.clearInteractions")}</button></div>
       {notice ? <p role="status" className="field-help">{notice}</p> : null}
       <div className="table-wrap"><table className="result-table"><thead><tr>
