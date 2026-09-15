@@ -76,12 +76,22 @@ in meaning and never rewrite bytes. No pickle/joblib or user kernel code.
 Starts = K*folds*(1+CV restarts) + final_refits*(1+final restarts).
 final_refits is 1 without details, otherwise K. Validation-none single uses
 zero folds. Show the exact count and reject over-budget without trimming.
-Before fixing the hard start limit, benchmark N/d = 50/2, 200/5, 500/12 with
-K=2/4, folds=5/10 and CV restarts=0/1/5. Record elapsed, peak memory, convergence
-and timeout; bounded benchmark timeouts are results, not successful fits.
+The measured 36-case grid used N/d = 50/2, 200/5, 500/12, K=2/4, folds=5/10,
+CV restarts=0/1/5 and a 30-second subprocess limit. Seventeen completed and
+nineteen timed out; the release record contains the elapsed/memory results.
+The hard limit is 256 optimizer starts. This preserves legacy LOO 200 with
+default final restarts (204 starts), and admits four candidates with 10 folds,
+five CV restarts and four default final refits (256 starts). It rejects 284
+starts rather than trimming the requested search. The benchmark shows that
+start count alone does not guarantee completion: N/d and global time also
+bound feasibility. A timed-out case is not a successful fit.
 Existing 5..600 second global budget remains. Candidate CV slices share the
 remaining budget fairly while reserving final-refit time; optimizer objective
 checks enforce deadlines between numerical evaluations. CPU threads remain 1.
+CV receives 75% of the global time budget, shared across remaining candidates;
+25% is reserved for selected/detail refits. A nonselected detail refit can fail
+after its CV succeeds; retain its CV status and a separate details_failure_code.
+The selected full refit must succeed; no lower-ranked fallback is substituted.
 
 ## Validation
 

@@ -1,5 +1,19 @@
 # Statistical Method Audit Matrix
 
+## Curvature and Kernel Comparison Gate (2026-09-16)
+
+Factorial 0.9.0 / General Full 0.4.0 add explicit term policies and independent
+Center curvature; the supplied Titer fixture has an independently calculated
+NumPy/SciPy static reference for Center-first, AB-second and all step metrics.
+Forced Center reproduces the previous AB-first fit. Existing alias guards and
+OLS/regularized selection are unchanged. GP 0.2.0 adds shared-split candidate
+comparison, schema-2 result/manifest and a deterministic optimizer-start budget.
+`gp_single_kernel_legacy.json` is a captured baseline parity fixture, not an
+independent oracle. `gp_kernel_comparison_reference.json` comes from a separate
+public sklearn script with no production imports, covering smooth, rough,
+multiscale and noisy responses. GPML posterior tests remain. Actual execution,
+benchmark timeouts and host limitations: `curvature_gp_validation.md`.
+
 ## Factorial Final-Model Gate
 
 `doe.factorial_design` 0.8.0 and `doe.general_factorial_design` 0.3.0 share

@@ -1,5 +1,16 @@
 # Statistical Twin
 
+### Selectable DOE Terms and GP Kernel Comparison
+
+Full-factorial Center curvature is now a removable candidate, with explicit
+candidate/forced/excluded term policies and detailed backward-step tables.
+Strong hierarchy protects factorial parents without treating Center as one.
+Standalone GP compares 2-4 signal kernels on identical CV folds, supports up
+to five CV restarts and optionally retains candidate diagnostics. WhiteKernel
+remains observation noise, not another signal choice. Only the selected GP
+model is saved for prediction; comparison scores are not an independent test.
+See the [release verification record](docs/curvature_gp_validation.md).
+
 ### Factorial Final-Model Workflow
 
 Full two-level and General Full analyses support explicit hierarchical backward
@@ -17,8 +28,8 @@ optimization within the training domain. They do not provide classical OLS
 p-values, ANOVA or prediction intervals. The eight analysis domains retain all
 current methods with more compact selection cards and initially collapsed guides.
 See [the statistical contract](docs/regularized_linear_model_contract.md).
-This release requires matching frontend/backend API contract 18 and metadata
-schema 19; existing saved artifacts are not rewritten.
+This release requires matching frontend/backend API contract 20 and metadata
+schema 20; existing saved artifacts are not rewritten.
 
 The refined UI uses Graph Builder's selection blue with compact, neutral
 navigation. Inactive sidebar groups start collapsed; an open analysis keeps its

@@ -1,6 +1,12 @@
 # CI Status
 
-Last updated: 2026-09-12
+Last updated: 2026-09-16
+
+## Current Curvature/GP Release
+
+The current run record is `curvature_gp_validation.md`. Earlier success counts
+below are historical and do not substitute for the new release gates. Remote
+publication/CI status is reported only after observing the published commit.
 
 ## Local Validation
 

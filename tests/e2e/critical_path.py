@@ -18,18 +18,24 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from curvature_gp_selection import (
+    verify_curvature_selection,
+    verify_gp_kernel_comparison,
+)
+from factorial_model_workflow import verify_factorial_model_workflow
 from playwright.sync_api import (
     Browser,
     BrowserContext,
     Locator,
     Page,
+    expect,
+    sync_playwright,
+)
+from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
-from playwright.sync_api import expect, sync_playwright
-from regularized_regression import verify_regularized_regression
 from refined_ui import verify_refined_ui
-from factorial_model_workflow import verify_factorial_model_workflow
-
+from regularized_regression import verify_regularized_regression
 
 SAMPLE_DATA = """Group\tValue
 A\t10
@@ -610,6 +616,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics,
             expect(page.get_by_text("API 준비됨")).to_be_visible(timeout=15_000)
             if factorial_only:
                 verify_factorial_model_workflow(page, diagnostics, backend_base_url)
+                verify_curvature_selection(page, diagnostics, backend_base_url)
                 return
             expect(page).to_have_url(re.compile(r"/(?:home)?(?:\?|$)"))
             expect(
@@ -750,6 +757,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics,
             diagnostics.step("verify DOE factorial analysis")
             verify_doe_factorial_analysis(page, diagnostics)
             verify_factorial_model_workflow(page, diagnostics, backend_base_url)
+            verify_curvature_selection(page, diagnostics, backend_base_url)
             diagnostics.step("verify DOE response surface analysis and optimization")
             verify_doe_response_surface_analysis(page, diagnostics)
             diagnostics.step("verify standalone LHS design and response revision")
@@ -2801,6 +2809,9 @@ def verify_gaussian_process_regression_and_prediction(
     if prediction.locator("tbody tr td").nth(3).inner_text().strip() == "-":
         raise AssertionError("GP point prediction did not render a numeric mean")
     diagnostics.capture_page(page, "gp-prediction.png")
+    verify_gp_kernel_comparison(
+        page, diagnostics, panel, result_info.value.url.rsplit("/", 1)[0]
+    )
 
     page.set_viewport_size({"width": 390, "height": 844})
     page_overflow = int(
@@ -3088,7 +3099,7 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
     expect(page.locator(".factorial-plots .chart-grid").first.locator("svg").first).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
-    expect(page.locator(".analysis-result-section")).to_contain_text("0.8.0")
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.9.0")
     expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
     expect(page.get_by_label("run 1 response")).to_be_disabled()
     expect(page.get_by_role("button", name="분석 후 반응 잠금")).to_be_disabled()

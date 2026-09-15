@@ -54,7 +54,7 @@ p-values and intervals are exploratory, not independent confirmatory inference.
 
 ## Versions and Legacy Reads
 
-Planned new writes: API 20; Factorial method .9/config 4/result 3/envelope 2;
+New writes: API 20; Factorial method .9/config 4/result 3/envelope 2;
 General Full method .4/config 3/result 3/envelope 1. Design/revision/prediction/
 report storage schemas and metadata 20 remain. Legacy config reconstruction
 must omit new default fields when validating old hashes. Reading never refits

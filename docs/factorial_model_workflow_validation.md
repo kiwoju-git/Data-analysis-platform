@@ -1,5 +1,11 @@
 # Factorial Final-Model Workflow Validation
 
+The original release evidence below applies to 0.8.0 and is retained as history.
+The 2026-09-16 Center/manual-term/GP extension and its separate validation gates
+are recorded in `curvature_gp_validation.md`. No old result is recomputed by
+upgrading; the new term metadata distinguishes design Center availability from
+final-model inclusion. The original response/revision/report workflow remains.
+
 Status: implementation and local release gates passed, including explicit
 process exit code 0 for `test.ps1`, `check.ps1` and the full Chromium E2E.
 The immutable publication SHA and observed remote CI state are recorded in the

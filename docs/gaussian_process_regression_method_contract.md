@@ -4,10 +4,10 @@
 
 - Method ID: `regression.gaussian_process`
 - Backend module: `regression`
-- Method version: `0.1.0`
-- Result schema: `1`
+- Method version: `0.2.0`
+- Result schema: `2` (schema 1 remains readable)
 - Model manifest kind: `gaussian_process_model_manifest`
-- Model manifest schema: `1`
+- Model manifest schema: `2` (schema 1 remains readable)
 - Execution: bounded synchronous analysis handler. The current analysis endpoint is a
   synchronous FastAPI route and therefore runs outside the async event loop. It must
   keep BLAS/OpenMP thread use at one and enforce the limits below.
@@ -116,7 +116,7 @@ response scale.
 
 The final model uses scikit-learn's bounded L-BFGS-B log-marginal-likelihood optimizer.
 Default final restarts are 3; allowed range is 0 through 10. Cross-validation defaults
-to zero restarts and allows at most one to bound total work. A deterministic integer
+to zero restarts and allows at most five. A deterministic integer
 seed is stored.
 
 The result records the initial policy, fitted kernel, amplitude, predictor length
@@ -164,7 +164,14 @@ hyperparameters; they are not unconditional guarantees.
 
 ## 10. Result sections
 
-Schema 1 contains:
+Schema 2 preserves these schema-1 selected-model fields and adds
+`kernel_selection` and `kernel_candidates`. The strict request union, common
+CV splits, probabilistic selection, candidate failure/details and resource
+budgets are defined in `gaussian_process_kernel_selection_contract.md`.
+WhiteKernel estimates IID observation variance; it is never a signal candidate.
+Comparison CV scores are selection scores, not independent test estimates.
+
+Selected-model fields:
 
 1. method and preprocessing policy;
 2. sample counts and model summary;

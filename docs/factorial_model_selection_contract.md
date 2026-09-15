@@ -1,6 +1,6 @@
 # Factorial Model Selection Contract
 
-Status: implementation contract, 2026-09-12. Official sources and baseline
+Status: implementation contract, updated 2026-09-16. Official sources and baseline
 inventory: `factorial_model_reduction_prediction_plots_audit.md`.
 
 ## Scope and Options
@@ -15,7 +15,11 @@ Unknown options are rejected; omitted options preserve the original full fit.
 
 Each two-level main/interaction is a 1-DF block. Each General Full term comprises
 all its treatment dummy products; individual category coefficients never leave
-alone. Intercept, block columns and curvature are fixed. A factorial term is
+alone. Intercept and block columns are structural and fixed. Center curvature
+is an independent candidate by default, optionally forced or excluded. It is
+never a factor-subset hierarchy parent. Explicit candidate/forced/excluded
+term policies and the server catalog are defined in
+`factorial_manual_term_selection_contract.md`. A factorial term is
 removable only when no remaining higher-order term contains its factor set.
 Validate initial hierarchy and exact column coverage. Rank-deficient initial
 matrices fail; selection is not a workaround for aliasing.
@@ -47,6 +51,13 @@ coefficients, removed ID/DF/SS/p, residual DF, SSE, S, R-squared, adjusted
 R-squared, PRESS and predicted R-squared. Suppressing detail drops only steps,
 not initial/final/pooled/removed IDs, policy or stop reason. Post-selection
 inference is marked exploratory in results, UI, predictions and reports.
+
+Each detailed step additionally records current-model term DF/p-values,
+coefficient labels/values and Mallows Cp relative to the initial specified
+model's MSE (null when unavailable). Internal step 0 displays as Step 1.
+User exclusions, forced terms and automatic removals are separate collections.
+On p ties, interactions precede independent Center, then main effects; order,
+original position and stable ID complete the deterministic policy.
 
 ## Final Fit
 

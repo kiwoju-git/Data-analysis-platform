@@ -1,5 +1,19 @@
 # Interactive Chart Contract
 
+## Selectable-Term and Kernel-Comparison Views (2026-09-16)
+
+DOE step matrices use server term IDs and internal-step-plus-one labels.
+Desktop Coef/P or multi-DF DF/P columns scroll inside table-wrap; mobile uses a
+native step selector and a single-step table. Removed values are absent, not
+zero. Level coefficients expand separately for multi-DF terms. S/R-squared/
+adjusted/predicted R-squared/PRESS/Cp/DF summaries use saved step values.
+
+GP candidate details reuse existing accessible interactive scatter plots for
+observed versus OOF and residuals; selecting a candidate does not refit it.
+Comparison tables retain failed/null states. Profiles, surfaces and prediction
+always belong to the selected kernel, not the currently inspected detail tab.
+HTML renders saved results with inline SVG and escaped text, never screenshots.
+
 ## Factorial Final-Model Diagnostics
 
 Raw/standardized four-in-one plots reuse interactive scatter/histogram

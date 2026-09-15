@@ -1,5 +1,23 @@
 # Method Versioning Policy
 
+## Curvature and Kernel Selection New Writes (2026-09-16)
+
+API contract 20 / metadata 20. Factorial is `0.9.0`, analysis config 4,
+result 3, envelope 2. General Full is `0.4.0`, config/result 3, envelope 1.
+Selectable independent Center curvature, explicit term policies and enriched
+step statistics change calculation meaning, so these are minor method bumps.
+Design manifests, response revisions, DOE predictions and report artifacts do
+not change schema. Existing `0.8.0`/config 3/result 2 reads retain original bytes.
+
+Standalone GP is `0.2.0`, result 2, JSON manifest 2. It adds shared-fold kernel
+comparison and CV restarts 0..5; legacy preset requests normalize to single.
+Schema-1 GP result/manifest readers remain. NPZ prediction state is unchanged;
+only the selected candidate owns a model asset. Candidate summaries have their
+own canonical SHA. Bayesian `0.6.0`, OLS, regularized regression and PLS are
+unchanged. No metadata migration is needed for these JSON-only extensions.
+See `factorial_manual_term_selection_contract.md` and
+`gaussian_process_kernel_selection_contract.md` for exact policies.
+
 ## Factorial Model Workflow New Writes (2026-09-12)
 
 API contract 19 adds explicit hierarchical DOE model selection and a final-model
@@ -29,12 +47,12 @@ PLS, GP, PCA, DOE and Bayesian versions/calculations are not changed by this wor
 
 This policy explains when a stable `method_id` in `METHOD_VERSIONS` should
 receive a method-version bump. `regression.predict` is `0.3.0`,
-`doe.factorial_design` is `0.8.0`, `doe.response_optimizer` is `0.4.0`, and
+`doe.factorial_design` is `0.9.0`, `doe.response_optimizer` is `0.4.0`, and
 `doe.response_surface` is `0.3.0`. `doe.bayesian_optimization` is `0.6.0`,
 `quality.attribute_control_chart` is `0.3.0`, `eda.normality` is `0.2.0`, and
 `eda.descriptive`, `eda.graphical_summary`, and `eda.equal_variances` are
 `0.2.0`. `quality.run_chart` and `hypothesis.mann_whitney` are `0.2.0`;
-`doe.latin_hypercube` is `0.3.0`, `doe.general_factorial_design` is `0.3.0`,
+`doe.latin_hypercube` is `0.3.0`, `doe.general_factorial_design` is `0.4.0`,
 and new `eda.principal_components` is `0.1.0`; other stable IDs remain on their
 recorded versions.
 

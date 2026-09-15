@@ -1,5 +1,25 @@
 # DOE Factorial Design and Analysis Contract
 
+## Current Selectable-Term Contract (2026-09-16)
+
+New analyses use method 0.9.0/config 4/result 3. General Full uses
+0.4.0/config 3/result 3. Center curvature defaults to an independent candidate,
+not a fixed term or an empty-set hierarchy parent. Users may exclude or force
+whole terms; structural blocks remain forced. The server-owned term catalog
+is available at `GET /api/v1/doe-designs/{design_id}/analysis-term-catalog`.
+Catalog estimability is checked against the full candidate matrix null space;
+the actual selected matrix is validated again during analysis.
+
+The supplied 11-run Titer fixture removes Center, then AB, retaining B for BC.
+Detailed steps include freshly recomputed coefficients/p-values, S/R-squared/
+adjusted/predicted R-squared/PRESS and conditional Mallows Cp. Center availability
+and final inclusion are separate metadata. Removed Center contributes to Error;
+its curvature lack-of-fit and pure error are not counted twice. Prediction uses
+the final term set, allowing interior numeric points only when Center is absent.
+Existing 0.8.0 results, predictions, reports and hashes remain readable unchanged.
+See `factorial_manual_term_selection_contract.md` for the current contract;
+the following release sections record the earlier workflow additions.
+
 ## Final-Model Workflow (2026-09-12)
 
 Method 0.8.0 adds explicit full-factorial backward elimination, mandatory strong
@@ -76,7 +96,7 @@ Implemented:
   lower-order terms retained to enforce hierarchy.
 - OLS coefficients, factorial effects (`effect = 2 * coefficient`), confidence
   intervals, partial drop-one sums of squares, model ANOVA, and ranked effects.
-- Center-point curvature and block fixed effects when present.
+- Selectable center-point curvature and structural block fixed effects when present.
 - Pure-error and lack-of-fit decomposition when replication permits it.
 - Residual, leverage, Cook's distance, Durbin-Watson, Shapiro-Wilk, Q-Q,
   main-effect, and interaction plot payloads.

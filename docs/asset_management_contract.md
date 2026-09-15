@@ -1,5 +1,16 @@
 # Local Workspace Asset Management Contract
 
+## Curvature and Kernel Selection (2026-09-16)
+
+DOE manual policies and per-step statistics remain inside immutable analysis
+JSON. Existing analysis-owned predictions/reports keep schema 1 and metadata
+20 ownership; their source SHA checks and deletion lifecycle are unchanged.
+GP comparison creates exactly one regression-model record and one JSON/NPZ
+pair, for the selected kernel. Optional nonselected details are bounded result
+data, not model assets. Manifest 2 adds selection metadata and a canonical
+candidate-summary checksum. Legacy manifest 1 reloads without rewrite. No new
+relational table or migration is needed; report generation never refits models.
+
 ## Factorial Analysis Ownership (Metadata 20)
 
 The catalog includes `doe_analysis`, `doe_prediction`, `doe_analysis_report`.

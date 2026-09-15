@@ -1,5 +1,16 @@
 # Browser E2E Coverage
 
+## Curvature and Kernel Comparison (2026-09-16)
+
+`tests/e2e/curvature_gp_selection.py` joins the existing critical path. It covers
+the exact unrandomized 11-run Titer dataset, full Center p-value, Center/AB
+removal order, final hierarchy, interior prediction, forced Center, manual BC
+exclusion, immutable design SHA, Korean/English and desktop/mobile step views.
+The GP sequence covers WhiteKernel composition, three shared-fold candidates,
+retained details, one selected model asset, point prediction, CV restarts 5,
+optimizer-budget blocking and 1440/1280/390 layouts. Legacy readers additionally
+have backend byte-preservation tests. Run records: `curvature_gp_validation.md`.
+
 This document describes what the current Playwright smoke covers, how to run it,
 and how to inspect failures. It is an operations and coverage note, not a
 statistical-method expansion plan.

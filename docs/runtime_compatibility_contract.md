@@ -1,9 +1,10 @@
 # Runtime Compatibility Contract
 
-Last updated: 2026-09-12
+Last updated: 2026-09-16
 
-API contract 19 governs factorial model selection, typed final-model diagnostics,
-and analysis-owned prediction/report workflows. Backend, frontend and PowerShell
+API contract 20 adds server-owned DOE term catalogs/manual policies and typed
+standalone GP single/compare kernel selection to the final-model workflows.
+Backend, frontend and PowerShell
 startup checks use the same contract value. Historical release notes below keep
 their original version numbers; they are not current handshake requirements.
 
@@ -46,8 +47,8 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `18`);
-- the actual metadata schema constant (currently `19`);
+- `api_contract_version` (currently `20`);
+- the actual metadata schema constant (currently `20`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
   deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and
@@ -67,7 +68,7 @@ regularized prediction and model-kind optimizer metadata. Metadata schema 19
 and existing artifact ownership remain sufficient; no migration or stored
 checksum rewrite is performed. Exact frontend/backend matching is required.
 
-The frontend expects API contract `18`, schema 19 or later, and every required
+The frontend expects API contract `20`, schema 20 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management
