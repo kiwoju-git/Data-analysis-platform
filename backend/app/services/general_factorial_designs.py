@@ -47,7 +47,7 @@ from app.statistics.general_factorial_design import (
     generate_general_full_factorial_design,
     options_to_payload,
 )
-from app.statistics.term_block_model_selection import DoeSelectionOptions
+from app.statistics.term_block_model_selection import selection_options_from_payload
 from app.storage.metadata import (
     ExperimentDesignAnalysisRecord,
     ExperimentDesignRecord,
@@ -67,7 +67,7 @@ DOE_GENERAL_FACTORIAL_METHOD_ID: Literal["doe.general_factorial_design"] = (
     "doe.general_factorial_design"
 )
 DOE_GENERAL_FACTORIAL_METHOD_VERSION = cast(
-    Literal["0.3.0"], METHOD_VERSIONS[DOE_GENERAL_FACTORIAL_METHOD_ID]
+    Literal["0.4.0"], METHOD_VERSIONS[DOE_GENERAL_FACTORIAL_METHOD_ID]
 )
 
 
@@ -247,7 +247,7 @@ def create_general_factorial_analysis(
             response_name=body.response_name.strip(),
             response_unit=next(iter(units)),
             max_interaction_order=body.max_interaction_order,
-            model_selection=DoeSelectionOptions(**body.model_selection.model_dump()),
+            model_selection=selection_options_from_payload(body.model_selection.model_dump()),
             confidence_level=body.confidence_level,
             point_limit=body.point_limit,
         )
@@ -261,7 +261,7 @@ def create_general_factorial_analysis(
     result["model_selection"] = DoeModelSelectionResult.model_validate(
         result["model_selection"]
     ).model_dump(mode="json")
-    config_json = _json_dumps({"schema_version": 2, **body.model_dump(mode="json")})
+    config_json = _json_dumps({"schema_version": 3, **body.model_dump(mode="json")})
     result["config_sha256"] = hashlib.sha256(config_json.encode("utf-8")).hexdigest()
     analysis_id = uuid4()
     now = utc_now()
@@ -319,11 +319,11 @@ def get_general_factorial_analysis(
     try:
         response = GeneralFactorialAnalysisResponse.model_validate_json(record.result_json)
         config = json.loads(record.config_json)
-        if response.result.get("schema_version") == 2:
+        if response.result.get("schema_version") in {2, 3}:
             DoeFinalModelWorkflow.model_validate(response.result.get("final_model"))
             DoeModelSelectionResult.model_validate(response.result.get("model_selection"))
             if (
-                config.get("schema_version") != 2
+                config.get("schema_version") != response.result.get("schema_version")
                 or response.result.get("config_sha256")
                 != hashlib.sha256(record.config_json.encode("utf-8")).hexdigest()
             ):
@@ -426,7 +426,7 @@ def _response(
         version_number=1,
         method_id=DOE_GENERAL_FACTORIAL_METHOD_ID,
         family="general_full_factorial",
-        method_version=cast(Literal["0.1.0", "0.2.0", "0.3.0"], design.method_version),
+        method_version=cast(Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0"], design.method_version),
         name=design.name,
         status=design.status,
         created_at=design.created_at,

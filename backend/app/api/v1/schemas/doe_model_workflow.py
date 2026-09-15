@@ -10,17 +10,62 @@ class WorkflowModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class DoeTermPolicy(WorkflowModel):
+    term_id: str = Field(min_length=1, max_length=200)
+    disposition: Literal["candidate", "forced", "excluded"]
+
+
+class DoeAnalysisTerm(WorkflowModel):
+    term_id: str
+    label: str
+    kind: str
+    hierarchy_role: Literal["factorial_term", "independent_term", "structural_term"]
+    order: int
+    factor_ids: list[str]
+    hierarchy_dependencies: list[str]
+    default_disposition: Literal["candidate", "forced", "excluded"]
+    df: int
+    estimable: bool
+
+
+class DoeAnalysisTermCatalog(WorkflowModel):
+    catalog_schema_version: Literal[1] = 1
+    design_id: UUID
+    max_interaction_order: int
+    terms: list[DoeAnalysisTerm]
+
+
 class DoeModelSelectionOptions(WorkflowModel):
     method: Literal["none", "backward_elimination"] = "none"
     alpha_to_remove: FiniteFloat = Field(default=0.05, gt=0, lt=1)
     hierarchy_policy: Literal["strong"] = "strong"
     saturated_start_policy: Literal["pool_smallest_adjusted_ss"] = "pool_smallest_adjusted_ss"
     display_step_details: bool = True
+    term_policies: list[DoeTermPolicy] = Field(default_factory=list, max_length=512)
+
+    @field_validator("term_policies")
+    @classmethod
+    def unique_term_policies(cls, value: list[DoeTermPolicy]) -> list[DoeTermPolicy]:
+        if len({policy.term_id for policy in value}) != len(value):
+            raise ValueError("doe_factorial_term_policy_invalid")
+        return value
 
 
 class SelectionStepCoefficient(WorkflowModel):
     column_index: int
+    label: str | None = None
     coefficient: FiniteFloat
+    p_value: FiniteFloat | None = None
+
+
+class DoeStepTermStatistic(WorkflowModel):
+    term_id: str
+    label: str
+    status: Literal["active", "forced", "retained_for_hierarchy", "removed_this_step"]
+    coefficient: FiniteFloat | None
+    df: int
+    p_value: FiniteFloat | None
+    coefficients: list[SelectionStepCoefficient]
 
 
 class DoeModelSelectionStep(WorkflowModel):
@@ -28,6 +73,7 @@ class DoeModelSelectionStep(WorkflowModel):
     phase: Literal["initial_full_model", "initial_pooling", "backward_elimination"]
     active_term_ids: list[str]
     removed_term_id: str | None
+    removed_term_label: str | None = None
     removal_df: int | None
     removal_adjusted_ss: FiniteFloat | None
     removal_p_value: FiniteFloat | None
@@ -40,9 +86,15 @@ class DoeModelSelectionStep(WorkflowModel):
     adjusted_r_squared: FiniteFloat | None
     press: FiniteFloat | None
     predicted_r_squared: FiniteFloat | None
+    term_statistics: list[DoeStepTermStatistic] = Field(default_factory=list)
+    mallows_cp: FiniteFloat | None = None
+    mallows_cp_unavailable_reason: str | None = None
 
 
 class DoeModelSelectionResult(DoeModelSelectionOptions):
+    term_catalog: list[DoeAnalysisTerm] = Field(default_factory=list)
+    candidate_term_ids: list[str] = Field(default_factory=list)
+    initially_excluded_term_ids: list[str] = Field(default_factory=list)
     tie_break_policy: str
     initial_model_saturated: bool
     initial_parameter_count: int

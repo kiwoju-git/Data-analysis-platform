@@ -212,7 +212,7 @@ def render_factorial_analysis_report(
                 ],
                 [
                     [
-                        step["step"],
+                        step["step"] + 1,
                         label("Initial pooling", "초기 오차 풀링")
                         if step["phase"] == "initial_pooling"
                         else label("Initial model", "초기 모형")
@@ -231,6 +231,74 @@ def render_factorial_analysis_report(
                 ],
             ),
         ]
+        if selection.get("term_catalog"):
+            term_labels = {term["term_id"]: term["label"] for term in selection["term_catalog"]}
+            parts.append(
+                report_table(
+                    titles,
+                    [
+                        [
+                            label(en, ko),
+                            ", ".join(
+                                term_labels.get(term, term) for term in selection.get(key, [])
+                            )
+                            or "-",
+                        ]
+                        for en, ko, key in [
+                            ("Candidate terms", "후보 항", "candidate_term_ids"),
+                            (
+                                "Excluded before analysis",
+                                "분석 전 제외 항",
+                                "initially_excluded_term_ids",
+                            ),
+                            ("Forced terms", "강제 유지 항", "fixed_term_ids"),
+                        ]
+                    ],
+                )
+            )
+            for step in selection["steps"]:
+                if not step.get("term_statistics"):
+                    continue
+                parts += [
+                    f"<h3>{escape(label('Step', '단계'))} {step['step'] + 1}</h3>",
+                    report_table(
+                        [label("Term", "항"), "DF", "Coef", "P"],
+                        [
+                            [term["label"], term["df"], term["coefficient"], term["p_value"]]
+                            for term in step["term_statistics"]
+                            if term["status"] != "removed_this_step"
+                        ],
+                    ),
+                    report_table(
+                        titles,
+                        [
+                            ["Mallows Cp", step.get("mallows_cp")],
+                            [label("Residual DF", "잔차 자유도"), step["residual_df"]],
+                        ],
+                    ),
+                ]
+                if step.get("mallows_cp_unavailable_reason"):
+                    parts.append(
+                        paragraph(
+                            "The initial model has no residual MSE for Mallows Cp.",
+                            "초기 모형에 잔차 MSE가 없어 Mallows Cp를 계산하지 않습니다.",
+                        )
+                    )
+                if source.final_model and source.final_model.equation.scale == "treatment":
+                    parts.append(
+                        report_table(
+                            [label("Level coefficient", "수준 계수"), "Coef", "P"],
+                            [
+                                [
+                                    coef.get("label", term["label"]),
+                                    coef["coefficient"],
+                                    coef.get("p_value"),
+                                ]
+                                for term in step["term_statistics"]
+                                for coef in term["coefficients"]
+                            ],
+                        )
+                    )
     workflow = source.final_model
     if workflow is not None:
         parts += [
@@ -330,8 +398,16 @@ def render_factorial_analysis_report(
         row = anova[key]
         rows.append([name, row["df"], row["sum_squares"], row.get("mean_square"), None, None])
     lack = anova.get("lack_of_fit", {})
+    lack_rows = (
+        [
+            (label("Curvature in error", "오차에 포함된 곡률"), lack["curvature_in_error"]),
+            (label("Other lack of fit", "나머지 적합성 결여"), lack["non_curvature_lack_of_fit"]),
+        ]
+        if lack.get("curvature_in_error")
+        else [(label("Lack of fit", "적합성 결여"), lack.get("lack_of_fit", lack))]
+    )
     for name, row in [
-        (label("Lack of fit", "적합성 결여"), lack.get("lack_of_fit", lack)),
+        *lack_rows,
         (label("Pure error", "순수오차"), lack.get("pure_error", anova.get("pure_error", {}))),
     ]:
         if "df" in row:

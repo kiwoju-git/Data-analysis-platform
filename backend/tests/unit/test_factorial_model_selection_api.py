@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
+from app.services.analysis_run_execution import canonical_json_bytes
 from app.storage.metadata import metadata_db_path
 
 
@@ -71,7 +72,7 @@ def test_selection_is_saved_restored_and_bound_to_config_and_revision(tmp_path, 
         )
         assert analyzed.status_code == 201, analyzed.text
         result = analyzed.json()
-        assert result["result"]["schema_version"] == 2
+        assert result["result"]["schema_version"] == 3
         assert result["result"]["model_selection"]["alpha_to_remove"] == 0.05
         assert len(result["result"]["model_selection"]["final_term_ids"]) == (2 if general else 3)
         if general:
@@ -95,6 +96,46 @@ def test_selection_is_saved_restored_and_bound_to_config_and_revision(tmp_path, 
         assert tampered.status_code == 409
         assert "config_checksum_mismatch" in tampered.json()["error"]["code"]
         assert len(design["design_sha256"]) == 64
+
+
+@pytest.mark.parametrize("general", [False, True])
+def test_server_term_catalog_and_manual_policy_round_trip(tmp_path, general):
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        design, base = create_full(client, general=general, centers=3)
+        route = f"/api/v1/doe-designs/{design['design_id']}/analysis-term-catalog"
+        response = client.get(route, params={"max_interaction_order": 2})
+        assert response.status_code == 200, response.text
+        terms = response.json()["terms"]
+        assert terms[0]["default_disposition"] == "forced"
+        interaction = next(term for term in terms if term["kind"] == "interaction")
+        assert len(interaction["hierarchy_dependencies"]) == 2
+        assert interaction["df"] == (2 if general else 1)
+        if not general:
+            center = next(term for term in terms if term["kind"] == "curvature")
+            assert center["default_disposition"] == "candidate"
+            assert center["hierarchy_dependencies"] == []
+            assert center["hierarchy_role"] == "independent_term"
+        analysis = client.post(
+            base + "/analyses",
+            json={
+                "response_name": "Yield",
+                "max_interaction_order": 2,
+                "model_selection": {
+                    "term_policies": [
+                        {"term_id": interaction["term_id"], "disposition": "excluded"}
+                    ]
+                },
+            },
+        )
+        assert analysis.status_code == 201, analysis.text
+        selection = analysis.json()["result"]["model_selection"]
+        assert selection["initially_excluded_term_ids"] == [interaction["term_id"]]
+        assert interaction["term_id"] not in selection["final_term_ids"]
+        assert selection["removed_term_ids"] == []
+        assert (
+            client.get(base + "/analyses/" + analysis.json()["analysis_id"]).json()
+            == analysis.json()
+        )
 
 
 def test_saturated_analysis_pools_without_inventing_p_values(tmp_path):
@@ -185,3 +226,49 @@ def test_legacy_schema_one_bytes_remain_readable_without_rewrite(tmp_path):
                 "WHERE analysis_id=?",
                 (analysis_id,),
             ).fetchone() == (result_json, sha)
+
+
+def test_legacy_point_eight_config_and_result_restore_without_rewrite(tmp_path):
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        _, base = create_full(client, centers=3)
+        created = client.post(base + "/analyses", json={"response_name": "Yield"})
+        assert created.status_code == 201, created.text
+        analysis_id = created.json()["analysis_id"]
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            config_json, result_json = connection.execute(
+                "SELECT config_json,result_json FROM experiment_design_analyses "
+                "WHERE analysis_id=?",
+                (analysis_id,),
+            ).fetchone()
+            config, envelope = json.loads(config_json), json.loads(result_json)
+            config["schema_version"] = 3
+            config["model_selection"].pop("term_policies", None)
+            config_json = canonical_json_bytes(config).decode()
+            envelope["method_version"] = "0.8.0"
+            envelope["result"]["schema_version"] = 2
+            envelope["result"]["config_sha256"] = hashlib.sha256(config_json.encode()).hexdigest()
+            selection = envelope["result"]["model_selection"]
+            for key in (
+                "term_catalog",
+                "initially_excluded_term_ids",
+                "forced_term_ids",
+                "candidate_term_ids",
+                "term_policies",
+            ):
+                selection.pop(key, None)
+            result_json = canonical_json_bytes(envelope).decode()
+            sha = hashlib.sha256(result_json.encode()).hexdigest()
+            connection.execute(
+                "UPDATE experiment_design_analyses SET method_version='0.8.0',config_json=?,"
+                "result_json=?,result_sha256=? WHERE analysis_id=?",
+                (config_json, result_json, sha, analysis_id),
+            )
+        restored = client.get(base + f"/analyses/{analysis_id}")
+        assert restored.status_code == 200, restored.text
+        assert restored.json()["result"]["schema_version"] == 2
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            assert connection.execute(
+                "SELECT config_json,result_json,result_sha256 FROM experiment_design_analyses "
+                "WHERE analysis_id=?",
+                (analysis_id,),
+            ).fetchone() == (config_json, result_json, sha)

@@ -9,8 +9,19 @@ from app.statistics.term_block_model_selection import (
     TermBlockSelectionError,
     pooling_target,
     select_term_blocks,
+    term_catalog,
     term_is_removable,
 )
+
+
+def test_catalog_estimability_uses_design_null_space_not_assumed_orthogonality():
+    matrix, blocks = _design()
+    assert all(item["estimable"] for item in term_catalog(blocks, matrix))
+    matrix[:, -1] = matrix[:, 1]
+    catalog = term_catalog(blocks, matrix)
+    assert not catalog[1]["estimable"]
+    assert not catalog[-1]["estimable"]
+    assert catalog[0]["estimable"]
 
 
 def _design(replicates=1):

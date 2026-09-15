@@ -406,7 +406,7 @@ class GeneralFactorialDesignResponse(BaseModel):
     design_version_id: UUID
     version_number: Literal[1]
     method_id: Literal["doe.general_factorial_design"]
-    method_version: Literal["0.1.0", "0.2.0", "0.3.0"]
+    method_version: Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0"]
     family: Literal["general_full_factorial"]
     name: str
     status: str
@@ -439,7 +439,7 @@ class GeneralFactorialAnalysisResponse(BaseModel):
     design_version_id: UUID
     design_version_number: int = Field(ge=1)
     method_id: Literal["doe.general_factorial_design"]
-    method_version: Literal["0.1.0", "0.2.0", "0.3.0"]
+    method_version: Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0"]
     analysis_schema_version: Literal[1]
     design_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     response_revision_id: UUID
@@ -607,6 +607,11 @@ class DoeFactorialModelPolicyResponse(BaseModel):
     max_interaction_order: int
     automatic_term_selection: bool
     center_curvature_included: bool
+    center_curvature_available: bool | None = None
+    center_curvature_disposition: Literal["candidate", "forced", "excluded", "removed"] | None = (
+        None
+    )
+    center_curvature_removed_step: int | None = None
     block_fixed_effects_included: bool
     sum_of_squares: str
 
@@ -693,6 +698,8 @@ class DoeLackOfFitBreakdownResponse(BaseModel):
     pure_error: DoeAnovaRowResponse
     lack_of_fit: DoeAnovaRowResponse
     residual_df: int
+    curvature_in_error: DoeAnovaRowResponse | None = None
+    non_curvature_lack_of_fit: DoeAnovaRowResponse | None = None
 
 
 class DoeFactorialAnovaResponse(BaseModel):
@@ -789,7 +796,7 @@ class DoeFactorialPlotsResponse(BaseModel):
 class DoeFactorialAnalysisResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1, 2]
+    schema_version: Literal[1, 2, 3]
     model_selection: DoeModelSelectionResult | None = None
     final_model: DoeFinalModelWorkflow | None = None
     config_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -812,7 +819,7 @@ class DoeFactorialAnalysisResult(BaseModel):
 
     @model_validator(mode="after")
     def validate_final_model(self) -> DoeFactorialAnalysisResult:
-        if self.schema_version == 2 and (self.model_selection is None or self.final_model is None):
+        if self.schema_version >= 2 and (self.model_selection is None or self.final_model is None):
             raise ValueError("doe_factorial_final_model_missing")
         return self
 

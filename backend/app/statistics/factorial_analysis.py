@@ -17,6 +17,7 @@ from app.statistics.term_block_model_selection import (
     ModelSelectionTermBlock,
     TermBlockSelectionError,
     select_term_blocks,
+    term_catalog,
 )
 
 MAX_FACTORIAL_ANALYSIS_POINTS = 256
@@ -80,16 +81,7 @@ def calculate_factorial_analysis(
     design_matrix = np.column_stack([term.values for term in terms])
     selection_result = None
     if model_selection is not None:
-        selection_blocks = [
-            ModelSelectionTermBlock(
-                term.term_id,
-                term.label,
-                term.factor_names,
-                (index,),
-                term.kind in {"intercept", "block", "curvature"},
-            )
-            for index, term in enumerate(terms)
-        ]
+        selection_blocks = _selection_blocks(terms)
         try:
             columns, selection_result = select_term_blocks(
                 design_matrix, response, selection_blocks, model_selection
@@ -147,6 +139,41 @@ def calculate_factorial_analysis(
         df_residual=df_residual,
         parameter_count=parameter_count,
     )
+    if (
+        model_selection is not None
+        and any(run.center_point for run in ordered_runs)
+        and not any(term.kind == "curvature" for term in terms)
+    ):
+        center_column = np.asarray([float(run.center_point) for run in ordered_runs])
+        augmented = np.column_stack([design_matrix, center_column])
+        if np.linalg.matrix_rank(augmented) == parameter_count + 1:
+            _, _, _, augmented_sse = _fit(augmented, response)
+            curvature_ss = max(0.0, sse - augmented_sse)
+            pure = lack_of_fit["pure_error"]
+            remainder_df = lack_of_fit["lack_of_fit"]["df"] - 1
+            remainder_ss = max(0.0, augmented_sse - pure["sum_squares"])
+            remainder_ms = remainder_ss / remainder_df if remainder_df > 0 else None
+            remainder_f = (
+                remainder_ms / pure["mean_square"]
+                if remainder_ms is not None
+                and pure["mean_square"] is not None
+                and pure["mean_square"] > 0
+                else None
+            )
+            lack_of_fit["curvature_in_error"] = {
+                "df": 1,
+                "sum_squares": curvature_ss,
+                "mean_square": curvature_ss,
+            }
+            lack_of_fit["non_curvature_lack_of_fit"] = {
+                "df": max(0, remainder_df),
+                "sum_squares": remainder_ss,
+                "mean_square": remainder_ms,
+                "f_statistic": remainder_f,
+                "p_value": float(stats.f.sf(remainder_f, remainder_df, pure["df"]))
+                if remainder_f is not None
+                else None,
+            }
     diagnostics = _diagnostics(
         ordered_runs,
         design_matrix,
@@ -172,7 +199,7 @@ def calculate_factorial_analysis(
     )
 
     result: dict[str, Any] = {
-        "schema_version": 1 if model_selection is None else 2,
+        "schema_version": 1 if model_selection is None else 3,
         "summary_type": "factorial_analysis",
         "method": "hierarchical_ols_two_level_full_factorial",
         "response": {"name": response_name, "unit": response_unit},
@@ -188,7 +215,7 @@ def calculate_factorial_analysis(
             "max_interaction_order": max_interaction_order,
             "automatic_term_selection": model_selection is not None
             and model_selection.method != "none",
-            "center_curvature_included": any(run.center_point for run in ordered_runs),
+            "center_curvature_included": any(term.kind == "curvature" for term in terms),
             "block_fixed_effects_included": len(_block_levels(ordered_runs)) > 1,
             "sum_of_squares": "partial_drop_one",
         },
@@ -253,6 +280,44 @@ def calculate_factorial_analysis(
         "warnings": warnings,
     }
     if selection_result is not None:
+        center_available = any(run.center_point for run in ordered_runs)
+        center_included = any(term.kind == "curvature" for term in terms)
+        center_policy = (
+            next(
+                (
+                    policy.disposition
+                    for policy in model_selection.term_policies
+                    if policy.term_id == "center_curvature"
+                ),
+                "candidate",
+            )
+            if model_selection
+            else "candidate"
+        )
+        result["model_policy"].update(
+            {
+                "center_curvature_available": center_available,
+                "center_curvature_disposition": (
+                    "removed"
+                    if center_available and not center_included and center_policy != "excluded"
+                    else center_policy
+                    if center_available
+                    else None
+                ),
+                "center_curvature_removed_step": next(
+                    (
+                        index
+                        for index, term_id in enumerate(
+                            selection_result["pooled_term_ids"]
+                            + selection_result["removed_term_ids"],
+                            1,
+                        )
+                        if term_id == "center_curvature"
+                    ),
+                    None,
+                ),
+            }
+        )
         result["model_selection"] = selection_result
         result["final_model"] = final_model_workflow(
             design_matrix,
@@ -289,6 +354,40 @@ def calculate_factorial_analysis(
         if selection_result["pooled_term_ids"]:
             warnings.append("doe_factorial_initial_pooling_assumption")
     return result
+
+
+def _selection_blocks(terms: Sequence[_Term]) -> list[ModelSelectionTermBlock]:
+    return [
+        ModelSelectionTermBlock(
+            term.term_id,
+            term.label,
+            term.factor_names,
+            (index,),
+            term.kind in {"intercept", "block"},
+            hierarchy_role=(
+                "structural_term"
+                if term.kind in {"intercept", "block"}
+                else "independent_term"
+                if term.kind == "curvature"
+                else "factorial_term"
+            ),
+            kind=term.kind,
+        )
+        for index, term in enumerate(terms)
+    ]
+
+
+def factorial_term_catalog(
+    runs: Sequence[FactorialAnalysisRun], factor_names: Sequence[str], max_interaction_order: int
+) -> list[dict[str, Any]]:
+    terms = _model_terms(runs, factor_names, max_interaction_order=max_interaction_order)
+    catalog = term_catalog(
+        _selection_blocks(terms), np.column_stack([term.values for term in terms])
+    )
+    names_to_ids = {name: f"factor_{index + 1}" for index, name in enumerate(factor_names)}
+    for item in catalog:
+        item["factor_ids"] = [names_to_ids[name] for name in item["factor_ids"]]
+    return catalog
 
 
 def _validate_inputs(

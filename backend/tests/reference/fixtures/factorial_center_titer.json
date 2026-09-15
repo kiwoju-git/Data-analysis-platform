@@ -1,0 +1,53 @@
+{
+  "provenance": {
+    "source": "User-supplied Minitab comparison; independently evaluated NumPy least squares and scipy t distribution",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3",
+    "generated_on": "2026-09-16",
+    "absolute_tolerance": 1e-9,
+    "relative_tolerance": 1e-8,
+    "coefficient_order": ["intercept", "factor_1", "factor_2", "factor_3", "factor_1:factor_2", "factor_1:factor_3", "factor_2:factor_3", "center_curvature"]
+  },
+  "factors": [
+    {"name": "Temperature", "low": 35, "high": 37},
+    {"name": "pH", "low": 6, "high": 7},
+    {"name": "Glucose", "low": 1, "high": 2}
+  ],
+  "responses": [1.88, 5.79, 0.91, 4.87, 4.23, 5.39, 5.09, 6.04, 4.11, 4.36, 4.26],
+  "removed_term_ids": ["center_curvature", "factor_1:factor_2"],
+  "steps": [
+    {
+      "columns": [0, 1, 2, 3, 4, 5, 6, 7],
+      "coefficients": [4.275, 1.2475, -0.0475, 0.9125, -0.02, -0.72, 0.425, -0.03166666666666629],
+      "p_values": [1.928367516526884e-6, 7.732906528684024e-5, 0.3293444236465606, 0.00019693042110278223, 0.6582444755204566, 0.00039914002730252296, 0.001899730129857148, 0.7129624401286838],
+      "residual_df": 3, "s": 0.11563832505801092,
+      "sse": 0.040116666666666585,
+      "r_squared": 0.998380240710778,
+      "adjusted_r_squared": 0.9946008023692602,
+      "predicted_r_squared": 0.9752877356135865,
+      "press": 0.6120499999999959, "mallows_cp": 8.0
+    },
+    {
+      "columns": [0, 1, 2, 3, 4, 5, 6],
+      "coefficients": [4.266363636363636, 1.2475, -0.0475, 0.9125, -0.02, -0.72, 0.425],
+      "p_values": [1.673537954177486e-8, 4.305341704925176e-6, 0.2614709760619182, 1.4966177986212446e-5, 0.6115479681749809, 3.83661019711086e-5, 0.00030631643839178235],
+      "residual_df": 4, "s": 0.1028403440466645,
+      "sse": 0.042304545454545296,
+      "r_squared": 0.9982919024393109,
+      "adjusted_r_squared": 0.9957297560982772,
+      "predicted_r_squared": 0.9839432366103921,
+      "press": 0.3976787346938764, "mallows_cp": 6.163613702458733
+    },
+    {
+      "columns": [0, 1, 2, 3, 5, 6],
+      "coefficients": [4.266363636363636, 1.2475, -0.0475, 0.9125, -0.72, 0.425],
+      "p_values": [2.642611136154276e-10, 2.720775073553316e-7, 0.21807834003520887, 1.290595193734245e-6, 4.1828375055305586e-6, 5.590844370483593e-5],
+      "residual_df": 5, "s": 0.09539868495377209,
+      "sse": 0.045504545454545305,
+      "r_squared": 0.9981626985408769,
+      "adjusted_r_squared": 0.9963253970817538,
+      "predicted_r_squared": 0.992248434724135,
+      "press": 0.19198343999999956, "mallows_cp": 4.402915738187857
+    }
+  ]
+}

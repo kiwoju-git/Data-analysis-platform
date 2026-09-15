@@ -675,25 +675,46 @@ class GaussianProcessCrossValidationOptions(BaseModel):
     seed: int = 20260829
 
 
+GpKernelPreset = Literal["matern_5_2_ard", "matern_3_2_ard", "rbf_ard", "rational_quadratic"]
+
+
+class GpSingleKernelSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["single"] = "single"
+    kernel_preset: GpKernelPreset = "matern_5_2_ard"
+
+
+class GpCandidateKernelSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["compare"]
+    kernel_candidates: list[GpKernelPreset] = Field(min_length=2, max_length=4)
+    criterion: Literal["cv_nlpd", "cv_rmse", "cv_mae"] = "cv_nlpd"
+    retain_candidate_details: bool = False
+
+    @field_validator("kernel_candidates")
+    @classmethod
+    def unique_candidates(cls, value: list[GpKernelPreset]) -> list[GpKernelPreset]:
+        if len(set(value)) != len(value):
+            raise ValueError("gp_kernel_candidates_invalid")
+        return value
+
+
 class GaussianProcessRegressionOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     response_column_id: str = Field(min_length=1)
     predictor_column_ids: list[str] = Field(min_length=1, max_length=12)
     missing_policy: Literal["complete_case"] = "complete_case"
-    kernel_preset: Literal[
-        "matern_5_2_ard",
-        "matern_3_2_ard",
-        "rbf_ard",
-        "rational_quadratic",
-    ] = "matern_5_2_ard"
+    kernel_selection: Annotated[
+        GpSingleKernelSelection | GpCandidateKernelSelection, Field(discriminator="mode")
+    ] = Field(default_factory=GpSingleKernelSelection)
     noise_mode: Literal["estimate", "fixed", "near_noiseless"] = "estimate"
     fixed_noise_standard_deviation: float | None = Field(default=None, gt=0.0)
     standardize_predictors: bool = True
     normalize_response: bool = True
     jitter: float = Field(default=1e-8, ge=1e-12, le=1e-3)
     optimizer_restarts: int = Field(default=3, ge=0, le=10)
-    cv_optimizer_restarts: int = Field(default=0, ge=0, le=1)
+    cv_optimizer_restarts: int = Field(default=0, ge=0, le=5)
     cv: GaussianProcessCrossValidationOptions = Field(
         default_factory=GaussianProcessCrossValidationOptions
     )
@@ -702,8 +723,25 @@ class GaussianProcessRegressionOptions(BaseModel):
     surface_grid_size: int = Field(default=25, ge=10, le=40)
     time_budget_seconds: float = Field(default=120.0, ge=5.0, le=600.0)
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_kernel(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "kernel_preset" in normalized:
+            if "kernel_selection" in normalized:
+                raise ValueError("gp_kernel_policy_invalid")
+            normalized["kernel_selection"] = {
+                "mode": "single",
+                "kernel_preset": normalized.pop("kernel_preset"),
+            }
+        return normalized
+
     @model_validator(mode="after")
     def validate_gaussian_process_options(self) -> "GaussianProcessRegressionOptions":
+        if self.kernel_selection.mode == "compare" and self.cv.method == "none":
+            raise ValueError("gp_kernel_comparison_requires_validation")
         if len(set(self.predictor_column_ids)) != len(self.predictor_column_ids):
             raise ValueError("gp_duplicate_predictor")
         if self.response_column_id in self.predictor_column_ids:

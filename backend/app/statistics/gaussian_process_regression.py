@@ -28,6 +28,7 @@ ValidationMethod = Literal["k_fold", "leave_one_out", "none"]
 MAX_GP_PREDICTORS = 12
 MAX_GP_USABLE_ROWS = 500
 MAX_GP_LOO_ROWS = 200
+MAX_GP_OPTIMIZER_STARTS = 256
 NORMAL_975 = 1.959963984540054
 BOUND_WARNING_FRACTION = 0.01
 
@@ -67,6 +68,11 @@ class GaussianProcessOptions:
     profile_points: int = 50
     surface_grid_size: int = 25
     time_budget_seconds: float = 120.0
+    kernel_selection_mode: Literal["single", "compare"] = "single"
+    kernel_candidates: tuple[KernelPreset, ...] = ()
+    selection_criterion: Literal["cv_nlpd", "cv_rmse", "cv_mae"] = "cv_nlpd"
+    retain_candidate_details: bool = False
+    deadline_monotonic: float | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +112,23 @@ class _FitResult:
     elapsed_seconds: float
 
 
+@dataclass(frozen=True)
+class _ValidationResult:
+    mean: FloatArray | None
+    latent_std: FloatArray | None
+    predictive_std: FloatArray | None
+    converged_folds: int
+    fold_count: int
+
+
+def optimizer_start_count(options: GaussianProcessOptions, fold_count: int) -> int:
+    count = len(options.kernel_candidates) if options.kernel_selection_mode == "compare" else 1
+    refits = count if options.retain_candidate_details else 1
+    return count * fold_count * (1 + options.cv_optimizer_restarts) + refits * (
+        1 + options.optimizer_restarts
+    )
+
+
 def calculate_gaussian_process_regression(
     rows: Iterable[Sequence[str | None]],
     response_column: GaussianProcessColumn,
@@ -127,19 +150,72 @@ def calculate_gaussian_process_regression(
     )
     _validate_sample(parsed, len(predictor_columns), active)
     started = time.monotonic()
+    active = replace(active, deadline_monotonic=started + active.time_budget_seconds)
     splits = _validation_splits(parsed.y.size, active)
+    if optimizer_start_count(active, len(splits)) > MAX_GP_OPTIMIZER_STARTS:
+        raise GaussianProcessRegressionError("gp_kernel_search_budget_exceeded")
+    if active.kernel_selection_mode == "compare":
+        from app.statistics.gaussian_process_kernel_selection import compare_kernel_candidates
+
+        return compare_kernel_candidates(
+            parsed, response_column, predictor_columns, active, splits, started
+        )
+    validation = _cross_validate(parsed, active, splits, started)
+    _check_time_budget(started, active)
+    with threadpool_limits(limits=1):
+        final = _fit_model(parsed.x, parsed.y, active)
+    _check_time_budget(started, active)
+    result = _assemble_result(
+        parsed,
+        response_column,
+        predictor_columns,
+        active,
+        splits,
+        validation,
+        final,
+        time.monotonic() - started,
+    )
+    result["kernel_selection"] = {
+        "mode": "single",
+        "criterion": None,
+        "candidate_presets": [active.kernel_preset],
+        "selected_preset": active.kernel_preset,
+        "retain_candidate_details": False,
+        "selection_is_external_validation": False,
+        "optimizer_starts": optimizer_start_count(active, len(splits)),
+        "tie_break_policy": None,
+    }
+    result["kernel_candidates"] = []
+    _check_time_budget(started, active)
+    return result
+
+
+def _cross_validate(
+    parsed: _ParsedRows,
+    active: GaussianProcessOptions,
+    splits: list[tuple[IntArray, IntArray]],
+    started: float,
+    *,
+    preset_index: int | None = None,
+) -> _ValidationResult:
     cv_mean: FloatArray | None = None
     cv_latent_std: FloatArray | None = None
     cv_predictive_std: FloatArray | None = None
-    cv_converged = True
+    converged_folds = 0
     if splits:
         cv_mean = np.full(parsed.y.shape, np.nan, dtype=np.float64)
         cv_latent_std = np.full(parsed.y.shape, np.nan, dtype=np.float64)
         cv_predictive_std = np.full(parsed.y.shape, np.nan, dtype=np.float64)
         cv_options = replace(active, optimizer_restarts=active.cv_optimizer_restarts)
         with threadpool_limits(limits=1):
-            for training, validation_indices in splits:
+            for fold_index, (training, validation_indices) in enumerate(splits):
                 _check_time_budget(started, active)
+                if preset_index is not None:
+                    cv_options = replace(
+                        cv_options,
+                        random_seed=(active.random_seed + preset_index * 104729 + fold_index * 1009)
+                        % (2**32 - 1),
+                    )
                 fit = _fit_model(parsed.x[training], parsed.y[training], cv_options)
                 predicted = predict_from_gaussian_process_state(
                     fit.state,
@@ -148,7 +224,7 @@ def calculate_gaussian_process_regression(
                 cv_mean[validation_indices] = predicted["mean"]
                 cv_latent_std[validation_indices] = predicted["latent_standard_deviation"]
                 cv_predictive_std[validation_indices] = predicted["predictive_standard_deviation"]
-                cv_converged = cv_converged and fit.state.converged
+                converged_folds += int(fit.state.converged)
         if not (
             np.all(np.isfinite(cv_mean))
             and np.all(np.isfinite(cv_latent_std))
@@ -156,11 +232,25 @@ def calculate_gaussian_process_regression(
         ):
             raise GaussianProcessRegressionError("gp_cross_validation_failed")
 
-    _check_time_budget(started, active)
-    with threadpool_limits(limits=1):
-        final = _fit_model(parsed.x, parsed.y, active)
-    elapsed = time.monotonic() - started
-    _check_time_budget(started, active)
+    return _ValidationResult(
+        cv_mean, cv_latent_std, cv_predictive_std, converged_folds, len(splits)
+    )
+
+
+def _assemble_result(
+    parsed: _ParsedRows,
+    response_column: GaussianProcessColumn,
+    predictor_columns: Sequence[GaussianProcessColumn],
+    active: GaussianProcessOptions,
+    splits: list[tuple[IntArray, IntArray]],
+    validation: _ValidationResult,
+    final: _FitResult,
+    elapsed: float,
+    *,
+    include_projections: bool = True,
+) -> dict[str, Any]:
+    cv_mean, cv_predictive_std = validation.mean, validation.predictive_std
+    cv_converged = validation.converged_folds == validation.fold_count
     training_metrics = _point_metrics(parsed.y, final.fitted)
     validation_metrics = _validation_metrics(parsed.y, cv_mean, cv_predictive_std)
     plot_indices = _evenly_spaced_indices(parsed.y.size, active.plot_point_limit)
@@ -172,17 +262,25 @@ def calculate_gaussian_process_regression(
         validation=validation_metrics,
         cv_converged=cv_converged,
     )
-    profiles = _conditional_profiles(
-        final.state,
-        parsed.x,
-        predictor_columns,
-        points=active.profile_points,
+    profiles = (
+        _conditional_profiles(
+            final.state,
+            parsed.x,
+            predictor_columns,
+            points=active.profile_points,
+        )
+        if include_projections
+        else []
     )
-    surface = _two_predictor_surface(
-        final.state,
-        parsed.x,
-        predictor_columns,
-        grid_size=active.surface_grid_size,
+    surface = (
+        _two_predictor_surface(
+            final.state,
+            parsed.x,
+            predictor_columns,
+            grid_size=active.surface_grid_size,
+        )
+        if include_projections
+        else None
     )
     fitted_parameters = _fitted_parameter_rows(
         final.state,
@@ -190,7 +288,7 @@ def calculate_gaussian_process_regression(
         noise_mode=active.noise_mode,
     )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "gaussian_process_regression",
         "method": {
             "name": "Gaussian Process Regression",
@@ -279,7 +377,11 @@ def calculate_gaussian_process_regression(
             }
             for index, column in enumerate(predictor_columns)
         ],
-        "prediction_basis": _prediction_basis(final.state, active),
+        **(
+            {"prediction_basis": _prediction_basis(final.state, active)}
+            if include_projections
+            else {}
+        ),
         "warnings": warnings_list,
     }
 
@@ -392,7 +494,7 @@ def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) ->
     model = GaussianProcessRegressor(
         kernel=kernel,
         alpha=alpha,
-        optimizer="fmin_l_bfgs_b",
+        optimizer=_bounded_optimizer(options.deadline_monotonic),
         n_restarts_optimizer=options.optimizer_restarts,
         normalize_y=False,
         copy_X_train=True,
@@ -402,6 +504,8 @@ def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) ->
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always", ConvergenceWarning)
             model.fit(scaled_x, scaled_y)
+    except GaussianProcessRegressionError:
+        raise
     except np.linalg.LinAlgError as exc:
         raise GaussianProcessRegressionError("gp_covariance_not_positive_definite") from exc
     except (FloatingPointError, ValueError) as exc:
@@ -444,6 +548,29 @@ def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) ->
         predictive_standard_deviation=predicted["predictive_standard_deviation"],
         elapsed_seconds=time.monotonic() - started,
     )
+
+
+def _bounded_optimizer(deadline: float | None) -> Any:
+    from scipy.optimize import minimize  # type: ignore[import-untyped]
+    from sklearn.exceptions import ConvergenceWarning  # type: ignore[import-untyped]
+
+    def optimize(objective: Any, theta: FloatArray, bounds: FloatArray) -> tuple[FloatArray, float]:
+        if not np.all(np.isfinite(bounds)):
+            raise GaussianProcessRegressionError("gp_kernel_bounds_invalid")
+
+        def checked(parameters: FloatArray) -> Any:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise GaussianProcessRegressionError("gp_time_budget_exhausted")
+            return objective(parameters)
+
+        result = minimize(checked, theta, method="L-BFGS-B", jac=True, bounds=bounds)
+        if result.status != 0:
+            warnings.warn(
+                "Gaussian Process optimizer failed to converge.", ConvergenceWarning, stacklevel=2
+            )
+        return np.asarray(result.x, dtype=np.float64), float(result.fun)
+
+    return optimize
 
 
 def _build_signal_kernel(preset: KernelPreset, predictor_count: int) -> Any:
@@ -916,8 +1043,24 @@ def _validate_options(options: GaussianProcessOptions) -> None:
         raise GaussianProcessRegressionError("gp_noise_value_invalid")
     if not 1e-12 <= options.jitter <= 1e-3:
         raise GaussianProcessRegressionError("gp_jitter_invalid")
-    if not 0 <= options.optimizer_restarts <= 10 or not 0 <= options.cv_optimizer_restarts <= 1:
+    if not 0 <= options.optimizer_restarts <= 10 or not 0 <= options.cv_optimizer_restarts <= 5:
         raise GaussianProcessRegressionError("gp_kernel_policy_invalid")
+    if options.kernel_selection_mode not in {"single", "compare"}:
+        raise GaussianProcessRegressionError("gp_kernel_policy_invalid")
+    if options.kernel_selection_mode == "compare":
+        if not 2 <= len(options.kernel_candidates) <= 4 or len(
+            set(options.kernel_candidates)
+        ) != len(options.kernel_candidates):
+            raise GaussianProcessRegressionError("gp_kernel_candidates_invalid")
+        if any(
+            preset not in {"matern_5_2_ard", "matern_3_2_ard", "rbf_ard", "rational_quadratic"}
+            for preset in options.kernel_candidates
+        ):
+            raise GaussianProcessRegressionError("gp_kernel_candidates_invalid")
+        if options.validation_method == "none":
+            raise GaussianProcessRegressionError("gp_kernel_comparison_requires_validation")
+        if options.selection_criterion not in {"cv_nlpd", "cv_rmse", "cv_mae"}:
+            raise GaussianProcessRegressionError("gp_kernel_criterion_invalid")
     if not 100 <= options.plot_point_limit <= 2000:
         raise GaussianProcessRegressionError("gp_kernel_policy_invalid")
     if not 10 <= options.profile_points <= 80 or not 10 <= options.surface_grid_size <= 40:

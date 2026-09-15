@@ -48,7 +48,7 @@ from app.storage.metadata import (
     insert_analysis_run_record_with_artifacts_and_regression_model,
 )
 
-GP_MODEL_MANIFEST_SCHEMA_VERSION = 1
+GP_MODEL_MANIFEST_SCHEMA_VERSION = 2
 GP_MODEL_ARTIFACT_KIND = "regression_model_manifest"
 GP_NUMERIC_ARTIFACT_KIND = "gaussian_process_model_numeric_state"
 GP_MODEL_MEDIA_TYPE = "application/json"
@@ -107,8 +107,21 @@ def _validate_options(value: dict[str, Any]) -> GaussianProcessRegressionOptions
     try:
         return GaussianProcessRegressionOptions.model_validate(value)
     except ValidationError as exc:
+        stable = {
+            "gp_kernel_candidates_invalid",
+            "gp_kernel_policy_invalid",
+            "gp_kernel_comparison_requires_validation",
+        }
+        code = next(
+            (
+                str(item.get("ctx", {}).get("error"))
+                for item in exc.errors()
+                if str(item.get("ctx", {}).get("error")) in stable
+            ),
+            "invalid_gaussian_process_options",
+        )
         raise ApiError(
-            code="invalid_gaussian_process_options",
+            code=code,
             message="Gaussian Process 회귀 옵션 계약이 올바르지 않습니다.",
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         ) from exc
@@ -157,8 +170,17 @@ def _column(column: DatasetColumnRecord) -> GaussianProcessColumn:
 
 
 def _statistics_options(options: GaussianProcessRegressionOptions) -> GaussianProcessOptions:
+    selection = options.kernel_selection
     return GaussianProcessOptions(
-        kernel_preset=options.kernel_preset,
+        kernel_preset=selection.kernel_preset
+        if selection.mode == "single"
+        else selection.kernel_candidates[0],
+        kernel_selection_mode=selection.mode,
+        kernel_candidates=tuple(selection.kernel_candidates) if selection.mode == "compare" else (),
+        selection_criterion=selection.criterion if selection.mode == "compare" else "cv_nlpd",
+        retain_candidate_details=selection.retain_candidate_details
+        if selection.mode == "compare"
+        else False,
         noise_mode=options.noise_mode,
         fixed_noise_standard_deviation=options.fixed_noise_standard_deviation,
         standardize_predictors=options.standardize_predictors,
@@ -362,6 +384,14 @@ def _manifest_payload(
             for name, array in arrays.items()
         },
     }
+    selection = cast(dict[str, Any], result["kernel_selection"])
+    candidate_summaries = [
+        {
+            key: candidate.get(key)
+            for key in ("preset", "status", "metrics", "selection_rank", "selected", "failure_code")
+        }
+        for candidate in cast(list[dict[str, Any]], result["kernel_candidates"])
+    ]
     return {
         "manifest_schema_version": GP_MODEL_MANIFEST_SCHEMA_VERSION,
         "manifest_kind": "gaussian_process_model_manifest",
@@ -385,6 +415,17 @@ def _manifest_payload(
             "y_scale": basis["y_scale"],
         },
         "kernel": result["kernel"],
+        "kernel_selection": {
+            key: value for key, value in selection.items() if key != "cv_validation_row_indices"
+        },
+        "candidate_summaries": candidate_summaries,
+        "candidate_summary_sha256": hashlib.sha256(
+            canonical_json_bytes({"candidates": candidate_summaries})
+        ).hexdigest(),
+        "optimizer_policy": {
+            "cv_restarts": result["method"]["cv_optimizer_restarts"],  # type: ignore[index]
+            "final_restarts": result["method"]["optimizer_restarts"],  # type: ignore[index]
+        },
         "noise_policy": {
             "mode": basis["noise_mode"],
             "jitter": basis["jitter"],
@@ -413,6 +454,10 @@ def _manifest_payload(
 
 def _analysis_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
     messages = {
+        "gp_kernel_selection_not_external_validation": (
+            "Kernel 선택에 사용한 CV 성능은 독립적인 외부 검증 성능이 아닙니다."
+        ),
+        "gp_kernel_candidate_failed": "일부 kernel 후보가 실패하여 선택 대상에서 제외되었습니다.",
         "gp_predictive_not_causal": (
             "Gaussian Process 예측 관계는 관찰 데이터만으로 인과 효과를 의미하지 않습니다."
         ),
@@ -448,6 +493,12 @@ def _analysis_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
 
 def _api_error(code: str) -> ApiError:
     messages = {
+        "gp_kernel_search_budget_exceeded": (
+            "Optimizer 시작 횟수 상한을 초과했습니다. 후보, fold 또는 재시작 수를 줄이세요."
+        ),
+        "gp_all_kernel_candidates_failed": (
+            "모든 kernel 후보가 실패했습니다. 시간 예산과 입력을 확인하세요."
+        ),
         "gp_response_required": "Gaussian Process 반응 변수를 선택하세요.",
         "gp_predictor_required": "Gaussian Process 예측변수를 하나 이상 선택하세요.",
         "gp_predictor_type_unsupported": (

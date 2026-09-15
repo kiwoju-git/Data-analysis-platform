@@ -2334,7 +2334,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             }
         ),
         property_consts=(("summary_type", "factorial_analysis"),),
-        property_enums=(("schema_version", frozenset({1, 2})),),
+        property_enums=(("schema_version", frozenset({1, 2, 3})),),
         property_any_of_refs=(
             ("model_selection", frozenset({"DoeModelSelectionResult"})),
             ("final_model", frozenset({"DoeFinalModelWorkflow"})),

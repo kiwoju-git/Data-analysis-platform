@@ -2454,7 +2454,76 @@ def _gaussian_process_report_section(
     <tbody>{parameter_rows}</tbody>
   </table>
   {chart}
+  {_gp_kernel_comparison_report(payload, locale)}
 """
+
+
+def _gp_kernel_comparison_report(payload: dict[str, object], locale: ReportLocale) -> str:
+    selection = payload.get("kernel_selection")
+    candidates = payload.get("kernel_candidates")
+    if not isinstance(selection, dict) or selection.get("mode") != "compare":
+        return ""
+    if not isinstance(candidates, list):
+        return ""
+    heading = report_text(locale, en="Kernel Comparison", ko="Kernel 후보 비교")
+    warning = report_text(
+        locale,
+        en="These CV metrics selected the kernel; they are not an independent test estimate.",
+        ko="Kernel 선택에 사용한 CV 성능이며 독립적인 외부 검증 성능이 아닙니다.",
+    )
+    headers = [
+        "Kernel",
+        report_text(locale, en="Status", ko="상태"),
+        "CV NLPD",
+        "CV RMSE",
+        "CV MAE",
+        report_text(locale, en="95% coverage", ko="95% 포함률"),
+        report_text(locale, en="Selected", ko="선택"),
+    ]
+    rows: list[str] = []
+    details: list[str] = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        metrics = candidate.get("metrics")
+        metrics = metrics if isinstance(metrics, dict) else {}
+        status = (
+            report_text(locale, en="Succeeded", ko="성공")
+            if candidate.get("status") == "succeeded"
+            else report_text(locale, en="Failed", ko="실패")
+        )
+        if candidate.get("failure_code"):
+            status += f" ({candidate['failure_code']})"
+        values = [
+            candidate.get("preset"),
+            status,
+            metrics.get("nlpd"),
+            metrics.get("rmse"),
+            metrics.get("mae"),
+            metrics.get("interval_coverage_95"),
+            report_text(locale, en="Selected", ko="선택") if candidate.get("selected") else "-",
+        ]
+        rows.append(
+            "<tr>"
+            + "".join(f"<td>{_html_text(_report_cell_value(value))}</td>" for value in values)
+            + "</tr>"
+        )
+        detail = candidate.get("details")
+        if isinstance(detail, dict):
+            details.append(
+                f"<details><summary>{_html_text(str(candidate.get('preset')))}</summary>"
+                + _gaussian_process_report_section(detail, locale)
+                + "</details>"
+            )
+    return (
+        f"<h3>{_html_text(heading)}</h3><p>{_html_text(warning)}</p>"
+        + "<table><thead><tr>"
+        + "".join(f"<th>{_html_text(h)}</th>" for h in headers)
+        + "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+        + "".join(details)
+    )
 
 
 def _gp_parameter_report_rows(value: object, locale: ReportLocale) -> str:

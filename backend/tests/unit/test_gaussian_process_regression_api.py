@@ -3,13 +3,15 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import sqlite3
 
 import numpy as np
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
-from app.storage.metadata import get_regression_model_record
+from app.services.analysis_run_execution import canonical_json_bytes
+from app.storage.metadata import get_regression_model_record, metadata_db_path
 
 
 def _create_dataset(client: TestClient) -> dict[str, object]:
@@ -46,7 +48,9 @@ def _create_dataset(client: TestClient) -> dict[str, object]:
     return confirmed.json()
 
 
-def _create_gp_analysis(client: TestClient, version: dict[str, object]) -> dict[str, object]:
+def _create_gp_analysis(
+    client: TestClient, version: dict[str, object], *, compare: bool = False
+) -> dict[str, object]:
     columns = version["columns"]
     assert isinstance(columns, list)
     response_id = columns[0]["column_id"]
@@ -55,7 +59,7 @@ def _create_gp_analysis(client: TestClient, version: dict[str, object]) -> dict[
         "/api/v1/analysis-runs",
         json={
             "method_id": "regression.gaussian_process",
-            "method_version": "0.1.0",
+            "method_version": "0.2.0",
             "dataset_version_id": version["version_id"],
             "filter_snapshot": {"expression_version": 1, "conditions": []},
             "roles": {"response": response_id, "predictors": ",".join(predictor_ids)},
@@ -63,7 +67,18 @@ def _create_gp_analysis(client: TestClient, version: dict[str, object]) -> dict[
                 "response_column_id": response_id,
                 "predictor_column_ids": predictor_ids,
                 "missing_policy": "complete_case",
-                "kernel_preset": "matern_5_2_ard",
+                **(
+                    {
+                        "kernel_selection": {
+                            "mode": "compare",
+                            "kernel_candidates": ["matern_5_2_ard", "rbf_ard"],
+                            "criterion": "cv_nlpd",
+                            "retain_candidate_details": True,
+                        }
+                    }
+                    if compare
+                    else {"kernel_preset": "matern_5_2_ard"}
+                ),
                 "noise_mode": "estimate",
                 "fixed_noise_standard_deviation": None,
                 "standardize_predictors": True,
@@ -119,7 +134,7 @@ def test_gp_analysis_persists_safe_numeric_state_and_predicts(tmp_path) -> None:
         )
 
         assert payload["method_id"] == "regression.gaussian_process"
-        assert result["schema_version"] == 1
+        assert result["schema_version"] == 2
         assert result["summary_type"] == "gaussian_process_regression"
         assert "prediction_basis" not in result
         assert result["conditional_profiles"]
@@ -262,3 +277,96 @@ def test_gp_html_reports_use_saved_result_and_requested_locale(tmp_path) -> None
     assert "관측값 대 적합값" in korean_text
     assert "<script" not in english_text
     assert "https://" not in english_text
+
+
+def test_gp_comparison_saves_only_selected_model_and_reports_candidates(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        analysis = _create_gp_analysis(client, _create_dataset(client), compare=True)
+        result = analysis["result"]
+        candidates = result["kernel_candidates"]
+        assert len(candidates) == 2
+        assert all(item["details"] for item in candidates)
+        assert len(client.get("/api/v1/regression-models").json()["models"]) == 1
+        pointer = result["model_manifest"]
+        model = get_regression_model_record(tmp_path, pointer["model_id"])
+        manifest_bytes = (tmp_path / model.manifest_path).read_bytes()
+        manifest = json.loads(manifest_bytes)
+        assert manifest["manifest_schema_version"] == 2
+        assert manifest["kernel_selection"]["selected_preset"] == result["kernel"]["preset"]
+        assert (
+            manifest["candidate_summary_sha256"]
+            == hashlib.sha256(
+                canonical_json_bytes({"candidates": manifest["candidate_summaries"]})
+            ).hexdigest()
+        )
+        predictions = client.post(
+            f"/api/v1/regression-models/{pointer['model_id']}/gaussian-process-predictions",
+            json={
+                "expected_model_manifest_sha256": pointer["manifest_sha256"],
+                "rows": [
+                    {
+                        "client_row_id": "inside",
+                        "values": {item["column_id"]: 1.0 for item in result["predictors"]},
+                    }
+                ],
+            },
+        )
+        assert predictions.status_code == 200, predictions.text
+        route = f"/api/v1/analysis-runs/{analysis['analysis_id']}/exports"
+        for locale, heading in [("en", "Kernel Comparison"), ("ko", "Kernel 후보 비교")]:
+            report = client.post(route + "/html", json={"locale": locale})
+            assert report.status_code == 201, report.text
+            html = client.get(route + f"/{report.json()['export_id']}/download").text
+            assert heading in html
+            assert all(candidate["preset"] in html for candidate in candidates)
+            assert "CV NLPD" in html
+            assert "<script" not in html and "https://" not in html
+        assert (tmp_path / model.manifest_path).read_bytes() == manifest_bytes
+
+
+def test_gp_schema_one_manifest_restore_preserves_bytes_and_predictions(tmp_path) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        analysis = _create_gp_analysis(client, _create_dataset(client))
+        result = analysis["result"]
+        pointer = result["model_manifest"]
+        model = get_regression_model_record(tmp_path, pointer["model_id"])
+        path = tmp_path / model.manifest_path
+        body = {
+            "expected_model_manifest_sha256": pointer["manifest_sha256"],
+            "rows": [
+                {
+                    "client_row_id": "inside",
+                    "values": {item["column_id"]: 1.0 for item in result["predictors"]},
+                }
+            ],
+        }
+        route = f"/api/v1/regression-models/{pointer['model_id']}/gaussian-process-predictions"
+        before = client.post(route, json=body)
+        assert before.status_code == 200
+        manifest = json.loads(path.read_bytes())
+        manifest["manifest_schema_version"] = 1
+        manifest["method_version"] = "0.1.0"
+        for key in (
+            "kernel_selection",
+            "candidate_summaries",
+            "candidate_summary_sha256",
+            "optimizer_policy",
+        ):
+            manifest.pop(key, None)
+        legacy_bytes = canonical_json_bytes(manifest)
+        sha = hashlib.sha256(legacy_bytes).hexdigest()
+        path.write_bytes(legacy_bytes)
+        with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+            connection.execute(
+                "UPDATE regression_models SET manifest_sha256=?, method_version='0.1.0' "
+                "WHERE model_id=?",
+                (sha, pointer["model_id"]),
+            )
+    with TestClient(create_app(settings)) as restarted:
+        body["expected_model_manifest_sha256"] = sha
+        restored = restarted.post(route, json=body)
+        assert restored.status_code == 200, restored.text
+        assert restored.json()["rows"] == before.json()["rows"]
+        assert path.read_bytes() == legacy_bytes

@@ -121,9 +121,7 @@ def final_model_workflow(
                 "ci_upper": float(coefficient + critical * se)
                 if critical is not None and se is not None
                 else None,
-                "status": "structural"
-                if feature.kind in {"intercept", "block", "center_curvature"}
-                else "retained",
+                "status": "structural" if feature.kind in {"intercept", "block"} else "retained",
             }
         )
     equation = f"{response_name} = {coefficients[0]:.12g}"

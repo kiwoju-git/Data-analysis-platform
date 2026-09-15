@@ -19,6 +19,7 @@ from app.api.v1.schemas.analyses import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
+from app.services.analysis_run_execution import canonical_json_bytes
 from app.services.dataset_rows import get_dataset_rows_context
 from app.services.regression_models import get_regression_model_manifest
 from app.statistics.gaussian_process_regression import (
@@ -52,11 +53,22 @@ def create_gaussian_process_point_predictions(
         and manifest.get("method_id") == "regression.gaussian_process"
         and manifest.get("model_family") == "gaussian_process_regression"
         and manifest.get("manifest_kind") == "gaussian_process_model_manifest"
-        and manifest.get("manifest_schema_version") == 1
+        and manifest.get("manifest_schema_version") in {1, 2}
     ):
         raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
     if body.expected_model_manifest_sha256 != model.manifest_sha256:
         raise _error("gp_model_manifest_checksum_mismatch", status.HTTP_409_CONFLICT)
+    if manifest["manifest_schema_version"] == 2:
+        selection = manifest.get("kernel_selection")
+        summaries = manifest.get("candidate_summaries")
+        if not (
+            isinstance(selection, dict)
+            and isinstance(summaries, list)
+            and selection.get("selected_preset") == manifest.get("kernel", {}).get("preset")
+            and hashlib.sha256(canonical_json_bytes({"candidates": summaries})).hexdigest()
+            == manifest.get("candidate_summary_sha256")
+        ):
+            raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
     source_run = get_analysis_run_record(settings.workspace_root, str(model.analysis_id))
     if source_run is None or source_run.stale or source_run.status != "succeeded":
         raise _error("gp_prediction_model_stale", status.HTTP_409_CONFLICT)

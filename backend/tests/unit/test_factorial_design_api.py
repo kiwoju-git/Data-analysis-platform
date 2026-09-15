@@ -171,7 +171,7 @@ def test_two_level_factorial_supports_categorical_pseudo_centers(tmp_path) -> No
         payload = response.json()
         restored = client.get(f"/api/v1/doe-designs/{payload['design_id']}")
 
-    assert payload["method_version"] == "0.8.0"
+    assert payload["method_version"] == "0.9.0"
     assert payload["design_schema_version"] == 2
     assert payload["run_count"] == 6
     assert payload["factors"][0]["factor_kind"] == "numeric"

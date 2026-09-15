@@ -30,6 +30,7 @@ from app.api.v1.schemas.doe import (
     ResponseSurfaceDesignCreateRequest,
     ResponseSurfaceDesignResponse,
 )
+from app.api.v1.schemas.doe_model_workflow import DoeAnalysisTermCatalog
 from app.services.doe_design_retention import (
     delete_doe_design,
     get_doe_design_deletion_preflight,
@@ -52,6 +53,7 @@ from app.services.doe_response_surface_analysis import (
     create_response_surface_analysis,
     get_response_surface_analysis,
 )
+from app.services.doe_term_catalog import get_analysis_term_catalog
 from app.services.general_factorial_designs import (
     create_general_factorial_analysis,
     create_general_factorial_design,
@@ -81,6 +83,13 @@ from app.services.response_surface_designs import (
 
 router = APIRouter(prefix="/doe-designs", tags=["doe-designs"])
 router.include_router(workflow_router)
+
+
+@router.get("/{design_id}/analysis-term-catalog", response_model=DoeAnalysisTermCatalog)
+def get_analysis_term_catalog_route(
+    request: Request, design_id: UUID, max_interaction_order: int = Query(default=2, ge=1, le=3)
+) -> DoeAnalysisTermCatalog:
+    return get_analysis_term_catalog(request.app.state.settings, design_id, max_interaction_order)
 
 
 @router.get(

@@ -15,6 +15,7 @@ from app.statistics.term_block_model_selection import (
     ModelSelectionTermBlock,
     TermBlockSelectionError,
     select_term_blocks,
+    term_catalog,
 )
 
 
@@ -38,6 +39,7 @@ class _TermBlock:
     label: str
     factor_names: tuple[str, ...]
     columns: np.ndarray
+    coefficient_labels: tuple[str, ...]
 
 
 def calculate_general_factorial_analysis(
@@ -63,19 +65,7 @@ def calculate_general_factorial_analysis(
     matrix = np.column_stack([intercept, *(block.columns for block in blocks)])
     selection_result = None
     if model_selection is not None:
-        selection_blocks = [ModelSelectionTermBlock("intercept", "Intercept", (), (0,), True)]
-        offset = 1
-        for block in blocks:
-            width = block.columns.shape[1]
-            selection_blocks.append(
-                ModelSelectionTermBlock(
-                    block.term_id,
-                    block.label,
-                    block.factor_names,
-                    tuple(range(offset, offset + width)),
-                )
-            )
-            offset += width
+        selection_blocks = _selection_blocks(blocks)
         try:
             columns, selection_result = select_term_blocks(
                 matrix, y, selection_blocks, model_selection
@@ -168,7 +158,7 @@ def calculate_general_factorial_analysis(
         warnings.append(str(lack_of_fit["reason"]))
 
     result: dict[str, Any] = {
-        "schema_version": 1 if model_selection is None else 2,
+        "schema_version": 1 if model_selection is None else 3,
         "summary_type": "general_factorial_analysis",
         "method": "categorical_treatment_coding_partial_f_tests",
         "response": {"name": response_name, "unit": response_unit},
@@ -270,6 +260,51 @@ def calculate_general_factorial_analysis(
     return result
 
 
+def _selection_blocks(blocks: Sequence[_TermBlock]) -> list[ModelSelectionTermBlock]:
+    result = [
+        ModelSelectionTermBlock(
+            "intercept",
+            "Intercept",
+            (),
+            (0,),
+            True,
+            hierarchy_role="structural_term",
+            kind="intercept",
+        )
+    ]
+    offset = 1
+    for block in blocks:
+        width = block.columns.shape[1]
+        result.append(
+            ModelSelectionTermBlock(
+                block.term_id,
+                block.label,
+                block.factor_names,
+                tuple(range(offset, offset + width)),
+                kind="main_effect" if len(block.factor_names) == 1 else "interaction",
+                coefficient_labels=block.coefficient_labels,
+            )
+        )
+        offset += width
+    return result
+
+
+def general_factorial_term_catalog(
+    runs: Sequence[GeneralFactorialAnalysisRun],
+    factor_levels: dict[str, Sequence[float | str]],
+    max_interaction_order: int,
+) -> list[dict[str, Any]]:
+    blocks = _term_blocks(runs, factor_levels, max_interaction_order)
+    catalog = term_catalog(
+        _selection_blocks(blocks),
+        np.column_stack([np.ones(len(runs)), *(b.columns for b in blocks)]),
+    )
+    names_to_ids = {name: f"factor_{index + 1}" for index, name in enumerate(factor_levels)}
+    for item in catalog:
+        item["factor_ids"] = [names_to_ids[name] for name in item["factor_ids"]]
+    return catalog
+
+
 def _validate(
     runs: Sequence[GeneralFactorialAnalysisRun],
     factor_levels: dict[str, Sequence[float | str]],
@@ -322,6 +357,15 @@ def _term_blocks(
                     label=" * ".join(names),
                     factor_names=names,
                     columns=columns,
+                    coefficient_labels=tuple(
+                        " * ".join(
+                            f"{name}[{factor_levels[name][level]}]"
+                            for name, level in zip(names, levels, strict=True)
+                        )
+                        for levels in product(
+                            *(range(1, len(factor_levels[name])) for name in names)
+                        )
+                    ),
                 )
             )
     return blocks
