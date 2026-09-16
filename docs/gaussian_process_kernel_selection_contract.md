@@ -43,8 +43,9 @@ based stable preset priority independent of checkbox order. Full refit uses
 
 Default minimize OOF Gaussian NLPD:
 `mean(log(2*pi*predictive_variance)/2 + residual**2/(2*predictive_variance))`.
-Variance is observation predictive SD squared, not latent SD, and a recorded
-numerical variance floor is used consistently with legacy metric policy.
+Variance is observation predictive SD squared, not latent SD. The unchanged
+legacy numerical floor is `numpy.finfo(float64).tiny` (about 2.225074e-308),
+an implementation constant rather than an estimated observation variance.
 The request's abbreviated sigma expression is not the Gaussian density formula.
 RMSE or MAE can be selected instead. LML is descriptive, not selection evidence.
 Ties within relative/absolute 1e-10 use secondary RMSE (NLPD primary) or NLPD,

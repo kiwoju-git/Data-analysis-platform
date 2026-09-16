@@ -1,7 +1,9 @@
 # Curvature and GP Kernel Selection Release Record
 
-Status: implementation and focused validation complete; final post-rebase
-release gates and publication are pending. A pending check is not a pass.
+Status: implementation and all local release gates passed. Tested production
+code is commit `556d2b0`; subsequent changes only complete this documentation.
+Publication identity and the separately observed remote CI status are recorded
+in the completion report and GitHub history, not inferred from local passes.
 
 ## Scope, Risks and Outcomes
 
@@ -87,6 +89,12 @@ NumPy 2.2.6/SciPy 1.15.3/scikit-learn 1.7.2; numerical threads limited to one.
   input rather than forbidding every unrelated live loading region. A mistaken
   intermediate RSM assertion edit was reverted before final validation.
 - Strict TypeScript and mypy (154 source files) passed during development.
+- Full release gates found stale tutorial/API runtime expectations and then a
+  General Full API expectation still at .3 instead of .4. Those test-only
+  expectations were corrected without altering any numeric reference. The
+  latter failure was isolated (1 failed), then its whole API file passed
+  (11 passed in 26.26s). Superseded full runs were stopped and are not counted
+  as successful. One formatting-only restart normalized mixed line endings.
 - Focused DOE Chromium E2E and full critical-path E2E passed, including existing
   regression/PLS/PCA/DOE/LHS/Bayesian/asset/navigation paths. Final rerun follows
   the rebase. Localization: 2,969 source strings / 3,790 keys passed initially.
@@ -119,6 +127,7 @@ or changed. The actual relevant commands include:
 git fetch origin
 git switch -c feat/factorial-curvature-and-gp-kernel-selection origin/main
 .\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_factorial_center_selection.py
+.\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_factorial_design_api.py -q
 .\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_term_block_model_selection.py backend/tests/unit/test_factorial_center_selection.py backend/tests/unit/test_factorial_model_selection_api.py -q
 .\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_gaussian_process_regression_api.py backend/tests/unit/test_gaussian_process_kernel_selection.py backend/tests/unit/test_factorial_model_selection_api.py -q
 .\.venv\Scripts\python.exe -m ruff check backend
@@ -130,37 +139,169 @@ npm --prefix frontend run build
 node scripts/check_frontend_localization.mjs
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 18011 -FrontendPort 18599 -FactorialWorkflowOnly -DiagnosticsRoot .tmp/e2e-diagnostics-curvature-doe-focused
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 18011 -FrontendPort 18599 -DiagnosticsRoot .tmp/e2e-diagnostics-factorial-curvature-gp-kernel
+git rebase origin/main
+.\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_factorial_analysis.py backend/tests/unit/test_term_block_model_selection.py backend/tests/unit/test_factorial_center_selection.py backend/tests/unit/test_factorial_prediction.py backend/tests/unit/test_factorial_analysis_exports.py backend/tests/unit/test_factorial_model_selection_api.py backend/tests/unit/test_general_factorial_design.py backend/tests/unit/test_gaussian_process_regression.py backend/tests/unit/test_gaussian_process_kernel_selection.py backend/tests/unit/test_gaussian_process_regression_api.py backend/tests/unit/test_regression_workflow_extensions_api.py backend/tests/unit/test_bayesian_optimization.py backend/tests/unit/test_bayesian_recommendations_api.py backend/tests/unit/test_bayesian_batches_api.py backend/tests/unit/test_openapi_frontend_contract.py backend/tests/unit/test_dev_startup_contract.py -q
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 18011 -FrontendPort 18599 -DiagnosticsRoot .tmp/e2e-diagnostics-factorial-curvature-gp-kernel-final
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 18011 -FrontendPort 18599 -DiagnosticsRoot .tmp/e2e-diagnostics-factorial-curvature-gp-kernel-verified
 ```
+
+`test_regression_models_api.py` is not a file in this tree. The actual focused
+workflow extension tests and complete `test_api_contracts.py` suite cover that
+catalog; GP model persistence/prediction also has its dedicated API tests.
+Final logs are `.tmp/curvature-gp-final-focused.log`,
+`.tmp/curvature-gp-final-frontend.log`, `.tmp/curvature-gp-release-test-final2.log`,
+`.tmp/curvature-gp-release-check-final3.log` and `.tmp/curvature-gp-verified-e2e.log`.
 
 ## Final Release Gates
 
-Post-rebase focused/full backend, frontend, typecheck/build, localization,
-test.ps1, check.ps1 and Chromium E2E: pending. Publication: pending.
-No failing state will be pushed to main. Exact final counts, exit codes and
-the resulting publication SHA/CI observation will be added after execution.
+Post-rebase focused backend: 376 passed in 318.76s, process exit 0.
+The complete Chromium E2E rerun passed after the final test-version fix, with
+process exit 0 on commit `556d2b0`. Log: `.tmp/curvature-gp-verified-e2e.log`,
+diagnostics suffix `-verified`.
+Standalone final frontend: 333 passed / 44 files in 29.49s, process exit 0.
+Localization: 2,969 sources / 3,791 translation keys, process exit 0.
+Final `test.ps1`: exit 0, backend 1,166 passed in 1,852.40s and frontend
+333 passed / 44 files in 29.83s.
+Final `check.ps1`: exit 0, backend 1,166 passed in 1,851.63s, frontend
+333 passed / 44 files in 21.69s, strict TypeScript, ESLint (zero errors),
+production build (3.57s), localization, Ruff lint/format (253 files), mypy
+(154 source files) and 18 tutorial blocks all passed. Vite's plugin-timing and
+chunk-size warnings are nonfatal; PowerShell renders native stderr as a
+NativeCommandError record, but the verified script/process exit code is zero.
+The remote main was fetched again after validation and was still the starting
+SHA. No remote-source conflict or untested upstream change was incorporated.
+No failing or interrupted run above is counted as a successful gate.
 
 ## Diagnostics and Limitations
 
-Diagnostics remain in `.tmp/e2e-diagnostics-factorial-curvature-gp-kernel`.
+Final diagnostics remain in
+`.tmp/e2e-diagnostics-factorial-curvature-gp-kernel-verified`.
 Required desktop/mobile captures include term selection, Center candidate/
 forced, step matrix/mobile, final Titer model, kernel settings/noise help,
 comparison/details/budget blocking/mobile. Desktop tables are internally
 scrollable. Viewports: 1440x900, 1280x800 and 390x844. Screenshots are not committed.
 Initial mobile capture caught the sidebar transition; final capture waits for
 the closed sidebar to leave the viewport, with a bounding assertion.
+The new kernel mobile capture is `gp-kernel-mobile.png`; `gp-mobile.png` is
+the pre-existing broader workflow's full-page capture. The final term/step and
+kernel-mobile captures were also visually inspected.
 
 Minitab itself and Windows 11 were not executed. The referenced image #1 was
 not attached; the requested semantic matrix layout was implemented. Nested
 kernel-family CV remains P1. Exact GP can time out on larger inputs; no sparse
 fallback or silent sampling is performed. LOO's UI count before complete-case
 filtering is an upper estimate; the backend enforces the exact usable-row count.
-Existing ESLint fast-refresh warnings are nonfatal; no error is suppressed.
+Seven ESLint fast-refresh warnings are nonfatal: two pre-existing settings
+exports and five helper exports in the new GP/DOE controls. No error is suppressed.
 The user-owned untracked `examples/image2.png` is intentionally excluded from Git.
 
 ## Publication
 
 Feature branch: `feat/factorial-curvature-and-gp-kernel-selection`.
-Initial contract commit: `d20353d`. Remaining logical commits and changed-file
-inventory are available from the branch diff against the base SHA. Local/main
-SHAs, push or permitted-PR method, GitHub commit URL and observed CI status will
-be reported after the final gate; no force push is permitted.
+Logical commits before this final documentation record:
+
+- `d20353d`: pre-implementation DOE/GP contracts and official-source audit.
+- `26d55d1`: selectable Center, term policies and shared-fold GP comparison.
+- `eda9b2a`: term editor, step matrices and kernel diagnostics UI.
+- `b16d50f`: independent fixtures, benchmarks, E2E and compatibility documents.
+- `59729d8`: tutorial/runtime expectation synchronization.
+- `70046be`: preserve forced terms when selecting the whole catalog.
+- `556d2b0`: General Full API version expectation.
+
+Main publication uses the requested non-force fast-forward workflow. The local
+main SHA, origin/main SHA, publication URL and observed Actions status are
+reported after the push; local checks are not presented as remote CI success.
+The feature branch is retained. No user image, workspace, database, diagnostic
+capture or log is included. The old localhost backend (API 19) and frontend were
+stopped, and the shared dev launcher verified matching API 20 / metadata 20 on
+8000/8600. A real Chromium browser reached the application shell. The final
+live source identity is rechecked after publication.
+
+## Changed Files
+
+The scoped inventory against the starting main contains these 80 files:
+
+```text
+README.md
+backend/app/analyses/registry.py
+backend/app/api/v1/doe_designs.py
+backend/app/api/v1/schemas/analyses.py
+backend/app/api/v1/schemas/doe.py
+backend/app/api/v1/schemas/doe_model_workflow.py
+backend/app/core/runtime_contract.py
+backend/app/services/analysis_run_exports.py
+backend/app/services/analysis_runner_gaussian_process.py
+backend/app/services/doe_factorial_analysis.py
+backend/app/services/doe_term_catalog.py
+backend/app/services/factorial_analysis_report.py
+backend/app/services/gaussian_process_predictions.py
+backend/app/services/general_factorial_designs.py
+backend/app/statistics/factorial_analysis.py
+backend/app/statistics/factorial_model_workflow.py
+backend/app/statistics/gaussian_process_kernel_selection.py
+backend/app/statistics/gaussian_process_regression.py
+backend/app/statistics/general_factorial_analysis.py
+backend/app/statistics/term_block_model_selection.py
+backend/tests/reference/fixtures/factorial_center_titer.json
+backend/tests/reference/fixtures/gp_kernel_comparison_reference.json
+backend/tests/reference/fixtures/gp_single_kernel_legacy.json
+backend/tests/unit/test_api_contracts.py
+backend/tests/unit/test_dev_startup_contract.py
+backend/tests/unit/test_factorial_center_selection.py
+backend/tests/unit/test_factorial_design_api.py
+backend/tests/unit/test_factorial_model_selection_api.py
+backend/tests/unit/test_gaussian_process_kernel_selection.py
+backend/tests/unit/test_gaussian_process_regression_api.py
+backend/tests/unit/test_health.py
+backend/tests/unit/test_openapi_frontend_contract.py
+backend/tests/unit/test_term_block_model_selection.py
+docs/asset_management_contract.md
+docs/ci_status.md
+docs/curvature_gp_validation.md
+docs/e2e_coverage.md
+docs/factorial_center_curvature_selection_audit.md
+docs/factorial_design_method_contract.md
+docs/factorial_manual_term_selection_contract.md
+docs/factorial_model_selection_contract.md
+docs/factorial_model_workflow_validation.md
+docs/factorial_prediction_and_plots_contract.md
+docs/gaussian_process_kernel_selection_contract.md
+docs/gaussian_process_regression_method_contract.md
+docs/interactive_chart_contract.md
+docs/method_versioning.md
+docs/runtime_compatibility_contract.md
+docs/statistical_method_audit_matrix.md
+docs/statistical_twin_end_to_end_tutorial_ko.md
+examples/tutorial/tutorial_expected_results.json
+frontend/src/App.css
+frontend/src/App.test.tsx
+frontend/src/App.tsx
+frontend/src/FactorialDesignPanel.tsx
+frontend/src/FactorialModelSelectionResults.tsx
+frontend/src/GaussianProcessRegressionPanel.test.tsx
+frontend/src/GaussianProcessRegressionPanel.tsx
+frontend/src/GeneralFactorialDesignPanel.tsx
+frontend/src/GpKernelSelectionSettings.tsx
+frontend/src/api/factorialWorkflow.ts
+frontend/src/api/routes.ts
+frontend/src/api/types/analysisResultsRegression.ts
+frontend/src/api/types/doe.ts
+frontend/src/api/types/doeModelWorkflow.ts
+frontend/src/asyncHookState.test.ts
+frontend/src/doe/DoeSelectionStepMatrix.tsx
+frontend/src/doe/DoeTermSelection.test.tsx
+frontend/src/doe/DoeTermSelection.tsx
+frontend/src/gpCapabilities.ts
+frontend/src/i18n/catalog.generated.json
+frontend/src/i18n/errorMessages.ts
+frontend/src/runtimeCompatibility.test.tsx
+frontend/src/runtimeCompatibility.ts
+scripts/benchmark_gp_kernel_search.py
+scripts/capture_gp_single_parity.py
+scripts/dev_runtime_helpers.ps1
+scripts/generate_gp_kernel_reference.py
+tests/e2e/critical_path.py
+tests/e2e/curvature_gp_selection.py
+```

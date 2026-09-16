@@ -23,8 +23,11 @@ their executable grid contract. Block-specific prediction requires a known
 block; default is the reference block, visibly recorded.
 
 Two-level coding: numeric (value-midpoint)/half_range; text low/high -1/+1.
-With curvature in the final selected model, allow only complete corners or actual stored center/pseudo-center
-settings. Reject arbitrary mixed/interior settings. General Full treats every
+With curvature in the final selected model, allow only complete corners or
+actual stored center/pseudo-center settings. Reject arbitrary mixed/interior
+settings. If Center was excluded or removed, allow in-range numeric
+interpolation; the presence of center runs alone does not impose this restriction.
+General Full treats every
 level as categorical: only declared levels, no numeric interpolation.
 
 Mean=x0'b; SE_mean=sqrt(MSE*x0'inverse(X'X)x0).

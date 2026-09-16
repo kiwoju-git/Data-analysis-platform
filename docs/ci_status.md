@@ -8,6 +8,22 @@ The current run record is `curvature_gp_validation.md`. Earlier success counts
 below are historical and do not substitute for the new release gates. Remote
 publication/CI status is reported only after observing the published commit.
 
+- Final `test.ps1` and `check.ps1` both exited 0 on production code `556d2b0`.
+  Each passed 1,166 backend tests and 333 frontend tests / 44 files. Backend
+  elapsed times were 1,852.40s and 1,851.63s respectively. Check also passed
+  Ruff lint/format (253 files), mypy (154), 18 tutorial blocks, localization
+  (2,969 sources / 3,791 keys), ESLint, strict TypeScript and production build
+  (3.57s). Seven Fast Refresh warnings (five new helper exports, two existing)
+  and Vite chunk/plugin-timing warnings remain nonfatal, with zero lint errors.
+- Focused backend: 376 passed, plus all 11 Factorial design API tests after
+  correcting the General Full version expectation. Superseded failures and
+  interrupted runs are listed in the release record, not counted as passes.
+- Complete Chromium E2E exited 0 after the last test fix. Diagnostics are in
+  `.tmp/e2e-diagnostics-factorial-curvature-gp-kernel-verified` (not committed).
+  New Center/manual-term/shared-fold-kernel paths and the prior critical paths
+  passed. Host: Windows 10 Home 19045, PowerShell 5.1, Python 3.10.11, Node
+  22.23.2; Windows 11 and the proprietary Minitab executable were not run.
+
 ## Local Validation
 
 - Factorial final-model workflow passed local release validation on
