@@ -336,7 +336,7 @@ def test_general_factorial_api_creates_three_level_design_and_analyzes_response(
         )
 
     assert design["method_id"] == "doe.general_factorial_design"
-    assert design["method_version"] == "0.3.0"
+    assert design["method_version"] == "0.4.0"
     assert design["run_count"] == 12
     assert saved.status_code == 200, saved.text
     assert analysis.status_code == 201, analysis.text
