@@ -141,7 +141,7 @@ def verify_refined_ui(browser: Browser, base_url: str, root: Path) -> None:
         assert selected_color == "rgb(34, 90, 167)"
         for selected in (
             ".language-switcher button.is-active",
-            ".sidebar-group-active > .sidebar-group-control",
+            ".sidebar-group-active > .sidebar-group-heading",
         ):
             assert (
                 page.locator(selected).evaluate(

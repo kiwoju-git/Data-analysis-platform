@@ -1,5 +1,17 @@
 # Browser E2E Coverage
 
+## Dashboard Navigation (2026-09-17)
+
+`tests/e2e/dashboard_navigation.py` runs in the isolated Chromium critical path.
+It checks six Home shortcuts and eight domain links, direct Analysis/Graphs
+sidebar navigation, independent Enter/Space disclosure, dataset query context,
+back/forward, graph selection color, mobile drawer close, and KOR/ENG layouts
+at 1440/1280/1024/390 widths. Screenshots use `dashboard-refresh-*`,
+`analysis-domain-refresh-*` and `navigation-graph-types.png`. Existing refined
+UI checks still cover all workspace routes, selected methods, drafts and focus.
+Actual run results and superseded test failures are recorded in
+`dashboard_navigation_refresh.md`; diagnostics are ignored, never committed.
+
 ## Curvature and Kernel Comparison (2026-09-16)
 
 `tests/e2e/curvature_gp_selection.py` joins the existing critical path. It covers

@@ -29,6 +29,7 @@ import {
   graphPreviewPanelClassName,
 } from "./graphBuilderLayout";
 import { graphBuilderColumns, useGraphBuilderState } from "./useGraphBuilderState";
+import { NavigationIcon } from "./components/NavigationIcon";
 
 interface GraphBuilderPageProps {
   catalog: AnalysisMethodListResponse | null;
@@ -94,6 +95,8 @@ export function GraphBuilderPage({
                   onClick={() => state.setGraphType(item.graphType)}
                   type="button"
                 >
+                  <span className="navigation-card-top"><NavigationIcon name={item.graphType} />
+                    {state.graphType === item.graphType ? <NavigationIcon name="check" size={16} /> : null}</span>
                   <strong>{item.label}</strong>
                   <span>{item.description}</span>
                 </button>

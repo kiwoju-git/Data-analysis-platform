@@ -57,6 +57,20 @@ const catalogOptions = {
 };
 
 describe("sidebar navigation model", () => {
+  it("connects Analysis and Graphs group labels to their root pages", () => {
+    const onOpenAnalysis = vi.fn();
+    const onOpenGraphs = vi.fn();
+    const groups = createSidebarNavigationGroups({
+      ...catalogOptions, activePage: "home", canOpenAnalysis: true,
+      query: new URLSearchParams(), onOpenAnalysis, onOpenGraphs,
+      onOpenDatasetSection: vi.fn(), onOpenHelpSection: vi.fn(),
+      onOpenManageTab: vi.fn(), onOpenProject: vi.fn(), onOpenReportTab: vi.fn(),
+    });
+    groups.find((group) => group.id === "analysis")?.onActivate?.();
+    groups.find((group) => group.id === "graphs")?.onActivate?.();
+    expect(onOpenAnalysis).toHaveBeenCalledOnce();
+    expect(onOpenGraphs).toHaveBeenCalledOnce();
+  });
   it("builds seven readable groups with query-synchronized active leaves", () => {
     const onOpenManageTab = vi.fn();
     const groups = createSidebarNavigationGroups({

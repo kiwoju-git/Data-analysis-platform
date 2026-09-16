@@ -1,0 +1,92 @@
+.navigation-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+.navigation-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 7px;
+  color: var(--brand-nav-blue);
+}
+
+.navigation-card-arrow { opacity: 0.55; }
+
+.analysis-domain-card,
+.analysis-domain-method-card,
+.graph-type-button,
+.home-quick-card {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.analysis-domain-card:active,
+button.analysis-domain-method-card.is-active,
+.graph-type-button.is-selected {
+  border-color: var(--brand-nav-blue);
+  background: var(--brand-nav-blue);
+  color: var(--text-on-blue);
+}
+
+.analysis-domain-card:active > span,
+button.analysis-domain-method-card.is-active .navigation-card-top,
+.graph-type-button.is-selected .navigation-card-top {
+  color: var(--text-on-blue);
+}
+
+.analysis-domain-card:hover .navigation-card-arrow,
+.home-quick-card:hover .navigation-card-arrow,
+.analysis-domain-method-card:hover .navigation-card-arrow { opacity: 1; }
+
+.analysis-domain-method-card > .navigation-card-top,
+.home-quick-card > .navigation-card-top { color: var(--brand-nav-blue); }
+
+.graph-type-button { border-radius: 6px; }
+
+.workspace:has(.project-overview-page) { background: var(--surface-app); }
+
+.project-overview-page { gap: 26px; }
+.project-overview-heading h2 { font-size: 1.35rem; margin-bottom: 6px; }
+.project-overview-heading p { color: var(--text-secondary); font-size: 0.88rem; }
+.project-overview-heading .secondary-button { display: inline-flex; align-items: center; gap: 7px; }
+
+.home-quick-card { gap: 6px; padding: 14px; }
+.home-quick-card strong { font-size: 0.96rem; }
+.home-quick-card > span:not(.navigation-card-top) { color: var(--text-secondary); font-size: 0.78rem; }
+.home-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.home-section-heading h3 { margin: 0; font-size: 1rem; }
+.home-section-link { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 0; border: 0; background: transparent; color: var(--brand-nav-blue); font-size: 0.84rem; }
+.home-section-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.home-analysis-section .analysis-domain-card { background: #edf0f4; border-color: transparent; }
+.home-analysis-section .analysis-domain-card:hover { background: var(--brand-blue-soft); border-color: var(--brand-blue-border); }
+.home-analysis-section .analysis-domain-card:active { background: var(--brand-nav-blue); color: var(--text-on-blue); }
+.analysis-domain-grid.is-compact .analysis-domain-card { grid-template-rows: auto auto 1fr; gap: 4px; }
+.analysis-domain-grid.is-compact .analysis-domain-card-description { margin: 0; font-size: 0.8rem; }
+.project-dashboard-primary strong { color: var(--text-primary); }
+.project-dashboard-actions button { min-height: 36px; font-size: 0.82rem; }
+.project-dashboard-card .empty-state { padding: 14px 0; background: transparent; border: 0; }
+
+@media (max-width: 1180px) and (min-width: 761px) {
+  .home-quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .sidebar-group-toggle { flex-basis: 44px; min-height: 44px; }
+  .project-overview-heading { align-items: flex-start; }
+  .project-overview-page { gap: 22px; }
+  .home-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-quick-card { padding: 12px; }
+  .home-section-link { min-height: 44px; }
+  .project-dashboard-card { padding: 14px; }
+  .project-dashboard-card-header { flex-wrap: wrap; }
+  .project-dashboard-actions button { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-domain-card, .analysis-domain-method-card,
+  .graph-type-button, .home-quick-card { transition: none; }
+}

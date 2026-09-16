@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { NavigationIcon } from "./components/NavigationIcon";
+import { useI18n } from "./i18n/LocaleProvider";
 
 import {
   createSidebarExpansionState,
@@ -16,6 +18,7 @@ export function SidebarNavigation({
   groups: SidebarNavigationGroup[];
   onNavigate?: () => void;
 }) {
+  const { t } = useI18n();
   const activeItemRef = useRef<HTMLButtonElement>(null);
   const activeGroupId = groups.find((group) => group.active)?.id ?? null;
   const activeLeafId = findActiveLeaf(groups.flatMap((group) => group.children))?.id ?? null;
@@ -84,23 +87,41 @@ export function SidebarNavigation({
                   }}
                   type="button"
                 >
-                  <span>{group.label}</span>
+                  <NavigationIcon name={group.id} size={18} /><span>{group.label}</span>
                 </button>
               </li>
             );
           }
           return (
             <li className={["sidebar-group", group.active ? "sidebar-group-active" : "", expanded ? "" : "is-collapsed"].filter(Boolean).join(" ")} key={group.id}>
+              <div className="sidebar-group-heading">
               <button
-                aria-controls={submenuId}
-                aria-expanded={expanded}
+                aria-controls={group.onActivate === undefined ? submenuId : undefined}
+                aria-expanded={group.onActivate === undefined ? expanded : undefined}
+                aria-current={group.onActivate !== undefined && group.active ? "location" : undefined}
                 className="sidebar-group-control"
-                onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !(current[group.id] ?? group.active) }))}
+                onClick={() => {
+                  if (group.onActivate !== undefined) {
+                    setExpandedGroups((current) => ({ ...current, [group.id]: true }));
+                    group.onActivate();
+                    onNavigate?.();
+                  } else {
+                    setExpandedGroups((current) => ({ ...current, [group.id]: !(current[group.id] ?? group.active) }));
+                  }
+                }}
                 type="button"
               >
+                <NavigationIcon name={group.id} size={18} />
                 <span>{group.label}</span>
-                <Chevron className="sidebar-group-chevron" />
+                {group.onActivate === undefined ? <Chevron className="sidebar-group-chevron" /> : null}
               </button>
+              {group.onActivate !== undefined ? <button type="button"
+                className="sidebar-group-toggle" aria-controls={submenuId} aria-expanded={expanded}
+                aria-label={t(expanded ? "navigation.collapseGroup" : "navigation.expandGroup", { group: group.label })}
+                onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !expanded }))}>
+                <Chevron className="sidebar-group-chevron" />
+              </button> : null}
+              </div>
               <ul className="sidebar-submenu" hidden={!expanded} id={submenuId}>
                 {group.children.map((item) => (
                   <NavigationItem
@@ -191,7 +212,7 @@ function hasActiveItem(item: SidebarNavigationItem): boolean {
 }
 
 function Chevron({ className }: { className: string }) {
-  return <svg aria-hidden="true" className={className} viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6" /></svg>;
+  return <NavigationIcon name="chevron" className={className} size={16} />;
 }
 
 function safeId(value: string): string {

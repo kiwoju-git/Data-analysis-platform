@@ -1,5 +1,14 @@
 # Statistical Twin
 
+### Dashboard and Direct Navigation
+
+Home now groups six icon-led quick actions, the eight analysis domains, and
+live dataset/recent-analysis/model summaries. Sidebar Analysis and Graphs open
+their workspaces directly; separate chevrons only expand their menus. Compact
+entry cards share Graph Builder's blue selection state, local icons and KOR/ENG
+labels. Statistical workflows and stored assets are unchanged. See the
+[UI validation and rollback record](docs/dashboard_navigation_refresh.md).
+
 ### Selectable DOE Terms and GP Kernel Comparison
 
 Full-factorial Center curvature is now a removable candidate, with explicit

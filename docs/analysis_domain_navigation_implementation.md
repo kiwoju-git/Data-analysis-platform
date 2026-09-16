@@ -1,5 +1,20 @@
 # Analysis Domain Navigation Implementation
 
+## Dashboard and navigation update (2026-09-17)
+
+The sidebar **Analysis** and **Graphs** labels now open `/analysis` and
+`/graphs`, using the same handlers as Home. Their separately labelled chevron
+buttons expand/collapse submenus without navigation. On mobile, navigation
+closes the drawer and returns focus to its toggle. Domain/family/method IDs,
+direct URLs, dataset query context and browser history remain unchanged.
+
+Home reuses the eight-domain catalog below six icon-led quick actions, then
+shows the existing dataset/recent-analysis/model/report resources. Root domain,
+method and graph-type entries share small locally bundled Lucide icons and the
+existing graph selection blue. Short purpose labels replace long domain prose
+on entry cards; help and all executable/planned/contextual distinctions remain.
+See `dashboard_navigation_refresh.md` for checks, dependency review and rollback.
+
 ## Refined Workbench Update (2026-09-11)
 
 The eight-domain landing remains visible until a method is chosen. An open

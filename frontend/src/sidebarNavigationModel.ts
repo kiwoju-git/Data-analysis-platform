@@ -45,6 +45,7 @@ interface SidebarNavigationOptions {
   canOpenAnalysis: boolean;
   query: URLSearchParams;
   onOpenAnalysisMethod: (method: AnalysisMethodDescriptor) => void;
+  onOpenAnalysis?: () => void;
   onOpenAnalysisDomain?: (domain: AnalysisDomainDefinition) => void;
   onOpenAnalysisModule?: (moduleId: string) => void;
   onOpenDatasetSection: (section: DatasetSidebarSection) => void;
@@ -68,6 +69,7 @@ export function createSidebarNavigationGroups({
   canOpenAnalysis,
   query,
   onOpenAnalysisMethod,
+  onOpenAnalysis,
   onOpenAnalysisDomain = () => undefined,
   onOpenDatasetSection,
   onOpenHelpSection,
@@ -138,6 +140,7 @@ export function createSidebarNavigationGroups({
       }),
       id: "analysis",
       label: "분석",
+      onActivate: onOpenAnalysis,
     },
     {
       active: activePage === "graphs",
@@ -151,6 +154,7 @@ export function createSidebarNavigationGroups({
       ],
       id: "graphs",
       label: "그래프",
+      onActivate: onOpenGraphs,
     },
     {
       active: activePage === "reports",

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import "./App.css";
+import "./dashboardNavigation.css";
 import {
   createAnalysisRun,
   createFactorialAnalysis,
@@ -4612,6 +4613,7 @@ export default function App() {
     activePage: appRoute.page,
     canOpenAnalysis: selectedMethod !== null || analysisCatalog !== null,
     query: navigationQuery,
+    onOpenAnalysis: handleOpenAnalysisPage,
     onOpenAnalysisMethod: handleOpenAnalysisMethod,
     onOpenAnalysisDomain: handleOpenAnalysisDomain,
     onOpenDatasetSection: handleOpenDatasetPage,
@@ -4661,6 +4663,7 @@ export default function App() {
         onAssetsDeleted={handleAssetsDeleted}
         onDatasetMetadataChanged={activeDatasetSelectorProps.catalogState.onRefresh}
         onOpenAnalysisPage={handleOpenAnalysisPage}
+        onOpenAnalysisDomain={handleOpenAnalysisDomain}
         onOpenDatasetPage={handleOpenDatasetPage}
         onOpenGraphsPage={handleOpenGraphsPage}
         onOpenHelpPage={() => handleOpenHelpPage()}

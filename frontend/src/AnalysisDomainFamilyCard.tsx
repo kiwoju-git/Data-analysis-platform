@@ -6,6 +6,7 @@ import {
 } from "./analysisDomainMapping";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
+import { NavigationIcon } from "./components/NavigationIcon";
 
 interface AnalysisDomainFamilyCardProps {
   catalog: AnalysisMethodListResponse;
@@ -41,7 +42,8 @@ export function AnalysisDomainFamilyCard({
               onClick={() => onSelectMethod(method)}
               type="button"
             >
-              {methodLabel(method, locale)}
+              <NavigationIcon name={method.method_id} size={18} />
+              <span>{methodLabel(method, locale)}</span>
             </button>
           ))}
         </div>

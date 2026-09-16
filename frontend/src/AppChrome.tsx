@@ -123,6 +123,7 @@ export function AppChrome({
 
   const closeMobileMenu = () => {
     setMobileMenuOpen(false);
+    if (mobileMenuOpen) mobileMenuButtonRef.current?.focus();
   };
   const openProjectHome = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -287,6 +288,7 @@ function fallbackNavigationGroups({
       children: [item],
       id,
       label,
+      onActivate: id === "analysis" || id === "graphs" ? onActivate : undefined,
     };
   });
 }

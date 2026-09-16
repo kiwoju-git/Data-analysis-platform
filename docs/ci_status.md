@@ -1,6 +1,26 @@
 # CI Status
 
-Last updated: 2026-09-16
+Last updated: 2026-09-17
+
+## Dashboard Navigation Refresh
+
+UI-only release from `45e2665`, on `feat/dashboard-navigation-refresh`.
+See `dashboard_navigation_refresh.md` for commands, source inventory, dependency
+review, corrected attempts and rollback. No statistical/schema/storage changes.
+
+- Full backend: 1,166 passed in 1,718.10 seconds. Frontend: 335 passed / 44 files.
+- Strict TypeScript, localization (2,964 sources / 3,811 keys), ESLint (zero
+  errors; seven existing warnings), Ruff lint/format, mypy and 18 tutorial blocks
+  passed. Production build native exit 0 was explicitly verified.
+- Complete Chromium E2E passed after the final localization cleanup, including
+  KOR/ENG, four viewports, sidebar label/disclosure separation, Home navigation,
+  existing statistical workflows, reports, assets and preserved drafts.
+- The combined `check.ps1` log wrapper returned 1 when PowerShell 5.1 treated
+  Vite stderr warnings as an error stream, despite all stages completing. This
+  wrapper result is not represented as exit 0. The independent build returned
+  0; exact outcomes and existing development-only npm audit findings are recorded.
+- Diagnostics are ignored under `.tmp/e2e-diagnostics-dashboard-refresh`.
+  Remote CI is checked separately for the published SHA, not inferred locally.
 
 ## Current Curvature/GP Release
 

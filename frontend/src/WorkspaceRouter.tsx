@@ -13,6 +13,7 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import type { AppRoute } from "./appRoute";
+import type { AnalysisDomainDefinition } from "./analysisDomains";
 import {
   DatasetPreparationPage,
   type DatasetPreparationPageProps,
@@ -43,6 +44,7 @@ export interface WorkspaceRouterProps {
   onAssetsDeleted: (response: DatasetVersionDeleteResponse) => void;
   onDatasetMetadataChanged: () => void;
   onOpenAnalysisPage: () => void;
+  onOpenAnalysisDomain?: (domain: AnalysisDomainDefinition) => void;
   onOpenDatasetPage: () => void;
   onOpenGraphsPage: () => void;
   onOpenHelpPage: () => void;
@@ -68,6 +70,7 @@ export function WorkspaceRouter({
   onAssetsDeleted,
   onDatasetMetadataChanged,
   onOpenAnalysisPage,
+  onOpenAnalysisDomain,
   onOpenDatasetPage,
   onOpenGraphsPage,
   onOpenHelpPage,
@@ -113,6 +116,7 @@ export function WorkspaceRouter({
             analysisCatalog={analysisCatalog}
             currentDatasetVersion={currentDatasetVersion ?? null}
             onOpenAnalysis={onOpenAnalysisPage}
+            onOpenAnalysisDomain={onOpenAnalysisDomain}
             onOpenDatasetPage={onOpenDatasetPage}
             onOpenGraphs={onOpenGraphsPage}
             onOpenHelp={onOpenHelpPage}

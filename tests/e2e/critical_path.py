@@ -23,6 +23,7 @@ from curvature_gp_selection import (
     verify_gp_kernel_comparison,
 )
 from factorial_model_workflow import verify_factorial_model_workflow
+from dashboard_navigation import verify_dashboard_navigation
 from playwright.sync_api import (
     Browser,
     BrowserContext,
@@ -503,7 +504,7 @@ def verify_localization_shell(
         ):
             expect(page.get_by_text(label, exact=True).first).to_be_visible()
         analysis_control = page.locator(".sidebar-group-control").filter(has_text=re.compile("^Analysis$"))
-        expect(analysis_control).to_have_attribute("aria-expanded", "false")
+        expect(page.locator('#sidebar-submenu-analysis')).to_be_hidden()
         analysis_control.click()
         for domain_label in (
             "Basic Statistics & Exploration",
@@ -700,6 +701,7 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics,
 
             diagnostics.step("verify project dashboard alignment and brand links")
             verify_project_dashboard(page, diagnostics)
+            verify_dashboard_navigation(page, diagnostics)
             verify_sidebar_group_toggle(page, diagnostics)
             open_primary_navigation(page, "분석")
             verify_active_dataset_analysis_alignment(page, diagnostics)
@@ -1151,6 +1153,9 @@ def open_primary_navigation(page: Page, label: str) -> None:
         )
     )
     control = group.locator(".sidebar-group-control")
+    toggle = group.locator(".sidebar-group-toggle")
+    if toggle.count() > 0:
+        control = toggle
     if control.get_attribute("aria-controls") is None:
         control.click()
         return
@@ -1192,11 +1197,10 @@ def verify_sidebar_group_toggle(page: Page, diagnostics: E2EDiagnostics) -> None
     group = page.locator(".sidebar-group").filter(
         has=page.locator(".sidebar-group-control").filter(has_text=re.compile("^분석$"))
     )
-    control = group.locator(".sidebar-group-control")
+    control = group.locator(".sidebar-group-toggle")
     page.locator(".brand-home-link").click()
-    page.locator(".home-quick-card").filter(
-        has=page.get_by_text("분석", exact=True)
-    ).click()
+    group.locator(".sidebar-group-control").click()
+    expect(page).to_have_url(re.compile(r"/analysis(?:\?|$)"))
     expect(control).to_have_attribute("aria-expanded", "true")
     domain_grid = page.locator(".analysis-domain-grid")
     expect(domain_grid.locator(".analysis-domain-card")).to_have_count(8)
@@ -1648,7 +1652,7 @@ def verify_grouped_graphs_and_hypothesis_extensions(
     analysis_group = page.locator(".sidebar-group").filter(
         has=page.locator(".sidebar-group-control").filter(has_text=re.compile("^분석$"))
     )
-    analysis_control = analysis_group.locator(".sidebar-group-control")
+    analysis_control = analysis_group.locator(".sidebar-group-toggle")
     analysis_control.click()
     expect(page.locator("#application-sidebar")).to_have_class(
         re.compile(r"\bis-open\b")
@@ -1822,7 +1826,7 @@ def verify_help_report_and_manage_routes(
     expect_lazy_workspace_page(page, "ProjectOverviewPage")
     expect(
         page.get_by_text(
-            "로컬 작업공간의 최근 자산을 확인하고 다음 작업을 시작합니다.",
+            "로컬 분석 작업공간",
             exact=True,
         )
     ).to_be_visible()

@@ -7,6 +7,7 @@ import { availabilityLabel } from "./analysisWorkbenchUtils";
 import { getMethodCardTags } from "./analysisMethodGuidance";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
+import { NavigationIcon } from "./components/NavigationIcon";
 
 interface AvailableMethodCardProps {
   method: AnalysisMethodDescriptor;
@@ -32,6 +33,8 @@ export function AnalysisDomainMethodCard({
       onClick={() => onSelectMethod(method)}
       type="button"
     >
+      <span className="navigation-card-top"><NavigationIcon name={method.method_id} />
+        <NavigationIcon name={selected ? "check" : "arrow"} className="navigation-card-arrow" size={16} /></span>
       <strong>{methodLabel(method, locale)}</strong>
       {locale === "ko" && method.label_en !== method.label_ko ? <span className="analysis-method-subtitle">{method.label_en}</span> : null}
       <span className="analysis-method-compact-tags" id={descriptionId}>

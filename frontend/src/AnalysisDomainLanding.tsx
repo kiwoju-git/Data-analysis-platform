@@ -1,8 +1,8 @@
 import type { AnalysisMethodDescriptor, AnalysisMethodListResponse } from "./api";
-import { ANALYSIS_DOMAINS, type AnalysisDomainDefinition } from "./analysisDomains";
+import type { AnalysisDomainDefinition } from "./analysisDomains";
+import { AnalysisDomainGrid } from "./AnalysisDomainGrid";
 import {
   directCatalogMethods,
-  domainCatalogMethods,
   validateAnalysisDomainCatalog,
 } from "./analysisDomainMapping";
 import { domainGuidanceKey } from "./analysisDomainGuidance";
@@ -13,7 +13,6 @@ import {
   PlannedDomainMethodCard,
 } from "./AnalysisDomainMethodCard";
 import { useI18n } from "./i18n/LocaleProvider";
-import { methodLabel } from "./i18n/catalogLabels";
 
 interface AnalysisDomainLandingProps {
   catalog: AnalysisMethodListResponse;
@@ -30,7 +29,7 @@ export function AnalysisDomainLanding({
   onOpenDomain,
   onSelectMethod,
 }: AnalysisDomainLandingProps) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const mappingErrors = validateAnalysisDomainCatalog(catalog);
   const mappingNotice = mappingErrors.length > 0 ? (
     <div className="error-box" role="alert">
@@ -41,29 +40,7 @@ export function AnalysisDomainLanding({
     return (
       <section aria-label={t("analysisDomains.title")}>
         {mappingNotice}
-        <div className="analysis-domain-grid">
-          {ANALYSIS_DOMAINS.map((candidate) => {
-            const methods = domainCatalogMethods(catalog, candidate);
-            return (
-              <button
-                className="analysis-domain-card"
-                key={candidate.id}
-                onClick={() => onOpenDomain(candidate)}
-                type="button"
-              >
-                <strong>{t(candidate.labelKey)}</strong>
-                <span className="analysis-domain-card-description">
-                  {t(candidate.descriptionKey)}
-                </span>
-                <span className="analysis-domain-card-families">
-                  {candidate.landingMode === "flat_methods"
-                    ? methods.slice(0, 3).map((method) => methodLabel(method, locale)).join(" · ")
-                    : candidate.families.slice(0, 3).map((family) => t(family.labelKey)).join(" · ")}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <AnalysisDomainGrid catalog={catalog} onOpenDomain={onOpenDomain} />
       </section>
     );
   }

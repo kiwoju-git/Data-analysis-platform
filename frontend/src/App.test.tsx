@@ -5448,7 +5448,12 @@ describe("App", () => {
     );
 
     expect(html).toContain("Statistical Twin 대시보드");
-    expect(html).toContain("로컬 작업공간의 최근 자산");
+    expect(html).toContain("분석 둘러보기");
+    expect((html.match(/class="analysis-domain-card"/g) ?? [])).toHaveLength(8);
+    expect((html.match(/class="home-quick-card /g) ?? [])).toHaveLength(6);
+    expect(html.indexOf("home-quick-grid")).toBeLessThan(html.indexOf("home-analysis-section"));
+    expect(html.indexOf("home-analysis-section")).toBeLessThan(html.indexOf("project-dashboard-grid"));
+    expect(html).toContain("로컬 분석 작업공간");
     expect(html).toContain("현재 분석 데이터셋");
     expect(html).toContain("장기 보관 공정 데이터");
     expect(html).toContain("source-data.csv");

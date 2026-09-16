@@ -1,4 +1,8 @@
 import type { ReactNode } from "react";
+import { AnalysisDomainGrid } from "./AnalysisDomainGrid";
+import type { AnalysisDomainDefinition } from "./analysisDomains";
+import { NavigationIcon } from "./components/NavigationIcon";
+import { useI18n } from "./i18n/LocaleProvider";
 
 import type {
   AnalysisMethodListResponse,
@@ -21,6 +25,7 @@ export interface ProjectOverviewPageProps {
   analysisCatalog?: AnalysisMethodListResponse | null;
   currentDatasetVersion: DatasetVersionResponse | null;
   onOpenAnalysis: () => void;
+  onOpenAnalysisDomain?: (domain: AnalysisDomainDefinition) => void;
   onOpenDatasetPage: () => void;
   onOpenGraphs: () => void;
   onOpenHelp: () => void;
@@ -34,6 +39,7 @@ export function ProjectOverviewPage({
   analysisCatalog = null,
   currentDatasetVersion,
   onOpenAnalysis,
+  onOpenAnalysisDomain,
   onOpenDatasetPage,
   onOpenGraphs,
   onOpenHelp,
@@ -41,6 +47,7 @@ export function ProjectOverviewPage({
   onOpenReports,
   workspaceAssetRevision = 0,
 }: ProjectOverviewPageProps) {
+  const { t } = useI18n();
   const state = useProjectOverviewState(workspaceAssetRevision);
   const composition =
     currentDatasetVersion === null
@@ -52,9 +59,10 @@ export function ProjectOverviewPage({
       <div className="panel-heading project-overview-heading">
         <div>
           <h2 id="project-overview-title">Statistical Twin 대시보드</h2>
-          <p>로컬 작업공간의 최근 자산을 확인하고 다음 작업을 시작합니다.</p>
+          <p>{t("dashboard.subtitle")}</p>
         </div>
         <button className="secondary-button" onClick={state.onRetry} type="button">
+          <NavigationIcon name="refresh" size={16} />
           새로고침
         </button>
       </div>
@@ -63,14 +71,14 @@ export function ProjectOverviewPage({
         <HomeQuickCard
           accent="dataset"
           action={currentDatasetVersion === null ? "데이터 등록" : "데이터 보기"}
-          detail={currentDatasetVersion === null ? "분석을 시작하려면 데이터를 등록하세요." : `${currentDatasetVersion.row_count.toLocaleString()}행 · ${currentDatasetVersion.column_count.toLocaleString()}열`}
+          detail={currentDatasetVersion === null ? t("dashboard.importData") : t("dashboard.datasetSize", { rows: currentDatasetVersion.row_count.toLocaleString(), columns: currentDatasetVersion.column_count.toLocaleString() })}
           title="데이터셋"
           onActivate={onOpenDatasetPage}
         />
         <HomeQuickCard
           accent="analysis"
           action="분석 시작"
-          detail={state.summary.data === null ? "통계 method 선택" : `저장 분석 ${state.summary.data.stored_analysis_count.toLocaleString()}건`}
+          detail={state.summary.data === null ? t("dashboard.chooseMethod") : t("dashboard.analysisCount", { count: state.summary.data.stored_analysis_count.toLocaleString() })}
           title="분석"
           onActivate={onOpenAnalysis}
         />
@@ -78,19 +86,30 @@ export function ProjectOverviewPage({
         <HomeQuickCard
           accent="reports"
           action="리포트 열기"
-          detail={state.summary.data === null ? "결과 보기와 내보내기" : `리포트·내보내기 ${state.summary.data.export_report_count.toLocaleString()}건`}
+          detail={state.summary.data === null ? "결과 보기와 내보내기" : t("dashboard.reportCount", { count: state.summary.data.export_report_count.toLocaleString() })}
           title="리포트"
           onActivate={() => onOpenReports()}
         />
         <HomeQuickCard
           accent="manage"
           action="자산 관리"
-          detail={state.summary.data === null ? "저장 자산 검색과 관리" : `데이터 ${state.summary.data.visible_dataset_version_count + state.summary.data.archived_dataset_version_count} · 모델 ${state.summary.data.regression_model_count}`}
+          detail={state.summary.data === null ? "저장 자산 검색과 관리" : t("dashboard.assetCounts", { datasets: state.summary.data.visible_dataset_version_count + state.summary.data.archived_dataset_version_count, models: state.summary.data.regression_model_count })}
           title="관리"
           onActivate={onOpenManage}
         />
         <HomeQuickCard accent="help" action="도움말 열기" detail="Method 찾기와 튜토리얼" title="도움말" onActivate={onOpenHelp} />
       </div>
+
+      <section className="home-analysis-section" aria-labelledby="home-analysis-title">
+        <div className="home-section-heading">
+          <h3 id="home-analysis-title">{t("dashboard.exploreAnalyses")}</h3>
+          <button className="home-section-link" onClick={onOpenAnalysis} type="button">
+            {t("dashboard.allAnalyses")}<NavigationIcon name="arrow" size={16} />
+          </button>
+        </div>
+        <AnalysisDomainGrid catalog={analysisCatalog} compact
+          onOpenDomain={onOpenAnalysisDomain ?? onOpenAnalysis} />
+      </section>
 
       <div className="project-dashboard-grid">
         <article
@@ -98,7 +117,7 @@ export function ProjectOverviewPage({
           aria-labelledby="project-current-dataset"
         >
           <div className="project-dashboard-card-header">
-            <h3 id="project-current-dataset">현재 분석 데이터셋</h3>
+            <h3 id="project-current-dataset"><NavigationIcon name="dataset" size={18} />현재 분석 데이터셋</h3>
           </div>
           {currentDatasetVersion === null ? (
             <div className="empty-state">
@@ -165,7 +184,7 @@ export function ProjectOverviewPage({
 
         <article className="project-dashboard-card" aria-labelledby="project-datasets">
           <div className="project-dashboard-card-header">
-            <h3 id="project-datasets">데이터셋 현황</h3>
+            <h3 id="project-datasets"><NavigationIcon name="manage" size={18} />데이터셋 현황</h3>
           </div>
           <ProjectResource
             resource={state.summary}
@@ -199,8 +218,7 @@ export function ProjectOverviewPage({
                     <li key={item.version_id}>
                       <strong>{item.user_label ?? item.original_filename}</strong>
                       <span>
-                        {item.row_count.toLocaleString()}행 ·{" "}
-                        {item.column_count.toLocaleString()}열
+                        {t("dashboard.datasetSize", { rows: item.row_count.toLocaleString(), columns: item.column_count.toLocaleString() })}
                       </span>
                       <span>{formatLocalDateTime(item.created_at)}</span>
                     </li>
@@ -221,7 +239,7 @@ export function ProjectOverviewPage({
 
         <article className="project-dashboard-card" aria-labelledby="project-analyses">
           <div className="project-dashboard-card-header">
-            <h3 id="project-analyses">최근 분석</h3>
+            <h3 id="project-analyses"><NavigationIcon name="analysis" size={18} />최근 분석</h3>
             <ProjectResource
               resource={state.summary}
               retry={state.onRetry}
@@ -230,7 +248,7 @@ export function ProjectOverviewPage({
             >
               {(summary) => (
                 <span className="project-dashboard-count">
-                  저장 {summary.stored_analysis_count.toLocaleString()}
+                  {t("dashboard.savedCount", { count: summary.stored_analysis_count.toLocaleString() })}
                 </span>
               )}
             </ProjectResource>
@@ -282,7 +300,7 @@ export function ProjectOverviewPage({
 
         <article className="project-dashboard-card" aria-labelledby="project-assets">
           <div className="project-dashboard-card-header">
-            <h3 id="project-assets">모델 및 리포트</h3>
+            <h3 id="project-assets"><NavigationIcon name="reports" size={18} />모델 및 리포트</h3>
           </div>
           <ProjectResource
             resource={state.summary}
@@ -361,9 +379,10 @@ function HomeQuickCard({
       onClick={onActivate}
       type="button"
     >
+      <span className="navigation-card-top"><NavigationIcon name={accent} size={22} />
+        <NavigationIcon name="arrow" className="navigation-card-arrow" size={15} /></span>
       <strong>{title}</strong>
       <span>{detail}</span>
-      <small>{action}</small>
     </button>
   );
 }

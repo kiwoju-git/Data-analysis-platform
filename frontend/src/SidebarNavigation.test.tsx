@@ -9,6 +9,16 @@ import { SidebarNavigation } from "./SidebarNavigation";
 import type { SidebarNavigationGroup } from "./sidebarNavigationModel";
 
 describe("SidebarNavigation", () => {
+  it("separates workspace navigation from disclosure with accessible icons", () => {
+    const groups = navigationGroups("analysis");
+    groups[2].onActivate = vi.fn();
+    const html = renderToString(<SidebarNavigation groups={groups} />);
+    expect(html).toContain('class="sidebar-group-toggle"');
+    expect(html).toContain('aria-label="분석 메뉴 접기"');
+    expect(html).toMatch(/class="sidebar-group-toggle"[^>]*aria-controls="sidebar-submenu-analysis"/);
+    expect(html).toContain('aria-hidden="true"');
+    expect(groups[2].onActivate).not.toHaveBeenCalled();
+  });
   it("expands the active group and keeps inactive submenus hidden", () => {
     const groups = navigationGroups("analysis");
     const html = renderToString(<SidebarNavigation groups={groups} />);
