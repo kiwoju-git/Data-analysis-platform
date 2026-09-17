@@ -1,5 +1,11 @@
 # Statistical Method Audit Matrix
 
+2026-09-17: standalone GPR writes method 0.3.0/result 3/manifest 3/API 21.
+Explicit sample-SD-coordinate bounds and bounded BFGS have independent sklearn
+posterior/optimization/fold-local CV and transformed-gradient tests. PLS remains
+0.1.0/schema 1; its report dispatch is repaired. See
+`gaussian_process_optimizer_contract.md` and `html_report_coverage_matrix.md`.
+
 ## Curvature and Kernel Comparison Gate (2026-09-16)
 
 Factorial 0.9.0 / General Full 0.4.0 add explicit term policies and independent

@@ -1,5 +1,17 @@
 # Statistical Twin
 
+### GPR Reproducibility and Report Parity
+
+Family-domain landings now share compact method cards while sidebar families and
+routes remain intact. Standalone GPR exposes length-scale units/bounds and actual
+L-BFGS-B or bounded BFGS optimization, with fold-local reproducibility evidence.
+New scaled-input drafts propose a 0.5 lower bound; the legacy 0.01 preset remains
+available and stronger smoothing is not guaranteed to improve prediction.
+PLS HTML now preserves stored tables/plots without recalculation. Other report
+coverage and summary-only limitations are documented in the
+[method report matrix](docs/html_report_coverage_matrix.md).
+See the [validation and rollback record](docs/gpr_ui_report_parity_validation.md).
+
 ### Dashboard and Direct Navigation
 
 Home now groups six icon-led quick actions, the eight analysis domains, and

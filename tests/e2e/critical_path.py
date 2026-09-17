@@ -205,6 +205,7 @@ def main() -> int:
     parser.add_argument("--diagnostics-root", type=Path, default=None)
     parser.add_argument("--keep-workspace", action="store_true")
     parser.add_argument("--factorial-workflow-only", action="store_true")
+    parser.add_argument("--gpr-report-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -303,7 +304,13 @@ def main() -> int:
         wait_for_url(
             frontend_base_url, "frontend dev server", managed_processes, diagnostics
         )
-        run_browser_flow(frontend_base_url, diagnostics, backend_base_url, args.factorial_workflow_only)
+        run_browser_flow(
+            frontend_base_url,
+            diagnostics,
+            backend_base_url,
+            args.factorial_workflow_only,
+            args.gpr_report_only,
+        )
         print("E2E critical path passed")
         return 0
     except Exception as exc:
@@ -594,8 +601,13 @@ def assert_mobile_locale_controls(page: Page, language: str, api_status: str) ->
     assert api_box["y"] < language_box["y"] + language_box["height"]
 
 
-def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics,
-                     backend_base_url: str, factorial_only: bool = False) -> None:
+def run_browser_flow(
+    frontend_base_url: str,
+    diagnostics: E2EDiagnostics,
+    backend_base_url: str,
+    factorial_only: bool = False,
+    gpr_report_only: bool = False,
+) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
@@ -618,6 +630,11 @@ def run_browser_flow(frontend_base_url: str, diagnostics: E2EDiagnostics,
             if factorial_only:
                 verify_factorial_model_workflow(page, diagnostics, backend_base_url)
                 verify_curvature_selection(page, diagnostics, backend_base_url)
+                return
+            if gpr_report_only:
+                verify_pls_regression_and_prediction(page, diagnostics)
+                verify_gaussian_process_regression_and_prediction(page, diagnostics)
+                verify_dashboard_navigation(page, diagnostics)
                 return
             expect(page).to_have_url(re.compile(r"/(?:home)?(?:\?|$)"))
             expect(
@@ -2718,6 +2735,10 @@ def verify_pls_regression_and_prediction(
     expect(prediction.locator("tbody tr").first).to_contain_text("준비됨")
     if prediction.locator("tbody tr td").nth(3).inner_text().strip() == "-":
         raise AssertionError("PLS point prediction did not render a numeric value")
+    from gpr_report_parity import verify_pls_exports
+
+    verify_pls_exports(page, diagnostics, result_info.value.json(),
+                       lambda: open_primary_navigation(page, "리포트"))
 
 
 def verify_gaussian_process_regression_and_prediction(
@@ -2744,6 +2765,9 @@ def verify_gaussian_process_regression_and_prediction(
     panel.get_by_label("Surface grid 크기").fill("10")
     diagnostics.capture_page(page, "gp-input.png")
     diagnostics.capture_page(page, "gp-kernel-settings.png")
+    from gpr_report_parity import configure_and_verify_gp_settings
+
+    configure_and_verify_gp_settings(page, diagnostics)
 
     with page.expect_response(
         lambda response: response.request.method == "POST"
@@ -2753,6 +2777,10 @@ def verify_gaussian_process_regression_and_prediction(
         panel.get_by_role("button", name="Gaussian Process 회귀 실행").click()
     if not result_info.value.ok:
         raise AssertionError(f"GP analysis failed: {result_info.value.text()}")
+    applied = result_info.value.json()["result"]["method"]
+    assert applied["optimizer"] == "bfgs"
+    assert applied["length_scale"]["lower"] == 0.75
+    assert applied["length_scale"]["upper"] == 20
 
     expect(panel.get_by_role("heading", name="모형 요약", exact=True)).to_be_visible(
         timeout=120_000

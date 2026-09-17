@@ -2,6 +2,33 @@
 
 Last updated: 2026-09-17
 
+## GPR, Domain and Report Parity
+
+Release from `740486e885492d56456aef99933d80e7422ba421`, branch
+`feat/gpr-reproducibility-and-report-parity`. Full evidence, limitations, command
+history, screenshots and rollback are in `gpr_ui_report_parity_validation.md`.
+
+- Final `check.ps1` returned native exit 0. Backend: 1,224 passed in 1,576.48s.
+  Frontend: 342 passed across 46 files in 27.80s. Ruff lint/format (260 files),
+  mypy (158 source files), 18 tutorial blocks, localization (2,964 sources /
+  3,835 keys), ESLint, strict TypeScript and production build (4.67s) passed.
+- ESLint has zero errors and nine nonfatal Fast Refresh warnings: seven prior
+  warnings and two new helper exports in `GpOptimizationSettings.tsx`. Vite's
+  chunk-size and localization-plugin timing warnings remain nonfatal. No lint
+  rule or test was disabled to obtain a pass.
+- Complete Chromium E2E returned native exit 0 under
+  `.tmp/e2e-gpr-ui-report-final`, including prior statistical and asset workflows.
+  Focused offline-report, coordinate-confirmation and geometry follow-ups also
+  returned 0. KOR/ENG and 1440/1280/1024/390 widths were checked.
+- API 21, metadata 20, standalone GPR method 0.3.0/result 3/manifest 3. Legacy
+  schema-1/2 models/results retain their stored settings and checksums. No DB
+  migration, dependency upgrade or Bayesian calculation change.
+- Actual host: Windows 10 Home 19045, PowerShell 5.1, CPython 3.10.11,
+  Node 22.23.2. Windows 11 was not independently run. No user Python/data was
+  supplied; reference comparisons are synthetic and do not reproduce that case.
+- Remote Actions status is observed separately after publishing, never inferred
+  from local success or an empty legacy commit-status list.
+
 ## Dashboard Navigation Refresh
 
 UI-only release from `45e2665`, on `feat/dashboard-navigation-refresh`.

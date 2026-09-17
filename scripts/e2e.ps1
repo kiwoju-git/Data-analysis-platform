@@ -5,7 +5,8 @@ param(
     [string]$DiagnosticsRoot = "",
     [switch]$InstallBrowsers,
     [switch]$KeepWorkspace,
-    [switch]$FactorialWorkflowOnly
+    [switch]$FactorialWorkflowOnly,
+    [switch]$GprReportOnly
 )
 
 Set-StrictMode -Version Latest
@@ -50,6 +51,9 @@ try {
     }
     if ($FactorialWorkflowOnly) {
         $Args += "--factorial-workflow-only"
+    }
+    if ($GprReportOnly) {
+        $Args += "--gpr-report-only"
     }
 
     & $Python @Args

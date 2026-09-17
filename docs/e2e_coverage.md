@@ -1,5 +1,22 @@
 # Browser E2E Coverage
 
+## GPR/UI/Report Parity (2026-09-17)
+
+`dashboard_navigation.py`: all eight landings in KOR/ENG, 1440x900, 1280x800,
+1024x768, 390x844; common card counts/overflow/direct navigation/reload/back and
+dataset context. `gpr_report_parity.py`: applied length bounds/BFGS, boundary
+validation, bilingual responsive controls, separate PLS prediction JSON,
+correct-analysis HTML generation/Report Center, local HTML in an offline context.
+Existing refined UI tests retain draft/locale/mobile keyboard coverage. Outputs
+stay in `.tmp`. Actual outcomes: `gpr_ui_report_parity_validation.md`.
+
+Focused rerun: `powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1
+-GprReportOnly -DiagnosticsRoot .\.tmp\e2e-gpr-report-focused`. This subset runs
+PLS exports, standalone GPR and dashboard/domain navigation; it is not a substitute
+for the default complete critical path. GPR control/label bounding assertions and
+viewport-only mobile screenshots distinguish real clipping from fixed-header
+artifacts in full-page captures.
+
 ## Dashboard Navigation (2026-09-17)
 
 `tests/e2e/dashboard_navigation.py` runs in the isolated Chromium critical path.
