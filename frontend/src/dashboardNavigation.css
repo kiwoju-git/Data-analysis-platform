@@ -7,6 +7,44 @@
 
 .analysis-method-family-label { font-size: 0.75rem; color: var(--text-secondary); }
 .analysis-domain-supporting-items:empty { display: none; }
+
+.analysis-method-groups {
+  display: grid;
+  gap: 20px;
+}
+
+.analysis-method-group {
+  min-width: 0;
+  padding: 12px;
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-app);
+}
+
+.analysis-method-group h3 {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.analysis-method-group .analysis-domain-method-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (min-width: 1380px) {
+  .analysis-method-groups { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .analysis-method-group { grid-column: span 4; }
+  .analysis-method-group[data-family-id="t-tests"] { grid-column: span 3; }
+  .analysis-method-group[data-family-id="analysis-of-variance"] { grid-column: span 1; }
+  .analysis-method-group[data-family-id="analysis-of-variance"] .analysis-domain-method-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .analysis-method-group .analysis-domain-method-grid { grid-template-columns: minmax(0, 1fr); }
+  .analysis-method-groups { gap: 16px; }
+}
 .sidebar-group-control { font-weight: 700; }
 .sidebar-navigation [data-node-kind="domain"] > button { font-weight: 600; }
 .sidebar-navigation [data-node-kind="family"] > button {

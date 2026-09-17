@@ -88,12 +88,14 @@ def verify_refined_ui(browser: Browser, base_url: str, root: Path) -> None:
             dataset_id = selector.input_value()
             navigation = page.locator(".analysis-method-navigation")
             expect(navigation).not_to_have_attribute("open", "")
-            expect(navigation.locator(".analysis-domain-method-grid")).to_be_hidden()
+            for grid in navigation.locator(".analysis-domain-method-grid").all():
+                expect(grid).to_be_hidden()
             toggle = navigation.locator("summary").first
             toggle.focus()
             page.keyboard.press("Enter")
             expect(navigation).to_have_attribute("open", "")
-            expect(navigation.locator(".analysis-domain-method-grid")).to_be_visible()
+            for grid in navigation.locator(".analysis-domain-method-grid").all():
+                expect(grid).to_be_visible()
             toggle.press("Space")
             expect(navigation).not_to_have_attribute("open", "")
             toggle.press("Tab")

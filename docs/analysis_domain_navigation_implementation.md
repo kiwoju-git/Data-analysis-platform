@@ -190,3 +190,21 @@ Active ancestors have a quiet text emphasis; the active method retains the blue
 fill, weight and leading border. Expansion and navigation state are unchanged.
 Tests assert identical method sets/order with a reversed API catalog, common
 card counts, retained planned items, and semantic hierarchy/active leaf markup.
+
+## Mean-domain grouping (2026-09-18)
+
+The mean/equivalence domain alone now groups its unchanged ten cards into
+t-tests (3), ANOVA (1), equivalence (3), and nonparametric comparison (3).
+These are flat pale-gray section bands with labelled h3 headings and separators,
+not additional clickable family cards. The shared method card, blue selected
+state, icons, route/state ownership and canonical order stay unchanged.
+Repeated per-card family captions are omitted inside these labelled sections.
+Comparability remains a separate planned row and guidance remains collapsed.
+Wide screens place ANOVA alongside t-tests; mobile stacks methods without
+clipping. Other seven domains and sidebar taxonomy are untouched.
+
+The installed ui-ux-pro-max skill was read and its `navigation grouping
+hierarchy` UX search supplied heading-hierarchy/accessibility guidance. The
+narrower proximity search had no relevant grouping match; the gray bands use
+the existing design tokens and the user's request, not a claimed skill preset.
+No new palette, font, icon or chart library was introduced.

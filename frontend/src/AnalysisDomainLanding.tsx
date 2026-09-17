@@ -46,33 +46,54 @@ export function AnalysisDomainLanding({
     );
   }
 
+  const entries = landingCatalogMethods(catalog, domain);
+  const grouped = domain.id === "mean-equivalence";
+  const methodCard = ({ method, family }: (typeof entries)[number]) => (
+    <AnalysisDomainMethodCard
+      key={method.method_id}
+      familyLabel={grouped || family === null ? undefined : t(family.labelKey)}
+      method={method}
+      selected={selectedMethodId === method.method_id}
+      onSelectMethod={onSelectMethod}
+    />
+  );
+
   return (
     <section className="analysis-domain-landing" aria-label={t(domain.labelKey)}>
       {mappingNotice}
-          <div className="analysis-domain-method-grid">
-            {landingCatalogMethods(catalog, domain).map(({ method, family }) => (
-              <AnalysisDomainMethodCard
-                key={method.method_id}
-                familyLabel={family === null ? undefined : t(family.labelKey)}
-                method={method}
-                selected={selectedMethodId === method.method_id}
-                onSelectMethod={onSelectMethod}
-              />
+      {grouped ? (
+        <div className="analysis-method-groups">
+          {domain.families.map((family) => {
+            const methods = entries.filter((entry) => entry.family?.id === family.id);
+            if (methods.length === 0) return null;
+            const headingId = `analysis-method-group-${family.id}`;
+            return (
+              <section className="analysis-method-group" key={family.id}
+                aria-labelledby={headingId} data-family-id={family.id}>
+                <h3 id={headingId}>{t(family.labelKey)}</h3>
+                <div className="analysis-domain-method-grid">{methods.map(methodCard)}</div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="analysis-domain-method-grid">
+          {entries.map(methodCard)}
+          {(domain.directPlannedWorkflows ?? []).map((workflow) => (
+            <PlannedDomainMethodCard key={workflow.id} workflow={workflow} />
+          ))}
+          {(domain.directContextualWorkflows ?? [])
+            .filter((workflow) => workflow.presentation === "card")
+            .map((workflow) => (
+              <ContextualDomainMethodCard key={workflow.id} workflow={workflow} />
             ))}
-            {(domain.directPlannedWorkflows ?? []).map((workflow) => (
-              <PlannedDomainMethodCard key={workflow.id} workflow={workflow} />
-            ))}
-            {(domain.directContextualWorkflows ?? [])
-              .filter((workflow) => workflow.presentation === "card")
-              .map((workflow) => (
-                <ContextualDomainMethodCard key={workflow.id} workflow={workflow} />
-              ))}
-          </div>
-          {domain.contextualSummaryKey !== undefined ? (
-            <p className="analysis-domain-contextual-summary">
-              {t(domain.contextualSummaryKey)}
-            </p>
-          ) : null}
+        </div>
+      )}
+      {domain.contextualSummaryKey !== undefined ? (
+        <p className="analysis-domain-contextual-summary">
+          {t(domain.contextualSummaryKey)}
+        </p>
+      ) : null}
       <details className="analysis-domain-guide">
         <summary>{t("domain.compactGuide")}</summary>
         <p>{t(domainGuidanceKey(domain.id))}</p>

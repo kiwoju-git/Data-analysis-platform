@@ -16,6 +16,7 @@ import type {
   AnalysisMethodListResponse,
   AnalysisModuleId,
 } from "./api";
+import { setCurrentLocale } from "./i18n/store";
 
 const expectedRegistryMethodIds = [
   "eda.descriptive",
@@ -58,6 +59,24 @@ const expectedRegistryMethodIds = [
 ] as const;
 
 describe("analysis domain navigation", () => {
+  it.each(["ko", "en"] as const)("groups the ten mean methods without duplicate family captions (%s)", (locale) => {
+    setCurrentLocale(locale);
+    try {
+      const html = renderToString(<AnalysisDomainLanding catalog={testCatalog()} domain={ANALYSIS_DOMAINS[1]}
+        selectedMethodId="hypothesis.one_sample_t" onOpenDomain={() => undefined} onSelectMethod={() => undefined} />);
+      const groups = [...html.matchAll(/<section class="analysis-method-group"[^>]*data-family-id="([^"]+)"[\s\S]*?<\/section>/g)];
+      expect(groups.map((group) => group[1])).toEqual(["t-tests", "analysis-of-variance", "equivalence-tests", "nonparametric-tests"]);
+      expect(groups.map((group) => (group[0].match(/<button/g) ?? []).length)).toEqual([3, 1, 3, 3]);
+      for (const group of groups) {
+        expect(group[0]).toContain(`aria-labelledby="analysis-method-group-${group[1]}"`);
+        expect(group[0]).toContain(`<h3 id="analysis-method-group-${group[1]}">`);
+      }
+      expect(html).not.toContain('class="analysis-method-family-label"');
+      expect(html).toContain('aria-pressed="true"');
+      expect(html).toContain('is-planned');
+      expect(html).toContain(locale === "ko" ? "비모수 비교" : "Nonparametric Tests");
+    } finally { setCurrentLocale("ko"); }
+  });
   it("defines the eight presentation domains in the required order", () => {
     expect(ANALYSIS_DOMAINS.map((domain) => domain.id)).toEqual([
       "basic-exploration",

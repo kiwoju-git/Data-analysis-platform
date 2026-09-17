@@ -1129,7 +1129,7 @@ def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> 
     navigation = page.locator(".analysis-method-navigation")
     if navigation.count() and navigation.get_attribute("open") is None:
         navigation.locator("summary").first.click()
-    family_grid = page.locator(".analysis-domain-method-grid")
+    family_grid = page.locator(".analysis-method-groups")
     methods = family_grid.get_by_role("button")
     expect(methods).to_have_count(10)
     for family_label in (
