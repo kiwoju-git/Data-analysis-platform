@@ -164,13 +164,14 @@ function NavigationItem({
   const submenuId = `sidebar-tree-${safeId(item.id)}`;
   const buttonClass = level === 0 ? "sidebar-submenu-button" : "sidebar-method-button";
   return (
-    <li className={hasChildren ? `sidebar-tree-item sidebar-tree-level-${level}` : undefined}>
+    <li className={hasChildren ? `sidebar-tree-item sidebar-tree-level-${level}` : undefined}
+      data-node-kind={item.kind ?? "destination"} data-node-depth={level}>
       <button
         aria-controls={hasChildren ? submenuId : undefined}
         aria-current={item.active && !hasActiveDescendant ? "page" : undefined}
         aria-disabled={item.disabled || undefined}
         aria-expanded={hasChildren ? expanded : undefined}
-        className={`${buttonClass}${item.active ? " is-active" : ""}${level > 1 ? " is-nested" : ""}`}
+        className={`${buttonClass}${item.active ? " is-active" : ""}${hasActiveDescendant ? " is-active-ancestor" : ""}${level > 1 ? " is-nested" : ""}`}
         disabled={item.disabled}
         onClick={() => {
           if (hasChildren) {

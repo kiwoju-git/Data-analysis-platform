@@ -89,6 +89,22 @@ export function directCatalogMethods(
     );
 }
 
+// Presentation order belongs to the domain definition, not the API catalog.
+// This does not register a second canonical placement for family methods.
+export function landingCatalogMethods(
+  catalog: AnalysisMethodListResponse,
+  domain: AnalysisDomainDefinition,
+): { method: AnalysisMethodDescriptor; family: AnalysisDomainFamily | null }[] {
+  const byId = new Map(catalog.methods.map((method) => [method.method_id, method]));
+  return [
+    ...(domain.directMethodIds ?? []).map((id) => ({ id, family: null })),
+    ...domain.families.flatMap((family) => family.methodIds.map((id) => ({ id, family }))),
+  ].flatMap(({ id, family }) => {
+    const method = byId.get(id);
+    return method === undefined ? [] : [{ method, family }];
+  });
+}
+
 export function familyCatalogMethods(
   catalog: AnalysisMethodListResponse,
   family: AnalysisDomainFamily,

@@ -10,12 +10,14 @@ import { useI18n } from "./i18n/LocaleProvider";
 import { NavigationIcon } from "./components/NavigationIcon";
 
 interface AvailableMethodCardProps {
+  familyLabel?: string;
   method: AnalysisMethodDescriptor;
   selected: boolean;
   onSelectMethod: (method: AnalysisMethodDescriptor) => void;
 }
 
 export function AnalysisDomainMethodCard({
+  familyLabel,
   method,
   selected,
   onSelectMethod,
@@ -36,6 +38,7 @@ export function AnalysisDomainMethodCard({
       <span className="navigation-card-top"><NavigationIcon name={method.method_id} />
         <NavigationIcon name={selected ? "check" : "arrow"} className="navigation-card-arrow" size={16} /></span>
       <strong>{methodLabel(method, locale)}</strong>
+      {familyLabel !== undefined ? <span className="analysis-method-family-label">{familyLabel}</span> : null}
       {locale === "ko" && method.label_en !== method.label_ko ? <span className="analysis-method-subtitle">{method.label_en}</span> : null}
       <span className="analysis-method-compact-tags" id={descriptionId}>
         {tags.map((tag, index) => <span key={`${tag.category}-${index}`}>{tag.label}</span>)}

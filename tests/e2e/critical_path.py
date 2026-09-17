@@ -1112,10 +1112,9 @@ def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> 
     navigation = page.locator(".analysis-method-navigation")
     if navigation.count() and navigation.get_attribute("open") is None:
         navigation.locator("summary").first.click()
-    family_grid = page.locator(".analysis-domain-family-grid")
-    families = family_grid.locator(".analysis-domain-family-card")
-    expect(families).to_have_count(4)
-    expect(family_grid.get_by_role("button")).to_have_count(10)
+    family_grid = page.locator(".analysis-domain-method-grid")
+    methods = family_grid.get_by_role("button")
+    expect(methods).to_have_count(10)
     for family_label in (
         "t-검정",
         "동등성 검정",
@@ -1123,24 +1122,15 @@ def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> 
         "비모수 비교",
     ):
         expect(family_grid).to_contain_text(family_label)
-    expect(page.locator(".analysis-domain-planned-notice")).to_contain_text("Comparability")
-    assert_children_do_not_overlap(family_grid, families, "hypothesis families")
-    t_card = families.filter(has=page.get_by_role("heading", name="t-검정"))
-    anova_card = families.filter(has=page.get_by_role("heading", name="ANOVA"))
-    height_difference = abs(
-        t_card.bounding_box()["height"] - anova_card.bounding_box()["height"]
+    expect(page.locator(".analysis-domain-workflow-row.is-planned")).to_contain_text(
+        "Comparability"
     )
-    if height_difference > 2:
-        raise AssertionError(
-            f"t-test and ANOVA cards differed by {height_difference:.2f}px"
-        )
-    equivalence = families.filter(has=page.get_by_role("heading", name="동등성 검정"))
-    expect(equivalence.get_by_role("button")).to_have_text(
-        ["1-표본 동등성 검정", "2-표본 동등성 검정", "대응표본 동등성 검정"]
-    )
+    assert_children_do_not_overlap(family_grid, methods, "hypothesis methods")
+    for name in ("1-표본 동등성 검정", "2-표본 동등성 검정", "대응표본 동등성 검정"):
+        expect(methods.filter(has=page.get_by_text(name, exact=True))).to_have_count(1)
     diagnostics.capture_locator(
         family_grid,
-        "hypothesis-family-cards.png",
+        "hypothesis-common-method-cards.png",
     )
     if navigation.count():
         navigation.locator("summary").first.click()

@@ -505,7 +505,8 @@ describe("App", () => {
     expect(methodGridHtml).not.toContain('class="method-meta"');
     expect(methodGridHtml).not.toContain("데이터셋 필요");
     expect(methodGridHtml).not.toContain("Source 자산 선택");
-    expect(methodGridHtml).toContain('class="analysis-domain-family-card analysis-domain-family-');
+    expect(methodGridHtml).toContain('class="analysis-domain-method-grid"');
+    expect(methodGridHtml).not.toContain('class="analysis-domain-family-card');
     expect(html).toContain("독립 그룹 평균 → 2-표본 t-검정");
     expect(html).toContain("순위 기반 비교 → Mann-Whitney U 검정");
     expect(html).not.toContain('class="workbench-steps"');

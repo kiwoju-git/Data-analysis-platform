@@ -2,11 +2,12 @@ import type { AnalysisMethodDescriptor, AnalysisMethodListResponse } from "./api
 import type { AnalysisDomainDefinition } from "./analysisDomains";
 import { AnalysisDomainGrid } from "./AnalysisDomainGrid";
 import {
-  directCatalogMethods,
+  landingCatalogMethods,
+  contextualCatalogMethods,
   validateAnalysisDomainCatalog,
 } from "./analysisDomainMapping";
 import { domainGuidanceKey } from "./analysisDomainGuidance";
-import { AnalysisDomainFamilyCard } from "./AnalysisDomainFamilyCard";
+import { methodLabel } from "./i18n/catalogLabels";
 import {
   AnalysisDomainMethodCard,
   ContextualDomainMethodCard,
@@ -29,7 +30,7 @@ export function AnalysisDomainLanding({
   onOpenDomain,
   onSelectMethod,
 }: AnalysisDomainLandingProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const mappingErrors = validateAnalysisDomainCatalog(catalog);
   const mappingNotice = mappingErrors.length > 0 ? (
     <div className="error-box" role="alert">
@@ -48,12 +49,11 @@ export function AnalysisDomainLanding({
   return (
     <section className="analysis-domain-landing" aria-label={t(domain.labelKey)}>
       {mappingNotice}
-      {domain.landingMode === "flat_methods" ? (
-        <>
           <div className="analysis-domain-method-grid">
-            {directCatalogMethods(catalog, domain).map((method) => (
+            {landingCatalogMethods(catalog, domain).map(({ method, family }) => (
               <AnalysisDomainMethodCard
                 key={method.method_id}
+                familyLabel={family === null ? undefined : t(family.labelKey)}
                 method={method}
                 selected={selectedMethodId === method.method_id}
                 onSelectMethod={onSelectMethod}
@@ -73,20 +73,6 @@ export function AnalysisDomainLanding({
               {t(domain.contextualSummaryKey)}
             </p>
           ) : null}
-        </>
-      ) : (
-        <div className="analysis-domain-family-grid">
-          {domain.families.filter((family) => family.methodIds.length > 0).map((family) => (
-            <AnalysisDomainFamilyCard
-              catalog={catalog}
-              family={family}
-              key={family.id}
-              selectedMethodId={selectedMethodId}
-              onSelectMethod={onSelectMethod}
-            />
-          ))}
-        </div>
-      )}
       <details className="analysis-domain-guide">
         <summary>{t("domain.compactGuide")}</summary>
         <p>{t(domainGuidanceKey(domain.id))}</p>
@@ -94,9 +80,20 @@ export function AnalysisDomainLanding({
           {domain.selectionGuideKeys?.map((key) => <li key={key}>{t(key)}</li>)}
         </ul> : null}
       </details>
-      {domain.landingMode === "family_cards" ? domain.families.filter((family) => family.methodIds.length === 0).map((family) =>
-        <AnalysisDomainFamilyCard key={family.id} family={family} catalog={catalog}
-          selectedMethodId={selectedMethodId} onSelectMethod={onSelectMethod} />) : null}
+      {domain.families.map((family) => <div className="analysis-domain-supporting-items" key={family.id}>
+        {contextualCatalogMethods(catalog, family).map((method) =>
+          <div className="analysis-domain-workflow-row" key={method.method_id}>
+            <span>{methodLabel(method, locale)}</span><small>{t("analysisContext.label")}</small>
+          </div>)}
+        {(family.contextualWorkflows ?? []).map((workflow) =>
+          <div className="analysis-domain-workflow-row" key={workflow.id}>
+            <span>{t(workflow.labelKey)}</span><small>{t(workflow.statusKey ?? "analysisContext.label")}</small>
+          </div>)}
+        {(family.plannedWorkflows ?? []).map((workflow) =>
+          <div className="analysis-domain-workflow-row is-planned" key={workflow.id}>
+            <span>{t(workflow.labelKey)}</span><small>{t("analysisPlanned.label")}</small>
+          </div>)}
+      </div>)}
     </section>
   );
 }

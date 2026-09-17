@@ -8,6 +8,7 @@ import {
   analysisFamilyForMethod,
   analysisMethodPlacement,
   mappedAnalysisMethodIds,
+  landingCatalogMethods,
   validateAnalysisDomainCatalog,
 } from "./analysisDomainMapping";
 import type {
@@ -125,6 +126,21 @@ describe("analysis domain navigation", () => {
     expect(
       validateAnalysisDomainCatalog({ ...catalog, methods: catalog.methods.slice(1) }),
     ).toContain(`unknown:${catalog.methods[0].method_id}`);
+  });
+
+  it("normalizes every landing without changing placement, count or canonical order", () => {
+    const catalog = testCatalog();
+    for (const domain of ANALYSIS_DOMAINS) {
+      const expected = [...(domain.directMethodIds ?? []), ...domain.families.flatMap((family) => family.methodIds)];
+      const entries = landingCatalogMethods({ ...catalog, methods: [...catalog.methods].reverse() }, domain);
+      expect(entries.map(({ method }) => method.method_id)).toEqual(expected);
+      expect(new Set(expected).size).toBe(expected.length);
+      const html = renderToString(<AnalysisDomainLanding catalog={catalog} domain={domain}
+        selectedMethodId={null} onOpenDomain={() => undefined} onSelectMethod={() => undefined} />);
+      expect(html.match(/<button[^>]*class="analysis-domain-method-card/g) ?? []).toHaveLength(expected.length);
+      expect(html).not.toContain('class="analysis-domain-family-card');
+      expect(html).not.toContain('<details class="analysis-domain-guide" open');
+    }
   });
 
   it("renders domain and family landings without turning planned work into a button", () => {

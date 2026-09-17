@@ -5,6 +5,38 @@
   pointer-events: none;
 }
 
+.analysis-method-family-label { font-size: 0.75rem; color: var(--text-secondary); }
+.analysis-domain-supporting-items:empty { display: none; }
+.sidebar-group-control { font-weight: 700; }
+.sidebar-navigation [data-node-kind="domain"] > button { font-weight: 600; }
+.sidebar-navigation [data-node-kind="family"] > button {
+  font-weight: 550;
+  font-size: 0.8rem;
+  margin-top: 5px;
+}
+.sidebar-navigation [data-node-kind="method"] > button,
+.sidebar-navigation [data-node-kind="workflow"] > button {
+  font-weight: 400;
+  font-size: 0.82rem;
+}
+.sidebar-navigation .sidebar-method-list,
+.sidebar-navigation .sidebar-family-method-list {
+  border-left: 1px solid var(--brand-blue-border);
+  margin-left: 9px;
+  padding-left: 7px;
+}
+.sidebar-navigation [data-node-kind] > button.is-active-ancestor {
+  background: transparent;
+  color: var(--brand-nav-blue);
+  border-left-color: transparent;
+}
+.sidebar-navigation [data-node-kind="method"] > button.is-active {
+  font-weight: 600;
+  border-left-color: var(--brand-nav-blue-hover);
+  background: var(--brand-nav-blue);
+  color: var(--text-on-blue);
+}
+
 .navigation-card-top {
   display: flex;
   align-items: center;

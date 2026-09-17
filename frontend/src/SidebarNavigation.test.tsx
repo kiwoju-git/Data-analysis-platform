@@ -9,6 +9,19 @@ import { SidebarNavigation } from "./SidebarNavigation";
 import type { SidebarNavigationGroup } from "./sidebarNavigationModel";
 
 describe("SidebarNavigation", () => {
+  it("exposes semantic hierarchy and distinguishes the active path from the leaf", () => {
+    const groups = navigationGroups("analysis");
+    groups[2].children = [{ id: "domain", kind: "domain", label: "Domain", active: true,
+      children: [{ id: "family", kind: "family", label: "Family", active: true,
+        children: [{ id: "method", kind: "method", label: "Method", active: true }] }] }];
+    const html = renderToString(<SidebarNavigation groups={groups} />);
+    expect(html).toContain('data-node-kind="domain" data-node-depth="0"');
+    expect(html).toContain('data-node-kind="family" data-node-depth="1"');
+    expect(html).toContain('data-node-kind="method" data-node-depth="2"');
+    expect(html.match(/is-active-ancestor/g)).toHaveLength(2);
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(html).not.toContain('role="tree"');
+  });
   it("separates workspace navigation from disclosure with accessible icons", () => {
     const groups = navigationGroups("analysis");
     groups[2].onActivate = vi.fn();

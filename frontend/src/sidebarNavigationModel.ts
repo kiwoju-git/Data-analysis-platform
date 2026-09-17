@@ -16,6 +16,7 @@ import { t } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
 
 export interface SidebarNavigationItem {
+  kind?: "domain" | "family" | "method" | "workflow" | "destination";
   active: boolean;
   children?: SidebarNavigationItem[];
   disabled?: boolean;
@@ -123,6 +124,7 @@ export function createSidebarNavigationGroups({
         const active = activePage === "analysis" && resolvedActiveDomainId === domain.id;
         return {
           active,
+          kind: "domain",
           children: analysisDomainSidebarChildren({
             activeAnalysisMethodId,
             activePage,
@@ -304,6 +306,7 @@ function familySidebarItems({
   );
   if (methodItems.length === 0 && plannedItems.length === 0) return [];
   return [{
+    kind: "family",
     active:
       activeAnalysisMethodId !== null &&
       analysisMethodPlacement(activeAnalysisMethodId)?.family?.id === family.id,
@@ -322,6 +325,7 @@ function methodSidebarItem(
   onOpenAnalysisMethod: (method: AnalysisMethodDescriptor) => void,
 ): SidebarNavigationItem {
   return {
+    kind: "method",
     active: activePage === "analysis" && activeAnalysisMethodId === method.method_id,
     disabled: !canOpenAnalysis || method.availability !== "available",
     id: method.method_id,
@@ -332,6 +336,7 @@ function methodSidebarItem(
 
 function plannedSidebarItem(id: string, label: string, locale: AppLocale): SidebarNavigationItem {
   return {
+    kind: "workflow",
     active: false,
     disabled: true,
     id: `planned-${id}`,

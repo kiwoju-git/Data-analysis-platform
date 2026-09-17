@@ -177,3 +177,16 @@ factorial workspace with `design_kind=general` and its `design_id` preserved.
 - Metadata schema: unchanged.
 - SQLite migration: none.
 - Existing saved artifacts and checksums: not rewritten.
+# Unified landing presentation (2026-09)
+
+`landingCatalogMethods` projects direct and family method IDs into one ordered
+presentation list without changing canonical placement. All eight domains use
+`AnalysisDomainMethodCard`; the four family domains add a small family caption
+instead of nested family boxes. Planned/contextual family items remain separate
+non-executable rows below the collapsed guide. Sidebar taxonomy is unchanged.
+
+Sidebar items carry semantic `kind` metadata (domain/family/method/workflow).
+Active ancestors have a quiet text emphasis; the active method retains the blue
+fill, weight and leading border. Expansion and navigation state are unchanged.
+Tests assert identical method sets/order with a reversed API catalog, common
+card counts, retained planned items, and semantic hierarchy/active leaf markup.
