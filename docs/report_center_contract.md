@@ -1,6 +1,13 @@
 # Report Center P0 Contract
 
-Last updated: 2026-07-23
+Last updated: 2026-09-17
+
+PLS now has a schema-1-specific renderer, not the OLS renderer. GPR includes
+saved optimizer/bounds/convergence evidence. See `html_report_coverage_matrix.md`
+for method-level support and remaining summary-only views. Unknown or malformed
+core results cannot succeed as empty HTML. Existing reports are not rewritten.
+Completed PLS point predictions may be downloaded separately as client JSON
+snapshots; these are explicitly not managed Report Center artifacts.
 
 ## Purpose
 
@@ -60,7 +67,7 @@ generated filename is ID-derived and contains no original filename or workspace 
 | --- | --- | --- | --- |
 | Regression Predict | Dedicated workflow restore | Full prediction CSV in Predict | Not supported |
 | Response Optimizer | Dedicated workflow restore | Not supported | Not supported |
-| Factorial DOE | Dedicated design/analysis restore | Not a generic export | Design HTML in Factorial workflow |
+| Factorial / General Full DOE | Dedicated design/analysis restore | Not a generic export | Managed analysis HTML and separate legacy design/response HTML in owning workflow |
 | RSM | Dedicated workflow restore | Not supported | Not supported |
 | Bayesian Optimization | Study/recommendation restore | Not supported | Not supported |
 

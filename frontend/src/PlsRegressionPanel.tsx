@@ -8,6 +8,9 @@ import type {
   PlsRegressionResult,
 } from "./api";
 import { createPlsPointPredictions } from "./api/regression";
+import { triggerBrowserDownload } from "./api/client";
+import { createLatestRequestGuard } from "./latestRequest";
+import { plsPredictionSnapshot } from "./plsPredictionSnapshot";
 import { CompactSettingsTable } from "./components/CompactSettingsTable";
 import { NumericColumnPicker } from "./components/NumericColumnPicker";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
@@ -332,12 +335,12 @@ export function PlsRegressionPanel({
           </div>
         </>
       )}
-      {analysisResult !== null && result !== null ? <PlsResults result={result} /> : null}
+      {analysisResult !== null && result !== null ? <PlsResults result={result} analysisId={analysisResult.analysis_id} /> : null}
     </section>
   );
 }
 
-function PlsResults({ result }: { result: PlsRegressionResult }) {
+function PlsResults({ result, analysisId }: { result: PlsRegressionResult; analysisId: string }) {
   const { t, formatNumber } = useI18n();
   const [loadingComponent, setLoadingComponent] = useState(1);
   const maxLoadingComponent = result.model_summary.selected_components;
@@ -425,7 +428,7 @@ function PlsResults({ result }: { result: PlsRegressionResult }) {
         </section>
       ) : null}
 
-      {result.model_manifest !== undefined ? <PlsPointPrediction result={result} /> : null}
+      {result.model_manifest !== undefined ? <PlsPointPrediction key={result.model_manifest.model_id} result={result} analysisId={analysisId} /> : null}
     </div>
   );
 }
@@ -470,11 +473,13 @@ function ScatterSvg({ ariaLabel, bounds, series, showReferenceLine = false }: { 
   return <><svg aria-label={ariaLabel} className="interactive-chart pls-scatter-chart" role="img" viewBox="0 0 640 290"><title>{ariaLabel}</title><desc>{ariaLabel}</desc><line className="chart-axis" x1="54" x2="594" y1="254" y2="254"/><line className="chart-axis" x1="54" x2="54" y1="44" y2="254"/>{showReferenceLine ? <line className="chart-reference-line" x1="54" x2="594" y1="254" y2="44"/> : null}{series.flatMap((item) => item.points.map((point, index) => { const key = `${item.label}-${index}`; return <circle aria-label={`${item.label}, ${point.label}, ${number(point.x)}, ${number(point.y)}`} className={`${item.className}${selected === key ? " is-selected" : ""}`} cx={x(point.x)} cy={y(point.y)} key={key} onClick={() => setSelected(key)} onFocus={() => setSelected(key)} r="5" tabIndex={0}/>; }))}</svg><div className="chart-legend">{series.map((item) => <span key={item.label} className={item.className}>{item.label}</span>)}</div></>;
 }
 
-function PlsPointPrediction({ result }: { result: PlsRegressionResult }) {
+function PlsPointPrediction({ result, analysisId }: { result: PlsRegressionResult; analysisId: string }) {
   const { t, locale } = useI18n();
   const nextId = useRef(2);
   const [rows, setRows] = useState<PredictionRowDraft[]>([emptyPredictionRow("pls-row-1", result)]);
   const [prediction, setPrediction] = useState<PlsPointPredictionResponse | null>(null);
+  const [snapshot, setSnapshot] = useState<ReturnType<typeof plsPredictionSnapshot> | null>(null);
+  const guard = useRef(createLatestRequestGuard()).current;
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const manifest = result.model_manifest;
@@ -486,18 +491,53 @@ function PlsPointPrediction({ result }: { result: PlsRegressionResult }) {
     setError(null);
   }, [manifest?.model_id, result]);
 
+  useEffect(() => {
+    guard.cancel(); setSnapshot(null); setPrediction(null); setIsRunning(false);
+    return () => guard.cancel();
+  }, [rows, guard]);
+
   async function run(): Promise<void> {
     if (manifest === undefined || !valid) return;
+    const token = guard.begin();
     setIsRunning(true); setError(null); setPrediction(null);
     try {
-      setPrediction(await createPlsPointPredictions(manifest.model_id, { expected_model_manifest_sha256: manifest.manifest_sha256, rows: rows.map((row) => ({ client_row_id: row.id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, Number(row.values[predictor.column_id])])) })) }));
+      const request = { expected_model_manifest_sha256: manifest.manifest_sha256, rows: rows.map((row) => ({ client_row_id: row.id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, Number(row.values[predictor.column_id])])) })) };
+      const response = await createPlsPointPredictions(manifest.model_id, request);
+      if (!guard.isCurrent(token)) return;
+      setPrediction(response);
+      setSnapshot(plsPredictionSnapshot(analysisId, request, response, new Date().toISOString()));
     } catch (caught) {
+      if (!guard.isCurrent(token)) return;
       const display = localizedErrorDisplay(caught, locale);
       setError(`${display.message} (${display.code})`);
-    } finally { setIsRunning(false); }
+    } finally { if (guard.isCurrent(token)) setIsRunning(false); }
   }
 
-  return <section className="result-section pls-point-prediction"><h4>{t("pls.pointPrediction")}</h4><p>{t("pls.pointPredictionHelp")}</p>{!valid ? <div className="notice-box warning">{t("pls.inputRequired")}</div> : null}{error !== null ? <div className="notice-box error">{error}</div> : null}<div className="table-wrap"><table className="result-table pls-prediction-grid"><thead><tr><th>{t("pls.row")}</th>{result.predictors.map((predictor) => <th key={predictor.column_id}>{predictor.display_name}</th>)}<th>{t("pls.predictedValue")}</th><th>{t("pls.status")}</th><th /></tr></thead><tbody>{rows.map((row, index) => { const predicted = prediction?.rows.find((item) => item.client_row_id === row.id); return <tr key={row.id}><td>{index + 1}</td>{result.predictors.map((predictor) => <td key={predictor.column_id}><input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal" onChange={(event) => { const value = event.currentTarget.value; setRows((current) => current.map((item) => item.id === row.id ? { ...item, values: { ...item.values, [predictor.column_id]: value } } : item)); setPrediction(null); }} type="text" value={row.values[predictor.column_id] ?? ""}/></td>)}<td>{predicted === undefined ? "-" : number(predicted.predicted_value)}</td><td>{predicted?.warnings.includes("prediction_extrapolation_risk") ? t("pls.extrapolation") : predicted === undefined ? "-" : t("pls.ready")}</td><td><button aria-label={`${t("pls.deleteRow")} ${index + 1}`} onClick={() => setRows((current) => current.length === 1 ? [emptyPredictionRow(`pls-row-${nextId.current++}`, result)] : current.filter((item) => item.id !== row.id))} type="button">{t("pls.deleteRow")}</button></td></tr>; })}</tbody></table></div><div className="button-row"><button onClick={() => setRows((current) => [...current, emptyPredictionRow(`pls-row-${nextId.current++}`, result)])} type="button">{t("pls.addRow")}</button><button className="primary-button" disabled={!valid || isRunning || manifest === undefined} onClick={() => void run()} type="button">{isRunning ? t("pls.predicting") : t("pls.runPrediction")}</button></div></section>;
+  const exportControl = snapshot === null ? null : <div className="button-row">
+    <button type="button" onClick={() => triggerBrowserDownload(new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" }), `pls-prediction-${snapshot.response.model_id}.json`)}>{t("pls.prediction.export")}</button>
+    <p className="field-help">{t("pls.prediction.separate")}</p>
+  </div>;
+
+  return <section className="result-section pls-point-prediction">
+    <h4>{t("pls.pointPrediction")}</h4><p>{t("pls.pointPredictionHelp")}</p>
+    {!valid ? <div className="notice-box warning">{t("pls.inputRequired")}</div> : null}
+    {error !== null ? <div className="notice-box error">{error}</div> : null}
+    <div className="table-wrap"><table className="result-table pls-prediction-grid">
+      <thead><tr><th>{t("pls.row")}</th>{result.predictors.map((predictor) => <th key={predictor.column_id}>{predictor.display_name}</th>)}<th>{t("pls.predictedValue")}</th><th>{t("pls.status")}</th><th /></tr></thead>
+      <tbody>{rows.map((row, index) => {
+        const predicted = prediction?.rows.find((item) => item.client_row_id === row.id);
+        return <tr key={row.id}><td>{index + 1}</td>{result.predictors.map((predictor) => <td key={predictor.column_id}>
+          <input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal"
+            onChange={(event) => { const value = event.currentTarget.value; setRows((current) => current.map((item) => item.id === row.id ? { ...item, values: { ...item.values, [predictor.column_id]: value } } : item)); }}
+            type="text" value={row.values[predictor.column_id] ?? ""} />
+        </td>)}<td>{predicted === undefined ? "-" : number(predicted.predicted_value)}</td>
+          <td>{predicted?.warnings.includes("prediction_extrapolation_risk") ? t("pls.extrapolation") : predicted === undefined ? "-" : t("pls.ready")}</td>
+          <td><button aria-label={`${t("pls.deleteRow")} ${index + 1}`} onClick={() => setRows((current) => current.length === 1 ? [emptyPredictionRow(`pls-row-${nextId.current++}`, result)] : current.filter((item) => item.id !== row.id))} type="button">{t("pls.deleteRow")}</button></td></tr>;
+      })}</tbody>
+    </table></div>
+    <div className="button-row"><button onClick={() => setRows((current) => [...current, emptyPredictionRow(`pls-row-${nextId.current++}`, result)])} type="button">{t("pls.addRow")}</button><button className="primary-button" disabled={!valid || isRunning || manifest === undefined} onClick={() => void run()} type="button">{isRunning ? t("pls.predicting") : t("pls.runPrediction")}</button></div>
+    {exportControl}
+  </section>;
 }
 
 function emptyPredictionRow(id: string, result: PlsRegressionResult): PredictionRowDraft {

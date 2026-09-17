@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useI18n } from "./i18n/LocaleProvider";
+import { localizedErrorDisplay } from "./i18n/errorMessages";
 
 import type {
   AnalysisResultCsvExportResponse,
@@ -76,6 +78,7 @@ export function AnalysisResultExportPanel({
   creationCapabilities?: { json: boolean; csv: boolean; html: boolean };
 }) {
   const [pendingDeletionExportId, setPendingDeletionExportId] = useState<string | null>(null);
+  const { locale } = useI18n();
   if (analysisResult === null || analysisResult.status !== "succeeded") {
     return null;
   }
@@ -294,6 +297,7 @@ export function AnalysisResultExportPanel({
       {htmlReportError !== null ? (
         <div className="error-box analysis-error-box" role="alert">
           <h4>HTML report 실패</h4>
+          <p>{localizedErrorDisplay(new Error(htmlReportError), locale).message}</p>
           <code>오류 코드: {htmlReportError}</code>
         </div>
       ) : null}

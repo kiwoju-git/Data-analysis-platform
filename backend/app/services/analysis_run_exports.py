@@ -4,6 +4,7 @@ import io
 import json
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
@@ -34,6 +35,7 @@ from app.services.analysis_run_execution import canonical_json_bytes
 from app.services.analysis_run_execution import utc_now as _utc_now
 from app.services.analysis_run_results import get_analysis_run_result
 from app.services.gaussian_process_report import gp_saved_details_report
+from app.services.pls_regression_report import pls_warning_text, render_pls_report
 from app.services.regression_models import (
     REGRESSION_PREDICTION_METHOD_ID,
     iter_regression_prediction_rows,
@@ -43,6 +45,7 @@ from app.services.regularized_model_report import (
     regularized_warning_text,
     render_regularized_report,
 )
+from app.services.report_coverage import INLINE_REPORT_CONTRACTS, SUMMARY_REPORT_METHODS
 from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
@@ -1115,6 +1118,8 @@ def _analysis_result_html_report_bytes(
     del rows
 
     def warning_text(code: str, message: str) -> str:
+        if (result.result or {}).get("summary_type") == "partial_least_squares_regression":
+            return pls_warning_text(code, locale)
         if isinstance((result.result or {}).get("regularization"), dict):
             return regularized_warning_text(code, locale)
         return message if locale == "ko" else "Review this analysis warning."
@@ -1133,7 +1138,38 @@ def _analysis_result_html_report_bytes(
             en="<li>No saved warnings.</li>",
             ko="<li>저장된 경고가 없습니다.</li>",
         )
-    method_specific_markup = _analysis_result_method_specific_report_section(result, locale)
+    try:
+        method_specific_markup = _analysis_result_method_specific_report_section(result, locale)
+    except ValueError as exc:
+        raise ApiError(
+            code="analysis_report_payload_unsupported",
+            message="The saved result cannot be rendered by this report version.",
+            status_code=422,
+        ) from exc
+    if not method_specific_markup.strip():
+        raise ApiError(
+            code="analysis_report_payload_unsupported",
+            message=(
+                "No supported core-result renderer is available for this saved analysis. "
+                "Export JSON instead."
+            ),
+            status_code=422,
+        )
+    if result.method_id in SUMMARY_REPORT_METHODS:
+        notice = report_text(
+            locale,
+            en=(
+                "Summary report: the tables below are supported, but this renderer does not "
+                "reproduce every interactive result view. Consult the saved JSON for full detail."
+            ),
+            ko=(
+                "요약 보고서: 아래 표는 지원하지만 모든 대화형 결과 화면을 재현하지는 않습니다. "
+                "전체 저장 내용은 JSON으로 확인하세요."
+            ),
+        )
+        method_specific_markup = (
+            f'<p class="notice">{_html_text(notice)}</p>' + method_specific_markup
+        )
     method_label = _analysis_method_report_label(result.method_id, locale)
     result_payload = result.result if isinstance(result.result, dict) else {}
     input_settings = _report_input_settings(result_payload, locale)
@@ -1360,13 +1396,28 @@ def _analysis_result_method_specific_report_section(
     if not isinstance(payload, dict):
         return ""
     summary_type = payload.get("summary_type")
-    renderers = {
+    contract = INLINE_REPORT_CONTRACTS.get(result.method_id)
+    if (
+        contract is None
+        or summary_type != contract[0]
+        or not isinstance(payload.get("schema_version"), int)
+        or payload.get("schema_version") not in contract[1]
+    ):
+        raise ValueError("analysis_report_schema_unsupported")
+    if not any(
+        value not in (None, {}, [])
+        for key, value in payload.items()
+        if key not in {"schema_version", "summary_type", "method", "warnings"}
+    ):
+        raise ValueError("analysis_report_payload_invalid")
+    renderers: dict[str, Callable[[dict[str, Any], ReportLocale], str]] = {
         "descriptive_statistics": _descriptive_statistics_report_section,
         "graphical_summary": _graphical_summary_report_section_v2,
         "normality_test": _normality_report_section,
         "equal_variances_test": _equal_variances_report_section_v2,
         "principal_components_analysis": _principal_components_report_section,
         "gaussian_process_regression": _gaussian_process_report_section,
+        "partial_least_squares_regression": render_pls_report,
     }
     renderer = renderers.get(str(summary_type))
     if renderer is not None:

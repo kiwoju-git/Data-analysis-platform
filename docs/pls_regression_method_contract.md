@@ -6,6 +6,13 @@ Method version: `0.1.0`
 Result schema: `1`  
 Model manifest kind/schema: `pls_model_manifest` / `1`
 
+HTML reports now dispatch to `pls_regression_report.py` using the stored schema-1
+payload. They preserve all component selection rows, coefficients, saved scores,
+every loading component, response/residual plots and limitations. No fit/predict
+or raw-data read occurs on export. Point predictions remain separate; completed
+responses can download a source/model-SHA-bound JSON snapshot, not a managed
+Report Center artifact. See `html_report_coverage_matrix.md` for exact coverage.
+
 The method is an executable item in the Correlation, Regression & Prediction
 domain. It is not a planned workflow and remains distinct from planned
 PLS-based process monitoring.

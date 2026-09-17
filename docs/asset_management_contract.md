@@ -1,5 +1,15 @@
 # Local Workspace Asset Management Contract
 
+## GPR Settings and PLS Reports (2026-09-17)
+
+Standalone GP manifest 3 retains the existing selected-model JSON/NPZ ownership
+and candidate-summary SHA, adds applied optimizer/bounds/evidence, and reads
+schemas 1/2 without rewriting them. Metadata remains 20. PLS HTML uses existing
+managed analysis exports; no new table/migration. A separate completed PLS point
+prediction JSON download is a client snapshot, explicitly outside Report Center
+ownership. It contains source/model IDs and hash, request/response and receipt
+time; original analysis/model files are never mutated by exporting it.
+
 ## Curvature and Kernel Selection (2026-09-16)
 
 DOE manual policies and per-step statistics remain inside immutable analysis
