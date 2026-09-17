@@ -2,6 +2,7 @@ param(
     [switch]$BackendOnly,
     [switch]$FrontendOnly,
     [switch]$ReuseCompatibleBackend,
+    [switch]$LocalOnly,
     [int]$BackendPort = 8000,
     [int]$FrontendPort = 8600,
     [int]$StartupTimeoutSeconds = 30
@@ -13,6 +14,7 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 $FrontendNodeModules = Join-Path $RepoRoot "frontend\node_modules"
+$FrontendHost = if ($LocalOnly) { "127.0.0.1" } else { "0.0.0.0" }
 . (Join-Path $PSScriptRoot "dev_runtime_helpers.ps1")
 
 Push-Location $RepoRoot
@@ -69,6 +71,11 @@ try {
         if ($null -ne $FrontendOwner) {
             throw "Frontend port $FrontendPort is already in use by $(Format-DevPortOwner -Owner $FrontendOwner). Open that process intentionally or stop it yourself; DataLab will not move to another port automatically."
         }
+        if (-not $LocalOnly) {
+            Write-Warning "Trusted LAN development mode: every connected user can read, change and delete this shared workspace. No login, per-user roles or TLS. Do not expose to the Internet."
+            Write-Host "LAN entry: http://<this-PC-IPv4>:$FrontendPort (frontend binds 0.0.0.0; API stays loopback via same-origin proxy)."
+            Write-Host "Restrict inbound TCP $FrontendPort to trusted PCs on a Private/Domain firewall profile. Use -LocalOnly to disable LAN access."
+        }
     }
 
     if ($BackendOnly) {
@@ -82,15 +89,17 @@ try {
     }
 
     if ($FrontendOnly) {
-        $env:VITE_API_BASE_URL = "http://127.0.0.1:$BackendPort"
+        $env:VITE_API_BASE_URL = "/"
+        $env:DATALAB_DEV_API_TARGET = "http://127.0.0.1:$BackendPort"
         $env:VITE_GIT_COMMIT = $RepositoryBuildId
-        npm --prefix .\frontend run dev -- --port $FrontendPort --strictPort
+        npm --prefix .\frontend run dev -- --host $FrontendHost --port $FrontendPort --strictPort
         exit
     }
 
     $BackendJob = $null
     $previousApiBase = $env:VITE_API_BASE_URL
     $previousFrontendCommit = $env:VITE_GIT_COMMIT
+    $previousApiTarget = $env:DATALAB_DEV_API_TARGET
     try {
         if (-not $UsingExistingBackend) {
             $BackendJob = Start-Job -ScriptBlock {
@@ -122,14 +131,16 @@ try {
             Write-Host "Backend ready: http://127.0.0.1:$BackendPort (contract $($RuntimeInfo.api_contract_version), schema $($RuntimeInfo.metadata_schema_version), build $($RuntimeInfo.build_commit))"
         }
 
-        $env:VITE_API_BASE_URL = "http://127.0.0.1:$BackendPort"
+        $env:VITE_API_BASE_URL = "/"
+        $env:DATALAB_DEV_API_TARGET = "http://127.0.0.1:$BackendPort"
         $env:VITE_GIT_COMMIT = $RepositoryBuildId
         Write-Host "Frontend starting: http://127.0.0.1:$FrontendPort"
-        npm --prefix .\frontend run dev -- --port $FrontendPort --strictPort
+        npm --prefix .\frontend run dev -- --host $FrontendHost --port $FrontendPort --strictPort
     }
     finally {
         $env:VITE_API_BASE_URL = $previousApiBase
         $env:VITE_GIT_COMMIT = $previousFrontendCommit
+        $env:DATALAB_DEV_API_TARGET = $previousApiTarget
         if ($null -ne $BackendJob) {
             Stop-Job $BackendJob -ErrorAction SilentlyContinue
             Remove-Job $BackendJob -ErrorAction SilentlyContinue

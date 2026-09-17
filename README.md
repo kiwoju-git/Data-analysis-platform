@@ -83,7 +83,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
 
-Open [http://127.0.0.1:8600](http://127.0.0.1:8600). The backend runs at `http://127.0.0.1:8000`. Both services bind only to `127.0.0.1` by default.
+Open [http://127.0.0.1:8600](http://127.0.0.1:8600), or from an approved LAN PC
+open `http://<server-PC-IPv4>:8600`. The frontend binds to `0.0.0.0` and proxies
+the loopback API through the same origin. Use `-LocalOnly` for loopback-only use.
+**Trusted operators only:** there is no login, per-user permission or TLS; peers
+can read, change and delete the shared workspace. Restrict firewall access to
+approved PCs and never expose this development server to the Internet.
+See [LAN setup and security boundaries](docs/trusted_lan_development.md).
 
 ## Basic Use
 

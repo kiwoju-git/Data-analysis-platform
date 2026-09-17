@@ -33,7 +33,7 @@ def verify_curvature_selection(page, diagnostics, backend):
     expect(terms.get_by_label("Temperature", exact=True).locator('option[value="excluded"]')).to_be_disabled()
     diagnostics.capture_locator(terms, "factorial-term-selection.png")
     def analyze():
-        with page.expect_response(lambda response: response.url == backend + base + "/analyses" and response.request.method == "POST") as pending:
+        with page.expect_response(lambda response: response.url == origin + base + "/analyses" and response.request.method == "POST") as pending:
             root.get_by_role("button", name="효과 및 ANOVA 분석", exact=True).click()
         assert pending.value.ok, pending.value.text()
         return pending.value.json()

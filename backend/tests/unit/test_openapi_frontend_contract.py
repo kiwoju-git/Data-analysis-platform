@@ -3421,7 +3421,8 @@ def test_frontend_api_modules_use_central_route_map() -> None:
     frontend_api_root = _repo_root() / "frontend/src/api"
     direct_endpoint_files = []
     for path in sorted(frontend_api_root.glob("*.ts")):
-        if path.name == "routes.ts":
+        # Test expectations deliberately spell out URLs independently of the route map.
+        if path.name == "routes.ts" or path.name.endswith(".test.ts"):
             continue
         text = path.read_text(encoding="utf-8")
         if re.search(r"""["'`]/api/v1""", text):

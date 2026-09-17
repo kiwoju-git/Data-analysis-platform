@@ -1,9 +1,9 @@
 export function getApiBaseUrl(): string {
   const configuredBaseUrl: unknown = import.meta.env.VITE_API_BASE_URL;
   if (typeof configuredBaseUrl === "string" && configuredBaseUrl.length > 0) {
-    return configuredBaseUrl;
+    return configuredBaseUrl.replace(/\/+$/u, "");
   }
-  return "http://127.0.0.1:8000";
+  return "";
 }
 
 import { getCurrentLocale } from "../i18n/store";

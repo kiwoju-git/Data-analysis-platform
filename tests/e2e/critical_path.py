@@ -239,7 +239,8 @@ def main() -> int:
         frontend_env = os.environ.copy()
         frontend_env.update(
             {
-                "VITE_API_BASE_URL": backend_base_url,
+                "VITE_API_BASE_URL": "/",
+                "DATALAB_DEV_API_TARGET": backend_base_url,
             },
         )
 
@@ -2515,6 +2516,7 @@ def verify_linear_model_fit_and_prediction(
             dedicated_delete_manifest = dedicated_delete_preflight.json()
             dedicated_delete = dedicated_page.request.delete(
                 f"{api_v1}/analysis-runs/{dedicated_prediction_id}/deletion",
+                headers={"Origin": api_v1.removesuffix("/api/v1")},
                 data={
                     "confirmation_analysis_id": dedicated_prediction_id,
                     "expected_deletion_manifest_sha256": dedicated_delete_manifest[
@@ -2541,6 +2543,7 @@ def verify_linear_model_fit_and_prediction(
         owned_manifest = owned_preflight.json()
         owned_delete = page.request.delete(
             f"{api_v1}/analysis-runs/{owned_analysis_id}/deletion",
+            headers={"Origin": api_v1.removesuffix("/api/v1")},
             data={
                 "confirmation_analysis_id": owned_analysis_id,
                 "expected_deletion_manifest_sha256": owned_manifest[
@@ -2579,6 +2582,7 @@ def verify_linear_model_fit_and_prediction(
     prediction_delete_manifest = prediction_delete_preflight.json()
     prediction_delete = page.request.delete(
         f"{api_v1}/analysis-runs/{prediction_id}/deletion",
+        headers={"Origin": api_v1.removesuffix("/api/v1")},
         data={
             "confirmation_analysis_id": prediction_id,
             "expected_deletion_manifest_sha256": prediction_delete_manifest[
@@ -2948,6 +2952,7 @@ def verify_attribute_control_chart(page: Page) -> None:
     api_v1 = baseline_response.url.rsplit("/analysis-runs", 1)[0]
     limit_set_response = page.request.post(
         f"{api_v1}/quality/attribute-control-limit-sets",
+        headers={"Origin": api_v1.removesuffix("/api/v1")},
         data={"source_analysis_id": baseline_payload["analysis_id"]},
     )
     if not limit_set_response.ok:
@@ -3007,7 +3012,8 @@ def verify_attribute_control_chart(page: Page) -> None:
     phase_2_analysis_id = phase_2_payload["analysis_id"]
     for export_kind in ("json", "csv", "html"):
         export_response = page.request.post(
-            f"{api_v1}/analysis-runs/{phase_2_analysis_id}/exports/{export_kind}"
+            f"{api_v1}/analysis-runs/{phase_2_analysis_id}/exports/{export_kind}",
+            headers={"Origin": api_v1.removesuffix("/api/v1")},
         )
         if not export_response.ok:
             raise AssertionError(

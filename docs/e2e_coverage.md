@@ -848,6 +848,23 @@ not as a second executable GP method. Requested diagnostics use
 
 ## Maintenance Checklist
 
+The 2026-09-18 critical path now uses same-origin `/api` proxying instead of a
+browser loopback API address. Its native HTTP cleanup helpers supply an explicit
+Origin, matching the new development CSRF boundary; browser requests continue
+to supply their own Origin naturally. Mean-domain assertions target four named
+groups while preserving all ten cards and keyboard/state checks.
+
+Additional isolated Windows startup/LAN test:
+
+```powershell
+.\.venv\Scripts\python.exe .\tests\e2e\lan_grouped_menu.py --lan-host <this-PC-IPv4> --diagnostics .\.tmp\e2e-grouped-menu-lan
+```
+
+This checks actual adapter addressing, API routing, Host/Origin rejection,
+`-LocalOnly`, ten routes, KOR/ENG and 1440/1280/1024/390 viewport widths. It uses
+a temporary workspace and stores only synthetic screenshots. Physical peer
+reachability and site-specific firewall policy require separate IT verification.
+
 When extending `tests/e2e/critical_path.py`:
 
 - Add a `diagnostics.step(...)` marker before each major browser action or

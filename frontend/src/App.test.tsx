@@ -1796,21 +1796,21 @@ describe("App", () => {
     expect(comparisonResponse).toEqual(comparison);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "http://127.0.0.1:8000/api/v1/analysis-runs?limit=20&offset=0&dataset_version_id=version-1&method_id=eda.descriptive&status=succeeded&stale=false&result_available=true",
+      "/api/v1/analysis-runs?limit=20&offset=0&dataset_version_id=version-1&method_id=eda.descriptive&status=succeeded&stale=false&result_available=true",
       expect.objectContaining({
         headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      `http://127.0.0.1:8000/api/v1/analysis-runs/${restored.analysis_id}/result`,
+      `/api/v1/analysis-runs/${restored.analysis_id}/result`,
       expect.objectContaining({
         headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      `http://127.0.0.1:8000/api/v1/analysis-runs/${restored.analysis_id}/exports`,
+      `/api/v1/analysis-runs/${restored.analysis_id}/exports`,
       expect.objectContaining({
         method: "GET",
         headers: { Accept: "application/json", "Accept-Language": "ko" },
@@ -1818,7 +1818,7 @@ describe("App", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
-      `http://127.0.0.1:8000/api/v1/analysis-runs/comparison?left_analysis_id=${comparison.left.analysis_id}&right_analysis_id=${comparison.right.analysis_id}`,
+      `/api/v1/analysis-runs/comparison?left_analysis_id=${comparison.left.analysis_id}&right_analysis_id=${comparison.right.analysis_id}`,
       expect.objectContaining({
         headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
@@ -1827,25 +1827,25 @@ describe("App", () => {
 
   it("builds API routes from a central route map and encodes path ids", () => {
     expect(apiRoutes.datasetConfirmParsing("dataset/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/datasets/dataset%2F1/confirm-parsing",
+      "/api/v1/datasets/dataset%2F1/confirm-parsing",
     );
     expect(apiRoutes.datasetVersion("version/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/dataset-versions/version%2F1",
+      "/api/v1/dataset-versions/version%2F1",
     );
     expect(apiRoutes.datasetVersionRows("version/1", 5, 10)).toBe(
-      "http://127.0.0.1:8000/api/v1/dataset-versions/version%2F1/rows?limit=10&offset=5",
+      "/api/v1/dataset-versions/version%2F1/rows?limit=10&offset=5",
     );
     expect(apiRoutes.datasetVersions(20, 40)).toBe(
-      "http://127.0.0.1:8000/api/v1/dataset-versions?limit=20&offset=40&visibility=visible",
+      "/api/v1/dataset-versions?limit=20&offset=40&visibility=visible",
     );
     expect(apiRoutes.regressionPredictionRows("prediction/1", 25, 50)).toBe(
-      "http://127.0.0.1:8000/api/v1/regression-models/predictions/prediction%2F1/rows?limit=25&offset=50",
+      "/api/v1/regression-models/predictions/prediction%2F1/rows?limit=25&offset=50",
     );
     expect(apiRoutes.regressionPredictionCsvExport("prediction/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/regression-models/predictions/prediction%2F1/exports/csv",
+      "/api/v1/regression-models/predictions/prediction%2F1/exports/csv",
     );
     expect(apiRoutes.analysisRunsBase()).toBe(
-      "http://127.0.0.1:8000/api/v1/analysis-runs",
+      "/api/v1/analysis-runs",
     );
     expect(
       apiRoutes.analysisRuns({
@@ -1858,27 +1858,27 @@ describe("App", () => {
         status: "succeeded",
       }),
     ).toBe(
-      "http://127.0.0.1:8000/api/v1/analysis-runs?limit=20&offset=0&dataset_version_id=version-1&method_id=eda.descriptive&status=succeeded&stale=false&result_available=true",
+      "/api/v1/analysis-runs?limit=20&offset=0&dataset_version_id=version-1&method_id=eda.descriptive&status=succeeded&stale=false&result_available=true",
     );
     expect(apiRoutes.analysisRunExportDownload("analysis/1", "export/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/exports/export%2F1/download",
+      "/api/v1/analysis-runs/analysis%2F1/exports/export%2F1/download",
     );
     expect(
       apiRoutes.analysisRunExportDeletionPreflight("analysis/1", "export/1"),
     ).toBe(
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/exports/export%2F1/deletion-preflight",
+      "/api/v1/analysis-runs/analysis%2F1/exports/export%2F1/deletion-preflight",
     );
     expect(apiRoutes.analysisRunExportDelete("analysis/1", "export/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/exports/export%2F1",
+      "/api/v1/analysis-runs/analysis%2F1/exports/export%2F1",
     );
     expect(apiRoutes.analysisRunDeletionPreflight("analysis/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/deletion-preflight",
+      "/api/v1/analysis-runs/analysis%2F1/deletion-preflight",
     );
     expect(apiRoutes.analysisRunDelete("analysis/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis%2F1/deletion",
+      "/api/v1/analysis-runs/analysis%2F1/deletion",
     );
     expect(apiRoutes.attributeControlLimitSetsBase()).toBe(
-      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets",
+      "/api/v1/quality/attribute-control-limit-sets",
     );
     expect(
       apiRoutes.attributeControlLimitSets({
@@ -1888,31 +1888,31 @@ describe("App", () => {
         offset: 20,
       }),
     ).toBe(
-      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets?limit=10&offset=20&source_dataset_version_id=version%2F1&chart_type=np",
+      "/api/v1/quality/attribute-control-limit-sets?limit=10&offset=20&source_dataset_version_id=version%2F1&chart_type=np",
     );
     expect(apiRoutes.attributeControlLimitSet("limit/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets/limit%2F1",
+      "/api/v1/quality/attribute-control-limit-sets/limit%2F1",
     );
     expect(apiRoutes.attributeControlLimitSetDeletionPreflight("limit/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets/limit%2F1/deletion-preflight",
+      "/api/v1/quality/attribute-control-limit-sets/limit%2F1/deletion-preflight",
     );
     expect(apiRoutes.attributeControlMonitoringPreflight("limit/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/quality/attribute-control-limit-sets/limit%2F1/monitoring-preflight",
+      "/api/v1/quality/attribute-control-limit-sets/limit%2F1/monitoring-preflight",
     );
     expect(apiRoutes.bayesianStudyClose("study/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/bayesian-studies/study%2F1/close",
+      "/api/v1/bayesian-studies/study%2F1/close",
     );
     expect(apiRoutes.bayesianStudyDeletionPreflight("study/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/bayesian-studies/study%2F1/deletion-preflight",
+      "/api/v1/bayesian-studies/study%2F1/deletion-preflight",
     );
     expect(apiRoutes.bayesianStudyDelete("study/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/bayesian-studies/study%2F1",
+      "/api/v1/bayesian-studies/study%2F1",
     );
     expect(apiRoutes.regressionModel("model/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/regression-models/model%2F1",
+      "/api/v1/regression-models/model%2F1",
     );
     expect(apiRoutes.regressionModelDeletionPreflight("model/1")).toBe(
-      "http://127.0.0.1:8000/api/v1/regression-models/model%2F1/deletion-preflight",
+      "/api/v1/regression-models/model%2F1/deletion-preflight",
     );
   });
 
@@ -1956,14 +1956,14 @@ describe("App", () => {
     ).toEqual(deleted);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/exports/export-1/deletion-preflight",
+      "/api/v1/analysis-runs/analysis-1/exports/export-1/deletion-preflight",
       expect.objectContaining({
         headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/exports/export-1",
+      "/api/v1/analysis-runs/analysis-1/exports/export-1",
       expect.objectContaining({
         method: "DELETE",
         body: JSON.stringify({
@@ -2028,14 +2028,14 @@ describe("App", () => {
     ).toEqual(deleted);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/deletion-preflight",
+      "/api/v1/analysis-runs/analysis-1/deletion-preflight",
       expect.objectContaining({
         headers: { Accept: "application/json", "Accept-Language": "ko" },
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "http://127.0.0.1:8000/api/v1/analysis-runs/analysis-1/deletion",
+      "/api/v1/analysis-runs/analysis-1/deletion",
       expect.objectContaining({
         method: "DELETE",
         body: JSON.stringify({

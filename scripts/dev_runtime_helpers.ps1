@@ -121,6 +121,7 @@ function Get-DevSourceFingerprintFiles {
         "frontend/package.json",
         "frontend/package-lock.json",
         "frontend/index.html",
+        "frontend/devNetwork.ts",
         ".gitattributes"
     )
     foreach ($relativePath in $explicitRelativePaths) {

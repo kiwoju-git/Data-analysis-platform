@@ -23,6 +23,12 @@
 
 ## 2. 확정 가정과 아키텍처 결정
 
+2026-09-18 owner-approved exception to DEC-002 / SEC-001: the development
+frontend may serve trusted LAN operators on `0.0.0.0:8600`, proxying a loopback
+API; `-LocalOnly` remains available. This does not add production multi-user
+authentication/RBAC/TLS. The scope, browser-origin defenses, shared-workspace
+risks and firewall requirements are defined in `docs/trusted_lan_development.md`.
+
 | ID | 결정 | 이유 |
 | --- | --- | --- |
 | DEC-001 | MVP는 Windows 11, Python 3.10.x, CPU-only를 1급 지원한다. | 사용 환경과 설치 재현성을 고정한다. |

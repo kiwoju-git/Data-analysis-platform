@@ -57,7 +57,7 @@ def verify_factorial_model_workflow(page, diagnostics, backend):
         root.locator(".doe-model-selection select").select_option("backward_elimination" if backward else "none")
         if backward:
             expect(root.locator(".doe-model-selection input[type=number]").first).to_have_value("0.05")
-        with page.expect_response(lambda response: response.url == backend + base + "/analyses" and response.request.method == "POST") as pending:
+        with page.expect_response(lambda response: response.url == origin + base + "/analyses" and response.request.method == "POST") as pending:
             root.get_by_role("button", name="효과 및 ANOVA 분석", exact=True).click()
         response = pending.value
         assert response.status == 201, response.text()
@@ -219,7 +219,7 @@ def verify_factorial_model_workflow(page, diagnostics, backend):
     general, general_base, _ = fixture(general=True, save=True)
     root = open_design(general, general=True)
     root.locator(".doe-model-selection select").select_option("backward_elimination")
-    with page.expect_response(lambda response: response.url == backend + general_base + "/analyses" and response.request.method == "POST") as pending:
+    with page.expect_response(lambda response: response.url == origin + general_base + "/analyses" and response.request.method == "POST") as pending:
         root.get_by_role("button", name=re.compile("ANOVA")).click()
     assert pending.value.status == 201, pending.value.text()
     general_analysis = pending.value.json()

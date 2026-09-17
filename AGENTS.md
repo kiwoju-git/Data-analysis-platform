@@ -26,7 +26,7 @@ These are non-negotiable unless the user explicitly changes them.
 - Python: CPython 3.10.x
 - Compute: CPU-only; no CUDA or required GPU dependency
 - Product mode: local, single-user web app
-- Default bind address: `127.0.0.1`, never `0.0.0.0`
+- Owner-approved trusted LAN development entry (2026-09-18): frontend `0.0.0.0:8600`, loopback API behind same-origin proxy; `dev.ps1 -LocalOnly` restores loopback-only use. See `docs/trusted_lan_development.md`.
 - Backend: FastAPI
 - Frontend: React + Vite + TypeScript
 - Core ML: scikit-learn
@@ -228,7 +228,7 @@ PyCaret, Optuna, SHAP, and LIME are optional enhancements. Do not introduce them
 
 ## 10. Data security and privacy rules
 
-- Bind only to `127.0.0.1` by default and keep CORS narrow.
+- Keep the API bound to `127.0.0.1` and CORS narrow. The approved LAN frontend uses the documented same-origin proxy and Host/Origin guard; never wildcard CORS or silently open firewall rules.
 - Do not transmit datasets, column values, file names, or derived statistics externally.
 - Validate actual file type, size, dimensions, parser limits, and decompression ratio.
 - Sanitize file names and prevent path traversal.
@@ -239,7 +239,7 @@ PyCaret, Optuna, SHAP, and LIME are optional enhancements. Do not introduce them
 - Keep test data synthetic or publicly licensed.
 - Store workspaces, logs, exports, and temp data outside the repository.
 - Provide retention and explicit deletion behavior.
-- Do not expose the local server to a LAN as a shortcut. Intranet deployment requires a separate authentication/RBAC/TLS threat model.
+- Do not extend trusted LAN development beyond the threat model in `docs/trusted_lan_development.md`. Production intranet deployment still requires authentication/RBAC/TLS and per-user audit gates.
 - Do not add an external AI call without an explicit product requirement, opt-in UX, field-level transmission preview, and audit record.
 
 ## 11. Frontend rules

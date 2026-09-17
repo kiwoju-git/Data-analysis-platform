@@ -101,6 +101,22 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "port: 8600" in vite_text
 
 
+def test_lan_entry_keeps_api_loopback_and_does_not_widen_cors() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    dev = (repo_root / "scripts/dev.ps1").read_text(encoding="utf-8")
+    vite = (repo_root / "frontend/vite.config.ts").read_text(encoding="utf-8")
+    config = (repo_root / "backend/app/core/config.py").read_text(encoding="utf-8")
+    assert "[switch]$LocalOnly" in dev
+    assert '$env:VITE_API_BASE_URL = "/"' in dev
+    assert '$env:DATALAB_DEV_API_TARGET = "http://127.0.0.1:$BackendPort"' in dev
+    assert "--host $FrontendHost" in dev
+    assert "--host 127.0.0.1 --port $Port" in dev
+    assert 'host: mode === "test" ? "127.0.0.1" : "0.0.0.0"' in vite
+    assert "cors: false" in vite
+    assert "allowedHosts: true" not in vite
+    assert 'bind_host: str = "127.0.0.1"' in config
+
+
 @pytest.mark.parametrize("schema,expected", [(19, "False"), (20, "True")])
 def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expected: str) -> None:
     repo_root = Path(__file__).resolve().parents[3]
@@ -186,6 +202,10 @@ def test_archive_source_fingerprint_is_path_independent_and_content_sensitive(
     )
     changed_id = _get_build_id(repo_root, second)
     assert changed_id != first_id
+    (second / "frontend/devNetwork.ts").write_text(
+        "export const allowed = false;\n", encoding="utf-8"
+    )
+    assert _get_build_id(repo_root, second) != changed_id
 
 
 def test_archive_source_fingerprint_ignores_generated_and_workspace_files(

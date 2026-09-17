@@ -42,7 +42,7 @@ describe("createGraphPreview", () => {
 
     expect(result).toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/api/v1/visualizations/preview",
+      "/api/v1/visualizations/preview",
       expect.objectContaining({ method: "POST" }),
     );
   });

@@ -1,5 +1,11 @@
 # Runtime Compatibility Contract
 
+2026-09-18 startup extension: `dev.ps1` now exposes the frontend on
+`0.0.0.0:8600` for trusted LAN development, with an unchanged loopback backend
+and same-origin `/api` proxy. `-LocalOnly` restores local-only binding. Exact
+commit, API 21 and metadata 20 checks remain required. No wire/schema version
+change is needed. See `trusted_lan_development.md` for network/security scope.
+
 Last updated: 2026-09-17
 
 API contract 21 adds explicit standalone GPR length-scale coordinates/bounds and
