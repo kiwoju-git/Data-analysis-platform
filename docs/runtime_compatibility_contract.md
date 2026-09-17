@@ -1,6 +1,11 @@
 # Runtime Compatibility Contract
 
-Last updated: 2026-09-16
+Last updated: 2026-09-17
+
+API contract 21 adds explicit standalone GPR length-scale coordinates/bounds and
+optimizer selection. GP writes method 0.3.0/result 3/manifest 3; legacy omitted
+options retain 0.01..100/L-BFGS-B. Metadata remains 20: JSON extensions need no
+relational migration. PLS report and navigation fixes do not change calculations.
 
 API contract 20 adds server-owned DOE term catalogs/manual policies and typed
 standalone GP single/compare kernel selection to the final-model workflows.
@@ -47,7 +52,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `20`);
+- `api_contract_version` (currently `21`);
 - the actual metadata schema constant (currently `20`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and

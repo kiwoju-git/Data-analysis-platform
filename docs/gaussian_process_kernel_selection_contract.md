@@ -1,5 +1,10 @@
 # Gaussian Process Kernel Selection Contract
 
+Current extension: method 0.3.0/result 3/manifest 3/API 21 propagates explicit
+length-scale settings and optimizer choice through every shared CV fold, selected
+refit and optional candidate refit. The seed/split/ranking/time/start-budget policy
+below is unchanged. See `gaussian_process_optimizer_contract.md`. BO is untouched.
+
 Pre-implementation review: 2026-09-16, scikit-learn 1.7.2, NumPy 2.2.6,
 SciPy 1.15.3. Standalone GP only; Bayesian paths are not refactored.
 

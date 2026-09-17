@@ -699,6 +699,20 @@ class GpCandidateKernelSelection(BaseModel):
         return value
 
 
+class GpLengthScaleOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    lower: float = Field(gt=0)
+    initial: float = Field(gt=0)
+    upper: float = Field(gt=0)
+    coordinate_system: Literal["standardized", "original"]
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "GpLengthScaleOptions":
+        if not self.lower < self.upper or not self.lower <= self.initial <= self.upper:
+            raise ValueError("gp_length_scale_invalid")
+        return self
+
+
 class GaussianProcessRegressionOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -712,6 +726,8 @@ class GaussianProcessRegressionOptions(BaseModel):
     fixed_noise_standard_deviation: float | None = Field(default=None, gt=0.0)
     standardize_predictors: bool = True
     normalize_response: bool = True
+    length_scale: GpLengthScaleOptions | None = None
+    optimizer: Literal["l_bfgs_b", "bfgs"] = "l_bfgs_b"
     jitter: float = Field(default=1e-8, ge=1e-12, le=1e-3)
     optimizer_restarts: int = Field(default=3, ge=0, le=10)
     cv_optimizer_restarts: int = Field(default=0, ge=0, le=5)
@@ -740,6 +756,15 @@ class GaussianProcessRegressionOptions(BaseModel):
 
     @model_validator(mode="after")
     def validate_gaussian_process_options(self) -> "GaussianProcessRegressionOptions":
+        if self.length_scale is not None:
+            coordinate = "standardized" if self.standardize_predictors else "original"
+            if self.length_scale.coordinate_system != coordinate:
+                raise ValueError("gp_length_scale_coordinate_mismatch")
+            if self.optimizer == "bfgs" and self.length_scale.initial in {
+                self.length_scale.lower,
+                self.length_scale.upper,
+            }:
+                raise ValueError("gp_bfgs_initial_on_boundary")
         if self.kernel_selection.mode == "compare" and self.cv.method == "none":
             raise ValueError("gp_kernel_comparison_requires_validation")
         if len(set(self.predictor_column_ids)) != len(self.predictor_column_ids):

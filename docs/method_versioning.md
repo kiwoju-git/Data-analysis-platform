@@ -1,5 +1,17 @@
 # Method Versioning Policy
 
+## Standalone GPR Settings and Report Parity (2026-09-17)
+
+API 21; GP method `0.3.0`, result schema 3, manifest schema 3. Explicit length
+coordinates/bounds, bounded BFGS, optimizer traces and fold-local preprocessing
+evidence change request/result meaning. New scaled-X UI drafts propose 0.5/1/100;
+omitted legacy options retain 0.01/1/100 and L-BFGS-B. Readers preserve schema 1/2
+models/results without refitting or rewriting bytes. Metadata remains 20.
+PLS method/result/manifest remain 0.1.0/1/1. HTML artifact schema remains 3;
+renderer coverage/visible content changes, not artifact structure. The separate
+client PLS prediction snapshot has schema 1 and is not a managed model/report.
+No DOE, Bayesian, OLS or PLS statistical formulas change.
+
 ## Curvature and Kernel Selection New Writes (2026-09-16)
 
 API contract 20 / metadata 20. Factorial is `0.9.0`, analysis config 4,

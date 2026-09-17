@@ -122,3 +122,13 @@ button.analysis-domain-method-card.is-active .navigation-card-top,
   .analysis-domain-card, .analysis-domain-method-card,
   .graph-type-button, .home-quick-card { transition: none; }
 }
+.gp-optimization-settings {
+  min-width: 0;
+  margin: 12px 0;
+  padding: 12px 0;
+  border: 0;
+  border-block: 1px solid var(--border-color, #d4deeb);
+}
+.gp-optimization-settings legend { padding: 0 8px 0 0; font-weight: 600; }
+.gp-optimization-settings .button-row { margin-top: 10px; flex-wrap: wrap; }
+.gp-optimization-settings .field-help { margin-block: 6px 10px; }

@@ -48,7 +48,7 @@ from app.storage.metadata import (
     insert_analysis_run_record_with_artifacts_and_regression_model,
 )
 
-GP_MODEL_MANIFEST_SCHEMA_VERSION = 2
+GP_MODEL_MANIFEST_SCHEMA_VERSION = 3
 GP_MODEL_ARTIFACT_KIND = "regression_model_manifest"
 GP_NUMERIC_ARTIFACT_KIND = "gaussian_process_model_numeric_state"
 GP_MODEL_MEDIA_TYPE = "application/json"
@@ -108,6 +108,9 @@ def _validate_options(value: dict[str, Any]) -> GaussianProcessRegressionOptions
         return GaussianProcessRegressionOptions.model_validate(value)
     except ValidationError as exc:
         stable = {
+            "gp_length_scale_invalid",
+            "gp_length_scale_coordinate_mismatch",
+            "gp_bfgs_initial_on_boundary",
             "gp_kernel_candidates_invalid",
             "gp_kernel_policy_invalid",
             "gp_kernel_comparison_requires_validation",
@@ -172,6 +175,13 @@ def _column(column: DatasetColumnRecord) -> GaussianProcessColumn:
 def _statistics_options(options: GaussianProcessRegressionOptions) -> GaussianProcessOptions:
     selection = options.kernel_selection
     return GaussianProcessOptions(
+        length_scale_lower=options.length_scale.lower if options.length_scale else 0.01,
+        length_scale_initial=options.length_scale.initial if options.length_scale else 1.0,
+        length_scale_upper=options.length_scale.upper if options.length_scale else 100.0,
+        length_scale_coordinate_system=options.length_scale.coordinate_system
+        if options.length_scale
+        else None,
+        optimizer=options.optimizer,
         kernel_preset=selection.kernel_preset
         if selection.mode == "single"
         else selection.kernel_candidates[0],
@@ -423,6 +433,9 @@ def _manifest_payload(
             canonical_json_bytes({"candidates": candidate_summaries})
         ).hexdigest(),
         "optimizer_policy": {
+            "optimizer": result["method"]["optimizer"],  # type: ignore[index]
+            "length_scale": result["method"]["length_scale"],  # type: ignore[index]
+            "evidence": result["optimization"],
             "cv_restarts": result["method"]["cv_optimizer_restarts"],  # type: ignore[index]
             "final_restarts": result["method"]["optimizer_restarts"],  # type: ignore[index]
         },
@@ -440,6 +453,7 @@ def _manifest_payload(
         "package_versions": {
             "scikit-learn": result["method"]["engine_version"],  # type: ignore[index]
             "numpy": np.__version__,
+            "scipy": result["method"]["package_versions"]["scipy"],  # type: ignore[index]
         },
         "limitations": [
             "exact_gp_maximum_500_rows",
@@ -493,6 +507,10 @@ def _analysis_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
 
 def _api_error(code: str) -> ApiError:
     messages = {
+        "gp_length_scale_invalid": "길이 척도의 하한·초기값·상한을 확인하세요.",
+        "gp_length_scale_coordinate_mismatch": "길이 척도 좌표와 예측변수 표준화 설정이 다릅니다.",
+        "gp_bfgs_initial_on_boundary": "BFGS 초기값은 경계 안쪽이어야 합니다.",
+        "gp_optimizer_invalid": "지원하지 않는 최적화 알고리즘입니다.",
         "gp_kernel_search_budget_exceeded": (
             "Optimizer 시작 횟수 상한을 초과했습니다. 후보, fold 또는 재시작 수를 줄이세요."
         ),

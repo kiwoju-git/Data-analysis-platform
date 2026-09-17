@@ -3948,6 +3948,8 @@ export default function App() {
           predictor_column_ids: config.predictorColumnIds,
           missing_policy: "complete_case",
           kernel_selection: config.kernelSelection,
+          length_scale: config.lengthScale,
+          optimizer: config.optimizer,
           noise_mode: config.noiseMode,
           fixed_noise_standard_deviation: config.fixedNoiseStandardDeviation,
           standardize_predictors: config.standardizePredictors,
@@ -5868,7 +5870,7 @@ function isGaussianProcessRegressionResult(
   if (value === null || value === undefined || typeof value !== "object") return false;
   const candidate = value as Partial<GaussianProcessRegressionResult>;
   return (
-    (candidate.schema_version === 1 || candidate.schema_version === 2) &&
+    (candidate.schema_version === 1 || candidate.schema_version === 2 || candidate.schema_version === 3) &&
     candidate.summary_type === "gaussian_process_regression" &&
     candidate.model_summary !== undefined &&
     candidate.kernel !== undefined

@@ -79,7 +79,7 @@ def test_legacy_single_kernel_parity(preset):
         options(kernel_selection_mode="single", kernel_candidates=(), kernel_preset=preset),
     )
     assert_nested(actual, reference["results"][preset])
-    assert actual["schema_version"] == 2
+    assert actual["schema_version"] == 3
     assert actual["kernel_selection"]["mode"] == "single"
 
 

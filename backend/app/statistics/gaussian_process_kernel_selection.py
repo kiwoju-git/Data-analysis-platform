@@ -158,7 +158,14 @@ def compare_kernel_candidates(
             if options.retain_candidate_details:
                 record["details"] = {
                     key: result[key]
-                    for key in ("method", "kernel", "model_summary", "diagnostics", "warnings")
+                    for key in (
+                        "method",
+                        "kernel",
+                        "model_summary",
+                        "diagnostics",
+                        "warnings",
+                        "optimization",
+                    )
                 }
             record["fitted_kernel_summary"] = result["kernel"]
         except GaussianProcessRegressionError as exc:

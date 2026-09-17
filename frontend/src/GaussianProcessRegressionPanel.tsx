@@ -12,11 +12,14 @@ import { CompactSettingsTable } from "./components/CompactSettingsTable";
 import { NumericColumnPicker } from "./components/NumericColumnPicker";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
 import { useI18n } from "./i18n/LocaleProvider";
-import type { GpKernelSelection } from "./api/types/analysisResultsRegression";
+import type { GpKernelSelection, GpLengthScale, GpOptimizer } from "./api/types/analysisResultsRegression";
+import { GpOptimizationSettings, gpLengthPreset, gpLengthValue } from "./GpOptimizationSettings";
 import { GpKernelSelectionSettings, gpOptimizerStarts, gpKernelName } from "./GpKernelSelectionSettings";
 import { MAX_GP_OPTIMIZER_STARTS } from "./gpCapabilities";
 
 export interface GaussianProcessRunConfig {
+  lengthScale: GpLengthScale;
+  optimizer: GpOptimizer;
   responseColumnId: string;
   predictorColumnIds: string[];
   kernelPreset: "matern_5_2_ard" | "matern_3_2_ard" | "rbf_ard" | "rational_quadratic";
@@ -55,6 +58,7 @@ interface PredictionRowDraft {
 
 const warningKeys = {
   gp_kernel_selection_not_external_validation: "gp.selection.bias",
+  gp_not_converged: "gp.optimization.notConverged",
   gp_kernel_candidate_failed: "gp.selection.failedWarning",
   missing_values_excluded: "gp.warning.missing",
   gp_hyperparameter_near_bound: "gp.warning.bound",
@@ -94,6 +98,8 @@ export function GaussianProcessRegressionPanel({
   });
   const [fixedNoiseStandardDeviation, setFixedNoiseStandardDeviation] = useState(0.1);
   const [standardizePredictors, setStandardizePredictors] = useState(true);
+  const [lengthDraft, setLengthDraft] = useState(() => gpLengthPreset(true));
+  const [optimizer, setOptimizer] = useState<GpOptimizer>("l_bfgs_b");
   const [normalizeResponse, setNormalizeResponse] = useState(true);
   const [validationMethod, setValidationMethod] =
     useState<GaussianProcessRunConfig["validationMethod"]>("k_fold");
@@ -113,10 +119,38 @@ export function GaussianProcessRegressionPanel({
     setPredictorColumnIds([]);
   }, [version?.version_id]);
 
+  const restoredAnalysisId = useRef<string | null>(null);
+  useEffect(() => {
+    if (result === null || analysisResult === null || restoredAnalysisId.current === analysisResult.analysis_id) return;
+    restoredAnalysisId.current = analysisResult.analysis_id;
+    const method = result.method;
+    setResponseColumnId(result.response.column_id);
+    setPredictorColumnIds(result.predictors.map((column) => column.column_id));
+    setStandardizePredictors(method.standardize_predictors);
+    setNormalizeResponse(method.normalize_response);
+    setLengthDraft(method.length_scale ? { lower: String(method.length_scale.lower), initial: String(method.length_scale.initial), upper: String(method.length_scale.upper) } : gpLengthPreset(method.standardize_predictors, true));
+    setOptimizer(method.optimizer ?? "l_bfgs_b");
+    setKernelPreset(method.kernel_preset);
+    setNoiseMode(method.noise_mode);
+    if (method.fixed_noise_standard_deviation != null) setFixedNoiseStandardDeviation(method.fixed_noise_standard_deviation);
+    setJitter(method.jitter);
+    setOptimizerRestarts(method.optimizer_restarts);
+    setCvOptimizerRestarts(method.cv_optimizer_restarts);
+    setRandomSeed(result.kernel_selection?.base_seed ?? method.random_seed);
+    setValidationMethod(method.validation_method);
+    setCvFolds(method.cv_folds || 5);
+    setCvShuffle(method.cv_shuffle);
+    setKernelSelectionMode(result.kernel_selection?.mode ?? "single");
+    if (result.kernel_selection?.mode === "compare") setCandidateSelection({ mode: "compare", kernel_candidates: result.kernel_selection.candidate_presets, criterion: result.kernel_selection.criterion ?? "cv_nlpd", retain_candidate_details: result.kernel_selection.retain_candidate_details });
+  }, [analysisResult, result]);
+
+  const lengthScale = gpLengthValue(lengthDraft, standardizePredictors, optimizer);
+
   const kernelSelection: GpKernelSelection = kernelSelectionMode === "single" ? { mode: "single", kernel_preset: kernelPreset } : candidateSelection;
   const estimatedStarts = gpOptimizerStarts(kernelSelection, validationMethod === "none" ? 0 : validationMethod === "leave_one_out" ? version?.row_count ?? 0 : cvFolds, cvOptimizerRestarts, optimizerRestarts);
   const canRun =
     version !== null &&
+    lengthScale !== null &&
     responseColumnId.length > 0 &&
     predictorColumnIds.length >= 1 &&
     predictorColumnIds.length <= 12 &&
@@ -222,7 +256,11 @@ export function GaussianProcessRegressionPanel({
                   <label className="doe-table-toggle">
                     <input
                       checked={standardizePredictors}
-                      onChange={(event) => setStandardizePredictors(event.currentTarget.checked)}
+                      onChange={(event) => {
+                        if (!window.confirm(t("gp.optimization.resetCoordinates"))) return;
+                        setStandardizePredictors(event.currentTarget.checked);
+                        setLengthDraft(gpLengthPreset(event.currentTarget.checked));
+                      }}
                       type="checkbox"
                     />
                     <span>{t("gp.standardize")}</span>
@@ -309,6 +347,8 @@ export function GaussianProcessRegressionPanel({
 
           <details>
             <summary>{t("gp.advanced")}</summary>
+            <GpOptimizationSettings draft={lengthDraft} onChange={setLengthDraft} optimizer={optimizer}
+              onOptimizerChange={setOptimizer} standardized={standardizePredictors} />
             <div className="option-grid option-grid-wide gp-advanced-grid">
               <NumberField label={t("gp.jitter")} min={1e-12} step="any" value={jitter} onChange={setJitter} />
               <NumberField label={t("gp.finalRestarts")} max={10} min={0} value={optimizerRestarts} onChange={setOptimizerRestarts} />
@@ -319,6 +359,7 @@ export function GaussianProcessRegressionPanel({
               <NumberField label={t("gp.timeBudget")} max={600} min={5} value={timeBudgetSeconds} onChange={setTimeBudgetSeconds} />
             </div>
           </details>
+          <p className="field-help gp-applied-settings">{t("gp.optimization.summary", { optimizer: optimizer === "bfgs" ? "BFGS" : "L-BFGS-B", lower: lengthDraft.lower, initial: lengthDraft.initial, upper: lengthDraft.upper })} {t(standardizePredictors ? "gp.optimization.scaledUnits" : "gp.optimization.rawUnits")}</p>
           <p className="field-help">{t("gp.selection.restartHelp", { starts: 1 + cvOptimizerRestarts })}</p>
           <p className="gp-optimizer-starts">{t("gp.selection.starts")}: {estimatedStarts}
             {validationMethod === "leave_one_out" ? <small> {t("gp.selection.looEstimate")}</small> : null}</p>
@@ -332,8 +373,10 @@ export function GaussianProcessRegressionPanel({
             <button
               className="primary-button"
               disabled={!canRun}
-              onClick={() =>
+              onClick={() => lengthScale !== null &&
                 onRun({
+                  lengthScale,
+                  optimizer,
                   responseColumnId,
                   predictorColumnIds,
                   kernelPreset,
@@ -405,6 +448,7 @@ function GaussianProcessResults({ result }: { result: GaussianProcessRegressionR
     value === null ? "-" : formatNumber(value, { maximumSignificantDigits: 7 });
   return (
     <div className="gp-results">
+      <GpOptimizationEvidence result={result} />
       {result.kernel_selection?.mode === "compare" ? <GpKernelComparison result={result} /> : null}
       <section className="result-section">
         <h4>{t("gp.method")}</h4>
@@ -499,6 +543,26 @@ function GaussianProcessResults({ result }: { result: GaussianProcessRegressionR
       {result.model_manifest !== undefined ? <GaussianProcessPrediction result={result} /> : null}
     </div>
   );
+}
+
+function GpOptimizationEvidence({ result }: { result: GaussianProcessRegressionResult }) {
+  const { t, formatNumber } = useI18n();
+  const settings = result.method.length_scale;
+  if (settings === undefined) return null;
+  return <section className="result-section gp-optimization-evidence">
+    <p>{t("gp.optimization.summary", { optimizer: result.method.optimizer === "bfgs" ? "BFGS" : "L-BFGS-B", ...settings })} {t(settings.coordinate_system === "standardized" ? "gp.optimization.scaledUnits" : "gp.optimization.rawUnits")}</p>
+    <details><summary>{t("gp.optimization.evidence")}</summary>
+      <div className="table-wrap"><table className="result-table"><thead><tr>
+        <th>{t("gp.optimization.optimizer")}</th><th>{t("gp.optimization.iterations")}</th>
+        <th>{t("gp.optimization.gradient")}</th><th>{t("gp.optimization.evidence")}</th>
+      </tr></thead><tbody>{result.optimization?.final_runs.map((run, index) => <tr key={index}>
+        <td>{run.scipy_method} #{index + 1}</td><td>{run.iterations} / {run.evaluations}</td>
+        <td>{formatNumber(run.theta_gradient_inf_norm)} / {formatNumber(run.optimizer_gradient_inf_norm)}</td>
+        <td>{t(run.converged ? "gp.optimization.converged" : "gp.optimization.notConverged")} <code>{run.termination}</code></td>
+      </tr>)}</tbody></table></div>
+      <p>{t("gp.cvRestarts")}: {result.method.cv_optimizer_restarts} · {t("gp.finalRestarts")}: {result.method.optimizer_restarts} · {t("gp.seed")}: {result.kernel_selection?.base_seed ?? result.method.random_seed}</p>
+    </details>
+  </section>;
 }
 
 export function GpKernelComparison({ result }: { result: GaussianProcessRegressionResult }) {

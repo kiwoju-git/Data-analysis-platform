@@ -33,6 +33,7 @@ from app.i18n.report_text import ReportLocale, report_text
 from app.services.analysis_run_execution import canonical_json_bytes
 from app.services.analysis_run_execution import utc_now as _utc_now
 from app.services.analysis_run_results import get_analysis_run_result
+from app.services.gaussian_process_report import gp_saved_details_report
 from app.services.regression_models import (
     REGRESSION_PREDICTION_METHOD_ID,
     iter_regression_prediction_rows,
@@ -1226,6 +1227,8 @@ def _analysis_result_html_report_bytes(
     .report-card {{ border: 1px solid #cfd8e6; padding: 12px; min-width: 0; break-inside: avoid; }}
     .report-card-full {{ grid-column: 1 / -1; }}
     svg {{ width: 100%; height: auto; }}
+    .table-wrap {{ overflow-x: auto; }}
+    td, th {{ overflow-wrap: anywhere; }}
     .axis {{ stroke: #51647b; stroke-width: 1; }}
     .normal-fit {{ fill: none; stroke: #b42318; stroke-width: 2; stroke-dasharray: 6 3; }}
     .histogram-bar {{ fill: #79a7d8; stroke: #315d8c; }}
@@ -2439,7 +2442,9 @@ def _gaussian_process_report_section(
     estimate_header = report_text(locale, en="Estimate", ko="추정값")
     bounds_header = report_text(locale, en="Bounds", ko="경계")
     status_header = report_text(locale, en="Status", ko="상태")
-    return f"""
+    return (
+        gp_saved_details_report(payload, locale)
+        + f"""
   <h2>{_html_text(heading)}</h2>
   <p>{_html_text(description)}</p>
   <table>
@@ -2456,6 +2461,7 @@ def _gaussian_process_report_section(
   {chart}
   {_gp_kernel_comparison_report(payload, locale)}
 """
+    )
 
 
 def _gp_kernel_comparison_report(payload: dict[str, object], locale: ReportLocale) -> str:

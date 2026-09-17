@@ -4,10 +4,10 @@
 
 - Method ID: `regression.gaussian_process`
 - Backend module: `regression`
-- Method version: `0.2.0`
-- Result schema: `2` (schema 1 remains readable)
+- Method version: `0.3.0`
+- Result schema: `3` (schemas 1 and 2 remain readable)
 - Model manifest kind: `gaussian_process_model_manifest`
-- Model manifest schema: `2` (schema 1 remains readable)
+- Model manifest schema: `3` (schemas 1 and 2 remain readable)
 - Execution: bounded synchronous analysis handler. The current analysis endpoint is a
   synchronous FastAPI route and therefore runs outside the async event loop. It must
   keep BLAS/OpenMP thread use at one and enforce the limits below.
@@ -93,7 +93,9 @@ The default preset is `matern_5_2_ard`.
 Default standardized-scale bounds are:
 
 - amplitude: `1e-3` through `1e3`
-- length scale: `1e-2` through `1e2`
+- length scale: new scaled-X UI proposal `0.5` through `100`, initial `1`;
+  legacy omitted API settings/preset `0.01` through `100`. Explicit positive finite
+  bounds and initial value are configurable. Raw-X values use original units.
 - estimated noise variance: `1e-8` through `1e1`
 - Rational Quadratic alpha: `1e-2` through `1e2`
 
@@ -114,7 +116,11 @@ response scale.
 
 ## 7. Hyperparameter optimization
 
-The final model uses scikit-learn's bounded L-BFGS-B log-marginal-likelihood optimizer.
+The default uses the existing bounded L-BFGS-B log-marginal-likelihood optimizer.
+BFGS is an explicit advanced option with logistic-transformed log bounds and
+chain-rule gradients, not SciPy's unsupported BFGS box-bounds argument. See
+`gaussian_process_optimizer_contract.md` for units, strict-interior initialization,
+convergence evidence and independent reproduction tests. No ADAM is used.
 Default final restarts are 3; allowed range is 0 through 10. Cross-validation defaults
 to zero restarts and allows at most five. A deterministic integer
 seed is stored.

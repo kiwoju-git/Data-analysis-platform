@@ -616,8 +616,18 @@ export interface GpKernelCandidate {
     interval_coverage_95: number; mean_interval_width: number } | null;
   details: Pick<GaussianProcessRegressionResult, "method" | "kernel" | "model_summary" | "diagnostics" | "warnings"> | null;
 }
+export type GpOptimizer = "l_bfgs_b" | "bfgs";
+export interface GpLengthScale {
+  lower: number; initial: number; upper: number; coordinate_system: "standardized" | "original";
+}
+export interface GpOptimizerRun {
+  optimizer: GpOptimizer; scipy_method: string; converged: boolean; status: number;
+  termination: string; iterations: number; evaluations: number; objective: number;
+  theta_gradient_inf_norm: number; optimizer_gradient_inf_norm: number; near_bound: boolean;
+}
 export interface GaussianProcessRegressionResult {
-  schema_version: 1 | 2;
+  schema_version: 1 | 2 | 3;
+  optimization?: { final_runs: GpOptimizerRun[]; cv_folds: { fold: number; converged: boolean; seed: number; optimizer_runs: GpOptimizerRun[] }[] };
   kernel_selection?: { mode: "single" | "compare"; criterion: "cv_nlpd" | "cv_rmse" | "cv_mae" | null;
     candidate_presets: GpKernelPreset[]; selected_preset: GpKernelPreset; retain_candidate_details: boolean;
     selection_is_external_validation: false; optimizer_starts: number; tie_break_policy: string | null;
@@ -625,6 +635,10 @@ export interface GaussianProcessRegressionResult {
   kernel_candidates?: GpKernelCandidate[];
   summary_type: "gaussian_process_regression";
   method: {
+    optimizer?: GpOptimizer;
+    length_scale?: GpLengthScale;
+    scaling_ddof?: number;
+    fixed_noise_standard_deviation?: number | null;
     name: string;
     engine: string;
     engine_version: string;

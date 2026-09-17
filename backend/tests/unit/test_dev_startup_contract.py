@@ -80,7 +80,7 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "Get-DevRepositoryBuildId" in dev_text
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
-    assert "$script:ExpectedApiContractVersion = 20" in helper_text
+    assert "$script:ExpectedApiContractVersion = 21" in helper_text
     assert "$script:MinimumMetadataSchemaVersion = 20" in helper_text
     frontend_runtime = (repo_root / "frontend/src/runtimeCompatibility.ts").read_text(
         encoding="utf-8"
@@ -109,7 +109,7 @@ def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expe
         "$capabilities = @{}; "
         "foreach ($name in $script:RequiredRuntimeCapabilities) { $capabilities[$name] = $true }; "
         "$runtime = [pscustomobject]@{ service='datalab-studio-api'; "
-        f"api_contract_version=20; metadata_schema_version={schema}; "
+        f"api_contract_version=21; metadata_schema_version={schema}; "
         "capabilities=[pscustomobject]$capabilities; build_commit='test' }; "
         "Test-DevRuntimeCompatibility -RuntimeInfo $runtime "
         "-ExpectedBuildId test -RequireExactCommit"

@@ -11,6 +11,11 @@ export interface LocalizedErrorDisplay {
 
 const errorKeys: Readonly<Record<string, TranslationKey>> = {
   ...regularizedErrorKeys,
+  analysis_report_payload_unsupported: "reports.unsupportedPayload",
+  gp_length_scale_invalid: "gp.optimization.invalid",
+  gp_length_scale_coordinate_mismatch: "gp.optimization.resetCoordinates",
+  gp_bfgs_initial_on_boundary: "gp.optimization.invalid",
+  gp_optimizer_invalid: "errors.gpGeneric",
   api_unreachable: "errors.apiUnreachable",
   invalid_gaussian_process_options: "errors.gpGeneric",
   gp_kernel_search_budget_exceeded: "gp.selection.budget",

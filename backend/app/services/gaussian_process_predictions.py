@@ -53,12 +53,12 @@ def create_gaussian_process_point_predictions(
         and manifest.get("method_id") == "regression.gaussian_process"
         and manifest.get("model_family") == "gaussian_process_regression"
         and manifest.get("manifest_kind") == "gaussian_process_model_manifest"
-        and manifest.get("manifest_schema_version") in {1, 2}
+        and manifest.get("manifest_schema_version") in {1, 2, 3}
     ):
         raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
     if body.expected_model_manifest_sha256 != model.manifest_sha256:
         raise _error("gp_model_manifest_checksum_mismatch", status.HTTP_409_CONFLICT)
-    if manifest["manifest_schema_version"] == 2:
+    if manifest["manifest_schema_version"] in {2, 3}:
         selection = manifest.get("kernel_selection")
         summaries = manifest.get("candidate_summaries")
         if not (

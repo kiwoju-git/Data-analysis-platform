@@ -73,6 +73,11 @@ class GaussianProcessOptions:
     selection_criterion: Literal["cv_nlpd", "cv_rmse", "cv_mae"] = "cv_nlpd"
     retain_candidate_details: bool = False
     deadline_monotonic: float | None = None
+    length_scale_lower: float = 0.01
+    length_scale_initial: float = 1.0
+    length_scale_upper: float = 100.0
+    length_scale_coordinate_system: Literal["standardized", "original"] | None = None
+    optimizer: Literal["l_bfgs_b", "bfgs"] = "l_bfgs_b"
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,7 @@ class _FitResult:
     latent_standard_deviation: FloatArray
     predictive_standard_deviation: FloatArray
     elapsed_seconds: float
+    optimizer_runs: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -119,6 +125,7 @@ class _ValidationResult:
     predictive_std: FloatArray | None
     converged_folds: int
     fold_count: int
+    folds: list[dict[str, Any]]
 
 
 def optimizer_start_count(options: GaussianProcessOptions, fold_count: int) -> int:
@@ -202,6 +209,7 @@ def _cross_validate(
     cv_latent_std: FloatArray | None = None
     cv_predictive_std: FloatArray | None = None
     converged_folds = 0
+    fold_records: list[dict[str, Any]] = []
     if splits:
         cv_mean = np.full(parsed.y.shape, np.nan, dtype=np.float64)
         cv_latent_std = np.full(parsed.y.shape, np.nan, dtype=np.float64)
@@ -225,6 +233,22 @@ def _cross_validate(
                 cv_latent_std[validation_indices] = predicted["latent_standard_deviation"]
                 cv_predictive_std[validation_indices] = predicted["predictive_standard_deviation"]
                 converged_folds += int(fit.state.converged)
+                fold_records.append(
+                    {
+                        "fold": fold_index + 1,
+                        "training_row_indices": [parsed.row_indices[int(i)] for i in training],
+                        "validation_row_indices": [
+                            parsed.row_indices[int(i)] for i in validation_indices
+                        ],
+                        "seed": cv_options.random_seed,
+                        "x_mean": fit.state.x_mean.tolist(),
+                        "x_scale": fit.state.x_scale.tolist(),
+                        "y_mean": fit.state.y_mean,
+                        "y_scale": fit.state.y_scale,
+                        "optimizer_runs": fit.optimizer_runs,
+                        "converged": fit.state.converged,
+                    }
+                )
         if not (
             np.all(np.isfinite(cv_mean))
             and np.all(np.isfinite(cv_latent_std))
@@ -233,7 +257,7 @@ def _cross_validate(
             raise GaussianProcessRegressionError("gp_cross_validation_failed")
 
     return _ValidationResult(
-        cv_mean, cv_latent_std, cv_predictive_std, converged_folds, len(splits)
+        cv_mean, cv_latent_std, cv_predictive_std, converged_folds, len(splits), fold_records
     )
 
 
@@ -261,6 +285,7 @@ def _assemble_result(
         training_r_squared=training_metrics["r_squared"],
         validation=validation_metrics,
         cv_converged=cv_converged,
+        length_bounds=(active.length_scale_lower, active.length_scale_upper),
     )
     profiles = (
         _conditional_profiles(
@@ -286,9 +311,10 @@ def _assemble_result(
         final.state,
         predictor_columns,
         noise_mode=active.noise_mode,
+        length_bounds=(active.length_scale_lower, active.length_scale_upper),
     )
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "summary_type": "gaussian_process_regression",
         "method": {
             "name": "Gaussian Process Regression",
@@ -308,7 +334,24 @@ def _assemble_result(
             "missing_policy": "complete_case",
             "execution_mode": "bounded_inline",
             "elapsed_seconds": elapsed,
+            "optimizer": active.optimizer,
+            "length_scale": {
+                "lower": active.length_scale_lower,
+                "initial": active.length_scale_initial,
+                "upper": active.length_scale_upper,
+                "coordinate_system": "standardized"
+                if active.standardize_predictors
+                else "original",
+                "policy": "common_scalar_applied_to_all_length_scales",
+            },
+            "scaling_ddof": 1,
+            "fixed_noise_standard_deviation": active.fixed_noise_standard_deviation,
+            "package_versions": {
+                name: importlib.metadata.version(name)
+                for name in ("numpy", "scipy", "scikit-learn")
+            },
         },
+        "optimization": {"final_runs": final.optimizer_runs, "cv_folds": validation.folds},
         "response": _column_payload(response_column),
         "predictors": [_column_payload(column) for column in predictor_columns],
         "sample": {
@@ -474,7 +517,7 @@ def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) ->
         raise GaussianProcessRegressionError("gp_constant_response")
     scaled_x = (x - x_mean) / x_scale
     scaled_y = (y - y_mean) / y_scale
-    signal_kernel = _build_signal_kernel(options.kernel_preset, x.shape[1])
+    signal_kernel = _build_signal_kernel(options.kernel_preset, x.shape[1], options)
     kernel: Any = signal_kernel
     alpha = options.jitter
     fixed_noise_scaled = 0.0
@@ -491,10 +534,11 @@ def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) ->
         fixed_noise_scaled = (options.fixed_noise_standard_deviation / y_scale) ** 2
         alpha += fixed_noise_scaled
     started = time.monotonic()
+    optimizer_runs: list[dict[str, Any]] = []
     model = GaussianProcessRegressor(
         kernel=kernel,
         alpha=alpha,
-        optimizer=_bounded_optimizer(options.deadline_monotonic),
+        optimizer=_bounded_optimizer(options.deadline_monotonic, options.optimizer, optimizer_runs),
         n_restarts_optimizer=options.optimizer_restarts,
         normalize_y=False,
         copy_X_train=True,
@@ -547,15 +591,31 @@ def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) ->
         latent_standard_deviation=predicted["latent_standard_deviation"],
         predictive_standard_deviation=predicted["predictive_standard_deviation"],
         elapsed_seconds=time.monotonic() - started,
+        optimizer_runs=optimizer_runs,
     )
 
 
-def _bounded_optimizer(deadline: float | None) -> Any:
+def _bounded_theta(z: FloatArray, bounds: FloatArray) -> tuple[FloatArray, FloatArray]:
+    from scipy.special import expit  # type: ignore[import-untyped]
+
+    sigmoid = expit(z)
+    complement = expit(-z)
+    width = bounds[:, 1] - bounds[:, 0]
+    # Evaluate from the nearer endpoint to avoid cancellation/roundoff overshoot.
+    theta = np.where(z < 0, bounds[:, 0] + width * sigmoid, bounds[:, 1] - width * complement)
+    return theta, width * sigmoid * complement
+
+
+def _bounded_optimizer(
+    deadline: float | None,
+    algorithm: Literal["l_bfgs_b", "bfgs"] = "l_bfgs_b",
+    records: list[dict[str, Any]] | None = None,
+) -> Any:
     from scipy.optimize import minimize  # type: ignore[import-untyped]
     from sklearn.exceptions import ConvergenceWarning  # type: ignore[import-untyped]
 
     def optimize(objective: Any, theta: FloatArray, bounds: FloatArray) -> tuple[FloatArray, float]:
-        if not np.all(np.isfinite(bounds)):
+        if not np.all(np.isfinite(bounds)) or np.any(bounds[:, 0] >= bounds[:, 1]):
             raise GaussianProcessRegressionError("gp_kernel_bounds_invalid")
 
         def checked(parameters: FloatArray) -> Any:
@@ -563,17 +623,78 @@ def _bounded_optimizer(deadline: float | None) -> Any:
                 raise GaussianProcessRegressionError("gp_time_budget_exhausted")
             return objective(parameters)
 
-        result = minimize(checked, theta, method="L-BFGS-B", jac=True, bounds=bounds)
-        if result.status != 0:
+        if algorithm == "bfgs":
+            fraction = (theta - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0])
+            if np.any(fraction <= 0) or np.any(fraction >= 1):
+                raise GaussianProcessRegressionError("gp_bfgs_initial_on_boundary")
+            initial_z = np.log(fraction) - np.log1p(-fraction)
+
+            def transformed(z: FloatArray) -> tuple[float, FloatArray]:
+                parameters, derivative = _bounded_theta(z, bounds)
+                value, gradient = checked(parameters)
+                return float(value), np.asarray(gradient, dtype=np.float64) * derivative
+
+            applied_options: dict[str, Any] = {"gtol": 1e-5}
+            result = minimize(
+                transformed, initial_z, method="BFGS", jac=True, options=applied_options
+            )
+            final_theta, _derivative = _bounded_theta(result.x, bounds)
+        else:
+            applied_options = {}
+            result = minimize(checked, theta, method="L-BFGS-B", jac=True, bounds=bounds)
+            final_theta = np.asarray(result.x, dtype=np.float64)
+        value, gradient = checked(final_theta)
+        gradient = np.asarray(gradient, dtype=np.float64)
+        if not (
+            np.isfinite(value)
+            and np.all(np.isfinite(final_theta))
+            and np.all(np.isfinite(gradient))
+        ):
+            raise GaussianProcessRegressionError("gp_fit_failed")
+        distance = np.minimum(final_theta - bounds[:, 0], bounds[:, 1] - final_theta)
+        near = distance <= 1e-6 * (bounds[:, 1] - bounds[:, 0])
+        projected = gradient.copy()
+        projected[(final_theta - bounds[:, 0] <= 1e-6) & (gradient > 0)] = 0
+        projected[(bounds[:, 1] - final_theta <= 1e-6) & (gradient < 0)] = 0
+        saturation = algorithm == "bfgs" and bool(np.any(near & (np.abs(projected) > 1e-3)))
+        converged = bool(result.success) and not saturation
+        if records is not None:
+            records.append(
+                {
+                    "optimizer": algorithm,
+                    "scipy_method": "BFGS" if algorithm == "bfgs" else "L-BFGS-B",
+                    "options": applied_options,
+                    "defaults": "SciPy " + importlib.metadata.version("scipy"),
+                    "initial_log_theta": theta.tolist(),
+                    "final_log_theta": final_theta.tolist(),
+                    "log_bounds": bounds.tolist(),
+                    "converged": converged,
+                    "status": int(result.status),
+                    "termination": "transformed_boundary_saturation"
+                    if saturation
+                    else "converged"
+                    if converged
+                    else "optimizer_not_converged",
+                    "iterations": int(result.nit),
+                    "evaluations": int(result.nfev),
+                    "objective": float(value),
+                    "theta_gradient_inf_norm": float(np.max(np.abs(gradient))),
+                    "optimizer_gradient_inf_norm": float(np.max(np.abs(result.jac))),
+                    "near_bound": bool(np.any(near)),
+                }
+            )
+        if not converged:
             warnings.warn(
                 "Gaussian Process optimizer failed to converge.", ConvergenceWarning, stacklevel=2
             )
-        return np.asarray(result.x, dtype=np.float64), float(result.fun)
+        return final_theta, float(value)
 
     return optimize
 
 
-def _build_signal_kernel(preset: KernelPreset, predictor_count: int) -> Any:
+def _build_signal_kernel(
+    preset: KernelPreset, predictor_count: int, options: GaussianProcessOptions | None = None
+) -> Any:
     from sklearn.gaussian_process.kernels import (  # type: ignore[import-untyped]
         RBF,
         ConstantKernel,
@@ -582,18 +703,20 @@ def _build_signal_kernel(preset: KernelPreset, predictor_count: int) -> Any:
     )
 
     amplitude = ConstantKernel(1.0, (1e-3, 1e3))
-    length_scale = np.ones(predictor_count, dtype=np.float64)
+    active = options or GaussianProcessOptions()
+    length_scale = np.full(predictor_count, active.length_scale_initial, dtype=np.float64)
+    length_bounds = (active.length_scale_lower, active.length_scale_upper)
     if preset == "matern_5_2_ard":
-        base = Matern(length_scale=length_scale, length_scale_bounds=(1e-2, 1e2), nu=2.5)
+        base = Matern(length_scale=length_scale, length_scale_bounds=length_bounds, nu=2.5)
     elif preset == "matern_3_2_ard":
-        base = Matern(length_scale=length_scale, length_scale_bounds=(1e-2, 1e2), nu=1.5)
+        base = Matern(length_scale=length_scale, length_scale_bounds=length_bounds, nu=1.5)
     elif preset == "rbf_ard":
-        base = RBF(length_scale=length_scale, length_scale_bounds=(1e-2, 1e2))
+        base = RBF(length_scale=length_scale, length_scale_bounds=length_bounds)
     elif preset == "rational_quadratic":
         base = RationalQuadratic(
-            length_scale=1.0,
+            length_scale=active.length_scale_initial,
             alpha=1.0,
-            length_scale_bounds=(1e-2, 1e2),
+            length_scale_bounds=length_bounds,
             alpha_bounds=(1e-2, 1e2),
         )
     else:
@@ -902,6 +1025,7 @@ def _fitted_parameter_rows(
     predictors: Sequence[GaussianProcessColumn],
     *,
     noise_mode: NoiseMode,
+    length_bounds: tuple[float, float] = (0.01, 100.0),
 ) -> list[dict[str, object]]:
     payload = state.signal_kernel_payload
     rows = [
@@ -911,10 +1035,10 @@ def _fitted_parameter_rows(
     ]
     length_scales = cast(list[float], payload["length_scales"])
     if len(length_scales) == 1 and len(predictors) > 1:
-        rows.append(_parameter_row("shared_length_scale", None, length_scales[0], 1e-2, 1e2))
+        rows.append(_parameter_row("shared_length_scale", None, length_scales[0], *length_bounds))
     else:
         rows.extend(
-            _parameter_row("length_scale", predictor.column_id, value, 1e-2, 1e2)
+            _parameter_row("length_scale", predictor.column_id, value, *length_bounds)
             for predictor, value in zip(predictors, length_scales, strict=True)
         )
     if "rational_quadratic_alpha" in payload:
@@ -976,6 +1100,7 @@ def _warning_codes(
     training_r_squared: float | None,
     validation: dict[str, float | None],
     cv_converged: bool,
+    length_bounds: tuple[float, float] = (0.01, 100.0),
 ) -> list[str]:
     codes = ["gp_predictive_not_causal", "gp_uncertainty_conditional_on_kernel"]
     if parsed.n_excluded_missing + parsed.n_excluded_non_numeric > 0:
@@ -987,7 +1112,7 @@ def _warning_codes(
     length_scales = [float(value) for value in cast(list[float], payload["length_scales"])]
     if _near_bound(amplitude, 1e-3, 1e3):
         codes.append("gp_amplitude_near_bound")
-    if any(_near_bound(value, 1e-2, 1e2) for value in length_scales):
+    if any(_near_bound(value, *length_bounds) for value in length_scales):
         codes.append("gp_length_scale_near_bound")
     if noise_mode == "estimate" and _near_bound(
         state.observation_noise_variance_scaled,
@@ -1026,6 +1151,22 @@ def _validate_columns(
 
 
 def _validate_options(options: GaussianProcessOptions) -> None:
+    lengths = (options.length_scale_lower, options.length_scale_initial, options.length_scale_upper)
+    if not all(isfinite(value) and value > 0 for value in lengths) or not (
+        options.length_scale_lower < options.length_scale_upper
+        and options.length_scale_lower <= options.length_scale_initial <= options.length_scale_upper
+    ):
+        raise GaussianProcessRegressionError("gp_length_scale_invalid")
+    coordinate = "standardized" if options.standardize_predictors else "original"
+    if options.length_scale_coordinate_system not in {None, coordinate}:
+        raise GaussianProcessRegressionError("gp_length_scale_coordinate_mismatch")
+    if options.optimizer not in {"l_bfgs_b", "bfgs"}:
+        raise GaussianProcessRegressionError("gp_optimizer_invalid")
+    if options.optimizer == "bfgs" and options.length_scale_initial in {
+        options.length_scale_lower,
+        options.length_scale_upper,
+    }:
+        raise GaussianProcessRegressionError("gp_bfgs_initial_on_boundary")
     if options.kernel_preset not in {
         "matern_5_2_ard",
         "matern_3_2_ard",

@@ -6,6 +6,7 @@ import json
 import sqlite3
 
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -49,7 +50,11 @@ def _create_dataset(client: TestClient) -> dict[str, object]:
 
 
 def _create_gp_analysis(
-    client: TestClient, version: dict[str, object], *, compare: bool = False
+    client: TestClient,
+    version: dict[str, object],
+    *,
+    compare: bool = False,
+    extra_options: dict | None = None,
 ) -> dict[str, object]:
     columns = version["columns"]
     assert isinstance(columns, list)
@@ -59,7 +64,7 @@ def _create_gp_analysis(
         "/api/v1/analysis-runs",
         json={
             "method_id": "regression.gaussian_process",
-            "method_version": "0.2.0",
+            "method_version": "0.3.0",
             "dataset_version_id": version["version_id"],
             "filter_snapshot": {"expression_version": 1, "conditions": []},
             "roles": {"response": response_id, "predictors": ",".join(predictor_ids)},
@@ -91,6 +96,7 @@ def _create_gp_analysis(
                 "profile_points": 10,
                 "surface_grid_size": 10,
                 "time_budget_seconds": 120,
+                **(extra_options or {}),
             },
         },
     )
@@ -134,7 +140,7 @@ def test_gp_analysis_persists_safe_numeric_state_and_predicts(tmp_path) -> None:
         )
 
         assert payload["method_id"] == "regression.gaussian_process"
-        assert result["schema_version"] == 2
+        assert result["schema_version"] == 3
         assert result["summary_type"] == "gaussian_process_regression"
         assert "prediction_basis" not in result
         assert result["conditional_profiles"]
@@ -292,7 +298,7 @@ def test_gp_comparison_saves_only_selected_model_and_reports_candidates(tmp_path
         model = get_regression_model_record(tmp_path, pointer["model_id"])
         manifest_bytes = (tmp_path / model.manifest_path).read_bytes()
         manifest = json.loads(manifest_bytes)
-        assert manifest["manifest_schema_version"] == 2
+        assert manifest["manifest_schema_version"] == 3
         assert manifest["kernel_selection"]["selected_preset"] == result["kernel"]["preset"]
         assert (
             manifest["candidate_summary_sha256"]
@@ -325,7 +331,10 @@ def test_gp_comparison_saves_only_selected_model_and_reports_candidates(tmp_path
         assert (tmp_path / model.manifest_path).read_bytes() == manifest_bytes
 
 
-def test_gp_schema_one_manifest_restore_preserves_bytes_and_predictions(tmp_path) -> None:
+@pytest.mark.parametrize("legacy_schema", [1, 2])
+def test_gp_legacy_manifest_restore_preserves_bytes_and_predictions(
+    tmp_path, legacy_schema
+) -> None:
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:
         analysis = _create_gp_analysis(client, _create_dataset(client))
@@ -346,15 +355,16 @@ def test_gp_schema_one_manifest_restore_preserves_bytes_and_predictions(tmp_path
         before = client.post(route, json=body)
         assert before.status_code == 200
         manifest = json.loads(path.read_bytes())
-        manifest["manifest_schema_version"] = 1
-        manifest["method_version"] = "0.1.0"
+        manifest["manifest_schema_version"] = legacy_schema
+        manifest["method_version"] = "0.1.0" if legacy_schema == 1 else "0.2.0"
         for key in (
             "kernel_selection",
             "candidate_summaries",
             "candidate_summary_sha256",
             "optimizer_policy",
         ):
-            manifest.pop(key, None)
+            if legacy_schema == 1 or key == "optimizer_policy":
+                manifest.pop(key, None)
         legacy_bytes = canonical_json_bytes(manifest)
         sha = hashlib.sha256(legacy_bytes).hexdigest()
         path.write_bytes(legacy_bytes)
@@ -370,3 +380,55 @@ def test_gp_schema_one_manifest_restore_preserves_bytes_and_predictions(tmp_path
         assert restored.status_code == 200, restored.text
         assert restored.json()["rows"] == before.json()["rows"]
         assert path.read_bytes() == legacy_bytes
+
+
+@pytest.mark.parametrize("optimizer", ["l_bfgs_b", "bfgs"])
+def test_gp_applied_settings_survive_restart_and_report(tmp_path, optimizer) -> None:
+    settings = Settings(workspace_root=tmp_path)
+    bounds = {"lower": 0.5, "initial": 1.0, "upper": 6.0, "coordinate_system": "standardized"}
+    with TestClient(create_app(settings)) as client:
+        analysis = _create_gp_analysis(
+            client,
+            _create_dataset(client),
+            extra_options={
+                "length_scale": bounds,
+                "optimizer": optimizer,
+            },
+        )
+        result = analysis["result"]
+        pointer = result["model_manifest"]
+        record = get_regression_model_record(tmp_path, pointer["model_id"])
+        path = tmp_path / record.manifest_path
+        saved = path.read_bytes()
+        manifest = json.loads(saved)
+        assert manifest["manifest_schema_version"] == 3
+        assert manifest["optimizer_policy"]["optimizer"] == optimizer
+        assert manifest["optimizer_policy"]["length_scale"]["lower"] == 0.5
+        route = f"/api/v1/regression-models/{pointer['model_id']}/gaussian-process-predictions"
+        body = {
+            "expected_model_manifest_sha256": pointer["manifest_sha256"],
+            "rows": [
+                {
+                    "client_row_id": "training-first",
+                    "values": {
+                        result["predictors"][0]["column_id"]: float(f"{1/3:.12f}"),
+                        result["predictors"][1]["column_id"]: 1.75,
+                    },
+                }
+            ],
+        }
+        before = client.post(route, json=body)
+        assert before.status_code == 200, before.text
+        exports = f"/api/v1/analysis-runs/{analysis['analysis_id']}/exports"
+        export = client.post(exports + "/html", json={"locale": "en"})
+        assert export.status_code == 201, export.text
+        html = client.get(exports + f"/{export.json()['export_id']}/download").text
+        assert "Applied GPR Settings" in html
+        assert "0.5 / 1.0 / 6.0" in html
+        assert optimizer in html and "Optimizer Convergence" in html
+        assert "Stored Two-Predictor Surface" in html
+    with TestClient(create_app(settings)) as restored:
+        after = restored.post(route, json=body)
+        assert after.status_code == 200, after.text
+        assert after.json()["rows"] == before.json()["rows"]
+        assert path.read_bytes() == saved
