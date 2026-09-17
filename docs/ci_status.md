@@ -1,6 +1,31 @@
 # CI Status
 
-Last updated: 2026-09-17
+Last updated: 2026-09-18
+
+## Grouped Mean Menu and Trusted LAN Development
+
+Base: `43d20ae5580c3013276462e6b95bea16e42550d2`, feature branch
+`feat/grouped-mean-menu-and-lan-dev`. Evidence, corrected attempts and security
+limits are in `grouped_mean_menu_lan_validation.md` and
+`trusted_lan_development.md`.
+
+- Final `check.ps1` native exit 0: backend 1,225 passed in 1,380.80 seconds;
+  frontend 361 passed / 47 files in 21.91 seconds. Tutorial sync, Ruff lint/format,
+  mypy, localization (2,964 sources / 3,835 keys), ESLint, strict TypeScript and
+  production build (3.68 seconds) passed. Nine existing Fast Refresh warnings
+  and Vite chunk-size/plugin-timing warnings remain nonfatal.
+- Complete Chromium E2E passed through the same-origin API proxy. Additional
+  actual-adapter LAN/LocalOnly tests passed, including KOR/ENG, all ten mean
+  domain routes, four viewports, keyboard/state/overflow and Host/Origin checks.
+- The first full run's 1 failed / 1,224 passed was a route-ownership checker
+  scanning a literal test expectation. Production scanning remains enforced;
+  its 214-test focused rerun and the subsequent complete check both passed.
+- No statistical, API/result/manifest/metadata version or stored-asset changes.
+  Actual host was Windows 10 / PowerShell 5.1 / Python 3.10.11 / Node 22.23.2.
+  Windows 11 and a second physical LAN client were not independently tested.
+- Four development-tooling npm audit findings remain (two moderate, two high).
+  LAN mode is for mutually trusted operators only, without login/RBAC/TLS.
+- Remote Actions status is observed after publication, not inferred here.
 
 ## GPR, Domain and Report Parity
 
