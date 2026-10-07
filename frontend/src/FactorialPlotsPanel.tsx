@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { DoeFinalModelWorkflow } from "./api/types/doeModelWorkflow";
+import { ChartItemFeedback } from "./charts/ChartItemFeedback";
 import { paddedNumericRange, scaleChartValue } from "./charts/chartScale";
 import { useChartItemInteraction } from "./charts/useChartItemInteraction";
 import { factorialViewFactors, isGeneralFactorial, type FactorialViewDesign, type FactorialViewFactor } from "./doe/factorialView";
@@ -68,7 +69,6 @@ function FactorialMeanChart({ xFactor, traceFactor, cells, means }: { xFactor: F
   const range = paddedNumericRange(points.flatMap((point) => point.value === null ? [] : [point.value]), 0.1);
   const x = (index: number) => 62 + index * 316 / Math.max(1, xFactor.levels.length - 1);
   const y = (value: number) => scaleChartValue(value, range, 190, 25);
-  const selected = points.find((point) => point.id === interaction.activeItem?.id);
   const title = `${t(traceFactor ? "doe.plots.interaction" : "doe.plots.main")}: ${xFactor.name}${traceFactor ? ` / ${traceFactor.name}` : ""}`;
   const overall = factorialMarginalMean(cells, {}, means);
   return <div className="chart-panel"><h4>{title}</h4><div className="interactive-chart">
@@ -80,15 +80,15 @@ function FactorialMeanChart({ xFactor, traceFactor, cells, means }: { xFactor: F
       {traces.map((trace, series) => <polyline key={trace.code} fill="none" stroke={seriesColors[series]} strokeWidth={2} strokeDasharray={series % 2 ? "6 3" : undefined}
         points={points.filter((point) => point.series === series && point.value !== null).map((point) => `${x(point.index)},${y(point.value!)}`).join(" ")} />)}
       {points.filter((point) => point.value !== null).map((point) => <circle key={point.id} cx={x(point.index)} cy={y(point.value!)} r={5} fill={seriesColors[point.series]}
-        className="chart-interactive-item" tabIndex={interaction.tabIndexFor(point.id)} aria-label={`${point.label}: ${factorialNumber(point.value)}`} role="img"
+        className={`chart-interactive-item ${interaction.stateClass(point.id)}`} aria-describedby={interaction.describedBy(point.id)} onBlur={() => interaction.clearFocus(point.id)} tabIndex={interaction.tabIndexFor(point.id)} aria-label={`${point.label}: ${factorialNumber(point.value)}`} role="img"
         ref={(element) => interaction.itemRef(point.id, element)} onFocus={() => interaction.activate(point.id, x(point.index), y(point.value!), "focus")}
         onClick={() => interaction.activate(point.id, x(point.index), y(point.value!), "selection")} onKeyDown={(event) => interaction.handleKeyDown(event, point.id)}
-        onPointerEnter={(event) => interaction.move(point.id, event)} onPointerLeave={() => interaction.clear(point.id)}><title>{point.label}: {factorialNumber(point.value)}</title></circle>)}
+        onPointerMove={(event) => interaction.move(point.id, event)} onPointerEnter={(event) => interaction.move(point.id, event)} onPointerLeave={() => interaction.clearHover(point.id)}><title>{point.label}: {factorialNumber(point.value)}</title></circle>)}
       {xFactor.levels.map((level, index) => <text className="chart-axis-label" key={level.code} x={x(index)} y={210} textAnchor="middle"><title>{String(level.actual)}</title>{String(level.actual).length > 12 ? `${String(level.actual).slice(0, 10)}...` : String(level.actual)}</text>)}
       <text className="chart-axis-label" x={220} y={246} textAnchor="middle">{xFactor.name}{xFactor.unit ? ` (${xFactor.unit})` : ""}</text>
     </svg>
     {traceFactor ? <ul className="factorial-plot-legend">{traces.map((trace, index) => <li key={trace.code}><span aria-hidden="true" style={{ backgroundColor: seriesColors[index] }} />{traceFactor.name}: {String(trace.actual)}</li>)}</ul> : null}
-    <p className="factorial-point-detail" aria-live="polite">{selected ? `${selected.label}: ${factorialNumber(selected.value)}` : "\u00a0"}</p>
+    <ChartItemFeedback interaction={interaction} items={points.map((point) => ({ id: point.id, title: point.label, details: [{ label: t("doe.plots.mean"), value: factorialNumber(point.value) }] }))} />
   </div></div>;
 }
 
@@ -101,20 +101,19 @@ function FactorialCubeChart({ factors, cells, means, fixed }: { factors: Factori
       value: factorialMarginalMean(cells, settings, means), label: factors.map((factor, at) => `${factor.name} = ${factor.levels[bits[at]].actual}`).join("; ") };
   });
   const interaction = useChartItemInteraction(vertices.map((point) => point.id));
-  const selected = vertices.find((point) => point.id === interaction.activeItem?.id);
   return <div className="chart-panel factorial-cube-chart"><svg className="chart-svg" viewBox="0 0 520 360" role="img" aria-labelledby={`${id}-title ${id}-desc`}>
     <title id={`${id}-title`}>{t("doe.plots.cube")}</title><desc id={`${id}-desc`}>{factors.map((factor) => factor.name).join(", ")}; {t("doe.plots.fixed")}: {Object.entries(fixed).map(([key, value]) => `${key}=${value}`).join(", ")}</desc>
     {vertices.flatMap((point, index) => factors.map((_, bit) => {
       const other = index ^ (1 << bit); return other > index ? <line className="chart-axis" key={`${index}-${bit}`} x1={point.x} y1={point.y} x2={vertices[other].x} y2={vertices[other].y} /> : null;
     }))}
-    {vertices.map((point) => <g key={point.id}><circle className="scatter-point chart-interactive-item" cx={point.x} cy={point.y} r={6} role="img" aria-label={`${point.label}: ${factorialNumber(point.value)}`}
+    {vertices.map((point) => <g key={point.id}><circle className={`scatter-point chart-interactive-item ${interaction.stateClass(point.id)}`} aria-describedby={interaction.describedBy(point.id)} onBlur={() => interaction.clearFocus(point.id)} cx={point.x} cy={point.y} r={6} role="img" aria-label={`${point.label}: ${factorialNumber(point.value)}`}
       tabIndex={interaction.tabIndexFor(point.id)} ref={(element) => interaction.itemRef(point.id, element)} onFocus={() => interaction.activate(point.id, point.x, point.y, "focus")}
       onKeyDown={(event) => interaction.handleKeyDown(event, point.id)} onClick={() => interaction.activate(point.id, point.x, point.y, "selection")}
-      onPointerEnter={(event) => interaction.move(point.id, event)}><title>{point.label}: {factorialNumber(point.value)}</title></circle>
+      onPointerMove={(event) => interaction.move(point.id, event)} onPointerEnter={(event) => interaction.move(point.id, event)} onPointerLeave={() => interaction.clearHover(point.id)}><title>{point.label}: {factorialNumber(point.value)}</title></circle>
       <text x={point.x} y={point.y - 12} className="chart-axis-label" textAnchor="middle">{factorialNumber(point.value)}</text></g>)}
     <text x={255} y={322} className="chart-axis-label" textAnchor="middle">{factors[0].name}</text>
     <text x={20} y={180} className="chart-axis-label" transform="rotate(-90 20 180)" textAnchor="middle">{factors[1].name}</text>
     {factors[2] ? <text x={425} y={245} className="chart-axis-label" textAnchor="middle">{factors[2].name}</text> : null}
-  </svg><p className="factorial-point-detail" aria-live="polite">{selected ? `${selected.label}: ${factorialNumber(selected.value)}` : "\u00a0"}</p>
+  </svg><ChartItemFeedback interaction={interaction} items={vertices.map((point) => ({ id: point.id, title: point.label, details: [{ label: t("doe.plots.mean"), value: factorialNumber(point.value) }] }))} />
   <ul className="factorial-plot-legend">{factors.map((factor) => <li key={factor.name}>{factor.name}: {factor.levels.map((level) => String(level.actual)).join(" / ")}</li>)}</ul></div>;
 }

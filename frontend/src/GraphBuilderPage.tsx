@@ -1,3 +1,4 @@
+import { ChartSourceContext } from "./charts/chartSourceContext";
 import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
@@ -293,11 +294,16 @@ export function GraphBuilderPage({
                   그대로 표시합니다.
                 </div>
               ) : null}
+              <ChartSourceContext.Provider value={[
+                state.result.dataset_version_id, state.result.source_schema_hash,
+                state.result.filter_snapshot_sha256, state.result.preview_config_sha256,
+              ].join(":")}>
               <GraphPreviewPanels
                 graphType={state.graphType}
                 layout={state.layout}
                 panels={state.result.panels}
               />
+              </ChartSourceContext.Provider>
               {state.graphType === "qq_plot" ? (
                 <p className="interpretation-note">
                   Q-Q Plot은 직선에 가까운지 시각적으로 검토하는 보조 도구이며 정규성

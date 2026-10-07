@@ -31,6 +31,7 @@ import { defaultDoeSelection, interactionOrderLabel } from "./doe/factorialWorkf
 import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
 import { FactorialResidualPlots } from "./FactorialResidualPlots";
 import { FactorialPlotsPanel } from "./FactorialPlotsPanel";
+import { ChartSourceContext } from "./charts/chartSourceContext";
 import { FactorialStoredModelWorkflow } from "./FactorialStoredModelWorkflow";
 import { fetchStoredFactorialAnalysis } from "./api/factorialWorkflow";
 import { appLocationChangeEvent } from "./browserNavigation";
@@ -1071,7 +1072,9 @@ export function FactorialDesignPreview({
             </button>
           </div>
           {matchingAnalysis !== null ? (
-            <FactorialAnalysisResultView analysis={matchingAnalysis} design={design} />
+            <ChartSourceContext.Provider value={matchingAnalysis.analysis_id}>
+              <FactorialAnalysisResultView analysis={matchingAnalysis} design={design} />
+            </ChartSourceContext.Provider>
           ) : null}
         </>
       ) : null}

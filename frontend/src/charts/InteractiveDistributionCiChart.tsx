@@ -1,5 +1,5 @@
 import type { GraphicalConfidenceInterval } from "../api/types/analysisResultsExploration";
-import { ChartTooltip } from "./ChartTooltip";
+import { ChartItemFeedback } from "./ChartItemFeedback";
 import { paddedNumericRange, scaleChartValue } from "./chartScale";
 import { useChartItemInteraction } from "./useChartItemInteraction";
 
@@ -57,9 +57,6 @@ export function InteractiveDistributionCiChart({
     .flatMap((item) => [item.interval.lower!, item.interval.upper!]);
   const locationRange = paddedNumericRange(locationValues.length > 0 ? locationValues : [0, 1]);
   const spreadRange = paddedNumericRange(spreadValues.length > 0 ? spreadValues : [0, 1]);
-  const activeIndex = computedItems.findIndex((item) => item.id === interaction.activeItem?.id);
-  const activeItem = activeIndex >= 0 ? computedItems[activeIndex] : null;
-  const details = activeItem === null ? [] : intervalDetails(activeItem);
 
   return (
     <div className="interactive-chart">
@@ -88,29 +85,32 @@ export function InteractiveDistributionCiChart({
             plot.left,
             width - plot.right,
           );
-          const selected = interaction.activeItem?.id === item.id;
+          const selected = interaction.pinnedId === item.id;
           return (
-            <g
-              aria-label={`${item.label} ${formatNumber(item.interval.estimate!)} 신뢰구간 ${formatNumber(item.interval.lower!)}에서 ${formatNumber(item.interval.upper!)}`}
-              className={`distribution-ci-item chart-interactive-item${selected ? " chart-item-selected" : ""}`}
-              data-selected={selected ? "true" : "false"}
-              key={item.id}
-              onBlur={() => interaction.clear(item.id)}
-              onClick={() => interaction.activate(item.id, estimateX, y, "selection")}
-              onFocus={() => interaction.activate(item.id, estimateX, y, "focus")}
-              onKeyDown={(event) => interaction.handleKeyDown(event, item.id, estimateX, y)}
-              onPointerEnter={(event) => interaction.move(item.id, event)}
-              onPointerLeave={() => interaction.clear(item.id)}
-              onPointerMove={(event) => interaction.move(item.id, event)}
-              ref={(element) => interaction.itemRef(item.id, element)}
-              role="img"
-              tabIndex={interaction.tabIndexFor(item.id)}
-            >
+            <g key={item.id}>
               <text className="chart-row-label" x={plot.left - 12} y={y + 4}>{item.label}</text>
               <line className="distribution-ci-line" x1={lowerX} x2={upperX} y1={y} y2={y} />
               <line className="distribution-ci-cap" x1={lowerX} x2={lowerX} y1={y - 7} y2={y + 7} />
               <line className="distribution-ci-cap" x1={upperX} x2={upperX} y1={y - 7} y2={y + 7} />
               <circle className="distribution-ci-estimate" cx={estimateX} cy={y} r="4" />
+              <rect
+              aria-label={`${item.label} ${formatNumber(item.interval.estimate!)} 신뢰구간 ${formatNumber(item.interval.lower!)}에서 ${formatNumber(item.interval.upper!)}`}
+              className={`chart-hit-target ${interaction.stateClass(item.id)}${selected ? " chart-hit-target-selected" : ""}`}
+              data-selected={selected ? "true" : "false"}
+              onBlur={() => interaction.clearFocus(item.id)}
+              onClick={() => interaction.activate(item.id, estimateX, y, "selection")}
+              onFocus={() => interaction.activate(item.id, estimateX, y, "focus")}
+              onKeyDown={(event) => interaction.handleKeyDown(event, item.id, estimateX, y)}
+              onPointerEnter={(event) => interaction.move(item.id, event)}
+              onPointerLeave={() => interaction.clearHover(item.id)}
+              onPointerMove={(event) => interaction.move(item.id, event)}
+              ref={(element) => interaction.itemRef(item.id, element)}
+              role="img"
+              aria-describedby={interaction.describedBy(item.id)}
+              tabIndex={interaction.tabIndexFor(item.id)}
+                x={Math.min(lowerX, estimateX) - 5} y={y - 12}
+                width={Math.max(10, Math.max(upperX, estimateX) - Math.min(lowerX, estimateX) + 10)} height={24}
+              />
             </g>
           );
         })}
@@ -119,24 +119,7 @@ export function InteractiveDistributionCiChart({
         <text className="chart-axis-label" x={plot.left} y="233">{formatNumber(spreadRange.min)}</text>
         <text className="chart-axis-label chart-axis-label-end" x={width - plot.right} y="233">{formatNumber(spreadRange.max)}</text>
       </svg>
-      {interaction.activeItem !== null && activeItem !== null ? (
-        <ChartTooltip
-          details={details}
-          left={interaction.activeItem.left}
-          title={activeItem.label}
-          top={interaction.activeItem.top}
-        />
-      ) : null}
-      <div className="chart-selected-detail" aria-live="polite">
-        {activeItem === null ? (
-          <span>Tab과 방향키로 구간을 확인할 수 있습니다.</span>
-        ) : (
-          <>
-            <strong>{activeItem.label}</strong>
-            {details.map((detail) => <span key={detail.label}>{detail.label}: {detail.value}</span>)}
-          </>
-        )}
-      </div>
+      <ChartItemFeedback interaction={interaction} items={computedItems.map((item) => ({ id: item.id, title: item.label, details: intervalDetails(item) }))} />
     </div>
   );
 }

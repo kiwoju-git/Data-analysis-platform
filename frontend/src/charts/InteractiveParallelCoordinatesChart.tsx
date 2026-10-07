@@ -1,4 +1,6 @@
 import { useId } from "react";
+import { useChartItemInteraction } from "./useChartItemInteraction";
+import { ChartItemFeedback } from "./ChartItemFeedback";
 
 interface ParallelFactor {
   name: string;
@@ -46,42 +48,17 @@ export function InteractiveParallelCoordinatesChart({
       : (run.factor_levels[factor.name] - factor.low) / (factor.high - factor.low);
     return top + (1 - normalized) * plotHeight;
   };
-  const selected = runs.find((run) => run.run_order === selectedRunOrder) ?? null;
-
-  const moveSelection = (offset: number) => {
-    if (runs.length === 0) return;
-    const current = runs.findIndex((run) => run.run_order === selectedRunOrder);
-    const next = current < 0
-      ? offset < 0 ? runs.length - 1 : 0
-      : Math.min(runs.length - 1, Math.max(0, current + offset));
-    onSelectRun(runs[next].run_order);
-  };
+  const interaction = useChartItemInteraction(runs.map((run) => `run:${run.run_order}`), {
+    selectedId: selectedRunOrder === null ? null : `run:${selectedRunOrder}`,
+    onSelect: (runId) => onSelectRun(Number(runId.slice(4))),
+    onClear: () => onSelectRun(null),
+  });
 
   return (
     <div className="lhs-parallel-chart-scroll">
       <div
         className="interactive-chart lhs-parallel-chart"
-        onKeyDown={(event) => {
-          if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-            event.preventDefault();
-            moveSelection(-1);
-          } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-            event.preventDefault();
-            moveSelection(1);
-          } else if (event.key === "Home" && runs.length > 0) {
-            event.preventDefault();
-            onSelectRun(runs[0].run_order);
-          } else if (event.key === "End" && runs.length > 0) {
-            event.preventDefault();
-            onSelectRun(runs[runs.length - 1].run_order);
-          } else if (event.key === "Escape") {
-            onSelectRun(null);
-          } else if ((event.key === "Enter" || event.key === " ") && runs.length > 0) {
-            event.preventDefault();
-            onSelectRun(selectedRunOrder ?? runs[0].run_order);
-          }
-        }}
-        tabIndex={0}
+        onKeyDown={(event) => interaction.handleKeyDown(event)}
       >
         <svg
           aria-labelledby={`${id}-title ${id}-description`}
@@ -125,11 +102,20 @@ export function InteractiveParallelCoordinatesChart({
             return (
               <polyline
                 aria-label={`Run ${run.run_order}`}
-                className={`lhs-parallel-run${isSelected ? " lhs-parallel-run-selected" : ""}`}
+                className={`lhs-parallel-run ${interaction.stateClass(`run:${run.run_order}`)}${isSelected ? " lhs-parallel-run-selected" : ""}`}
                 data-run-order={run.run_order}
                 key={run.run_order}
-                onClick={() => onSelectRun(run.run_order)}
-                onPointerEnter={() => onSelectRun(run.run_order)}
+                onClick={() => interaction.pin(`run:${run.run_order}`)}
+                onFocus={() => interaction.activateItem(`run:${run.run_order}`, "focus")}
+                onBlur={() => interaction.clearFocus(`run:${run.run_order}`)}
+                onPointerEnter={(event) => interaction.move(`run:${run.run_order}`, event)}
+                onPointerMove={(event) => interaction.move(`run:${run.run_order}`, event)}
+                onPointerLeave={() => interaction.clearHover(`run:${run.run_order}`)}
+                onKeyDown={(event) => interaction.handleKeyDown(event, `run:${run.run_order}`)}
+                ref={(element) => interaction.itemRef(`run:${run.run_order}`, element)}
+                tabIndex={interaction.tabIndexFor(`run:${run.run_order}`)}
+                aria-describedby={interaction.describedBy(`run:${run.run_order}`)}
+                role="img"
                 points={points}
               >
                 <title>{`Run ${run.run_order}`}</title>
@@ -137,21 +123,11 @@ export function InteractiveParallelCoordinatesChart({
             );
           })}
         </svg>
-        <div className="chart-selected-detail" aria-live="polite">
-          {selected === null ? (
-            <span>선을 가리키거나 차트에 초점을 둔 뒤 화살표 키로 실험을 확인하세요.</span>
-          ) : (
-            <>
-              <strong>{`Run ${selected.run_order}`}</strong>
-              {factors.map((factor) => (
-                <span key={factor.name}>
-                  {factor.name}: {format(selected.factor_levels[factor.name])}
-                  {factor.unit ? ` ${factor.unit}` : ""}
-                </span>
-              ))}
-            </>
-          )}
-        </div>
+        <ChartItemFeedback interaction={interaction} items={runs.map((run) => ({
+          id: `run:${run.run_order}`, title: `Run ${run.run_order}`,
+          details: factors.map((factor) => ({ label: factor.name,
+            value: `${format(run.factor_levels[factor.name])}${factor.unit ? ` ${factor.unit}` : ""}` })),
+        }))} />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import type { EqualVarianceMultipleComparisons } from "../api/types/analysisResultsExploration";
-import { ChartTooltip } from "./ChartTooltip";
+import { ChartItemFeedback } from "./ChartItemFeedback";
 import { paddedNumericRange, scaleChartValue } from "./chartScale";
 import { useChartItemInteraction } from "./useChartItemInteraction";
 
@@ -28,9 +28,6 @@ export function InteractiveVarianceComparisonIntervalsChart({
   const range = paddedNumericRange(
     groups.flatMap((group) => [group.comparison_interval.lower, group.comparison_interval.upper]),
   );
-  const activeIndex = ids.indexOf(interaction.activeItem?.id ?? "");
-  const activeGroup = activeIndex >= 0 ? groups[activeIndex] : null;
-  const details = activeGroup === null ? [] : groupDetails(activeGroup, result);
   const plotWidth = width - plot.left - plot.right;
 
   return (
@@ -73,29 +70,32 @@ export function InteractiveVarianceComparisonIntervalsChart({
             plot.left,
             plot.left + plotWidth,
           );
-          const selected = interaction.activeItem?.id === id;
+          const selected = interaction.pinnedId === id;
           return (
-            <g
-              aria-label={`${group.group_label}, 표준편차 ${formatNumber(group.sample_standard_deviation)}, 구간 ${formatNumber(group.comparison_interval.lower)}에서 ${formatNumber(group.comparison_interval.upper)}`}
-              className={`variance-comparison-group chart-interactive-item${selected ? " chart-item-selected" : ""}`}
-              data-selected={selected ? "true" : "false"}
-              key={id}
-              onBlur={() => interaction.clear(id)}
-              onClick={() => interaction.activate(id, estimateX, y, "selection")}
-              onFocus={() => interaction.activate(id, estimateX, y, "focus")}
-              onKeyDown={(event) => interaction.handleKeyDown(event, id, estimateX, y)}
-              onPointerEnter={(event) => interaction.move(id, event)}
-              onPointerLeave={() => interaction.clear(id)}
-              onPointerMove={(event) => interaction.move(id, event)}
-              ref={(element) => interaction.itemRef(id, element)}
-              role="img"
-              tabIndex={interaction.tabIndexFor(id)}
-            >
+            <g key={id}>
               <text className="chart-row-label" x={plot.left - 12} y={y + 4}>{group.group_label}</text>
               <line className="variance-interval-line" x1={lowerX} x2={upperX} y1={y} y2={y} />
               <line className="variance-interval-cap" x1={lowerX} x2={lowerX} y1={y - 8} y2={y + 8} />
               <line className="variance-interval-cap" x1={upperX} x2={upperX} y1={y - 8} y2={y + 8} />
               <circle className="variance-interval-estimate" cx={estimateX} cy={y} r="5" />
+              <rect
+              aria-label={`${group.group_label}, 표준편차 ${formatNumber(group.sample_standard_deviation)}, 구간 ${formatNumber(group.comparison_interval.lower)}에서 ${formatNumber(group.comparison_interval.upper)}`}
+              className={`chart-hit-target ${interaction.stateClass(id)}${selected ? " chart-hit-target-selected" : ""}`}
+              data-selected={selected ? "true" : "false"}
+              onBlur={() => interaction.clearFocus(id)}
+              onClick={() => interaction.activate(id, estimateX, y, "selection")}
+              onFocus={() => interaction.activate(id, estimateX, y, "focus")}
+              onKeyDown={(event) => interaction.handleKeyDown(event, id, estimateX, y)}
+              onPointerEnter={(event) => interaction.move(id, event)}
+              onPointerLeave={() => interaction.clearHover(id)}
+              onPointerMove={(event) => interaction.move(id, event)}
+              ref={(element) => interaction.itemRef(id, element)}
+              role="img"
+              aria-describedby={interaction.describedBy(id)}
+              tabIndex={interaction.tabIndexFor(id)}
+                x={Math.min(lowerX, estimateX) - 5} y={y - 12}
+                width={Math.max(10, Math.max(upperX, estimateX) - Math.min(lowerX, estimateX) + 10)} height={24}
+              />
             </g>
           );
         })}
@@ -103,24 +103,7 @@ export function InteractiveVarianceComparisonIntervalsChart({
         <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={height - 14}>{formatNumber(range.max)}</text>
         <text className="chart-axis-label chart-axis-label-center" x={plot.left + plotWidth / 2} y={height - 4}>표준편차</text>
       </svg>
-      {interaction.activeItem !== null && activeGroup !== null ? (
-        <ChartTooltip
-          details={details}
-          left={interaction.activeItem.left}
-          title={activeGroup.group_label}
-          top={interaction.activeItem.top}
-        />
-      ) : null}
-      <div className="chart-selected-detail" aria-live="polite">
-        {activeGroup === null ? (
-          <span>그룹을 선택하면 표준편차와 비교구간을 확인할 수 있습니다.</span>
-        ) : (
-          <>
-            <strong>{activeGroup.group_label}</strong>
-            {details.map((detail) => <span key={detail.label}>{detail.label}: {detail.value}</span>)}
-          </>
-        )}
-      </div>
+      <ChartItemFeedback interaction={interaction} items={groups.map((group, index) => ({ id: ids[index], title: group.group_label, details: groupDetails(group, result) }))} />
     </div>
   );
 }

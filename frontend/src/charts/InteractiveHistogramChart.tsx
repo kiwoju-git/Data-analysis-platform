@@ -1,4 +1,4 @@
-import { ChartTooltip } from "./ChartTooltip";
+import { ChartItemFeedback } from "./ChartItemFeedback";
 import { paddedNumericRange, scaleChartValue } from "./chartScale";
 import { useChartItemInteraction } from "./useChartItemInteraction";
 
@@ -41,9 +41,6 @@ export function InteractiveHistogramChart({
     ...bins.map((bin) => bin.count),
     ...normalFitPoints.map((point) => point.expected_count),
   );
-  const activeIndex = ids.indexOf(interaction.activeItem?.id ?? "");
-  const activeBin = activeIndex >= 0 ? bins[activeIndex] : null;
-  const details = activeBin === null ? [] : binDetails(activeBin, activeIndex, nBasis);
 
   return (
     <div className="interactive-chart">
@@ -63,23 +60,24 @@ export function InteractiveHistogramChart({
           const x2 = scaleChartValue(bin.upper, range, plot.left, plot.left + plotWidth);
           const barWidth = Math.max(1, x2 - x1 - 1);
           const barHeight = (bin.count / maxCount) * plotHeight;
-          const selected = interaction.activeItem?.id === id;
+          const selected = interaction.pinnedId === id;
           return (
             <rect
               aria-label={`${columnName} bin ${index + 1}, ${formatNumber(bin.lower)}부터 ${formatNumber(bin.upper)}, count ${bin.count}`}
-              className={`histogram-bar chart-interactive-item${selected ? " chart-item-selected" : ""}`}
+              className={`histogram-bar chart-interactive-item ${interaction.stateClass(id)}`}
               data-selected={selected ? "true" : "false"}
               height={barHeight}
               key={id}
-              onBlur={() => interaction.clear(id)}
+              onBlur={() => interaction.clearFocus(id)}
               onClick={() => interaction.activate(id, x1 + barWidth / 2, plot.top + plotHeight - barHeight, "selection")}
               onFocus={() => interaction.activate(id, x1 + barWidth / 2, plot.top + plotHeight - barHeight, "focus")}
               onKeyDown={(event) => interaction.handleKeyDown(event, id, x1 + barWidth / 2, plot.top + plotHeight - barHeight)}
               onPointerEnter={(event) => interaction.move(id, event)}
-              onPointerLeave={() => interaction.clear(id)}
+              onPointerLeave={() => interaction.clearHover(id)}
               onPointerMove={(event) => interaction.move(id, event)}
               ref={(element) => interaction.itemRef(id, element)}
               role="img"
+              aria-describedby={interaction.describedBy(id)}
               tabIndex={interaction.tabIndexFor(id)}
               width={barWidth}
               x={x1}
@@ -110,10 +108,7 @@ export function InteractiveHistogramChart({
         <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={height - 10}>{formatNumber(range.max)}</text>
         <text className="chart-axis-label" x={plot.left - 8} y={plot.top + 8}>{maxCount}</text>
       </svg>
-      {interaction.activeItem !== null && activeBin !== null ? (
-        <ChartTooltip details={details} left={interaction.activeItem.left} title={`Bin ${activeIndex + 1}`} top={interaction.activeItem.top} />
-      ) : null}
-      <Detail title={activeBin === null ? null : `Bin ${activeIndex + 1}`} details={details} empty="막대에 마우스를 올리거나 Tab과 화살표 키로 bin 값을 확인할 수 있습니다." />
+      <ChartItemFeedback interaction={interaction} items={bins.map((bin, index) => ({ id: ids[index], title: `Bin ${index + 1}`, details: binDetails(bin, index, nBasis) }))} />
     </div>
   );
 }
@@ -128,10 +123,6 @@ function binDetails(bin: InteractiveHistogramBin, index: number, nBasis: number)
     { label: "Count", value: bin.count.toLocaleString() },
     { label: "비율", value: nBasis > 0 ? `${formatNumber((bin.count / nBasis) * 100)}%` : "-" },
   ];
-}
-
-function Detail({ title, details, empty }: { title: string | null; details: Array<{ label: string; value: string }>; empty: string }) {
-  return <div className="chart-selected-detail" aria-live="polite">{title === null ? <span>{empty}</span> : <><strong>{title}</strong>{details.map((detail) => <span key={detail.label}>{detail.label}: {detail.value}</span>)}</>}</div>;
 }
 
 function EmptyChart({ label }: { label: string }) {

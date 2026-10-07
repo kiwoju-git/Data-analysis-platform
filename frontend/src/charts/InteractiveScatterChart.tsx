@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useId } from "react";
 
-import { ChartTooltip } from "./ChartTooltip";
+import { ChartItemFeedback } from "./ChartItemFeedback";
 import { scaleChartValue, type NumericRange } from "./chartScale";
 import { useChartPointInteraction } from "./useChartPointInteraction";
 
@@ -42,6 +42,9 @@ interface InteractiveScatterChartProps {
   yRange: NumericRange;
   selectedPointId?: string | null;
   onPointSelect?: (pointId: string) => void;
+  onPointActivate?: (pointId: string) => void;
+  onSelectionClear?: () => void;
+  sourceKey?: string;
 }
 
 const margins = { left: 54, right: 18, top: 22, bottom: 50 };
@@ -62,27 +65,27 @@ export function InteractiveScatterChart({
   xRange,
   yLabel,
   yRange,
-  selectedPointId = null,
+  selectedPointId,
   onPointSelect,
+  onPointActivate,
+  onSelectionClear,
+  sourceKey,
 }: InteractiveScatterChartProps) {
-  const interaction = useChartPointInteraction(points.map((point) => point.id));
+  const instanceId = useId();
+  const interaction = useChartPointInteraction(points.map((point) => point.id), {
+    sourceKey, selectedId: selectedPointId, onSelect: onPointSelect,
+    onActivate: onPointActivate, onClear: onSelectionClear,
+  });
   const width = square || compact ? 360 : 440;
   const height = square ? 360 : compact ? 210 : 280;
   const plotWidth = width - margins.left - margins.right;
   const plotHeight = height - margins.top - margins.bottom;
-  const active = points.find((point) => point.id === interaction.activePoint?.id) ?? null;
-
-  useEffect(() => {
-    if (interaction.activePoint !== null) {
-      onPointSelect?.(interaction.activePoint.id);
-    }
-  }, [interaction.activePoint, onPointSelect]);
   const x = (value: number) =>
     scaleChartValue(value, xRange, margins.left, margins.left + plotWidth);
   const y = (value: number) =>
     scaleChartValue(value, yRange, margins.top + plotHeight, margins.top);
-  const titleId = `${chartId}-title`;
-  const descriptionId = `${chartId}-description`;
+  const titleId = `${chartId}-title-${instanceId}`;
+  const descriptionId = `${chartId}-description-${instanceId}`;
   const connectedPath = connectPoints === undefined ? null : pointPath(points, x, y, connectPoints);
 
   if (points.length === 0) {
@@ -121,7 +124,7 @@ export function InteractiveScatterChart({
           const cx = x(point.x);
           const cy = y(point.y);
           const selected =
-            interaction.activePoint?.id === point.id || selectedPointId === point.id;
+            interaction.pinnedId === point.id;
           return (
             <g key={point.id}>
               {point.warning ? (
@@ -129,21 +132,22 @@ export function InteractiveScatterChart({
               ) : null}
               <circle
                 aria-label={point.ariaLabel}
-                className={`${point.className}${selected ? " chart-point-selected" : ""}`}
+                className={`${point.className} ${interaction.stateClass(point.id)}`}
                 cx={cx}
                 cy={cy}
                 data-selected={selected ? "true" : "false"}
-                onBlur={() => interaction.clear(point.id)}
+                onBlur={() => interaction.clearFocus(point.id)}
                 onClick={() => {
                   interaction.activate(point.id, cx, cy, "selection");
                 }}
                 onFocus={() => interaction.activate(point.id, cx, cy, "focus")}
                 onKeyDown={(event) => interaction.handleKeyDown(event, point.id, cx, cy)}
                 onPointerEnter={(event) => interaction.move(point.id, event)}
-                onPointerLeave={() => interaction.clear(point.id)}
+                onPointerLeave={() => interaction.clearHover(point.id)}
                 onPointerMove={(event) => interaction.move(point.id, event)}
                 r="3.5"
                 role="img"
+                aria-describedby={interaction.describedBy(point.id)}
                 tabIndex={interaction.tabIndexFor(point.id)}
                 ref={(element) => interaction.itemRef(point.id, element)}
               >
@@ -158,24 +162,10 @@ export function InteractiveScatterChart({
         <text className="chart-axis-title" x={margins.left + plotWidth / 2} y={height - 28}>{xLabel}</text>
         <text className="chart-axis-title chart-axis-title-y" transform={`translate(16 ${margins.top + plotHeight / 2}) rotate(-90)`}>{yLabel}</text>
       </svg>
-      {interaction.activePoint !== null && active !== null ? (
-        <ChartTooltip
-          details={active.details}
-          left={interaction.activePoint.left}
-          title={active.title}
-          top={interaction.activePoint.top}
-        />
-      ) : null}
       <div className="chart-annotations" aria-label={`${title} 요약`}>
         {annotations.map((annotation) => <span key={annotation}>{annotation}</span>)}
       </div>
-      <div className="chart-selected-detail" aria-live="polite">
-        {active === null ? (
-          <span>점에 마우스를 올리거나 Tab으로 초점을 이동하면 값을 확인할 수 있습니다.</span>
-        ) : (
-          <><strong>{active.title}</strong>{active.details.map((detail) => <span key={detail.label}>{detail.label}: {detail.value}</span>)}</>
-        )}
-      </div>
+      <ChartItemFeedback interaction={interaction} items={points} />
     </div>
   );
 }

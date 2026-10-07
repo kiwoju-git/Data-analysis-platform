@@ -13,6 +13,7 @@ import {
 } from "./api";
 import { apiRoutes } from "./api/routes";
 import { InteractiveParallelCoordinatesChart } from "./charts/InteractiveParallelCoordinatesChart";
+import { ChartSourceContext } from "./charts/chartSourceContext";
 import {
   InteractiveScatterChart,
   type InteractiveScatterPoint,
@@ -733,6 +734,7 @@ function LhsDesignVisualization({
     : { min: yFactor.low, max: yFactor.high };
 
   return (
+    <ChartSourceContext.Provider value={design.design_version_id}>
     <section className="result-section lhs-visualization" aria-labelledby="lhs-visualization-title">
       <div className="panel-heading">
         <div>
@@ -787,6 +789,7 @@ function LhsDesignVisualization({
           emptyLabel="표시할 run이 없습니다."
           formatValue={formatNumber}
           onPointSelect={(pointId) => onSelectRun(Number(pointId.replace("run-", "")))}
+          onSelectionClear={() => onSelectRun(null)}
           points={points}
           selectedPointId={selectedRunOrder === null ? null : `run-${selectedRunOrder}`}
           title="LHS 2요인 투영"
@@ -800,6 +803,7 @@ function LhsDesignVisualization({
         <p className="compact-note">일정 간격 숫자 요인은 허용 수준의 수직·수평 띠로 나타나는 것이 정상입니다.</p>
       ) : null}
     </section>
+    </ChartSourceContext.Provider>
   );
 }
 

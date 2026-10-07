@@ -1,5 +1,36 @@
 # Interactive Chart Contract
 
+## Viewport Interaction Contract (2026-10-08)
+
+Chart interaction separates hovered, focused, pinned and roving item IDs.
+Transient tooltip priority is hover, focus, then pin. Persistent detail shows
+the pinned item, or the focused item when no pin exists. Hover never changes
+linked row/run selection. Only click or Enter/Space invokes `onPointSelect`;
+Escape and invalidated source selection invoke `onSelectionClear`.
+
+Escape dismisses all displayed interaction state without moving DOM focus or
+the roving Tab entry. Resize and locale changes do not restore dismissed
+tooltips. New pointer/focus input or explicit pin can restore them. Missing
+item IDs invalidate immediately; sourceKey identifies the analysis/view, not
+locale or viewport size. Controlled selection has one external owner.
+
+`chartCoordinates.ts` is the coordinate boundary: pointer client coordinates,
+SVG screen CTM transforms, and element client-rect centers all produce viewport
+anchors. No document scroll offset is added. Invalid transforms return null.
+The compatibility `activate(id,x,y,source)` accepts SVG user units only;
+focus/click use the actual hit target's rect instead of label-containing groups.
+
+Tooltips are text-only `role=tooltip` portals under document.body, with fixed
+positioning, measured flip/clamp placement and an 8px viewport margin. Active
+targets link through aria-describedby. Tooltip movement does not announce all
+values through a live region; focus/pin detail does. Resize/scroll observers
+are active only while needed and scheduled frames/listeners are cleaned up.
+
+Pure reducer/coordinate tests run in Vitest's existing Node environment.
+`tests/e2e/result_charts.py` covers real focus, keyboard, pointer, controlled
+selection, source replacement, scale and scroll behavior against a standalone
+Vite fixture. It asserts that interaction makes no analysis API requests.
+
 ## Selectable-Term and Kernel-Comparison Views (2026-09-16)
 
 DOE step matrices use server term IDs and internal-step-plus-one labels.

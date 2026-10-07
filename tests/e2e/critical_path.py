@@ -37,6 +37,7 @@ from playwright.sync_api import (
 )
 from refined_ui import verify_refined_ui
 from regularized_regression import verify_regularized_regression
+from result_charts import verify_chart_interactions
 
 SAMPLE_DATA = """Group\tValue
 A\t10
@@ -613,6 +614,7 @@ def run_browser_flow(
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
             verify_localization_shell(browser, frontend_base_url, diagnostics)
             context = browser.new_context(accept_downloads=True)
             context.add_init_script(

@@ -5088,6 +5088,16 @@ td {
   stroke-width: 1.8;
 }
 
+.chart-point-hovered {
+  stroke: #536176;
+  stroke-width: 2;
+}
+
+.chart-point-focused {
+  outline: 2px solid #2563a6;
+  outline-offset: 3px;
+}
+
 .chart-point-selected,
 .diagnostic-point:focus,
 .influence-point:focus {
@@ -5097,39 +5107,41 @@ td {
   stroke-width: 2.5;
 }
 
-.chart-tooltip {
-  position: absolute;
-  z-index: 3;
+.chart-tooltip-portal {
+  position: fixed;
+  z-index: 1000;
   display: grid;
   gap: 4px;
-  max-width: min(260px, calc(100% - 16px));
+  max-width: min(280px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  overflow-wrap: anywhere;
   border: 1px solid #7a8494;
   border-radius: 6px;
   background: #ffffff;
   box-shadow: 0 4px 14px rgb(31 41 55 / 16%);
   padding: 8px 10px;
   pointer-events: none;
-  transform: translate(8px, calc(-100% - 8px));
   color: #1f2937;
   font-size: 0.78rem;
 }
 
-.chart-tooltip dl,
-.chart-tooltip dl div {
+.chart-tooltip-portal dl,
+.chart-tooltip-portal dl div {
   display: grid;
   gap: 2px 8px;
   margin: 0;
 }
 
-.chart-tooltip dl div {
-  grid-template-columns: max-content 1fr;
+.chart-tooltip-portal dl div {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.chart-tooltip dt {
+.chart-tooltip-portal dt {
   color: #667185;
 }
 
-.chart-tooltip dd {
+.chart-tooltip-portal dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }

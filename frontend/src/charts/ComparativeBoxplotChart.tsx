@@ -1,5 +1,5 @@
 import type { GraphicalSummaryColumn } from "../api";
-import { ChartTooltip } from "./ChartTooltip";
+import { ChartItemFeedback } from "./ChartItemFeedback";
 import { paddedNumericRange, scaleChartValue } from "./chartScale";
 import { useChartItemInteraction } from "./useChartItemInteraction";
 
@@ -38,22 +38,6 @@ export function ComparativeBoxplotChart({
   const plotWidth = width - margin.left - margin.right;
   const x = (value: number) =>
     scaleChartValue(value, range, margin.left, margin.left + plotWidth);
-  const active =
-    computed.find(
-      (column) => `${chartId}-${column.column_id}` === interaction.activeItem?.id,
-    ) ?? null;
-  const details =
-    active === null
-      ? []
-      : [
-          { label: "Lower whisker", value: formatNumber(active.boxplot.lower_whisker) },
-          { label: "Q1", value: formatNumber(active.boxplot.q1) },
-          { label: "Median", value: formatNumber(active.boxplot.median) },
-          { label: "Q3", value: formatNumber(active.boxplot.q3) },
-          { label: "Upper whisker", value: formatNumber(active.boxplot.upper_whisker) },
-          { label: "Outlier count", value: active.boxplot.outlier_count.toLocaleString() },
-          { label: "N", value: active.n_used.toLocaleString() },
-        ];
 
   return (
     <div className="interactive-chart">
@@ -84,7 +68,7 @@ export function ComparativeBoxplotChart({
           const upper = boxplot.upper_whisker as number;
           const y = margin.top + rowHeight * index + rowHeight / 2;
           const id = `${chartId}-${column.column_id}`;
-          const selected = interaction.activeItem?.id === id;
+          const selected = interaction.pinnedId === id;
           return (
             <g key={id}>
               <text className="chart-axis-label" textAnchor="end" x={margin.left - 12} y={y + 4}>
@@ -105,17 +89,18 @@ export function ComparativeBoxplotChart({
                 aria-label={`${column.display_name}, median ${formatNumber(
                   median,
                 )}, Q1 ${formatNumber(q1)}, Q3 ${formatNumber(q3)}`}
-                className={`chart-hit-target${selected ? " chart-hit-target-selected" : ""}`}
+                className={`chart-hit-target ${interaction.stateClass(id)}${selected ? " chart-hit-target-selected" : ""}`}
                 height="50"
-                onBlur={() => interaction.clear(id)}
+                onBlur={() => interaction.clearFocus(id)}
                 onClick={() => interaction.activate(id, x(median), y, "selection")}
                 onFocus={() => interaction.activate(id, x(median), y, "focus")}
                 onKeyDown={(event) => interaction.handleKeyDown(event, id, x(median), y)}
                 onPointerEnter={(event) => interaction.move(id, event)}
-                onPointerLeave={() => interaction.clear(id)}
+                onPointerLeave={() => interaction.clearHover(id)}
                 onPointerMove={(event) => interaction.move(id, event)}
                 ref={(element) => interaction.itemRef(id, element)}
                 role="img"
+                aria-describedby={interaction.describedBy(id)}
                 tabIndex={interaction.tabIndexFor(id)}
                 width={plotWidth}
                 x={margin.left}
@@ -131,28 +116,7 @@ export function ComparativeBoxplotChart({
           {formatNumber(range.max)}
         </text>
       </svg>
-      {interaction.activeItem !== null && active !== null ? (
-        <ChartTooltip
-          details={details}
-          left={interaction.activeItem.left}
-          title={active.display_name}
-          top={interaction.activeItem.top}
-        />
-      ) : null}
-      <div className="chart-selected-detail" aria-live="polite">
-        {active === null ? (
-          <span>Tab과 방향키로 각 변수의 quartile과 whisker를 확인할 수 있습니다.</span>
-        ) : (
-          <>
-            <strong>{active.display_name}</strong>
-            {details.map((detail) => (
-              <span key={detail.label}>
-                {detail.label}: {detail.value}
-              </span>
-            ))}
-          </>
-        )}
-      </div>
+      <ChartItemFeedback interaction={interaction} items={computed.map((column) => ({ id: `${chartId}-${column.column_id}`, title: column.display_name, details: columnDetails(column) }))} />
     </div>
   );
 }
@@ -161,4 +125,16 @@ function formatNumber(value: number | null): string {
   return value === null
     ? "-"
     : new Intl.NumberFormat("ko-KR", { maximumSignificantDigits: 6 }).format(value);
+}
+
+function columnDetails(column: GraphicalSummaryColumn) {
+  return [
+          { label: "Lower whisker", value: formatNumber(column.boxplot.lower_whisker) },
+          { label: "Q1", value: formatNumber(column.boxplot.q1) },
+          { label: "Median", value: formatNumber(column.boxplot.median) },
+          { label: "Q3", value: formatNumber(column.boxplot.q3) },
+          { label: "Upper whisker", value: formatNumber(column.boxplot.upper_whisker) },
+          { label: "Outlier count", value: column.boxplot.outlier_count.toLocaleString() },
+          { label: "N", value: column.n_used.toLocaleString() },
+        ];
 }

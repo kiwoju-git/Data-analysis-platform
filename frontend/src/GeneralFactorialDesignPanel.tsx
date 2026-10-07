@@ -28,6 +28,7 @@ import { defaultDoeSelection, interactionOrderLabel, factorialWorkflowMessage } 
 import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
 import { FactorialResidualPlots } from "./FactorialResidualPlots";
 import { FactorialPlotsPanel } from "./FactorialPlotsPanel";
+import { ChartSourceContext } from "./charts/chartSourceContext";
 import { FactorialStoredModelWorkflow } from "./FactorialStoredModelWorkflow";
 import { fetchStoredGeneralFactorialAnalysis } from "./api/factorialWorkflow";
 import { DOE_FACTOR_CAPABILITIES } from "./doe/factorCapabilities";
@@ -633,7 +634,7 @@ function GeneralFactorialResult({ analysis, design, onAnalyze, onSave, pending, 
     <DoeActionBar summary="반응 저장 후 범주형 term-block ANOVA를 실행합니다."><button className="secondary-button" disabled={pending !== null || locked} onClick={onSave} type="button">{pending === "save" ? "저장 중" : "반응 저장"}</button><button className="primary-button" disabled={pending !== null || !canAnalyze} onClick={onAnalyze} type="button">{pending === "analysis" ? "분석 중" : "일반 완전요인 ANOVA"}</button></DoeActionBar>
     {analysis?.result.final_model && analysis.result.model_selection ? <FactorialModelSelectionResults selection={analysis.result.model_selection} model={analysis.result.final_model} fit={analysis.result.fit} n={analysis.result.sample.n_observations} /> : null}
     {analysis !== null ? <GeneralFactorialAnalysisView analysis={analysis} /> : null}
-    {analysis?.result.final_model ? <><FactorialResidualPlots plots={analysis.result.final_model.residual_plots} /><FactorialPlotsPanel model={analysis.result.final_model} design={design} /></> : null}
+    {analysis?.result.final_model ? <ChartSourceContext.Provider value={analysis.analysis_id}><FactorialResidualPlots plots={analysis.result.final_model.residual_plots} /><FactorialPlotsPanel model={analysis.result.final_model} design={design} /></ChartSourceContext.Provider> : null}
     {analysis ? <FactorialStoredModelWorkflow design={design} analysisId={analysis.analysis_id} model={analysis.result.final_model} /> : null}
   </section>;
 }

@@ -1,4 +1,5 @@
 import { AnalysisFilterControls } from "./AnalysisFilterControls";
+import { ChartSourceContext } from "./charts/chartSourceContext";
 import { useI18n } from "./i18n/LocaleProvider";
 import type { AnalysisDomainDefinition } from "./analysisDomains";
 import { analysisDomainForMethod } from "./analysisDomainMapping";
@@ -995,6 +996,7 @@ export function AnalysisShell({
           gageRunChartAnalysisResult,
         });
   return (
+    <ChartSourceContext.Provider value={`${selectedMethod?.method_id ?? ""}:${selectedAnalysisResult?.analysis_id ?? ""}`}>
     <section className="analysis-shell" aria-labelledby="analysis-modules-title">
       <div className="analysis-heading analysis-domain-compact-heading">
         <div>
@@ -1889,6 +1891,7 @@ export function AnalysisShell({
         />
       ) : null}
     </section>
+    </ChartSourceContext.Provider>
   );
 }
 
