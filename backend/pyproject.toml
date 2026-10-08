@@ -7,7 +7,7 @@ name = "datalab-studio-backend"
 version = "0.1.0"
 description = "Local-first statistical analysis backend for DataLab Studio."
 readme = "README.md"
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "fastapi==0.115.6",
     "numpy==2.2.6",

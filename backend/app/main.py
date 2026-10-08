@@ -3,6 +3,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.root import router as root_router
 from app.api.v1.analysis_methods import router as analysis_methods_router
@@ -27,6 +28,7 @@ from app.services.dataset_cell_corrections import recover_dataset_cell_correctio
 from app.services.dataset_version_retention import recover_dataset_version_quarantine_files
 from app.services.workspace_asset_retention import recover_workspace_asset_quarantine_files
 from app.storage.metadata import initialize_metadata_store
+from app.web_ui import built_ui_router
 
 
 def create_lifespan(settings: Settings) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
@@ -66,6 +68,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=create_lifespan(app_settings),
     )
     app.state.settings = app_settings
+    if app_settings.frontend_dist is not None:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 
     app.add_middleware(
         CORSMiddleware,
@@ -77,7 +81,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     register_exception_handlers(app)
-    app.include_router(root_router)
+    if app_settings.frontend_dist is None:
+        app.include_router(root_router)
     app.include_router(analysis_methods_router, prefix="/api/v1")
     app.include_router(analysis_runs_router, prefix="/api/v1")
     app.include_router(assets_router, prefix="/api/v1")
@@ -91,6 +96,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(regression_models_router, prefix="/api/v1")
     app.include_router(visualizations_router, prefix="/api/v1")
     app.include_router(workspace_router, prefix="/api/v1")
+    if app_settings.frontend_dist is not None:
+        app.include_router(built_ui_router(app_settings.frontend_dist))
     return app
 
 

@@ -42,6 +42,37 @@
 This is a running validation record, not a completion claim. Main and Release
 publication require all implementation stages and final platform checks.
 
+### Two Variances and Reports
+
+- Method0.1.0/result1/API22 added; metadata20 unchanged. BF/F independent values,
+  canonical group identities, row limits, degeneracies and finite encoding tested.
+- Focused statistics/runtime/OpenAPI/web/launch checks:244 passed,1 Windows
+  symlink-permission skip. Follow-up isolated web/launch:5 passed,1 skip.
+- Two Variances + existing PCA/PLS/GP API/report checks:19 passed.
+- Actual Windows application E2E passed CSV paste, preflight race, BF/F/SD and
+  one-sided bounds, reload/restore, KO/EN,1440/1024/390, report-center downloads,
+  offline HTML and source-checksum preservation. Browser review caught missing
+  form classes and categorical report ticks; both fixed and browser-reverified.
+- Frontend55 files/396 tests and strict typecheck passed. Initial concurrent run
+  had two lazy-import timeouts and one stale35-method assertion;36-method fixture
+  updated and full rerun passed without increasing timeouts.
+- Diagnostics: `.tmp/verification-frontend-agent-20261008/two-variances/`.
+
+### Linux Locks and Environment
+
+- Actual WSL Ubuntu24.04.4/x86_64 generated Python3.12.3 and isolated3.11.17
+  runtime25-wheel/dev42-wheel hash locks. Runtime/dev common versions agree.
+- Fresh offline wheel-only hash-locked installations and pip check passed for
+  3.12 runtime/dev and3.11 runtime. NumPy2.2.6/SciPy1.15.3/sklearn1.7.2 preserved.
+- 3.11 dev installation was interrupted by filesystem I/O failure. C: then had
+  zero free bytes and WSL could no longer execute bash. This is **not** a pass.
+  User files/processes were not deleted/restarted. Further Linux validation is
+  assigned to Ubuntu24.04 CI; final archive smoke remains required.
+- Windows tests use isolated D: TEMP/TMP after the disk incident. An initial
+  web/launch check had4 disk-full failures on C:, then passed on D: as above.
+- Local Windows is Windows10 Home19045; this is not a claim of physical Win11
+  testing. Hosted Windows/Ubuntu runner results will be separately identified.
+
 ### Common Frame and PCA/PLS/GP Adapters
 
 - Frame/coordinate/state and affected regularized-result tests: 26 passed.

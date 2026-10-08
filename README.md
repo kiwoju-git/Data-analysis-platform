@@ -1,5 +1,26 @@
 # Statistical Twin
 
+### Result Charts and Two Variances
+
+Result charts share viewport-safe tooltips, explicit pinned selections, visible
+axes and bounded responsive frames. Desktop results switch between one/two
+columns by available content width; navigation becomes a drawer below1100px.
+PCA/PLS/GPR and existing DOE/BO fitting policies are unchanged.
+`quality.two_variances`0.1 adds explicit two-group BF equality or normal-F ratio
+inference; Bonett ratio intervals are not included in this version. API22,
+metadata20. See [method contract](docs/two_variances_method_contract.md) and
+[validation record](docs/result_charts_linux_validation.md).
+
+### Linux Prerelease
+
+Windows PowerShell/Python3.10 remains supported. Linux source/CI adds Python3.11
+and3.12; the offline archive targets Ubuntu24.04 x86_64/Python3.12 only. It ships
+built UI and hash-locked wheels, not Python itself. Release runtime binds loopback
+and requires no Node/Git/CDN. See [installation guide](README-linux.md) and
+[packaging contract](docs/linux_release_contract.md). Availability and actual
+validation are recorded in the GitHub prerelease assets; source support alone is
+not an archive validation pass.
+
 ### GPR Reproducibility and Report Parity
 
 Family-domain landings now share compact method cards while sidebar families and

@@ -34,15 +34,38 @@ def main() -> int:
         description="Validate the Windows Python hash lock."
     )
     parser.add_argument("lock_path", type=Path)
+    parser.add_argument(
+        "--target",
+        choices=["py310-win", "py311-linux", "py312-linux"],
+        default="py310-win",
+    )
+    parser.add_argument("--profile", choices=["dev", "runtime"], default="dev")
     args = parser.parse_args()
-    packages = validate_lock_text(args.lock_path.read_text(encoding="ascii"))
+    required = None
+    if args.target != "py310-win":
+        from packaging.requirements import Requirement
+
+        inputs = args.lock_path.with_suffix(".in").read_text(encoding="ascii")
+        required = {}
+        for line in inputs.splitlines():
+            if line and not line.startswith("#"):
+                requirement = Requirement(line)
+                required[requirement.name.lower().replace("_", "-")] = str(
+                    requirement.specifier
+                ).removeprefix("==")
+    packages = validate_lock_text(
+        args.lock_path.read_text(encoding="ascii"),
+        required,
+        target=args.target,
+        profile=args.profile,
+    )
     print(
         json.dumps(
             {
                 "status": "passed",
                 "package_count": len(packages),
                 "scikit_learn": packages["scikit-learn"]["version"],
-                "target": "CPython 3.10 Windows AMD64",
+                "target": args.target,
             },
             sort_keys=True,
         )
@@ -53,8 +76,20 @@ def main() -> int:
 def validate_lock_text(
     text: str,
     required_packages: dict[str, str] | None = None,
+    *,
+    target: str = "py310-win",
+    profile: str = "dev",
 ) -> dict[str, dict[str, str]]:
-    if "# Target: CPython 3.10, Windows AMD64, wheel-only installation." not in text:
+    header = "# Target: CPython 3.10, Windows AMD64, wheel-only installation."
+    if target != "py310-win":
+        if target not in {"py311-linux", "py312-linux"} or profile not in {
+            "dev",
+            "runtime",
+        }:
+            raise ValueError("unsupported lock target/profile")
+        minor = 11 if target == "py311-linux" else 12
+        header = f"# Target: CPython 3.{minor}, Linux x86_64, wheel-only; profile: {profile}."
+    if header not in text:
         raise ValueError("lock target header is missing")
     if "git+" in text or "http://" in text or "https://" in text or " -e " in text:
         raise ValueError("lock must not contain URLs or editable requirements")

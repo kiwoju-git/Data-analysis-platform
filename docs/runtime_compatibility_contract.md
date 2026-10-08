@@ -1,5 +1,14 @@
 # Runtime Compatibility Contract
 
+## 2026-10-08 Update
+
+API contract22 adds the Two Variances preflight/execution contract; minimum
+metadata schema remains20. Windows and Linux startup validate the same service,
+API/schema/capabilities/build identity. Linux source archives use the same
+archive-sha256 fingerprint inputs as PowerShell. Built releases take identity
+from verified BUILD_INFO.json; they do not disable compatibility checks or use
+"unknown" as a successful release identity. See linux_release_contract.md.
+
 2026-09-18 startup extension: `dev.ps1` now exposes the frontend on
 `0.0.0.0:8600` for trusted LAN development, with an unchanged loopback backend
 and same-origin `/api` proxy. `-LocalOnly` restores local-only binding. Exact

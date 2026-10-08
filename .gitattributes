@@ -1,3 +1,6 @@
 examples/tutorial/generate_studio_tutorial_data.py text eol=lf
 examples/tutorial/*.csv text eol=lf
 examples/tutorial/*.tsv text eol=lf
+*.sh text eol=lf
+backend/requirements-*-linux-*.in text eol=lf
+backend/requirements-*-linux-*.lock text eol=lf

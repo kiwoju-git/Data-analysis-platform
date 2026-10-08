@@ -72,3 +72,91 @@ jobs:
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\screenshots\*.png
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\html\*.html
           if-no-files-found: ignore
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-ubuntu24-py312-${{ hashFiles('backend/requirements-py312-linux-dev.lock') }}
+      - name: Linux bootstrap
+        run: bash scripts/bootstrap.sh --python python3.12
+      - name: Linux full check
+        run: bash scripts/check.sh
+      - name: Install Linux Chromium
+        run: .venv/bin/python -m playwright install --with-deps chromium
+      - name: Linux browser E2E
+        run: bash scripts/e2e.sh --diagnostics-root .tmp/linux-e2e
+      - name: Linux diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-e2e-diagnostics
+          path: .tmp/linux-e2e
+          if-no-files-found: ignore
+
+  python311:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-ubuntu24-py311-${{ hashFiles('backend/requirements-py311-linux-dev.lock') }}
+      - name: Install Python 3.11 locked environment
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --only-binary=:all: --require-hashes -r backend/requirements-py311-linux-dev.lock
+          .venv/bin/python -m pip install --no-deps --no-build-isolation -e './backend[dev]'
+          .venv/bin/python -m pip check
+      - name: Python 3.11 calculation and API compatibility
+        run: .venv/bin/python -m pytest backend/tests
+
+  linux-release:
+    runs-on: ubuntu-24.04
+    needs: [windows, e2e, linux, python311]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Bootstrap builder
+        run: bash scripts/bootstrap.sh --python python3.12
+      - name: Install validation browser
+        run: .venv/bin/python -m playwright install --with-deps chromium
+      - name: Build exact committed archive
+        run: .venv/bin/python scripts/build_linux_release.py --source-commit "$GITHUB_SHA" --release-version 2026.10.1 --output-dir .tmp/linux-release
+      - name: Verify completed archive offline
+        run: .venv/bin/python scripts/verify_linux_release.py .tmp/linux-release/statistical-twin-linux-2026.10.1-ubuntu24.04-x86_64-py312.tar.gz --output-dir .tmp/linux-release-validation
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: verified-linux-release-${{ github.sha }}
+          path: |
+            .tmp/linux-release/*
+            .tmp/linux-release-validation/validation-report.json
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: linux-release-failure-diagnostics
+          path: .tmp/linux-release-validation
+          if-no-files-found: ignore

@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     git_commit: str | None = None
     max_upload_bytes: int = 100 * 1024 * 1024
     workspace_root: Path = Field(default_factory=default_workspace_root)
+    frontend_dist: Path | None = None
     cors_allowed_origins: list[str] = Field(
         default_factory=lambda: [
             "http://127.0.0.1:8600",
@@ -37,6 +38,18 @@ class Settings(BaseSettings):
         if value not in allowed_hosts:
             raise ValueError("DATALAB_BIND_HOST must be 127.0.0.1 or localhost")
         return value
+
+    @model_validator(mode="after")
+    def validate_frontend_dist(self) -> "Settings":
+        if self.frontend_dist is not None:
+            root = self.frontend_dist.resolve()
+            workspace = self.workspace_root.resolve()
+            if root == workspace or root in workspace.parents or workspace in root.parents:
+                raise ValueError("Frontend static files must be separate from the workspace")
+            if not (root / "index.html").is_file():
+                raise ValueError("DATALAB_FRONTEND_DIST must contain index.html")
+            self.frontend_dist = root
+        return self
 
 
 @lru_cache

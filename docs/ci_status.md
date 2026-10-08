@@ -1,6 +1,17 @@
 # CI Status
 
-Last updated: 2026-09-18
+Last updated: 2026-10-08
+
+## Result Charts and Linux Addition
+
+Feature branch: feat/result-charts-two-variances-linux-release. New Ubuntu24.04
+Python3.12 full-check/browser job, Python3.11 backend compatibility job and exact
+commit archive/offline-smoke job supplement (not replace) Windows jobs. Cache
+keys separate OS/Python/lock. CI artifacts are not a published GitHub Release.
+At source-authoring time these new jobs are pending; actual run IDs/status and
+archive validation are reported separately after execution. Local C: disk-full
+interrupted WSL3.11dev installation; no pass is claimed for that attempt.
+Incremental executed results: result_charts_linux_validation.md.
 
 ## Grouped Mean Menu and Trusted LAN Development
 

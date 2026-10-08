@@ -1,5 +1,20 @@
 # Browser E2E Coverage
 
+## Charts, Desktop Resize and Linux (2026-10-08)
+
+`result_charts.py`: pointer/focus/pin/roving, viewport tooltip coordinates,
+PCA raw loading/square/one-component behavior, PLS separate CV series/pagination,
+GP stored profile and asynchronous client-row identity/stale-response protection.
+`desktop_resize.py`:1920→1440→1280→1024→900→768→1440 plus390; persisted
+draft/dataset/chart state, container900 breakpoint and drawer1100 focus cleanup.
+Standalone run additionally verifies actual Chromium zoom100/125/150 via tabs API.
+`two_variances.py`: paste/preflight races/BF/F/SD, one-sided bounds, KO/EN,
+saved restore, report center and offline HTML. These helpers are connected to
+critical_path.py. `linux_release.py` black-box tests the installed archive via
+its API and built UI; verify_linux_release.py adds two offline installations and
+external-workspace restart/restore. See running validation record for executed
+versus pending checks; fixtures are synthetic and diagnostics remain ignored.
+
 ## GPR/UI/Report Parity (2026-09-17)
 
 `dashboard_navigation.py`: all eight landings in KOR/ENG, 1440x900, 1280x800,
