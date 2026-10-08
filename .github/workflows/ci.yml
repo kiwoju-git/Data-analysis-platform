@@ -92,6 +92,15 @@ jobs:
           key: pip-ubuntu24-py312-${{ hashFiles('backend/requirements-py312-linux-dev.lock') }}
       - name: Linux bootstrap
         run: bash scripts/bootstrap.sh --python python3.12
+      - name: Independent Linux numerical probe
+        run: .venv/bin/python scripts/probe_linux_numerics.py --output-dir .tmp/numerics-py312
+      - name: Numerical probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: numerical-probe-py312
+          path: .tmp/numerics-py312
+          if-no-files-found: ignore
       - name: Linux full check
         run: bash scripts/check.sh
       - name: Install Linux Chromium
@@ -126,6 +135,16 @@ jobs:
           .venv/bin/python -m pip check
       - name: Python 3.11 calculation and API compatibility
         run: .venv/bin/python -m pytest backend/tests
+      - name: Independent Python 3.11 numerical probe
+        if: always()
+        run: .venv/bin/python scripts/probe_linux_numerics.py --output-dir .tmp/numerics-py311
+      - name: Numerical probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: numerical-probe-py311
+          path: .tmp/numerics-py311
+          if-no-files-found: ignore
 
   linux-release:
     runs-on: ubuntu-24.04

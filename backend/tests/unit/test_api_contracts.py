@@ -3,6 +3,7 @@ import csv
 import hashlib
 import io
 import json
+import platform
 import sqlite3
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -8460,7 +8461,7 @@ def test_regression_prediction_version_and_dependency_provenance_are_aligned(tmp
     assert provenance["missing_policy"] == "complete_case"
     assert provenance["confidence_level"] == 0.95
     assert provenance["include_intervals"] is True
-    assert provenance["python_version"].startswith("3.10.")
+    assert provenance["python_version"] == platform.python_version()
     assert provenance["platform"]
     assert provenance["build_commit"] == "prediction-provenance-test"
     assert provenance["package_versions"] == {"numpy": "2.2.6", "scipy": "1.15.3"}

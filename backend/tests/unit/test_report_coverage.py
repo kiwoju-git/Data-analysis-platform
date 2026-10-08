@@ -20,6 +20,7 @@ def test_every_inline_method_has_an_explicit_report_contract_and_dispatch():
         "graphical_summary": "_graphical_summary_report_section_v2",
         "normality_test": "_normality_report_section",
         "equal_variances_test": "_equal_variances_report_section_v2",
+        "two_variances_test": "render_two_variances_report",
         "principal_components_analysis": "_principal_components_report_section",
         "partial_least_squares_regression": "render_pls_report",
         "gaussian_process_regression": "_gaussian_process_report_section",

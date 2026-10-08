@@ -68,6 +68,13 @@ def archive_fingerprint(root: Path) -> str:
 def source_identity(root: Path) -> str:
     if (root / ".git").exists():
         try:
+            top_level = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
             result = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
                 cwd=root,
@@ -77,9 +84,11 @@ def source_identity(root: Path) -> str:
             )
         except OSError:
             return archive_fingerprint(root)
-        if result.returncode == 0 and re.fullmatch(
-            r"[a-f0-9]{40}", result.stdout.strip()
-        ):
+        if (
+            top_level.returncode == 0
+            and Path(top_level.stdout.strip()).resolve() == root.resolve()
+            and result.returncode == 0
+        ) and re.fullmatch(r"[a-f0-9]{40}", result.stdout.strip()):
             return result.stdout.strip()
     return archive_fingerprint(root)
 

@@ -203,6 +203,8 @@ function Get-DevRepositoryBuildId {
         $previousErrorActionPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = "Continue"
+            $topLevelOutput = & $gitCommand.Source -C $RepoRoot rev-parse --show-toplevel 2>$null
+            $topLevelExitCode = $LASTEXITCODE
             $commitOutput = & $gitCommand.Source -C $RepoRoot rev-parse --verify HEAD 2>$null
             $gitExitCode = $LASTEXITCODE
         }
@@ -210,7 +212,11 @@ function Get-DevRepositoryBuildId {
             $ErrorActionPreference = $previousErrorActionPreference
         }
         $commit = [string]($commitOutput | Select-Object -First 1)
-        if ($gitExitCode -eq 0 -and $commit.Trim() -match "^[0-9a-fA-F]{40}$") {
+        $topLevel = [string]($topLevelOutput | Select-Object -First 1)
+        $isSourceRoot = $topLevelExitCode -eq 0 -and $topLevel.Trim() -ne "" -and
+            [System.IO.Path]::GetFullPath($topLevel.Trim()).TrimEnd('\', '/') -eq
+            [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+        if ($isSourceRoot -and $gitExitCode -eq 0 -and $commit.Trim() -match "^[0-9a-fA-F]{40}$") {
             return $commit.Trim().ToLowerInvariant()
         }
     }

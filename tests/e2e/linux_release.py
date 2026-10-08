@@ -164,14 +164,21 @@ def verify_application(base: str, output: Path) -> dict:
         ).to_be_visible()
         assert "version mismatch" not in page.locator("body").inner_text().lower()
         page.screenshot(path=str(output / "release-home.png"), full_page=True)
-        for route in (
-            "/analysis/quality/quality.two_variances",
-            "/analysis/regression/regression.gaussian_process",
-            "/reports",
+        for route, selector in (
+            (
+                "/analysis/quality/quality.two_variances",
+                '[data-analysis-execution="quality.two_variances"]',
+            ),
+            (
+                "/analysis/regression/regression.gaussian_process",
+                '[data-analysis-execution="regression.gaussian_process"]',
+            ),
+            ("/reports", ".report-center-page #report-center-title"),
         ):
             page.goto(base + route, wait_until="networkidle")
             page.reload(wait_until="networkidle")
-            assert page.locator("#root").inner_text().strip()
+            expect(page.locator(selector)).to_be_visible(timeout=30_000)
+            expect(page.locator(".error-box[role=alert]")).to_have_count(0)
         for report in reports:
             context.set_offline(True)
             page.goto(report.as_uri())

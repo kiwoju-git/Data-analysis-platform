@@ -42,6 +42,24 @@
 This is a running validation record, not a completion claim. Main and Release
 publication require all implementation stages and final platform checks.
 
+### Integrated Verification Corrections
+
+- First integrated Windows backend run:1,246 passed,6 failed,1 skipped in1,801.92s.
+  Four failures were stale catalog/handler expectations, one was nested archive
+  Git identity incorrectly inheriting a parent HEAD, and one was the report-test
+  dispatch map missing Two Variances. All were corrected; a fresh full run is required.
+- First Ubuntu3.11/3.12 CI run37712911669: each1,238 passed,5 failed,11 Windows-only
+  skips. Failures included a Python3.10-specific provenance assertion, route-map
+  declaration syntax, report-test dispatch, GP smooth-case NLPD platform delta,
+  and the21-record Bayesian lifecycle fixture's100-evaluation budget.
+- No production GP/BO calculation or Windows numerical fixture is changed to
+  suppress those failures. `probe_linux_numerics.py` collects independent sklearn
+  references, production comparisons and explicit test-only budget diagnostics.
+  Probe success means evidence collected, not an acceptance-test pass.
+- E2E assertions were updated for portal tooltip versus explicit pin, shared
+  chart frames,1100px drawer, hidden roadmap-only entries and bounded canvases.
+  Earlier failing attempts remain in ignored diagnostic logs; tests were not disabled.
+
 ### Two Variances and Reports
 
 - Method0.1.0/result1/API22 added; metadata20 unchanged. BF/F independent values,

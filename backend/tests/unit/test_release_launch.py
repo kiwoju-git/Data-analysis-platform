@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.runtime_contract import API_CONTRACT_VERSION
+from app.core.runtime_contract import API_CONTRACT_VERSION, RUNTIME_CAPABILITIES
 from app.launch import verify_release
 from app.storage.metadata import SCHEMA_VERSION
 
@@ -23,6 +23,7 @@ def release_fixture(root: Path) -> None:
         "source_commit": "a" * 40,
         "api_contract_version": API_CONTRACT_VERSION,
         "metadata_schema_version": SCHEMA_VERSION,
+        "required_capabilities": RUNTIME_CAPABILITIES,
         "python_target": "3.12",
         "os": "ubuntu24.04",
         "architecture": "x86_64",

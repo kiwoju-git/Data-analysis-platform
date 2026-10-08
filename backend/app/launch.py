@@ -58,7 +58,7 @@ def verify_release(root: Path) -> dict[str, Any]:
         if not actual.issubset(seen):
             raise ValueError("Release contains unverified static files or wheels")
     info: dict[str, Any] = json.loads((root / "BUILD_INFO.json").read_text(encoding="utf-8"))
-    from app.core.runtime_contract import API_CONTRACT_VERSION
+    from app.core.runtime_contract import API_CONTRACT_VERSION, RUNTIME_CAPABILITIES
     from app.storage.metadata import SCHEMA_VERSION
 
     if not re.fullmatch(r"[a-f0-9]{40}", str(info.get("source_commit", ""))):
@@ -66,6 +66,7 @@ def verify_release(root: Path) -> dict[str, Any]:
     if (
         info.get("api_contract_version") != API_CONTRACT_VERSION
         or info.get("metadata_schema_version") != SCHEMA_VERSION
+        or info.get("required_capabilities") != RUNTIME_CAPABILITIES
     ):
         raise ValueError("Release runtime contract mismatch")
     if (

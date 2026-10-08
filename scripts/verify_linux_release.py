@@ -70,6 +70,10 @@ def wait_ready(base: str, process: subprocess.Popen, expected: dict) -> dict:
                 info["metadata_schema_version"] == expected["metadata_schema_version"]
             )
             assert info["service"] == "datalab-studio-api"
+            assert all(
+                info.get("capabilities", {}).get(key) is value
+                for key, value in expected["required_capabilities"].items()
+            )
             return info
         except (urllib.error.URLError, TimeoutError):
             time.sleep(0.3)
@@ -135,6 +139,15 @@ def main() -> int:
         smoke = None
         for index in range(2):
             root = unpack(archive, temp / f"installation-{index}")
+            for dependency in ("react", "react-dom", "lucide-react"):
+                notices = list(
+                    (root / "THIRD_PARTY_NOTICES/frontend").glob(f"{dependency}-*")
+                )
+                assert notices and any(
+                    path.name.lower().startswith("license")
+                    for directory in notices
+                    for path in directory.iterdir()
+                ), f"Missing frontend license notice: {dependency}"
             expected = json.loads((root / "BUILD_INFO.json").read_text())
             with (output / f"install-{index}.log").open("wb") as log:
                 subprocess.run(

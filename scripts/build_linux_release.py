@@ -124,6 +124,31 @@ def main() -> int:
             (package / filename).write_text(contents, encoding="utf-8", newline="\n")
         notices = package / "THIRD_PARTY_NOTICES"
         notices.mkdir()
+        frontend_notices = notices / "frontend"
+        frontend_notices.mkdir()
+        dependency_paths = subprocess.check_output(
+            ["npm", "ls", "--omit=dev", "--all", "--parseable"],
+            cwd=source / "frontend",
+            text=True,
+        ).splitlines()
+        for dependency_path in dependency_paths:
+            dependency = Path(dependency_path)
+            if dependency == source / "frontend":
+                continue
+            metadata = json.loads(
+                (dependency / "package.json").read_text(encoding="utf-8")
+            )
+            name = metadata["name"].replace("/", "_").replace("@", "")
+            destination = frontend_notices / f"{name}-{metadata['version']}"
+            destination.mkdir(exist_ok=True)
+            (destination / "package.json").write_text(
+                json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
+            )
+            for path in dependency.iterdir():
+                if path.is_file() and path.name.lower().startswith(
+                    ("license", "notice", "copying")
+                ):
+                    shutil.copy2(path, destination / path.name)
         for wheel in wheels.glob("*.whl"):
             destination = notices / wheel.stem
             destination.mkdir()
@@ -148,7 +173,7 @@ def main() -> int:
                 [
                     sys.executable,
                     "-c",
-                    "import json; from app.core.runtime_contract import API_CONTRACT_VERSION; from app.storage.metadata import SCHEMA_VERSION; print(json.dumps([API_CONTRACT_VERSION,SCHEMA_VERSION]))",
+                    "import json; from app.core.runtime_contract import API_CONTRACT_VERSION,RUNTIME_CAPABILITIES; from app.storage.metadata import SCHEMA_VERSION; print(json.dumps([API_CONTRACT_VERSION,SCHEMA_VERSION,RUNTIME_CAPABILITIES]))",
                 ],
                 cwd=source,
                 env=contract_env,
@@ -160,6 +185,7 @@ def main() -> int:
             "source_commit": args.source_commit,
             "api_contract_version": contract[0],
             "metadata_schema_version": contract[1],
+            "required_capabilities": contract[2],
             "python_target": "3.12",
             "os": "ubuntu24.04",
             "architecture": "x86_64",

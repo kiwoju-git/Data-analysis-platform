@@ -19,6 +19,8 @@ remain unchanged. Port conflicts fail instead of killing unrelated processes.
 Git HEAD or archive-sha256 identity is shared by frontend/backend. Archive hashing
 uses the same source-file selection and sorted relative-path/NUL/file-hash/newline
 aggregation as dev_runtime_helpers.ps1. Install paths/mtimes are excluded.
+Git must identify the source root itself, not an enclosing repository containing
+an extracted archive with invalid Git metadata.
 Startup verifies service, API, metadata, identity and required capabilities.
 
 ## Built UI
@@ -35,6 +37,9 @@ Build from a clean tracked HEAD only. Git archive excludes untracked/user files.
 The archive contains built web files, runtime/application wheels, hash requirements,
 BUILD_INFO, FILES.sha256, install/run scripts, notices and instructions. It contains
 no interpreter, node_modules, workspace, credentials, models or diagnostics.
+Notices include Python wheel metadata/licenses and frontend production dependency
+package metadata/licenses. BUILD_INFO records required capabilities as well as
+the source, API and metadata identities; startup and archive verification check all.
 
 Install requires Ubuntu24.04/x86_64/CPython3.12+venv/pip already available. It
 verifies paths and hashes, force-reinstalls only the packaged wheels offline and

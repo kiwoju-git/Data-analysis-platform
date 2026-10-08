@@ -1,7 +1,11 @@
 import hashlib
 import importlib.util
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 SPEC = importlib.util.spec_from_file_location("dev_linux", ROOT / "scripts/dev_linux.py")
@@ -36,3 +40,30 @@ def test_linux_direct_dependency_pins_match_pyproject() -> None:
             assert dependencies <= set(inputs)
             assert "joblib==1.5.2" in inputs
             assert "threadpoolctl==3.6.0" in inputs
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="Git fixture requires Git")
+def test_nested_invalid_git_does_not_inherit_parent_identity(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fixture",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    source = tmp_path / "nested archive"
+    (source / ".git").mkdir(parents=True)
+    (source / "backend/app").mkdir(parents=True)
+    (source / "backend/app/main.py").write_text("VALUE = 1\n", encoding="utf-8")
+    assert DEV.source_identity(source) == DEV.archive_fingerprint(source)
