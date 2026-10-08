@@ -1,3 +1,4 @@
+import { LineMetricChart, ResponsePlot, ScorePlot, LoadingPlot } from "./charts/PlsResultCharts";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -344,6 +345,7 @@ function PlsResults({ result, analysisId }: { result: PlsRegressionResult; analy
   const { t, formatNumber } = useI18n();
   const [loadingComponent, setLoadingComponent] = useState(1);
   const maxLoadingComponent = result.model_summary.selected_components;
+  useEffect(() => setLoadingComponent((current) => Math.max(1, Math.min(current, maxLoadingComponent))), [maxLoadingComponent]);
   return (
     <div className="pls-results">
       <section className="result-section">
@@ -374,7 +376,7 @@ function PlsResults({ result, analysisId }: { result: PlsRegressionResult; analy
 
       <section className="result-section">
         <h4>{t("pls.modelSelectionPlot")}</h4>
-        <LineMetricChart result={result} />
+        <LineMetricChart result={result} analysisId={analysisId} />
       </section>
 
       <section className="result-section">
@@ -397,13 +399,14 @@ function PlsResults({ result, analysisId }: { result: PlsRegressionResult; analy
       </section>
 
       <div className="chart-grid pls-chart-grid">
-        <section className="result-section"><h4>{t("pls.responsePlot")}</h4><ResponsePlot result={result} /></section>
-        <section className="result-section"><h4>{t("pls.scores")}</h4><ScorePlot result={result} /></section>
+        <section className="result-section"><h4>{t("pls.responsePlot")}</h4><ResponsePlot result={result} analysisId={analysisId} /></section>
+        <section className="result-section"><h4>{t("pls.scores")}</h4><ScorePlot result={result} analysisId={analysisId} /></section>
       </div>
 
       <section className="result-section">
         <div className="section-heading-row"><h4>{t("pls.loadings")}</h4><label><span>{t("pls.loadingComponent")}</span><select value={loadingComponent} onChange={(event) => setLoadingComponent(Number(event.currentTarget.value))}>{Array.from({ length: maxLoadingComponent }, (_value, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div>
-        <LoadingPlot component={loadingComponent} result={result} />
+        <LoadingPlot component={loadingComponent} result={result} analysisId={analysisId} />
+        <details><summary>{t("pls.loadings")}</summary><div className="table-wrap"><table className="result-table"><thead><tr><th>{t("pls.predictor")}</th>{Array.from({ length: maxLoadingComponent }, (_, index) => <th key={index}>{index + 1}</th>)}</tr></thead><tbody>{result.predictors.map((predictor, index) => <tr key={predictor.column_id}><th>{predictor.display_name}</th>{result.latent_components.x_loadings[index]?.map((value, componentIndex) => <td key={componentIndex}>{number(value)}</td>)}</tr>)}</tbody></table></div></details>
       </section>
 
       <section className="result-section">
@@ -431,46 +434,6 @@ function PlsResults({ result, analysisId }: { result: PlsRegressionResult; analy
       {result.model_manifest !== undefined ? <PlsPointPrediction key={result.model_manifest.model_id} result={result} analysisId={analysisId} /> : null}
     </div>
   );
-}
-
-function LineMetricChart({ result }: { result: PlsRegressionResult }) {
-  const { t } = useI18n();
-  const points = result.component_selection.rows;
-  const values = points.flatMap((row) => [row.training_r_squared, row.predicted_r_squared]);
-  const bounds = extent(values);
-  const x = (component: number) => 54 + ((component - 1) / Math.max(1, points.length - 1)) * 540;
-  const y = (value: number) => 254 - ((value - bounds[0]) / Math.max(1e-12, bounds[1] - bounds[0])) * 210;
-  return <svg aria-label={t("pls.modelSelectionPlotDesc")} className="interactive-chart pls-selection-chart" role="img" viewBox="0 0 640 290"><title>{t("pls.modelSelectionPlot")}</title><desc>{t("pls.modelSelectionPlotDesc")}</desc><line className="chart-axis" x1="54" x2="594" y1="254" y2="254"/><line className="chart-axis" x1="54" x2="54" y1="44" y2="254"/><line className="pls-selected-component-line" x1={x(result.model_summary.selected_components)} x2={x(result.model_summary.selected_components)} y1="36" y2="254"/><polyline className="pls-training-line" fill="none" points={points.map((row) => `${x(row.components)},${y(row.training_r_squared)}`).join(" ")}/><polyline className="pls-cv-line" fill="none" points={points.map((row) => `${x(row.components)},${y(row.predicted_r_squared)}`).join(" ")}/>{points.map((row) => <g key={row.components}><circle aria-label={`${t("pls.components")} ${row.components}, ${t("pls.trainingR")} ${number(row.training_r_squared)}`} className="pls-training-point" cx={x(row.components)} cy={y(row.training_r_squared)} r="5" tabIndex={0}/><circle aria-label={`${t("pls.components")} ${row.components}, ${t("pls.predictedR")} ${number(row.predicted_r_squared)}`} className="pls-cv-point" cx={x(row.components)} cy={y(row.predicted_r_squared)} r="5" tabIndex={0}/><text className="chart-tick-label" textAnchor="middle" x={x(row.components)} y="275">{row.components}</text></g>)}</svg>;
-}
-
-function ResponsePlot({ result }: { result: PlsRegressionResult }) {
-  const { t } = useI18n();
-  const points = result.diagnostics.points;
-  const values = points.flatMap((point) => [point.observed, point.fitted, point.cross_validated_fitted]);
-  const bounds = extent(values);
-  return <ScatterSvg ariaLabel={t("pls.responsePlotDesc")} bounds={bounds} series={[{ className: "pls-training-point", label: t("pls.fitted"), points: points.map((point) => ({ x: point.observed, y: point.fitted, label: `${t("pls.row")} ${point.row_index + 1}` })) }, { className: "pls-cv-point", label: t("pls.cvFitted"), points: points.map((point) => ({ x: point.observed, y: point.cross_validated_fitted, label: `${t("pls.row")} ${point.row_index + 1}` })) }]} showReferenceLine />;
-}
-
-function ScorePlot({ result }: { result: PlsRegressionResult }) {
-  const { t } = useI18n();
-  const scores = result.latent_components.x_scores;
-  const points = scores.map((row, index) => ({ x: row[0] ?? 0, y: row[1] ?? 0, label: `${t("pls.row")} ${(result.latent_components.score_row_indices[index] ?? index) + 1}` }));
-  return <ScatterSvg ariaLabel={t("pls.scoresPlotDesc")} bounds={extent(points.flatMap((point) => [point.x, point.y]))} series={[{ className: "pls-score-point", label: t("pls.scores"), points }]} />;
-}
-
-function LoadingPlot({ component, result }: { component: number; result: PlsRegressionResult }) {
-  const { t } = useI18n();
-  const values = result.predictors.map((predictor, index) => ({ label: predictor.display_name, value: result.latent_components.x_loadings[index]?.[component - 1] ?? 0 }));
-  const maximum = Math.max(1e-12, ...values.map((item) => Math.abs(item.value)));
-  const height = Math.max(180, values.length * 32 + 30);
-  return <svg aria-label={t("pls.loadingPlotTitle", { component })} className="interactive-chart pls-loading-chart" role="img" viewBox={`0 0 640 ${height}`}><title>{t("pls.loadingPlotTitle", { component })}</title><desc>{t("pls.loadingPlotDesc")}</desc><line className="chart-axis" x1="320" x2="320" y1="10" y2={height - 10}/>{values.map((item, index) => { const width = (Math.abs(item.value) / maximum) * 230; const x = item.value >= 0 ? 320 : 320 - width; const y = 18 + index * 32; return <g key={item.label} tabIndex={0}><text className="chart-tick-label" textAnchor="end" x="80" y={y + 13}>{item.label}</text><rect aria-label={`${item.label} ${number(item.value)}`} className={item.value >= 0 ? "pls-loading-positive" : "pls-loading-negative"} height="18" width={width} x={x} y={y}/></g>; })}</svg>;
-}
-
-function ScatterSvg({ ariaLabel, bounds, series, showReferenceLine = false }: { ariaLabel: string; bounds: [number, number]; series: Array<{ className: string; label: string; points: Array<{ x: number; y: number; label: string }> }>; showReferenceLine?: boolean }) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const x = (value: number) => 54 + ((value - bounds[0]) / Math.max(1e-12, bounds[1] - bounds[0])) * 540;
-  const y = (value: number) => 254 - ((value - bounds[0]) / Math.max(1e-12, bounds[1] - bounds[0])) * 210;
-  return <><svg aria-label={ariaLabel} className="interactive-chart pls-scatter-chart" role="img" viewBox="0 0 640 290"><title>{ariaLabel}</title><desc>{ariaLabel}</desc><line className="chart-axis" x1="54" x2="594" y1="254" y2="254"/><line className="chart-axis" x1="54" x2="54" y1="44" y2="254"/>{showReferenceLine ? <line className="chart-reference-line" x1="54" x2="594" y1="254" y2="44"/> : null}{series.flatMap((item) => item.points.map((point, index) => { const key = `${item.label}-${index}`; return <circle aria-label={`${item.label}, ${point.label}, ${number(point.x)}, ${number(point.y)}`} className={`${item.className}${selected === key ? " is-selected" : ""}`} cx={x(point.x)} cy={y(point.y)} key={key} onClick={() => setSelected(key)} onFocus={() => setSelected(key)} r="5" tabIndex={0}/>; }))}</svg><div className="chart-legend">{series.map((item) => <span key={item.label} className={item.className}>{item.label}</span>)}</div></>;
 }
 
 function PlsPointPrediction({ result, analysisId }: { result: PlsRegressionResult; analysisId: string }) {
@@ -550,15 +513,6 @@ function finiteInput(value: string | undefined): boolean {
 
 function isNumericColumn(column: DatasetColumnResponse): boolean {
   return column.role !== "id" && (column.data_type === "integer" || column.data_type === "decimal");
-}
-
-function extent(values: number[]): [number, number] {
-  const finite = values.filter(Number.isFinite);
-  if (finite.length === 0) return [0, 1];
-  const low = Math.min(...finite); const high = Math.max(...finite);
-  if (low === high) return [low - 1, high + 1];
-  const padding = (high - low) * 0.05;
-  return [low - padding, high + padding];
 }
 
 function number(value: number): string {

@@ -25,3 +25,13 @@ export function scaleChartValue(
   if (domain.min === domain.max) return (rangeMin + rangeMax) / 2;
   return rangeMin + ((value - domain.min) / (domain.max - domain.min)) * (rangeMax - rangeMin);
 }
+
+export function expandNumericRange(range: NumericRange, values: readonly number[]): NumericRange {
+  const finite = values.filter(Number.isFinite);
+  if (!Number.isFinite(range.min) || !Number.isFinite(range.max) || range.min > range.max) {
+    return paddedNumericRange(finite);
+  }
+  const min = Math.min(range.min, ...finite);
+  const max = Math.max(range.max, ...finite);
+  return min === max ? paddedNumericRange([min]) : { min, max };
+}

@@ -1,5 +1,32 @@
 # Interactive Chart Contract
 
+## Fixed Frames and Stored-Result Adapters (2026-10-08)
+
+`ChartFrame` owns the HTML wrapper and a unique title/description/clip-path per
+SVG instance. Standard plots use a fixed 480 x 320 viewBox; PCA two-component
+plots use 480 x 480 with a square 384 x 384 plotting area and a common symmetric
+numeric range. Resizing changes neither saved values nor SVG data coordinates.
+Visible axis titles, units, bounded tick labels, series-specific paths and
+marker-shaped legends are shared. Invalid/non-finite items are reported, never
+converted to zero. Stored intervals and bands extend the domain without being
+recomputed. Labels are bounded and collision-filtered; complete text remains
+available in item details and result tables.
+
+PCA adapters keep raw scores/loadings separate from the legacy loading display
+multiplier in the biplot. One stored component uses row-vs-score and loading
+bars, not a fabricated PC2. D-squared uses stored source row numbers and its
+saved reference. PLS retains negative predicted R-squared, separate training
+and OOF series, score-row identities and all stored loadings. Loading plots
+page twelve predictors; the complete table/report is unaffected.
+
+GP charts name observation predictive standard deviation explicitly and use
+every saved profile point and observation interval. Surface generation takes
+an immutable model/hash/axis/grid/median snapshot, joins response rows by
+client_row_id, rejects incomplete/duplicate/unexpected identities, and accepts
+only the latest request for the current source. Draft axis controls never
+relabel an older rendered surface. These changes do not alter GP optimization,
+kernel selection, CV, model artifacts or Bayesian Optimization.
+
 ## Viewport Interaction Contract (2026-10-08)
 
 Chart interaction separates hovered, focused, pinned and roving item IDs.

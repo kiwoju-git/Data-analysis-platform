@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Biplot, ComponentPairSelectors, LoadingPlot, OutlierPlot, ScorePlot, ScreePlot } from "./charts/PrincipalComponentCharts";
+import { availablePcaComponents, validPcaPair } from "./charts/pcaChartModels";
 
 import type {
   AnalysisResultEnvelope,
@@ -220,16 +222,18 @@ export function PrincipalComponentsPanel({
           </div>
         </>
       )}
-      {analysisResult !== null && result !== null ? <PrincipalComponentsResults result={result} /> : null}
+      {analysisResult !== null && result !== null ? <PrincipalComponentsResults result={result} analysisId={analysisResult.analysis_id} /> : null}
     </section>
   );
 }
 
-function PrincipalComponentsResults({ result }: { result: PrincipalComponentsResult }) {
+function PrincipalComponentsResults({ result, analysisId }: { result: PrincipalComponentsResult; analysisId: string }) {
   const { t, formatNumber } = useI18n();
-  const [xComponent, setXComponent] = useState(1);
-  const [yComponent, setYComponent] = useState(Math.min(2, result.eigenanalysis.length));
-  const componentOptions = result.eigenanalysis.map((row) => row.component);
+  const [requestedX, setXComponent] = useState(1);
+  const [requestedY, setYComponent] = useState(2);
+  const componentOptions = availablePcaComponents(result);
+  const { x: xComponent, y: yComponent } = validPcaPair(componentOptions, requestedX, requestedY);
+  useEffect(() => { setXComponent(xComponent); setYComponent(yComponent ?? xComponent); }, [xComponent, yComponent]);
   return (
     <div className="pca-results">
       <section className="result-section">
@@ -252,14 +256,14 @@ function PrincipalComponentsResults({ result }: { result: PrincipalComponentsRes
         <div className="table-wrap"><table className="result-table"><thead><tr><th>{t("pca.variable")}</th>{componentOptions.map((component) => <th key={component}>PC{component}</th>)}</tr></thead><tbody>{result.loadings.map((row) => <tr key={row.column_id}><td>{row.display_name}</td>{row.values.map((value, index) => <td key={index}>{number(value)}</td>)}</tr>)}</tbody></table></div>
       </section>
       <div className="chart-grid pca-chart-grid">
-        <section className="result-section"><h4>{t("pca.screePlot")}</h4><ScreePlot result={result} /></section>
+        <section className="result-section"><h4>{t("pca.screePlot")}</h4><ScreePlot result={result} analysisId={analysisId} /></section>
         <section className="result-section">
           <div className="section-heading-row"><h4>{t("pca.scorePlot")}</h4><ComponentPairSelectors components={componentOptions} onX={setXComponent} onY={setYComponent} x={xComponent} y={yComponent} /></div>
-          <PcaScatter ariaLabel={t("pca.scorePlotDesc")} points={result.plot.points.map((row) => ({ label: `${t("pca.row")} ${row.source_row_number}`, x: row.scores[xComponent - 1] ?? 0, y: row.scores[yComponent - 1] ?? 0, outlier: row.outlier }))} />
+          <ScorePlot result={result} analysisId={analysisId} xComponent={xComponent} yComponent={yComponent} />
         </section>
-        <section className="result-section"><h4>{t("pca.loadingPlot")}</h4><LoadingPlot result={result} xComponent={xComponent} yComponent={yComponent} /></section>
-        <section className="result-section"><h4>{t("pca.biplot")}</h4><Biplot result={result} xComponent={xComponent} yComponent={yComponent} /></section>
-        <section className="result-section"><h4>{t("pca.outlierPlot")}</h4><OutlierPlot result={result} /></section>
+        <section className="result-section"><h4>{t("pca.loadingPlot")}</h4><LoadingPlot result={result} analysisId={analysisId} xComponent={xComponent} yComponent={yComponent} /></section>
+        <section className="result-section"><h4>{t("pca.biplot")}</h4><Biplot result={result} analysisId={analysisId} xComponent={xComponent} yComponent={yComponent} /></section>
+        <section className="result-section"><h4>{t("pca.outlierPlot")}</h4><OutlierPlot result={result} analysisId={analysisId} /></section>
       </div>
       <section className="result-section">
         <h4>{t("pca.scores")}</h4>
@@ -269,56 +273,6 @@ function PrincipalComponentsResults({ result }: { result: PrincipalComponentsRes
       {result.warnings.length > 0 ? <section className="result-section"><h4>{t("pca.warnings")}</h4><ul className="warning-list">{result.warnings.map((warning) => <li key={warning}>{pcaWarningText(warning, t)} <span className="cell-subtle">{warning}</span></li>)}</ul></section> : null}
     </div>
   );
-}
-
-function ComponentPairSelectors({ components, onX, onY, x, y }: { components: number[]; onX: (value: number) => void; onY: (value: number) => void; x: number; y: number }) {
-  return <div className="pca-component-pair"><select aria-label="PC X" value={x} onChange={(event) => onX(Number(event.currentTarget.value))}>{components.map((component) => <option disabled={component === y} key={component} value={component}>PC{component}</option>)}</select><select aria-label="PC Y" value={y} onChange={(event) => onY(Number(event.currentTarget.value))}>{components.map((component) => <option disabled={component === x} key={component} value={component}>PC{component}</option>)}</select></div>;
-}
-
-function ScreePlot({ result }: { result: PrincipalComponentsResult }) {
-  const { t } = useI18n();
-  const max = Math.max(...result.eigenanalysis.map((row) => row.eigenvalue), 1e-12);
-  const x = (index: number) => 48 + (index / Math.max(1, result.eigenanalysis.length - 1)) * 540;
-  const y = (value: number) => 245 - (value / max) * 200;
-  return <svg className="interactive-chart pca-chart" role="img" viewBox="0 0 620 280"><title>{t("pca.screePlot")}</title><desc>{t("pca.screePlotDesc")}</desc><line className="chart-axis" x1="48" x2="588" y1="245" y2="245"/><line className="chart-axis" x1="48" x2="48" y1="45" y2="245"/><polyline className="pca-scree-line" fill="none" points={result.eigenanalysis.map((row, index) => `${x(index)},${y(row.eigenvalue)}`).join(" ")}/>{result.eigenanalysis.map((row, index) => <g key={row.component}><circle aria-label={`PC${row.component}, ${number(row.eigenvalue)}`} className={row.selected ? "pca-point is-selected" : "pca-point"} cx={x(index)} cy={y(row.eigenvalue)} r="5" tabIndex={0}/><text className="chart-tick-label" textAnchor="middle" x={x(index)} y="266">{row.component}</text></g>)}</svg>;
-}
-
-function LoadingPlot({ result, xComponent, yComponent }: { result: PrincipalComponentsResult; xComponent: number; yComponent: number }) {
-  const points = result.loadings.map((row) => ({ label: row.display_name, x: row.values[xComponent - 1] ?? 0, y: row.values[yComponent - 1] ?? 0, outlier: false }));
-  return <PcaScatter ariaLabel={`PC${xComponent} / PC${yComponent}`} labels points={points} />;
-}
-
-function Biplot({ result, xComponent, yComponent }: { result: PrincipalComponentsResult; xComponent: number; yComponent: number }) {
-  const scorePoints = result.plot.points.map((row) => ({ label: String(row.source_row_number), x: row.scores[xComponent - 1] ?? 0, y: row.scores[yComponent - 1] ?? 0, outlier: row.outlier }));
-  const extent = symmetricExtent(scorePoints.flatMap((point) => [point.x, point.y]));
-  const scale = Math.max(Math.abs(extent[0]), Math.abs(extent[1]));
-  const loadingPoints = result.loadings.map((row) => ({ label: row.display_name, x: (row.values[xComponent - 1] ?? 0) * scale, y: (row.values[yComponent - 1] ?? 0) * scale, outlier: false }));
-  return <PcaScatter ariaLabel="PCA biplot" labels loadingPoints={loadingPoints} points={scorePoints} />;
-}
-
-function OutlierPlot({ result }: { result: PrincipalComponentsResult }) {
-  const { t } = useI18n();
-  const points = result.plot.points;
-  const max = Math.max(result.outliers.reference_value, ...points.map((row) => row.mahalanobis_distance_squared), 1e-12);
-  const x = (index: number) => 48 + (index / Math.max(1, points.length - 1)) * 540;
-  const y = (value: number) => 245 - (value / max) * 200;
-  return <svg className="interactive-chart pca-chart" role="img" viewBox="0 0 620 280"><title>{t("pca.outlierPlot")}</title><desc>{t("pca.outlierPlotDesc")}</desc><line className="chart-axis" x1="48" x2="588" y1="245" y2="245"/><line className="chart-axis" x1="48" x2="48" y1="45" y2="245"/><line className="chart-reference-line" x1="48" x2="588" y1={y(result.outliers.reference_value)} y2={y(result.outliers.reference_value)}/>{points.map((row, index) => <circle aria-label={`${t("pca.row")} ${row.source_row_number}, ${number(row.mahalanobis_distance_squared)}`} className={row.outlier ? "pca-point is-outlier" : "pca-point"} cx={x(index)} cy={y(row.mahalanobis_distance_squared)} key={row.source_row_number} r="4" tabIndex={0}/>)}</svg>;
-}
-
-function PcaScatter({ ariaLabel, labels = false, loadingPoints = [], points }: { ariaLabel: string; labels?: boolean; loadingPoints?: Array<ChartPoint>; points: Array<ChartPoint> }) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const all = [...points, ...loadingPoints];
-  const bounds = symmetricExtent(all.flatMap((point) => [point.x, point.y]));
-  const x = (value: number) => 310 + (value / Math.max(Math.abs(bounds[0]), Math.abs(bounds[1]))) * 250;
-  const y = (value: number) => 145 - (value / Math.max(Math.abs(bounds[0]), Math.abs(bounds[1]))) * 105;
-  return <><svg aria-label={ariaLabel} className="interactive-chart pca-chart" role="img" viewBox="0 0 620 290"><title>{ariaLabel}</title><desc>{ariaLabel}</desc><line className="chart-axis" x1="45" x2="575" y1="145" y2="145"/><line className="chart-axis" x1="310" x2="310" y1="35" y2="255"/>{points.map((point, index) => { const key = `score-${index}`; return <circle aria-label={`${point.label}, ${number(point.x)}, ${number(point.y)}`} className={`pca-point${point.outlier ? " is-outlier" : ""}${selected === key ? " is-selected" : ""}`} cx={x(point.x)} cy={y(point.y)} key={key} onClick={() => setSelected(key)} onFocus={() => setSelected(key)} r="4.5" tabIndex={0}/>; })}{loadingPoints.map((point, index) => <g key={`loading-${index}`}><line className="pca-loading-vector" x1="310" x2={x(point.x)} y1="145" y2={y(point.y)}/><text className="chart-tick-label" x={x(point.x)} y={y(point.y)}>{point.label}</text></g>)}{labels ? points.map((point, index) => <text className="chart-tick-label" key={`label-${index}`} x={x(point.x) + 5} y={y(point.y) - 5}>{point.label}</text>) : null}</svg>{selected === null ? null : <p className="chart-detail">{points[Number(selected.split("-")[1])]?.label}</p>}</>;
-}
-
-interface ChartPoint { label: string; x: number; y: number; outlier: boolean }
-
-function symmetricExtent(values: number[]): [number, number] {
-  const maximum = Math.max(1e-12, ...values.filter(Number.isFinite).map(Math.abs));
-  return [-maximum * 1.08, maximum * 1.08];
 }
 
 function isNumericColumn(column: DatasetColumnResponse): boolean {

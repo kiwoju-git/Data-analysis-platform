@@ -15,7 +15,9 @@
 ## Baseline
 
 - Fresh Windows frontend baseline: 47 files / 361 tests passed.
-- Full backend baseline is being collected separately before backend changes.
+- Fresh full Windows backend baseline: 1,225 passed in 1,760.51s, native exit 0.
+  No backend edits existed while this baseline ran. Log:
+  `.tmp/baseline-backend-desktop-charts-linux.log`.
 - Existing WSL Ubuntu 24.04.4 x86_64 / Python 3.12.3 is available; availability
   inspection alone is not a Linux installation or release verification pass.
 
@@ -39,3 +41,21 @@
 
 This is a running validation record, not a completion claim. Main and Release
 publication require all implementation stages and final platform checks.
+
+### Common Frame and PCA/PLS/GP Adapters
+
+- Frame/coordinate/state and affected regularized-result tests: 26 passed.
+- PCA/PLS/GP adapters and panel tests: 19 passed.
+- Strict TypeScript passed after correcting typed synthetic-fixture columns.
+- Source review found and corrected marker-state CSS specificity, legend
+  marker/line mismatch, and missing invalid-grid explanations.
+- Existing numerical backend functions and stored schemas are unchanged.
+- Full frontend check: 53 files / 386 tests passed; lint: zero errors and nine
+  existing fast-refresh warnings. Production build passed (large-chunk warning).
+- Chromium common + result-model fixtures passed (`--suite all`): PCA raw values
+  and square axes; PLS negative predicted R-squared, separate series, twelve-item
+  pagination and page preservation; GP all 25 profile points, unique SVG IDs,
+  shuffled surface responses, superseded/source-stale responses, and invalid ID
+  sets. 1440/1024/390 viewport overflow checks passed. Synthetic diagnostics:
+  `.tmp/e2e-result-charts-verified/`. This does not yet cover the full application
+  resize sequence, browser zoom, all remaining plots or Linux release smoke.

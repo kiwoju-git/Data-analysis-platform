@@ -16,6 +16,7 @@ import type { GpKernelSelection, GpLengthScale, GpOptimizer } from "./api/types/
 import { GpOptimizationSettings, gpLengthPreset, gpLengthValue } from "./GpOptimizationSettings";
 import { GpKernelSelectionSettings, gpOptimizerStarts, gpKernelName } from "./GpKernelSelectionSettings";
 import { MAX_GP_OPTIMIZER_STARTS } from "./gpCapabilities";
+import { GpScatter, GpResidualChart, GpUncertaintyChart, GpProfileChart, GpSurfaceChart } from "./charts/GaussianProcessCharts";
 
 export interface GaussianProcessRunConfig {
   lengthScale: GpLengthScale;
@@ -407,7 +408,7 @@ export function GaussianProcessRegressionPanel({
         </>
       )}
 
-      {analysisResult !== null && result !== null ? <GaussianProcessResults result={result} /> : null}
+      {analysisResult !== null && result !== null ? <GaussianProcessResults result={result} analysisId={analysisResult.analysis_id} /> : null}
     </section>
   );
 }
@@ -442,14 +443,15 @@ function NumberField({
   );
 }
 
-function GaussianProcessResults({ result }: { result: GaussianProcessRegressionResult }) {
+function GaussianProcessResults({ result, analysisId }: { result: GaussianProcessRegressionResult; analysisId: string }) {
+  const scope = `${analysisId}:selected`;
   const { t, formatNumber, formatPercent } = useI18n();
   const metric = (value: number | null) =>
     value === null ? "-" : formatNumber(value, { maximumSignificantDigits: 7 });
   return (
     <div className="gp-results">
       <GpOptimizationEvidence result={result} />
-      {result.kernel_selection?.mode === "compare" ? <GpKernelComparison result={result} /> : null}
+      {result.kernel_selection?.mode === "compare" ? <GpKernelComparison result={result} analysisId={analysisId} /> : null}
       <section className="result-section">
         <h4>{t("gp.method")}</h4>
         <dl className="result-definition-grid">
@@ -510,21 +512,21 @@ function GaussianProcessResults({ result }: { result: GaussianProcessRegressionR
       </section>
 
       <div className="chart-grid gp-chart-grid">
-        <section className="result-section"><h4>{t("gp.observedFitted")}</h4><GpScatter result={result} mode="fitted" /></section>
-        {result.method.validation_method !== "none" ? <section className="result-section"><h4>{t("gp.observedCv")}</h4><GpScatter result={result} mode="cv" /></section> : null}
-        <section className="result-section"><h4>{t("gp.residualDiagnostics")}</h4><GpResidualChart result={result} /></section>
-        <section className="result-section"><h4>{t("gp.uncertaintyDiagnostics")}</h4><GpUncertaintyChart result={result} /></section>
+        <section className="result-section"><h4>{t("gp.observedFitted")}</h4><GpScatter scope={scope} result={result} mode="fitted" /></section>
+        {result.method.validation_method !== "none" ? <section className="result-section"><h4>{t("gp.observedCv")}</h4><GpScatter scope={scope} result={result} mode="cv" /></section> : null}
+        <section className="result-section"><h4>{t("gp.residualDiagnostics")}</h4><GpResidualChart scope={scope} result={result} /></section>
+        <section className="result-section"><h4>{t("gp.uncertaintyDiagnostics")}</h4><GpUncertaintyChart scope={scope} result={result} /></section>
       </div>
 
       <section className="result-section">
         <h4>{t("gp.conditionalProfiles")}</h4>
         <p>{t("gp.profileNotice")}</p>
         <div className="chart-grid gp-chart-grid">
-          {result.conditional_profiles.map((profile) => <GpProfileChart key={profile.column_id} profile={profile} />)}
+          {result.conditional_profiles.map((profile) => <GpProfileChart key={profile.column_id} profile={profile} result={result} scope={scope} />)}
         </div>
       </section>
 
-      {result.two_predictor_surface !== null ? <GpSurfaceChart result={result} /> : null}
+      {result.two_predictor_surface !== null ? <GpSurfaceChart scope={scope} result={result} /> : null}
 
       {result.warnings.length > 0 ? (
         <section className="result-section">
@@ -565,7 +567,7 @@ function GpOptimizationEvidence({ result }: { result: GaussianProcessRegressionR
   </section>;
 }
 
-export function GpKernelComparison({ result }: { result: GaussianProcessRegressionResult }) {
+export function GpKernelComparison({ result, analysisId = "legacy" }: { result: GaussianProcessRegressionResult; analysisId?: string }) {
   const { t, formatNumber } = useI18n();
   const candidates = result.kernel_candidates ?? [];
   const [preset, setPreset] = useState(result.kernel_selection?.selected_preset);
@@ -601,8 +603,8 @@ export function GpKernelComparison({ result }: { result: GaussianProcessRegressi
         <div className="table-wrap"><table className="result-table"><thead><tr><th>{t("gp.parameter")}</th><th>{t("gp.estimate")}</th><th>{t("gp.status")}</th></tr></thead>
           <tbody>{details.kernel.parameters.map((parameter, index) => <tr key={index}><th scope="row">{parameter.column_id ? `${result.predictors.find((column) => column.column_id === parameter.column_id)?.display_name ?? parameter.column_id}: ` : ""}{parameter.parameter}</th>
             <td>{number(parameter.estimate)}</td><td>{t(parameter.near_bound ? "gp.nearBound" : "gp.inRange")}</td></tr>)}</tbody></table></div>
-        {detailedResult ? <div className="chart-grid gp-chart-grid"><section><h5>{t("gp.observedCv")}</h5><GpScatter result={detailedResult} mode="cv" /></section>
-          <section><h5>{t("gp.residualDiagnostics")}</h5><GpResidualChart result={detailedResult} /></section></div> : null}
+        {detailedResult ? <div className="chart-grid gp-chart-grid"><section><h5>{t("gp.observedCv")}</h5><GpScatter scope={`${analysisId}:candidate:${chosen?.preset}`} result={detailedResult} mode="cv" /></section>
+          <section><h5>{t("gp.residualDiagnostics")}</h5><GpResidualChart scope={`${analysisId}:candidate:${chosen?.preset}`} result={detailedResult} /></section></div> : null}
         <ul className="warning-list">{details.warnings.map((warning) => <li key={warning}>{t(warningKeys[warning as keyof typeof warningKeys] ?? "gp.warning.generic")} <span className="cell-subtle">{warning}</span></li>)}</ul>
       </>}
     </> : null}
@@ -611,121 +613,6 @@ export function GpKernelComparison({ result }: { result: GaussianProcessRegressi
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div><dt>{label}</dt><dd>{value}</dd></div>;
-}
-
-function GpScatter({ result, mode }: { result: GaussianProcessRegressionResult; mode: "fitted" | "cv" }) {
-  const { t, formatNumber } = useI18n();
-  const points = result.diagnostics.points
-    .map((point) => ({ x: point.observed, y: mode === "fitted" ? point.fitted : point.cross_validated_fitted, row: point.row_index }))
-    .filter((point): point is { x: number; y: number; row: number } => point.y !== null);
-  const bounds = extent(points.flatMap((point) => [point.x, point.y]));
-  const x = scale(bounds, 54, 594);
-  const y = scale(bounds, 254, 44);
-  const title = mode === "fitted" ? t("gp.observedFitted") : t("gp.observedCv");
-  return <svg aria-label={title} className="interactive-chart gp-scatter-chart" role="img" viewBox="0 0 640 290"><title>{title}</title><desc>{title}</desc><line className="chart-axis" x1="54" x2="594" y1="254" y2="254"/><line className="chart-axis" x1="54" x2="54" y1="44" y2="254"/><line className="chart-reference-line" x1="54" x2="594" y1="254" y2="44"/>{points.map((point) => <circle aria-label={`${t("gp.row")} ${point.row + 1}, ${t("gp.observed")} ${formatNumber(point.x)}, ${mode === "fitted" ? t("gp.fitted") : t("gp.cvFitted")} ${formatNumber(point.y)}`} className="gp-chart-point" cx={x(point.x)} cy={y(point.y)} key={point.row} r="5" tabIndex={0}/>)}</svg>;
-}
-
-function GpResidualChart({ result }: { result: GaussianProcessRegressionResult }) {
-  const { t, formatNumber } = useI18n();
-  const xBounds = extent(result.diagnostics.points.map((point) => point.fitted));
-  const yBounds = extent(result.diagnostics.points.map((point) => point.residual).concat(0));
-  const x = scale(xBounds, 54, 594); const y = scale(yBounds, 254, 44);
-  return <svg aria-label={t("gp.residualDiagnostics")} className="interactive-chart gp-scatter-chart" role="img" viewBox="0 0 640 290"><title>{t("gp.residualDiagnostics")}</title><desc>{t("gp.residualDiagnostics")}</desc><line className="chart-axis" x1="54" x2="594" y1="254" y2="254"/><line className="chart-axis" x1="54" x2="54" y1="44" y2="254"/><line className="chart-reference-line" x1="54" x2="594" y1={y(0)} y2={y(0)}/>{result.diagnostics.points.map((point) => <circle aria-label={`${t("gp.row")} ${point.row_index + 1}, ${t("gp.fitted")} ${formatNumber(point.fitted)}, ${t("gp.residual")} ${formatNumber(point.residual)}`} className="gp-chart-point" cx={x(point.fitted)} cy={y(point.residual)} key={point.row_index} r="5" tabIndex={0}/>)}</svg>;
-}
-
-function GpUncertaintyChart({ result }: { result: GaussianProcessRegressionResult }) {
-  const { t, formatNumber } = useI18n();
-  const maximum = Math.max(1e-12, ...result.diagnostics.points.map((point) => point.predictive_standard_deviation));
-  const x = (index: number) => 54 + (index / Math.max(1, result.diagnostics.points.length - 1)) * 540;
-  const y = (value: number) => 254 - (value / maximum) * 210;
-  return <svg aria-label={t("gp.uncertaintyDiagnostics")} className="interactive-chart gp-scatter-chart" role="img" viewBox="0 0 640 290"><title>{t("gp.uncertaintyDiagnostics")}</title><desc>{t("gp.uncertaintyDiagnostics")}</desc><line className="chart-axis" x1="54" x2="594" y1="254" y2="254"/><line className="chart-axis" x1="54" x2="54" y1="44" y2="254"/>{result.diagnostics.points.map((point, index) => <circle aria-label={`${t("gp.row")} ${point.row_index + 1}, ${t("gp.predictiveSd")} ${formatNumber(point.predictive_standard_deviation)}`} className="gp-uncertainty-point" cx={x(index)} cy={y(point.predictive_standard_deviation)} key={point.row_index} r="5" tabIndex={0}/>)}</svg>;
-}
-
-function GpProfileChart({ profile }: { profile: GaussianProcessRegressionResult["conditional_profiles"][number] }) {
-  const { t, formatNumber } = useI18n();
-  const xBounds = extent(profile.points.map((point) => point.value));
-  const yBounds = extent(profile.points.flatMap((point) => [point.predictive_interval_95.lower, point.predictive_interval_95.upper]));
-  const x = scale(xBounds, 54, 594); const y = scale(yBounds, 254, 44);
-  const band = [...profile.points.map((point) => `${x(point.value)},${y(point.predictive_interval_95.lower)}`), ...profile.points.slice().reverse().map((point) => `${x(point.value)},${y(point.predictive_interval_95.upper)}`)].join(" ");
-  return <figure className="gp-profile-chart"><figcaption>{profile.display_name}</figcaption><svg aria-label={`${t("gp.conditionalProfiles")}: ${profile.display_name}`} className="interactive-chart" role="img" viewBox="0 0 640 290"><title>{profile.display_name}</title><desc>{t("gp.profileNotice")}</desc><line className="chart-axis" x1="54" x2="594" y1="254" y2="254"/><line className="chart-axis" x1="54" x2="54" y1="44" y2="254"/><polygon className="gp-profile-band" points={band}/><polyline className="gp-profile-line" fill="none" points={profile.points.map((point) => `${x(point.value)},${y(point.predicted_mean)}`).join(" ")}/>{profile.points.filter((_point, index) => index % Math.max(1, Math.floor(profile.points.length / 12)) === 0).map((point) => <circle aria-label={`${profile.display_name} ${formatNumber(point.value)}, ${t("gp.predictedMean")} ${formatNumber(point.predicted_mean)}`} className="gp-profile-point" cx={x(point.value)} cy={y(point.predicted_mean)} key={point.value} r="4" tabIndex={0}/>)}</svg></figure>;
-}
-
-function GpSurfaceChart({ result }: { result: GaussianProcessRegressionResult }) {
-  const { t, locale, formatNumber } = useI18n();
-  const [view, setView] = useState<"mean" | "uncertainty">("mean");
-  const initialSurface = result.two_predictor_surface;
-  const [xColumnId, setXColumnId] = useState(initialSurface?.x_column_id ?? "");
-  const [yColumnId, setYColumnId] = useState(initialSurface?.y_column_id ?? "");
-  const [surface, setSurface] = useState(initialSurface);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const manifest = result.model_manifest;
-
-  useEffect(() => {
-    setXColumnId(initialSurface?.x_column_id ?? "");
-    setYColumnId(initialSurface?.y_column_id ?? "");
-    setSurface(initialSurface);
-    setError(null);
-  }, [initialSurface, manifest?.model_id]);
-
-  if (surface === null || initialSurface === null) return null;
-  const requestedGridSize = initialSurface.grid_size;
-
-  async function generateSurface(): Promise<void> {
-    if (manifest === undefined || xColumnId === yColumnId) return;
-    const gridSize = Math.min(40, requestedGridSize);
-    const xRange = result.training_ranges.find((item) => item.column_id === xColumnId);
-    const yRange = result.training_ranges.find((item) => item.column_id === yColumnId);
-    if (xRange === undefined || yRange === undefined) return;
-    const rows: Array<{ client_row_id: string; values: Record<string, number> }> = [];
-    for (let yIndex = 0; yIndex < gridSize; yIndex += 1) {
-      const y = interpolate(yRange.minimum, yRange.maximum, yIndex, gridSize);
-      for (let xIndex = 0; xIndex < gridSize; xIndex += 1) {
-        const x = interpolate(xRange.minimum, xRange.maximum, xIndex, gridSize);
-        rows.push({
-          client_row_id: `surface-${yIndex}-${xIndex}`,
-          values: Object.fromEntries(
-            result.training_ranges.map((item) => [
-              item.column_id,
-              item.column_id === xColumnId ? x : item.column_id === yColumnId ? y : item.median,
-            ]),
-          ),
-        });
-      }
-    }
-    setIsGenerating(true);
-    setError(null);
-    try {
-      const response = await createGaussianProcessPointPredictions(manifest.model_id, {
-        expected_model_manifest_sha256: manifest.manifest_sha256,
-        rows,
-      });
-      setSurface({
-        x_column_id: xColumnId,
-        x_display_name: xRange.display_name,
-        y_column_id: yColumnId,
-        y_display_name: yRange.display_name,
-        grid_size: gridSize,
-        fixed_values: result.training_ranges.map((item) => item.median),
-        points: response.rows.map((row, index) => ({
-          x: rows[index].values[xColumnId],
-          y: rows[index].values[yColumnId],
-          predicted_mean: row.predicted_mean,
-          predictive_standard_deviation: row.predictive_standard_deviation,
-        })),
-      });
-    } catch (caught) {
-      const display = localizedErrorDisplay(caught, locale);
-      setError(`${display.message} (${display.code})`);
-    } finally {
-      setIsGenerating(false);
-    }
-  }
-
-  const values = surface.points.map((point) => view === "mean" ? point.predicted_mean : point.predictive_standard_deviation);
-  const bounds = extent(values);
-  const cell = 500 / surface.grid_size;
-  return <section className="result-section"><div className="section-heading-row"><h4>{t("gp.surface")}</h4><div className="segmented-control"><button aria-pressed={view === "mean"} onClick={() => setView("mean")} type="button">{t("gp.surfaceMean")}</button><button aria-pressed={view === "uncertainty"} onClick={() => setView("uncertainty")} type="button">{t("gp.surfaceUncertainty")}</button></div></div><p>{t("gp.surfaceNotice")}</p><div className="gp-surface-controls"><label><span>{t("gp.surfaceX")}</span><select onChange={(event) => setXColumnId(event.currentTarget.value)} value={xColumnId}>{result.predictors.map((predictor) => <option disabled={predictor.column_id === yColumnId} key={predictor.column_id} value={predictor.column_id}>{predictor.display_name}</option>)}</select></label><label><span>{t("gp.surfaceY")}</span><select onChange={(event) => setYColumnId(event.currentTarget.value)} value={yColumnId}>{result.predictors.map((predictor) => <option disabled={predictor.column_id === xColumnId} key={predictor.column_id} value={predictor.column_id}>{predictor.display_name}</option>)}</select></label><button disabled={manifest === undefined || xColumnId === yColumnId || isGenerating} onClick={() => void generateSurface()} type="button">{isGenerating ? t("gp.generatingSurface") : t("gp.generateSurface")}</button></div>{error !== null ? <div className="notice-box error" role="alert">{error}</div> : null}<p>{surface.y_display_name} vs {surface.x_display_name}</p><svg aria-label={t(view === "mean" ? "gp.surfaceMean" : "gp.surfaceUncertainty")} className="interactive-chart gp-surface-chart" role="img" viewBox="0 0 620 560"><title>{t("gp.surface")}</title><desc>{t("gp.surfaceNotice")}</desc>{surface.points.map((point, index) => { const normalized = (values[index] - bounds[0]) / Math.max(1e-12, bounds[1] - bounds[0]); const row = Math.floor(index / surface.grid_size); const column = index % surface.grid_size; return <rect aria-label={`${surface.x_display_name} ${formatNumber(point.x)}, ${surface.y_display_name} ${formatNumber(point.y)}, ${formatNumber(values[index])}`} className="gp-surface-cell" fill={`hsl(${220 - normalized * 190} 70% ${82 - normalized * 35}%)`} height={cell + 0.5} key={`${point.x}-${point.y}`} tabIndex={0} width={cell + 0.5} x={70 + column * cell} y={20 + (surface.grid_size - row - 1) * cell}/>; })}<text className="chart-axis-label" textAnchor="middle" x="320" y="545">{surface.x_display_name}</text><text className="chart-axis-label" textAnchor="middle" transform="rotate(-90 18 270)" x="18" y="270">{surface.y_display_name}</text></svg></section>;
 }
 
 function GaussianProcessPrediction({ result }: { result: GaussianProcessRegressionResult }) {
@@ -754,9 +641,6 @@ function GaussianProcessPrediction({ result }: { result: GaussianProcessRegressi
 function emptyPredictionRow(id: string, result: GaussianProcessRegressionResult): PredictionRowDraft { return { id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, ""])) }; }
 function finiteInput(value: string | undefined): boolean { return value !== undefined && value.trim().length > 0 && Number.isFinite(Number(value)); }
 function isNumericColumn(column: DatasetColumnResponse): boolean { return column.role !== "id" && (column.data_type === "integer" || column.data_type === "decimal"); }
-function extent(values: number[]): [number, number] { const finite = values.filter(Number.isFinite); if (finite.length === 0) return [0, 1]; const low = Math.min(...finite); const high = Math.max(...finite); if (low === high) return [low - 1, high + 1]; const padding = (high - low) * 0.05; return [low - padding, high + padding]; }
-function scale(bounds: [number, number], start: number, end: number): (value: number) => number { return (value) => start + ((value - bounds[0]) / Math.max(1e-12, bounds[1] - bounds[0])) * (end - start); }
-function interpolate(minimum: number, maximum: number, index: number, count: number): number { return count <= 1 ? minimum : minimum + (index / (count - 1)) * (maximum - minimum); }
 function kernelLabel(value: GaussianProcessRegressionResult["method"]["kernel_preset"], t: ReturnType<typeof useI18n>["t"]): string { return t(value === "matern_5_2_ard" ? "gp.kernel.matern52" : value === "matern_3_2_ard" ? "gp.kernel.matern32" : value === "rbf_ard" ? "gp.kernel.rbf" : "gp.kernel.rq"); }
 function noiseKey(value: GaussianProcessRegressionResult["method"]["noise_mode"]): "estimate" | "fixed" | "nearNoiseless" { return value === "near_noiseless" ? "nearNoiseless" : value; }
 function validationLabel(value: GaussianProcessRegressionResult["method"]["validation_method"], t: ReturnType<typeof useI18n>["t"]): string { return t(value === "k_fold" ? "gp.validation.kFold" : value === "leave_one_out" ? "gp.validation.loo" : "gp.validation.none"); }

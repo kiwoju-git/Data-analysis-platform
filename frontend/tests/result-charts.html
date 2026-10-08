@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Result chart fixture</title></head>
+  <body><div id="fixture"></div><script type="module">
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import { ResultChartsFixture } from "/src/charts/ResultChartsFixture.tsx";
+    import "/src/App.css";
+    createRoot(document.getElementById("fixture")).render(React.createElement(ResultChartsFixture));
+  </script></body>
+</html>

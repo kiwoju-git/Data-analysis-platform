@@ -1,0 +1,46 @@
+.chart-frame { min-inline-size: 0; inline-size: 100%; }
+.gp-profile-chart { margin: 0; min-inline-size: 0; }
+
+.chart-frame .chart-point-hovered {
+  stroke: #536176;
+  stroke-width: 2;
+}
+.chart-frame .chart-point-selected {
+  stroke: #111827;
+  stroke-width: 2.5;
+  opacity: 1;
+}
+.chart-frame .chart-point-focused {
+  outline: 2px solid #2563a6;
+  outline-offset: 3px;
+}
+.quality-signal-point { fill: #b45309; stroke: #78350f; }
+.quality-limit-line { stroke: #b45309; stroke-width: 1.4; }
+.quality-center-line { stroke: #6b7280; stroke-dasharray: 5 4; }
+.run-point-above { fill: #2563eb; stroke: #172033; }
+.run-point-below { fill: #059669; stroke: #172033; }
+.run-point-tie { fill: #6b7280; stroke: #172033; }
+.chart-frame-canvas { min-inline-size: 0; inline-size: 100%; margin-inline: auto; }
+.chart-frame .chart-frame-svg {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  min-block-size: 0;
+  max-inline-size: 100%;
+  overflow: visible;
+}
+.chart-grid-line { stroke: #e8edf3; stroke-width: 0.6; }
+.chart-tick-label { fill: #596579; font-size: 10px; }
+.chart-visible-axis-title { fill: #354052; font-size: 11px; font-weight: 500; }
+.chart-series-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0; padding: 0; list-style: none; font-size: 12px; }
+.chart-series-legend li { display: inline-flex; align-items: center; gap: 6px; min-inline-size: 0; overflow-wrap: anywhere; }
+.chart-series-legend svg { flex: 0 0 24px; inline-size: 24px; block-size: 12px; }
+.chart-interval { stroke: #7099ba; stroke-width: 2; fill: none; }
+.chart-interval-mean_ci { stroke: #135eab; stroke-width: 3; }
+.chart-interval-prediction_interval { stroke-dasharray: 4 2; }
+.chart-interval-band { fill: #d9eaf7; opacity: 0.7; }
+.chart-vector-label { fill: #354052; font-size: 10px; }
+.chart-horizontal-label { fill: #354052; font-size: 11px; }
+.chart-page-controls { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.chart-color-scale { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; font-size: 12px; margin-block: 8px; }
+.chart-color-scale-ramp { inline-size: 120px; block-size: 10px; background: linear-gradient(90deg, #e6f1f8, #1264a3); }
