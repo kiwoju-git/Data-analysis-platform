@@ -64,7 +64,7 @@ def verify_dashboard_navigation(page: Page, diagnostics: Any) -> None:
         ).click()
         for width, height in ((1440, 900), (1280, 800), (1024, 768), (390, 844)):
             page.set_viewport_size({"width": width, "height": height})
-            home = ".mobile-brand-home-link" if width < 761 else ".brand-home-link"
+            home = ".mobile-brand-home-link" if width < 1100 else ".brand-home-link"
             page.locator(home).click()
             expect(page.locator(".home-quick-card")).to_have_count(6)
             expect(page.locator(".analysis-domain-card")).to_have_count(8)
@@ -87,7 +87,7 @@ def verify_dashboard_navigation(page: Page, diagnostics: Any) -> None:
             diagnostics.capture_page(
                 page, f"analysis-domain-refresh-{locale}-{width}.png"
             )
-            for domain_index, expected_count in enumerate((4, 10, 3, 5, 3, 2, 5, 3)):
+            for domain_index, expected_count in enumerate((4, 10, 3, 5, 3, 2, 5, 4)):
                 page.locator(".analysis-domain-card").nth(domain_index).click()
                 cards = page.locator("button.analysis-domain-method-card")
                 expect(cards).to_have_count(expected_count)

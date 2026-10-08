@@ -619,11 +619,6 @@ def run_browser_flow(
             verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
             verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
-            variance_context = browser.new_context(accept_downloads=True)
-            variance_page = variance_context.new_page()
-            variance_page.goto(frontend_base_url, wait_until="networkidle")
-            verify_two_variances(variance_page, diagnostics, backend_base_url)
-            variance_context.close()
             verify_localization_shell(browser, frontend_base_url, diagnostics)
             context = browser.new_context(accept_downloads=True)
             context.add_init_script(
@@ -836,6 +831,11 @@ def run_browser_flow(
             verify_lazy_panel_error_boundary(context, frontend_base_url)
             diagnostics.step("verify refined UI, compact navigation and preserved drafts")
             verify_refined_ui(browser, frontend_base_url, diagnostics.root / "refined-ui")
+            variance_context = browser.new_context(accept_downloads=True)
+            variance_page = variance_context.new_page()
+            variance_page.goto(frontend_base_url, wait_until="networkidle")
+            verify_two_variances(variance_page, diagnostics, backend_base_url)
+            variance_context.close()
         except PlaywrightTimeoutError as exc:
             message = (
                 f"Playwright wait timed out during '{diagnostics.current_step_label}': "
@@ -2718,21 +2718,21 @@ def verify_pls_regression_and_prediction(
     selection_table = panel.locator(".pls-selection-table-wrap")
     expect(selection_table).to_contain_text("예측 R²")
     expect(selection_table.locator("tbody tr")).to_have_count(2)
-    expect(panel.locator(".pls-selection-chart")).to_be_visible()
+    expect(panel.locator('[data-chart-id="pls-selection"]')).to_be_visible()
     diagnostics.capture_page(page, "pls-model-selection.png")
 
     expect(panel.get_by_role("heading", name="반응 그림")).to_be_visible()
-    expect(panel.locator(".pls-scatter-chart").first).to_be_visible()
+    expect(panel.locator('[data-chart-id="pls-response"]')).to_be_visible()
     expect(
-        panel.locator(".pls-scatter-chart").first.locator(".chart-reference-line")
+        panel.locator('[data-chart-id="pls-response"] .chart-frame-svg .reference-line')
     ).to_have_count(1)
     diagnostics.capture_page(page, "pls-response-plot.png")
 
     expect(panel.get_by_role("heading", name="점수")).to_be_visible()
     expect(panel.get_by_role("heading", name="적재량")).to_be_visible()
-    expect(panel.locator(".pls-loading-chart")).to_be_visible()
+    expect(panel.locator('[data-chart-id="pls-loading"]')).to_be_visible()
     expect(
-        panel.locator(".pls-scatter-chart").nth(1).locator(".chart-reference-line")
+        panel.locator('[data-chart-id="pls-scores"] .chart-frame-svg .reference-line')
     ).to_have_count(0)
     diagnostics.capture_page(page, "pls-score-loading.png")
 
@@ -2811,7 +2811,7 @@ def verify_gaussian_process_regression_and_prediction(
     diagnostics.capture_page(page, "gp-hyperparameters.png")
 
     expect(panel.get_by_role("heading", name="관측값 대 적합값")).to_be_visible()
-    expect(panel.locator(".gp-scatter-chart").first).to_be_visible()
+    expect(panel.locator('[data-chart-id="gp-fitted"]')).to_be_visible()
     diagnostics.capture_page(page, "gp-observed-predicted.png")
     diagnostics.capture_page(page, "gp-validation.png")
 
@@ -2819,7 +2819,7 @@ def verify_gaussian_process_regression_and_prediction(
     expect(panel.locator(".gp-profile-chart")).to_have_count(2)
     diagnostics.capture_page(page, "gp-conditional-profile.png")
 
-    surface = panel.locator(".gp-surface-chart")
+    surface = panel.locator('[data-chart-id="gp-surface"]')
     expect(surface).to_be_visible()
     expect(panel.get_by_label("X 예측변수").locator("option:checked")).to_have_text(
         "temperature_c"
@@ -2906,7 +2906,7 @@ def verify_principal_components_analysis(
     expect(panel.get_by_role("heading", name="고유값 분석")).to_be_visible(
         timeout=30_000
     )
-    expect(panel.locator(".pca-scree-line")).to_be_visible()
+    expect(panel.locator('[data-chart-id="pca-scree"] svg path.interactive-data-line')).to_be_visible()
     expect(panel.get_by_role("heading", name="점수 그림")).to_be_visible()
     diagnostics.capture_page(page, "pca-eigenanalysis.png")
     diagnostics.capture_page(page, "pca-scree-score.png")
@@ -3612,6 +3612,7 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(scatter.locator(".chart-point")).to_have_count(6)
     workspace.locator(".lhs-parallel-chart").focus()
     page.keyboard.press("ArrowRight")
+    page.keyboard.press("Enter")
     expect(
         workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
     ).to_have_count(1)
@@ -3619,6 +3620,10 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
         workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
     ).to_contain_text("1")
     scatter.locator(".chart-point").nth(2).focus()
+    expect(
+        workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
+    ).to_contain_text("1")
+    page.keyboard.press("Enter")
     expect(
         workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
     ).to_contain_text("3")
