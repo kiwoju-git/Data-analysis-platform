@@ -8,7 +8,6 @@ import json
 import os
 import re
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -16,6 +15,8 @@ import urllib.error
 import urllib.request
 import webbrowser
 from pathlib import Path
+
+from app.core.network_ports import check_tcp_port_available
 
 
 def source_files(root: Path) -> list[str]:
@@ -158,8 +159,7 @@ def main() -> int:
         ("0.0.0.0" if args.lan else "127.0.0.1", args.frontend_port),
     ):
         try:
-            with socket.socket() as probe:
-                probe.bind((host, port))
+            check_tcp_port_available(host, port)
         except OSError:
             parser.error(f"Port {port} is already in use; no process was stopped")
     identity = source_identity(root)

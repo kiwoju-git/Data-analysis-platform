@@ -152,7 +152,7 @@ jobs:
 
   linux-release:
     runs-on: ubuntu-24.04
-    needs: [windows, e2e, linux, python311]
+    needs: [linux, python311]
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4

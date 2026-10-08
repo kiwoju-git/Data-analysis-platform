@@ -51,6 +51,9 @@ The launcher verifies identity/files before setting environment and importing th
 FastAPI app. It binds127.0.0.1:8600, one worker, no reload, CPU threads capped.
 The existing workspace default and metadata20 migration/recovery rules remain.
 Remote access is via SSH forwarding, not a public unauthenticated bind.
+Linux port preflight uses SO_REUSEADDR (never SO_REUSEPORT), matching Uvicorn's
+closed-connection TIME_WAIT restart behavior. An active listener still fails
+preflight and is never stopped. Windows port behavior is unchanged.
 
 Verification extracts the actual tar.gz twice into new locations, installs with
 neither Node nor Git in PATH and pip no-index, uses an external synthetic workspace,
@@ -58,3 +61,6 @@ checks API/UI/deep links, PCA/PLS/GP/Two Variances, reports, restart and restore
 Browser assertions execute from the development test environment, not the archive.
 Validation JSON and archive SHA are release assets, not source files rewritten
 after FINAL_SHA. The exact tested bytes are published as a prerelease.
+CI archive build/validation may run alongside Windows checks after Linux gates
+pass. It only uploads a CI artifact: main and public Release publication still
+require every Windows/Linux/E2E job to pass on that exact source commit.

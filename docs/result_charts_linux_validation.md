@@ -93,6 +93,19 @@ CI run `37716695085`, source `46d2a19`, completed both Linux jobs successfully:
   exact published source and final check results, without rewriting this source
   document after an archive is built.
 
+### Archive Restart Correction
+
+Run `37717898265` / `6cc0290` passed Windows (1,276 backend and 397 frontend
+tests), Windows E2E and both Linux jobs. Its actual tar.gz passed the first
+offline installation, PCA/PLS/GP/Two Variances, stored reports, built UI and
+offline HTML, but **failed** restart from the second installation directory.
+`server-1.log` reported `Errno98 Address already in use` after the first server
+had shut down cleanly: the port preflight did not allow Linux TCP TIME_WAIT.
+No main/Release publication occurred. A Linux-only SO_REUSEADDR preflight now
+matches Uvicorn without allowing active-listener sharing; portable occupied-port
+and Linux TIME_WAIT tests cover the distinction. A new archive from the new
+source SHA must pass both installations and shared-workspace restore.
+
 ### Integrated Verification Corrections
 
 - First integrated Windows backend run:1,246 passed,6 failed,1 skipped in1,801.92s.

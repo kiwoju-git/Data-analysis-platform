@@ -6,10 +6,11 @@ import json
 import os
 import platform
 import re
-import socket
 import sys
 from pathlib import Path
 from typing import Any
+
+from app.core.network_ports import check_tcp_port_available
 
 
 def verify_release(root: Path) -> dict[str, Any]:
@@ -99,8 +100,7 @@ def main() -> None:
     root = args.release_root.resolve()
     try:
         info = verify_release(root)
-        with socket.socket() as probe:
-            probe.bind(("127.0.0.1", args.port))
+        check_tcp_port_available("127.0.0.1", args.port)
     except (ValueError, OSError) as error:
         parser.error(str(error))
     os.environ.update(
