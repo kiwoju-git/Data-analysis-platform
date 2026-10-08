@@ -156,7 +156,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
     ]
 
     method_ids = [method.method_id for method in METHODS]
-    assert len(method_ids) == 37
+    assert len(method_ids) == 38
     assert len(set(method_ids)) == len(method_ids)
     assert method_ids[:5] == [
         "eda.descriptive",
@@ -207,6 +207,7 @@ def test_analysis_registry_module_and_method_ids_are_stable() -> None:
         "quality.capability",
         "quality.gage_rr",
         "quality.gage_run_chart",
+        "quality.two_variances",
         "doe.factorial_design",
         "doe.general_factorial_design",
         "doe.latin_hypercube",
@@ -261,6 +262,7 @@ def test_analysis_execution_handler_registry_covers_core_methods() -> None:
         "quality.capability": "capability_analysis",
         "quality.gage_rr": "gage_rr",
         "quality.gage_run_chart": "gage_run_chart",
+        "quality.two_variances": "two_variances_test",
     }
     assert set(_METHOD_EXECUTION_HANDLERS) == {
         method.method_id
@@ -441,7 +443,7 @@ def test_analysis_method_catalog_response_groups_available_and_disabled_methods(
     catalog = analysis_method_catalog()
 
     assert len(catalog.modules) == 6
-    assert len(catalog.methods) == 37
+    assert len(catalog.methods) == 38
     assert {method.availability.value for method in catalog.methods} == {"available"}
     assert catalog.methods[0].method_id == "eda.descriptive"
     assert catalog.methods[0].availability == MethodAvailability.AVAILABLE
@@ -646,7 +648,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
     assert response.status_code == 200
     payload = response.json()
     assert len(payload["modules"]) == 6
-    assert len(payload["methods"]) == 37
+    assert len(payload["methods"]) == 38
     assert {method["availability"] for method in payload["methods"]} == {"available"}
     available = [
         method["method_id"]
@@ -685,6 +687,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "quality.capability",
         "quality.gage_rr",
         "quality.gage_run_chart",
+        "quality.two_variances",
         "doe.factorial_design",
         "doe.general_factorial_design",
         "doe.latin_hypercube",

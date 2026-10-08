@@ -1,3 +1,4 @@
+import { visiblePlannedWorkflows } from "./plannedWorkflowVisibility";
 import type {
   AnalysisMethodDescriptor,
   AnalysisMethodListResponse,
@@ -236,7 +237,7 @@ function analysisDomainSidebarChildren({
         ? []
         : [methodSidebarItem(method, activeAnalysisMethodId, activePage, canOpenAnalysis, locale, onOpenAnalysisMethod)];
     });
-    const plannedItems = (domain.directPlannedWorkflows ?? [])
+    const plannedItems = visiblePlannedWorkflows(domain.directPlannedWorkflows)
       .filter((workflow) => workflow.showInSidebar)
       .map((workflow) => plannedSidebarItem(workflow.id, t(workflow.labelKey, {}, locale), locale));
     const contextualItems = (domain.directContextualWorkflows ?? [])
@@ -284,33 +285,44 @@ function familySidebarItems({
     const method = analysisCatalog?.methods.find((candidate) => candidate.method_id === methodId);
     return method === undefined ? [] : [method];
   });
+  const visiblePlanned = visiblePlannedWorkflows(family.plannedWorkflows);
   const hasSupportingItems =
     (family.contextualMethodIds?.length ?? 0) > 0 ||
     (family.contextualWorkflows?.length ?? 0) > 0 ||
-    (family.plannedWorkflows?.length ?? 0) > 0;
+    visiblePlanned.length > 0;
   if (methods.length === 1 && !hasSupportingItems) {
     return [{
       ...methodSidebarItem(methods[0], activeAnalysisMethodId, activePage, canOpenAnalysis, locale, onOpenAnalysisMethod),
       label: t(family.labelKey, {}, locale),
     }];
   }
-  if (methods.length === 0 && (family.plannedWorkflows?.length ?? 0) === 1) {
-    const workflow = family.plannedWorkflows![0];
+  if (methods.length === 0 && visiblePlanned.length === 1 && !family.contextualMethodIds?.length && !family.contextualWorkflows?.length) {
+    const workflow = visiblePlanned[0];
     return [plannedSidebarItem(workflow.id, t(workflow.labelKey, {}, locale), locale)];
   }
   const methodItems = methods.map((method) =>
     methodSidebarItem(method, activeAnalysisMethodId, activePage, canOpenAnalysis, locale, onOpenAnalysisMethod),
   );
-  const plannedItems = (family.plannedWorkflows ?? []).map((workflow) =>
+  const plannedItems = visiblePlanned.map((workflow) =>
     plannedSidebarItem(workflow.id, t(workflow.labelKey, {}, locale), locale),
   );
-  if (methodItems.length === 0 && plannedItems.length === 0) return [];
+  const contextualItems = [
+    ...(family.contextualMethodIds ?? []).flatMap((id) => {
+      const method = analysisCatalog?.methods.find((item) => item.method_id === id);
+      return method ? [{ ...plannedSidebarItem(id, methodLabel(method, locale), locale), label: `${methodLabel(method, locale)} · ${t("analysisContext.label", {}, locale)}` }] : [];
+    }),
+    ...(family.contextualWorkflows ?? []).filter((workflow) => workflow.showInSidebar !== false).map((workflow) => ({
+      ...plannedSidebarItem(workflow.id, t(workflow.labelKey, {}, locale), locale),
+      label: `${t(workflow.labelKey, {}, locale)} · ${t("analysisContext.label", {}, locale)}`,
+    })),
+  ];
+  if (methodItems.length === 0 && plannedItems.length === 0 && contextualItems.length === 0) return [];
   return [{
     kind: "family",
     active:
       activeAnalysisMethodId !== null &&
       analysisMethodPlacement(activeAnalysisMethodId)?.family?.id === family.id,
-    children: [...methodItems, ...plannedItems],
+    children: [...methodItems, ...plannedItems, ...contextualItems],
     id: `${domain.id}-${family.id}`,
     label: t(family.labelKey, {}, locale),
   }];

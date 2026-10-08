@@ -1438,6 +1438,15 @@ Family 2: `측정시스템 분석 / Measurement System Analysis`
 
 ## 14.2 New P0 — Two Variances
 
+### Implemented v0.1 versus future draft
+
+The executable v0.1 scope is **median-centered Brown-Forsythe equality**
+(ratio 1, two-sided, no ratio CI) and **normal-theory F ratio inference**
+(variance/SD ratios, both one-sided alternatives and two-sided intervals).
+The Bonett/Both options in the original draft below are deferred requirements,
+not shipped features. No automatic method selection or combined verdict is
+provided. See `two_variances_method_contract.md` for the implemented contract.
+
 권장 method ID:
 
 ```text

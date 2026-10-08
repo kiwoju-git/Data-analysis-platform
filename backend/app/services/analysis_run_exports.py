@@ -46,6 +46,8 @@ from app.services.regularized_model_report import (
     render_regularized_report,
 )
 from app.services.report_coverage import INLINE_REPORT_CONTRACTS, SUMMARY_REPORT_METHODS
+from app.services.stored_report_primitives import report_plot
+from app.services.two_variances_report import render_two_variances_report
 from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
@@ -1351,6 +1353,7 @@ def _analysis_method_report_label(method_id: str, locale: ReportLocale = "en") -
             "PCA 기반 다변량 검토",
         ),
         "eda.equal_variances": ("Test for Equal Variances", "등분산 검정"),
+        "quality.two_variances": ("Two Variances", "두 분산 비교"),
         "regression.linear_model": ("Fit Regression Model", "회귀모형 적합"),
         "regression.partial_least_squares": (
             "Partial Least Squares Regression",
@@ -1418,6 +1421,7 @@ def _analysis_result_method_specific_report_section(
         "principal_components_analysis": _principal_components_report_section,
         "gaussian_process_regression": _gaussian_process_report_section,
         "partial_least_squares_regression": render_pls_report,
+        "two_variances_test": render_two_variances_report,
     }
     renderer = renderers.get(str(summary_type))
     if renderer is not None:
@@ -1605,86 +1609,78 @@ def _pca_report_svgs(
     outliers: object,
     locale: ReportLocale,
 ) -> str:
-    eigen_rows = [item for item in eigenanalysis if isinstance(item, dict)]
-    if not eigen_rows:
+    def text(en: str, ko: str) -> str:
+        return report_text(locale, en=en, ko=ko)
+
+    eigen = [row for row in eigenanalysis if isinstance(row, dict)]
+    points = plot.get("points", []) if isinstance(plot, dict) else []
+    if not eigen:
         return ""
-    maximum = (
-        max(
-            (
-                float(item["eigenvalue"])
-                for item in eigen_rows
-                if isinstance(item.get("eigenvalue"), int | float)
-            ),
-            default=1.0,
+    scree_title = text("Scree Plot", "스크리 그림")
+    charts = [
+        report_plot(
+            scree_title,
+            text("Principal component", "주성분"),
+            text("Eigenvalue", "고유값"),
+            [
+                (
+                    scree_title,
+                    [
+                        (row["component"], row["eigenvalue"], f'PC{row["component"]}')
+                        for row in eigen
+                    ],
+                )
+            ],
+            lines=True,
+            x_ticks=[(row["component"], str(row["component"])) for row in eigen],
         )
-        or 1.0
-    )
-    count = len(eigen_rows)
-    circle_rows: list[str] = []
-    for index, item in enumerate(eigen_rows):
-        x = 45 + index / max(1, count - 1) * 500
-        y = 245 - float(item.get("eigenvalue", 0)) / maximum * 190
-        circle_rows.append(
-            f'<circle cx="{x:.3f}" cy="{y:.3f}" r="4">'
-            f"<title>PC{index + 1}: {_html_text(item.get('eigenvalue'))}</title></circle>"
-        )
-    circles = "".join(circle_rows)
-    scree_title = report_text(locale, en="Scree Plot", ko="스크리 그림")
-    score_title = report_text(locale, en="Score Plot", ko="점수 그림")
-    points_value = plot.get("points") if isinstance(plot, dict) else None
-    score_points = (
-        [item for item in points_value if isinstance(item, dict)]
-        if isinstance(points_value, list)
-        else []
-    )
-    score_pairs: list[tuple[dict[str, Any], list[Any]]] = []
-    for item in score_points:
-        scores = item.get("scores")
-        if isinstance(scores, list) and len(scores) >= 2:
-            score_pairs.append((item, scores))
-    values = [
-        float(value)
-        for _item, scores in score_pairs
-        for value in scores[:2]
-        if isinstance(value, int | float)
     ]
-    bound = max((abs(value) for value in values), default=1.0) or 1.0
-    score_circle_rows: list[str] = []
-    for item, scores in score_pairs:
-        x = 295 + float(scores[0]) / bound * 240
-        y = 145 - float(scores[1]) / bound * 105
-        score_circle_rows.append(
-            f'<circle cx="{x:.3f}" cy="{y:.3f}" r="3.5">'
-            f"<title>{_html_text(item.get('source_row_number'))}</title></circle>"
+    usable = [
+        row
+        for row in points
+        if isinstance(row, dict) and isinstance(row.get("scores"), list) and row["scores"]
+    ]
+    two = bool(usable) and all(len(row["scores"]) >= 2 for row in usable)
+    title = text("Score Plot", "점수 그림")
+
+    def score_label(index: int) -> str:
+        proportion = next((row["proportion"] for row in eigen if row["component"] == index), None)
+        return f"PC{index} score" + (
+            f" ({100 * proportion:.1f}%)" if proportion is not None else ""
         )
-    score_circles = "".join(score_circle_rows)
-    outlier_count = outliers.get("count") if isinstance(outliers, dict) else None
-    outlier_summary = report_text(
-        locale,
-        en=f"Outlier count: {_report_cell_value(outlier_count)}",
-        ko=f"이상치 수: {_report_cell_value(outlier_count)}",
+
+    charts.append(
+        report_plot(
+            title,
+            score_label(1) if two else text("Analysis row number", "분석 행 번호"),
+            score_label(2) if two else score_label(1),
+            [
+                (
+                    title,
+                    [
+                        (
+                            row["scores"][0] if two else row["source_row_number"],
+                            row["scores"][1] if two else row["scores"][0],
+                            str(row["source_row_number"]),
+                        )
+                        for row in usable
+                    ],
+                )
+            ],
+            square=two,
+        )
     )
-    return f"""
-  <div class="chart-grid">
-    <figure><svg role="img" viewBox="0 0 590 280"
-      aria-labelledby="pca-scree-title pca-scree-desc">
-      <title id="pca-scree-title">{_html_text(scree_title)}</title>
-      <desc id="pca-scree-desc">{_html_text(scree_title)}</desc>
-      <line class="axis" x1="45" x2="545" y1="245" y2="245"/>
-      <line class="axis" x1="45" x2="45" y1="45" y2="245"/>
-      <g class="estimate">{circles}</g></svg>
-      <figcaption>{_html_text(scree_title)}</figcaption></figure>
-    <figure><svg role="img" viewBox="0 0 590 280"
-      aria-labelledby="pca-score-title pca-score-desc">
-      <title id="pca-score-title">{_html_text(score_title)}</title>
-      <desc id="pca-score-desc">{_html_text(score_title)}</desc>
-      <line class="axis" x1="45" x2="545" y1="145" y2="145"/>
-      <line class="axis" x1="295" x2="295" y1="40" y2="250"/>
-      <g class="estimate">{score_circles}</g></svg>
-      <figcaption>{_html_text(score_title)}. {_html_text(outlier_summary)}</figcaption>
-    </figure>
-  </div>
-"""
+    count = outliers.get("count") if isinstance(outliers, dict) else None
+    charts.append(
+        "<p>"
+        + escape(
+            text(
+                f"Exploratory D-squared outlier count: {count}", f"탐색적 D 제곱 이상치 수: {count}"
+            )
+        )
+        + "</p>"
+    )
+    return '<div class="chart-grid">' + "".join(charts) + "</div>"
 
 
 def _descriptive_statistics_report_row(column: dict[object, object]) -> str:
@@ -2485,7 +2481,7 @@ def _gaussian_process_report_section(
         if row
     )
     parameter_rows = _gp_parameter_report_rows(kernel.get("parameters"), locale)
-    chart = _gp_observed_fitted_report_svg(diagnostics, locale)
+    chart = _gp_observed_fitted_report_svg(diagnostics, locale, payload.get("response"))
     metric_header = report_text(locale, en="Metric", ko="지표")
     value_header = report_text(locale, en="Value", ko="값")
     parameter_header = report_text(locale, en="Parameter", ko="항목")
@@ -2569,7 +2565,14 @@ def _gp_kernel_comparison_report(payload: dict[str, object], locale: ReportLocal
         if isinstance(detail, dict):
             details.append(
                 f"<details><summary>{_html_text(str(candidate.get('preset')))}</summary>"
-                + _gaussian_process_report_section(detail, locale)
+                + _gaussian_process_report_section(
+                    {
+                        **detail,
+                        "response": payload.get("response", {}),
+                        "predictors": payload.get("predictors", []),
+                    },
+                    locale,
+                )
                 + "</details>"
             )
     return (
@@ -2614,50 +2617,32 @@ def _gp_parameter_report_rows(value: object, locale: ReportLocale) -> str:
 def _gp_observed_fitted_report_svg(
     diagnostics: object,
     locale: ReportLocale,
+    response: object = None,
 ) -> str:
-    points_value = diagnostics.get("points") if isinstance(diagnostics, dict) else None
-    if not isinstance(points_value, list):
+    if not isinstance(diagnostics, dict):
         return ""
-    points = [
-        item
-        for item in points_value
-        if isinstance(item, dict)
-        and isinstance(item.get("observed"), int | float)
-        and isinstance(item.get("fitted"), int | float)
-    ]
-    if not points:
-        return ""
-    values = [float(item[key]) for item in points for key in ("observed", "fitted")]
-    lower = min(values)
-    upper = max(values)
-    span = upper - lower or 1.0
-
-    def coordinate(value: object) -> float:
-        return 45.0 + (float(cast(float, value)) - lower) / span * 500.0
-
-    circles = "".join(
-        (
-            f'<circle cx="{coordinate(item["observed"]):.4f}" '
-            f'cy="{555.0 - coordinate(item["fitted"]):.4f}" r="3.5">'
-            f'<title>{_html_text(item.get("row_index"))}</title></circle>'
-        )
-        for item in points
-    )
+    points = diagnostics.get("points", [])
+    column = response if isinstance(response, dict) else {}
+    label = str(column.get("display_name", report_text(locale, en="Response", ko="반응")))
+    if column.get("unit"):
+        label += f' ({column["unit"]})'
     title = report_text(locale, en="Observed versus Fitted", ko="관측값 대 적합값")
-    desc = report_text(
-        locale,
-        en="Saved observed and fitted values with a 45-degree reference line.",
-        ko="저장된 관측값과 적합값 및 45도 기준선입니다.",
+    return report_plot(
+        title,
+        report_text(locale, en="Observed ", ko="관측 ") + label,
+        report_text(locale, en="Predicted ", ko="예측 ") + label,
+        [
+            (
+                report_text(locale, en="Training prediction", ko="학습 예측"),
+                [
+                    (point["observed"], point["fitted"], str(point["row_index"] + 1))
+                    for point in points
+                    if isinstance(point, dict)
+                ],
+            )
+        ],
+        identity=True,
     )
-    return f"""
-  <h3>{_html_text(title)}</h3>
-  <svg role="img" viewBox="0 0 600 600" aria-labelledby="gp-report-title gp-report-desc">
-    <title id="gp-report-title">{_html_text(title)}</title>
-    <desc id="gp-report-desc">{_html_text(desc)}</desc>
-    <line class="interval" x1="45" x2="545" y1="510" y2="10" />
-    <g class="estimate">{circles}</g>
-  </svg>
-"""
 
 
 def _regression_metric_report_rows(

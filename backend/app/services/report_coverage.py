@@ -2,6 +2,7 @@
 
 # method_id -> (summary_type, supported stored schema versions)
 INLINE_REPORT_CONTRACTS: dict[str, tuple[str, frozenset[int]]] = {
+    "quality.two_variances": ("two_variances_test", frozenset({1})),
     "eda.descriptive": ("descriptive_statistics", frozenset({1, 2})),
     "eda.graphical_summary": ("graphical_summary", frozenset({1, 2})),
     "eda.normality": ("normality_test", frozenset({1, 2})),
@@ -45,6 +46,7 @@ SUMMARY_REPORT_METHODS = frozenset(
             key
             for key in INLINE_REPORT_CONTRACTS
             if key.startswith(("hypothesis.", "categorical.", "quality."))
+            and key != "quality.two_variances"
         ),
     }
 )

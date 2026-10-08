@@ -1,0 +1,26 @@
+{
+  "source": "User-specified hand-checkable fixture; independent F(4,4) CDF and quantile reference",
+  "sample_1": [1, 2, 3, 4, 5],
+  "sample_2": [1, 3, 5, 7, 9],
+  "sample_variances": [2.5, 10.0],
+  "variance_ratio": 0.25,
+  "standard_deviation_ratio": 0.5,
+  "normal_f": {
+    "statistic": 0.25,
+    "df1": 4,
+    "df2": 4,
+    "two_sided_p_value": 0.208,
+    "confidence_level": 0.95,
+    "variance_ratio_interval": [0.0260293843634819, 2.40113247118072]
+  },
+  "brown_forsythe": {
+    "statistic_numerator": 72,
+    "statistic_denominator": 35,
+    "p_value": 0.189403661093321
+  },
+  "tolerance": {
+    "relative": 1e-11,
+    "absolute_p": 1e-13,
+    "reason": "Double precision small-sample F evaluation and supplied 15-digit independent constants; not optimizer tolerance"
+  }
+}

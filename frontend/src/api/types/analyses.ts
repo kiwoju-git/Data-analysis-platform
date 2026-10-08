@@ -1,3 +1,4 @@
+import type { TwoVariancesResult } from "./twoVariances";
 import type {
   DescriptiveStatisticsResult,
   EqualVariancesResult,
@@ -145,6 +146,7 @@ export interface AnalysisResultEnvelope {
     | NormalityResult
     | PrincipalComponentsResult
     | EqualVariancesResult
+    | TwoVariancesResult
     | OneSampleTResult
     | EquivalenceTostResult
     | PairedTResult

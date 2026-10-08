@@ -167,7 +167,7 @@ components in `quick` mode; the full method uses `full` mode and additionally
 shows Q-Q and ECDF. Quick results never overwrite the descriptive result and
 are invalidated when the active dataset or filter draft changes.
 
-## Later Phase 2 Backlog
+## Phase 2 Migrations Completed (2026-10-08)
 
 - Pearson scatter: row index or safe point index, X, Y, fitted/reference value.
 - Run/Individuals/Subgroup and P/NP/C/U charts: point order, statistic,
@@ -175,13 +175,20 @@ are invalidated when the active dataset or filter draft changes.
 - Gage Run Chart: part/operator/replicate-safe identifiers and measurement
   already present in the bounded result payload.
 
-Each migration must preserve the method's existing point cap and explicitly
-define whether row indices or safe design identifiers are exposed.
+These migrations preserve existing point caps and use saved row/design identities.
+I/MR signal squares/diamonds, variable per-point limits, Gage series separation,
+zero-valued limits/specifications and independently nullable prediction CI/PI
+are retained. Calculation functions and historical result bytes are unchanged.
 
-## Phase 3 Backlog
+## DOE Display Migrations (2026-10-08)
 
 - DOE main and interaction effect coordinates;
 - RSM contour grid coordinates and response values.
+
+Factorial main/interaction/cube and existing RSM grid displays now use the shared
+interaction/frame boundary. The prior RSM renderer had no contour-line overlay;
+its saved grid values and coded/actual distinctions remain. Cube projection is
+not forced into a Cartesian XY interpretation.
 
 Zoom/pan, chart image artifacts, arbitrary HTML tooltips, full-dataset browser
 loading, and a heavy chart dependency are outside this contract. Any future

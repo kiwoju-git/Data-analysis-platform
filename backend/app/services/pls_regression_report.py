@@ -4,7 +4,7 @@ from html import escape
 from typing import Any
 
 from app.i18n.report_text import ReportLocale, report_text
-from app.services.stored_report_primitives import report_plot, report_table
+from app.services.stored_report_primitives import report_horizontal_bars, report_plot, report_table
 
 
 def pls_warning_text(code: str, locale: ReportLocale) -> str:
@@ -147,9 +147,11 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 ],
             )
             for key, label in [
-                ("training_r_squared", "Training R-squared"),
-                ("predicted_r_squared", "CV R-squared"),
-                ("x_variance", text("X variance ratio", "X 설명 비율")),
+                ("training_r_squared", text("Training R-squared", "학습 R 제곱")),
+                (
+                    "predicted_r_squared",
+                    text("Cross-validated predicted R-squared", "교차검증 예측 R 제곱"),
+                ),
             ]
         ]
         parts += [
@@ -157,10 +159,11 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
             report_plot(
                 text("PLS Model Selection", "PLS 모형 선택"),
                 headers[0],
-                text("Ratio", "비율"),
+                text("R-squared", "R 제곱"),
                 series,
                 lines=True,
                 selected_x=selected,
+                x_ticks=[(row["components"], str(row["components"])) for row in selection["rows"]],
             ),
             "</div>",
         ]
@@ -214,7 +217,10 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 "저장된 점만 표시하며 원자료를 다시 읽지 않습니다.",
             ),
         ]
-        observed = text("Observed response", "관측 반응")
+        response_name = payload["response"]["display_name"]
+        unit = payload["response"].get("unit")
+        response_label = response_name + (f" ({unit})" if unit else "")
+        observed = text("Observed ", "관측 ") + response_label
         for key, label in [
             ("fitted", text("Training prediction", "학습 예측")),
             ("cross_validated_fitted", text("Cross-validated prediction", "교차검증 예측")),
@@ -223,9 +229,18 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 heading(label, label),
                 report_plot(
                     label,
-                    label,
                     observed,
-                    [(label, [(p[key], p["observed"], str(p["row_index"] + 1)) for p in points])],
+                    text("Predicted ", "예측 ") + response_label,
+                    [
+                        (
+                            label,
+                            [
+                                (p["observed"], p[key], str(p["row_index"] + 1))
+                                for p in points
+                                if p.get(key) is not None
+                            ],
+                        )
+                    ],
                     identity=True,
                 ),
             ]
@@ -244,8 +259,8 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
             '<div data-pls-score-plot="1">',
             report_plot(
                 score_title,
-                "Component 1" if selected > 1 else row_label,
-                "Component 2" if selected > 1 else "Component 1",
+                "PLS t1 score" if selected > 1 else row_label,
+                "PLS t2 score" if selected > 1 else "PLS t1 score",
                 [(score_title, score_points)],
                 zero=True,
             ),
@@ -263,20 +278,14 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
             parts += [
                 f'<div data-loading-component="{component+1}">',
                 heading(label, label),
-                report_plot(
+                report_horizontal_bars(
                     label,
-                    text("Predictor index", "예측변수 순서"),
-                    "X Loading",
+                    f"Component {component+1} loading",
+                    text("Predictor", "예측변수"),
                     [
-                        (
-                            label,
-                            [
-                                (i + 1, row[component], predictors[i]["display_name"])
-                                for i, row in enumerate(latent["x_loadings"])
-                            ],
-                        )
+                        (predictors[i]["display_name"], row[component])
+                        for i, row in enumerate(latent["x_loadings"])
                     ],
-                    zero=True,
                 ),
                 report_table(
                     [text("Predictor", "예측변수"), "X Loading", "X Weight", "X Rotation"],

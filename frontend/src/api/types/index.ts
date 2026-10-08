@@ -1,6 +1,7 @@
 export type * from "./common";
 export type * from "./datasets";
 export type * from "./analyses";
+export type * from "./twoVariances";
 export type * from "./analysisResultsExploration";
 export type * from "./analysisResultsCategorical";
 export type * from "./analysisResultsRegression";

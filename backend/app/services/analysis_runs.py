@@ -43,6 +43,7 @@ from app.services.analysis_runner_gaussian_process import (
 )
 from app.services.analysis_runner_pca import run_principal_components_analysis
 from app.services.analysis_runner_pls import run_pls_regression_analysis
+from app.services.analysis_runner_two_variances import run_two_variances_analysis
 from app.services.analysis_runners_categorical import (
     run_chi_square_association_analysis,
     run_one_proportion_analysis,
@@ -158,6 +159,7 @@ _METHOD_EXECUTION_HANDLERS: dict[str, MethodExecutionHandler] = build_method_exe
         "eda.graphical_summary": run_graphical_summary_analysis,
         "eda.normality": run_normality_analysis,
         "eda.principal_components": run_principal_components_analysis,
+        "quality.two_variances": run_two_variances_analysis,
         "eda.equal_variances": run_equal_variances_analysis,
         "hypothesis.one_sample_t": run_one_sample_t_analysis,
         "hypothesis.paired_t": run_paired_t_analysis,

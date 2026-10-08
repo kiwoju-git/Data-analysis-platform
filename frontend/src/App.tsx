@@ -62,6 +62,7 @@ import type { OneWayAnovaExecutionOptions } from "./OneWayAnovaPanel";
 import type { MannWhitneyExecutionOptions } from "./MannWhitneyPanel";
 import type { PlsRunConfig } from "./PlsRegressionPanel";
 import type { PrincipalComponentsRunConfig } from "./PrincipalComponentsPanel";
+import { isTwoVariancesResult, type TwoVariancesOptions } from "./api/types/twoVariances";
 import type { GaussianProcessRunConfig } from "./GaussianProcessRegressionPanel";
 import type { TwoSampleEquivalenceExecutionOptions } from "./TwoSampleEquivalencePanel";
 import {
@@ -1008,6 +1009,8 @@ export default function App() {
     displayedAnalysisResult !== null && isEquivalenceMethodId(displayedAnalysisResult.method_id)
       ? displayedAnalysisResult
       : null;
+  const twoVariancesAnalysisResult = displayedAnalysisResult?.method_id === "quality.two_variances" ? displayedAnalysisResult : null;
+  const twoVariancesResult = isTwoVariancesResult(twoVariancesAnalysisResult?.result) ? twoVariancesAnalysisResult.result : null;
   const principalComponentsAnalysisResult =
     displayedAnalysisResult?.method_id === "eda.principal_components"
       ? displayedAnalysisResult
@@ -3914,6 +3917,22 @@ export default function App() {
     }
   }
 
+  async function handleRunTwoVariancesAnalysis(options: TwoVariancesOptions) {
+    if (!version || selectedMethod?.method_id !== "quality.two_variances") return;
+    if (analysisFilterValidationError) { setFlowError(analysisFilterValidationError); return; }
+    setIsRunningAnalysis(true); setFlowError(null);
+    try {
+      const response = await createAnalysisRun({
+        method_id: selectedMethod.method_id, method_version: selectedMethod.method_version,
+        dataset_version_id: version.version_id,
+        filter_snapshot: { expression_version: 1, conditions: serializeAnalysisFilterDrafts(analysisFilterDrafts, version.columns) },
+        roles: { response: options.response_column_id, group: options.group_column_id }, options: { ...options },
+      });
+      setAnalysisResult(response);
+    } catch (error) { setFlowError(error instanceof Error ? error.message : "analysis_run_failed"); }
+    finally { setIsRunningAnalysis(false); }
+  }
+
   async function handleRunGaussianProcessAnalysis(config: GaussianProcessRunConfig) {
     if (
       version === null ||
@@ -4304,6 +4323,9 @@ export default function App() {
     linearModelAnalysisResult,
     plsAnalysisResult,
     principalComponentsAnalysisResult,
+    twoVariancesAnalysisResult,
+    twoVariancesResult,
+    onRunTwoVariancesAnalysis: (options) => { void handleRunTwoVariancesAnalysis(options); },
     gaussianProcessAnalysisResult,
     linearModelConfidenceLevel,
     linearModelSelectionMethod,

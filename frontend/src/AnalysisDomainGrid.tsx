@@ -1,3 +1,4 @@
+import { visiblePlannedWorkflows } from "./plannedWorkflowVisibility";
 import type { AnalysisMethodListResponse } from "./api";
 import { ANALYSIS_DOMAINS, type AnalysisDomainDefinition } from "./analysisDomains";
 import { domainCatalogMethods } from "./analysisDomainMapping";
@@ -35,7 +36,7 @@ export function AnalysisDomainGrid({ catalog, onOpenDomain, compact = false }: {
         {!compact ? <span className="analysis-domain-card-families">
           {domain.landingMode === "flat_methods"
             ? methods.slice(0, 3).map((method) => methodLabel(method, locale)).join(" · ")
-            : domain.families.slice(0, 3).map((family) => t(family.labelKey)).join(" · ")}
+            : domain.families.filter((family) => family.methodIds.length || family.contextualMethodIds?.length || family.contextualWorkflows?.length || visiblePlannedWorkflows(family.plannedWorkflows).length).slice(0, 3).map((family) => t(family.labelKey)).join(" · ")}
         </span> : null}
       </button>;
     })}

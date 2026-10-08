@@ -37,6 +37,7 @@ export interface AttributeControlLimitSetsRouteParams {
 }
 
 export const apiRoutes = {
+  twoVariancesPreflight: () => apiUrl("/analysis-methods/quality.two_variances/preflight"),
   factorialTermCatalog: (designId: string, order: number) => urlWithQuery(
     `/doe-designs/${pathId(designId)}/analysis-term-catalog`,
     new URLSearchParams({ max_interaction_order: String(order) }),

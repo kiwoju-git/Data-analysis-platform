@@ -37,6 +37,17 @@ function optional(label: string, detail: string): MethodRoleRequirement {
 }
 
 export const analysisMethodGuidance = {
+  "quality.two_variances": {
+    methodId: "quality.two_variances",
+    cardTags: [
+      { category: "design", label: translationToken("twoVariances.twoIndependentGroups") },
+      { category: "target", label: translationToken("twoVariances.varianceRatio") },
+    ],
+    roleRequirements: [required(translationToken("twoVariances.response"), translationToken("twoVariances.independence")), required(translationToken("twoVariances.group"), translationToken("twoVariances.twoGroupsRequired"))],
+    optionChecklist: [translationToken("twoVariances.method"), translationToken("twoVariances.numerator"), translationToken("twoVariances.confidence")],
+    preflightChecks: [translationToken("twoVariances.checkGroups"), translationToken("twoVariances.bfLimit")],
+    resultFocus: [translationToken("twoVariances.ratio"), translationToken("twoVariances.interval"), translationToken("twoVariances.statistic")],
+  },
   "eda.descriptive": {
     methodId: "eda.descriptive",
     cardTags: [

@@ -1,5 +1,14 @@
 # Method Versioning Policy
 
+## Result Charts and Two Variances (2026-10-08)
+
+API 22 adds quality.two_variances method0.1.0 / two_variances_test result1 and
+typed group preflight. Metadata remains20; no migration or model manifest is
+needed. Existing methods, calculations and stored result/model schemas remain
+unchanged. HTML artifact schema3 remains: visible labels/plots project stored
+values. Linux release version2026.10.1 is a separate distribution identifier.
+Two Variances v0.1 intentionally defers the menu draft's Bonett CI/Both modes.
+
 ## Standalone GPR Settings and Report Parity (2026-09-17)
 
 API 21; GP method `0.3.0`, result schema 3, manifest schema 3. Explicit length

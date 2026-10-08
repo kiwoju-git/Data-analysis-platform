@@ -1,5 +1,12 @@
 # Statistical Method Audit Matrix
 
+2026-10-08: quality.two_variances0.1.0/result1 is a new two-independent-group
+method, not a rename of eda.equal_variances. Median Brown-Forsythe is default
+(equality only, no ratio CI); explicit normal-F supports directional/nonunit
+ratio hypotheses and finite/unbounded interval encoding. Reference fixture:
+backend/tests/reference/two_variances_reference.json. Existing PCA/PLS/GPR,
+OLS/regularized, DOE and Bayesian calculations are unchanged by chart adapters.
+
 2026-09-17: standalone GPR writes method 0.3.0/result 3/manifest 3/API 21.
 Explicit sample-SD-coordinate bounds and bounded BFGS have independent sklearn
 posterior/optimization/fold-local CV and transformed-gradient tests. PLS remains

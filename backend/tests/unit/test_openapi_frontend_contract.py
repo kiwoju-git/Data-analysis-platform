@@ -48,6 +48,14 @@ class FrontendResultTypeFileContract:
 # OperationContract here in the same change so backend pytest catches route drift.
 FRONTEND_ROUTE_CONTRACTS = [
     OperationContract(
+        route_name="twoVariancesPreflight",
+        method="post",
+        path="/api/v1/analysis-methods/quality.two_variances/preflight",
+        success_status="200",
+        response_schema="TwoVariancesPreflightResponse",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="health",
         method="get",
         path="/api/v1/health",
@@ -3205,6 +3213,10 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
 
 
 FRONTEND_RESULT_TYPE_FILE_CONTRACTS = [
+    FrontendResultTypeFileContract(
+        path="frontend/src/api/types/twoVariances.ts",
+        summary_types=frozenset({"two_variances_test"}),
+    ),
     FrontendResultTypeFileContract(
         path="frontend/src/api/types/analysisResultsExploration.ts",
         summary_types=frozenset(

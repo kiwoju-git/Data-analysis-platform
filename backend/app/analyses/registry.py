@@ -15,6 +15,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "eda.normality": "0.2.0",
     "eda.principal_components": "0.1.0",
     "eda.equal_variances": "0.2.0",
+    "quality.two_variances": "0.1.0",
     "hypothesis.one_sample_t": METHOD_VERSION,
     "hypothesis.paired_t": METHOD_VERSION,
     "hypothesis.two_sample_t": METHOD_VERSION,
@@ -406,6 +407,13 @@ METHODS: tuple[AnalysisMethodDescriptor, ...] = (
         label_ko="Gage Run Chart",
         label_en="Gage Run Chart",
         order=70,
+    ),
+    _available(
+        method_id="quality.two_variances",
+        module_id=AnalysisModuleId.QUALITY,
+        label_ko="두 분산 비교",
+        label_en="Two Variances",
+        order=80,
     ),
     _available(
         method_id="doe.factorial_design",

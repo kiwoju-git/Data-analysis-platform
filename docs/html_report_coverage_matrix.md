@@ -30,7 +30,7 @@ reports** in both languages. PLS was completely missing from actual dispatch;
 its dedicated renderer is added in this release. GPR gains stored settings,
 optimizer evidence, OOF/residual/uncertainty/profile SVGs and a surface table.
 
-Audit source: 37-method backend registry, eight frontend domains and actual export
+Audit source: 38-method backend registry, eight frontend domains and actual export
 routes. Every generic entry includes provenance and saved warnings. Schema below
 is the current result schema; legacy accepted versions are explicit in
 `report_coverage.py`. Status `supported` does not claim every option was visually
@@ -45,7 +45,7 @@ Renderer shorthand: E = named EDA renderer in `analysis_run_exports.py`, H =
 | Basic | eda.descriptive 0.2.0 | descriptive_statistics / 2 | E: column statistics | supported; quick chart is not a stored report | API EDA exports |
 | Basic | eda.graphical_summary 0.2.0 | graphical_summary / 2 | E v2: stats/CI, histogram, box, Q-Q, ECDF | supported | API + E2E |
 | Basic | eda.normality 0.2.0 | normality_test / 2 | E: per-column tests | summary; diagnostic plots absent | API EDA exports |
-| Basic | eda.principal_components 0.1.0 | principal_components_analysis / 1 | PCA eigenanalysis/loadings and 5 SVG views | supported; bounded saved points | PCA API/report |
+| Basic | eda.principal_components 0.1.0 | principal_components_analysis / 1 | PCA eigenanalysis/loadings, scree and score SVG | supported; bounded saved points; D-squared remains exploratory | PCA API/report |
 | Means | hypothesis.one_sample_t 0.1.0 | one_sample_t_test / 1 | H: estimates/test/CI | summary; plots absent | API hypothesis exports |
 | Means | hypothesis.paired_t 0.1.0 | paired_t_test / 1 | H: difference/test | summary; plots absent | API hypothesis exports |
 | Means | hypothesis.two_sample_t 0.1.0 | two_sample_t_test / 1 | H: groups/difference/test | summary | API hypothesis exports |
@@ -73,6 +73,7 @@ Renderer shorthand: E = named EDA renderer in `analysis_run_exports.py`, H =
 | AI/ML | doe.latin_hypercube 0.3.0 | dedicated LHS | design CSV | unsupported HTML | LHS API/E2E |
 | AI/ML | doe.bayesian_optimization 0.6.0 | dedicated study/recommendation | study/initial-design export | unsupported HTML | BO API/reference/E2E |
 | Quality | quality.attribute_control_chart 0.3.0 | attribute_control_chart / 3 | Q: chart summaries/signals | summary; chart SVG absent | API quality exports |
+| Measurement | quality.two_variances 0.1.0 | two_variances_test / 1 | two_variances_report: settings/groups/ratio/test/conditional CI, group plot and F ratio interval SVG | supported; BF deliberately has no ratio CI; Bonett deferred | test_two_variances_report + browser E2E |
 | Quality | quality.subgroup_chart 0.1.0 | subgroup_chart / 1 | Q: Xbar/R/S summaries | summary | API quality exports |
 | Quality | quality.individuals_chart 0.1.0 | individuals_chart / 1 | Q: I/MR summaries | summary | API quality exports |
 | Quality | quality.run_chart 0.2.0 | run_chart / 2 | Q: runs/tests | summary | API quality exports |

@@ -252,6 +252,66 @@ class PrincipalComponentsOptions(BaseModel):
         return self
 
 
+class TwoVariancesOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    numerator_group_key: str = Field(min_length=1)
+    denominator_group_key: str = Field(min_length=1)
+    method: Literal["brown_forsythe", "normal_f"] = "brown_forsythe"
+    ratio_scale: Literal["variance", "standard_deviation"] = "variance"
+    hypothesized_ratio: float = Field(default=1, gt=0)
+    alternative: Literal["two_sided", "less", "greater"] = "two_sided"
+    confidence_level: float = Field(default=0.95, gt=0.5, lt=1)
+    preflight_fingerprint: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+
+    @field_validator("hypothesized_ratio", "confidence_level", mode="before")
+    @classmethod
+    def require_numeric_value(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float) or not isfinite(value):
+            raise ValueError("must be a finite number")
+        return value
+
+    @model_validator(mode="after")
+    def validate_two_groups(self) -> "TwoVariancesOptions":
+        if self.response_column_id == self.group_column_id:
+            raise ValueError("response and group columns must differ")
+        if self.numerator_group_key == self.denominator_group_key:
+            raise ValueError("numerator and denominator must differ")
+        if self.method == "brown_forsythe" and (
+            self.hypothesized_ratio != 1 or self.alternative != "two_sided"
+        ):
+            raise ValueError("Brown-Forsythe supports two-sided equality only")
+        return self
+
+
+class TwoVariancesPreflightRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version_id: UUID
+    response_column_id: str = Field(min_length=1)
+    group_column_id: str = Field(min_length=1)
+    filter_snapshot: AnalysisFilterSnapshot = Field(default_factory=AnalysisFilterSnapshot)
+
+
+class TwoVariancesPreflightGroup(BaseModel):
+    key: str
+    display_label: str
+    n_used: int
+
+
+class TwoVariancesPreflightResponse(BaseModel):
+    preflight_schema_version: Literal[1] = 1
+    fingerprint: str
+    groups: list[TwoVariancesPreflightGroup]
+    n_total: int
+    n_used: int
+    n_excluded: int
+    eligible: bool
+    reason_codes: list[str]
+
+
 class EqualVariancesOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

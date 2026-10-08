@@ -3,6 +3,8 @@ import { ChartSourceContext } from "./charts/chartSourceContext";
 import { useI18n } from "./i18n/LocaleProvider";
 import type { AnalysisDomainDefinition } from "./analysisDomains";
 import { analysisDomainForMethod } from "./analysisDomainMapping";
+import { TwoVariancesPanel } from "./TwoVariancesPanel";
+import type { TwoVariancesOptions, TwoVariancesResult } from "./api/types/twoVariances";
 import {
   AnalysisWorkbench,
   type AnalysisWorkbenchComparisonState,
@@ -148,6 +150,7 @@ interface AnalysisResultByMethod {
   linearModelAnalysisResult: AnalysisResultEnvelope | null;
   plsAnalysisResult: AnalysisResultEnvelope | null;
   principalComponentsAnalysisResult: AnalysisResultEnvelope | null;
+  twoVariancesAnalysisResult?: AnalysisResultEnvelope | null;
   gaussianProcessAnalysisResult: AnalysisResultEnvelope | null;
   attributeControlChartAnalysisResult: AnalysisResultEnvelope | null;
   individualsChartAnalysisResult: AnalysisResultEnvelope | null;
@@ -279,6 +282,9 @@ export interface AnalysisShellProps {
   plsResult?: PlsRegressionResult | null;
   principalComponentsAnalysisResult?: AnalysisResultEnvelope | null;
   principalComponentsResult?: PrincipalComponentsResult | null;
+  twoVariancesAnalysisResult?: AnalysisResultEnvelope | null;
+  twoVariancesResult?: TwoVariancesResult | null;
+  onRunTwoVariancesAnalysis?: (options: TwoVariancesOptions) => void;
   gaussianProcessAnalysisResult?: AnalysisResultEnvelope | null;
   gaussianProcessResult?: GaussianProcessRegressionResult | null;
   isRunningLinearModelPrediction?: boolean;
@@ -647,6 +653,9 @@ export function AnalysisShell({
   linearModelAnalysisResult = null,
   plsAnalysisResult = null,
   principalComponentsAnalysisResult = null,
+  twoVariancesAnalysisResult = null,
+  twoVariancesResult = null,
+  onRunTwoVariancesAnalysis = () => undefined,
   gaussianProcessAnalysisResult = null,
   linearModelConfidenceLevel = 0.95,
   linearModelInteractionKeys = [],
@@ -970,6 +979,7 @@ export function AnalysisShell({
           graphicalSummaryAnalysisResult,
           normalityAnalysisResult,
           principalComponentsAnalysisResult,
+          twoVariancesAnalysisResult,
           equalVariancesAnalysisResult,
           oneSampleTAnalysisResult,
           equivalenceTostAnalysisResult,
@@ -1533,6 +1543,13 @@ export function AnalysisShell({
               );
             }
             if (
+              method.method_id === "quality.two_variances" && method.availability === "available"
+            ) {
+              return <TwoVariancesPanel version={version} filterDrafts={analysisFilterDrafts}
+                filterValidationError={analysisFilterValidationError} isRunningAnalysis={isRunningAnalysis}
+                analysisResult={twoVariancesAnalysisResult} result={twoVariancesResult} onRun={onRunTwoVariancesAnalysis} />;
+            }
+            if (
               method.method_id === "eda.principal_components" &&
               method.availability === "available"
             ) {
@@ -1942,6 +1959,8 @@ function selectedAnalysisResultForMethod(
       return results.plsAnalysisResult;
     case "eda.principal_components":
       return results.principalComponentsAnalysisResult;
+    case "quality.two_variances":
+      return results.twoVariancesAnalysisResult ?? null;
     case "regression.gaussian_process":
       return results.gaussianProcessAnalysisResult;
     case "quality.attribute_control_chart":

@@ -39,6 +39,7 @@ from refined_ui import verify_refined_ui
 from regularized_regression import verify_regularized_regression
 from result_charts import verify_chart_interactions, verify_result_chart_models
 from desktop_resize import verify_desktop_resize
+from two_variances import verify_two_variances
 
 SAMPLE_DATA = """Group\tValue
 A\t10
@@ -618,6 +619,11 @@ def run_browser_flow(
             verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
             verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
+            variance_context = browser.new_context(accept_downloads=True)
+            variance_page = variance_context.new_page()
+            variance_page.goto(frontend_base_url, wait_until="networkidle")
+            verify_two_variances(variance_page, diagnostics, backend_base_url)
+            variance_context.close()
             verify_localization_shell(browser, frontend_base_url, diagnostics)
             context = browser.new_context(accept_downloads=True)
             context.add_init_script(

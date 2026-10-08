@@ -14,6 +14,7 @@ import {
   PlannedDomainMethodCard,
 } from "./AnalysisDomainMethodCard";
 import { useI18n } from "./i18n/LocaleProvider";
+import { visiblePlannedWorkflows } from "./plannedWorkflowVisibility";
 
 interface AnalysisDomainLandingProps {
   catalog: AnalysisMethodListResponse;
@@ -79,7 +80,7 @@ export function AnalysisDomainLanding({
       ) : (
         <div className="analysis-domain-method-grid">
           {entries.map(methodCard)}
-          {(domain.directPlannedWorkflows ?? []).map((workflow) => (
+          {visiblePlannedWorkflows(domain.directPlannedWorkflows).map((workflow) => (
             <PlannedDomainMethodCard key={workflow.id} workflow={workflow} />
           ))}
           {(domain.directContextualWorkflows ?? [])
@@ -101,7 +102,10 @@ export function AnalysisDomainLanding({
           {domain.selectionGuideKeys?.map((key) => <li key={key}>{t(key)}</li>)}
         </ul> : null}
       </details>
-      {domain.families.map((family) => <div className="analysis-domain-supporting-items" key={family.id}>
+      {domain.families.map((family) => {
+        const planned = visiblePlannedWorkflows(family.plannedWorkflows);
+        if (!planned.length && !(family.contextualWorkflows?.length) && !contextualCatalogMethods(catalog, family).length) return null;
+        return <div className="analysis-domain-supporting-items" key={family.id}>
         {contextualCatalogMethods(catalog, family).map((method) =>
           <div className="analysis-domain-workflow-row" key={method.method_id}>
             <span>{methodLabel(method, locale)}</span><small>{t("analysisContext.label")}</small>
@@ -110,11 +114,11 @@ export function AnalysisDomainLanding({
           <div className="analysis-domain-workflow-row" key={workflow.id}>
             <span>{t(workflow.labelKey)}</span><small>{t(workflow.statusKey ?? "analysisContext.label")}</small>
           </div>)}
-        {(family.plannedWorkflows ?? []).map((workflow) =>
+        {planned.map((workflow) =>
           <div className="analysis-domain-workflow-row is-planned" key={workflow.id}>
             <span>{t(workflow.labelKey)}</span><small>{t("analysisPlanned.label")}</small>
           </div>)}
-      </div>)}
+      </div>; })}
     </section>
   );
 }

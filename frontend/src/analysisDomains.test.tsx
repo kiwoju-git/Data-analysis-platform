@@ -48,6 +48,7 @@ const expectedRegistryMethodIds = [
   "quality.individuals_chart",
   "quality.run_chart",
   "quality.capability",
+  "quality.two_variances",
   "quality.gage_rr",
   "quality.gage_run_chart",
   "doe.factorial_design",
@@ -73,7 +74,7 @@ describe("analysis domain navigation", () => {
       }
       expect(html).not.toContain('class="analysis-method-family-label"');
       expect(html).toContain('aria-pressed="true"');
-      expect(html).toContain('is-planned');
+      expect(html).not.toContain('is-planned');
       expect(html).toContain(locale === "ko" ? "비모수 비교" : "Nonparametric Tests");
     } finally { setCurrentLocale("ko"); }
   });
@@ -103,7 +104,8 @@ describe("analysis domain navigation", () => {
     expect(
       regression?.families.flatMap((family) => family.methodIds),
     ).not.toContain("regression.predict");
-    expect(mappedAnalysisMethodIds()).not.toContain("quality.two_variances");
+    expect(mappedAnalysisMethodIds()).not.toContain("quality.multivariate_monitoring");
+    expect(mappedAnalysisMethodIds()).toContain("quality.two_variances");
     expect(analysisFamilyForMethod("eda.equal_variances")?.id).toBe(
       "variance-comparison",
     );
@@ -204,8 +206,8 @@ describe("analysis domain navigation", () => {
     expect(basicHtml).toContain('<details class="analysis-domain-guide">');
     expect(basicHtml.indexOf("analysis-domain-method-grid")).toBeLessThan(basicHtml.indexOf("analysis-domain-guide\""));
     expect(familyHtml).toContain('<details class="analysis-domain-guide">');
-    expect(familyHtml).toContain("Two Variances");
-    expect(familyHtml).not.toContain(">Two Variances</button>");
+    expect(familyHtml).toContain('aria-label="quality.two_variances"');
+    expect(familyHtml).not.toContain('is-planned');
     expect(familyHtml).toContain("등분산 검정");
   });
 });

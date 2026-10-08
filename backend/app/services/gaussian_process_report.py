@@ -93,30 +93,58 @@ def gp_saved_details_report(payload: dict[str, Any], locale: ReportLocale) -> st
             ),
         ]
     points = payload.get("diagnostics", {}).get("points", [])
+    response = payload.get("response", {})
+    response_label = response.get("display_name", text("Response", "반응"))
+    if response.get("unit"):
+        response_label += f' ({response["unit"]})'
+    axis_labels = {
+        "observed": text("Observed ", "관측 ") + response_label,
+        "cross_validated_fitted": text("Predicted ", "예측 ") + response_label,
+        "fitted": text("Fitted ", "적합 ") + response_label,
+        "residual": text("Residual", "잔차"),
+        "row_index": text("Analysis row number", "분석 행 번호"),
+        "predictive_standard_deviation": text(
+            "New observation predictive SD", "새 관측값 예측 표준편차"
+        )
+        + (f' ({response["unit"]})' if response.get("unit") else ""),
+    }
     for x, y, title in [
         (
-            "cross_validated_fitted",
             "observed",
+            "cross_validated_fitted",
             text("Observed vs CV Prediction", "관측값 대 CV 예측"),
         ),
         ("fitted", "residual", text("Residuals vs Fitted", "잔차 대 적합값")),
         (
-            "fitted",
+            "row_index",
             "predictive_standard_deviation",
             text("Predictive Uncertainty", "예측 불확실성"),
         ),
     ]:
         series = [
-            (p[x], p[y], str(p["row_index"] + 1))
+            (p[x] + 1 if x == "row_index" else p[x], p[y], str(p["row_index"] + 1))
             for p in points
             if p.get(x) is not None and p.get(y) is not None
         ]
         parts += [
             heading(title, title),
             report_plot(
-                title, x, y, [(title, series)], identity=y == "observed", zero=y == "residual"
+                title,
+                axis_labels[x],
+                axis_labels[y],
+                [(title, series)],
+                identity=x == "observed",
+                zero=y == "residual",
             ),
         ]
+    predictor_units = {
+        item["column_id"]: item.get("unit") for item in payload.get("predictors", [])
+    }
+
+    def predictor_label(column_id: str, name: str) -> str:
+        unit = predictor_units.get(column_id)
+        return name + (f" ({unit})" if unit else "")
+
     for profile in payload.get("conditional_profiles", []):
         title = text("Conditional Profile", "조건부 profile") + ": " + profile["display_name"]
         profile_series = [
@@ -127,7 +155,9 @@ def gp_saved_details_report(payload: dict[str, Any], locale: ReportLocale) -> st
         ]
         profile_series += [
             (
-                text("95% lower", "95% 하한") if key == "lower" else text("95% upper", "95% 상한"),
+                text("95% new-observation PI lower", "95% 새 관측값 예측구간 하한")
+                if key == "lower"
+                else text("95% new-observation PI upper", "95% 새 관측값 예측구간 상한"),
                 [(p["value"], p["predictive_interval_95"][key], "") for p in profile["points"]],
             )
             for key in ("lower", "upper")
@@ -135,7 +165,11 @@ def gp_saved_details_report(payload: dict[str, Any], locale: ReportLocale) -> st
         parts += [
             heading(title, title),
             report_plot(
-                title, profile["display_name"], text("Response", "반응"), profile_series, lines=True
+                title,
+                predictor_label(profile["column_id"], profile["display_name"]),
+                response_label,
+                profile_series,
+                lines=True,
             ),
             report_table(
                 [text("Fixed predictors (model order)", "고정 예측변수 (모형 순서)")],
@@ -148,10 +182,11 @@ def gp_saved_details_report(payload: dict[str, Any], locale: ReportLocale) -> st
             heading("Stored Two-Predictor Surface", "저장된 두 예측변수 곡면"),
             report_table(
                 [
-                    surface["x_display_name"],
-                    surface["y_display_name"],
-                    text("Predicted mean", "예측 평균"),
-                    text("Observation predictive SD", "관측 예측 표준편차"),
+                    predictor_label(surface["x_column_id"], surface["x_display_name"]),
+                    predictor_label(surface["y_column_id"], surface["y_display_name"]),
+                    text("Predicted mean", "예측 평균")
+                    + (f' ({response["unit"]})' if response.get("unit") else ""),
+                    axis_labels["predictive_standard_deviation"],
                 ],
                 [
                     [p["x"], p["y"], p["predicted_mean"], p["predictive_standard_deviation"]]

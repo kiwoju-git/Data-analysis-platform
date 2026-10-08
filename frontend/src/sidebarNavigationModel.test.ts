@@ -28,6 +28,7 @@ const analysisCatalog: AnalysisMethodListResponse = {
     ["eda.normality", "정규성 검정", "exploration"],
     ["eda.principal_components", "PCA 기반 다변량 검토", "exploration"],
     ["eda.equal_variances", "등분산 검정", "exploration"],
+    ["quality.two_variances", "두 분산 비교", "quality"],
     ["hypothesis.one_way_anova", "일원분산분석", "hypothesis"],
     ["categorical.chi_square_association", "카이제곱 독립성 검정", "categorical"],
     ["quality.run_chart", "런 차트", "quality"],
@@ -272,8 +273,8 @@ describe("sidebar navigation model", () => {
     const plannedTwoVariances = variance?.children?.find((item) =>
       item.id.includes("quality.two_variances"),
     );
-    expect(plannedTwoVariances?.disabled).toBe(true);
-    expect(plannedTwoVariances).not.toHaveProperty("onActivate");
+    expect(plannedTwoVariances?.disabled).toBe(false);
+    expect(plannedTwoVariances).toHaveProperty("onActivate");
   });
 
   it("marks method detail URLs as the active Help leaf", () => {

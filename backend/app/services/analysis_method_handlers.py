@@ -25,6 +25,11 @@ class MethodExecutionHandlerSpec:
 
 METHOD_EXECUTION_HANDLER_SPECS: tuple[MethodExecutionHandlerSpec, ...] = (
     MethodExecutionHandlerSpec(
+        method_id="quality.two_variances",
+        method_version=METHOD_VERSIONS["quality.two_variances"],
+        result_summary_type="two_variances_test",
+    ),
+    MethodExecutionHandlerSpec(
         method_id="eda.descriptive",
         method_version=METHOD_VERSIONS["eda.descriptive"],
         result_summary_type="descriptive_statistics",

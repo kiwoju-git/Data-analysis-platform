@@ -11,6 +11,7 @@ export type AnalysisDomainId =
   | "measurement-variability";
 
 export interface AnalysisPlannedWorkflow {
+  visibility?: "navigation" | "roadmap_only";
   descriptionKey: TranslationKey;
   id: string;
   labelKey: TranslationKey;
@@ -127,6 +128,7 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
         plannedWorkflows: [
           {
             id: "hypothesis.comparability_assessment",
+            visibility: "roadmap_only",
             labelKey: "analysisPlanned.comparability.label",
             descriptionKey: "analysisPlanned.comparability.description",
             showInSidebar: true,
@@ -263,6 +265,7 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
         plannedWorkflows: [
           {
             id: "quality.multivariate_monitoring",
+            visibility: "roadmap_only",
             labelKey: "analysisPlanned.multivariateMonitoring.label",
             descriptionKey: "analysisPlanned.multivariateMonitoring.description",
             showInSidebar: true,
@@ -283,14 +286,7 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
         id: "variance-comparison",
         labelKey: "analysisFamilies.variance.label",
         descriptionKey: "analysisFamilies.variance.description",
-        methodIds: ["eda.equal_variances"],
-        plannedWorkflows: [
-          {
-            id: "quality.two_variances",
-            labelKey: "analysisPlanned.twoVariances.label",
-            descriptionKey: "analysisPlanned.twoVariances.description",
-          },
-        ],
+        methodIds: ["eda.equal_variances", "quality.two_variances"],
       },
       {
         id: "measurement-systems",
