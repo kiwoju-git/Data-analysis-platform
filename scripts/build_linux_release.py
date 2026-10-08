@@ -51,10 +51,10 @@ def main() -> int:
     checked(["git", "diff", "--cached", "--exit-code"], repo)
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    name = (
+    archive_name = (
         f"statistical-twin-linux-{args.release_version}-ubuntu24.04-x86_64-py312.tar.gz"
     )
-    if (output / name).exists():
+    if (output / archive_name).exists():
         parser.error("Output archive already exists; use a new output directory")
     with tempfile.TemporaryDirectory(prefix="statistical-twin-build-") as temporary:
         stage = Path(temporary)
@@ -138,8 +138,8 @@ def main() -> int:
             metadata = json.loads(
                 (dependency / "package.json").read_text(encoding="utf-8")
             )
-            name = metadata["name"].replace("/", "_").replace("@", "")
-            destination = frontend_notices / f"{name}-{metadata['version']}"
+            dependency_name = metadata["name"].replace("/", "_").replace("@", "")
+            destination = frontend_notices / f"{dependency_name}-{metadata['version']}"
             destination.mkdir(exist_ok=True)
             (destination / "package.json").write_text(
                 json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
@@ -207,14 +207,20 @@ def main() -> int:
         (package / "FILES.sha256").write_text(
             "\n".join(manifest) + "\n", encoding="utf-8"
         )
-        with tarfile.open(output / name, "w:gz") as archive:
+        with tarfile.open(output / archive_name, "w:gz") as archive:
             archive.add(package, arcname="statistical-twin-linux")
-    checksum = hashlib.sha256((output / name).read_bytes()).hexdigest()
-    (output / "SHA256SUMS").write_text(f"{checksum}  {name}\n", encoding="ascii")
+    checksum = hashlib.sha256((output / archive_name).read_bytes()).hexdigest()
+    (output / "SHA256SUMS").write_text(
+        f"{checksum}  {archive_name}\n", encoding="ascii"
+    )
     shutil.copy2(repo / "README-linux.md", output / "README-linux.md")
     print(
         json.dumps(
-            {"archive": name, "sha256": checksum, "source_commit": args.source_commit}
+            {
+                "archive": archive_name,
+                "sha256": checksum,
+                "source_commit": args.source_commit,
+            }
         )
     )
     return 0

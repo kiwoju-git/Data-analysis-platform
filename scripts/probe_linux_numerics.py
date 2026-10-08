@@ -47,7 +47,9 @@ def load_test(name: str):
     if spec is None or spec.loader is None:
         raise RuntimeError("Unable to load the existing diagnostic test fixture")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # pytest adds the repository root; a directly executed script does not.
+    with patch.object(sys, "path", [str(ROOT), *sys.path]):
+        spec.loader.exec_module(module)
     return module
 
 

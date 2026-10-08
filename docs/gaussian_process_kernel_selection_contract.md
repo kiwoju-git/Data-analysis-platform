@@ -107,13 +107,17 @@ ranking, partial/all failure, starts/deadlines, detailed retention, schema-1
 restore, model tamper/prediction, Bayesian fixtures and KOR/ENG UI/E2E. Existing
 workspace values never leave the machine or enter diagnostic logs.
 
-### Linux optimized-reference exception
+### Hosted optimized-reference exception
 
 The Windows static optimized-kernel fixture and its tolerances are unchanged.
-Linux may refit the **same frozen x/y, seed and fold row indices** using the
-independent sklearn code in `scripts/generate_gp_kernel_reference.py`. This
-bounded exception is a same-platform independent numerical cross-check, not
-static Linux parity or regeneration of expected values from production code.
+The test-only `DATALAB_GP_REFERENCE_MODE` accepts exactly `static` or
+`independent`; invalid values fail validation. Without an override, Windows
+uses `static` and Linux uses `independent`. Hosted Windows CI explicitly selects
+`independent` because CPU/BLAS optimization drift was also observed there.
+Independent mode refits the **same frozen x/y, seed and fold row indices** using
+the independent sklearn code in `scripts/generate_gp_kernel_reference.py`.
+This bounded exception is a same-platform independent numerical cross-check,
+not static parity or regeneration of expected values from production code.
 No application module is imported by that reference implementation. Static
 selected presets, fold identity, legacy results and fixed-hyperparameter
 posterior references remain checked. Optimized metrics/LML use the existing

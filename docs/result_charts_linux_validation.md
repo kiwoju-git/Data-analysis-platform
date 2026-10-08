@@ -42,6 +42,34 @@
 This is a running validation record, not a completion claim. Main and Release
 publication require all implementation stages and final platform checks.
 
+### Final Local Runs
+
+- Full Windows backend rerun: 1,254 passed, 1 skipped, 0 failed in 1,841.69s,
+  native exit 0. Command: `.venv/Scripts/python.exe -m pytest backend/tests
+  --basetemp .tmp/pytest-full-chart-audit-20261008-2/cases`. TEMP/TMP use that
+  isolated D: directory; numerical CPU thread environment variables are 1.
+  The skip is Windows symlink creation privilege; Linux must exercise it.
+  Log: `.tmp/pytest-full-chart-audit-20261008-2.log`.
+- Full Chromium critical path attempt 8 passed, native exit 0, including common
+  chart interaction, desktop resize, all existing analysis workflows,
+  KO/EN navigation/draft preservation, Two Variances and offline stored HTML.
+  Command: `powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1
+  -BackendPort 8135 -FrontendPort 5295 -DiagnosticsRoot .tmp/e2e-full-result-charts`.
+  Actual browser zoom was separately verified by the standalone desktop fixture,
+  not rerun inside this critical-path command.
+  Log: `.tmp/verification-e2e-agent-20261008/critical-path-pass8.log`;
+  synthetic diagnostics: `.tmp/e2e-full-result-charts/`.
+- CI run37715465878 Python3.11 backend: 1,253 passed, 11 Windows-only skips.
+  Its subsequent diagnostic probe failed due to a direct-script import path;
+  the overall job is **not** a pass. That import path is corrected separately.
+- Optimized GP checks now explicitly support test-only `static` or `independent`
+  reference modes. Local Windows retains static historical checks; hosted
+  Windows/Linux use independent sklearn refits of identical frozen inputs at
+  unchanged tolerances. This is not a claim of cross-CPU static optimizer parity.
+  See `linux_numerical_reference_validation.md` for measured differences.
+- Linux archive installation/smoke and GitHub publication are still pending;
+  no source-only or component-test result substitutes for those checks.
+
 ### Integrated Verification Corrections
 
 - First integrated Windows backend run:1,246 passed,6 failed,1 skipped in1,801.92s.

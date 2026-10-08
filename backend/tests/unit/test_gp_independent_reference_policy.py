@@ -1,5 +1,8 @@
 import ast
 import copy
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +20,34 @@ def test_independent_reference_has_no_application_imports() -> None:
         elif isinstance(node, ast.ImportFrom):
             imports.append(node.module or "")
     assert not any(name == "app" or name.startswith("app.") for name in imports)
+
+
+@pytest.mark.parametrize("outside_repository", [False, True])
+def test_standalone_probe_imports_do_not_depend_on_cwd(tmp_path, outside_repository) -> None:
+    scripts = Path(reference.__file__).resolve().parent
+    code = """
+import runpy
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+probe = runpy.run_path(str(Path(sys.argv[1]) / "probe_linux_numerics.py"))
+original = list(sys.path)
+probe["load_test"]("test_gaussian_process_kernel_selection")
+probe["load_test"]("test_bayesian_recommendations_api")
+assert sys.path == original
+print("standalone probe imports passed")
+"""
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", code, str(scripts)],
+        cwd=tmp_path if outside_repository else scripts.parent,
+        env={**os.environ, "DATALAB_WORKSPACE_ROOT": str(tmp_path / "unused-workspace")},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "standalone probe imports passed"
 
 
 def test_frozen_reference_uses_exact_inputs_splits_and_seeds(monkeypatch) -> None:

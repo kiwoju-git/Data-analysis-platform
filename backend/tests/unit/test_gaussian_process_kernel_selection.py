@@ -1,4 +1,5 @@
 import json
+import os
 import platform
 from dataclasses import replace
 from pathlib import Path
@@ -23,6 +24,37 @@ FIXTURES = Path(__file__).parents[1] / "reference/fixtures"
 REFERENCE = json.loads(
     (FIXTURES / "gp_kernel_comparison_reference.json").read_text(encoding="utf-8")
 )
+
+
+def _reference_mode():
+    mode = os.environ.get("DATALAB_GP_REFERENCE_MODE")
+    if mode is None:
+        return "independent" if platform.system() == "Linux" else "static"
+    if mode not in {"static", "independent"}:
+        raise ValueError("DATALAB_GP_REFERENCE_MODE must be 'static' or 'independent'")
+    return mode
+
+
+@pytest.mark.parametrize("system,expected", [("Windows", "static"), ("Linux", "independent")])
+def test_reference_mode_defaults(monkeypatch, system, expected):
+    monkeypatch.delenv("DATALAB_GP_REFERENCE_MODE", raising=False)
+    monkeypatch.setattr(platform, "system", lambda: system)
+    assert _reference_mode() == expected
+
+
+@pytest.mark.parametrize("system", ["Windows", "Linux"])
+@pytest.mark.parametrize("mode", ["static", "independent"])
+def test_reference_mode_explicit_override(monkeypatch, system, mode):
+    monkeypatch.setenv("DATALAB_GP_REFERENCE_MODE", mode)
+    monkeypatch.setattr(platform, "system", lambda: system)
+    assert _reference_mode() == mode
+
+
+@pytest.mark.parametrize("mode", ["", "STATIC", "auto", " independent"])
+def test_reference_mode_rejects_invalid_values(monkeypatch, mode):
+    monkeypatch.setenv("DATALAB_GP_REFERENCE_MODE", mode)
+    with pytest.raises(ValueError, match="DATALAB_GP_REFERENCE_MODE"):
+        _reference_mode()
 
 
 def calculate(case, options):
@@ -87,11 +119,12 @@ def test_legacy_single_kernel_parity(preset):
 
 @pytest.mark.parametrize("case", REFERENCE["cases"], ids=lambda case: case["name"])
 def test_independent_sklearn_kernel_comparison(case):
+    reference_mode = _reference_mode()
     result = calculate(case, options(retain_candidate_details=True))
     assert result["kernel_selection"]["cv_validation_row_indices"] == REFERENCE["splits"]
     assert result["kernel_selection"]["selected_preset"] == case["selected"]["nlpd"]
     expected_case = case
-    if platform.system() == "Linux":
+    if reference_mode == "independent":
         # Optimized NLPD is BLAS/CPU-sensitive; keep frozen inputs and tolerances.
         expected_case = evaluate_frozen_case(case, REFERENCE["splits"], REFERENCE["seed"])
         assert expected_case["selected"] == case["selected"]

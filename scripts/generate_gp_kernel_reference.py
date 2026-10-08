@@ -1,9 +1,10 @@
 """Independent sklearn reference with no application imports.
 
-Windows tests use the committed static reference. Linux optimized-kernel tests
-may call evaluate_frozen_case on its saved inputs/splits to isolate BLAS/CPU
-optimizer drift; this never regenerates inputs or overwrites a fixture. The
-fixed-hyperparameter posterior tests remain static on all supported platforms.
+Windows tests default to the committed static reference. Linux and explicitly
+configured hosted Windows optimized-kernel tests may call evaluate_frozen_case
+on its saved inputs/splits to isolate BLAS/CPU optimizer drift; this never
+regenerates inputs or overwrites a fixture. Fixed-hyperparameter posterior
+tests remain static on all supported platforms.
 """
 
 import argparse
