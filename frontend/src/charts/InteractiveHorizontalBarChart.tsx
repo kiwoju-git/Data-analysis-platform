@@ -48,7 +48,7 @@ export function InteractiveHorizontalBarChart({ chartId, title, description, ite
       onFocus={() => interaction.activateItem(item.id, "focus")} onBlur={() => interaction.clearFocus(item.id)}
       onPointerEnter={(event) => interaction.move(item.id, event)} onPointerMove={(event) => interaction.move(item.id, event)} onPointerLeave={() => interaction.clearHover(item.id)}
       onClick={() => interaction.pin(item.id)} onKeyDown={(event) => interaction.handleKeyDown(event, item.id)}>
-      <title>{item.label}: {item.value}</title>
+      <title>{`${item.label}: ${item.value}`}</title>
     </rect>)}
   </ChartFrame>;
 }

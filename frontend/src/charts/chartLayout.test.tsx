@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ChartAxes } from "./ChartAxes";
 import { ChartFrame } from "./ChartFrame";
 import { InteractiveScatterChart, type InteractiveScatterPoint } from "./InteractiveScatterChart";
@@ -60,5 +60,16 @@ describe("fixed chart frames and axes", () => {
     expect(html.match(/tabindex=/g)).toHaveLength(12);
     expect(html).toContain("1-12");
     expect(html).toContain("25");
+  });
+  it("renders escaped bar titles as one text node without React title warnings", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const html = renderToStaticMarkup(<InteractiveHorizontalBarChart chartId="title" title="Loading" description="Stored loading"
+        items={[{ id: "column:a", label: "A & B", title: "A & B", value: -0.25, details: [] }]} xLabel="Loading" yLabel="Predictor" />);
+      expect(html).toContain("<title>A &amp; B: -0.25</title>");
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   });
 });

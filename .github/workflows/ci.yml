@@ -105,6 +105,8 @@ jobs:
           if-no-files-found: ignore
       - name: Linux full check
         run: bash scripts/check.sh
+      - name: Linux source runner lifecycle
+        run: .venv/bin/python tests/e2e/linux_source.py --diagnostics-root .tmp/linux-e2e/source-runner
       - name: Install Linux Chromium
         run: .venv/bin/python -m playwright install --with-deps chromium
       - name: Linux browser E2E

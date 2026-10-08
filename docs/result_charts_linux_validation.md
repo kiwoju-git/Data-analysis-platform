@@ -70,6 +70,29 @@ publication require all implementation stages and final platform checks.
 - Linux archive installation/smoke and GitHub publication are still pending;
   no source-only or component-test result substitutes for those checks.
 
+### Ubuntu CI Acceptance Before Archive Build
+
+CI run `37716695085`, source `46d2a19`, completed both Linux jobs successfully:
+
+- Ubuntu24.04 / Python3.12.15: `bash scripts/check.sh` passed Ruff/format
+  (273 files), mypy (164 source files), backend (1,265 passed, 11 Windows-only
+  skips), localization (2,934 source strings / 3,936 keys), frontend lint,
+  strict typecheck, Vitest (55 files / 396 tests) and production build.
+- `bash scripts/e2e.sh --diagnostics-root .tmp/linux-e2e` passed the complete
+  Chromium critical path on Ubuntu, including stored DOE/BO/PLS/GP/PCA and
+  Two Variances workflows. Log: `.tmp/ci-37716695085-linux.log`.
+- Ubuntu24.04 / Python3.11.17: locked install/pip check, full backend
+  (1,265 passed / 11 Windows-only skips) and independent numerical probe passed.
+- Linux `dev.sh` lifecycle now has an additional executable smoke test for
+  loopback/LAN bindings, shared source identity, collision refusal and owned
+  process cleanup. Its actual run is a separate CI gate, not inferred from the
+  browser test which launches its own servers.
+- The new horizontal-bar SVG title was corrected to a single escaped text
+  node after log review; a regression assertion rejects React title warnings.
+  Final archive validation JSON and the release validation summary identify the
+  exact published source and final check results, without rewriting this source
+  document after an archive is built.
+
 ### Integrated Verification Corrections
 
 - First integrated Windows backend run:1,246 passed,6 failed,1 skipped in1,801.92s.
