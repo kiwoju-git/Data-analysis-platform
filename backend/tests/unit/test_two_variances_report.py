@@ -22,6 +22,8 @@ def test_report_exports_saved_payload_without_fit_or_rows(
         version = dataset(client)
         body = run_body(version)
         body["options"].update(method=method, alternative=alternative)
+        if method == "normal_f":
+            body["options"]["hypothesized_ratio"] = 0.5
         created = client.post("/api/v1/analysis-runs", json=body)
         assert created.status_code == 201, created.text
         source = created.json()
@@ -50,6 +52,9 @@ def test_report_exports_saved_payload_without_fit_or_rows(
         assert 'data-two-variances-report="1"' in visible
         assert "<svg" in visible and "<table" in visible
         assert "0.25" in visible
+        if locale == "en":
+            assert "specified ratio hypothesis" in visible
+            assert "Evidence of a variance difference." not in visible
         assert "<script" not in page and 'src="http' not in page
         assert ("두 분산 비교" if locale == "ko" else "Two Variances") in visible
         if method == "brown_forsythe":

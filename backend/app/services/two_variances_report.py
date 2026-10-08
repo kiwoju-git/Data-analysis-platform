@@ -181,11 +181,17 @@ def render_two_variances_report(payload: dict[str, Any], locale: ReportLocale) -
             )
         )
         conclusion = (
-            text("Evidence of a variance difference.", "분산 차이의 근거가 있습니다.")
+            text(
+                "Evidence against the specified ratio hypothesis "
+                "in favor of the selected alternative.",
+                "지정한 비율 귀무가설에 반대하며 선택한 대립가설을 지지하는 근거가 있습니다.",
+            )
             if test["reject"]
             else text(
-                "Insufficient evidence of a difference; equal variances are not proven.",
-                "차이를 검출할 근거가 부족합니다. 분산이 같음이 증명된 것은 아닙니다.",
+                "Insufficient evidence against the specified ratio hypothesis; "
+                "non-rejection does not establish equivalence.",
+                "지정한 비율 귀무가설을 기각할 근거가 부족합니다. "
+                "비기각은 동등함을 증명하지 않습니다.",
             )
         )
         parts.append(f"<p>{escape(conclusion)}</p>")
