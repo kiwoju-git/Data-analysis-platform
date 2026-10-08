@@ -1,8 +1,8 @@
+import { RunResultChart } from "./charts/QualityResultCharts";
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
   DatasetVersionResponse,
-  RunChartPoint,
   RunChartResult,
 } from "./api";
 
@@ -21,17 +21,6 @@ interface RunChartPanelProps {
   onRun: () => void;
   onValueColumnChange: (columnId: string) => void;
 }
-
-const chartWidth = 520;
-const chartHeight = 270;
-const plot = {
-  left: 54,
-  right: 18,
-  top: 24,
-  bottom: 44,
-};
-const plotWidth = chartWidth - plot.left - plot.right;
-const plotHeight = chartHeight - plot.top - plot.bottom;
 
 export function RunChartPanel({
   analysisResult,
@@ -168,10 +157,10 @@ export function RunChartPanel({
                     </p>
                   </div>
                 </div>
-                <div className="chart-grid chart-grid-single">
+                <div className="chart-grid chart-grid-single analysis-result-grid">
                   <div className="chart-panel">
                     <div className="chart-panel-title">{result.value.display_name}</div>
-                    {renderRunChart(result)}
+                    <RunResultChart result={result} />
                   </div>
                 </div>
               </div>
@@ -352,146 +341,6 @@ function ApproximateRandomnessTests({ result }: { result: RunChartResult }) {
   );
 }
 
-function renderRunChart(result: RunChartResult) {
-  const points = result.chart.points.filter(
-    (point) => Number.isFinite(point.value) && Number.isFinite(point.position),
-  );
-  if (points.length === 0) {
-    return <EmptyChart label="런 차트 point 없음" />;
-  }
-
-  const xRange = paddedRange(points.map((point) => point.position));
-  const yRange = paddedRange([...points.map((point) => point.value), result.center_line]);
-  const centerY = scaleY(result.center_line, yRange);
-  const path = points
-    .map((point) => `${scaleX(point.position, xRange)},${scaleY(point.value, yRange)}`)
-    .join(" ");
-  const xAxisLabel =
-    result.chart.x_axis === "order_rank" ? "order rank" : "canonical position";
-
-  return (
-    <svg
-      aria-label={`${result.value.display_name} run chart`}
-      className="mini-chart"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      <rect
-        x={plot.left}
-        y={plot.top}
-        width={plotWidth}
-        height={plotHeight}
-        fill="#ffffff"
-        stroke="#d4dde8"
-      />
-      <line
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={centerY}
-        y2={centerY}
-        stroke="#6b7280"
-        strokeDasharray="5 4"
-        strokeWidth="1.5"
-      />
-      <text x={plot.left + 6} y={centerY - 6} className="chart-axis-label">
-        median {formatRunChartNumber(result.center_line)}
-      </text>
-      <polyline fill="none" points={path} stroke="#1f4e79" strokeWidth="2" />
-      {points.map((point) => (
-        <RunChartDot
-          key={`${point.position}-${point.value}`}
-          point={point}
-          x={scaleX(point.position, xRange)}
-          y={scaleY(point.value, yRange)}
-        />
-      ))}
-      <line
-        x1={plot.left}
-        x2={plot.left}
-        y1={plot.top}
-        y2={plot.top + plotHeight}
-        stroke="#7b8794"
-      />
-      <line
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top + plotHeight}
-        y2={plot.top + plotHeight}
-        stroke="#7b8794"
-      />
-      <text x={plot.left} y={chartHeight - 12} className="chart-axis-label">
-        {xAxisLabel}
-      </text>
-      <text x={8} y={plot.top + 12} className="chart-axis-label">
-        value
-      </text>
-      <text x={plot.left} y={plot.top + plotHeight + 18} className="chart-axis-label">
-        {formatRunChartNumber(xRange.min)}
-      </text>
-      <text
-        x={plot.left + plotWidth - 20}
-        y={plot.top + plotHeight + 18}
-        className="chart-axis-label"
-      >
-        {formatRunChartNumber(xRange.max)}
-      </text>
-    </svg>
-  );
-}
-
-function RunChartDot({
-  point,
-  x,
-  y,
-}: {
-  point: RunChartPoint;
-  x: number;
-  y: number;
-}) {
-  const hasSignal = point.signal_codes.length > 0;
-  const signalLabel = point.signal_codes.join(", ");
-  const sourceLabel =
-    point.canonical_position === undefined
-      ? ""
-      : ` · canonical ${point.canonical_position.toLocaleString()}`;
-  if (hasSignal) {
-    return (
-      <g>
-        <rect
-          x={x - 4.5}
-          y={y - 4.5}
-          width="9"
-          height="9"
-          fill="#b45309"
-          stroke="#78350f"
-        />
-        <title>
-          {`${point.position}: ${formatRunChartNumber(point.value)}${sourceLabel} · ${
-            signalLabel
-          }`}
-        </title>
-      </g>
-    );
-  }
-
-  const fill =
-    point.relative_to_center === "above"
-      ? "#2563eb"
-      : point.relative_to_center === "below"
-        ? "#059669"
-        : "#6b7280";
-  return (
-    <g>
-      <circle cx={x} cy={y} r="4" fill={fill} stroke="#172033" />
-      <title>
-        {`${point.position}: ${formatRunChartNumber(point.value)}${sourceLabel} · ${
-          point.relative_to_center
-        }`}
-      </title>
-    </g>
-  );
-}
-
 function countRunChartSignals(result: RunChartResult, code: string): number {
   return result.signals.filter((signal) => signal.code === code).length;
 }
@@ -516,36 +365,6 @@ function formatRunChartRunsTest(result: RunChartResult): string {
   return `low p=${formatRunChartNumber(result.runs_test.p_value_low)} · high p=${formatRunChartNumber(
     result.runs_test.p_value_high,
   )}`;
-}
-
-function EmptyChart({ label }: { label: string }) {
-  return (
-    <svg className="mini-chart" role="img" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-      <rect width={chartWidth} height={chartHeight} fill="#f8fafc" />
-      <text x={plot.left} y={chartHeight / 2} className="chart-axis-label">
-        {label}
-      </text>
-    </svg>
-  );
-}
-
-function paddedRange(values: number[]): { min: number; max: number } {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  if (min === max) {
-    const pad = Math.abs(min) > 1 ? Math.abs(min) * 0.1 : 1;
-    return { min: min - pad, max: max + pad };
-  }
-  const pad = (max - min) * 0.08;
-  return { min: min - pad, max: max + pad };
-}
-
-function scaleX(value: number, range: { min: number; max: number }) {
-  return plot.left + ((value - range.min) / (range.max - range.min)) * plotWidth;
-}
-
-function scaleY(value: number, range: { min: number; max: number }) {
-  return plot.top + plotHeight - ((value - range.min) / (range.max - range.min)) * plotHeight;
 }
 
 function formatRunChartNumber(value: number | null | undefined): string {

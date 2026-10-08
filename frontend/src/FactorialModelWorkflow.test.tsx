@@ -53,7 +53,7 @@ describe("factorial model workflow presentation", () => {
       reference_line: { slope: 0.5, intercept: 0 }, points: [{ run_order: 3, fitted: 10, residual: -0.5 }, { run_order: 7, fitted: 12, residual: 0.5 }] };
     const plots: DoeFinalModelWorkflow["residual_plots"] = { raw: view, standardized: view, n_total: 12, point_limit: 2, truncated: true, points: [] };
     const html = renderToStaticMarkup(<FactorialResidualPlots plots={plots} />);
-    expect(html.match(/<svg/g)).toHaveLength(4);
+    expect(html.match(/class="chart-frame-svg"/g)).toHaveLength(4);
     expect(html).toContain("N = 12");
     expect(html).toContain("Residuals versus Run Order");
     expect(html).toContain('tabindex="0"');

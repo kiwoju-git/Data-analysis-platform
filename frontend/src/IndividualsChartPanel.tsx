@@ -1,11 +1,9 @@
+import { IndividualsResultChart } from "./charts/QualityResultCharts";
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
   DatasetVersionResponse,
-  IndividualsChartPoint,
   IndividualsChartResult,
-  IndividualsChartSeries,
-  MovingRangeChartSeries,
 } from "./api";
 
 interface IndividualsChartPanelProps {
@@ -23,17 +21,6 @@ interface IndividualsChartPanelProps {
   onRun: () => void;
   onValueColumnChange: (columnId: string) => void;
 }
-
-const chartWidth = 520;
-const chartHeight = 250;
-const plot = {
-  left: 54,
-  right: 18,
-  top: 22,
-  bottom: 42,
-};
-const plotWidth = chartWidth - plot.left - plot.right;
-const plotHeight = chartHeight - plot.top - plot.bottom;
 
 export function IndividualsChartPanel({
   analysisResult,
@@ -151,22 +138,14 @@ export function IndividualsChartPanel({
               </div>
               <div className="result-section" aria-label="I-MR 관리도 결과">
                 <SignalSummary result={result} />
-                <div className="chart-grid">
+                <div className="chart-grid analysis-result-grid">
                   <div className="chart-panel">
                     <div className="chart-panel-title">I chart</div>
-                    {renderControlChart(
-                      result.individuals_chart,
-                      `${result.value.display_name} I chart`,
-                      "individuals",
-                    )}
+                    <IndividualsResultChart series={result.individuals_chart} label={`${result.value.display_name} I chart`} chartKind="individuals" unit={result.value.unit} />
                   </div>
                   <div className="chart-panel">
                     <div className="chart-panel-title">MR chart</div>
-                    {renderControlChart(
-                      result.moving_range_chart,
-                      `${result.value.display_name} MR chart`,
-                      "moving_range",
-                    )}
+                    <IndividualsResultChart series={result.moving_range_chart} label={`${result.value.display_name} MR chart`} chartKind="moving_range" unit={result.value.unit} />
                   </div>
                 </div>
               </div>
@@ -246,171 +225,6 @@ export function IndividualsChartPanel({
   );
 }
 
-function renderControlChart(
-  series: IndividualsChartSeries | MovingRangeChartSeries,
-  label: string,
-  chartKind: "individuals" | "moving_range",
-) {
-  const points = series.points.filter(
-    (point) => Number.isFinite(point.value) && Number.isFinite(point.position),
-  );
-  if (points.length === 0) {
-    return <EmptyChart label="관리도 point 없음" />;
-  }
-
-  const yRange = paddedRange([
-    ...points.map((point) => point.value),
-    series.lcl,
-    series.center_line,
-    series.ucl,
-  ]);
-  const xRange = paddedRange(points.map((point) => point.position));
-  const path = points
-    .map((point) => `${scaleX(point.position, xRange)},${scaleY(point.value, yRange)}`)
-    .join(" ");
-
-  return (
-    <svg className="mini-chart" role="img" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-      <title>{label}</title>
-      <desc>
-        {`${label}. LCL ${formatNumber(series.lcl)}, 중심선 ${formatNumber(
-          series.center_line,
-        )}, UCL ${formatNumber(series.ucl)}. 사각형은 관리한계 신호, 마름모는 패턴 규칙 신호입니다.`}
-      </desc>
-      <rect
-        x={plot.left}
-        y={plot.top}
-        width={plotWidth}
-        height={plotHeight}
-        fill="#ffffff"
-        stroke="#d4dde8"
-      />
-      <ControlLine label="UCL" range={yRange} value={series.ucl} />
-      <ControlLine label="CL" range={yRange} value={series.center_line} dashed />
-      <ControlLine label="LCL" range={yRange} value={series.lcl} />
-      <polyline fill="none" points={path} stroke="#1f4e79" strokeWidth="2" />
-      {points.map((point) => (
-        <ChartPoint
-          key={`${chartKind}-${point.position}-${point.value}`}
-          chartKind={chartKind}
-          point={point}
-          x={scaleX(point.position, xRange)}
-          y={scaleY(point.value, yRange)}
-        />
-      ))}
-      <line
-        x1={plot.left}
-        x2={plot.left}
-        y1={plot.top}
-        y2={plot.top + plotHeight}
-        stroke="#7b8794"
-      />
-      <line
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top + plotHeight}
-        y2={plot.top + plotHeight}
-        stroke="#7b8794"
-      />
-      <text x={plot.left} y={chartHeight - 12} className="chart-axis-label">
-        canonical position
-      </text>
-      <text x={8} y={plot.top + 12} className="chart-axis-label">
-        value
-      </text>
-    </svg>
-  );
-}
-
-function ControlLine({
-  dashed = false,
-  label,
-  range,
-  value,
-}: {
-  dashed?: boolean;
-  label: string;
-  range: { min: number; max: number };
-  value: number;
-}) {
-  const y = scaleY(value, range);
-  return (
-    <g>
-      <line
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={y}
-        y2={y}
-        stroke={dashed ? "#6b7280" : "#b45309"}
-        strokeDasharray={dashed ? "5 4" : undefined}
-        strokeWidth="1.3"
-      />
-      <text x={plot.left + 6} y={y - 5} className="chart-axis-label">
-        {label} {formatNumber(value)}
-      </text>
-    </g>
-  );
-}
-
-function ChartPoint({
-  chartKind,
-  point,
-  x,
-  y,
-}: {
-  chartKind: "individuals" | "moving_range";
-  point: IndividualsChartPoint;
-  x: number;
-  y: number;
-}) {
-  const hasSignal = point.signal_codes.length > 0;
-  const hasLimitSignal = point.signal_codes.some(
-    (code) => code.includes("beyond_3_sigma") || code.includes("mr_beyond_ucl"),
-  );
-  const sourceLabel = `canonical ${point.canonical_position.toLocaleString()}`;
-  if (hasLimitSignal) {
-    return (
-      <g>
-        <rect
-          x={x - 4.5}
-          y={y - 4.5}
-          width="9"
-          height="9"
-          fill="#b45309"
-          stroke="#78350f"
-        />
-        <title>
-          {`${chartKind} ${point.position}: ${formatNumber(point.value)} · ${sourceLabel} · ${
-            point.signal_codes.join(", ")
-          }`}
-        </title>
-      </g>
-    );
-  }
-  if (hasSignal) {
-    const diamond = `${x},${y - 6} ${x + 6},${y} ${x},${y + 6} ${x - 6},${y}`;
-    return (
-      <g>
-        <polygon points={diamond} fill="#ffffff" stroke="#b45309" strokeWidth="2.5" />
-        <title>
-          {`${chartKind} ${point.position}: ${formatNumber(point.value)} · ${sourceLabel} · ${
-            point.signal_codes.join(", ")
-          }`}
-        </title>
-      </g>
-    );
-  }
-
-  return (
-    <g>
-      <circle cx={x} cy={y} r="4" fill="#2563eb" stroke="#172033" />
-      <title>
-        {`${chartKind} ${point.position}: ${formatNumber(point.value)} · ${sourceLabel}`}
-      </title>
-    </g>
-  );
-}
-
 function SignalSummary({ result }: { result: IndividualsChartResult }) {
   const summary = summarizeSignals(result);
   return (
@@ -462,36 +276,6 @@ function overallSignalStatus(result: IndividualsChartResult): string {
   return result.signals.length > 0
     ? "특별원인 신호 있음"
     : "현재 활성화된 관리도 규칙에서 신호 없음";
-}
-
-function EmptyChart({ label }: { label: string }) {
-  return (
-    <svg className="mini-chart" role="img" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-      <rect width={chartWidth} height={chartHeight} fill="#f8fafc" />
-      <text x={plot.left} y={chartHeight / 2} className="chart-axis-label">
-        {label}
-      </text>
-    </svg>
-  );
-}
-
-function paddedRange(values: number[]): { min: number; max: number } {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  if (min === max) {
-    const pad = Math.abs(min) > 1 ? Math.abs(min) * 0.1 : 1;
-    return { min: min - pad, max: max + pad };
-  }
-  const pad = (max - min) * 0.08;
-  return { min: min - pad, max: max + pad };
-}
-
-function scaleX(value: number, range: { min: number; max: number }) {
-  return plot.left + ((value - range.min) / (range.max - range.min)) * plotWidth;
-}
-
-function scaleY(value: number, range: { min: number; max: number }) {
-  return plot.top + plotHeight - ((value - range.min) / (range.max - range.min)) * plotHeight;
 }
 
 function formatOrderSource(result: IndividualsChartResult): string {

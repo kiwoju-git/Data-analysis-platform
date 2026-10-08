@@ -1,3 +1,4 @@
+import { PredictionIntervalChart } from "./charts/PredictionIntervalChart";
 import type {
   DatasetVersionCatalogItem,
   DatasetVersionResponse,
@@ -366,7 +367,7 @@ export function RegressionPredictionPanel({
           ) : null}
           <div className="result-section" aria-label="예측 구간 차트 결과">
             <div className="panel-heading"><div><h4>예측 구간 차트</h4><p>Predicted mean · mean CI · prediction interval</p></div></div>
-            <div className="chart-grid chart-grid-single"><PredictionIntervalChart rows={previewRows} /></div>
+            <div className="chart-grid chart-grid-single analysis-result-grid"><PredictionIntervalChart rows={previewRows} sourceKey={prediction.prediction_id} total={prediction.row_count_predicted} /></div>
           </div>
           {prediction.prediction_uncertainty_kind === "point_only" ? <p className="notice-box">{t("reg.pointOnly")}</p> : null}
           <RegressionPredictionResultsTable rowNumberOffset={-1} rows={previewRows} />
@@ -403,36 +404,6 @@ function PredictionMappingTable({
         ))}</tbody>
       </table>
     </div>
-  );
-}
-
-function PredictionIntervalChart({ rows }: { rows: RegressionPredictionResponse["rows"] }) {
-  const usable = rows.filter((row) => row.prediction_interval !== null);
-  if (usable.length === 0) return <div className="empty-state">표시할 예측 구간이 없습니다.</div>;
-  const width = 440;
-  const height = 250;
-  const values = usable.flatMap((row) => [
-    row.prediction_interval!.lower,
-    row.prediction_interval!.upper,
-    row.mean_confidence_interval?.lower ?? row.predicted_mean,
-    row.mean_confidence_interval?.upper ?? row.predicted_mean,
-  ]);
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  const span = maximum === minimum ? 1 : maximum - minimum;
-  const y = (value: number) => 18 + ((maximum - value) / span) * 190;
-  const x = (index: number) => 48 + (index / Math.max(1, usable.length - 1)) * 374;
-  return (
-    <svg aria-label="예측 평균과 신뢰구간 및 개별 예측구간" className="chart-svg chart-svg-wide" role="img" viewBox={`0 0 ${width} ${height}`}>
-      {usable.map((row, index) => {
-        const xPosition = x(index);
-        return <g key={row.row_index}>
-          <line className="prediction-interval-line" x1={xPosition} x2={xPosition} y1={y(row.prediction_interval!.lower)} y2={y(row.prediction_interval!.upper)} />
-          {row.mean_confidence_interval !== null ? <line className="prediction-ci-line" x1={xPosition - 3} x2={xPosition - 3} y1={y(row.mean_confidence_interval.lower)} y2={y(row.mean_confidence_interval.upper)} /> : null}
-          <circle className="prediction-mean-point" cx={xPosition} cy={y(row.predicted_mean)} r="3" />
-        </g>;
-      })}
-    </svg>
   );
 }
 

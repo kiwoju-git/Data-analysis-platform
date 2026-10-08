@@ -2334,7 +2334,8 @@ describe("App", () => {
     expect(html).toContain("Y 변수");
     expect(html).toContain("분석 도움말");
     expect(html).toContain("산점도");
-    expect(html).toContain("A C scatter plot");
+    expect(html).toContain('data-chart-id="pearson-scatter"');
+    expect(html).toContain('class="chart-visible-axis-title"');
     expect(html).toContain("0.926872");
   });
 
@@ -2953,7 +2954,8 @@ describe("App", () => {
     expect(html).toContain("필터 후 유효 관측에서 추정");
     expect(html).toContain("관리한계 밖");
     expect(html).toContain("Phase I 중심선과 3-sigma 관리한계");
-    expect(html).toContain("P 관리도. 중심선");
+    expect(html).toContain('data-chart-id="quality-p"');
+    expect(html).toContain("CL:");
   });
 
   it("requires visible constant-opportunity confirmation for the C chart", () => {
@@ -3261,7 +3263,7 @@ describe("App", () => {
     expect(html).toContain("관리한계");
     expect(html).toContain("계산 안 함");
     expect(html).toContain("Run count");
-    expect(html).toContain("A run chart");
+    expect(html).toContain("A Run Chart");
     expect(html).toContain("run_chart_trend");
     expect(html).toContain("이전 버전 결과에는 네 가지 근사 p-value가 없습니다.");
   });
@@ -3466,7 +3468,7 @@ describe("App", () => {
     expect(html).toContain("MRbar/d2 within");
     expect(html).toContain("Cp / Pp");
     expect(html).toContain("Cpk / Ppk");
-    expect(html).toContain("capability histogram");
+    expect(html).toContain('data-chart-id="capability-histogram"');
     expect(html).toContain("Total ppm");
   });
 
@@ -3892,7 +3894,8 @@ describe("App", () => {
     expect(html).toContain("Q-Q Plot");
     expect(html).toContain("ECDF");
     expect(html).toContain("A");
-    expect(html).toContain("막대 하나에 Tab으로 진입");
+    expect(html).toContain('class="chart-histogram-hit ');
+    expect(html).toContain('tabindex="0"');
     expect(html).toContain("개별 outlier 값 없이");
     expect(html).toContain("A ECDF 1");
   });

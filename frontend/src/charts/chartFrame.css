@@ -1,4 +1,24 @@
 .chart-frame { min-inline-size: 0; inline-size: 100%; }
+.factorial-series-0 { fill: #2563a6; stroke: #2563a6; }
+.interactive-data-line.factorial-series-0 { fill: none; }
+.factorial-series-1 { fill: #ad3e64; stroke: #ad3e64; }
+.interactive-data-line.factorial-series-1 { fill: none; stroke-dasharray: 6 3; }
+.factorial-series-2 { fill: #187762; stroke: #187762; }
+.interactive-data-line.factorial-series-2 { fill: none; }
+.factorial-series-3 { fill: #8a651b; stroke: #8a651b; }
+.interactive-data-line.factorial-series-3 { fill: none; stroke-dasharray: 6 3; }
+.factorial-series-4 { fill: #6852a1; stroke: #6852a1; }
+.interactive-data-line.factorial-series-4 { fill: none; }
+.factorial-series-5 { fill: #a04c23; stroke: #a04c23; }
+.interactive-data-line.factorial-series-5 { fill: none; stroke-dasharray: 6 3; }
+.factorial-series-6 { fill: #237e91; stroke: #237e91; }
+.interactive-data-line.factorial-series-6 { fill: none; }
+.factorial-series-7 { fill: #735c68; stroke: #735c68; }
+.interactive-data-line.factorial-series-7 { fill: none; stroke-dasharray: 6 3; }
+.factorial-series-8 { fill: #4e6f29; stroke: #4e6f29; }
+.interactive-data-line.factorial-series-8 { fill: none; }
+.factorial-series-9 { fill: #94662f; stroke: #94662f; }
+.interactive-data-line.factorial-series-9 { fill: none; stroke-dasharray: 6 3; }
 .gp-profile-chart { margin: 0; min-inline-size: 0; }
 
 .chart-frame .chart-point-hovered {

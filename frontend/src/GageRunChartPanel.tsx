@@ -1,3 +1,4 @@
+import { GageResultChart } from "./charts/GageResultChart";
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
@@ -29,17 +30,6 @@ interface GageRunChartPanelProps {
   onReplicateColumnChange: (columnId: string) => void;
   onRun: () => void;
 }
-
-const chartWidth = 540;
-const chartHeight = 280;
-const plot = {
-  left: 56,
-  right: 22,
-  top: 24,
-  bottom: 44,
-};
-const plotWidth = chartWidth - plot.left - plot.right;
-const plotHeight = chartHeight - plot.top - plot.bottom;
 
 export function GageRunChartPanel({
   analysisResult,
@@ -180,12 +170,12 @@ export function GageRunChartPanel({
                     </p>
                   </div>
                 </div>
-                <div className="chart-grid chart-grid-single">
+                <div className="chart-grid chart-grid-single analysis-result-grid">
                   <div className="chart-panel">
                     <div className="chart-panel-title">
                       Part facet · Operator color · Replicate symbol
                     </div>
-                    {renderGageRunChart(result)}
+                    <GageResultChart result={result} />
                   </div>
                 </div>
               </div>
@@ -272,83 +262,6 @@ function SummaryTable({
         </tbody>
       </table>
     </div>
-  );
-}
-
-function renderGageRunChart(result: GageRunChartResult) {
-  const points = result.chart.points;
-  if (points.length === 0) {
-    return <div className="empty-state">표시할 point가 없습니다.</div>;
-  }
-  const values = [...points.map((point) => point.value), result.summary.mean];
-  const yMin = Math.min(...values);
-  const yMax = Math.max(...values);
-  const yPadding = yMax === yMin ? 1 : (yMax - yMin) * 0.08;
-  const min = yMin - yPadding;
-  const max = yMax + yPadding;
-  const xMax = Math.max(...points.map((point) => point.position), 1);
-  const xScale = (position: number) =>
-    plot.left + (xMax <= 1 ? 0 : ((position - 1) / (xMax - 1)) * plotWidth);
-  const yScale = (value: number) => plot.top + ((max - value) / (max - min)) * plotHeight;
-  const meanY = yScale(result.summary.mean);
-
-  return (
-    <svg
-      aria-label="Gage Run Chart"
-      className="analysis-chart"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      <line
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={meanY}
-        y2={meanY}
-      />
-      <text className="chart-axis-label" x={plot.left + plotWidth - 56} y={meanY - 6}>
-        mean
-      </text>
-      <line
-        stroke="currentColor"
-        strokeOpacity="0.35"
-        x1={plot.left}
-        x2={plot.left}
-        y1={plot.top}
-        y2={plot.top + plotHeight}
-      />
-      <line
-        stroke="currentColor"
-        strokeOpacity="0.35"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top + plotHeight}
-        y2={plot.top + plotHeight}
-      />
-      {points.map((point) => (
-        <circle
-          className={`chart-point chart-series-${(point.operator_index - 1) % 6}`}
-          cx={xScale(point.position)}
-          cy={yScale(point.value)}
-          key={`${point.position}-${point.canonical_position}`}
-          r={point.replicate_index % 2 === 0 ? 4.6 : 3.4}
-        >
-          <title>{`Run ${point.position}, Part index ${point.part_index}, Operator index ${point.operator_index}, Replicate index ${point.replicate_index}, Value ${formatNumber(point.value)}`}</title>
-        </circle>
-      ))}
-      <text className="chart-axis-label" x={plot.left} y={chartHeight - 8}>
-        run order
-      </text>
-      <text
-        className="chart-axis-label"
-        transform={`rotate(-90 ${14} ${plot.top + plotHeight})`}
-        x={14}
-        y={plot.top + plotHeight}
-      >
-        measurement
-      </text>
-    </svg>
   );
 }
 

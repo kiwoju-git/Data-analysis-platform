@@ -1,3 +1,4 @@
+import { PearsonResultChart } from "./charts/PearsonResultChart";
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
@@ -24,17 +25,6 @@ interface PearsonCorrelationPanelProps {
   onXColumnChange: (columnId: string) => void;
   onYColumnChange: (columnId: string) => void;
 }
-
-const chartWidth = 420;
-const chartHeight = 250;
-const plot = {
-  left: 48,
-  right: 14,
-  top: 18,
-  bottom: 42,
-};
-const plotWidth = chartWidth - plot.left - plot.right;
-const plotHeight = chartHeight - plot.top - plot.bottom;
 
 export function PearsonCorrelationPanel({
   alpha,
@@ -182,12 +172,12 @@ export function PearsonCorrelationPanel({
                     </p>
                   </div>
                 </div>
-                <div className="chart-grid chart-grid-single">
+                <div className="chart-grid chart-grid-single analysis-result-grid">
                   <div className="chart-panel">
                     <div className="chart-panel-title">
                       {result.x.display_name} vs {result.y.display_name}
                     </div>
-                    {renderScatterPlot(result)}
+                    <PearsonResultChart result={result} />
                   </div>
                 </div>
               </div>
@@ -256,129 +246,6 @@ export function PearsonCorrelationPanel({
       )}
     </section>
   );
-}
-
-function renderScatterPlot(result: PearsonCorrelationResult) {
-  const points = result.scatterplot.points.filter(
-    (point) => Number.isFinite(point.x) && Number.isFinite(point.y),
-  );
-  if (points.length === 0) {
-    return <EmptyChart label="산점도 point 없음" />;
-  }
-
-  const xRange = paddedRange(points.map((point) => point.x));
-  const yRange = paddedRange(points.map((point) => point.y));
-  return (
-    <svg
-      aria-label={`${result.x.display_name} ${result.y.display_name} scatter plot`}
-      className="chart-svg chart-svg-wide"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      {chartAxes()}
-      {points.map((point, index) => (
-        <circle
-          key={`${point.x}-${point.y}-${index}`}
-          className="scatter-point"
-          cx={scale(point.x, xRange.min, xRange.max, plot.left, plot.left + plotWidth)}
-          cy={scale(point.y, yRange.min, yRange.max, plot.top + plotHeight, plot.top)}
-          r="3"
-        />
-      ))}
-      {chartTickLabels(formatAnalysisNumber(xRange.min), formatAnalysisNumber(xRange.max))}
-      <text className="chart-axis-label" x={plot.left - 10} y={plot.top + 8}>
-        {formatAnalysisNumber(yRange.max)}
-      </text>
-      <text className="chart-axis-label" x={plot.left - 10} y={plot.top + plotHeight}>
-        {formatAnalysisNumber(yRange.min)}
-      </text>
-    </svg>
-  );
-}
-
-function EmptyChart({ label }: { label: string }) {
-  return (
-    <svg
-      aria-label={label}
-      className="chart-svg chart-svg-empty"
-      role="img"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-    >
-      <rect className="empty-chart-bg" height={plotHeight} width={plotWidth} x={plot.left} y={plot.top} />
-      <text className="empty-chart-text" x={chartWidth / 2} y={chartHeight / 2}>
-        {label}
-      </text>
-    </svg>
-  );
-}
-
-function chartAxes() {
-  return (
-    <>
-      <line
-        className="chart-axis"
-        x1={plot.left}
-        x2={plot.left}
-        y1={plot.top}
-        y2={plot.top + plotHeight}
-      />
-      <line
-        className="chart-axis"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top + plotHeight}
-        y2={plot.top + plotHeight}
-      />
-      <line
-        className="chart-grid-line"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top}
-        y2={plot.top}
-      />
-    </>
-  );
-}
-
-function chartTickLabels(leftLabel: string, rightLabel: string) {
-  return (
-    <>
-      <text className="chart-axis-label" x={plot.left} y={chartHeight - 12}>
-        {leftLabel}
-      </text>
-      <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={chartHeight - 12}>
-        {rightLabel}
-      </text>
-    </>
-  );
-}
-
-function paddedRange(values: number[]): { min: number; max: number } {
-  const finiteValues = values.filter((value) => Number.isFinite(value));
-  if (finiteValues.length === 0) {
-    return { min: 0, max: 1 };
-  }
-  const min = Math.min(...finiteValues);
-  const max = Math.max(...finiteValues);
-  if (min === max) {
-    const padding = Math.max(1, Math.abs(min) * 0.1);
-    return { min: min - padding, max: max + padding };
-  }
-  const padding = (max - min) * 0.04;
-  return { min: min - padding, max: max + padding };
-}
-
-function scale(
-  value: number,
-  domainMin: number,
-  domainMax: number,
-  rangeMin: number,
-  rangeMax: number,
-): number {
-  if (domainMin === domainMax) {
-    return (rangeMin + rangeMax) / 2;
-  }
-  return rangeMin + ((value - domainMin) / (domainMax - domainMin)) * (rangeMax - rangeMin);
 }
 
 function confidenceIntervalLabel(result: PearsonCorrelationResult): string {

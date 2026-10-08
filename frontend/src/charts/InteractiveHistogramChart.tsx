@@ -1,134 +1,80 @@
+import { t } from "../i18n/translate";
 import { ChartItemFeedback } from "./ChartItemFeedback";
+import { ChartFrame } from "./ChartFrame";
+import { ChartAxes } from "./ChartAxes";
 import { paddedNumericRange, scaleChartValue } from "./chartScale";
 import { useChartItemInteraction } from "./useChartItemInteraction";
 
 export interface InteractiveHistogramBin {
-  count: number;
-  include_lower: boolean;
-  include_upper: boolean;
-  lower: number;
-  upper: number;
+  count: number; include_lower: boolean; include_upper: boolean; lower: number; upper: number;
+  density?: number;
 }
-
 interface InteractiveHistogramChartProps {
-  bins: InteractiveHistogramBin[];
-  chartId: string;
-  columnName: string;
-  nBasis: number;
+  bins: InteractiveHistogramBin[]; chartId: string; columnName: string; nBasis: number;
   normalFitPoints?: Array<{ x: number; expected_count: number }>;
+  densityFitPoints?: Array<{ x: number; density: number }>;
+  ordinate?: "count" | "density"; unit?: string | null; sourceKey?: string;
+  referenceValues?: Array<{ label: string; value: number }>;
 }
+const layout = { width: 360, height: 210, maxWidth: 640, plot: { left: 60, top: 16, width: 288, height: 130 } };
 
-const width = 360;
-const height = 210;
-const plot = { left: 38, right: 12, top: 16, bottom: 36 };
-
-export function InteractiveHistogramChart({
-  bins,
-  chartId,
-  columnName,
-  nBasis,
-  normalFitPoints = [],
-}: InteractiveHistogramChartProps) {
-  const ids = bins.map((_, index) => `${chartId}-bin-${index}`);
-  const interaction = useChartItemInteraction(ids);
-  if (bins.length === 0) return <EmptyChart label="숫자 데이터 없음" />;
-
-  const plotWidth = width - plot.left - plot.right;
-  const plotHeight = height - plot.top - plot.bottom;
-  const range = paddedNumericRange(bins.flatMap((bin) => [bin.lower, bin.upper]));
-  const maxCount = Math.max(
-    1,
-    ...bins.map((bin) => bin.count),
-    ...normalFitPoints.map((point) => point.expected_count),
-  );
-
-  return (
-    <div className="interactive-chart">
-      <svg
-        aria-labelledby={`${chartId}-title ${chartId}-description`}
-        className="chart-svg interactive-chart-svg"
-        role="img"
-        viewBox={`0 0 ${width} ${height}`}
-      >
-        <title id={`${chartId}-title`}>{`${columnName} 히스토그램`}</title>
-        <desc id={`${chartId}-description`}>막대 하나에 Tab으로 진입한 뒤 화살표 키로 bin을 이동합니다.</desc>
-        <line className="chart-axis" x1={plot.left} x2={plot.left} y1={plot.top} y2={plot.top + plotHeight} />
-        <line className="chart-axis" x1={plot.left} x2={plot.left + plotWidth} y1={plot.top + plotHeight} y2={plot.top + plotHeight} />
-        {bins.map((bin, index) => {
-          const id = ids[index];
-          const x1 = scaleChartValue(bin.lower, range, plot.left, plot.left + plotWidth);
-          const x2 = scaleChartValue(bin.upper, range, plot.left, plot.left + plotWidth);
-          const barWidth = Math.max(1, x2 - x1 - 1);
-          const barHeight = (bin.count / maxCount) * plotHeight;
-          const selected = interaction.pinnedId === id;
-          return (
-            <rect
-              aria-label={`${columnName} bin ${index + 1}, ${formatNumber(bin.lower)}부터 ${formatNumber(bin.upper)}, count ${bin.count}`}
-              className={`histogram-bar chart-interactive-item ${interaction.stateClass(id)}`}
-              data-selected={selected ? "true" : "false"}
-              height={barHeight}
-              key={id}
-              onBlur={() => interaction.clearFocus(id)}
-              onClick={() => interaction.activate(id, x1 + barWidth / 2, plot.top + plotHeight - barHeight, "selection")}
-              onFocus={() => interaction.activate(id, x1 + barWidth / 2, plot.top + plotHeight - barHeight, "focus")}
-              onKeyDown={(event) => interaction.handleKeyDown(event, id, x1 + barWidth / 2, plot.top + plotHeight - barHeight)}
-              onPointerEnter={(event) => interaction.move(id, event)}
-              onPointerLeave={() => interaction.clearHover(id)}
-              onPointerMove={(event) => interaction.move(id, event)}
-              ref={(element) => interaction.itemRef(id, element)}
-              role="img"
-              aria-describedby={interaction.describedBy(id)}
-              tabIndex={interaction.tabIndexFor(id)}
-              width={barWidth}
-              x={x1}
-              y={plot.top + plotHeight - barHeight}
-            >
-              <title>{`${formatNumber(bin.lower)} ~ ${formatNumber(bin.upper)}: ${bin.count}`}</title>
-            </rect>
-          );
-        })}
-        {normalFitPoints.length > 1 ? (
-          <polyline
-            aria-label="적합 정규곡선"
-            className="histogram-normal-fit-line"
-            fill="none"
-            points={normalFitPoints
-              .map((point) => {
-                const x = scaleChartValue(point.x, range, plot.left, plot.left + plotWidth);
-                const y = plot.top + plotHeight - (point.expected_count / maxCount) * plotHeight;
-                return `${x},${y}`;
-              })
-              .join(" ")}
-            role="img"
-          >
-            <title>표본 평균과 표본 표준편차로 적합한 정규곡선</title>
-          </polyline>
-        ) : null}
-        <text className="chart-axis-label" x={plot.left} y={height - 10}>{formatNumber(range.min)}</text>
-        <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={height - 10}>{formatNumber(range.max)}</text>
-        <text className="chart-axis-label" x={plot.left - 8} y={plot.top + 8}>{maxCount}</text>
-      </svg>
-      <ChartItemFeedback interaction={interaction} items={bins.map((bin, index) => ({ id: ids[index], title: `Bin ${index + 1}`, details: binDetails(bin, index, nBasis) }))} />
-    </div>
-  );
+export function InteractiveHistogramChart({ bins, chartId, columnName, nBasis, normalFitPoints = [],
+  densityFitPoints = [], ordinate = "count", unit, sourceKey, referenceValues = [] }: InteractiveHistogramChartProps) {
+  const records = bins.map((bin, index) => ({ bin, index, id: `${chartId}:bin:${index}`, value: ordinate === "count" ? bin.count : bin.density }));
+  const valid = records.filter(({ bin, value }) => [bin.lower, bin.upper, bin.count, value].every(Number.isFinite) &&
+    (bin.upper > bin.lower || ordinate === "count" && bin.upper === bin.lower && bin.include_lower && bin.include_upper) && bin.count >= 0 && value! >= 0);
+  const fit = (ordinate === "count" ? normalFitPoints.map((point) => ({ x: point.x, value: point.expected_count })) : densityFitPoints.map((point) => ({ x: point.x, value: point.density })));
+  const fitValid = fit.every((point) => Number.isFinite(point.x) && Number.isFinite(point.value) && point.value >= 0);
+  const refs = referenceValues.filter((ref) => Number.isFinite(ref.value));
+  const interaction = useChartItemInteraction(valid.map((item) => item.id), { sourceKey });
+  const invalid = bins.length - valid.length + referenceValues.length - refs.length + (fitValid ? 0 : fit.length);
+  if (!valid.length) return <div className="empty-state">{t("charts.noData")}{invalid > 0 && <p>{t("charts.invalidData", { count: invalid })}</p>}</div>;
+  const range = paddedNumericRange([...valid.flatMap(({ bin }) => [bin.lower, bin.upper]), ...refs.map((ref) => ref.value), ...(fitValid ? fit.map((point) => point.x) : [])]);
+  const maxValue = Math.max(0, ...valid.map((item) => item.value!), ...(fitValid ? fit.map((point) => point.value) : []));
+  const yRange = { min: 0, max: maxValue > 0 ? maxValue * 1.08 : 1 };
+  const { plot } = layout;
+  const x = (value: number) => scaleChartValue(value, range, plot.left, plot.left + plot.width);
+  const y = (value: number) => scaleChartValue(value, yRange, plot.top + plot.height, plot.top);
+  const title = `${columnName} ${t("charts.histogram")}`;
+  const yLabel = t(ordinate === "count" ? "charts.count" : "charts.density");
+  return <ChartFrame chartId={chartId} title={title} description={title} layout={layout}
+    axes={<ChartAxes layout={layout} x={{ label: columnName, unit, range }} y={{ label: yLabel, range: yRange }} />}
+    footer={<>
+      <ul className="chart-series-legend">{refs.map((ref) => <li key={ref.label}>{ref.label}: {formatNumber(ref.value)}</li>)}
+        {fit.length > 0 && fitValid && <li>{t("charts.normalFit")}</li>}</ul>
+      {invalid > 0 && <p>{t("charts.invalidData", { count: invalid })}</p>}
+      <ChartItemFeedback interaction={interaction} items={valid.map(({ bin, index, id, value }) => ({ id, title: `Bin ${index + 1}`,
+        details: [...binDetails(bin, index, nBasis), ...(ordinate === "density" ? [{ label: yLabel, value: formatNumber(value!) }] : [])] }))} />
+    </>}>
+    {valid.map(({ bin, id, index, value }) => {
+      const left = x(bin.lower); const right = x(bin.upper); const top = y(value!);
+      const barHeight = plot.top + plot.height - top;
+      return <g key={id}>
+        <rect className="histogram-bar" x={left} y={top} width={Math.max(1, right - left - 1)} height={barHeight} />
+        <rect className={`chart-histogram-hit ${interaction.stateClass(id)}`} x={left} y={barHeight > 0 ? top : top - 8}
+          width={Math.max(1, right - left - 1)} height={Math.max(8, barHeight)} fill="transparent"
+          role="img" aria-label={`${columnName} bin ${index + 1}, ${formatNumber(bin.lower)} - ${formatNumber(bin.upper)}, ${yLabel} ${formatNumber(value!)}`}
+          aria-describedby={interaction.describedBy(id)} data-selected={interaction.pinnedId === id ? "true" : "false"}
+          tabIndex={interaction.tabIndexFor(id)} ref={(element) => interaction.itemRef(id, element)}
+          onFocus={() => interaction.activateItem(id, "focus")} onBlur={() => interaction.clearFocus(id)}
+          onPointerEnter={(event) => interaction.move(id, event)} onPointerMove={(event) => interaction.move(id, event)} onPointerLeave={() => interaction.clearHover(id)}
+          onClick={() => interaction.pin(id)} onKeyDown={(event) => interaction.handleKeyDown(event, id)}>
+          <title>{`${formatNumber(bin.lower)} - ${formatNumber(bin.upper)}: ${formatNumber(value!)}`}</title>
+        </rect>
+      </g>;
+    })}
+    {fit.length > 1 && fitValid && <polyline className="histogram-normal-fit-line" fill="none" points={fit.map((point) => `${x(point.x)},${y(point.value)}`).join(" ")}><title>{t("charts.normalFit")}</title></polyline>}
+    {refs.map((ref) => <line key={ref.label} className="quality-limit-line" x1={x(ref.value)} x2={x(ref.value)} y1={plot.top} y2={plot.top + plot.height}><title>{`${ref.label}: ${formatNumber(ref.value)}`}</title></line>)}
+  </ChartFrame>;
 }
-
 function binDetails(bin: InteractiveHistogramBin, index: number, nBasis: number) {
   return [
     { label: "Bin", value: String(index + 1) },
-    { label: "하한", value: formatNumber(bin.lower) },
-    { label: "상한", value: formatNumber(bin.upper) },
-    { label: "하한 포함", value: bin.include_lower ? "예" : "아니요" },
-    { label: "상한 포함", value: bin.include_upper ? "예" : "아니요" },
-    { label: "Count", value: bin.count.toLocaleString() },
-    { label: "비율", value: nBasis > 0 ? `${formatNumber((bin.count / nBasis) * 100)}%` : "-" },
+    { label: t("charts.binBounds"), value: `${bin.include_lower ? "[" : "("}${formatNumber(bin.lower)}, ${formatNumber(bin.upper)}${bin.include_upper ? "]" : ")"}` },
+    { label: t("charts.count"), value: bin.count.toLocaleString() },
+    { label: t("charts.proportion"), value: nBasis > 0 ? `${formatNumber(bin.count / nBasis * 100)}%` : "-" },
   ];
 }
-
-function EmptyChart({ label }: { label: string }) {
-  return <div className="empty-state">{label}</div>;
-}
-
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat("ko-KR", { maximumSignificantDigits: 6 }).format(value);
+  return Number.isFinite(value) ? Number(value.toPrecision(6)).toString() : "-";
 }

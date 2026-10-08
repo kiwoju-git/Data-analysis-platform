@@ -59,3 +59,18 @@ publication require all implementation stages and final platform checks.
   sets. 1440/1024/390 viewport overflow checks passed. Synthetic diagnostics:
   `.tmp/e2e-result-charts-verified/`. This does not yet cover the full application
   resize sequence, browser zoom, all remaining plots or Linux release smoke.
+
+### Remaining Result Plots
+
+- I/MR, subgroup and attribute control charts preserve stored limits, signal
+  shapes and run identities. Run Chart retains only its stored median reference.
+- Capability uses saved histogram bins/density and normal-fit points. Zero
+  specification limits remain visible; constant count bins remain supported.
+- Prediction charts show stored means and independently available CI/PI values;
+  point-only predictions do not gain fabricated intervals.
+- Pearson, Gage, factorial main/interactions/cube and RSM grid now use shared
+  interaction/frame rules. Gage operator series remain separate. RSM's prior
+  renderer was a grid, not a contour-line renderer; saved grid values are retained.
+- Initial full frontend check found five legacy markup assertions; these were
+  updated to verify visible axes/frames and hit targets. Follow-up: 54 files /
+  392 tests passed. These are display tests, not new statistical reference tests.

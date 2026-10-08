@@ -17,6 +17,7 @@ export interface InteractiveScatterPoint {
   x: number;
   y: number;
   marker?: "circle" | "square" | "diamond";
+  markerRadius?: number;
   seriesId?: string;
   label?: string;
   labelVisibility?: "always" | "active";
@@ -148,7 +149,7 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
         {point.warning && <circle className="chart-warning-ring" cx={cx} cy={cy} r={6} />}
         {point.marker === "square" ? <rect {...props} x={cx - 3.5} y={cy - 3.5} width={7} height={7}><title>{point.ariaLabel}</title></rect>
           : point.marker === "diamond" ? <polygon {...props} points={`${cx},${cy - 4.5} ${cx + 4.5},${cy} ${cx},${cy + 4.5} ${cx - 4.5},${cy}`}><title>{point.ariaLabel}</title></polygon>
-            : <circle {...props} cx={cx} cy={cy} r={3.5}><title>{point.ariaLabel}</title></circle>}
+            : <circle {...props} cx={cx} cy={cy} r={point.markerRadius ?? 3.5}><title>{point.ariaLabel}</title></circle>}
       </g>;
     })}
   </ChartFrame>;

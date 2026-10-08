@@ -1,3 +1,4 @@
+import { ResponseSurfaceGrid } from "./charts/ResponseSurfaceGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -742,7 +743,7 @@ function ResponseSurfaceResult({ analysis }: { analysis: DoeResponseSurfaceAnaly
       ) : null}
       <div className="chart-panel">
         <span className="chart-panel-title">예측 contour</span>
-        <ContourPlot analysis={analysis} />
+        <ResponseSurfaceGrid analysis={analysis} />
       </div>
       <div className="table-wrap">
         <table className="result-table">
@@ -784,52 +785,6 @@ function ResponseSurfaceResult({ analysis }: { analysis: DoeResponseSurfaceAnaly
         <div className="notice-box notice-warning" key={warning}>{warning}</div>
       ))}
     </section>
-  );
-}
-
-function ContourPlot({ analysis }: { analysis: DoeResponseSurfaceAnalysisResponse }) {
-  const { contour } = analysis.result;
-  const width = 540;
-  const height = 380;
-  const left = 64;
-  const top = 20;
-  const plotSize = 300;
-  const cellSize = plotSize / contour.grid_size;
-  const values = contour.points.map((point) => point.predicted);
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  return (
-    <svg
-      className="chart-svg chart-svg-wide"
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={`${contour.x_factor}와 ${contour.y_factor}의 예측 반응 contour`}
-    >
-      {contour.points.map((point, index) => {
-        const column = index % contour.grid_size;
-        const row = Math.floor(index / contour.grid_size);
-        return (
-          <rect
-            key={`${point.x_coded}:${point.y_coded}`}
-            x={left + column * cellSize}
-            y={top + (contour.grid_size - row - 1) * cellSize}
-            width={cellSize + 0.4}
-            height={cellSize + 0.4}
-            fill={contourColor(point.predicted, minimum, maximum)}
-          >
-            <title>{formatNumber(point.predicted)}</title>
-          </rect>
-        );
-      })}
-      <line className="chart-axis" x1={left} x2={left + plotSize} y1={top + plotSize} y2={top + plotSize} />
-      <line className="chart-axis" x1={left} x2={left} y1={top} y2={top + plotSize} />
-      <text className="chart-axis-label" x={left + plotSize / 2 - 20} y={top + plotSize + 32}>{contour.x_factor}</text>
-      <text className="chart-axis-label" x={8} y={top + plotSize / 2}>{contour.y_factor}</text>
-      <text className="chart-axis-label" x={left} y={top + plotSize + 16}>-1</text>
-      <text className="chart-axis-label chart-axis-label-end" x={left + plotSize} y={top + plotSize + 16}>+1</text>
-      <text className="chart-axis-label" x={left + plotSize + 24} y={top + 20}>최대 {formatNumber(maximum)}</text>
-      <text className="chart-axis-label" x={left + plotSize + 24} y={top + 42}>최소 {formatNumber(minimum)}</text>
-    </svg>
   );
 }
 
@@ -908,18 +863,4 @@ function formatNumber(value: number): string {
 
 function formatNullable(value: number | null): string {
   return value === null ? "-" : formatNumber(value);
-}
-
-function contourColor(value: number, minimum: number, maximum: number): string {
-  const ratio = maximum === minimum ? 0.5 : (value - minimum) / (maximum - minimum);
-  if (ratio <= 0.5) {
-    const amount = ratio * 2;
-    return mixColor([34, 117, 111], [245, 240, 204], amount);
-  }
-  return mixColor([245, 240, 204], [181, 61, 52], (ratio - 0.5) * 2);
-}
-
-function mixColor(start: [number, number, number], end: [number, number, number], amount: number): string {
-  const channels = start.map((value, index) => Math.round(value + (end[index] - value) * amount));
-  return `rgb(${channels.join(",")})`;
 }

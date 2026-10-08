@@ -1,3 +1,6 @@
+import { InteractiveHorizontalBarChart } from "./charts/InteractiveHorizontalBarChart";
+import { InteractiveScatterChart } from "./charts/InteractiveScatterChart";
+import { paddedNumericRange } from "./charts/chartScale";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { t } from "./i18n/translate";
 
@@ -1129,7 +1132,7 @@ function FactorialAnalysisResultView({
         <span>Analysis ID</span>
         <strong>{analysis.analysis_id}</strong>
       </div> : null}
-      <div className="chart-grid">
+      <div className="chart-grid analysis-result-grid">
         <div className="chart-panel">
           <span className="chart-panel-title">절대 효과 순위</span>
           <FactorialEffectChart analysis={analysis} />
@@ -1250,89 +1253,26 @@ function factorialTermDisplayLabel(
 }
 
 function FactorialEffectChart({ analysis }: { analysis: DoeFactorialAnalysisResponse }) {
-  const effects = analysis.result.ranked_effects.slice(0, 12);
-  if (effects.length === 0) {
-    return <div className="notice-box">표시할 factorial 효과가 없습니다.</div>;
-  }
-  const width = 720;
-  const left = 170;
-  const right = 40;
-  const rowHeight = 28;
-  const height = Math.max(180, 32 + effects.length * rowHeight);
-  const maxEffect = Math.max(...effects.map((effect) => effect.absolute_effect), 1e-12);
-  const barWidth = width - left - right;
-  return (
-    <svg
-      aria-label="절대 효과 순위 차트"
-      className="chart-svg"
-      role="img"
-      viewBox={`0 0 ${width} ${height}`}
-    >
-      <title>절대 효과 순위</title>
-      {effects.map((effect, index) => {
-        const y = 18 + index * rowHeight;
-        const valueWidth = (effect.absolute_effect / maxEffect) * barWidth;
-        return (
-          <g key={effect.term_id}>
-            <text className="chart-axis-label chart-axis-label-end" x={left - 10} y={y + 13}>
-              {effect.label}
-            </text>
-            <rect className="doe-effect-bar" height={18} width={valueWidth} x={left} y={y} />
-            <text className="chart-axis-label" x={left + valueWidth + 6} y={y + 13}>
-              {formatMetric(effect.effect)}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
+  return <InteractiveHorizontalBarChart chartId="factorial-effects" sourceKey={analysis.analysis_id}
+    title={t("charts.absoluteEffects")} description={t("charts.absoluteEffects")} xLabel={t("charts.absoluteEffect")} yLabel={t("charts.term")}
+    items={analysis.result.ranked_effects.map((effect) => ({ id: effect.term_id, label: effect.label, title: effect.label,
+      value: effect.absolute_effect, className: "doe-effect-bar", details: [{ label: t("charts.effect"), value: formatMetric(effect.effect) }] }))} />;
 }
 
 function FactorialMainEffectsChart({ analysis }: { analysis: DoeFactorialAnalysisResponse }) {
   const effects = analysis.result.plots.main_effects;
-  if (effects.length === 0) {
-    return <div className="notice-box">표시할 주효과 평균이 없습니다.</div>;
-  }
-  const width = 720;
-  const leftX = 270;
-  const rightX = 620;
-  const rowHeight = 42;
-  const height = Math.max(180, 35 + effects.length * rowHeight);
-  const values = effects.flatMap((effect) => [effect.low_mean, effect.high_mean]);
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  const range = Math.max(maximum - minimum, 1e-12);
-  return (
-    <svg
-      aria-label="주효과 평균 차트"
-      className="chart-svg"
-      role="img"
-      viewBox={`0 0 ${width} ${height}`}
-    >
-      <title>요인별 low와 high 반응 평균</title>
-      {effects.map((effect, index) => {
-        const centerY = 24 + index * rowHeight + rowHeight / 2;
-        const lowY = centerY + ((maximum - effect.low_mean) / range - 0.5) * 24;
-        const highY = centerY + ((maximum - effect.high_mean) / range - 0.5) * 24;
-        return (
-          <g key={effect.factor}>
-            <text className="chart-axis-label chart-axis-label-end" x={150} y={centerY + 4}>
-              {effect.factor}
-            </text>
-            <line className="doe-main-effect-line" x1={leftX} x2={rightX} y1={lowY} y2={highY} />
-            <circle className="doe-main-effect-point" cx={leftX} cy={lowY} r={5} />
-            <circle className="doe-main-effect-point" cx={rightX} cy={highY} r={5} />
-            <text className="chart-axis-label" x={leftX - 80} y={lowY + 4}>
-              -1: {formatMetric(effect.low_mean)}
-            </text>
-            <text className="chart-axis-label" x={rightX + 10} y={highY + 4}>
-              +1: {formatMetric(effect.high_mean)}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
+  return <div className="chart-grid analysis-result-grid">{effects.map((effect) => {
+    const points = [{ x: -1, y: effect.low_mean }, { x: 1, y: effect.high_mean }].map((point) => ({
+      ...point, id: `${effect.factor}:${point.x}`, title: `${effect.factor}: ${point.x}`,
+      ariaLabel: `${effect.factor}: ${point.x}, ${formatMetric(point.y)}`, className: "doe-main-effect-point",
+      details: [{ label: t("doe.plots.data"), value: formatMetric(point.y) }],
+    }));
+    return <InteractiveScatterChart key={effect.factor} chartId="factorial-legacy-main" sourceKey={`${analysis.analysis_id}:${effect.factor}`}
+      title={effect.factor} description={t("doe.plots.data")} annotations={[]} emptyLabel={t("charts.noData")} formatValue={formatMetric}
+      points={points} connectPoints="line" xLabel={`${effect.factor} (${t("charts.coded")})`} yLabel={`${t("doe.plots.data")}: ${analysis.response_name}`}
+      xRange={{ min: -1.1, max: 1.1 }} yRange={paddedNumericRange(points.map((point) => point.y))}
+      xTicks={[{ value: -1, label: "-1" }, { value: 1, label: "+1" }]} />;
+  })}</div>;
 }
 
 function formatMetric(value: number | null): string {

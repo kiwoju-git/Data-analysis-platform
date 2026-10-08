@@ -1,7 +1,9 @@
-import { useId, useState } from "react";
+import { InteractiveScatterChart } from "./charts/InteractiveScatterChart";
+import { ChartFrame } from "./charts/ChartFrame";
+import { useState } from "react";
 import type { DoeFinalModelWorkflow } from "./api/types/doeModelWorkflow";
 import { ChartItemFeedback } from "./charts/ChartItemFeedback";
-import { paddedNumericRange, scaleChartValue } from "./charts/chartScale";
+import { paddedNumericRange } from "./charts/chartScale";
 import { useChartItemInteraction } from "./charts/useChartItemInteraction";
 import { factorialViewFactors, isGeneralFactorial, type FactorialViewDesign, type FactorialViewFactor } from "./doe/factorialView";
 import { factorialNumber } from "./doe/factorialWorkflowPresentation";
@@ -31,14 +33,14 @@ export function FactorialPlotsPanel({ model, design }: { model: DoeFinalModelWor
       <option value="fitted_mean">{t("doe.plots.fitted")}</option><option value="data_mean">{t("doe.plots.data")}</option>
     </select></label><p className="field-help">{t("doe.plots.policy")}</p>
     {!model.factorial_plots.available ? <p className="notice-box">{t("doe.model.unavailable")}</p> : <>
-      <h4>{t("doe.plots.main")}</h4><div className="chart-grid">{factors.map((factor) => <FactorialMeanChart key={factor.name} xFactor={factor} cells={cells} means={means} />)}</div>
+      <h4>{t("doe.plots.main")}</h4><div className="chart-grid analysis-result-grid">{factors.map((factor) => <FactorialMeanChart key={factor.name} xFactor={factor} cells={cells} means={means} />)}</div>
       <h4>{t("doe.plots.interaction")}</h4><div className="option-grid">
         <label><span>{t("doe.plots.x")}</span><select value={xFactor.name} onChange={(event) => setXName(event.currentTarget.value)}>{factors.map((factor) => <option key={factor.name}>{factor.name}</option>)}</select></label>
         <label><span>{t("doe.plots.trace")}</span><select value={traceFactor.name} onChange={(event) => setTraceName(event.currentTarget.value)}>{factors.filter((factor) => factor.name !== xFactor.name).map((factor) => <option key={factor.name}>{factor.name}</option>)}</select></label>
       </div><label className="doe-table-toggle"><input type="checkbox" checked={allPairs} onChange={(event) => setAllPairs(event.currentTarget.checked)} /><span>{t("doe.plots.allPairs")}</span></label>
       <label className="doe-table-toggle"><input type="checkbox" checked={modelPairsOnly} onChange={(event) => setModelPairsOnly(event.currentTarget.checked)} /><span>{t("doe.plots.modelPairs")}</span></label>
       <p className="field-help">{t("doe.plots.parallel")}</p>
-      <div className="chart-grid">{pairs.map(([factor, trace]) => <FactorialMeanChart key={`${factor.name}:${trace.name}`} xFactor={factor} traceFactor={trace} cells={cells} means={means} />)}</div>
+      <div className="chart-grid analysis-result-grid">{pairs.map(([factor, trace]) => <FactorialMeanChart key={`${factor.name}:${trace.name}`} xFactor={factor} traceFactor={trace} cells={cells} means={means} />)}</div>
       <h4>{t("doe.plots.cube")}</h4>{!cubeAllowed ? <p className="field-help">{t("doe.plots.cubeUnavailable")}</p> : <>
         <div className="option-grid"><label><span>{t("doe.plots.count")}</span><select aria-label={t("doe.plots.count")} value={cubeNames.length} onChange={(event) => {
           const count = Number(event.currentTarget.value); setCubeNames([...cubeNames.slice(0, count), ...factors.filter((factor) => !cubeNames.includes(factor.name)).map((factor) => factor.name)].slice(0, count));
@@ -57,63 +59,50 @@ export function FactorialPlotsPanel({ model, design }: { model: DoeFinalModelWor
   </section>;
 }
 
-const seriesColors = ["#2563a6", "#ad3e64", "#187762", "#8a651b", "#6852a1", "#a04c23", "#237e91", "#735c68", "#4e6f29", "#94662f"];
-
 function FactorialMeanChart({ xFactor, traceFactor, cells, means }: { xFactor: FactorialViewFactor; traceFactor?: FactorialViewFactor; cells: Cell[]; means: Means }) {
-  const id = useId().replace(/:/g, "");
   const traces = traceFactor?.levels ?? [{ code: 0, actual: "" }];
-  const points = traces.flatMap((trace, series) => xFactor.levels.map((level, index) => ({ id: `${id}-${series}-${index}`, series, index,
-    label: `${xFactor.name} = ${level.actual}${traceFactor ? `; ${traceFactor.name} = ${trace.actual}` : ""}`,
-    value: factorialMarginalMean(cells, { [xFactor.name]: level.code, ...(traceFactor ? { [traceFactor.name]: trace.code } : {}) }, means) })));
-  const interaction = useChartItemInteraction(points.filter((point) => point.value !== null).map((point) => point.id));
-  const range = paddedNumericRange(points.flatMap((point) => point.value === null ? [] : [point.value]), 0.1);
-  const x = (index: number) => 62 + index * 316 / Math.max(1, xFactor.levels.length - 1);
-  const y = (value: number) => scaleChartValue(value, range, 190, 25);
+  const points = traces.flatMap((trace, series) => xFactor.levels.map((level, index) => {
+    const value = factorialMarginalMean(cells, { [xFactor.name]: level.code, ...(traceFactor ? { [traceFactor.name]: trace.code } : {}) }, means);
+    const label = `${xFactor.name} = ${level.actual}${traceFactor ? `; ${traceFactor.name} = ${trace.actual}` : ""}`;
+    return { id: JSON.stringify([xFactor.name, level.code, traceFactor?.name, trace.code]), seriesId: String(trace.code), x: index, y: value ?? NaN,
+      title: label, ariaLabel: `${label}: ${factorialNumber(value)}`, className: `factorial-series-${series}`,
+      marker: series % 2 ? "diamond" as const : "circle" as const,
+      details: [{ label: t(means === "fitted_mean" ? "doe.plots.fitted" : "doe.plots.data"), value: factorialNumber(value) }] };
+  }));
   const title = `${t(traceFactor ? "doe.plots.interaction" : "doe.plots.main")}: ${xFactor.name}${traceFactor ? ` / ${traceFactor.name}` : ""}`;
   const overall = factorialMarginalMean(cells, {}, means);
-  return <div className="chart-panel"><h4>{title}</h4><div className="interactive-chart">
-    <svg className="chart-svg chart-svg-wide" viewBox="0 0 440 265" role="img" aria-labelledby={`${id}-title ${id}-desc`}>
-      <title id={`${id}-title`}>{title}</title><desc id={`${id}-desc`}>{t("doe.plots.policy")}</desc>
-      <line className="chart-axis" x1={62} x2={378} y1={190} y2={190} /><line className="chart-axis" x1={62} x2={62} y1={25} y2={190} />
-      {[range.min, (range.min + range.max) / 2, range.max].map((value) => <text key={value} className="chart-axis-label" textAnchor="end" x={55} y={y(value) + 4}>{factorialNumber(value)}</text>)}
-      {!traceFactor && overall !== null ? <line className="reference-line" x1={62} x2={378} y1={y(overall)} y2={y(overall)} /> : null}
-      {traces.map((trace, series) => <polyline key={trace.code} fill="none" stroke={seriesColors[series]} strokeWidth={2} strokeDasharray={series % 2 ? "6 3" : undefined}
-        points={points.filter((point) => point.series === series && point.value !== null).map((point) => `${x(point.index)},${y(point.value!)}`).join(" ")} />)}
-      {points.filter((point) => point.value !== null).map((point) => <circle key={point.id} cx={x(point.index)} cy={y(point.value!)} r={5} fill={seriesColors[point.series]}
-        className={`chart-interactive-item ${interaction.stateClass(point.id)}`} aria-describedby={interaction.describedBy(point.id)} onBlur={() => interaction.clearFocus(point.id)} tabIndex={interaction.tabIndexFor(point.id)} aria-label={`${point.label}: ${factorialNumber(point.value)}`} role="img"
-        ref={(element) => interaction.itemRef(point.id, element)} onFocus={() => interaction.activate(point.id, x(point.index), y(point.value!), "focus")}
-        onClick={() => interaction.activate(point.id, x(point.index), y(point.value!), "selection")} onKeyDown={(event) => interaction.handleKeyDown(event, point.id)}
-        onPointerMove={(event) => interaction.move(point.id, event)} onPointerEnter={(event) => interaction.move(point.id, event)} onPointerLeave={() => interaction.clearHover(point.id)}><title>{point.label}: {factorialNumber(point.value)}</title></circle>)}
-      {xFactor.levels.map((level, index) => <text className="chart-axis-label" key={level.code} x={x(index)} y={210} textAnchor="middle"><title>{String(level.actual)}</title>{String(level.actual).length > 12 ? `${String(level.actual).slice(0, 10)}...` : String(level.actual)}</text>)}
-      <text className="chart-axis-label" x={220} y={246} textAnchor="middle">{xFactor.name}{xFactor.unit ? ` (${xFactor.unit})` : ""}</text>
-    </svg>
-    {traceFactor ? <ul className="factorial-plot-legend">{traces.map((trace, index) => <li key={trace.code}><span aria-hidden="true" style={{ backgroundColor: seriesColors[index] }} />{traceFactor.name}: {String(trace.actual)}</li>)}</ul> : null}
-    <ChartItemFeedback interaction={interaction} items={points.map((point) => ({ id: point.id, title: point.label, details: [{ label: t("doe.plots.mean"), value: factorialNumber(point.value) }] }))} />
-  </div></div>;
+  const xRange = paddedNumericRange(points.map((point) => point.x));
+  return <div className="chart-panel"><h4>{title}</h4><InteractiveScatterChart chartId="factorial-means"
+    sourceKey={JSON.stringify([means, xFactor.name, traceFactor?.name])} title={title} description={t("doe.plots.policy")} annotations={[]}
+    points={points} formatValue={factorialNumber} emptyLabel={t("charts.noData")} xLabel={xFactor.name} xUnit={xFactor.unit}
+    yLabel={t(means === "fitted_mean" ? "doe.plots.fitted" : "doe.plots.data")} xRange={xRange} yRange={paddedNumericRange(points.map((point) => point.y))}
+    xTicks={xFactor.levels.map((level, index) => ({ value: index, label: String(level.actual) }))}
+    series={traces.map((trace, index) => ({ id: String(trace.code), label: traceFactor ? `${traceFactor.name}: ${trace.actual}` : xFactor.name,
+      className: `factorial-series-${index}`, pointIds: points.filter((point) => point.seriesId === String(trace.code)).map((point) => point.id), connect: "line" }))}
+    referenceLines={!traceFactor && overall !== null ? [{ label: t("doe.plots.mean"), x1: xRange.min, x2: xRange.max, y1: overall, y2: overall }] : []} />
+  </div>;
 }
 
 function FactorialCubeChart({ factors, cells, means, fixed }: { factors: FactorialViewFactor[]; cells: Cell[]; means: Means; fixed: Record<string, number> }) {
-  const id = useId().replace(/:/g, "");
   const vertices = Array.from({ length: 2 ** factors.length }, (_, index) => {
     const bits = factors.map((_, bit) => (index >> bit) & 1);
     const settings = { ...fixed, ...Object.fromEntries(factors.map((factor, at) => [factor.name, factor.levels[bits[at]].code])) };
-    return { id: `${id}-${index}`, bits, x: 100 + bits[0] * 235 + (bits[2] ?? 0) * 80, y: 275 - bits[1] * 165 - (bits[2] ?? 0) * 70,
+    return { id: JSON.stringify(Object.entries(settings)), bits, x: 100 + bits[0] * 235 + (bits[2] ?? 0) * 80, y: 275 - bits[1] * 165 - (bits[2] ?? 0) * 70,
       value: factorialMarginalMean(cells, settings, means), label: factors.map((factor, at) => `${factor.name} = ${factor.levels[bits[at]].actual}`).join("; ") };
   });
-  const interaction = useChartItemInteraction(vertices.map((point) => point.id));
-  return <div className="chart-panel factorial-cube-chart"><svg className="chart-svg" viewBox="0 0 520 360" role="img" aria-labelledby={`${id}-title ${id}-desc`}>
-    <title id={`${id}-title`}>{t("doe.plots.cube")}</title><desc id={`${id}-desc`}>{factors.map((factor) => factor.name).join(", ")}; {t("doe.plots.fixed")}: {Object.entries(fixed).map(([key, value]) => `${key}=${value}`).join(", ")}</desc>
+  const interaction = useChartItemInteraction(vertices.filter((point) => point.value !== null).map((point) => point.id), { sourceKey: JSON.stringify([means, factors.map((factor) => factor.name), fixed]) });
+  return <div className="chart-panel factorial-cube-chart"><ChartFrame chartId="factorial-cube" title={t("doe.plots.cube")} description={factors.map((factor) => factor.name).join(", ")} layout={{ width: 520, height: 360, maxWidth: 640, plot: { left: 0, top: 0, width: 520, height: 360 } }}>
     {vertices.flatMap((point, index) => factors.map((_, bit) => {
       const other = index ^ (1 << bit); return other > index ? <line className="chart-axis" key={`${index}-${bit}`} x1={point.x} y1={point.y} x2={vertices[other].x} y2={vertices[other].y} /> : null;
     }))}
-    {vertices.map((point) => <g key={point.id}><circle className={`scatter-point chart-interactive-item ${interaction.stateClass(point.id)}`} aria-describedby={interaction.describedBy(point.id)} onBlur={() => interaction.clearFocus(point.id)} cx={point.x} cy={point.y} r={6} role="img" aria-label={`${point.label}: ${factorialNumber(point.value)}`}
+    {vertices.map((point) => <g key={point.id}>{point.value !== null && <circle className={`scatter-point chart-interactive-item ${interaction.stateClass(point.id)}`} aria-describedby={interaction.describedBy(point.id)} onBlur={() => interaction.clearFocus(point.id)} cx={point.x} cy={point.y} r={6} role="img" aria-label={`${point.label}: ${factorialNumber(point.value)}`}
       tabIndex={interaction.tabIndexFor(point.id)} ref={(element) => interaction.itemRef(point.id, element)} onFocus={() => interaction.activate(point.id, point.x, point.y, "focus")}
       onKeyDown={(event) => interaction.handleKeyDown(event, point.id)} onClick={() => interaction.activate(point.id, point.x, point.y, "selection")}
-      onPointerMove={(event) => interaction.move(point.id, event)} onPointerEnter={(event) => interaction.move(point.id, event)} onPointerLeave={() => interaction.clearHover(point.id)}><title>{point.label}: {factorialNumber(point.value)}</title></circle>
+      onPointerMove={(event) => interaction.move(point.id, event)} onPointerEnter={(event) => interaction.move(point.id, event)} onPointerLeave={() => interaction.clearHover(point.id)}><title>{point.label}: {factorialNumber(point.value)}</title></circle>}
       <text x={point.x} y={point.y - 12} className="chart-axis-label" textAnchor="middle">{factorialNumber(point.value)}</text></g>)}
     <text x={255} y={322} className="chart-axis-label" textAnchor="middle">{factors[0].name}</text>
     <text x={20} y={180} className="chart-axis-label" transform="rotate(-90 20 180)" textAnchor="middle">{factors[1].name}</text>
     {factors[2] ? <text x={425} y={245} className="chart-axis-label" textAnchor="middle">{factors[2].name}</text> : null}
-  </svg><ChartItemFeedback interaction={interaction} items={vertices.map((point) => ({ id: point.id, title: point.label, details: [{ label: t("doe.plots.mean"), value: factorialNumber(point.value) }] }))} />
+  </ChartFrame><ChartItemFeedback interaction={interaction} items={vertices.map((point) => ({ id: point.id, title: point.label, details: [{ label: t("doe.plots.mean"), value: factorialNumber(point.value) }] }))} />
   <ul className="factorial-plot-legend">{factors.map((factor) => <li key={factor.name}>{factor.name}: {factor.levels.map((level) => String(level.actual)).join(" / ")}</li>)}</ul></div>;
 }

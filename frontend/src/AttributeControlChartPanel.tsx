@@ -1,8 +1,8 @@
+import { AttributeResultChart } from "./charts/QualityResultCharts";
 import { useState } from "react";
 
 import type {
   AnalysisResultEnvelope,
-  AttributeControlChartPoint,
   AttributeControlChartResult,
   AttributeControlChartType,
   DatasetColumnResponse,
@@ -48,12 +48,6 @@ const chartOptions: Array<{
   { type: "c", label: "C", purpose: "동일 검사 기회의 결점 수" },
   { type: "u", label: "U", purpose: "가변 검사 기회의 단위당 결점" },
 ];
-
-const chartWidth = 760;
-const chartHeight = 300;
-const plot = { left: 58, right: 22, top: 24, bottom: 44 };
-const plotWidth = chartWidth - plot.left - plot.right;
-const plotHeight = chartHeight - plot.top - plot.bottom;
 
 export function AttributeControlChartPanel({
   analysisResult,
@@ -406,7 +400,7 @@ export function AttributeControlChartPanel({
                   <div className="chart-panel-title">
                     {result.chart_type.toUpperCase()} chart · {result.count.display_name}
                   </div>
-                  {renderAttributeChart(result)}
+                  <AttributeResultChart result={result} />
                 </div>
               </div>
               <div className="table-wrap">
@@ -443,88 +437,6 @@ export function AttributeControlChartPanel({
       )}
     </section>
   );
-}
-
-function renderAttributeChart(result: AttributeControlChartResult) {
-  const points = result.chart.points.filter((point) =>
-    [point.position, point.value, point.lcl, point.ucl].every(Number.isFinite),
-  );
-  if (points.length === 0) {
-    return null;
-  }
-  const xRange = paddedRange(points.map((point) => point.position));
-  const yRange = paddedRange(
-    points.flatMap((point) => [point.value, point.lcl, point.ucl, result.center_line]),
-  );
-  const path = (selector: (point: AttributeControlChartPoint) => number) =>
-    points
-      .map((point) => `${scaleX(point.position, xRange)},${scaleY(selector(point), yRange)}`)
-      .join(" ");
-
-  return (
-    <svg className="mini-chart" role="img" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-      <title>
-        {`${result.chart_type.toUpperCase()} 관리도. 중심선 ${formatNumber(result.center_line)}, 신호 ${result.signals.length}개`}
-      </title>
-      <rect
-        fill="#ffffff"
-        height={plotHeight}
-        stroke="#d4dde8"
-        width={plotWidth}
-        x={plot.left}
-        y={plot.top}
-      />
-      <polyline fill="none" points={path((point) => point.ucl)} stroke="#b45309" strokeWidth="1.4" />
-      <line
-        stroke="#6b7280"
-        strokeDasharray="5 4"
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={scaleY(result.center_line, yRange)}
-        y2={scaleY(result.center_line, yRange)}
-      />
-      <polyline fill="none" points={path((point) => point.lcl)} stroke="#b45309" strokeWidth="1.4" />
-      <polyline fill="none" points={path((point) => point.value)} stroke="#1f4e79" strokeWidth="2" />
-      {points.map((point) => (
-        <circle
-          cx={scaleX(point.position, xRange)}
-          cy={scaleY(point.value, yRange)}
-          fill={point.signal_codes.length ? "#b45309" : "#2563eb"}
-          key={point.position}
-          r={point.signal_codes.length ? 5 : 4}
-          stroke="#172033"
-        >
-          <title>
-            {`점 ${point.position}: ${formatNumber(point.value)} · LCL ${formatNumber(point.lcl)} · UCL ${formatNumber(point.ucl)}`}
-          </title>
-        </circle>
-      ))}
-      <text className="chart-axis-label" x={plot.left + 6} y={scaleY(result.center_line, yRange) - 5}>
-        CL {formatNumber(result.center_line)}
-      </text>
-      <text className="chart-axis-label" x={plot.left} y={chartHeight - 12}>
-        canonical position
-      </text>
-    </svg>
-  );
-}
-
-function paddedRange(values: number[]): { min: number; max: number } {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  if (min === max) {
-    return { min: Math.max(0, min - 1), max: max + 1 };
-  }
-  const pad = (max - min) * 0.08;
-  return { min: Math.max(0, min - pad), max: max + pad };
-}
-
-function scaleX(value: number, range: { min: number; max: number }) {
-  return plot.left + ((value - range.min) / (range.max - range.min)) * plotWidth;
-}
-
-function scaleY(value: number, range: { min: number; max: number }) {
-  return plot.top + plotHeight - ((value - range.min) / (range.max - range.min)) * plotHeight;
 }
 
 function formatNumber(value: number): string {

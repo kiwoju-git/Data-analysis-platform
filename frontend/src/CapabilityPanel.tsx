@@ -1,6 +1,6 @@
+import { InteractiveHistogramChart } from "./charts/InteractiveHistogramChart";
 import type {
   AnalysisResultEnvelope,
-  CapabilityHistogramBin,
   CapabilityResult,
   DatasetColumnResponse,
   DatasetVersionResponse,
@@ -24,17 +24,6 @@ interface CapabilityPanelProps {
   onUslChange: (value: string) => void;
   onValueColumnChange: (columnId: string) => void;
 }
-
-const chartWidth = 560;
-const chartHeight = 260;
-const plot = {
-  left: 54,
-  right: 20,
-  top: 24,
-  bottom: 44,
-};
-const plotWidth = chartWidth - plot.left - plot.right;
-const plotHeight = chartHeight - plot.top - plot.bottom;
 
 export function CapabilityPanel({
   analysisResult,
@@ -285,166 +274,17 @@ function parseOptionalNumber(value: string): { kind: "ok"; value: number | null 
 }
 
 function renderCapabilityHistogram(result: CapabilityResult) {
-  const bins = result.histogram.bins;
-  if (bins.length === 0) {
-    return <EmptyChart label="histogram 없음" />;
-  }
-
-  const valueMin = Math.min(
-    bins[0].lower,
-    result.spec_limits.lsl ?? bins[0].lower,
-    result.spec_limits.target ?? bins[0].lower,
-  );
-  const valueMax = Math.max(
-    bins[bins.length - 1].upper,
-    result.spec_limits.usl ?? bins[bins.length - 1].upper,
-    result.spec_limits.target ?? bins[bins.length - 1].upper,
-  );
-  const yMax = Math.max(...bins.map((bin) => bin.density), ...bins.map((bin) => bin.normal_density));
-  const xRange = paddedRange([valueMin, valueMax]);
-  const yRange = { min: 0, max: yMax * 1.12 };
-  const densityPath = bins
-    .map((bin) => `${scaleX(bin.midpoint, xRange)},${scaleY(bin.normal_density, yRange)}`)
-    .join(" ");
-
-  return (
-    <svg className="mini-chart" role="img" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-      <title>{`${result.value.display_name} capability histogram`}</title>
-      <rect
-        x={plot.left}
-        y={plot.top}
-        width={plotWidth}
-        height={plotHeight}
-        fill="#ffffff"
-        stroke="#d4dde8"
-      />
-      {bins.map((bin) => (
-        <HistogramBar key={`${bin.lower}-${bin.upper}`} bin={bin} xRange={xRange} yRange={yRange} />
-      ))}
-      <polyline fill="none" points={densityPath} stroke="#1f4e79" strokeWidth="2" />
-      {result.spec_limits.lsl === null ? null : (
-        <SpecLine label="LSL" value={result.spec_limits.lsl} range={xRange} />
-      )}
-      {result.spec_limits.usl === null ? null : (
-        <SpecLine label="USL" value={result.spec_limits.usl} range={xRange} />
-      )}
-      {result.spec_limits.target === null ? null : (
-        <SpecLine label="Target" value={result.spec_limits.target} range={xRange} muted />
-      )}
-      <line
-        x1={plot.left}
-        x2={plot.left}
-        y1={plot.top}
-        y2={plot.top + plotHeight}
-        stroke="#7b8794"
-      />
-      <line
-        x1={plot.left}
-        x2={plot.left + plotWidth}
-        y1={plot.top + plotHeight}
-        y2={plot.top + plotHeight}
-        stroke="#7b8794"
-      />
-      <text x={plot.left} y={chartHeight - 12} className="chart-axis-label">
-        measurement value
-      </text>
-      <text x={8} y={plot.top + 12} className="chart-axis-label">
-        density
-      </text>
-    </svg>
-  );
-}
-
-function HistogramBar({
-  bin,
-  xRange,
-  yRange,
-}: {
-  bin: CapabilityHistogramBin;
-  xRange: { min: number; max: number };
-  yRange: { min: number; max: number };
-}) {
-  const x1 = scaleX(bin.lower, xRange);
-  const x2 = scaleX(bin.upper, xRange);
-  const y = scaleY(bin.density, yRange);
-  return (
-    <g>
-      <rect
-        x={x1}
-        y={y}
-        width={Math.max(1, x2 - x1 - 1)}
-        height={plot.top + plotHeight - y}
-        fill="#d7e8f7"
-        stroke="#7aa6ca"
-      />
-      <title>{`${formatNumber(bin.lower)}-${formatNumber(bin.upper)}: ${bin.count}`}</title>
-    </g>
-  );
-}
-
-function SpecLine({
-  label,
-  muted = false,
-  range,
-  value,
-}: {
-  label: string;
-  muted?: boolean;
-  range: { min: number; max: number };
-  value: number;
-}) {
-  const x = scaleX(value, range);
-  return (
-    <g>
-      <line
-        x1={x}
-        x2={x}
-        y1={plot.top}
-        y2={plot.top + plotHeight}
-        stroke={muted ? "#6b7280" : "#b45309"}
-        strokeDasharray={muted ? "5 4" : undefined}
-        strokeWidth="1.5"
-      />
-      <text x={x + 4} y={plot.top + 14} className="chart-axis-label">
-        {label} {formatNumber(value)}
-      </text>
-    </g>
-  );
-}
-
-function EmptyChart({ label }: { label: string }) {
-  return (
-    <svg className="mini-chart" role="img" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-      <rect width={chartWidth} height={chartHeight} fill="#f8fafc" />
-      <text x={plot.left} y={chartHeight / 2} className="chart-axis-label">
-        {label}
-      </text>
-    </svg>
-  );
+  return <InteractiveHistogramChart chartId="capability-histogram" columnName={result.value.display_name} unit={result.value.unit}
+    nBasis={result.n_used} ordinate="density"
+    bins={result.histogram.bins.map((bin, index) => ({ ...bin, include_lower: true, include_upper: index === result.histogram.bins.length - 1 }))}
+    densityFitPoints={result.histogram.bins.map((bin) => ({ x: bin.midpoint, density: bin.normal_density }))}
+    referenceValues={[["LSL", result.spec_limits.lsl], ["USL", result.spec_limits.usl], ["Target", result.spec_limits.target]].flatMap(([label, value]) =>
+      typeof value === "number" ? [{ label: String(label), value }] : [])} />;
 }
 
 function specLabel(result: CapabilityResult) {
   const limits = result.spec_limits;
   return `LSL ${formatNullable(limits.lsl)} / USL ${formatNullable(limits.usl)}`;
-}
-
-function paddedRange(values: number[]): { min: number; max: number } {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  if (min === max) {
-    const pad = Math.abs(min) > 1 ? Math.abs(min) * 0.1 : 1;
-    return { min: min - pad, max: max + pad };
-  }
-  const pad = (max - min) * 0.06;
-  return { min: min - pad, max: max + pad };
-}
-
-function scaleX(value: number, range: { min: number; max: number }) {
-  return plot.left + ((value - range.min) / (range.max - range.min)) * plotWidth;
-}
-
-function scaleY(value: number, range: { min: number; max: number }) {
-  return plot.top + plotHeight - ((value - range.min) / (range.max - range.min)) * plotHeight;
 }
 
 function formatNullable(value: number | null) {
