@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Desktop resize browser fixture</title></head>
+  <body><div id="fixture"></div><script type="module">
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import { DesktopResizeFixture } from "/src/charts/DesktopResizeFixture.tsx";
+    import { LocaleProvider } from "/src/i18n/LocaleProvider.tsx";
+    import "/src/App.css";
+    createRoot(document.getElementById("fixture")).render(React.createElement(LocaleProvider, null, React.createElement(DesktopResizeFixture)));
+  </script></body>
+</html>

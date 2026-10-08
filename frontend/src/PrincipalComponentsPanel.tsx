@@ -255,7 +255,7 @@ function PrincipalComponentsResults({ result, analysisId }: { result: PrincipalC
         <h4>{t("pca.loadings")}</h4>
         <div className="table-wrap"><table className="result-table"><thead><tr><th>{t("pca.variable")}</th>{componentOptions.map((component) => <th key={component}>PC{component}</th>)}</tr></thead><tbody>{result.loadings.map((row) => <tr key={row.column_id}><td>{row.display_name}</td>{row.values.map((value, index) => <td key={index}>{number(value)}</td>)}</tr>)}</tbody></table></div>
       </section>
-      <div className="chart-grid pca-chart-grid">
+      <div className="chart-grid pca-chart-grid analysis-result-grid">
         <section className="result-section"><h4>{t("pca.screePlot")}</h4><ScreePlot result={result} analysisId={analysisId} /></section>
         <section className="result-section">
           <div className="section-heading-row"><h4>{t("pca.scorePlot")}</h4><ComponentPairSelectors components={componentOptions} onX={setXComponent} onY={setYComponent} x={xComponent} y={yComponent} /></div>

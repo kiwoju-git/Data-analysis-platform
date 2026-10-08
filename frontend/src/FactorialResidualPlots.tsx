@@ -30,7 +30,7 @@ export function FactorialResidualPlots({ plots }: { plots: DoeFinalModelWorkflow
     <label className="factorial-inline-select"><span>{t("doe.residual.mode")}</span><select value={mode} onChange={(event) => setMode(event.currentTarget.value as typeof mode)}>
       <option value="raw">{t("doe.residual.raw")}</option><option value="standardized">{t("doe.residual.standardized")}</option>
     </select></label><p className="field-help">{t("doe.residual.description")} N = {plots.n_total}</p>
-    <div className="chart-grid linear-model-four-in-one">
+    <div className="chart-grid linear-model-four-in-one analysis-result-grid">
       <div className="chart-panel"><h4>{t("doe.residual.qq")}</h4>{scatter("qq")}</div>
       <div className="chart-panel"><h4>{t("doe.residual.histogram")}</h4><InteractiveHistogramChart chartId={`${id}-${mode}-histogram`}
         columnName={label} nBasis={view.n} bins={view.histogram.map((bin, index) => ({ ...bin, include_lower: true, include_upper: index === view.histogram.length - 1 }))} /></div>

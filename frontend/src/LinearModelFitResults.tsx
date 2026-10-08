@@ -264,7 +264,7 @@ export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
                 </label>
               ))}
             </fieldset>
-            <div className="linear-model-four-in-one">
+            <div className="linear-model-four-in-one analysis-result-grid">
               <ChartPanel title="잔차 정규확률도">
                 {renderResidualQqChart(result, residualType)}
               </ChartPanel>
@@ -318,7 +318,7 @@ export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
           <span>Influential 후보</span>
           <strong>{result.diagnostics.influence.high_cooks_distance_count.toLocaleString()}개</strong>
         </div>
-        <div className="linear-model-diagnostic-layout">
+        <div className="linear-model-diagnostic-layout analysis-result-grid">
           <ChartPanel title="Observed vs Fitted">{renderObservedFittedChart(result)}</ChartPanel>
           <ChartPanel title="Leverage vs Cook's D">{renderInfluenceChart(result)}</ChartPanel>
         </div>

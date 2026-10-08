@@ -1,0 +1,54 @@
+.analysis-results-scope {
+  container-type: inline-size;
+  container-name: analysis-results;
+  min-inline-size: 0;
+}
+.analysis-results-scope .analysis-result-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-inline-size: 0;
+}
+@container analysis-results (min-width: 900px) {
+  .analysis-results-scope .analysis-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.analysis-results-scope .analysis-result-grid.chart-grid-single { grid-template-columns: minmax(0, 1fr); }
+.analysis-results-scope .linear-model-diagnostic-primary { grid-column: 1 / -1; }
+.analysis-results-scope .result-section { min-inline-size: 0; grid-template-columns: minmax(0, 1fr); }
+.analysis-results-scope .chart-panel,
+.analysis-results-scope .chart-frame,
+.analysis-results-scope label,
+.analysis-results-scope fieldset { min-inline-size: 0; }
+.analysis-results-scope .table-wrap { max-inline-size: 100%; min-inline-size: 0; overflow-x: auto; }
+.analysis-results-scope .section-heading-row,
+.analysis-results-scope .panel-heading,
+.analysis-results-scope .button-row { flex-wrap: wrap; }
+.analysis-results-scope :is(h3, h4, h5, p, dd, label, .chart-selected-detail) { overflow-wrap: anywhere; }
+.analysis-results-scope .chart-frame-svg { min-block-size: 0; }
+
+@media (max-width: 1099px) {
+  body .app-shell { display: block; }
+  .app-shell > .mobile-shell-header {
+    position: sticky; top: 0; z-index: 30; display: flex; min-height: 58px;
+    align-items: center; justify-content: space-between; padding: 8px 14px;
+    border-bottom: 1px solid var(--border-default); background: var(--surface-page);
+  }
+  .mobile-shell-header .mobile-brand-home-link { color: var(--brand-logo-blue); font-weight: 700; text-decoration: none; }
+  .mobile-shell-header .mobile-menu-toggle {
+    width: 44px; height: 42px; border: 1px solid var(--brand-blue-border); border-radius: 4px;
+    background: var(--surface-page); color: var(--brand-logo-blue); cursor: pointer;
+  }
+  .app-shell > .sidebar-scrim { position: fixed; z-index: 35; inset: 0; display: block; border: 0; background: rgb(21 34 52 / 48%); }
+  .app-shell > .sidebar {
+    position: fixed; z-index: 40; inset: 0 auto 0 0; width: min(88vw, 310px); height: 100dvh;
+    border-right: 1px solid var(--border-default); border-bottom: 0; padding: 0;
+    transform: translateX(-102%); transition: transform 160ms ease-out;
+  }
+  .app-shell > .sidebar.is-open { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell > .sidebar { transition: none; }
+}

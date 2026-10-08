@@ -1,3 +1,6 @@
+import { Menu } from "lucide-react";
+import { useMediaQuery } from "./hooks/useMediaQuery";
+import "./resultCharts.css";
 import {
   useEffect,
   useRef,
@@ -58,9 +61,14 @@ export function AppChrome({
   onOpenProjectPage,
   onOpenReportsPage,
 }: AppChromeProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const isWideLayout = useMediaQuery("(min-width: 1100px)");
+  useEffect(() => { if (isWideLayout) setDrawerOpen(false); }, [isWideLayout]);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (sidebarRef.current) sidebarRef.current.inert = !isWideLayout && !drawerOpen;
+  }, [isWideLayout, drawerOpen]);
   const groups =
     navigationGroups ??
     fallbackNavigationGroups({
@@ -76,11 +84,11 @@ export function AppChrome({
     });
 
   useEffect(() => {
-    if (!mobileMenuOpen) return;
+    if (isWideLayout || !drawerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setMobileMenuOpen(false);
-        mobileMenuButtonRef.current?.focus();
+        setDrawerOpen(false);
+        if (menuButtonRef.current?.getClientRects().length) menuButtonRef.current.focus();
         return;
       }
       if (event.key !== "Tab") return;
@@ -88,7 +96,7 @@ export function AppChrome({
         sidebarRef.current?.querySelectorAll<HTMLElement>(
           'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
         ) ?? [],
-      ).filter((item) => item.closest("[hidden]") === null);
+      ).filter((item) => item.closest("[hidden]") === null && item.getClientRects().length > 0);
       if (focusableItems.length === 0) return;
       const first = focusableItems[0];
       const last = focusableItems[focusableItems.length - 1];
@@ -101,7 +109,7 @@ export function AppChrome({
       }
     };
     document.addEventListener("keydown", onKeyDown);
-    window.requestAnimationFrame(() => {
+    const frame = window.requestAnimationFrame(() => {
       const activeItem = sidebarRef.current?.querySelector<HTMLButtonElement>(
         '[aria-current="page"]',
       );
@@ -118,12 +126,11 @@ export function AppChrome({
             sidebarRef.current?.querySelector<HTMLButtonElement>("button");
       focusTarget?.focus();
     });
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [mobileMenuOpen]);
+    return () => { document.removeEventListener("keydown", onKeyDown); window.cancelAnimationFrame(frame); };
+  }, [drawerOpen, isWideLayout]);
 
   const closeMobileMenu = () => {
-    setMobileMenuOpen(false);
-    if (mobileMenuOpen) mobileMenuButtonRef.current?.focus();
+    setDrawerOpen(false);
   };
   const openProjectHome = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -145,30 +152,30 @@ export function AppChrome({
         </a>
         <button
           aria-controls="application-sidebar"
-          aria-expanded={mobileMenuOpen}
+          aria-expanded={drawerOpen}
           aria-label="주요 메뉴 열기"
           className="mobile-menu-toggle"
-          onClick={() => setMobileMenuOpen((open) => !open)}
-          ref={mobileMenuButtonRef}
+          onClick={() => setDrawerOpen((open) => !open)}
+          ref={menuButtonRef}
           type="button"
         >
-          <span aria-hidden="true">☰</span>
+          <Menu size={20} aria-hidden="true" />
         </button>
       </header>
-      {mobileMenuOpen ? (
+      {!isWideLayout && drawerOpen ? (
         <button
           aria-label="주요 메뉴 닫기"
           className="sidebar-scrim"
           onClick={() => {
             closeMobileMenu();
-            mobileMenuButtonRef.current?.focus();
           }}
           type="button"
         />
       ) : null}
       <aside
-        className={mobileMenuOpen ? "sidebar is-open" : "sidebar"}
+        className={drawerOpen ? "sidebar is-open" : "sidebar"}
         id="application-sidebar"
+        aria-hidden={!isWideLayout && !drawerOpen}
         ref={sidebarRef}
       >
         <div className="brand">

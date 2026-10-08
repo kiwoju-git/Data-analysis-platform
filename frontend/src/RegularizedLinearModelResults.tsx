@@ -51,7 +51,7 @@ export function RegularizedLinearModelResults({ result }: { result: RegularizedL
           `${i > 0 && c.estimate >= 0 ? "+ " : ""}${fmt(c.estimate)}${c.term_kind === "intercept" ? "" : ` * ${c.term}`}`).join(" ") || fmt(0)}
       </p>
     </section>
-    <div className="chart-grid regularized-chart-grid">
+    <div className="chart-grid regularized-chart-grid analysis-result-grid">
       <section className="result-section"><h4>{t("reg.curve")}</h4><RegularizationCurve result={result} /></section>
       <section className="result-section"><h4>{t("reg.path")}</h4><RegularizationPath result={result} /></section>
       <Diagnostic titleKey="reg.observedFitted" xLabel={t("reg.fitted")} yLabel={t("reg.observed")}

@@ -997,7 +997,7 @@ export function AnalysisShell({
         });
   return (
     <ChartSourceContext.Provider value={`${selectedMethod?.method_id ?? ""}:${selectedAnalysisResult?.analysis_id ?? ""}`}>
-    <section className="analysis-shell" aria-labelledby="analysis-modules-title">
+    <section className="analysis-shell analysis-results-scope" aria-labelledby="analysis-modules-title">
       <div className="analysis-heading analysis-domain-compact-heading">
         <div>
           <h2 id="analysis-modules-title">

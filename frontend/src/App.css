@@ -383,10 +383,8 @@ button.analysis-domain-method-card.is-active > small {
 .regularization-settings details { margin: 10px 0; }
 .regularization-settings details > .table-wrap { margin-top: 10px; }
 .regularized-results, .regularized-results .result-section { min-width: 0; }
-.regularized-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .regularized-equation { overflow-wrap: anywhere; }
 @media (max-width: 760px) {
-  .regularized-chart-grid { grid-template-columns: minmax(0, 1fr); }
   .regression-estimator-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -6790,7 +6788,7 @@ td select {
   min-width: 0;
 }
 
-.pls-chart-grid .interactive-chart {
+.pls-chart-grid .interactive-chart:not(.chart-frame) {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -6925,7 +6923,7 @@ td select {
   min-width: 0;
 }
 
-.gp-chart-grid .interactive-chart,
+.gp-chart-grid .interactive-chart:not(.chart-frame),
 .gp-surface-chart {
   width: 100%;
   min-height: 260px;
@@ -7012,8 +7010,7 @@ td select {
 }
 
 @media (max-width: 760px) {
-  .numeric-column-picker-grid,
-  .gp-chart-grid {
+  .numeric-column-picker-grid {
     grid-template-columns: 1fr;
   }
 
@@ -7021,19 +7018,18 @@ td select {
     grid-template-columns: 1fr;
   }
 
-  .gp-chart-grid .interactive-chart,
+  .gp-chart-grid .interactive-chart:not(.chart-frame),
   .gp-surface-chart {
     min-height: 220px;
   }
 }
 
 @media (max-width: 760px) {
-  .pls-chart-grid,
   .result-definition-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .pls-chart-grid .interactive-chart {
+  .pls-chart-grid .interactive-chart:not(.chart-frame) {
     min-height: 190px;
   }
 }
@@ -7065,14 +7061,7 @@ td select {
   gap: 8px;
 }
 
-.pca-chart-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
 
-.pca-chart {
-  inline-size: 100%;
-  min-block-size: 250px;
-}
 
 .pca-scree-line,
 .pca-loading-vector {
@@ -7108,9 +7097,6 @@ td select {
 }
 
 @media (max-width: 760px) {
-  .pca-chart-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 
   .pca-component-pair {
     inline-size: 100%;

@@ -511,7 +511,7 @@ function GaussianProcessResults({ result, analysisId }: { result: GaussianProces
         </div>
       </section>
 
-      <div className="chart-grid gp-chart-grid">
+      <div className="chart-grid gp-chart-grid analysis-result-grid">
         <section className="result-section"><h4>{t("gp.observedFitted")}</h4><GpScatter scope={scope} result={result} mode="fitted" /></section>
         {result.method.validation_method !== "none" ? <section className="result-section"><h4>{t("gp.observedCv")}</h4><GpScatter scope={scope} result={result} mode="cv" /></section> : null}
         <section className="result-section"><h4>{t("gp.residualDiagnostics")}</h4><GpResidualChart scope={scope} result={result} /></section>
@@ -521,7 +521,7 @@ function GaussianProcessResults({ result, analysisId }: { result: GaussianProces
       <section className="result-section">
         <h4>{t("gp.conditionalProfiles")}</h4>
         <p>{t("gp.profileNotice")}</p>
-        <div className="chart-grid gp-chart-grid">
+        <div className="chart-grid gp-chart-grid analysis-result-grid">
           {result.conditional_profiles.map((profile) => <GpProfileChart key={profile.column_id} profile={profile} result={result} scope={scope} />)}
         </div>
       </section>
@@ -603,7 +603,7 @@ export function GpKernelComparison({ result, analysisId = "legacy" }: { result: 
         <div className="table-wrap"><table className="result-table"><thead><tr><th>{t("gp.parameter")}</th><th>{t("gp.estimate")}</th><th>{t("gp.status")}</th></tr></thead>
           <tbody>{details.kernel.parameters.map((parameter, index) => <tr key={index}><th scope="row">{parameter.column_id ? `${result.predictors.find((column) => column.column_id === parameter.column_id)?.display_name ?? parameter.column_id}: ` : ""}{parameter.parameter}</th>
             <td>{number(parameter.estimate)}</td><td>{t(parameter.near_bound ? "gp.nearBound" : "gp.inRange")}</td></tr>)}</tbody></table></div>
-        {detailedResult ? <div className="chart-grid gp-chart-grid"><section><h5>{t("gp.observedCv")}</h5><GpScatter scope={`${analysisId}:candidate:${chosen?.preset}`} result={detailedResult} mode="cv" /></section>
+        {detailedResult ? <div className="chart-grid gp-chart-grid analysis-result-grid"><section><h5>{t("gp.observedCv")}</h5><GpScatter scope={`${analysisId}:candidate:${chosen?.preset}`} result={detailedResult} mode="cv" /></section>
           <section><h5>{t("gp.residualDiagnostics")}</h5><GpResidualChart scope={`${analysisId}:candidate:${chosen?.preset}`} result={detailedResult} /></section></div> : null}
         <ul className="warning-list">{details.warnings.map((warning) => <li key={warning}>{t(warningKeys[warning as keyof typeof warningKeys] ?? "gp.warning.generic")} <span className="cell-subtle">{warning}</span></li>)}</ul>
       </>}

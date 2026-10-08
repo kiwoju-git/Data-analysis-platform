@@ -398,7 +398,7 @@ function PlsResults({ result, analysisId }: { result: PlsRegressionResult; analy
         <div className="table-wrap"><table className="result-table"><thead><tr><th>{t("pls.predictor")}</th><th>{t("pls.rawCoefficient")}</th><th>{t("pls.standardizedCoefficient")}</th><th>{t("pls.direction")}</th></tr></thead><tbody>{result.coefficients.map((coefficient) => <tr key={coefficient.column_id}><td>{coefficient.display_name}</td><td>{number(coefficient.coefficient)}</td><td>{number(coefficient.standardized_coefficient)}</td><td>{t(`pls.direction.${coefficient.direction}`)}</td></tr>)}</tbody></table></div>
       </section>
 
-      <div className="chart-grid pls-chart-grid">
+      <div className="chart-grid pls-chart-grid analysis-result-grid">
         <section className="result-section"><h4>{t("pls.responsePlot")}</h4><ResponsePlot result={result} analysisId={analysisId} /></section>
         <section className="result-section"><h4>{t("pls.scores")}</h4><ScorePlot result={result} analysisId={analysisId} /></section>
       </div>

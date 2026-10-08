@@ -74,3 +74,18 @@ publication require all implementation stages and final platform checks.
 - Initial full frontend check found five legacy markup assertions; these were
   updated to verify visible axes/frames and hit targets. Follow-up: 54 files /
   392 tests passed. These are display tests, not new statistical reference tests.
+
+### Desktop Responsive Layout
+
+- Actual Chromium same-screen sequence passed: 1920, 1440, 1280, 1024, 900,
+  768, 1440 and 390 CSS pixels. Input/dataset/component/pin/loading page and
+  mount identity persisted. Charts stayed within frames; table scroll remained
+  internal. Container widths below 900 use one column; 900 and above use two.
+- Source CSS order initially overrode the narrow shell at 1024px. The scoped
+  selector was corrected, then the strict full-width/header assertions passed.
+- Drawer Tab trap/Escape/navigation and wide-resize trap cleanup passed.
+- Actual browser zoom 100/125/150/100% passed using Chromium tabs.setZoom and
+  getZoom in a temporary extension/profile; not deviceScaleFactor or CSS scale.
+- Command: `.venv/Scripts/python.exe -X utf8 tests/e2e/desktop_resize.py --url
+  http://127.0.0.1:5199 --output .tmp/e2e-desktop-resize-verified` (exit 0).
+  Eleven synthetic screenshots and two JSON records are ignored diagnostics.
