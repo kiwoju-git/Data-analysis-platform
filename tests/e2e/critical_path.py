@@ -3039,7 +3039,7 @@ def verify_attribute_control_chart(page: Page) -> None:
     phase_2_chart = page.locator('[data-chart-id="quality-p"]')
     expect(phase_2_chart.locator(".chart-frame-svg")).to_be_visible()
     expect(phase_2_chart.locator(".chart-visible-axis-title")).to_have_count(2)
-    phase_2_point = phase_2_chart.locator('.chart-point[tabindex="0"]')
+    phase_2_point = phase_2_chart.locator('[data-selected][tabindex="0"]')
     phase_2_point.focus()
     phase_2_point.press("Enter")
     expect(phase_2_chart.locator(".chart-selected-detail")).to_contain_text("LCL")
@@ -3649,12 +3649,21 @@ def verify_latin_hypercube_design(page: Page, diagnostics: E2EDiagnostics) -> No
     scatter = workspace.get_by_role("img", name="LHS 2요인 투영")
     expect(scatter).to_be_visible()
     expect(scatter.locator(".chart-point")).to_have_count(6)
-    workspace.locator(".lhs-parallel-chart").focus()
-    page.keyboard.press("ArrowRight")
+    parallel_target = parallel.locator('.lhs-parallel-run[tabindex="0"]')
+    expect(parallel_target).to_have_count(1)
+    parallel_target.focus()
+    expect(
+        workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
+    ).to_have_count(0)
     page.keyboard.press("Enter")
     expect(
         workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
     ).to_have_count(1)
+    expect(
+        workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
+    ).to_contain_text("1")
+    page.keyboard.press("ArrowRight")
+    expect(parallel.locator('.lhs-parallel-run[data-run-order="2"]')).to_be_focused()
     expect(
         workspace.locator('.lhs-run-table tbody tr[data-selected="true"]')
     ).to_contain_text("1")

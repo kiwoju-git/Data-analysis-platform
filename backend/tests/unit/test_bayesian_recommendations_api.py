@@ -414,15 +414,18 @@ def test_latest_recommendation_is_correct_after_more_than_twenty_records(
         study = _complete_initial_trials(client, _create_study(client))
         recommendation_ids: list[str] = []
         for index in range(21):
+            request_payload = _recommendation_request(
+                study["observation_history"]["history_revision_id"],
+                total_trial_budget=30,
+                random_seed=100 + index,
+                candidate_count=32,
+                local_start_count=0,
+            )
+            # This test covers 21-record retention, not a 100-evaluation fit budget.
+            request_payload["search"]["model_max_evaluations"] = 200
             created_response = client.post(
                 f"/api/v1/bayesian-studies/{study['study_id']}/recommendations",
-                json=_recommendation_request(
-                    study["observation_history"]["history_revision_id"],
-                    total_trial_budget=30,
-                    random_seed=100 + index,
-                    candidate_count=32,
-                    local_start_count=0,
-                ),
+                json=request_payload,
             )
             assert created_response.status_code == 201, created_response.text
             created = created_response.json()

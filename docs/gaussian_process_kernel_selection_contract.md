@@ -106,3 +106,20 @@ helpers. Cover all four old presets/noise policies, shared splits, deterministic
 ranking, partial/all failure, starts/deadlines, detailed retention, schema-1
 restore, model tamper/prediction, Bayesian fixtures and KOR/ENG UI/E2E. Existing
 workspace values never leave the machine or enter diagnostic logs.
+
+### Linux optimized-reference exception
+
+The Windows static optimized-kernel fixture and its tolerances are unchanged.
+Linux may refit the **same frozen x/y, seed and fold row indices** using the
+independent sklearn code in `scripts/generate_gp_kernel_reference.py`. This
+bounded exception is a same-platform independent numerical cross-check, not
+static Linux parity or regeneration of expected values from production code.
+No application module is imported by that reference implementation. Static
+selected presets, fold identity, legacy results and fixed-hyperparameter
+posterior references remain checked. Optimized metrics/LML use the existing
+absolute/relative `1e-6`; OOF means and SD retain absolute `1e-6`.
+
+The reason and Linux artifact provenance are recorded in
+`docs/linux_numerical_reference_validation.md`. No calculation, optimizer,
+kernel-selection rule, dependency pin or production budget changes follow from
+this testing policy.

@@ -1,4 +1,10 @@
-"""Independent sklearn reference, with no application imports or test-time generation."""
+"""Independent sklearn reference with no application imports.
+
+Windows tests use the committed static reference. Linux optimized-kernel tests
+may call evaluate_frozen_case on its saved inputs/splits to isolate BLAS/CPU
+optimizer drift; this never regenerates inputs or overwrites a fixture. The
+fixed-hyperparameter posterior tests remain static on all supported platforms.
+"""
 
 import argparse
 import json
@@ -9,7 +15,13 @@ import numpy as np
 import scipy
 import sklearn
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import ConstantKernel, Matern, RBF, RationalQuadratic, WhiteKernel
+from sklearn.gaussian_process.kernels import (
+    ConstantKernel,
+    Matern,
+    RBF,
+    RationalQuadratic,
+    WhiteKernel,
+)
 from sklearn.model_selection import KFold
 from threadpoolctl import threadpool_limits
 
@@ -29,10 +41,92 @@ def kernel(preset, d):
 def independent_fit(x, y, preset, seed):
     xm, xs = x.mean(axis=0), x.std(axis=0, ddof=1)
     ym, ys = y.mean(), y.std(ddof=1)
-    model = GaussianProcessRegressor(kernel=kernel(preset, x.shape[1]), alpha=1e-8,
-        normalize_y=False, n_restarts_optimizer=0, random_state=seed)
+    model = GaussianProcessRegressor(
+        kernel=kernel(preset, x.shape[1]),
+        alpha=1e-8,
+        normalize_y=False,
+        n_restarts_optimizer=0,
+        random_state=seed,
+    )
     model.fit((x - xm) / xs, (y - ym) / ys)
     return model, xm, xs, ym, ys
+
+
+def _evaluate_case(name, x, y, splits, seed):
+    candidates = []
+    for priority, preset in enumerate(PRESETS):
+        mean, sd = np.empty(len(y)), np.empty(len(y))
+        for fold, (train, test) in enumerate(splits):
+            model, xm, xs, ym, ys = independent_fit(
+                x[train], y[train], preset, seed + priority * 104729 + fold * 1009
+            )
+            mu, sigma = model.predict((x[test] - xm) / xs, return_std=True)
+            mean[test], sd[test] = mu * ys + ym, sigma * ys
+        residual = y - mean
+        variance = np.maximum(sd**2, np.finfo(float).tiny)
+        press = float(np.sum(residual**2))
+        metrics = {
+            "press": press,
+            "predicted_r_squared": 1 - press / float(np.sum((y - y.mean()) ** 2)),
+            "rmse": float(np.sqrt(np.mean(residual**2))),
+            "mae": float(np.mean(np.abs(residual))),
+            "nlpd": float(
+                np.mean(
+                    0.5 * np.log(2 * np.pi * variance) + 0.5 * residual**2 / variance
+                )
+            ),
+            "interval_coverage_95": float(
+                np.mean(np.abs(residual) <= 1.959963984540054 * sd)
+            ),
+            "mean_interval_width": float(np.mean(2 * 1.959963984540054 * sd)),
+        }
+        model, _, _, _, _ = independent_fit(x, y, preset, seed + priority * 104729)
+        candidates.append(
+            {
+                "preset": preset,
+                "metrics": metrics,
+                "oof_mean": mean.tolist(),
+                "oof_sd": sd.tolist(),
+                "fitted_kernel": str(model.kernel_),
+                "fitted_log_theta": model.kernel_.theta.tolist(),
+                "lml": float(model.log_marginal_likelihood_value_),
+            }
+        )
+    return {
+        "name": name,
+        "x": x.tolist(),
+        "y": y.tolist(),
+        "candidates": candidates,
+        "selected": {
+            metric: min(candidates, key=lambda item: item["metrics"][metric])["preset"]
+            for metric in ("nlpd", "rmse", "mae")
+        },
+    }
+
+
+def evaluate_frozen_case(case, validation_rows, seed):
+    """Refit only frozen observations and folds, independently of application code."""
+    x, y = np.asarray(case["x"], dtype=float), np.asarray(case["y"], dtype=float)
+    if x.ndim != 2 or y.ndim != 1 or len(x) != len(y):
+        raise ValueError("Frozen reference dimensions are invalid")
+    rows = [row for fold in validation_rows for row in fold]
+    if (
+        any(type(row) is not int for row in rows)
+        or sorted(rows) != list(range(len(y)))
+        or any(not fold or len(fold) >= len(y) - 1 for fold in validation_rows)
+    ):
+        raise ValueError(
+            "Frozen validation folds must partition every row exactly once"
+        )
+    splits = []
+    for validation in validation_rows:
+        training = np.asarray(
+            [row for row in range(len(y)) if row not in validation], dtype=int
+        )
+        splits.append((training, np.asarray(validation, dtype=int)))
+    with threadpool_limits(limits=1), warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return _evaluate_case(case["name"], x, y, splits, seed)
 
 
 def generate():
@@ -45,32 +139,19 @@ def generate():
         "noisy": np.sin(x[:, 0]) + rng.normal(0, 0.3, len(x)),
     }
     splits = list(KFold(3, shuffle=True, random_state=41).split(x))
-    records = []
-    for name, y in responses.items():
-        candidates = []
-        for priority, preset in enumerate(PRESETS):
-            mean, sd = np.empty(len(y)), np.empty(len(y))
-            for fold, (train, test) in enumerate(splits):
-                model, xm, xs, ym, ys = independent_fit(x[train], y[train], preset, 41 + priority * 104729 + fold * 1009)
-                mu, sigma = model.predict((x[test] - xm) / xs, return_std=True)
-                mean[test], sd[test] = mu * ys + ym, sigma * ys
-            residual = y - mean
-            variance = np.maximum(sd ** 2, np.finfo(float).tiny)
-            press = float(np.sum(residual ** 2))
-            metrics = {"press": press, "predicted_r_squared": 1 - press / float(np.sum((y - y.mean()) ** 2)),
-                "rmse": float(np.sqrt(np.mean(residual ** 2))), "mae": float(np.mean(np.abs(residual))),
-                "nlpd": float(np.mean(0.5 * np.log(2 * np.pi * variance) + 0.5 * residual ** 2 / variance)),
-                "interval_coverage_95": float(np.mean(np.abs(residual) <= 1.959963984540054 * sd)),
-                "mean_interval_width": float(np.mean(2 * 1.959963984540054 * sd))}
-            model, _, _, _, _ = independent_fit(x, y, preset, 41 + priority * 104729)
-            candidates.append({"preset": preset, "metrics": metrics, "oof_mean": mean.tolist(), "oof_sd": sd.tolist(),
-                "fitted_kernel": str(model.kernel_), "fitted_log_theta": model.kernel_.theta.tolist(),
-                "lml": float(model.log_marginal_likelihood_value_)})
-        records.append({"name": name, "x": x.tolist(), "y": y.tolist(), "candidates": candidates,
-            "selected": {metric: min(candidates, key=lambda item: item["metrics"][metric])["preset"] for metric in ("nlpd", "rmse", "mae")}})
-    return {"packages": {"sklearn": sklearn.__version__, "numpy": np.__version__, "scipy": scipy.__version__},
-        "seed": 41, "splits": [test.tolist() for _, test in splits], "absolute_tolerance": 1e-6,
-        "relative_tolerance": 1e-6, "cases": records}
+    records = [_evaluate_case(name, x, y, splits, 41) for name, y in responses.items()]
+    return {
+        "packages": {
+            "sklearn": sklearn.__version__,
+            "numpy": np.__version__,
+            "scipy": scipy.__version__,
+        },
+        "seed": 41,
+        "splits": [test.tolist() for _, test in splits],
+        "absolute_tolerance": 1e-6,
+        "relative_tolerance": 1e-6,
+        "cases": records,
+    }
 
 
 if __name__ == "__main__":
@@ -80,4 +161,6 @@ if __name__ == "__main__":
     with threadpool_limits(limits=1), warnings.catch_warnings():
         warnings.simplefilter("ignore")
         reference = generate()
-    args.output.write_text(json.dumps(reference, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(reference, indent=2, allow_nan=False) + "\n", encoding="utf-8"
+    )
