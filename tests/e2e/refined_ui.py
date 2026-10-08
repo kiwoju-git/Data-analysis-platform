@@ -121,7 +121,7 @@ def verify_refined_ui(browser: Browser, base_url: str, root: Path) -> None:
             )
             if width > 760:
                 assert abs(title["y"] - actions["y"]) < 2
-            else:
+            if width < 1100:
                 menu = page.locator(".mobile-menu-toggle")
                 menu.click()
                 expect(menu).to_have_attribute("aria-expanded", "true")

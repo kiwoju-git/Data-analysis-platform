@@ -115,7 +115,7 @@ def verify_gp_kernel_comparison(page, diagnostics, panel, api_base):
     diagnostics.capture_locator(comparison.locator(".table-wrap").first, "gp-kernel-comparison.png")
     for radio in comparison.get_by_role("radio").all():
         radio.check()
-        expect(comparison.locator("svg")).to_have_count(2)
+        expect(comparison.locator(".chart-frame-svg")).to_have_count(2)
     diagnostics.capture_locator(comparison, "gp-candidate-details.png")
     prediction = panel.locator(".gp-point-prediction")
     prediction.get_by_label("temperature_c 1", exact=True).fill("75")

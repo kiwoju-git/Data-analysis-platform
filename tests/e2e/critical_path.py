@@ -1151,9 +1151,9 @@ def capture_hypothesis_method_cards(page: Page, diagnostics: E2EDiagnostics) -> 
         "비모수 비교",
     ):
         expect(family_grid).to_contain_text(family_label)
-    expect(page.locator(".analysis-domain-workflow-row.is-planned")).to_contain_text(
-        "Comparability"
-    )
+    expect(
+        page.locator(".analysis-domain-workflow-row.is-planned").filter(has_text="Comparability")
+    ).to_have_count(0)
     assert_children_do_not_overlap(family_grid, methods, "hypothesis methods")
     for name in ("1-표본 동등성 검정", "2-표본 동등성 검정", "대응표본 동등성 검정"):
         expect(methods.filter(has=page.get_by_text(name, exact=True))).to_have_count(1)
@@ -1734,6 +1734,20 @@ def assert_chart_width_ratio(
     chart_box = card.locator("svg").first.bounding_box()
     if card_box is None or chart_box is None:
         raise AssertionError(f"{label} did not produce measurable card/chart bounds")
+    frame = card.locator(".chart-frame").first
+    if frame.count():
+        bounds = frame.evaluate("""element => {
+          const canvas = element.querySelector('.chart-frame-canvas');
+          const frameBox = element.getBoundingClientRect();
+          const canvasBox = canvas.getBoundingClientRect();
+          const maximum = parseFloat(getComputedStyle(canvas).maxInlineSize);
+          return { frameWidth: frameBox.width, canvasWidth: canvasBox.width, maximum };
+        }""")
+        expected_width = min(bounds["frameWidth"], bounds["maximum"])
+        assert abs(bounds["canvasWidth"] - expected_width) <= 1, (label, bounds)
+        assert abs(chart_box["width"] - expected_width) <= 1, (label, chart_box, bounds)
+        diagnostics.record(f"[e2e] {label} chart honors bounded canvas width={expected_width:.3f}")
+        return
     ratio = chart_box["width"] / card_box["width"]
     diagnostics.record(f"[e2e] {label} chart/card width ratio={ratio:.3f}")
     if ratio < 0.85:
@@ -2038,7 +2052,7 @@ def verify_reporting_summary_variance_and_scatter(
         "img", name="등분산 검정: yield_pct 대 production_line"
     )
     expect(interval_chart).to_be_visible()
-    interval_chart.locator(".variance-comparison-group").first.focus()
+    interval_chart.locator('.chart-hit-target[tabindex="0"]').focus()
     expect(
         page.locator(".variance-comparison-chart .chart-selected-detail")
     ).to_contain_text("표본 표준편차")
@@ -2320,12 +2334,16 @@ def verify_linear_model_fit_and_prediction(
     diagnostics.capture_page(page, "regression-four-in-one.png")
     observed_chart = page.locator(".chart-panel").filter(has_text="Observed vs Fitted")
     expect(observed_chart).to_be_visible()
-    expect(observed_chart.locator(".reference-line")).to_have_count(1)
+    expect(observed_chart.locator(".chart-frame-svg .reference-line")).to_have_count(1)
     observed_point = observed_chart.locator(".diagnostic-point").first
     observed_point.hover()
-    expect(observed_chart.locator(".chart-selected-detail")).to_contain_text("실제값")
+    expect(page.get_by_role("tooltip")).to_contain_text("실제값")
+    expect(observed_point).to_have_attribute("data-selected", "false")
     observed_point.focus()
+    expect(observed_point).to_have_attribute("data-selected", "false")
+    observed_point.press("Enter")
     expect(observed_point).to_have_attribute("data-selected", "true")
+    expect(observed_chart.locator(".chart-selected-detail")).to_contain_text("실제값")
     expect(
         page.locator(".chart-panel").filter(has_text="Leverage vs Cook's D")
     ).to_be_visible()
@@ -3018,7 +3036,17 @@ def verify_attribute_control_chart(page: Page) -> None:
     expect(summary).to_contain_text("Phase II")
     expect(summary).to_contain_text("검증된 immutable limit set")
     expect(summary).to_contain_text("Limit set")
-    expect(page.get_by_role("img", name=re.compile(r"P 관리도.*신호"))).to_be_visible()
+    phase_2_chart = page.locator('[data-chart-id="quality-p"]')
+    expect(phase_2_chart.locator(".chart-frame-svg")).to_be_visible()
+    expect(phase_2_chart.locator(".chart-visible-axis-title")).to_have_count(2)
+    phase_2_point = phase_2_chart.locator('.chart-point[tabindex="0"]')
+    phase_2_point.focus()
+    phase_2_point.press("Enter")
+    expect(phase_2_chart.locator(".chart-selected-detail")).to_contain_text("LCL")
+    expect(phase_2_chart.locator(".chart-selected-detail")).to_contain_text("UCL")
+    expect(phase_2_chart.locator(".chart-selected-detail")).to_contain_text(
+        limit_set_response.json()["limit_set_id"]
+    )
 
     phase_2_analysis_id = phase_2_payload["analysis_id"]
     for export_kind in ("json", "csv", "html"):
@@ -3135,7 +3163,9 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     expect(page.get_by_role("heading", name="Factorial 분석 결과")).to_be_visible(
         timeout=20_000
     )
-    expect(page.get_by_role("img", name="절대 효과 순위 차트")).to_be_visible()
+    effect_chart = page.locator('[data-chart-id="factorial-effects"]')
+    expect(effect_chart.locator(".chart-frame-svg")).to_be_visible()
+    expect(effect_chart).to_contain_text("절대 효과")
     expect(page.locator(".factorial-plots .chart-grid").first.locator("svg").first).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
     expect(page.locator(".analysis-result-section")).to_contain_text("0.9.0")
@@ -3412,9 +3442,18 @@ def verify_doe_response_surface_analysis(
     expect(
         page.get_by_role("heading", name="Quadratic response surface")
     ).to_be_visible(timeout=20_000)
-    expect(
-        page.get_by_role("img", name="Temperature와 Pressure의 예측 반응 contour")
-    ).to_be_visible()
+    contour_chart = page.locator('[data-chart-id="rsm-contour"]')
+    expect(contour_chart.locator(".chart-frame-svg")).to_be_visible()
+    expect(contour_chart.locator(".chart-visible-axis-title").nth(0)).to_contain_text(
+        "Temperature"
+    )
+    expect(contour_chart.locator(".chart-visible-axis-title").nth(1)).to_contain_text(
+        "Pressure"
+    )
+    expect(contour_chart.locator(".chart-color-scale")).to_be_visible()
+    expect(contour_chart.locator("[data-grid-cell]")).to_have_count(
+        len(rsm_analysis_payload["result"]["contour"]["points"])
+    )
     expect(page.get_by_role("columnheader", name="계수")).to_be_visible()
     expect(page.get_by_label("반응표면 적합 요약")).to_contain_text("R²")
     expect(page.get_by_label("반응표면 진단 요약")).to_be_visible()

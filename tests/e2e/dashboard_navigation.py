@@ -130,7 +130,11 @@ def verify_dashboard_navigation(page: Page, diagnostics: Any) -> None:
     expect(page.locator(".mobile-menu-toggle")).to_have_attribute(
         "aria-expanded", "false"
     )
-    expect(page.locator(".mobile-menu-toggle")).to_be_focused()
+    expect(page.locator("#application-sidebar")).to_have_attribute("inert", "")
+    page.keyboard.press("Tab")
+    assert page.evaluate(
+        "!document.querySelector('#application-sidebar').contains(document.activeElement)"
+    )
     expect(page.locator(".analysis-domain-card")).to_have_count(8)
     page.set_viewport_size({"width": 1440, "height": 900})
     for locale, language in (("ko", "KOR"), ("en", "ENG")):
