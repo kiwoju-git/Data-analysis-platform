@@ -15,8 +15,11 @@ metadata20. See [method contract](docs/two_variances_method_contract.md) and
 
 Windows PowerShell/Python3.10 remains supported. Linux source/CI adds Python3.11
 and3.12; the offline archive targets Ubuntu24.04 x86_64/Python3.12 only. It ships
-built UI and hash-locked wheels, not Python itself. Release runtime binds loopback
-and requires no Node/Git/CDN. See [installation guide](README-linux.md) and
+built UI and hash-locked wheels, not Python itself. Release 2026.10.2 defaults to
+`0.0.0.0:8600` for owner-approved trusted LAN use; `run.sh --local-only` restores
+loopback. All peers share read/write/delete access without login or TLS, so
+restrict firewall access and never expose it to the Internet. Runtime requires
+no Node/Git/CDN. See [installation guide](README-linux.md) and
 [packaging contract](docs/linux_release_contract.md). Availability and actual
 validation are recorded in the GitHub prerelease assets; source support alone is
 not an archive validation pass.

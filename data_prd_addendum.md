@@ -29,6 +29,14 @@ API; `-LocalOnly` remains available. This does not add production multi-user
 authentication/RBAC/TLS. The scope, browser-origin defenses, shared-workspace
 risks and firewall requirements are defined in `docs/trusted_lan_development.md`.
 
+2026-10-16 owner-approved Linux release exception to DEC-002 / SEC-001:
+the verified offline release defaults to one `0.0.0.0:8600` UI/API listener with
+exact local-IP Host/Origin validation. `run.sh --local-only` restores loopback.
+This remains a trusted, shared-operator workspace with no authentication, TLS
+or per-user authorization. Operators restrict firewall access to approved LAN
+peers; Internet exposure is not supported. API-only/source development defaults
+remain unchanged. See `docs/linux_release_contract.md` and `README-linux.md`.
+
 | ID | 결정 | 이유 |
 | --- | --- | --- |
 | DEC-001 | MVP는 Windows 11, Python 3.10.x, CPU-only를 1급 지원한다. | 사용 환경과 설치 재현성을 고정한다. |

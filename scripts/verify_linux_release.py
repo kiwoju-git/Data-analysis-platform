@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
+import ipaddress
 import json
 import os
 import platform
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import tarfile
@@ -18,6 +21,48 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def interface_ipv4() -> str:
+    """Select an actual assigned address without contacting an external service."""
+    import fcntl
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        for _, name in socket.if_nameindex():
+            try:
+                result = fcntl.ioctl(probe, 0x8915, struct.pack("256s", name.encode()))
+            except OSError as error:
+                # An interface may be IPv6-only; other failures must remain visible.
+                if error.errno in {errno.EADDRNOTAVAIL, errno.ENODEV}:
+                    continue
+                raise
+            address = ipaddress.IPv4Address(result[20:24])
+            if not (
+                address.is_loopback or address.is_unspecified or address.is_multicast
+            ):
+                return str(address)
+    raise RuntimeError(
+        "LAN archive verification requires a non-loopback IPv4 interface"
+    )
+
+
+def listener_addresses(port: int) -> set[str]:
+    return {
+        fields[1].split(":")[0]
+        for line in Path("/proc/net/tcp").read_text().splitlines()[1:]
+        if (fields := line.split())[3] == "0A"
+        and int(fields[1].split(":")[1], 16) == port
+    }
+
+
+def assert_interface_isolated(address: str, port: int) -> None:
+    with socket.socket() as probe:
+        probe.settimeout(2)
+        assert (
+            probe.connect_ex((address, port)) != 0
+        ), "Local-only server accepts LAN connections"
 
 
 def unpack(archive: Path, destination: Path) -> Path:
@@ -60,9 +105,7 @@ def wait_ready(base: str, process: subprocess.Popen, expected: dict) -> dict:
                 "Release server exited during startup; inspect server log"
             )
         try:
-            with urllib.request.urlopen(
-                base + "/api/v1/runtime-info", timeout=2
-            ) as response:
+            with HTTP.open(base + "/api/v1/runtime-info", timeout=2) as response:
                 info = json.load(response)
             assert info["build_commit"] == expected["source_commit"]
             assert info["api_contract_version"] == expected["api_contract_version"]
@@ -101,7 +144,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--port", type=int, default=18600)
+    parser.add_argument("--port", type=int, default=8600)
     args = parser.parse_args()
     if sys.flags.optimize:
         parser.error("Run release validation without Python optimization")
@@ -113,8 +156,10 @@ def main() -> int:
     repo = Path(__file__).resolve().parents[1]
     with socket.socket() as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        probe.bind(("127.0.0.1", args.port))
-    base = f"http://127.0.0.1:{args.port}"
+        probe.bind(("0.0.0.0", args.port))
+    lan_address = interface_ipv4()
+    lan_base = f"http://{lan_address}:{args.port}"
+    loopback_base = f"http://127.0.0.1:{args.port}"
     with tempfile.TemporaryDirectory(
         prefix="statistical-twin-archive-check-"
     ) as temporary:
@@ -162,15 +207,16 @@ def main() -> int:
             assert (
                 not workspace.exists() or index == 1
             ), "Installer must not create a workspace"
+            command = [str(root / "run.sh"), "--workspace-root", str(workspace)]
+            # Omit --port at 8600 to exercise the published launcher default itself.
+            if args.port != 8600:
+                command.extend(["--port", str(args.port)])
+            if index == 1:
+                command.append("--local-only")
+            base = lan_base if index == 0 else loopback_base
             with (output / f"server-{index}.log").open("wb") as log:
                 process = subprocess.Popen(
-                    [
-                        str(root / "run.sh"),
-                        "--workspace-root",
-                        str(workspace),
-                        "--port",
-                        str(args.port),
-                    ],
+                    command,
                     cwd=root,
                     env=env,
                     stdout=log,
@@ -179,7 +225,11 @@ def main() -> int:
                 )
                 try:
                     wait_ready(base, process, expected)
+                    assert listener_addresses(args.port) == {
+                        "00000000" if index == 0 else "0100007F"
+                    }, "Release bound a different interface than requested"
                     if index == 0:
+                        wait_ready(loopback_base, process, expected)
                         subprocess.run(
                             [
                                 sys.executable,
@@ -196,9 +246,10 @@ def main() -> int:
                             (output / "application-smoke.json").read_text()
                         )
                     else:
+                        assert_interface_isolated(lan_address, args.port)
                         assert smoke is not None
                         for analysis in smoke["analyses"]:
-                            with urllib.request.urlopen(
+                            with HTTP.open(
                                 base
                                 + f"/api/v1/analysis-runs/{analysis['analysis_id']}/result",
                                 timeout=30,
@@ -210,6 +261,9 @@ def main() -> int:
                             assert checksum == analysis["result_sha256"]
                 finally:
                     stop(process)
+                assert not listener_addresses(
+                    args.port
+                ), "Release listener survived shutdown"
         report = {
             "status": "passed",
             "archive": archive.name,
@@ -220,6 +274,13 @@ def main() -> int:
             "node_and_git_in_install_runtime_path": False,
             "offline_installations": 2,
             "shared_external_workspace_restart_restore": True,
+            "default_port_exercised": args.port == 8600,
+            "listen_port": args.port,
+            "lan_interface_ipv4": lan_address,
+            "default_lan_bind": "0.0.0.0",
+            "local_only_bind": "127.0.0.1",
+            "local_only_interface_connection_rejected": True,
+            "company_peer_or_firewall_tested": False,
             "application": smoke,
         }
         (output / "validation-report.json").write_text(

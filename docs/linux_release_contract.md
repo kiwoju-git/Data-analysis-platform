@@ -48,16 +48,48 @@ does not trust an equal app_version as proof that backend code matches the archi
 User workspaces are not touched by installation.
 
 The launcher verifies identity/files before setting environment and importing the
-FastAPI app. It binds127.0.0.1:8600, one worker, no reload, CPU threads capped.
+FastAPI app. Owner approval on 2026-10-16 changes the release default to
+0.0.0.0:8600 (built UI and API together), one worker, no reload, CPU threads capped.
+`run.sh --local-only` restores 127.0.0.1:8600. Linux source development and Windows
+development defaults are unchanged. Proxy headers are disabled in the release.
 The existing workspace default and metadata20 migration/recovery rules remain.
-Remote access is via SSH forwarding, not a public unauthenticated bind.
+Local-only mode can be accessed remotely through SSH forwarding.
 Linux port preflight uses SO_REUSEADDR (never SO_REUSEPORT), matching Uvicorn's
 closed-connection TIME_WAIT restart behavior. An active listener still fails
 preflight and is never stopped. Windows port behavior is unchanged.
 
+### Trusted LAN Release Guard
+
+This is a shared trusted-operator exception, not authenticated multi-user hosting.
+All admitted clients can read/write/delete shared assets. HTTP is unencrypted;
+operators must restrict inbound TCP to approved peers and never expose it to the
+Internet. The application does not change firewall rules. See README-linux.md.
+
+The launcher reads each Linux interface's assigned primary IPv4 address through
+SIOCGIFADDR without DNS or external traffic. Allowed Host values are those
+addresses, localhost and 127.0.0.1, with the configured port. Interface address
+changes require restart; additional secondary addresses/DNS aliases are not
+advertised or implicitly allowed. Malformed/duplicate/unknown Host headers fail
+with `release_host_not_allowed`. Mismatched/duplicate/null Origin, cross-site
+Sec-Fetch-Site, and mutations without exact same-origin headers fail with
+`release_origin_not_allowed`. This guard wraps CORS and does not trust forwarded
+headers. CORS remains narrow; browser same-origin requests need no CORS grant.
+Native clients must supply Origin for mutations; they can forge these headers,
+so the guard is browser request defense, not a network authorization boundary.
+
+Settings permits a non-loopback bind only with trusted_lan=true, production
+environment and a valid built UI directory separate from workspace. API-only
+Settings remains loopback by default. The launcher explicitly clears the LAN
+mode and host list in --local-only mode, including stale inherited values.
+No numerical policy, result/model schema, API22 contract or metadata20 changes.
+
 Verification extracts the actual tar.gz twice into new locations, installs with
 neither Node nor Git in PATH and pip no-index, uses an external synthetic workspace,
 checks API/UI/deep links, PCA/PLS/GP/Two Variances, reports, restart and restore.
+The LAN verifier uses the runner's actual non-loopback interface address and
+browser same-origin requests, verifies rejected Host/Origin requests, and then
+checks that --local-only cannot be reached through that interface. This is an
+Ubuntu CI network test, not a claim about the user's physical LAN/firewall.
 Browser assertions execute from the development test environment, not the archive.
 Validation JSON and archive SHA are release assets, not source files rewritten
 after FINAL_SHA. The exact tested bytes are published as a prerelease.

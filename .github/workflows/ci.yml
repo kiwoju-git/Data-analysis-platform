@@ -167,9 +167,9 @@ jobs:
       - name: Install validation browser
         run: .venv/bin/python -m playwright install --with-deps chromium
       - name: Build exact committed archive
-        run: .venv/bin/python scripts/build_linux_release.py --source-commit "$GITHUB_SHA" --release-version 2026.10.1 --output-dir .tmp/linux-release
+        run: .venv/bin/python scripts/build_linux_release.py --source-commit "$GITHUB_SHA" --release-version 2026.10.2 --output-dir .tmp/linux-release
       - name: Verify completed archive offline
-        run: .venv/bin/python scripts/verify_linux_release.py .tmp/linux-release/statistical-twin-linux-2026.10.1-ubuntu24.04-x86_64-py312.tar.gz --output-dir .tmp/linux-release-validation
+        run: .venv/bin/python scripts/verify_linux_release.py .tmp/linux-release/statistical-twin-linux-2026.10.2-ubuntu24.04-x86_64-py312.tar.gz --output-dir .tmp/linux-release-validation
       - uses: actions/upload-artifact@v4
         if: success()
         with:

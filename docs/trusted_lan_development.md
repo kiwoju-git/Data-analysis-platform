@@ -1,5 +1,9 @@
 # Trusted LAN Development (2026-09-18)
 
+The separate owner-approved Linux offline release now has its own guarded LAN
+default and `run.sh --local-only` mode. See [Linux release contract](linux_release_contract.md)
+and [installation guide](../README-linux.md). The development rules below are unchanged.
+
 ## Scope and acceptance
 
 The product owner explicitly requested LAN access in place of the former

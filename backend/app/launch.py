@@ -1,4 +1,4 @@
-"""Verified, loopback-only release launcher. Import the app only after setting identity."""
+"""Verified release launcher. Import the app only after setting identity and network mode."""
 
 import argparse
 import hashlib
@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.network_ports import check_tcp_port_available
+from app.core.trusted_lan import local_linux_ipv4_addresses
 
 
 def verify_release(root: Path) -> dict[str, Any]:
@@ -87,6 +88,9 @@ def main() -> None:
     parser.add_argument("--release-root", type=Path, required=True)
     parser.add_argument("--workspace-root", type=Path)
     parser.add_argument("--port", type=int, default=8600)
+    parser.add_argument(
+        "--local-only", action="store_true", help="Bind only 127.0.0.1; disable LAN access"
+    )
     args = parser.parse_args()
     if (
         platform.system() != "Linux"
@@ -98,18 +102,34 @@ def main() -> None:
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535")
     root = args.release_root.resolve()
+    host = "127.0.0.1" if args.local_only else "0.0.0.0"
     try:
         info = verify_release(root)
-        check_tcp_port_available("127.0.0.1", args.port)
+        check_tcp_port_available(host, args.port)
+        lan_hosts = [] if args.local_only else local_linux_ipv4_addresses()
     except (ValueError, OSError) as error:
         parser.error(str(error))
     os.environ.update(
         DATALAB_GIT_COMMIT=info["source_commit"],
         DATALAB_FRONTEND_DIST=str(root / "web"),
         DATALAB_ENVIRONMENT="production",
-        DATALAB_BIND_HOST="127.0.0.1",
+        DATALAB_BIND_HOST=host,
         DATALAB_BIND_PORT=str(args.port),
+        DATALAB_TRUSTED_LAN="false" if args.local_only else "true",
+        DATALAB_TRUSTED_LAN_HOSTS=json.dumps(lan_hosts),
     )
+    if not args.local_only:
+        print(
+            "Trusted LAN: all admitted peers share read/write/delete access. "
+            "No login, RBAC or TLS. Restrict TCP access to approved company PCs; "
+            "never expose this port to the Internet. Firewall rules are not changed.",
+            flush=True,
+        )
+        for address in lan_hosts:
+            print(f"LAN URL: http://{address}:{args.port}/home", flush=True)
+        if not lan_hosts:
+            print("No non-loopback IPv4 address found; reconnect and restart for LAN access.")
+    print(f"Local URL: http://127.0.0.1:{args.port}/home", flush=True)
     for name in (
         "OMP_NUM_THREADS",
         "OPENBLAS_NUM_THREADS",
@@ -121,7 +141,9 @@ def main() -> None:
         os.environ["DATALAB_WORKSPACE_ROOT"] = str(args.workspace_root.resolve())
     import uvicorn
 
-    uvicorn.run("app.main:app", host="127.0.0.1", port=args.port, workers=1, reload=False)
+    uvicorn.run(
+        "app.main:app", host=host, port=args.port, workers=1, reload=False, proxy_headers=False
+    )
 
 
 if __name__ == "__main__":

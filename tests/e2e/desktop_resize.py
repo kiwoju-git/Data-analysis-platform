@@ -97,6 +97,8 @@ def _drawer_focus_cycle(page: Page) -> None:
     expect(opener).to_have_attribute("aria-expanded", "true")
     expect(sidebar).to_have_attribute("aria-hidden", "false")
     expect(page.locator(".sidebar-scrim")).to_be_visible()
+    # Opening focus is scheduled in rAF after the visible/ARIA state commits.
+    expect(sidebar.locator('[aria-current="page"]:visible')).to_be_focused()
     focusable = sidebar.locator(
         'button:not(:disabled):visible, a[href]:visible, [tabindex]:not([tabindex="-1"]):visible'
     )

@@ -8,18 +8,108 @@ import json
 import math
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
+HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 
 def request(base: str, path: str, body: dict | None = None) -> dict:
+    headers = {"Content-Type": "application/json"}
+    if body is not None:
+        headers["Origin"] = base
     req = urllib.request.Request(
         base + path,
         data=None if body is None else json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
-    with urllib.request.urlopen(req, timeout=180) as response:
+    with HTTP.open(req, timeout=180) as response:
         return json.load(response)
+
+
+def verify_network_guards(base: str) -> list[str]:
+    endpoint = urllib.parse.urlsplit(base)
+    checks = [
+        (
+            "untrusted Host",
+            "GET",
+            {"Host": "untrusted.invalid"},
+            400,
+            "release_host_not_allowed",
+        ),
+        (
+            "wrong Host port",
+            "GET",
+            {"Host": endpoint.hostname + ":1"},
+            400,
+            "release_host_not_allowed",
+        ),
+        (
+            "forwarded Host cannot authorize",
+            "GET",
+            {"Host": "untrusted.invalid", "X-Forwarded-Host": endpoint.netloc},
+            400,
+            "release_host_not_allowed",
+        ),
+        ("missing Origin mutation", "POST", {}, 403, "release_origin_not_allowed"),
+        (
+            "foreign Origin mutation",
+            "POST",
+            {"Origin": "http://untrusted.invalid"},
+            403,
+            "release_origin_not_allowed",
+        ),
+        (
+            "null Origin mutation",
+            "POST",
+            {"Origin": "null"},
+            403,
+            "release_origin_not_allowed",
+        ),
+        (
+            "wrong Origin port",
+            "POST",
+            {"Origin": f"http://{endpoint.hostname}:1"},
+            403,
+            "release_origin_not_allowed",
+        ),
+        (
+            "cross-site fetch",
+            "GET",
+            {"Origin": base, "Sec-Fetch-Site": "cross-site"},
+            403,
+            "release_origin_not_allowed",
+        ),
+        (
+            "foreign preflight",
+            "OPTIONS",
+            {
+                "Origin": "http://untrusted.invalid",
+                "Access-Control-Request-Method": "POST",
+            },
+            403,
+            "release_origin_not_allowed",
+        ),
+    ]
+    for name, method, headers, status, code in checks:
+        path = "/api/v1/datasets/paste" if method == "POST" else "/api/v1/runtime-info"
+        req = urllib.request.Request(
+            base + path,
+            data=b"{}" if method == "POST" else None,
+            method=method,
+            headers={"Content-Type": "application/json", **headers},
+        )
+        try:
+            with HTTP.open(req, timeout=10):
+                raise AssertionError(f"Network guard accepted {name}")
+        except urllib.error.HTTPError as error:
+            assert error.code == status, name
+            payload = json.load(error)
+            assert payload["error"]["code"] == code, name
+            assert payload["error"]["correlation_id"], name
+            assert error.headers.get("Access-Control-Allow-Origin") is None, name
+    return [name for name, *_ in checks]
 
 
 def create_dataset(base: str, content: str) -> dict:
@@ -129,7 +219,7 @@ def verify_application(base: str, output: Path) -> dict:
         export = request(
             base, f"/api/v1/analysis-runs/{analysis_id}/exports/html", {"locale": "en"}
         )
-        with urllib.request.urlopen(
+        with HTTP.open(
             base
             + f"/api/v1/analysis-runs/{analysis_id}/exports/{export['export_id']}/download",
             timeout=30,
@@ -163,6 +253,27 @@ def verify_application(base: str, output: Path) -> dict:
             page.get_by_role("heading", name="Statistical Twin", exact=True)
         ).to_be_visible()
         assert "version mismatch" not in page.locator("body").inner_text().lower()
+        browser_runtime = page.evaluate(
+            "async () => (await fetch('/api/v1/runtime-info')).json()"
+        )
+        assert browser_runtime["build_commit"] == info["build_commit"]
+        with page.expect_request(
+            lambda req: req.url == base + "/api/v1/datasets/paste"
+        ) as sent:
+            browser_mutation = page.evaluate(
+                """async () => {
+                    const response = await fetch('/api/v1/datasets/paste', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({content: 'value,group\\n1,A\\n2,B\\n', original_filename: 'browser-lan-smoke.csv'})
+                    });
+                    return {status: response.status, payload: await response.json()};
+                }"""
+            )
+        assert sent.value.header_value("origin") == base
+        assert (
+            browser_mutation["status"] == 201
+            and browser_mutation["payload"]["dataset_id"]
+        )
         page.screenshot(path=str(output / "release-home.png"), full_page=True)
         for route, selector in (
             (
@@ -188,6 +299,9 @@ def verify_application(base: str, output: Path) -> dict:
         browser.close()
     return {
         "runtime": info,
+        "access_origin": base,
+        "browser_same_origin_mutation": True,
+        "network_guard_checks": verify_network_guards(base),
         "dataset_version_id": version["version_id"],
         "analyses": results,
         "checks": [
@@ -201,6 +315,9 @@ def verify_application(base: str, output: Path) -> dict:
             "offline HTML",
             "built home",
             "deep-link refresh",
+            "interface-IP browser runtime request",
+            "interface-IP browser same-origin mutation",
+            "Host and Origin rejection",
         ],
     }
 

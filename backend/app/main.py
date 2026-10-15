@@ -22,6 +22,7 @@ from app.api.v1.workspace import router as workspace_router
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.trusted_lan import TrustedLanMiddleware
 from app.services.analysis_run_exports import recover_analysis_export_quarantine_files
 from app.services.analysis_run_retention import recover_analysis_run_quarantine_files
 from app.services.dataset_cell_corrections import recover_dataset_cell_correction_files
@@ -68,7 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=create_lifespan(app_settings),
     )
     app.state.settings = app_settings
-    if app_settings.frontend_dist is not None:
+    if app_settings.frontend_dist is not None and not app_settings.trusted_lan:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 
     app.add_middleware(
@@ -79,6 +80,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Accept", "Content-Type", "X-Correlation-ID"],
         expose_headers=["Content-Disposition", "ETag"],
     )
+    if app_settings.trusted_lan:
+        # Outermost: CORS preflight must not bypass the exact Host/Origin guard.
+        app.add_middleware(
+            TrustedLanMiddleware,
+            hosts=app_settings.trusted_lan_hosts,
+            port=app_settings.bind_port,
+        )
 
     register_exception_handlers(app)
     if app_settings.frontend_dist is None:
