@@ -63,6 +63,11 @@ def verify_pls_exports(page: Page, diagnostics: Any, analysis: dict, open_report
         exports.first.get_by_role("button", name="다운로드", exact=True).click()
     assert 'data-pls-report="1"' in again.value.path().read_text(encoding="utf-8")
     page.goto(analysis_url)
+    # The catalog arrives after document load and replaces the temporary domain leaf.
+    expect(page.locator("#workbench-title")).to_have_text("PLS 회귀")
+    expect(page.locator('.sidebar-method-button[aria-current="page"]')).to_have_text(
+        "PLS 회귀"
+    )
 
 
 def configure_and_verify_gp_settings(page: Page, diagnostics: Any) -> None:

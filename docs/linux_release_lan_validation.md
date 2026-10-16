@@ -72,8 +72,23 @@ wrapped to the first link, then the pending initial-focus callback moved focus
 to the active menu. The browser test now waits for initial active-menu focus
 before testing Tab wrapping; no application UI or trap assertion is weakened.
 
-The full `scripts/check.ps1` is also run; its final results and any verification
-fixes are captured with the exact committed source in the release evidence.
+The local full `scripts/check.ps1` completed with exit 0: backend 1371 passed,
+2 skipped; frontend 397 tests in 55 files passed; Ruff, format, mypy, localization,
+ESLint, strict TypeScript and production build passed. Existing lint warnings
+remain warnings, not failed checks.
+
+The first feature CI (38823684712) passed Windows checks, Linux checks/browser E2E,
+Python 3.11 compatibility and the actual Linux release archive verification.
+Its final Windows browser E2E failed when moving from restored PLS to GPR. After
+`page.goto`, the navigation helper could see a temporary active domain leaf before
+the asynchronous method catalog replaced it with the active PLS method button.
+The helper then waited for a removed selector. This was reproduced three times
+by withholding the catalog response in Chromium. The PLS report workflow now
+asserts the restored workbench title and active method before continuing. No
+production UI, navigation semantics, timeout or test assertion was weakened.
+That failed run is not a release acceptance result; the corrected source must
+pass fresh CI and produce a newly verified archive before publication.
+
 Exact final Ubuntu/Windows CI outcomes, package smoke results, source SHA and
 archive SHA are recorded in the new release's validation assets and linked CI.
 Do not copy historical test counts as evidence for this change. A CI-hosted
