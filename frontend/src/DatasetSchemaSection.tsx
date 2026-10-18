@@ -6,6 +6,8 @@ import type {
 import { columnRoleOptions, measurementLevelOptions } from "./datasetDisplay";
 import type { SchemaDraftPatch } from "./datasetPreparationTypes";
 import type { SchemaDraft } from "./schemaPresets";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
 
 interface DatasetSchemaSectionProps {
   canApplyBayesianPreset: boolean;
@@ -26,6 +28,7 @@ export function DatasetSchemaSection({
   onSaveSchema,
   onSchemaDraftChange,
 }: DatasetSchemaSectionProps) {
+  const { locale } = useI18n();
   return (
     <>
       <div className="schema-actions">
@@ -94,7 +97,7 @@ export function DatasetSchemaSection({
                     >
                       {measurementLevelOptions.map((level) => (
                         <option key={level.value} value={level.value}>
-                          {level.label}
+                          {translateSystemText(level.label, locale)}
                         </option>
                       ))}
                     </select>
@@ -112,7 +115,7 @@ export function DatasetSchemaSection({
                     >
                       {columnRoleOptions.map((role) => (
                         <option key={role.value} value={role.value}>
-                          {role.label}
+                          {translateSystemText(role.label, locale)}
                         </option>
                       ))}
                     </select>

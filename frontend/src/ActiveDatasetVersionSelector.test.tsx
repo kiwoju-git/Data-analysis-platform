@@ -1,5 +1,5 @@
 import { renderToString } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ActiveDatasetVersionSelector } from "./ActiveDatasetVersionSelector";
 import type {
@@ -7,8 +7,33 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import type { DatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
+import { getCurrentLocale, setCurrentLocale } from "./i18n/store";
 
 describe("ActiveDatasetVersionSelector", () => {
+  const originalLocale = getCurrentLocale();
+  afterEach(() => setCurrentLocale(originalLocale));
+
+  it("localizes count units without translating user labels or option identity", () => {
+    const rawLabel = "\uE000doe.interactionOrder.mainEffectsOnly\uE001";
+    const item = catalogItem({ user_label: rawLabel });
+    const state = catalogState({
+      activeItem: item,
+      catalog: { offset: 0, limit: 1, total: 1, returned: 1, has_previous: false, has_next: false, versions: [item] },
+    });
+    const before = JSON.stringify(state.catalog);
+    const render = () => renderToString(<ActiveDatasetVersionSelector
+      catalogState={state} isSwitching={false} pendingVersionId={null} version={version()}
+      onRetrySwitch={vi.fn()} onSelect={vi.fn()}
+    />);
+    setCurrentLocale("ko");
+    expect(render()).toContain(`${rawLabel} · 240행 · 15열`);
+    setCurrentLocale("en");
+    const english = render();
+    expect(english).toContain(`${rawLabel} · 240 rows · 15 columns`);
+    expect(english).toContain(`value="${item.version_id}" selected`);
+    expect(JSON.stringify(state.catalog)).toBe(before);
+  });
+
   it("keeps the picker and user summary compact while preserving operational rows", () => {
     const html = renderToString(
       <ActiveDatasetVersionSelector

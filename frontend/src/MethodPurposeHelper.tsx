@@ -2,6 +2,7 @@ import type { AnalysisMethodListResponse, AnalysisModuleId } from "./api";
 import { availabilityLabel } from "./analysisWorkbenchUtils";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
 
 const purposeGuideItems = [
   {
@@ -140,9 +141,9 @@ export function MethodPurposeHelper({
       <div className="purpose-card-grid">
         {purposeGuideItems.map((item) => (
           <article className="purpose-card" key={item.question}>
-            <h4>{item.question}</h4>
-            <p>{item.reason}</p>
-            <div className="purpose-method-list" aria-label={`${item.question} 추천 method`}>
+            <h4>{translateSystemText(item.question, locale)}</h4>
+            <p>{translateSystemText(item.reason, locale)}</p>
+            <div className="purpose-method-list" aria-label={`${translateSystemText(item.question, locale)} ${translateSystemText("추천 method", locale)}`}>
               {item.methods.map((methodId) => {
                 const method = methodsById.get(methodId) ?? null;
                 const canSelect = method !== null && method.availability === "available";
@@ -170,7 +171,7 @@ export function MethodPurposeHelper({
                         ? "catalog 없음"
                         : method.availability === "available"
                           ? "메서드 보기"
-                          : availabilityLabel(method)}
+                          : availabilityLabel(method, locale)}
                     </small>
                   </button>
                 );
@@ -178,10 +179,10 @@ export function MethodPurposeHelper({
             </div>
             <div className="purpose-role-line">
               <strong>필요 역할</strong>
-              <span>{item.roles}</span>
+              <span>{translateSystemText(item.roles, locale)}</span>
             </div>
             <p className="purpose-caution">
-              <strong>주의</strong> {item.caution}
+              <strong>주의</strong> {translateSystemText(item.caution, locale)}
             </p>
           </article>
         ))}

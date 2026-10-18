@@ -1,3 +1,5 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -223,7 +225,7 @@ export function MannWhitneyPanel(props: MannWhitneyPanelProps) {
           </button>
           {props.analysisResult?.warnings.length ? (
             <ul className="warning-list">
-              {props.analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}>{warning.message}</li>)}
+              {props.analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>)}
             </ul>
           ) : null}
           {props.result !== null ? <MannWhitneyResults result={props.result} formatNumber={formatNumber} /> : null}

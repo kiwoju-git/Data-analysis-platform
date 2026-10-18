@@ -1,5 +1,7 @@
 import type { GeneralFactorialDesignCreateRequest } from "./api";
 import { DOE_FACTOR_CAPABILITIES } from "./doe/factorCapabilities";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 export interface GeneralFactorDraft {
   id: string;
@@ -14,7 +16,28 @@ export interface GeneralFactorDraft {
 export interface GeneralFactorialDraftValidation {
   request: GeneralFactorialDesignCreateRequest | null;
   runCount: number;
-  message: string | null;
+  issue: GeneralFactorialDraftIssue | null;
+}
+
+export type GeneralFactorialDraftIssue =
+  | { code: "invalid_design_settings" | "invalid_interaction_order" | "invalid_factor_definitions" | "invalid_level_values" | "duplicate_levels" }
+  | { code: "run_limit_exceeded"; runCount: number };
+
+export function generalFactorialDraftIssueLabel(issue: GeneralFactorialDraftIssue, locale: AppLocale): string {
+  switch (issue.code) {
+    case "invalid_design_settings":
+      return translateSystemText("설계 이름, 반복 수와 seed를 확인하세요.", locale);
+    case "invalid_interaction_order":
+      return translateSystemText("상호작용 차수는 요인 수 이하의 양의 정수여야 합니다.", locale);
+    case "invalid_factor_definitions":
+      return translateSystemText("요인 이름은 고유해야 하며 각 요인은 2~10개 수준이 필요합니다.", locale);
+    case "invalid_level_values":
+      return translateSystemText("모든 수준을 입력하고 숫자 수준에는 유한한 숫자만 사용하세요.", locale);
+    case "duplicate_levels":
+      return translateSystemText("한 요인 안에서 수준 값은 중복될 수 없습니다.", locale);
+    case "run_limit_exceeded":
+      return `${translateSystemText("예상", locale)} ${issue.runCount} ${translateSystemText("runs로 상한 256을 초과합니다.", locale)}`;
+  }
 }
 
 export function validateGeneralDraft(
@@ -43,13 +66,13 @@ export function validateGeneralDraft(
     !Number.isInteger(seed) ||
     seed < 0
   ) {
-    return { request: null, runCount, message: "설계 이름, 반복 수와 seed를 확인하세요." };
+    return { request: null, runCount, issue: { code: "invalid_design_settings" } };
   }
   if (!Number.isInteger(interaction) || interaction < 1 || interaction > factors.length) {
     return {
       request: null,
       runCount,
-      message: "상호작용 차수는 요인 수 이하의 양의 정수여야 합니다.",
+      issue: { code: "invalid_interaction_order" },
     };
   }
   if (
@@ -65,25 +88,25 @@ export function validateGeneralDraft(
     return {
       request: null,
       runCount,
-      message: "요인 이름은 고유해야 하며 각 요인은 2~10개 수준이 필요합니다.",
+      issue: { code: "invalid_factor_definitions" },
     };
   }
   if (parsed.some((factor) => factor.parsedLevels === null)) {
     return {
       request: null,
       runCount,
-      message: "모든 수준을 입력하고 숫자 수준에는 유한한 숫자만 사용하세요.",
+      issue: { code: "invalid_level_values" },
     };
   }
   if (parsed.some((factor) => hasDuplicateGeneralLevels(factor))) {
     return {
       request: null,
       runCount,
-      message: "한 요인 안에서 수준 값은 중복될 수 없습니다.",
+      issue: { code: "duplicate_levels" },
     };
   }
   if (runCount > 256) {
-    return { request: null, runCount, message: `예상 ${runCount} runs로 상한 256을 초과합니다.` };
+    return { request: null, runCount, issue: { code: "run_limit_exceeded", runCount } };
   }
   return {
     request: {
@@ -99,7 +122,7 @@ export function validateGeneralDraft(
       max_interaction_order: interaction,
     },
     runCount,
-    message: null,
+    issue: null,
   };
 }
 

@@ -1,4 +1,7 @@
 import type { EqualVarianceMultipleComparisons } from "../api/types/analysisResultsExploration";
+import { useI18n } from "../i18n/LocaleProvider";
+import { translateSystemText } from "../i18n/translate";
+import type { AppLocale } from "../i18n/types";
 import { ChartItemFeedback } from "./ChartItemFeedback";
 import { paddedNumericRange, scaleChartValue } from "./chartScale";
 import { useChartItemInteraction } from "./useChartItemInteraction";
@@ -18,6 +21,8 @@ export function InteractiveVarianceComparisonIntervalsChart({
   result: EqualVarianceMultipleComparisons;
   responseName: string;
 }) {
+  const { locale } = useI18n();
+  const text = (source: string) => translateSystemText(source, locale);
   const groups = result.groups;
   const ids = groups.map((group) => `${chartId}-group-${group.group_index}`);
   const interaction = useChartItemInteraction(ids);
@@ -79,7 +84,7 @@ export function InteractiveVarianceComparisonIntervalsChart({
               <line className="variance-interval-cap" x1={upperX} x2={upperX} y1={y - 8} y2={y + 8} />
               <circle className="variance-interval-estimate" cx={estimateX} cy={y} r="5" />
               <rect
-              aria-label={`${group.group_label}, 표준편차 ${formatNumber(group.sample_standard_deviation)}, 구간 ${formatNumber(group.comparison_interval.lower)}에서 ${formatNumber(group.comparison_interval.upper)}`}
+              aria-label={`${group.group_label}, ${text("표준편차")} ${formatNumber(group.sample_standard_deviation)}, ${text("구간")} ${formatNumber(group.comparison_interval.lower)} - ${formatNumber(group.comparison_interval.upper)}`}
               className={`chart-hit-target ${interaction.stateClass(id)}${selected ? " chart-hit-target-selected" : ""}`}
               data-selected={selected ? "true" : "false"}
               onBlur={() => interaction.clearFocus(id)}
@@ -101,9 +106,9 @@ export function InteractiveVarianceComparisonIntervalsChart({
         })}
         <text className="chart-axis-label" x={plot.left} y={height - 14}>{formatNumber(range.min)}</text>
         <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={height - 14}>{formatNumber(range.max)}</text>
-        <text className="chart-axis-label chart-axis-label-center" x={plot.left + plotWidth / 2} y={height - 4}>표준편차</text>
+        <text className="chart-axis-label chart-axis-label-center" x={plot.left + plotWidth / 2} y={height - 4}>{text("표준편차")}</text>
       </svg>
-      <ChartItemFeedback interaction={interaction} items={groups.map((group, index) => ({ id: ids[index], title: group.group_label, details: groupDetails(group, result) }))} />
+      <ChartItemFeedback interaction={interaction} items={groups.map((group, index) => ({ id: ids[index], title: group.group_label, details: groupDetails(group, result, locale) }))} />
     </div>
   );
 }
@@ -111,16 +116,18 @@ export function InteractiveVarianceComparisonIntervalsChart({
 function groupDetails(
   group: EqualVarianceMultipleComparisons["groups"][number],
   result: EqualVarianceMultipleComparisons,
+  locale: AppLocale,
 ) {
+  const text = (source: string) => translateSystemText(source, locale);
   const peers = result.non_overlapping_pairs
     .filter((pair) => pair.left_group === group.group_label || pair.right_group === group.group_label)
     .map((pair) => pair.left_group === group.group_label ? pair.right_group : pair.left_group);
   return [
     { label: "N", value: group.n.toLocaleString() },
-    { label: "표본 표준편차", value: formatNumber(group.sample_standard_deviation) },
-    { label: "구간 하한", value: formatNumber(group.comparison_interval.lower) },
-    { label: "구간 상한", value: formatNumber(group.comparison_interval.upper) },
-    { label: "겹치지 않는 그룹", value: peers.length > 0 ? peers.join(", ") : "없음" },
+    { label: text("표본 표준편차"), value: formatNumber(group.sample_standard_deviation) },
+    { label: text("구간 하한"), value: formatNumber(group.comparison_interval.lower) },
+    { label: text("구간 상한"), value: formatNumber(group.comparison_interval.upper) },
+    { label: text("겹치지 않는 그룹"), value: peers.length > 0 ? peers.join(", ") : text("없음") },
   ];
 }
 

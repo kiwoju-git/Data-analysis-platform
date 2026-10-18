@@ -1,3 +1,4 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import {
   useEffect,
   useRef,
@@ -503,8 +504,8 @@ export function DatasetPreviewSection({
 }
 
 function displayCellValue(value: string | null): string {
-  if (value === null) return "(결측)";
-  if (value === "") return "(빈 문자열)";
+  if (value === null) return systemText("(결측)");
+  if (value === "") return systemText("(빈 문자열)");
   return value;
 }
 
@@ -534,8 +535,8 @@ function validateCellDraft(
 
 function cellDraftValidationMessage(code: string): string {
   return code === "dataset_cell_correction_value_invalid"
-    ? "선택한 컬럼 타입으로 해석할 수 있는 값을 입력하세요."
-    : "셀 수정 내용을 확인할 수 없습니다.";
+    ? systemText("선택한 컬럼 타입으로 해석할 수 있는 값을 입력하세요.")
+    : systemText("셀 수정 내용을 확인할 수 없습니다.");
 }
 
 function handleCanonicalGridKeyDown(

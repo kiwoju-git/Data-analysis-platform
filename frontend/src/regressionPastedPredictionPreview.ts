@@ -1,4 +1,17 @@
+import { getCurrentLocale } from "./i18n/store";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 export type RegressionPredictionDelimiter = "auto" | "tab" | "comma";
+
+export function regressionPredictionPreviewHeaders(
+  preview: ReturnType<typeof parseRegressionPastedPredictionPreview>,
+  locale: AppLocale = getCurrentLocale(),
+): string[] {
+  return preview.inferredHeaderState === "data"
+    ? preview.headers.map((_, index) => `${translateSystemText("입력", locale)} ${index + 1}`)
+    : preview.headers;
+}
 
 export function parseRegressionPastedPredictionPreview(
   content: string,

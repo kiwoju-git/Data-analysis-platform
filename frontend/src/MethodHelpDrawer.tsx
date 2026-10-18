@@ -8,6 +8,7 @@ import type {
 import { getAnalysisMethodGuidance } from "./analysisMethodGuidance";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
 
 export function MethodHelpContent({
   method,
@@ -19,7 +20,7 @@ export function MethodHelpContent({
   version?: DatasetVersionResponse | null;
 }) {
   const { locale } = useI18n();
-  const guidance = getAnalysisMethodGuidance(method.method_id);
+  const guidance = getAnalysisMethodGuidance(method.method_id, locale);
   const requiredRoles = guidance.roleRequirements.filter((role) => role.required);
 
   return (
@@ -39,7 +40,7 @@ export function MethodHelpContent({
       </HelpSection>
       <HelpSection title="사용하면 안 되는 경우">
         <ul>
-          {(guidance.commonErrors ?? ["선택한 역할과 실제 연구 설계가 일치하지 않는 경우"]).map((item) => (
+          {(guidance.commonErrors ?? [translateSystemText("선택한 역할과 실제 연구 설계가 일치하지 않는 경우", locale)]).map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>

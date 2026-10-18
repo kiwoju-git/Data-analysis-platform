@@ -22,6 +22,7 @@ import type {
 } from "./sidebarNavigationModel";
 import { LanguageSwitcher } from "./i18n/LanguageSwitcher";
 import { getCurrentLocale } from "./i18n/store";
+import { translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
 
 export interface AppChromeProps {
@@ -230,7 +231,7 @@ function pageTitleFor(page: AppRoute["page"]): string {
     home: "홈",
     reports: "리포트",
   };
-  return labels[page];
+  return translateSystemText(labels[page]);
 }
 
 function fallbackNavigationGroups({
@@ -281,7 +282,7 @@ function fallbackNavigationGroups({
         children: [],
         direct: true,
         id,
-        label,
+        label: translateSystemText(label),
         onActivate,
       };
     }
@@ -289,14 +290,14 @@ function fallbackNavigationGroups({
       active: activePage === id,
       disabled,
       id: `${id}-default`,
-      label: leaf,
+      label: translateSystemText(leaf),
       onActivate,
     };
     return {
       active: activePage === id,
       children: [item],
       id,
-      label,
+      label: translateSystemText(label),
       onActivate: id === "analysis" || id === "graphs" ? onActivate : undefined,
     };
   });

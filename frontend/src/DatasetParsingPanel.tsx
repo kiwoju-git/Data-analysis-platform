@@ -1,3 +1,5 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+
 import type { ConfirmedParsingOptions, DatasetUploadResponse } from "./api";
 import { delimiterLabel } from "./datasetDisplay";
 
@@ -47,7 +49,7 @@ export function ParsingConfirmationPanel({
       {upload.warnings.length > 0 ? (
         <ul className="warning-list" aria-label="업로드 경고">
           {upload.warnings.map((warning) => (
-            <li key={warning.code}>{warning.message}</li>
+            <li key={warning.code}><ApiNoticeText notice={warning} /></li>
           ))}
         </ul>
       ) : null}

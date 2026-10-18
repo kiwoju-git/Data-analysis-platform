@@ -12,6 +12,7 @@ import {
   type LatinHypercubeDesignResponse,
 } from "./api";
 import { apiRoutes } from "./api/routes";
+import { t } from "./i18n/translate";
 import { InteractiveParallelCoordinatesChart } from "./charts/InteractiveParallelCoordinatesChart";
 import { ChartSourceContext } from "./charts/chartSourceContext";
 import {
@@ -49,7 +50,7 @@ const initialFactors: FactorDraft[] = [
 ];
 
 export function LatinHypercubePanel() {
-  const [name, setName] = useState("LHS 공간충전 설계");
+  const [name, setName] = useState(() => t("ui.c8d581642f8da2e0"));
   const [factors, setFactors] = useState(initialFactors);
   const [runCount, setRunCount] = useState("9");
   const [seed, setSeed] = useState("20260729");

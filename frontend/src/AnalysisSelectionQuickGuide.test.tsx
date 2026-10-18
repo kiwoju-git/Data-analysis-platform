@@ -1,9 +1,14 @@
 import { renderToString } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnalysisSelectionQuickGuide } from "./AnalysisSelectionQuickGuide";
+import { getCurrentLocale, setCurrentLocale } from "./i18n/store";
 
 describe("AnalysisSelectionQuickGuide", () => {
+  let previousLocale = getCurrentLocale();
+  beforeEach(() => { previousLocale = getCurrentLocale(); setCurrentLocale("ko"); });
+  afterEach(() => setCurrentLocale(previousLocale));
+
   it("renders study-design choices without executing a method", () => {
     const onSelectMethod = vi.fn();
     const html = renderToString(
@@ -51,5 +56,19 @@ describe("AnalysisSelectionQuickGuide", () => {
     );
 
     expect(html).toBe("");
+  });
+
+  it("resolves static guide labels at render time while preserving element IDs", () => {
+    const render = () => renderToString(<AnalysisSelectionQuickGuide selectedModuleId="hypothesis" onSelectMethod={() => undefined} />);
+    const korean = render();
+    setCurrentLocale("en");
+    const english = render();
+    expect(korean).toContain(">한 모집단</h3>");
+    expect(english).toContain(">one population</h3>");
+    expect(english).toContain("1-sample equivalence");
+    expect(english.match(/id="[^"]+"/gu)).toEqual(korean.match(/id="[^"]+"/gu));
+    expect(english).not.toContain("\uE000");
+    setCurrentLocale("ko");
+    expect(render()).toBe(korean);
   });
 });

@@ -1,5 +1,16 @@
 # Browser E2E Coverage
 
+## API Translation Boundary Remediation
+
+Stage `verify API translation boundary with synthetic inputs` runs four isolated
+browser cases (en/ko, pasted JSON/uploaded FormData). It checks actual transmitted
+JSON, Accept-Language, original file SHA/size, stored original_name/cell values and
+unchanged schema hash after locale switching. Fixtures contain quotes, newlines,
+backslashes, private-use token-like data and columns named code/message/warnings.
+`scripts/e2e.ps1 -ApiTranslationOnly` runs this stage without the remaining flow.
+Child-page trace and boundary-evidence.json use only synthetic data. Existing
+display-name sanitation is distinguished from preservation of original headers.
+
 ## Startup and Child-Page Diagnostics (2026-10-18)
 
 `app_readiness.wait_for_app_ready` distinguishes mounted UI, evaluated runtime

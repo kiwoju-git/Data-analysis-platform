@@ -1,4 +1,6 @@
 import type { IndividualValuePreviewPoint } from "../api";
+import { useI18n } from "../i18n/LocaleProvider";
+import { translateSystemText } from "../i18n/translate";
 import {
   InteractiveScatterChart,
   type InteractiveScatterPoint,
@@ -12,21 +14,23 @@ export function InteractiveIndividualValueChart({
   chartId: string;
   points: IndividualValuePreviewPoint[];
 }) {
+  const { locale } = useI18n();
+  const text = (source: string) => translateSystemText(source, locale);
   const series = Array.from(new Set(points.map((point) => point.series_label)));
   const interactivePoints: InteractiveScatterPoint[] = points.map((point, index) => {
     const seriesIndex = series.indexOf(point.series_label);
     const jitter = deterministicJitter(point.canonical_position, index);
     return {
-      ariaLabel: `${point.series_label} ${point.point_index}, 값 ${formatNumber(point.value)}`,
+      ariaLabel: `${point.series_label} ${point.point_index}, ${text("값")} ${formatNumber(point.value)}`,
       className: "interactive-chart-point individual-value-point",
       details: [
-        { label: "변수/그룹", value: point.series_label },
-        { label: "그룹", value: point.group ?? "-" },
-        { label: "점 순번", value: point.point_index.toLocaleString() },
-        { label: "값", value: formatNumber(point.value) },
+        { label: text("변수/그룹"), value: point.series_label },
+        { label: text("그룹"), value: point.group ?? "-" },
+        { label: text("점 순번"), value: point.point_index.toLocaleString() },
+        { label: text("값"), value: formatNumber(point.value) },
       ],
       id: `${chartId}-${index}`,
-      title: `${point.series_label} 관측 ${point.point_index}`,
+      title: `${point.series_label} ${text("관측")} ${point.point_index}`,
       x: seriesIndex + 1 + jitter,
       y: point.value,
     };
@@ -34,9 +38,9 @@ export function InteractiveIndividualValueChart({
   return (
     <InteractiveScatterChart
       annotations={[
-        `표시 ${points.length.toLocaleString()}점`,
-        "자동 표본추출 없음",
-        `series ${series.length.toLocaleString()}개`,
+        `${text("표시")} ${points.length.toLocaleString()} ${text("점")}`,
+        text("자동 표본추출 없음"),
+        `series ${series.length.toLocaleString()} ${text("개")}`,
       ]}
       chartId={chartId}
       description="실제 관측값을 변수 또는 그룹별 point strip으로 표시합니다."
@@ -44,7 +48,7 @@ export function InteractiveIndividualValueChart({
       formatValue={formatNumber}
       points={interactivePoints}
       title="Individual Value Plot"
-      xLabel="변수 또는 그룹"
+      xLabel={text("변수 또는 그룹")}
       xRange={{ min: 0.5, max: Math.max(1.5, series.length + 0.5) }}
       yLabel="Value"
       yRange={paddedNumericRange(points.map((point) => point.value))}

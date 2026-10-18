@@ -1,6 +1,11 @@
 import type { EquivalenceTostResult } from "../api";
+import { useI18n } from "../i18n/LocaleProvider";
+import { translateSystemText } from "../i18n/translate";
+import type { AppLocale } from "../i18n/types";
 
 export function InteractiveEquivalencePlot({ result }: { result: EquivalenceTostResult }) {
+  const { locale } = useI18n();
+  const text = (source: string) => translateSystemText(source, locale);
   const values = [
     result.equivalence_bounds.lower,
     result.equivalence_bounds.upper,
@@ -15,8 +20,8 @@ export function InteractiveEquivalencePlot({ result }: { result: EquivalenceTost
   const domainMinimum = minimum - padding;
   const domainMaximum = maximum + padding;
   const x = (value: number) => 54 + ((value - domainMinimum) / (domainMaximum - domainMinimum)) * 532;
-  const decision = result.tost.equivalent ? "동등성 근거 있음" : "동등성 근거 부족";
-  const description = `${estimateDefinition(result)}. 점 추정치 ${formatNumber(result.estimate.value)}, ${formatPercent(result.confidence_interval.level)} 신뢰구간 ${formatNumber(result.confidence_interval.lower)}에서 ${formatNumber(result.confidence_interval.upper)}, 동등성 한계 ${formatNumber(result.equivalence_bounds.lower)}에서 ${formatNumber(result.equivalence_bounds.upper)}. ${decision}.`;
+  const decision = text(result.tost.equivalent ? "동등성 근거 있음" : "동등성 근거 부족");
+  const description = `${estimateDefinition(result, locale)}. ${text("점 추정치")} ${formatNumber(result.estimate.value)}, ${formatPercent(result.confidence_interval.level)} ${text("신뢰구간")} ${formatNumber(result.confidence_interval.lower)} - ${formatNumber(result.confidence_interval.upper)}, ${text("동등성 한계")} ${formatNumber(result.equivalence_bounds.lower)} - ${formatNumber(result.equivalence_bounds.upper)}. ${decision}.`;
 
   return (
     <div className="interactive-chart equivalence-plot">
@@ -36,7 +41,7 @@ export function InteractiveEquivalencePlot({ result }: { result: EquivalenceTost
         <line className="equivalence-ci-cap" x1={x(result.confidence_interval.lower)} x2={x(result.confidence_interval.lower)} y1="64" y2="80" />
         <line className="equivalence-ci-cap" x1={x(result.confidence_interval.upper)} x2={x(result.confidence_interval.upper)} y1="64" y2="80" />
         <circle
-          aria-label={`점 추정치 ${formatNumber(result.estimate.value)}`}
+          aria-label={`${text("점 추정치")} ${formatNumber(result.estimate.value)}`}
           className="equivalence-estimate"
           cx={x(result.estimate.value)}
           cy="72"
@@ -51,10 +56,14 @@ export function InteractiveEquivalencePlot({ result }: { result: EquivalenceTost
   );
 }
 
-function estimateDefinition(result: EquivalenceTostResult): string {
-  if (result.design === "two_sample_independent_mean_difference") return "평균 차이 = 시험군 - 기준군";
-  if (result.design === "paired_mean_difference") return "평균 차이 = 시험 측정 - 기준 측정";
-  return "평균 차이 = 표본 평균 - 기준 평균";
+function estimateDefinition(result: EquivalenceTostResult, locale: AppLocale): string {
+  if (result.design === "two_sample_independent_mean_difference") {
+    return translateSystemText("평균 차이 = 시험군 - 기준군", locale);
+  }
+  if (result.design === "paired_mean_difference") {
+    return translateSystemText("평균 차이 = 시험 측정 - 기준 측정", locale);
+  }
+  return translateSystemText("평균 차이 = 표본 평균 - 기준 평균", locale);
 }
 
 function formatPercent(value: number): string {

@@ -3,6 +3,9 @@ import type {
   BayesianRecommendationBatchItemResponse,
   BayesianRecommendationCreateRequest,
 } from "../../api";
+import { getCurrentLocale } from "../../i18n/store";
+import { translateSystemText } from "../../i18n/translate";
+import type { AppLocale } from "../../i18n/types";
 
 export const BAYESIAN_CATALOG_PAGE_SIZE = 20;
 
@@ -66,21 +69,21 @@ export function formatNumber(value: number) {
   return Number.isFinite(value) ? value.toPrecision(6) : "-";
 }
 
-export function batchReasonText(item: BayesianRecommendationBatchItemResponse) {
-  const rank = `후보 ${item.rank}`;
+export function batchReasonText(item: BayesianRecommendationBatchItemResponse, locale: AppLocale = getCurrentLocale()) {
+  const rank = `${translateSystemText("후보", locale)} ${item.rank}${locale === "ko" ? "" : " "}`;
   if (item.reason_code === "target_distance_reduction") {
-    return `${rank}은 예측 평균이 목표값에 더 가까워질 가능성과 예측 불확실성을 함께 고려해 선택되었습니다.`;
+    return `${rank}${translateSystemText("은 예측 평균이 목표값에 더 가까워질 가능성과 예측 불확실성을 함께 고려해 선택되었습니다.", locale)}`;
   }
   if (item.reason_code === "uncertainty_driven") {
-    return `${rank}은 예측 평균 자체보다 아직 관측이 적은 영역의 불확실성 때문에 탐색 후보로 선택되었습니다.`;
+    return `${rank}${translateSystemText("은 예측 평균 자체보다 아직 관측이 적은 영역의 불확실성 때문에 탐색 후보로 선택되었습니다.", locale)}`;
   }
   if (item.reason_code === "batch_diversity_adjusted") {
-    return `${rank}은 앞선 batch 후보를 실제 관측이 아닌 posterior-mean fantasy로 조건화한 뒤에도 acquisition 값이 높고, 앞선 조건과의 중복을 피하도록 선택되었습니다.`;
+    return `${rank}${translateSystemText("은 앞선 batch 후보를 실제 관측이 아닌 posterior-mean fantasy로 조건화한 뒤에도 acquisition 값이 높고, 앞선 조건과의 중복을 피하도록 선택되었습니다.", locale)}`;
   }
   if (item.reason_code === "predicted_improvement_driven") {
-    return `${rank}은 현재 최선값보다 나은 예측 평균을 중심으로 선택되었습니다.`;
+    return `${rank}${translateSystemText("은 현재 최선값보다 나은 예측 평균을 중심으로 선택되었습니다.", locale)}`;
   }
-  return `${rank}은 예측 평균의 개선 가능성과 posterior 불확실성을 함께 고려해 선택되었습니다.`;
+  return `${rank}${translateSystemText("은 예측 평균의 개선 가능성과 posterior 불확실성을 함께 고려해 선택되었습니다.", locale)}`;
 }
 
 export function bayesianErrorCode(caught: unknown) {

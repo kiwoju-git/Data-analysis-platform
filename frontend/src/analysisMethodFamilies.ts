@@ -1,4 +1,6 @@
 import type { AnalysisMethodDescriptor } from "./api";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 export interface AnalysisMethodFamily {
   description: string;
@@ -48,6 +50,7 @@ const hypothesisFamilies = [
 
 export function groupHypothesisMethods(
   methods: AnalysisMethodDescriptor[],
+  locale?: AppLocale,
 ): AnalysisMethodFamily[] {
   const byId = new Map(methods.map((method) => [method.method_id, method]));
   const mappedIds = new Set<string>();
@@ -57,18 +60,18 @@ export function groupHypothesisMethods(
       .filter((method): method is AnalysisMethodDescriptor => method !== undefined);
     familyMethods.forEach((method) => mappedIds.add(method.method_id));
     return {
-      description: family.description,
+      description: translateSystemText(family.description, locale),
       id: family.id,
-      label: family.label,
+      label: translateSystemText(family.label, locale),
       methods: familyMethods,
     };
   });
   const unmapped = methods.filter((method) => !mappedIds.has(method.method_id));
   if (unmapped.length > 0) {
     families.push({
-      description: "새로 추가되었거나 별도 분류가 필요한 검정입니다.",
+      description: translateSystemText("새로 추가되었거나 별도 분류가 필요한 검정입니다.", locale),
       id: "other-tests",
-      label: "기타 검정",
+      label: translateSystemText("기타 검정", locale),
       methods: unmapped,
     });
   }

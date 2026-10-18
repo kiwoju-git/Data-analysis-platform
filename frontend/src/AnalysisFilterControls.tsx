@@ -1,4 +1,5 @@
 import type { AnalysisFilterOperator, DatasetColumnResponse } from "./api";
+import { useI18n } from "./i18n/LocaleProvider";
 import {
   createDefaultFilterDraft,
   filterOperatorOptions,
@@ -20,6 +21,7 @@ export function AnalysisFilterControls({
   drafts,
   onChange,
 }: AnalysisFilterControlsProps) {
+  const { locale } = useI18n();
   function updateDraft(id: string, patch: Partial<AnalysisFilterDraft>) {
     onChange(
       drafts.map((draft) =>
@@ -75,7 +77,7 @@ export function AnalysisFilterControls({
             const normalizedDraft = normalizeFilterDraft(draft, columns);
             const selectedColumn = findFilterColumn(columns, normalizedDraft.column_id);
             const operatorOptions =
-              selectedColumn === null ? [] : filterOperatorOptions(selectedColumn);
+              selectedColumn === null ? [] : filterOperatorOptions(selectedColumn, locale);
             const requiresValue = filterOperatorRequiresValue(normalizedDraft.operator);
 
             return (

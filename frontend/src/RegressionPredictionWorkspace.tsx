@@ -1,3 +1,4 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -283,16 +284,16 @@ export function RegressionPredictionWorkspace({
 }
 
 function modelLabel(model: RegressionModelCatalogItem): string {
-  const response = model.response?.display_name ?? "metadata 확인 필요";
+  const response = model.response?.display_name ?? systemText("metadata 확인 필요");
   const state =
     model.availability === "available"
-      ? "사용 가능"
+      ? systemText("사용 가능")
       : model.availability === "source_stale"
         ? "stale"
-        : "무결성 오류";
+        : systemText("무결성 오류");
   const label =
     model.user_label ??
-    `${response} · predictor ${model.predictor_count ?? "?"}개 · ${formatCreatedAt(model.created_at)}`;
+    `${response} · predictor ${model.predictor_count ?? "?"}${systemText("개 · ")}${formatCreatedAt(model.created_at)}`;
   const kind = { ols: "OLS", ridge: "Ridge", lasso: "Lasso", elastic_net: "Elastic Net", pls: "PLS", gaussian_process: "Gaussian Process" }[model.model_kind ?? "ols"];
   return `${kind} · ${label} · ${state} · ${shortId(model.model_id)}`;
 }

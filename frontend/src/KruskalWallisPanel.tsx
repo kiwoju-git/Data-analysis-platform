@@ -1,3 +1,8 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
@@ -40,6 +45,7 @@ export function KruskalWallisPanel({
   onResponseColumnChange,
   onRun,
 }: KruskalWallisPanelProps) {
+  const { locale } = useI18n();
   const canRun =
     version !== null &&
     responseColumnId !== null &&
@@ -118,7 +124,7 @@ export function KruskalWallisPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -134,7 +140,7 @@ export function KruskalWallisPanel({
                 <span>동률</span>
                 <strong>{result.has_ties ? "있음" : "없음"}</strong>
                 <span>Dunn/Holm</span>
-                <strong>{posthocLabel(result.posthoc.performed, result.posthoc.reason)}</strong>
+                <strong>{posthocLabel(result.posthoc.performed, result.posthoc.reason, locale)}</strong>
               </div>
               <div className="table-wrap">
                 <table className="result-table">
@@ -228,17 +234,17 @@ export function KruskalWallisPanel({
   );
 }
 
-function posthocLabel(performed: boolean, reason: string | null): string {
+function posthocLabel(performed: boolean, reason: string | null, locale: AppLocale): string {
   if (performed) {
-    return "실행됨";
+    return translateSystemText("실행됨", locale);
   }
   if (reason === "overall_not_significant") {
-    return "overall 비유의로 생략";
+    return translateSystemText("overall 비유의로 생략", locale);
   }
   if (reason === "not_requested") {
-    return "요청 안 함";
+    return translateSystemText("요청 안 함", locale);
   }
-  return "생략";
+  return translateSystemText("생략", locale);
 }
 
 function formatAnalysisNumber(value: number | null): string {

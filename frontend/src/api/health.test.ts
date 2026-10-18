@@ -41,9 +41,9 @@ describe("fetchRuntimeInfo", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(init.method).toBeUndefined();
-    expect(init.headers).toEqual({
-      Accept: "application/json",
-      "Accept-Language": "ko",
-    });
+    const headers = new Headers(init.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Accept-Language")).toBe("ko");
+    expect(headers.has("Cache-Control")).toBe(false);
   });
 });

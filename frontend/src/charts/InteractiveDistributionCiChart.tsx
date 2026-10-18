@@ -1,4 +1,7 @@
 import type { GraphicalConfidenceInterval } from "../api/types/analysisResultsExploration";
+import { useI18n } from "../i18n/LocaleProvider";
+import { translateSystemText } from "../i18n/translate";
+import type { AppLocale } from "../i18n/types";
 import { ChartItemFeedback } from "./ChartItemFeedback";
 import { paddedNumericRange, scaleChartValue } from "./chartScale";
 import { useChartItemInteraction } from "./useChartItemInteraction";
@@ -27,12 +30,14 @@ export function InteractiveDistributionCiChart({
     standard_deviation: GraphicalConfidenceInterval;
   };
 }) {
+  const { locale } = useI18n();
+  const text = (source: string) => translateSystemText(source, locale);
   const items: IntervalItem[] = [
-    { id: `${chartId}-mean`, label: "평균", interval: intervals.mean, scale: "location" },
-    { id: `${chartId}-median`, label: "중앙값", interval: intervals.median, scale: "location" },
+    { id: `${chartId}-mean`, label: text("평균"), interval: intervals.mean, scale: "location" },
+    { id: `${chartId}-median`, label: text("중앙값"), interval: intervals.median, scale: "location" },
     {
       id: `${chartId}-standard-deviation`,
-      label: "표준편차",
+      label: text("표준편차"),
       interval: intervals.standard_deviation,
       scale: "spread",
     },
@@ -94,7 +99,7 @@ export function InteractiveDistributionCiChart({
               <line className="distribution-ci-cap" x1={upperX} x2={upperX} y1={y - 7} y2={y + 7} />
               <circle className="distribution-ci-estimate" cx={estimateX} cy={y} r="4" />
               <rect
-              aria-label={`${item.label} ${formatNumber(item.interval.estimate!)} 신뢰구간 ${formatNumber(item.interval.lower!)}에서 ${formatNumber(item.interval.upper!)}`}
+              aria-label={`${item.label} ${formatNumber(item.interval.estimate!)} ${text("신뢰구간")} ${formatNumber(item.interval.lower!)} - ${formatNumber(item.interval.upper!)}`}
               className={`chart-hit-target ${interaction.stateClass(item.id)}${selected ? " chart-hit-target-selected" : ""}`}
               data-selected={selected ? "true" : "false"}
               onBlur={() => interaction.clearFocus(item.id)}
@@ -119,18 +124,19 @@ export function InteractiveDistributionCiChart({
         <text className="chart-axis-label" x={plot.left} y="233">{formatNumber(spreadRange.min)}</text>
         <text className="chart-axis-label chart-axis-label-end" x={width - plot.right} y="233">{formatNumber(spreadRange.max)}</text>
       </svg>
-      <ChartItemFeedback interaction={interaction} items={computedItems.map((item) => ({ id: item.id, title: item.label, details: intervalDetails(item) }))} />
+      <ChartItemFeedback interaction={interaction} items={computedItems.map((item) => ({ id: item.id, title: item.label, details: intervalDetails(item, locale) }))} />
     </div>
   );
 }
 
-function intervalDetails(item: IntervalItem) {
+function intervalDetails(item: IntervalItem, locale: AppLocale) {
+  const text = (source: string) => translateSystemText(source, locale);
   return [
-    { label: "추정값", value: formatNumber(item.interval.estimate!) },
-    { label: "하한", value: formatNumber(item.interval.lower!) },
-    { label: "상한", value: formatNumber(item.interval.upper!) },
-    { label: "신뢰수준", value: `${formatNumber(item.interval.confidence_level * 100)}%` },
-    { label: "방법", value: item.interval.method },
+    { label: text("추정값"), value: formatNumber(item.interval.estimate!) },
+    { label: text("하한"), value: formatNumber(item.interval.lower!) },
+    { label: text("상한"), value: formatNumber(item.interval.upper!) },
+    { label: text("신뢰수준"), value: `${formatNumber(item.interval.confidence_level * 100)}%` },
+    { label: text("방법"), value: item.interval.method },
   ];
 }
 

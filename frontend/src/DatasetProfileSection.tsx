@@ -1,3 +1,5 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+
 import type { DatasetProfileResponse } from "./api";
 import {
   formatPercent,
@@ -56,7 +58,7 @@ export function DatasetProfileSection({
       {profile?.warnings.length ? (
         <ul className="warning-list" aria-label="데이터셋 프로파일 경고">
           {profile.warnings.map((warning) => (
-            <li key={warning.code}>{warning.message}</li>
+            <li key={warning.code}><ApiNoticeText notice={warning} /></li>
           ))}
         </ul>
       ) : null}
@@ -134,7 +136,7 @@ export function DatasetProfileSection({
                     {column.warnings.length > 0 ? (
                       <ul className="inline-warning-list">
                         {column.warnings.map((warning) => (
-                          <li key={warning.code}>{warning.message}</li>
+                          <li key={warning.code}><ApiNoticeText notice={warning} /></li>
                         ))}
                       </ul>
                     ) : (

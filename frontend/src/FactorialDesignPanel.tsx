@@ -1,7 +1,8 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import { InteractiveHorizontalBarChart } from "./charts/InteractiveHorizontalBarChart";
 import { InteractiveScatterChart } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { t } from "./i18n/translate";
 
 import {
@@ -158,31 +159,10 @@ export function FactorialDesignPanel({
   const [randomize, setRandomize] = useState(true);
   const [randomizationSeed, setRandomizationSeed] = useState("20260702");
   const [blockCount, setBlockCount] = useState("1");
-  const validation = useMemo(
-    () =>
-      validateFactorialDesignDraft({
-        name,
-        factors,
-        replicates,
-        centerPoints,
-        randomize,
-        randomizationSeed,
-        blockCount,
-        designType,
-        fractionId,
-      }),
-    [
-      blockCount,
-      centerPoints,
-      designType,
-      factors,
-      fractionId,
-      name,
-      randomizationSeed,
-      randomize,
-      replicates,
-    ],
-  );
+  const validation = validateFactorialDesignDraft({
+    name, factors, replicates, centerPoints, randomize,
+    randomizationSeed, blockCount, designType, fractionId,
+  });
   const displayedDesign = preferRestored ? restoredDesign : design ?? restoredDesign;
   const displayedResponses = responses?.design_id === displayedDesign?.design_id ? responses : restoredResponses;
 
@@ -248,7 +228,7 @@ export function FactorialDesignPanel({
                 }}
                 type="radio"
               />
-              <span>{label}</span>
+              <span>{systemText(label)}</span>
             </label>
           ))}
         </fieldset>
@@ -695,10 +675,7 @@ export function FactorialDesignPreview({
     setRevisionError(null);
     setIsSavingRevision(false);
   }, [design.design_id, design.runs, firstResponse]);
-  const responseValidation = useMemo(
-    () => validateResponseDraft(design.runs, responseName, responseUnit, responseValues),
-    [design.runs, responseName, responseUnit, responseValues],
-  );
+  const responseValidation = validateResponseDraft(design.runs, responseName, responseUnit, responseValues);
   const matchingAnalysis = analysis?.design_id === design.design_id ? analysis : null;
   const aliased = Boolean(design.fractional || design.screening);
   const termCatalog = useDoeTermCatalog(design.design_id, maxInteractionOrder, modelSelection, !aliased);
@@ -1304,30 +1281,30 @@ function factorialWarningMessage(code: string): string {
   if (code.includes("vif_unavailable")) return t("doe.model.unavailable");
   const messages: Record<string, string> = {
     doe_factorial_randomization_and_independence_not_proven:
-      "랜덤화와 관측 독립성은 결과만으로 증명되지 않으므로 실험 실행 기록을 확인해야 합니다.",
+      systemText("랜덤화와 관측 독립성은 결과만으로 증명되지 않으므로 실험 실행 기록을 확인해야 합니다."),
     doe_factorial_effects_are_associations_within_experiment:
-      "효과는 현재 실험 설계영역의 연관이며 설계영역 밖 인과효과를 자동으로 증명하지 않습니다.",
+      systemText("효과는 현재 실험 설계영역의 연관이며 설계영역 밖 인과효과를 자동으로 증명하지 않습니다."),
     doe_factorial_model_saturated_no_inference:
-      "포화 모형이므로 효과는 계산되지만 오차 기반 p-value와 신뢰구간은 제공되지 않습니다.",
+      systemText("포화 모형이므로 효과는 계산되지만 오차 기반 p-value와 신뢰구간은 제공되지 않습니다."),
     doe_factorial_residual_df_small:
-      "잔차 자유도가 작아 추론과 잔차 진단을 신중히 해석해야 합니다.",
+      systemText("잔차 자유도가 작아 추론과 잔차 진단을 신중히 해석해야 합니다."),
     doe_factorial_higher_order_interactions_excluded_by_policy:
-      "선택한 최대 차수보다 높은 상호작용은 모형에서 제외됐습니다.",
+      systemText("선택한 최대 차수보다 높은 상호작용은 모형에서 제외됐습니다."),
     doe_factorial_residual_variance_zero:
-      "적합 후 잔차 분산이 사실상 0이므로 오차 기반 추론을 신중히 해석해야 합니다.",
+      systemText("적합 후 잔차 분산이 사실상 0이므로 오차 기반 추론을 신중히 해석해야 합니다."),
     doe_factorial_pure_error_unavailable_without_replication:
-      "동일 설계점 반복이 없어 pure error와 lack-of-fit을 분리할 수 없습니다.",
+      systemText("동일 설계점 반복이 없어 pure error와 lack-of-fit을 분리할 수 없습니다."),
     doe_factorial_lack_of_fit_df_unavailable:
-      "현재 설계와 자유도로 lack-of-fit 검정을 계산할 수 없습니다.",
-    doe_factorial_block_fixed_effects_included: "Block을 고정효과로 포함했습니다.",
+      systemText("현재 설계와 자유도로 lack-of-fit 검정을 계산할 수 없습니다."),
+    doe_factorial_block_fixed_effects_included: systemText("Block을 고정효과로 포함했습니다."),
     doe_factorial_large_standardized_residual:
-      "절대 표준화 잔차가 3을 넘는 run이 있어 입력과 실행조건을 확인해야 합니다.",
+      systemText("절대 표준화 잔차가 3을 넘는 run이 있어 입력과 실행조건을 확인해야 합니다."),
     doe_factorial_influential_run_detected:
-      "Cook's distance가 큰 run이 있어 잔차 진단을 확인해야 합니다.",
+      systemText("Cook's distance가 큰 run이 있어 잔차 진단을 확인해야 합니다."),
     doe_plackett_burman_main_effects_confounding:
-      "Plackett-Burman 주효과는 여러 2요인 상호작용과 부분적으로 섞일 수 있습니다.",
+      systemText("Plackett-Burman 주효과는 여러 2요인 상호작용과 부분적으로 섞일 수 있습니다."),
     doe_plackett_burman_low_power_ten_factors:
-      "10요인 12-run screening은 검정력이 제한됩니다. 중요한 요인은 후속 설계로 확인하세요.",
+      systemText("10요인 12-run screening은 검정력이 제한됩니다. 중요한 요인은 후속 설계로 확인하세요."),
   };
   return messages[code] ?? code;
 }
@@ -1385,10 +1362,10 @@ function validateFactorialDesignDraft({
 }): ValidationResult {
   const trimmedName = name.trim();
   if (trimmedName.length === 0) {
-    return validationError("설계 이름을 입력하세요.", 0);
+    return validationError(systemText("설계 이름을 입력하세요."), 0);
   }
   if (factors.length < 2 || factors.length > maxFactorCount) {
-    return validationError("요인은 2개 이상 10개 이하입니다.", 0);
+    return validationError(systemText("요인은 2개 이상 10개 이하입니다."), 0);
   }
 
   const parsedFactors: FactorialDesignCreateRequest["factors"] = [];
@@ -1396,18 +1373,18 @@ function validateFactorialDesignDraft({
   for (const factor of factors) {
     const factorName = factor.name.trim();
     if (factorName.length === 0) {
-      return validationError("비어 있는 요인 이름이 있습니다.", 0);
+      return validationError(systemText("비어 있는 요인 이름이 있습니다."), 0);
     }
     const normalizedName = factorName.toLocaleLowerCase("ko-KR");
     if (names.has(normalizedName)) {
-      return validationError("요인 이름은 중복될 수 없습니다.", 0);
+      return validationError(systemText("요인 이름은 중복될 수 없습니다."), 0);
     }
     names.add(normalizedName);
     if (factor.factorKind === "categorical") {
       const lowLabel = factor.low.trim();
       const highLabel = factor.high.trim();
       if (lowLabel.length === 0 || highLabel.length === 0 || lowLabel === highLabel) {
-        return validationError(`${factorName}의 두 범주 수준을 확인하세요.`, 0);
+        return validationError(`${factorName}${systemText("의 두 범주 수준을 확인하세요.")}`, 0);
       }
       parsedFactors.push({
         factor_kind: "categorical",
@@ -1421,11 +1398,11 @@ function validateFactorialDesignDraft({
     const low = Number(factor.low);
     const high = Number(factor.high);
     if (!Number.isFinite(low) || !Number.isFinite(high) || low >= high) {
-      return validationError(`${factorName}의 low/high를 확인하세요.`, 0);
+      return validationError(`${factorName}${systemText("의 low/high를 확인하세요.")}`, 0);
     }
     const domain = parseDoeFactorDomainDraft(factor, low, high);
     if (domain === null) {
-      return validationError(`${factorName}의 실행 간격 또는 표시 자리수를 확인하세요.`, 0);
+      return validationError(`${factorName}${systemText("의 실행 간격 또는 표시 자리수를 확인하세요.")}`, 0);
     }
     parsedFactors.push({
       factor_kind: "numeric",
@@ -1444,28 +1421,28 @@ function validateFactorialDesignDraft({
   const parsedSeed = integerField(randomizationSeed);
   const parsedBlockCount = integerField(blockCount);
   if (parsedReplicates === null || parsedReplicates < 1 || parsedReplicates > 16) {
-    return validationError("반복 수는 1 이상 16 이하입니다.", 0);
+    return validationError(systemText("반복 수는 1 이상 16 이하입니다."), 0);
   }
   if (parsedCenterPoints === null || parsedCenterPoints < 0 || parsedCenterPoints > 32) {
-    return validationError("센터점 수는 0 이상 32 이하입니다.", 0);
+    return validationError(systemText("센터점 수는 0 이상 32 이하입니다."), 0);
   }
   if (designType === "plackett_burman_screening" && parsedCenterPoints !== 0) {
-    return validationError("현재 Screening Design은 센터점을 지원하지 않습니다.", 0);
+    return validationError(systemText("현재 Screening Design은 센터점을 지원하지 않습니다."), 0);
   }
   const categoricalCount = parsedFactors.filter(
     (factor) => factor.factor_kind === "categorical",
   ).length;
   if (parsedCenterPoints > 0 && categoricalCount === parsedFactors.length) {
     return validationError(
-      "모든 요인이 범주형이면 센터점으로 곡률을 평가할 수 없습니다. 반복을 추가하세요.",
+      systemText("모든 요인이 범주형이면 센터점으로 곡률을 평가할 수 없습니다. 반복을 추가하세요."),
       0,
     );
   }
   if (parsedSeed === null || parsedSeed < 0) {
-    return validationError("Seed는 0 이상의 정수입니다.", 0);
+    return validationError(systemText("Seed는 0 이상의 정수입니다."), 0);
   }
   if (parsedBlockCount === null || parsedBlockCount < 1 || parsedBlockCount > 64) {
-    return validationError("Block 수는 1 이상 64 이하입니다.", 0);
+    return validationError(systemText("Block 수는 1 이상 64 이하입니다."), 0);
   }
 
   const fractionExponent = fractionId.includes("eighth")
@@ -1481,13 +1458,13 @@ function validateFactorialDesignDraft({
       (option) => option.id === fractionId,
     )
   ) {
-    return validationError("현재 요인 수에 맞는 검증된 부분요인 설계를 선택하세요.", 0);
+    return validationError(systemText("현재 요인 수에 맞는 검증된 부분요인 설계를 선택하세요."), 0);
   }
   if (
     designType === "plackett_burman_screening" &&
     (parsedFactors.length < 7 || parsedFactors.length > 10)
   ) {
-    return validationError("Screening Design은 7개 이상 10개 이하 요인이 필요합니다.", 0);
+    return validationError(systemText("Screening Design은 7개 이상 10개 이하 요인이 필요합니다."), 0);
   }
   const baseRunCount = designType === "plackett_burman_screening"
     ? 12
@@ -1497,14 +1474,14 @@ function validateFactorialDesignDraft({
   if (runCount > maxRunCount) {
     if (designType === "two_level_full") {
       return validationError(
-        `${parsedFactors.length}요인 완전요인은 최소 ${baseRunCount.toLocaleString()}개의 corner run이 필요합니다. Screening Design 또는 부분요인을 사용하세요.`,
+        `${parsedFactors.length}${systemText("요인 완전요인은 최소 ")}${baseRunCount.toLocaleString()}${systemText("개의 corner run이 필요합니다. Screening Design 또는 부분요인을 사용하세요.")}`,
         runCount,
       );
     }
-    return validationError(`현재 설계 제한은 ${maxRunCount.toLocaleString()} runs입니다.`, runCount);
+    return validationError(`${systemText("현재 설계 제한은 ")}${maxRunCount.toLocaleString()}${systemText(" runs입니다.")}`, runCount);
   }
   if (parsedBlockCount > runCount) {
-    return validationError("Block 수는 전체 run 수보다 클 수 없습니다.", runCount);
+    return validationError(systemText("Block 수는 전체 run 수보다 클 수 없습니다."), runCount);
   }
   return {
     kind: "ready",
@@ -1545,17 +1522,17 @@ function validateResponseDraft(
 ): ResponseValidationResult {
   const trimmedName = responseName.trim();
   if (trimmedName.length === 0) {
-    return responseValidationError("반응 이름을 입력하세요.");
+    return responseValidationError(systemText("반응 이름을 입력하세요."));
   }
   const values = [];
   for (const run of runs) {
     const rawValue = responseValues[run.run_order] ?? "";
     if (rawValue.trim().length === 0) {
-      return responseValidationError(`Run ${run.run_order}의 반응값을 입력하세요.`);
+      return responseValidationError(`Run ${run.run_order}${systemText("의 반응값을 입력하세요.")}`);
     }
     const parsed = Number(rawValue);
     if (!Number.isFinite(parsed)) {
-      return responseValidationError(`Run ${run.run_order}의 반응값은 숫자여야 합니다.`);
+      return responseValidationError(`Run ${run.run_order}${systemText("의 반응값은 숫자여야 합니다.")}`);
     }
     values.push({ run_order: run.run_order, value: parsed });
   }

@@ -1,3 +1,5 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+
 import type {
   AnalysisResultEnvelope,
   ChiSquareAssociationResult,
@@ -118,7 +120,7 @@ export function ChiSquareAssociationPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}

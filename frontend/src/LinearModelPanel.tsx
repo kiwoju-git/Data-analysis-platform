@@ -1,3 +1,5 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+
 import { useEffect, useState } from "react";
 
 import type {
@@ -25,6 +27,8 @@ import { LinearModelFitResults } from "./LinearModelFitResults";
 import { RegularizedLinearModelResults } from "./RegularizedLinearModelResults";
 import { RegularizationSettingsPanel, regularizationDefaults, regularizationValid } from "./RegularizationSettingsPanel";
 import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 import { RegressionResponseOptimizerPanel } from "./RegressionResponseOptimizerPanel";
 import { updateRegressionModelMetadata } from "./api/regression";
 import {
@@ -111,7 +115,7 @@ export function LinearModelPanel({
   onTogglePredictorColumn,
   onToggleQuadraticColumn,
 }: LinearModelPanelProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [estimator, setEstimator] = useState<LinearModelEstimator>("ols");
   const [regularizedDrafts, setRegularizedDrafts] = useState<Record<RegularizedEstimator, RegularizedRunConfig>>(() => ({
     ridge: regularizationDefaults("ridge"), lasso: regularizationDefaults("lasso"),
@@ -203,7 +207,7 @@ export function LinearModelPanel({
                     <span>
                       {column.display_name}
                       <span className="cell-subtle">
-                        {linearModelPredictorKind(column)}
+                        {linearModelPredictorKind(column, locale)}
                       </span>
                     </span>
                   </label>
@@ -329,7 +333,7 @@ export function LinearModelPanel({
           {analysisResult?.warnings.length && !(result && "regularization" in result) ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -534,9 +538,9 @@ export function LinearModelPanel({
   );
 }
 
-function linearModelPredictorKind(column: DatasetColumnResponse): string {
-  const representation = predictorKind(column) === "categorical" ? "범주형" : "숫자형";
-  return `${representation} · ${measurementLevelLabel(column.measurement_level)} · ${roleLabel(column.role)} 역할`;
+function linearModelPredictorKind(column: DatasetColumnResponse, locale: AppLocale): string {
+  const representation = translateSystemText(predictorKind(column) === "categorical" ? "범주형" : "숫자형", locale);
+  return `${representation} · ${measurementLevelLabel(column.measurement_level)} · ${roleLabel(column.role)} ${translateSystemText("역할", locale)}`;
 }
 
 function linearModelInteractionOptions(columns: DatasetColumnResponse[]): Array<{

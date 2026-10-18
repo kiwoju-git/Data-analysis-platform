@@ -117,8 +117,8 @@ describe("Bayesian batch and DOE presentation", () => {
   });
 
   it("keeps equivalence and Wilcoxon selection tags to four concise items", () => {
-    const equivalence = getMethodCardTags("hypothesis.equivalence_tost");
-    const wilcoxon = getMethodCardTags("hypothesis.one_sample_wilcoxon");
+    const equivalence = getMethodCardTags("hypothesis.equivalence_tost", "ko");
+    const wilcoxon = getMethodCardTags("hypothesis.one_sample_wilcoxon", "ko");
 
     expect(equivalence.map((tag) => tag.label)).toEqual([
       "연속형 수치",
@@ -126,8 +126,8 @@ describe("Bayesian batch and DOE presentation", () => {
       "평균과 기준값 비교",
       "동등성 한계 사전 지정",
     ]);
-    expect(getMethodCardTags("hypothesis.two_sample_equivalence_tost")).toHaveLength(4);
-    expect(getMethodCardTags("hypothesis.paired_equivalence_tost")).toHaveLength(4);
+    expect(getMethodCardTags("hypothesis.two_sample_equivalence_tost", "ko")).toHaveLength(4);
+    expect(getMethodCardTags("hypothesis.paired_equivalence_tost", "ko")).toHaveLength(4);
     expect(wilcoxon.map((tag) => tag.label)).toEqual([
       "순서형·연속형",
       "한 모집단",

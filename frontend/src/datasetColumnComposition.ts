@@ -1,4 +1,6 @@
 import type { DatasetColumnResponse } from "./api";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 export type DatasetColumnCompositionKind =
   | "numeric"
@@ -21,6 +23,7 @@ const labels: Record<DatasetColumnCompositionKind, string> = {
 
 export function summarizeDatasetColumnComposition(
   columns: readonly DatasetColumnResponse[],
+  locale?: AppLocale,
 ): DatasetColumnCompositionItem[] {
   const counts: Record<DatasetColumnCompositionKind, number> = {
     numeric: 0,
@@ -33,7 +36,7 @@ export function summarizeDatasetColumnComposition(
   });
   return (Object.keys(counts) as DatasetColumnCompositionKind[]).map((kind) => ({
     kind,
-    label: labels[kind],
+    label: translateSystemText(labels[kind], locale),
     count: counts[kind],
   }));
 }

@@ -1,3 +1,6 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
@@ -41,6 +44,7 @@ export function NormalityAnalysisPanel({
   onRun,
   onToggleColumn,
 }: NormalityAnalysisPanelProps) {
+  const { locale } = useI18n();
   return (
     <section className="analysis-run-panel" data-analysis-execution={methodId}>
       {version === null ? (
@@ -107,7 +111,7 @@ export function NormalityAnalysisPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -161,7 +165,7 @@ export function NormalityAnalysisPanel({
                         <td>{formatAnalysisNumber(column.shapiro_wilk.statistic)}</td>
                         <td>{formatAnalysisNumber(column.shapiro_wilk.p_value)}</td>
                         <td>{formatAnalysisNumber(column.anderson_darling.statistic)}</td>
-                        <td>{andersonPValueLabel(column.anderson_darling)}</td>
+                        <td>{andersonPValueLabel(column.anderson_darling, locale)}</td>
                         <td>
                           <NormalityDecision
                             decision={column.anderson_darling.decision_at_alpha}
@@ -188,8 +192,10 @@ function NormalityQqCard({
   alpha: number;
   column: NormalityResult["columns"][number];
 }) {
+  const { locale } = useI18n();
   const decision = andersonDecisionDisplay(
     column.anderson_darling.decision_at_alpha,
+    locale,
   );
   return (
     <section className="graphical-summary-card" aria-label={`${column.display_name} 정규성 Q-Q Plot`}>
@@ -199,7 +205,7 @@ function NormalityQqCard({
           <p>
             N {column.n_used.toLocaleString()} · Shapiro p{" "}
             {formatAnalysisNumber(column.shapiro_wilk.p_value)} · AD p (근사){" "}
-            {andersonPValueLabel(column.anderson_darling)} · alpha{" "}
+            {andersonPValueLabel(column.anderson_darling, locale)} · alpha{" "}
             {formatAnalysisNumber(alpha)}
           </p>
         </div>
@@ -241,7 +247,8 @@ function NormalityDecision({
 }: {
   decision: NormalityResult["columns"][number]["anderson_darling"]["decision_at_alpha"];
 }) {
-  const display = andersonDecisionDisplay(decision);
+  const { locale } = useI18n();
+  const display = andersonDecisionDisplay(decision, locale);
   return (
     <span
       className={`normality-decision-label is-${display.tone}`}

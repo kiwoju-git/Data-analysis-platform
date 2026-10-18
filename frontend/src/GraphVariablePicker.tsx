@@ -1,5 +1,7 @@
 import type { DatasetColumnResponse } from "./api";
 import { toggleGraphVariableSelection } from "./graphVariableSelection";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
 
 interface GraphVariablePickerProps {
   columns: DatasetColumnResponse[];
@@ -18,10 +20,11 @@ export function GraphVariablePicker({
   selectedIds,
   onChange,
 }: GraphVariablePickerProps) {
+  const { locale } = useI18n();
   const limitReached = selectedIds.length >= maximum;
   const helperId = `graph-variable-picker-${slugify(label)}-helper`;
-  const selectionCountLabel = `선택 ${selectedIds.length.toLocaleString()} / ${maximum.toLocaleString()}`;
-  const limitMessage = `최대 ${maximum.toLocaleString()}개를 선택했습니다. 다른 변수를 선택하려면 하나를 해제하세요.`;
+  const selectionCountLabel = `${translateSystemText("선택", locale)} ${selectedIds.length.toLocaleString()} / ${maximum.toLocaleString()}`;
+  const limitMessage = `${translateSystemText("최대", locale)} ${maximum.toLocaleString()}${translateSystemText("개를 선택했습니다. 다른 변수를 선택하려면 하나를 해제하세요.", locale)}`;
 
   return (
     <fieldset className="graph-variable-picker" aria-describedby={helperId}>

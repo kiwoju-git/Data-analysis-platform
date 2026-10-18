@@ -1,3 +1,5 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
@@ -150,7 +152,7 @@ export function GageRrPreflightPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -206,7 +208,7 @@ export function GageRrPreflightPanel({
               <ul className="warning-list" aria-label="Gage R&R 사전점검 이슈">
                 {preflight.issues.map((issue) => (
                   <li key={issue.code}>
-                    <strong>{issue.severity}</strong> {issue.message}
+                    <strong>{issue.severity}</strong> <ApiNoticeText notice={issue} />
                     {issue.count === null ? null : ` (${issue.count.toLocaleString()})`}
                   </li>
                 ))}

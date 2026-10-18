@@ -1,3 +1,7 @@
+import { getCurrentLocale } from "./i18n/store";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 export interface AnalysisRunErrorDetails {
   title: string;
   message: string;
@@ -644,11 +648,18 @@ const fallbackDetails: AnalysisRunErrorDetails = {
   action: "오류 코드와 선택한 컬럼, 옵션 값을 확인하세요.",
 };
 
-export function getAnalysisRunErrorDetails(code: string): AnalysisRunErrorDetails {
-  const exact = exactErrorDetails[code];
-  if (exact !== undefined) {
-    return exact;
-  }
-  const match = patternDetails.find(([pattern]) => pattern.test(code));
-  return match?.[1] ?? fallbackDetails;
+export function getAnalysisRunErrorDetails(
+  code: string,
+  locale: AppLocale = getCurrentLocale(),
+): AnalysisRunErrorDetails {
+  const exact = Object.prototype.hasOwnProperty.call(exactErrorDetails, code)
+    ? exactErrorDetails[code]
+    : undefined;
+  const details = exact ?? patternDetails.find(([pattern]) => pattern.test(code))?.[1]
+    ?? fallbackDetails;
+  return {
+    title: translateSystemText(details.title, locale),
+    message: translateSystemText(details.message, locale),
+    action: translateSystemText(details.action, locale),
+  };
 }

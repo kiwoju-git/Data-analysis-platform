@@ -1,3 +1,4 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import type { ReactNode } from "react";
 import { AnalysisDomainGrid } from "./AnalysisDomainGrid";
 import type { AnalysisDomainDefinition } from "./analysisDomains";
@@ -270,7 +271,7 @@ export function ProjectOverviewPage({
                           {analysisMethodDisplayLabel(
                             run.method_id,
                             analysisCatalog,
-                            "저장 분석",
+                            systemText("저장 분석"),
                           )}
                         </strong>
                         <span title={run.method_id}>
@@ -467,9 +468,9 @@ function modelAvailabilityLabel(
   availability: "available" | "source_stale" | "integrity_error",
 ): string {
   const labels = {
-    available: "사용 가능",
-    source_stale: "원본 변경",
-    integrity_error: "무결성 확인 필요",
+    available: systemText("사용 가능"),
+    source_stale: systemText("원본 변경"),
+    integrity_error: systemText("무결성 확인 필요"),
   } as const;
   return labels[availability];
 }

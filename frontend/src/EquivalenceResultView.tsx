@@ -1,3 +1,8 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 import type { AnalysisResultEnvelope, EquivalenceTostResult } from "./api";
 import { InteractiveEquivalencePlot } from "./charts/InteractiveEquivalencePlot";
 
@@ -8,18 +13,19 @@ export function EquivalenceResultView({
   analysisResult: AnalysisResultEnvelope | null;
   result: EquivalenceTostResult | null;
 }) {
+  const { locale } = useI18n();
   if (result === null) return null;
   return (
     <>
       {analysisResult?.warnings.length ? (
         <ul className="warning-list" aria-label="분석 경고">
-          {analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}>{warning.message}</li>)}
+          {analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>)}
         </ul>
       ) : null}
       <div className="metadata-grid" aria-label="동등성 검정 요약">
-        <span>설계</span><strong>{designLabel(result)}</strong>
-        <span>추정량 정의</span><strong>{estimateDefinition(result)}</strong>
-        <span>사용 N</span><strong>{sampleSize(result)}</strong>
+        <span>설계</span><strong>{designLabel(result, locale)}</strong>
+        <span>추정량 정의</span><strong>{estimateDefinition(result, locale)}</strong>
+        <span>사용 N</span><strong>{sampleSize(result, locale)}</strong>
         <span>평균 차이</span><strong>{formatNumber(result.estimate.value)}</strong>
         <span>판정</span><strong>{result.tost.equivalent ? "동등성 근거 있음" : "동등성 근거 부족"}</strong>
       </div>
@@ -51,20 +57,21 @@ function TestRow({ label, test }: { label: string; test: EquivalenceTostResult["
   return <tr><td>{label}</td><td>{formatNumber(test.bound)}</td><td>{formatNumber(test.statistic)}</td><td>{formatNumber(test.df)}</td><td>{formatNumber(test.p_value)}</td><td>{test.reject_null ? "기각" : "기각 안 함"}</td></tr>;
 }
 
-function designLabel(result: EquivalenceTostResult): string {
-  if (result.design === "two_sample_independent_mean_difference") return "독립 2-표본 평균 차이";
-  if (result.design === "paired_mean_difference") return "대응표본 평균 차이";
-  return "1-표본 평균";
+function designLabel(result: EquivalenceTostResult, locale: AppLocale): string {
+  if (result.design === "two_sample_independent_mean_difference") return translateSystemText("독립 2-표본 평균 차이", locale);
+  if (result.design === "paired_mean_difference") return translateSystemText("대응표본 평균 차이", locale);
+  return translateSystemText("1-표본 평균", locale);
 }
 
-function estimateDefinition(result: EquivalenceTostResult): string {
-  if (result.design === "two_sample_independent_mean_difference") return `${result.test_group_label ?? "시험군"} - ${result.reference_group_label ?? "기준군"}`;
-  if (result.design === "paired_mean_difference") return `${result.test_column?.display_name ?? "시험 측정"} - ${result.reference_column?.display_name ?? "기준 측정"}`;
-  return `${result.response.display_name} 평균 - 기준 평균`;
+function estimateDefinition(result: EquivalenceTostResult, locale: AppLocale): string {
+  if (result.design === "two_sample_independent_mean_difference") return `${result.test_group_label ?? translateSystemText("시험군", locale)} - ${result.reference_group_label ?? translateSystemText("기준군", locale)}`;
+  if (result.design === "paired_mean_difference") return `${result.test_column?.display_name ?? translateSystemText("시험 측정", locale)} - ${result.reference_column?.display_name ?? translateSystemText("기준 측정", locale)}`;
+  return `${result.response.display_name}${translateSystemText(" 평균 - 기준 평균", locale)}`;
 }
 
-function sampleSize(result: EquivalenceTostResult): string {
-  if (result.design === "paired_mean_difference") return `${result.n_complete_pairs ?? result.n_used}쌍 / ${result.n_total.toLocaleString()}행`;
+function sampleSize(result: EquivalenceTostResult, locale: AppLocale): string {
+  const unitSpace = locale === "en" ? " " : "";
+  if (result.design === "paired_mean_difference") return `${result.n_complete_pairs ?? result.n_used}${unitSpace}${translateSystemText("쌍 / ", locale)}${result.n_total.toLocaleString()}${unitSpace}${translateSystemText("행", locale)}`;
   return `${result.n_used.toLocaleString()} / ${result.n_total.toLocaleString()}`;
 }
 

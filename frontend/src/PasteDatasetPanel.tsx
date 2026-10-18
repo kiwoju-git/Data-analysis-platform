@@ -3,9 +3,11 @@ import { useState, type FormEvent } from "react";
 import { PastePreviewGrid } from "./PastePreviewGrid";
 import {
   pastedDelimiterLabel,
+  pastedPreviewWarningMessage,
   type PastedTablePreview,
 } from "./pastedTablePreview";
 import { usePastedDatasetDraft } from "./usePastedDatasetDraft";
+import { useI18n } from "./i18n/LocaleProvider";
 
 interface PasteDatasetPanelProps {
   isSubmitting: boolean;
@@ -13,6 +15,7 @@ interface PasteDatasetPanelProps {
 }
 
 export function PasteDatasetPanel({ isSubmitting, onRegister }: PasteDatasetPanelProps) {
+  const { locale } = useI18n();
   const draft = usePastedDatasetDraft();
   const [isAwaitingSubmit, setIsAwaitingSubmit] = useState(false);
 
@@ -107,7 +110,7 @@ export function PasteDatasetPanel({ isSubmitting, onRegister }: PasteDatasetPane
       {draft.preview !== null && draft.preview.warnings.length > 0 ? (
         <ul className="warning-list" aria-label="붙여넣기 미리보기 경고">
           {draft.preview.warnings.map((warning) => (
-            <li key={warning.code}>{warning.message}</li>
+            <li key={warning.code}>{pastedPreviewWarningMessage(warning, locale)}</li>
           ))}
         </ul>
       ) : null}
@@ -155,6 +158,7 @@ function PasteSummary({
   characterCount: number;
   preview: PastedTablePreview;
 }) {
+  const { locale } = useI18n();
   const countSuffix = preview.countsAreLowerBounds ? "+" : "";
   return (
     <dl className="paste-summary" aria-label="붙여넣기 표 요약">
@@ -168,7 +172,7 @@ function PasteSummary({
       </div>
       <div>
         <dt>구분자</dt>
-        <dd>{pastedDelimiterLabel(preview.delimiter)}</dd>
+        <dd>{pastedDelimiterLabel(preview.delimiter, locale)}</dd>
       </div>
       <div>
         <dt>줄바꿈</dt>

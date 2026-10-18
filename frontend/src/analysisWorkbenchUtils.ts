@@ -1,14 +1,16 @@
 import type { AnalysisMethodDescriptor } from "./api";
 import { getCurrentLocale } from "./i18n/store";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
-export function availabilityLabel(method: AnalysisMethodDescriptor): string {
+export function availabilityLabel(method: AnalysisMethodDescriptor, locale?: AppLocale): string {
   if (method.availability === "available") {
-    return method.execution_mode === "dedicated" ? "사용 가능 · 전용 워크플로" : "사용 가능";
+    return translateSystemText(method.execution_mode === "dedicated" ? "사용 가능 · 전용 워크플로" : "사용 가능", locale);
   }
   if (method.availability === "disabled") {
-    return "비활성";
+    return translateSystemText("비활성", locale);
   }
-  return "계획됨";
+  return translateSystemText("계획됨", locale);
 }
 
 export function shortHash(value: string): string {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "./i18n/LocaleProvider";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
+import { translateSystemText } from "./i18n/translate";
 
 import type {
   AnalysisResultCsvExportResponse,
@@ -367,13 +368,15 @@ function ExportFormatAction({
   onCreate: () => void;
   unsupportedReason: string | null;
 }) {
+  const { locale } = useI18n();
+  const actionLabel = `${format} ${translateSystemText(isBusy ? "생성 중" : "생성", locale)}`;
   return (
     <div className="export-format-card">
       <strong>{format}</strong>
       <p>{description}</p>
       {unsupportedReason === null ? (
         <button className="secondary-button compact-button" disabled={disabled} onClick={onCreate} type="button">
-          {isBusy ? `${format} 생성 중` : `${format} 생성`}
+          {actionLabel}
         </button>
       ) : <span className="unsupported-format-label">{unsupportedReason}</span>}
     </div>
@@ -397,6 +400,10 @@ function ExportStatus({
   sizeText: string;
   stale: boolean;
 }) {
+  const { locale } = useI18n();
+  const downloadLabel = isDownloading
+    ? translateSystemText("다운로드 중", locale)
+    : `${format} ${translateSystemText("다운로드", locale)}`;
   return (
     <div className="export-status-box" role="status">
       <strong>생성됨</strong>
@@ -412,7 +419,7 @@ function ExportStatus({
         }}
         type="button"
       >
-        {isDownloading ? "다운로드 중" : `${format} 다운로드`}
+        {downloadLabel}
       </button>
     </div>
   );

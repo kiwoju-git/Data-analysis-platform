@@ -1,4 +1,6 @@
 import type { AnalysisMethodDescriptor } from "./api";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
 
 type RoleGuideKey =
   | "response"
@@ -140,6 +142,7 @@ const methodRoleFocusById: Readonly<Record<string, MethodRoleFocus>> = {
 };
 
 export function StatisticalRoleGuide({ selectedMethod }: { selectedMethod: AnalysisMethodDescriptor | null }) {
+  const { locale } = useI18n();
   const focus =
     selectedMethod === null ? null : methodRoleFocusById[selectedMethod.method_id] ?? null;
   const focusedRoleKeys = new Set(focus?.roleKeys ?? []);
@@ -157,8 +160,8 @@ export function StatisticalRoleGuide({ selectedMethod }: { selectedMethod: Analy
       </div>
       {focus !== null ? (
         <div className="role-focus-box" role="note">
-          <strong>{focus.title}</strong>
-          <p>{focus.detail}</p>
+          <strong>{translateSystemText(focus.title, locale)}</strong>
+          <p>{translateSystemText(focus.detail, locale)}</p>
         </div>
       ) : null}
       <div className="role-guide-grid">
@@ -171,9 +174,9 @@ export function StatisticalRoleGuide({ selectedMethod }: { selectedMethod: Analy
             }
             key={item.title}
           >
-            <h4>{item.title}</h4>
-            <p>{item.description}</p>
-            <small>{item.risk}</small>
+            <h4>{translateSystemText(item.title, locale)}</h4>
+            <p>{translateSystemText(item.description, locale)}</p>
+            <small>{translateSystemText(item.risk, locale)}</small>
           </article>
         ))}
       </div>

@@ -23,7 +23,7 @@ export function AnalysisDomainMethodCard({
   onSelectMethod,
 }: AvailableMethodCardProps) {
   const { locale } = useI18n();
-  const tags = getMethodCardTags(method.method_id).slice(0, 3);
+  const tags = getMethodCardTags(method.method_id, locale).slice(0, 3);
   const descriptionId = `analysis-domain-method-${safeId(method.method_id)}`;
   return (
     <button

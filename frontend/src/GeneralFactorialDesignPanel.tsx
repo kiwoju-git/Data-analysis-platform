@@ -33,12 +33,14 @@ import { FactorialStoredModelWorkflow } from "./FactorialStoredModelWorkflow";
 import { fetchStoredGeneralFactorialAnalysis } from "./api/factorialWorkflow";
 import { DOE_FACTOR_CAPABILITIES } from "./doe/factorCapabilities";
 import {
+  generalFactorialDraftIssueLabel,
   parsePastedLevels,
   threeLevelPresetLevels,
   validateGeneralDraft,
   type GeneralFactorDraft,
 } from "./generalFactorialDraft";
-import { resolveLocalizedText, t } from "./i18n/translate";
+import { translateSystemText, t } from "./i18n/translate";
+import { useI18n } from "./i18n/LocaleProvider";
 
 export function GeneralFactorialDesignPanel({
   initialDesignId = null,
@@ -47,6 +49,7 @@ export function GeneralFactorialDesignPanel({
   initialDesignId?: string | null;
   initialAnalysisId?: string | null;
 }) {
+  const { locale } = useI18n();
   const [name, setName] = useState("3-level general factorial design");
   const [replicates, setReplicates] = useState("1");
   const [seed, setSeed] = useState("20260806");
@@ -425,7 +428,7 @@ export function GeneralFactorialDesignPanel({
         예상 실험 수 {validation.runCount.toLocaleString()}개. 3수준 완전요인은 일반 완전요인 설계의 한 형태입니다.
         연속 요인의 2차 곡률 최적화가 목적이면 반응표면법을 검토하세요.
       </div>
-      {validation.message !== null ? <div className="notice-box notice-warning">{validation.message}</div> : null}
+      {validation.issue !== null ? <div className="notice-box notice-warning">{generalFactorialDraftIssueLabel(validation.issue, locale)}</div> : null}
       {error !== null ? <div className="error-box">오류 코드: {error}</div> : null}
       <DoeActionBar summary={`최대 256 runs · 현재 ${validation.runCount.toLocaleString()} runs`}>
         <button className="primary-button" disabled={pending !== null || validation.request === null} onClick={() => void onCreate()} type="button">
@@ -678,7 +681,7 @@ function changeGeneralLevelCount(factor: GeneralFactorDraft, requestedCount: num
     if (
       removed.length > 0 &&
       !window.confirm(
-        resolveLocalizedText(`제거될 수준: ${removed.join(", ")}\n계속하시겠습니까?`),
+        `${translateSystemText("제거될 수준:")} ${removed.join(", ")}\n${translateSystemText("계속하시겠습니까?")}`,
       )
     ) return;
   }
@@ -691,7 +694,7 @@ function applyThreeLevelPreset(factors: GeneralFactorDraft[], setter: Dispatch<S
   if (
     factors.some((factor) => factor.levels.length > 3) &&
     !window.confirm(
-      resolveLocalizedText("3수준으로 줄이면 일부 중간 수준이 제거됩니다. 계속하시겠습니까?"),
+      translateSystemText("3수준으로 줄이면 일부 중간 수준이 제거됩니다. 계속하시겠습니까?"),
     )
   ) return;
   setter((current) => current.map((factor) => {

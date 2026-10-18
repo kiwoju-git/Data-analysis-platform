@@ -1,3 +1,6 @@
+import { translateSystemText as systemText } from "./i18n/translate";
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+
 import { PredictionIntervalChart } from "./charts/PredictionIntervalChart";
 import type {
   DatasetVersionCatalogItem,
@@ -259,7 +262,7 @@ export function RegressionPredictionPanel({
               <strong>Source 회귀모형 재적합 필요</strong>
               <ul>
                 {groupedIssues.sourceBlockers.map((issue, index) => (
-                  <li key={`${issue.code}-${index}`}>{issue.message}<span className="cell-subtle">{issue.code}</span></li>
+                  <li key={`${issue.code}-${index}`}><ApiNoticeText notice={issue} showCode={false} /><span className="cell-subtle">{issue.code}</span></li>
                 ))}
               </ul>
             </div>
@@ -305,7 +308,7 @@ export function RegressionPredictionPanel({
           {groupedIssues.otherIssues.length > 0 ? (
             <ul className="warning-list" aria-label="예측 사전점검 문제">
               {groupedIssues.otherIssues.map((issue, index) => (
-                <li key={`${issue.code}-${index}`}>[{issue.severity}] {issue.message}<span className="cell-subtle">{issue.display_name ?? issue.code}{issue.count !== null ? ` · ${issue.count.toLocaleString()}건` : ""}</span></li>
+                <li key={`${issue.code}-${index}`}>[{issue.severity}] <ApiNoticeText notice={issue} /><span className="cell-subtle">{issue.display_name ?? ""}{issue.count !== null ? ` · ${issue.count.toLocaleString()}건` : ""}</span></li>
               ))}
             </ul>
           ) : null}
@@ -363,7 +366,7 @@ export function RegressionPredictionPanel({
           </div>
           {predictionExportState.error !== null ? <div className="error-box" role="alert">예측 CSV export 실패: {predictionExportState.error}</div> : null}
           {prediction.warnings.length > 0 ? (
-            <ul className="warning-list" aria-label="예측 경고">{prediction.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}>[{warning.severity}] {warning.message}<span className="cell-subtle">{warning.code}</span></li>)}</ul>
+            <ul className="warning-list" aria-label="예측 경고">{prediction.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}>[{warning.severity}] <ApiNoticeText notice={warning} showCode={false} /><span className="cell-subtle">{warning.code}</span></li>)}</ul>
           ) : null}
           <div className="result-section" aria-label="예측 구간 차트 결과">
             <div className="panel-heading"><div><h4>예측 구간 차트</h4><p>Predicted mean · mean CI · prediction interval</p></div></div>
@@ -408,18 +411,18 @@ function PredictionMappingTable({
 }
 
 function targetLabel(target: DatasetVersionCatalogItem) {
-  return `${target.original_filename} · v${target.version_number} · ${target.row_count.toLocaleString()}행 × ${target.column_count.toLocaleString()}열 · ${shortId(target.version_id)}`;
+  return `${target.original_filename} · v${target.version_number} · ${target.row_count.toLocaleString()}${systemText("행 × ")}${target.column_count.toLocaleString()}${systemText("열 · ")}${shortId(target.version_id)}`;
 }
 
 function predictorKind(value: string) {
-  return value === "numeric" ? "숫자형" : "범주형";
+  return value === "numeric" ? systemText("숫자형") : systemText("범주형");
 }
 
 function matchType(value: string) {
-  if (value === "column_id") return "컬럼 ID";
-  if (value === "display_name") return "표시명";
-  if (value === "ambiguous") return "표시명 중복";
-  return "없음";
+  if (value === "column_id") return systemText("컬럼 ID");
+  if (value === "display_name") return systemText("표시명");
+  if (value === "ambiguous") return systemText("표시명 중복");
+  return systemText("없음");
 }
 
 function shortId(value: string) {

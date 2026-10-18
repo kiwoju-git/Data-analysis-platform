@@ -1,3 +1,4 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import { ChartSourceContext } from "./charts/chartSourceContext";
 import type {
   AnalysisMethodDescriptor,
@@ -23,7 +24,7 @@ import { paddedNumericRange } from "./charts/chartScale";
 import { formatLocalDateTime } from "./dateFormat";
 import {
   graphBuilderDefinition,
-  graphBuilderDefinitions,
+  localizedGraphBuilderDefinitions,
 } from "./graphBuilderRegistry";
 import {
   graphPreviewGridClassName,
@@ -31,6 +32,7 @@ import {
 } from "./graphBuilderLayout";
 import { graphBuilderColumns, useGraphBuilderState } from "./useGraphBuilderState";
 import { NavigationIcon } from "./components/NavigationIcon";
+import { useI18n } from "./i18n/LocaleProvider";
 
 interface GraphBuilderPageProps {
   catalog: AnalysisMethodListResponse | null;
@@ -43,8 +45,9 @@ export function GraphBuilderPage({
   version,
   onOpenAnalysis,
 }: GraphBuilderPageProps) {
+  const { locale } = useI18n();
   const state = useGraphBuilderState(version);
-  const definition = graphBuilderDefinition(state.graphType);
+  const definition = graphBuilderDefinition(state.graphType, locale);
   const roleColumns = graphBuilderColumns(version);
   const supportsGroupedComparison = [
     "box_plot",
@@ -84,7 +87,7 @@ export function GraphBuilderPage({
           <section className="surface-section" aria-labelledby="graph-type-title">
             <h3 id="graph-type-title">그래프 유형</h3>
             <div className="graph-type-grid">
-              {graphBuilderDefinitions.map((item) => (
+              {localizedGraphBuilderDefinitions(locale).map((item) => (
                 <button
                   aria-pressed={state.graphType === item.graphType}
                   className={
@@ -514,15 +517,15 @@ function ScatterPanel({ panel }: { panel: ScatterPreviewPanel }) {
   const result = panel.result;
   if (result === null) return null;
   const points: InteractiveScatterPoint[] = result.points.map((point, index) => ({
-    ariaLabel: `${panel.label} 점 ${index + 1}, X ${formatNumber(point.x)}, Y ${formatNumber(point.y)}`,
+    ariaLabel: `${panel.label}${systemText(" 점 ")}${index + 1}, X ${formatNumber(point.x)}, Y ${formatNumber(point.y)}`,
     className: "interactive-chart-point",
     details: [
       { label: "X", value: formatNumber(point.x) },
       { label: "Y", value: formatNumber(point.y) },
-      { label: "그룹", value: point.group ?? "-" },
+      { label: systemText("그룹"), value: point.group ?? "-" },
     ],
     id: `${panel.panel_id}-${index}`,
-    title: `${panel.label} 점 ${index + 1}`,
+    title: `${panel.label}${systemText(" 점 ")}${index + 1}`,
     x: point.x,
     y: point.y,
   }));
@@ -625,14 +628,12 @@ function SequenceChart({
   referenceLines: ScatterReferenceLine[];
 }) {
   const interactivePoints: InteractiveScatterPoint[] = points.map((point, index) => ({
-    ariaLabel: `${label} 위치 ${point.position}, 값 ${formatNumber(point.value)}${
-      point.signalCodes.length ? `, 신호 ${point.signalCodes.join(", ")}` : ""
-    }`,
+    ariaLabel: `${label}${systemText(" 위치 ")}${point.position}${systemText(", 값 ")}${formatNumber(point.value)}${point.signalCodes.length ? `, 신호 ${point.signalCodes.join(", ")}` : ""}`,
     className: "interactive-chart-point",
     details: [
-      { label: "위치", value: point.position.toLocaleString() },
-      { label: "값", value: formatNumber(point.value) },
-      { label: "신호", value: point.signalCodes.join(", ") || "없음" },
+      { label: systemText("위치"), value: point.position.toLocaleString() },
+      { label: systemText("값"), value: formatNumber(point.value) },
+      { label: systemText("신호"), value: point.signalCodes.join(", ") || systemText("없음") },
     ],
     id: `${chartId}-${index}`,
     title: `${label} ${point.position}`,
@@ -709,18 +710,18 @@ function AnalysisOnlyGraphLinks({
 
 function validationMessage(code: string): string {
   const messages: Record<string, string> = {
-    dataset_version_required: "데이터셋 버전을 먼저 생성하세요.",
+    dataset_version_required: systemText("데이터셋 버전을 먼저 생성하세요."),
     graph_builder_group_requires_one_value:
-      "현재는 여러 수치 변수 비교 또는 한 수치 변수의 그룹 비교 중 하나를 선택합니다.",
-    graph_builder_group_required: "그룹 비교에는 그룹 변수를 선택해야 합니다.",
+      systemText("현재는 여러 수치 변수 비교 또는 한 수치 변수의 그룹 비교 중 하나를 선택합니다."),
+    graph_builder_group_required: systemText("그룹 비교에는 그룹 변수를 선택해야 합니다."),
     graph_builder_group_not_allowed_in_multiple_mode:
-      "여러 수치 변수 비교에서는 그룹 변수를 사용하지 않습니다.",
-    graph_builder_scatter_roles_required: "X 변수 한 개와 Y 변수 한 개 이상을 선택하세요.",
-    graph_builder_scatter_duplicate_columns: "같은 축 역할에 중복 변수를 선택할 수 없습니다.",
-    graph_builder_scatter_same_axis_column: "같은 변수를 X와 Y에 동시에 선택할 수 없습니다.",
-    graph_builder_too_many_values: "이 그래프 유형의 최대 변수 수를 초과했습니다.",
-    graph_builder_value_required: "수치 변수를 한 개 이상 선택하세요.",
-    filter_value_required: "필터 조건 값을 입력하세요.",
+      systemText("여러 수치 변수 비교에서는 그룹 변수를 사용하지 않습니다."),
+    graph_builder_scatter_roles_required: systemText("X 변수 한 개와 Y 변수 한 개 이상을 선택하세요."),
+    graph_builder_scatter_duplicate_columns: systemText("같은 축 역할에 중복 변수를 선택할 수 없습니다."),
+    graph_builder_scatter_same_axis_column: systemText("같은 변수를 X와 Y에 동시에 선택할 수 없습니다."),
+    graph_builder_too_many_values: systemText("이 그래프 유형의 최대 변수 수를 초과했습니다."),
+    graph_builder_value_required: systemText("수치 변수를 한 개 이상 선택하세요."),
+    filter_value_required: systemText("필터 조건 값을 입력하세요."),
   };
   return messages[code] ?? code;
 }
@@ -728,10 +729,10 @@ function validationMessage(code: string): string {
 function graphErrorMessage(code: string): string {
   const messages: Record<string, string> = {
     graph_preview_unit_mismatch:
-      "단위가 다른 변수는 같은 축에서 직접 비교하면 오해할 수 있습니다. 개별 패널을 사용하세요.",
+      systemText("단위가 다른 변수는 같은 축에서 직접 비교하면 오해할 수 있습니다. 개별 패널을 사용하세요."),
     individual_value_point_limit_exceeded:
-      "Individual Value Plot은 현재 최대 2,000개 점을 표시합니다. 필터를 적용하거나 Box Plot/Histogram을 사용하세요.",
-    scatter_point_limit_exceeded: "Scatter Plot 점 수가 표시 한도를 초과했습니다. 필터를 적용하세요.",
+      systemText("Individual Value Plot은 현재 최대 2,000개 점을 표시합니다. 필터를 적용하거나 Box Plot/Histogram을 사용하세요."),
+    scatter_point_limit_exceeded: systemText("Scatter Plot 점 수가 표시 한도를 초과했습니다. 필터를 적용하세요."),
   };
   return messages[code] ?? code;
 }

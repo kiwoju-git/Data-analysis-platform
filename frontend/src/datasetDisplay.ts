@@ -3,6 +3,7 @@ import type {
   DatasetColumnRole,
   DatasetMeasurementLevel,
 } from "./api";
+import { translateSystemText } from "./i18n/translate";
 
 export const measurementLevelOptions: Array<{ value: DatasetMeasurementLevel; label: string }> = [
   { value: "unknown", label: "미정" },
@@ -70,7 +71,7 @@ export function formatProfileSummary(column: DatasetColumnProfile): string {
   const summaries: string[] = [];
   if (column.n_numeric > 0) {
     summaries.push(
-      `평균 ${formatNumber(column.numeric_mean)} · 범위 ${formatNumber(
+      `${translateSystemText("평균")} ${formatNumber(column.numeric_mean)} · ${translateSystemText("범위")} ${formatNumber(
         column.numeric_min,
       )}-${formatNumber(column.numeric_max)}`,
     );
@@ -82,11 +83,13 @@ export function formatProfileSummary(column: DatasetColumnProfile): string {
 }
 
 export function measurementLevelLabel(value: DatasetMeasurementLevel): string {
-  return measurementLevelOptions.find((level) => level.value === value)?.label ?? value;
+  const label = measurementLevelOptions.find((level) => level.value === value)?.label;
+  return label === undefined ? value : translateSystemText(label);
 }
 
 export function roleLabel(value: DatasetColumnRole): string {
-  return columnRoleOptions.find((role) => role.value === value)?.label ?? value;
+  const label = columnRoleOptions.find((role) => role.value === value)?.label;
+  return label === undefined ? value : translateSystemText(label);
 }
 
 export function delimiterLabel(delimiter: string): string {
@@ -111,14 +114,14 @@ function formatDateTimeProfile(profile: DatasetColumnProfile["datetime_profile"]
   }
   const formatCandidates = profile.format_candidates
     .slice(0, 2)
-    .map((candidate) => `${candidate.format} ${candidate.n_matched.toLocaleString()}개`)
+    .map((candidate) => `${candidate.format} ${candidate.n_matched.toLocaleString()}${translateSystemText("개")}`)
     .join(", ");
   const timezoneSummary =
     profile.timezone_aware_count > 0
-      ? ` · TZ ${profile.timezone_aware_count.toLocaleString()}개`
+      ? ` · TZ ${profile.timezone_aware_count.toLocaleString()}${translateSystemText("개")}`
       : "";
   const formatSummary = formatCandidates.length > 0 ? ` · ${formatCandidates}` : "";
-  return `날짜 ${profile.n_datetime.toLocaleString()}개 · ${profile.datetime_min ?? "?"}-${
+  return `${translateSystemText("날짜")} ${profile.n_datetime.toLocaleString()}${translateSystemText("개")} · ${profile.datetime_min ?? "?"}-${
     profile.datetime_max ?? "?"
   }${formatSummary}${timezoneSummary}`;
 }

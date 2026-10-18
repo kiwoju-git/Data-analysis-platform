@@ -1,5 +1,8 @@
 import type { DatasetVersionResponse } from "./api";
 import { formatLocalDateTime } from "./dateFormat";
+import { useI18n } from "./i18n/LocaleProvider";
+import { t, translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 import type { DatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 
 export interface ActiveDatasetVersionSelectorProps {
@@ -19,6 +22,7 @@ export function ActiveDatasetVersionSelector({
   onRetrySwitch,
   onSelect,
 }: ActiveDatasetVersionSelectorProps) {
+  const { locale } = useI18n();
   const selectedVersionId = pendingVersionId ?? version?.version_id ?? "";
   const activeOnCurrentPage = catalogState.catalog?.versions.some(
     (candidate) => candidate.version_id === selectedVersionId,
@@ -56,17 +60,17 @@ export function ActiveDatasetVersionSelector({
             <option value="">데이터셋 버전 선택</option>
             {activeOffPage !== null ? (
               <option value={activeOffPage.version_id}>
-                {catalogItemLabel(activeOffPage)}
+                {catalogItemLabel(activeOffPage, locale)}
               </option>
             ) : null}
             {currentVersionFallback !== null ? (
               <option value={currentVersionFallback.version_id}>
-                {currentVersionLabel(currentVersionFallback)}
+                {currentVersionLabel(currentVersionFallback, locale)}
               </option>
             ) : null}
             {catalogState.catalog?.versions.map((item) => (
               <option key={item.version_id} value={item.version_id}>
-                {catalogItemLabel(item)}
+                {catalogItemLabel(item, locale)}
               </option>
             ))}
           </select>
@@ -159,11 +163,13 @@ export function ActiveDatasetVersionSelector({
   );
 }
 
-function catalogItemLabel(item: NonNullable<DatasetVersionCatalogState["activeItem"]>) {
+function catalogItemLabel(item: NonNullable<DatasetVersionCatalogState["activeItem"]>, locale: AppLocale) {
   const label = item.user_label ?? item.original_filename;
-  return `${label} · ${item.row_count.toLocaleString()}행 · ${item.column_count.toLocaleString()}열 · v${item.version_number} · ${formatLocalDateTime(item.created_at)}`;
+  const size = t("dashboard.datasetSize", { rows: item.row_count.toLocaleString(), columns: item.column_count.toLocaleString() }, locale);
+  return `${label} · ${size} · v${item.version_number} · ${formatLocalDateTime(item.created_at)}`;
 }
 
-function currentVersionLabel(version: DatasetVersionResponse) {
-  return `데이터셋 v${version.version_number} · ${version.row_count.toLocaleString()}행 · ${version.column_count.toLocaleString()}열 · ${formatLocalDateTime(version.created_at)}`;
+function currentVersionLabel(version: DatasetVersionResponse, locale: AppLocale) {
+  const size = t("dashboard.datasetSize", { rows: version.row_count.toLocaleString(), columns: version.column_count.toLocaleString() }, locale);
+  return `${translateSystemText("데이터셋", locale)} v${version.version_number} · ${size} · ${formatLocalDateTime(version.created_at)}`;
 }

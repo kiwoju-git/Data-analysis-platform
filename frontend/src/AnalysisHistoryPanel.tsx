@@ -1,3 +1,4 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import { useState } from "react";
 
 import type {
@@ -491,12 +492,12 @@ export function AnalysisRunDeletionConfirmation({
 
 function analysisRunDeletionBlockerLabel(code: string): string {
   const labels: Record<string, string> = {
-    analysis_run_deletion_status_unsupported: "완료되지 않은 실행",
-    analysis_run_deletion_result_unavailable: "저장 결과 없음",
-    analysis_run_deletion_regression_model_dependency: "저장 회귀모형이 참조 중",
-    analysis_run_deletion_regression_prediction_dependency: "회귀 예측 실행이 참조 중",
-    analysis_run_deletion_limit_set_dependency: "Phase II limit set이 참조 중",
-    analysis_run_deletion_job_dependency: "job audit record가 참조 중",
+    analysis_run_deletion_status_unsupported: systemText("완료되지 않은 실행"),
+    analysis_run_deletion_result_unavailable: systemText("저장 결과 없음"),
+    analysis_run_deletion_regression_model_dependency: systemText("저장 회귀모형이 참조 중"),
+    analysis_run_deletion_regression_prediction_dependency: systemText("회귀 예측 실행이 참조 중"),
+    analysis_run_deletion_limit_set_dependency: systemText("Phase II limit set이 참조 중"),
+    analysis_run_deletion_job_dependency: systemText("job audit record가 참조 중"),
   };
   return labels[code] ?? code;
 }

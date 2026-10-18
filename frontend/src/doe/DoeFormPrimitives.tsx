@@ -1,4 +1,6 @@
 import { useId, type ReactNode } from "react";
+import { useI18n } from "../i18n/LocaleProvider";
+import { translateSystemText } from "../i18n/translate";
 
 export function DoeFormSection({
   children,
@@ -27,7 +29,7 @@ export function DoeFactorEditor({
   action,
   children,
   description,
-  title = "요인 범위",
+  title,
 }: {
   action?: ReactNode;
   children: ReactNode;
@@ -35,6 +37,7 @@ export function DoeFactorEditor({
   title?: string;
 }) {
   const headingId = useId();
+  const { locale } = useI18n();
   return (
     <section
       className="doe-compact-section doe-factor-editor"
@@ -42,7 +45,7 @@ export function DoeFactorEditor({
     >
       <div className="doe-compact-section-heading">
         <div>
-          <h4 id={headingId}>{title}</h4>
+          <h4 id={headingId}>{title ?? translateSystemText("요인 범위", locale)}</h4>
           {description ? <p>{description}</p> : null}
         </div>
         {action}

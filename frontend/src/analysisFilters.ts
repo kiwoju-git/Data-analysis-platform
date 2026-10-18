@@ -3,6 +3,8 @@ import type {
   AnalysisFilterOperator,
   DatasetColumnResponse,
 } from "./api";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 export interface AnalysisFilterDraft {
   id: string;
@@ -48,10 +50,11 @@ export function createDefaultFilterDraft(
   };
 }
 
-export function filterOperatorOptions(column: DatasetColumnResponse): FilterOperatorOption[] {
-  return isNumericColumn(column)
+export function filterOperatorOptions(column: DatasetColumnResponse, locale?: AppLocale): FilterOperatorOption[] {
+  const options = isNumericColumn(column)
     ? [...baseOperatorOptions, ...numericOperatorOptions]
     : baseOperatorOptions;
+  return options.map((option) => ({ ...option, label: translateSystemText(option.label, locale) }));
 }
 
 export function filterOperatorRequiresValue(operator: AnalysisFilterOperator): boolean {

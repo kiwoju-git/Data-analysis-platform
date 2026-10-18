@@ -1,3 +1,8 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
@@ -91,7 +96,7 @@ export function EqualVariancesPanel({
           ) : null}
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
-              {analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}>{warning.message}</li>)}
+              {analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>)}
             </ul>
           ) : null}
           {result !== null ? <EqualVarianceResults result={result} /> : null}
@@ -102,6 +107,7 @@ export function EqualVariancesPanel({
 }
 
 function EqualVarianceResults({ result }: { result: EqualVariancesResult }) {
+  const { locale } = useI18n();
   const isCurrent = result.schema_version >= 2 && result.multiple_comparisons && result.levene;
   return (
     <>
@@ -120,11 +126,11 @@ function EqualVarianceResults({ result }: { result: EqualVariancesResult }) {
                   <td>다중 비교</td><td>-</td>
                   <td>{formatAnalysisNumber(result.multiple_comparisons!.p_value)}</td>
                   <td>{formatAnalysisNumber(result.multiple_comparisons!.alpha)}</td>
-                  <td>{decisionLabel(result.multiple_comparisons!.reject_equal_variances)}</td>
+                  <td>{decisionLabel(result.multiple_comparisons!.reject_equal_variances, locale)}</td>
                 </tr>
                 <TestRow label="Levene 검정 (Brown-Forsythe)" test={result.levene!} />
               </>
-            ) : result.tests.map((test) => <TestRow key={test.method} label={legacyMethodLabel(test)} test={test} />)}
+            ) : result.tests.map((test) => <TestRow key={test.method} label={legacyMethodLabel(test, locale)} test={test} />)}
           </tbody>
         </table>
       </div>
@@ -161,18 +167,19 @@ function EqualVarianceResults({ result }: { result: EqualVariancesResult }) {
 }
 
 function TestRow({ label, test }: { label: string; test: EqualVarianceTestResult }) {
-  return <tr><td>{label}</td><td>{formatAnalysisNumber(test.statistic)}</td><td>{formatAnalysisNumber(test.p_value)}</td><td>{formatAnalysisNumber(test.alpha)}</td><td>{decisionLabel(test.reject_equal_variances)}</td></tr>;
+  const { locale } = useI18n();
+  return <tr><td>{label}</td><td>{formatAnalysisNumber(test.statistic)}</td><td>{formatAnalysisNumber(test.p_value)}</td><td>{formatAnalysisNumber(test.alpha)}</td><td>{decisionLabel(test.reject_equal_variances, locale)}</td></tr>;
 }
 
-function legacyMethodLabel(test: EqualVarianceTestResult): string {
+function legacyMethodLabel(test: EqualVarianceTestResult, locale: AppLocale): string {
   if (test.method === "brown_forsythe") return "Brown-Forsythe";
-  if (test.method === "levene_mean") return "Levene (평균 중심, legacy)";
+  if (test.method === "levene_mean") return translateSystemText("Levene (평균 중심, legacy)", locale);
   return test.method;
 }
 
-function decisionLabel(rejectEqualVariances: boolean | null): string {
-  if (rejectEqualVariances === null) return "계산 불가";
-  return rejectEqualVariances ? "등분산 기각" : "기각하지 않음";
+function decisionLabel(rejectEqualVariances: boolean | null, locale: AppLocale): string {
+  if (rejectEqualVariances === null) return translateSystemText("계산 불가", locale);
+  return translateSystemText(rejectEqualVariances ? "등분산 기각" : "기각하지 않음", locale);
 }
 
 function formatAnalysisNumber(value: number | null): string {

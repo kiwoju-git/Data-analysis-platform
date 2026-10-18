@@ -2,8 +2,11 @@ import type { BayesianStudyResponse } from "../../api";
 import { apiRoutes } from "../../api/routes";
 import { formatDoeFactorValue } from "../../doe/factorDomain";
 import { constraintText } from "./bayesianDisplay";
+import { useI18n } from "../../i18n/LocaleProvider";
+import { translateSystemText } from "../../i18n/translate";
 
 export function BayesianStudySummary({ study }: { study: BayesianStudyResponse }) {
+  const { locale } = useI18n();
   const initialTrials = study.trials.filter((trial) => trial.origin === "initial_design");
   const completedInitialTrials = initialTrials.filter(
     (trial) => trial.state === "completed",
@@ -24,7 +27,7 @@ export function BayesianStudySummary({ study }: { study: BayesianStudyResponse }
         </div>
       </div>
       <div className="info-box">
-        <strong>현재 단계: {phase}</strong>
+        <strong>현재 단계: {translateSystemText(phase, locale)}</strong>
         <p>
           초기 실험 {completedInitialTrials} / {initialTrials.length} 완료
           {pendingInitialTrials > 0
@@ -43,13 +46,13 @@ export function BayesianStudySummary({ study }: { study: BayesianStudyResponse }
         <span>최적화 목표</span>
         <strong>
           {study.objective.goal_type === "match_target"
-            ? `${study.objective.name} 목표 ${study.objective.target_value}${
+            ? `${study.objective.name} ${translateSystemText("목표", locale)} ${study.objective.target_value}${
                 study.objective.target_tolerance === null
                   ? ""
                   : ` ± ${study.objective.target_tolerance}`
               }`
             : `${study.objective.name} ${
-                study.objective.goal_type === "maximize" ? "최대화" : "최소화"
+                translateSystemText(study.objective.goal_type === "maximize" ? "최대화" : "최소화", locale)
               }`}
         </strong>
         <span>초기 설계</span>

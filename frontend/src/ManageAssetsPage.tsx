@@ -1,3 +1,4 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import type {
@@ -81,7 +82,7 @@ export function ManageAssetsPage({
             role="tab"
             type="button"
           >
-            {label}
+            {systemText(label)}
           </button>
         ))}
       </div>
@@ -168,7 +169,7 @@ function DatasetManagementPanel({
             onClick={() => state.onDatasetVisibilityChange(visibility)}
             type="button"
           >
-            {label}
+            {systemText(label)}
           </button>
         ))}
       </div>
@@ -432,7 +433,7 @@ function RegressionModelManagementPanel({
             </thead>
             <tbody>
               {state.modelCatalog.models.map((item) => {
-                const fallback = `${item.response?.display_name ?? "반응 metadata 확인 필요"} · predictor ${item.predictor_count ?? "?"}개`;
+                const fallback = `${item.response?.display_name ?? systemText("반응 metadata 확인 필요")} · predictor ${item.predictor_count ?? "?"}`;
                 const isSelected = selectedModelId === item.model_id;
                 const detailId = `model-inline-detail-${item.model_id}`;
                 return (
@@ -524,7 +525,7 @@ function ModelAssetEditor({
       onDeleted();
     }
   }, [onDeleted, retention.deletion]);
-  const fallback = `${item.response?.display_name ?? "반응 metadata 확인 필요"} · predictor ${item.predictor_count ?? "?"}개`;
+  const fallback = `${item.response?.display_name ?? systemText("반응 metadata 확인 필요")} · predictor ${item.predictor_count ?? "?"}`;
   return (
     <article className="asset-management-item">
       <div className="asset-management-summary">
@@ -1026,23 +1027,23 @@ export function DatasetDeletionImpact({
 }
 
 function integrityIssueTitle(code: string): string {
-  if (code === "dataset_version_path_invalid") return "저장 경로 검증 실패";
-  if (code === "dataset_version_artifact_mismatch") return "저장 파일 무결성 불일치";
-  if (code === "dataset_version_file_missing") return "저장 파일 누락";
-  return "저장 자산 무결성 확인 필요";
+  if (code === "dataset_version_path_invalid") return systemText("저장 경로 검증 실패");
+  if (code === "dataset_version_artifact_mismatch") return systemText("저장 파일 무결성 불일치");
+  if (code === "dataset_version_file_missing") return systemText("저장 파일 누락");
+  return systemText("저장 자산 무결성 확인 필요");
 }
 
 function integrityIssueDescription(code: string): string {
   if (code === "dataset_version_path_invalid") {
-    return "일부 저장 위치 정보가 안전한 workspace 규칙과 일치하지 않습니다. 외부 파일을 잘못 삭제하지 않도록 물리 파일 삭제를 중단했습니다.";
+    return systemText("일부 저장 위치 정보가 안전한 workspace 규칙과 일치하지 않습니다. 외부 파일을 잘못 삭제하지 않도록 물리 파일 삭제를 중단했습니다.");
   }
   if (code === "dataset_version_artifact_mismatch") {
-    return "저장 파일의 크기 또는 checksum이 등록 당시 정보와 다릅니다.";
+    return systemText("저장 파일의 크기 또는 checksum이 등록 당시 정보와 다릅니다.");
   }
   if (code === "dataset_version_file_missing") {
-    return "등록된 저장 파일 중 일부를 찾을 수 없습니다.";
+    return systemText("등록된 저장 파일 중 일부를 찾을 수 없습니다.");
   }
-  return "검증되지 않은 파일은 삭제하지 않고 보존합니다.";
+  return systemText("검증되지 않은 파일은 삭제하지 않고 보존합니다.");
 }
 
 function dependencyLabel(
@@ -1052,13 +1053,13 @@ function dependencyLabel(
     import("./api").DatasetDeletionDependencyAssetType,
     string
   > = {
-    analysis_run: "분석 결과",
-    regression_model: "회귀모델",
-    prediction: "예측 결과",
-    analysis_export: "리포트/내보내기",
-    attribute_control_limit_set: "관리한계",
-    phase_2_analysis: "Phase II 분석",
-    job: "Job 기록",
+    analysis_run: systemText("분석 결과"),
+    regression_model: systemText("회귀모델"),
+    prediction: systemText("예측 결과"),
+    analysis_export: systemText("리포트/내보내기"),
+    attribute_control_limit_set: systemText("관리한계"),
+    phase_2_analysis: systemText("Phase II 분석"),
+    job: systemText("Job 기록"),
   };
   return labels[assetType];
 }
@@ -1140,16 +1141,16 @@ function regressionModelPredictionUrl(item: RegressionModelCatalogItem): string 
 }
 
 function availabilityLabel(value: RegressionModelCatalogItem["availability"]) {
-  if (value === "available") return "사용 가능";
+  if (value === "available") return systemText("사용 가능");
   if (value === "source_stale") return "source stale";
-  return "무결성 오류";
+  return systemText("무결성 오류");
 }
 
 function AssetManagementErrorNotice({ error }: { error: AssetManagementError }) {
   return (
     <div className="error-box asset-management-error" role="alert">
-      <strong>{error.title}</strong>
-      <p>{error.message}</p>
+      <strong>{systemText(error.title)}</strong>
+      <p>{systemText(error.message)}</p>
       <span className="field-note">오류 코드: {error.code}</span>
       {error.correlationId !== null ? (
         <span className="field-note">요청 ID: {error.correlationId}</span>

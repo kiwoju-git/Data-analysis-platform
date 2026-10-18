@@ -1,3 +1,4 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -275,11 +276,11 @@ function sourceLabel(source: DoeResponseSurfaceAnalysisCatalogItem): string {
 
 function eligibilityLabel(value: DoeResponseSurfaceAnalysisCatalogItem["eligibility_status"]): string {
   switch (value) {
-    case "eligible": return "실행 가능";
-    case "acknowledgment_required": return "확인 필요";
-    case "ineligible": return "차단됨";
-    case "integrity_error": return "무결성 오류";
-    case "incompatible_method_version": return "버전 불일치";
+    case "eligible": return systemText("실행 가능");
+    case "acknowledgment_required": return systemText("확인 필요");
+    case "ineligible": return systemText("차단됨");
+    case "integrity_error": return systemText("무결성 오류");
+    case "incompatible_method_version": return systemText("버전 불일치");
   }
 }
 

@@ -29,8 +29,9 @@ export function t(
 export function resolveLocalizedText(value: string, locale = getCurrentLocale()): string {
   if (!value.includes(TOKEN_PREFIX)) return value;
   const dictionary = locale === "ko" ? catalog.ko : catalog.en;
-  return value.replace(tokenPattern, (_match, requestedKey: string) => {
+  return value.replace(tokenPattern, (match, requestedKey: string) => {
     const key = requestedKey as TranslationKey;
+    if (!Object.prototype.hasOwnProperty.call(catalog.en, key)) return match;
     return dictionary[key] ?? catalog.en[key] ?? (import.meta.env.DEV ? `[missing:${key}]` : key);
   });
 }
@@ -39,6 +40,7 @@ export function translateKnownSource(
   source: string,
   locale: AppLocale = getCurrentLocale(),
 ): string | null {
+  if (!Object.prototype.hasOwnProperty.call(catalog.sourceToKey, source)) return null;
   const key = catalog.sourceToKey[source as keyof typeof catalog.sourceToKey] as
     | TranslationKey
     | undefined;
@@ -50,4 +52,13 @@ function interpolate(template: string, params: TranslationParams): string {
     const value = params[name];
     return value === undefined ? match : String(value);
   });
+}
+
+// Only trusted static UI catalogs may use this boundary, never API/user data.
+export function translateSystemText(source: string, locale: AppLocale = getCurrentLocale()): string {
+  const normalized = source.replace(/\s+/gu, " ").trim();
+  const translated = translateKnownSource(normalized, locale);
+  if (translated === null) return resolveLocalizedText(source, locale);
+  return source.slice(0, source.length - source.trimStart().length)
+    + translated + source.slice(source.trimEnd().length);
 }

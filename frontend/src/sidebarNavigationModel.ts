@@ -13,7 +13,7 @@ import {
 import { analysisMethodPlacement } from "./analysisDomainMapping";
 import { methodLabel } from "./i18n/catalogLabels";
 import { getCurrentLocale } from "./i18n/store";
-import { t } from "./i18n/translate";
+import { t, translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
 
 export interface SidebarNavigationItem {
@@ -101,7 +101,7 @@ export function createSidebarNavigationGroups({
       children: [],
       direct: true,
       id: "home",
-      label: "홈",
+      label: translateSystemText("홈", locale),
       onActivate: onOpenProject,
     },
     {
@@ -112,12 +112,12 @@ export function createSidebarNavigationGroups({
       ].map(([id, label]) => ({
         active: activePage === "dataset" && datasetSection === id,
         id,
-        label,
+        label: translateSystemText(label, locale),
         onActivate: () =>
           onOpenDatasetSection(id as DatasetSidebarSection),
       })),
       id: "dataset",
-      label: "데이터셋",
+      label: translateSystemText("데이터셋", locale),
     },
     {
       active: activePage === "analysis",
@@ -142,7 +142,7 @@ export function createSidebarNavigationGroups({
         };
       }),
       id: "analysis",
-      label: "분석",
+      label: translateSystemText("분석", locale),
       onActivate: onOpenAnalysis,
     },
     {
@@ -151,12 +151,12 @@ export function createSidebarNavigationGroups({
         {
           active: activePage === "graphs",
           id: "graph-builder",
-          label: "그래프 작성",
+          label: translateSystemText("그래프 작성", locale),
           onActivate: onOpenGraphs,
         },
       ],
       id: "graphs",
-      label: "그래프",
+      label: translateSystemText("그래프", locale),
       onActivate: onOpenGraphs,
     },
     {
@@ -167,11 +167,11 @@ export function createSidebarNavigationGroups({
       ].map(([id, label]) => ({
         active: activePage === "reports" && reportTab === id,
         id,
-        label,
+        label: translateSystemText(label, locale),
         onActivate: () => onOpenReportTab(id as "reports" | "history"),
       })),
       id: "reports",
-      label: "리포트",
+      label: translateSystemText("리포트", locale),
     },
     {
       active: activePage === "manage",
@@ -184,14 +184,14 @@ export function createSidebarNavigationGroups({
       ].map(([id, label]) => ({
         active: activePage === "manage" && manageTab === id,
         id,
-        label,
+        label: translateSystemText(label, locale),
         onActivate: () =>
           onOpenManageTab(
             id as "all" | "datasets" | "analyses" | "models" | "designs",
           ),
       })),
       id: "manage",
-      label: "관리",
+      label: translateSystemText("관리", locale),
     },
     {
       active: activePage === "help",
@@ -203,12 +203,12 @@ export function createSidebarNavigationGroups({
       ].map(([id, label]) => ({
         active: activePage === "help" && helpSection === id,
         id,
-        label,
+        label: translateSystemText(label, locale),
         onActivate: () =>
           onOpenHelpSection(id as "purpose" | "roles" | "methods" | "tutorial"),
       })),
       id: "help",
-      label: "도움말",
+      label: translateSystemText("도움말", locale),
     },
   ];
 }

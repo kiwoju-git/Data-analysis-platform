@@ -11,11 +11,16 @@ import {
 } from "./api/regression";
 import { RegressionPredictionResultsTable } from "./RegressionPredictionResultsTable";
 import { useI18n } from "./i18n/LocaleProvider";
-
-interface ManualRow {
-  id: string;
-  values: Record<string, string>;
-}
+import { translateSystemText } from "./i18n/translate";
+import {
+  manualPredictionErrorDisplay,
+  manualPredictionValidationMessage,
+  parseImportedRows,
+  serializeRows,
+  validateRows,
+  type ManualPredictionError,
+  type ManualRow,
+} from "./regressionManualPredictionInput";
 
 interface Props {
   modelAvailable?: boolean;
@@ -26,7 +31,7 @@ export function RegressionManualPredictionPanel({
   modelAvailable = true,
   modelResult,
 }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const nextRowId = useRef(2);
   const [rows, setRows] = useState<ManualRow[]>([emptyRow("manual-row-1", modelResult)]);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -38,7 +43,8 @@ export function RegressionManualPredictionPanel({
     useState<RegressionPastedPredictionResponse | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ManualPredictionError | null>(null);
+  const errorDisplay = error === null ? null : manualPredictionErrorDisplay(error, locale);
   const manifest = modelResult.model_manifest;
   const domains = useMemo(
     () =>
@@ -116,13 +122,13 @@ export function RegressionManualPredictionPanel({
         expected_model_manifest_sha256: manifest.manifest_sha256,
       });
       if (response.row_count_usable !== rows.length) {
-        setError("입력한 행 중 점검을 통과하지 못한 행이 있어 전체 예측을 차단했습니다.");
+        setError({ kind: "validation", code: "incomplete_preflight" });
         setPreflight(response);
         return;
       }
       setPreflight(response);
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError({ kind: "request", cause: caught });
       setPreflight(null);
     } finally {
       setIsChecking(false);
@@ -148,13 +154,13 @@ export function RegressionManualPredictionPanel({
         include_intervals: !("regularization" in modelResult),
       });
       if (response.row_count_predicted !== rows.length) {
-        setError("일부 행만 예측된 응답은 저장 결과로 표시하지 않습니다.");
+        setError({ kind: "validation", code: "incomplete_prediction" });
         setPrediction(null);
         return;
       }
       setPrediction(response);
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError({ kind: "request", cause: caught });
       setPrediction(null);
     } finally {
       setIsPredicting(false);
@@ -164,7 +170,7 @@ export function RegressionManualPredictionPanel({
   function importPaste(): void {
     const imported = parseImportedRows(pasteContent, pasteHasHeader, modelResult);
     if (imported.error !== null) {
-      setError(imported.error);
+      setError({ kind: "validation", code: imported.error });
       return;
     }
     setRows(
@@ -218,7 +224,7 @@ export function RegressionManualPredictionPanel({
                         <select
                           aria-describedby={issue ? `${inputId}-error` : undefined}
                           aria-invalid={issue ? true : undefined}
-                          aria-label={`${rowIndex + 1}행 ${predictor.display_name}`}
+                          aria-label={t("prediction.manual.rowLabel", { row: rowIndex + 1, predictor: predictor.display_name })}
                           id={inputId}
                           value={row.values[predictor.column_id] ?? ""}
                           onChange={(event) => updateValue(row.id, predictor.column_id, event.currentTarget.value)}
@@ -230,7 +236,7 @@ export function RegressionManualPredictionPanel({
                         <input
                           aria-describedby={issue ? `${inputId}-error` : undefined}
                           aria-invalid={issue ? true : undefined}
-                          aria-label={`${rowIndex + 1}행 ${predictor.display_name}`}
+                          aria-label={t("prediction.manual.rowLabel", { row: rowIndex + 1, predictor: predictor.display_name })}
                           id={inputId}
                           inputMode={domain?.integer_only ? "numeric" : "decimal"}
                           type="text"
@@ -238,7 +244,7 @@ export function RegressionManualPredictionPanel({
                           onChange={(event) => updateValue(row.id, predictor.column_id, event.currentTarget.value)}
                         />
                       )}
-                      {issue ? <small className="field-error" id={`${inputId}-error`}>{issue}</small> : null}
+                      {issue ? <small className="field-error" id={`${inputId}-error`}>{manualPredictionValidationMessage(issue, locale)}</small> : null}
                       {domain?.kind === "numeric" && domain.minimum !== undefined && domain.maximum !== undefined ? (
                         <small className="cell-subtle">학습 {formatNumber(domain.minimum)} ~ {formatNumber(domain.maximum)}</small>
                       ) : null}
@@ -246,7 +252,7 @@ export function RegressionManualPredictionPanel({
                   );
                 })}
                 <td>{rowHasIssue(row.id, issues) ? "확인 필요" : "입력 완료"}</td>
-                <td><button aria-label={`${rowIndex + 1}행 삭제`} className="secondary-button compact-button" onClick={() => removeRow(row.id)} type="button">삭제</button></td>
+                <td><button aria-label={t("prediction.manual.deleteRow", { row: rowIndex + 1 })} className="secondary-button compact-button" onClick={() => removeRow(row.id)} type="button">삭제</button></td>
               </tr>
             ))}
           </tbody>
@@ -270,14 +276,18 @@ export function RegressionManualPredictionPanel({
       ) : null}
       <div className="doe-action-bar">
         <div className="doe-validation-summary">
-          {issues.size > 0 ? `수정할 cell ${issues.size.toLocaleString()}개` : `예측 조건 ${rows.length.toLocaleString()}행`}
+          {issues.size > 0
+            ? `${translateSystemText("수정할 cell", locale)} ${issues.size.toLocaleString()} ${translateSystemText("개", locale)}`
+            : `${translateSystemText("예측 조건", locale)} ${rows.length.toLocaleString()} ${translateSystemText("행", locale)}`}
         </div>
         <div className="button-row">
           <button className="secondary-button" disabled={!canCheck} onClick={() => void runPreflight()} type="button">{isChecking ? "점검 중" : "전체 사전점검"}</button>
           <button className="primary-button" disabled={!canPredict} onClick={() => void runPrediction()} type="button">{isPredicting ? "예측 중" : "전체 예측 실행"}</button>
         </div>
       </div>
-      {error ? <div className="error-box" role="alert">{error}</div> : null}
+      {errorDisplay ? <div className="error-box" role="alert">{errorDisplay.message}
+        {error?.kind === "request" ? <span className="cell-subtle">{errorDisplay.code}{errorDisplay.correlationId ? ` (${errorDisplay.correlationId})` : ""}</span> : null}
+      </div> : null}
       {preflight ? <div className={canPredict ? "success-box" : "error-box"} role="status">사용 가능 {preflight.row_count_usable.toLocaleString()} / 전체 {preflight.row_count_total.toLocaleString()}행</div> : null}
       {prediction ? <ManualPredictionResults prediction={prediction} /> : null}
       {"regularization" in modelResult ? <div className="notice-box">{t("reg.pointOnly")} {t("reg.assumptions")}</div> :
@@ -301,65 +311,10 @@ function emptyRow(id: string, result: LinearModelResult): ManualRow {
   return { id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, ""])) };
 }
 
-function validateRows(
-  rows: ManualRow[],
-  result: LinearModelResult,
-  domains: Map<string, NonNullable<LinearModelResult["training_domain"]>["predictors"][number]>,
-): Map<string, string> {
-  const issues = new Map<string, string>();
-  rows.forEach((row) => result.predictors.forEach((predictor) => {
-    const value = (row.values[predictor.column_id] ?? "").trim();
-    const key = `${row.id}:${predictor.column_id}`;
-    const domain = domains.get(predictor.column_id);
-    if (value === "") issues.set(key, "필수 값");
-    else if (domain?.kind !== "categorical") {
-      const numeric = Number(value);
-      if (!Number.isFinite(numeric)) issues.set(key, "숫자를 입력하세요");
-      else if (domain?.integer_only && !Number.isInteger(numeric)) issues.set(key, "정수를 입력하세요");
-    } else if (!(domain.levels ?? []).includes(value)) issues.set(key, "학습된 수준을 선택하세요");
-  }));
-  return issues;
-}
-
 function rowHasIssue(rowId: string, issues: Map<string, string>): boolean {
   return [...issues.keys()].some((key) => key.startsWith(`${rowId}:`));
 }
 
-function serializeRows(rows: ManualRow[], result: LinearModelResult): string {
-  const escape = (value: string) => value.replace(/\t|\r|\n/g, " ");
-  return [
-    result.predictors.map((predictor) => escape(predictor.column_id)).join("\t"),
-    ...rows.map((row) => result.predictors.map((predictor) => escape(row.values[predictor.column_id] ?? "")).join("\t")),
-  ].join("\n");
-}
-
-function parseImportedRows(content: string, hasHeader: boolean, result: LinearModelResult): { rows: Array<Record<string, string>>; error: string | null } {
-  const lines = content.replace(/\r\n?/g, "\n").split("\n").filter((line) => line.trim() !== "");
-  if (hasHeader && lines.length === 1) return { rows: [], error: "첫 행을 열 이름으로 사용하도록 설정되어 실제 예측 데이터 행이 없습니다. 첫 행에 열 이름 포함을 해제하세요." };
-  if (lines.length === 0) return { rows: [], error: "붙여넣은 값이 없습니다." };
-  const separator = lines[0].includes("\t") ? "\t" : ",";
-  let cells = lines.map((line) => line.split(separator).map((cell) => cell.trim()));
-  let indexes = result.predictors.map((_, index) => index);
-  if (hasHeader) {
-    const header = cells[0];
-    indexes = result.predictors.map((predictor) => header.findIndex((value) => value === predictor.column_id || value === predictor.display_name));
-    if (indexes.some((index) => index < 0)) return { rows: [], error: "모든 predictor 열 이름을 찾을 수 없습니다." };
-    cells = cells.slice(1);
-  } else if (cells.every((row) => row.length === 1) && cells.length === result.predictors.length) {
-    cells = [cells.map((row) => row[0])];
-  }
-  if (cells.length > 10_000) return { rows: [], error: "예측 조건은 최대 10,000행입니다." };
-  if (cells.some((row) => indexes.some((index) => index >= row.length))) return { rows: [], error: "붙여넣은 열 수와 predictor mapping을 확인하세요." };
-  return {
-    rows: cells.map((row) => Object.fromEntries(result.predictors.map((predictor, index) => [predictor.column_id, row[indexes[index]] ?? ""]))),
-    error: null,
-  };
-}
-
 function formatNumber(value: number): string {
   return Number.isFinite(value) ? value.toLocaleString("ko-KR", { maximumSignificantDigits: 6 }) : "-";
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "regression_manual_prediction_failed";
 }

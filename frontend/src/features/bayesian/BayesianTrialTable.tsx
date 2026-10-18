@@ -3,6 +3,10 @@ import { useMemo, useState } from "react";
 import type { BayesianStudyResponse } from "../../api";
 import { coordinateText, type PendingTrialTransition } from "./bayesianDisplay";
 import { BayesianTrialTransitionConfirmation } from "./BayesianTransitionConfirmations";
+import { useI18n } from "../../i18n/LocaleProvider";
+import { translateSystemText } from "../../i18n/translate";
+import type { AppLocale } from "../../i18n/types";
+import { observationPasteErrorMessage, parseObservationPaste, type ObservationPasteError } from "./bayesianObservationPaste";
 
 export function BayesianTrialTable({
   study,
@@ -35,9 +39,10 @@ export function BayesianTrialTable({
   onCancelTransition: () => void;
   onCancelObservationBatch: () => void;
 }) {
+  const { locale } = useI18n();
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteContent, setPasteContent] = useState("");
-  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [pasteError, setPasteError] = useState<ObservationPasteError | null>(null);
   const pendingTrials = useMemo(
     () => study.trials.filter((trial) => trial.state === "pending").sort((a, b) => a.trial_number - b.trial_number),
     [study.trials],
@@ -71,7 +76,7 @@ export function BayesianTrialTable({
           <h5 id="bayesian-observation-paste-title">관측값 붙여넣기</h5>
           <textarea aria-label="Bayesian 관측값 붙여넣기" rows={6} value={pasteContent} onChange={(event) => { setPasteContent(event.currentTarget.value); setPasteError(null); }} placeholder={"94.1\n95.2\n93.8"} />
           <p>값 한 열은 trial 번호 순서대로, `trial`과 `response` 두 열은 지정한 trial에 적용합니다. 적용 후 일괄 저장 전 다시 확인할 수 있습니다.</p>
-          {pasteError ? <div className="error-box" role="alert">{pasteError}</div> : null}
+          {pasteError ? <div className="error-box" role="alert">{observationPasteErrorMessage(pasteError, locale)}</div> : null}
           <div className="button-row">
             <button className="secondary-button" onClick={() => setPasteOpen(false)} type="button">취소</button>
             <button className="primary-button" disabled={pasteContent.trim() === ""} onClick={applyPaste} type="button">앞 pending trial에 적용</button>
@@ -87,7 +92,7 @@ export function BayesianTrialTable({
                 <td>{trial.trial_number}</td>
                 <td>{trial.origin === "recommendation" ? "추천" : "초기 설계"}</td>
                 <td>{coordinateText(trial.actual_coordinates)}</td>
-                <td>{trialStateLabel(trial.state)}</td>
+                <td>{trialStateLabel(trial.state, locale)}</td>
                 <td>
                   {trial.state === "pending" ? (
                     <input
@@ -133,35 +138,8 @@ export function BayesianTrialTable({
   );
 }
 
-function parseObservationPaste(
-  content: string,
-  pendingTrials: BayesianStudyResponse["trials"],
-): { values: Record<string, string>; error: string | null } {
-  const lines = content.replace(/\r\n?/g, "\n").split("\n").filter((line) => line.trim() !== "");
-  if (lines.length === 0) return { values: {}, error: "붙여넣은 관측값이 없습니다." };
-  const separator = lines[0].includes("\t") ? "\t" : lines[0].includes(",") ? "," : null;
-  let rows = lines.map((line) => separator === null ? [line.trim()] : line.split(separator).map((cell) => cell.trim()));
-  if (rows[0].some((cell) => /trial|response|반응|관측/i.test(cell))) rows = rows.slice(1);
-  if (rows.length === 0) return { values: {}, error: "header 아래에 관측 데이터가 없습니다." };
-  const values: Record<string, string> = {};
-  if (rows.every((row) => row.length === 1)) {
-    if (rows.length > pendingTrials.length) return { values: {}, error: "붙여넣은 값 수가 pending trial 수보다 많습니다." };
-    rows.forEach((row, index) => { values[pendingTrials[index].trial_id] = row[0]; });
-  } else if (rows.every((row) => row.length >= 2)) {
-    const byNumber = new Map(pendingTrials.map((trial) => [String(trial.trial_number), trial]));
-    for (const row of rows) {
-      const trial = byNumber.get(row[0]);
-      if (trial === undefined) return { values: {}, error: `pending Trial ${row[0]}을 찾을 수 없습니다.` };
-      if (trial.trial_id in values) return { values: {}, error: `Trial ${row[0]}이 중복되었습니다.` };
-      values[trial.trial_id] = row[1];
-    }
-  } else return { values: {}, error: "모든 행을 값 한 열 또는 trial/response 두 열로 맞추세요." };
-  if (Object.values(values).some((value) => value === "" || !Number.isFinite(Number(value)))) return { values: {}, error: "유한한 숫자가 아닌 관측값이 있습니다." };
-  return { values, error: null };
-}
-
-function trialStateLabel(state: BayesianStudyResponse["trials"][number]["state"]): string {
-  if (state === "pending") return "대기";
-  if (state === "completed") return "완료";
-  return "실험 포기";
+function trialStateLabel(state: BayesianStudyResponse["trials"][number]["state"], locale: AppLocale): string {
+  if (state === "pending") return translateSystemText("대기", locale);
+  if (state === "completed") return translateSystemText("완료", locale);
+  return translateSystemText("실험 포기", locale);
 }

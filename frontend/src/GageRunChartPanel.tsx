@@ -1,3 +1,7 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+
 import { GageResultChart } from "./charts/GageResultChart";
 import type {
   AnalysisResultEnvelope,
@@ -132,7 +136,7 @@ export function GageRunChartPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -197,7 +201,7 @@ export function GageRunChartPanel({
 
 function ColumnSelect({
   columns,
-  emptyLabel = "선택",
+  emptyLabel,
   label,
   value,
   onChange,
@@ -208,6 +212,7 @@ function ColumnSelect({
   value: string | null;
   onChange: (columnId: string) => void;
 }) {
+  const { locale } = useI18n();
   return (
     <label>
       <span>{label}</span>
@@ -217,7 +222,7 @@ function ColumnSelect({
           onChange(event.currentTarget.value);
         }}
       >
-        <option value="">{emptyLabel}</option>
+        <option value="">{emptyLabel ?? translateSystemText("선택", locale)}</option>
         {columns.map((column) => (
           <option key={column.column_id} value={column.column_id}>
             {column.display_name}

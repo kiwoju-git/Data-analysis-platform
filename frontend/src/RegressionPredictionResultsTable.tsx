@@ -1,3 +1,4 @@
+import { translateSystemText as systemText } from "./i18n/translate";
 import { useState } from "react";
 
 import type {
@@ -177,7 +178,7 @@ function FullPredictionTable({ mappings, rowNumberOffset, rows }: {
 }
 
 function statusLabel(warnings: string[]): string {
-  return warnings.length === 0 ? "범위 안" : warnings.join(", ");
+  return warnings.length === 0 ? systemText("범위 안") : warnings.join(", ");
 }
 
 function formatNumber(value: number): string {

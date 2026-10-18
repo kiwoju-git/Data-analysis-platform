@@ -10,6 +10,9 @@ import {
   type InteractiveScatterPoint,
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 type GraphicalSummaryColumn = GraphicalSummaryResult["columns"][number];
 
@@ -24,6 +27,7 @@ export function GraphicalSummaryColumnVisuals({
   column,
   mode,
 }: GraphicalSummaryColumnVisualsProps) {
+  const { locale } = useI18n();
   const visibleCharts =
     charts ?? (mode === "quick" ? ["histogram", "boxplot"] : ["histogram", "boxplot", "qq", "ecdf"]);
   const chartGridClassName =
@@ -34,7 +38,7 @@ export function GraphicalSummaryColumnVisuals({
   return (
     <section
       className={`graphical-summary-card graphical-summary-card-${mode}`}
-      aria-label={`${column.display_name} 그래프 요약`}
+      aria-label={`${column.display_name} ${translateSystemText("그래프 요약", locale)}`}
     >
       <div className="graphical-card-heading">
         <div>
@@ -80,11 +84,11 @@ export function GraphicalSummaryColumnVisuals({
           </ChartPanel>
         ) : null}
         {visibleCharts.includes("ecdf") ? (
-          <ChartPanel title="ECDF">{renderEcdf(column)}</ChartPanel>
+          <ChartPanel title="ECDF">{renderEcdf(column, locale)}</ChartPanel>
         ) : null}
       </div>
       {column.warnings.length > 0 ? (
-        <ul className="inline-warning-list" aria-label={`${column.display_name} 그래프 경고`}>
+        <ul className="inline-warning-list" aria-label={`${column.display_name} ${translateSystemText("그래프 경고", locale)}`}>
           {column.warnings.map((warning) => (
             <li key={warning}>{warning}</li>
           ))}
@@ -95,8 +99,9 @@ export function GraphicalSummaryColumnVisuals({
 }
 
 function FullGraphicalSummaryColumn({ column }: { column: GraphicalSummaryColumn }) {
+  const { locale } = useI18n();
   return (
-    <section className="graphical-summary-card graphical-summary-card-full" aria-label={`${column.display_name} 그래프 요약`}>
+    <section className="graphical-summary-card graphical-summary-card-full" aria-label={`${column.display_name} ${translateSystemText("그래프 요약", locale)}`}>
       <div className="graphical-card-heading">
         <div>
           <h5>{column.display_name}</h5>
@@ -145,10 +150,10 @@ function FullGraphicalSummaryColumn({ column }: { column: GraphicalSummaryColumn
       ) : null}
       <details className="graphical-summary-extra">
         <summary>추가 그래프: ECDF</summary>
-        <ChartPanel title="ECDF">{renderEcdf(column)}</ChartPanel>
+        <ChartPanel title="ECDF">{renderEcdf(column, locale)}</ChartPanel>
       </details>
       {column.warnings.length > 0 ? (
-        <ul className="inline-warning-list" aria-label={`${column.display_name} 그래프 경고`}>
+        <ul className="inline-warning-list" aria-label={`${column.display_name} ${translateSystemText("그래프 경고", locale)}`}>
           {column.warnings.map((warning) => <li key={warning}>{warning}</li>)}
         </ul>
       ) : null}
@@ -157,31 +162,33 @@ function FullGraphicalSummaryColumn({ column }: { column: GraphicalSummaryColumn
 }
 
 function GraphicalStatisticsPanel({ column }: { column: GraphicalSummaryColumn }) {
+  const { locale } = useI18n();
+  const text = (source: string) => translateSystemText(source, locale);
   const ad = column.anderson_darling;
   return (
-    <section className="graphical-statistics-panel" aria-label={`${column.display_name} 통계 요약`}>
+    <section className="graphical-statistics-panel" aria-label={`${column.display_name} ${translateSystemText("통계 요약", locale)}`}>
       <h6>Anderson-Darling 정규성 검정</h6>
       <DefinitionRows rows={[
         ["A²", formatAnalysisNumber(ad?.statistic ?? null)],
-        ["보정 A²", formatAnalysisNumber(ad?.adjusted_statistic ?? null)],
+        [text("보정 A²"), formatAnalysisNumber(ad?.adjusted_statistic ?? null)],
         ["p-value", formatAnalysisNumber(ad?.p_value ?? null)],
       ]} />
       <h6>기술통계</h6>
       <DefinitionRows rows={[
-        ["평균", formatAnalysisNumber(column.mean ?? null)],
-        ["표준편차", formatAnalysisNumber(column.standard_deviation ?? null)],
-        ["분산", formatAnalysisNumber(column.variance ?? null)],
-        ["왜도", formatAnalysisNumber(column.skewness ?? null)],
-        ["첨도", formatAnalysisNumber(column.kurtosis_excess ?? null)],
+        [text("평균"), formatAnalysisNumber(column.mean ?? null)],
+        [text("표준편차"), formatAnalysisNumber(column.standard_deviation ?? null)],
+        [text("분산"), formatAnalysisNumber(column.variance ?? null)],
+        [text("왜도"), formatAnalysisNumber(column.skewness ?? null)],
+        [text("첨도"), formatAnalysisNumber(column.kurtosis_excess ?? null)],
         ["N", column.n_used.toLocaleString()],
       ]} />
       <h6>5수치 요약</h6>
       <DefinitionRows rows={[
-        ["최소", formatAnalysisNumber(column.min)],
+        [text("최소"), formatAnalysisNumber(column.min)],
         ["Q1", formatAnalysisNumber(column.q1)],
-        ["중앙값", formatAnalysisNumber(column.median)],
+        [text("중앙값"), formatAnalysisNumber(column.median)],
         ["Q3", formatAnalysisNumber(column.q3)],
-        ["최대", formatAnalysisNumber(column.max)],
+        [text("최대"), formatAnalysisNumber(column.max)],
       ]} />
     </section>
   );
@@ -202,7 +209,8 @@ function ChartPanel({ title, children }: { title: string; children: ReactNode })
   );
 }
 
-function renderEcdf(column: GraphicalSummaryColumn) {
+function renderEcdf(column: GraphicalSummaryColumn, locale: AppLocale) {
+  const text = (source: string) => translateSystemText(source, locale);
   const points = column.ecdf.points
     .filter(
       (point): point is { x: number; probability: number } =>
@@ -215,33 +223,33 @@ function renderEcdf(column: GraphicalSummaryColumn) {
   }
   const xRange = paddedNumericRange(points.map((point) => point.x));
   const interactivePoints: InteractiveScatterPoint[] = points.map((point, index) => ({
-    ariaLabel: `${column.display_name} ECDF ${index + 1}, 값 ${formatAnalysisNumber(point.x)}, 누적확률 ${formatAnalysisNumber(point.probability)}`,
+    ariaLabel: `${column.display_name} ECDF ${index + 1}, ${text("값")} ${formatAnalysisNumber(point.x)}, ${text("누적확률")} ${formatAnalysisNumber(point.probability)}`,
     className: "ecdf-point interactive-chart-point",
     details: [
-      { label: "점 순번", value: String(index + 1) },
-      { label: "X 값", value: formatAnalysisNumber(point.x) },
-      { label: "누적확률", value: formatAnalysisNumber(point.probability) },
+      { label: text("점 순번"), value: String(index + 1) },
+      { label: text("X 값"), value: formatAnalysisNumber(point.x) },
+      { label: text("누적확률"), value: formatAnalysisNumber(point.probability) },
       {
-        label: "근사 순위",
+        label: text("근사 순위"),
         value: `${Math.max(1, Math.round(point.probability * column.n_used))} / ${column.n_used}`,
       },
-      { label: "N 기준", value: column.n_used.toLocaleString() },
+      { label: text("N 기준"), value: column.n_used.toLocaleString() },
     ],
     id: `graphical-ecdf-${column.column_id}-${index}`,
-    title: `ECDF 점 ${index + 1}`,
+    title: `ECDF ${text("점")} ${index + 1}`,
     x: point.x,
     y: point.probability,
   }));
   return (
     <InteractiveScatterChart
       annotations={[
-        `표시 ${points.length.toLocaleString()} / payload ${column.ecdf.point_count.toLocaleString()}`,
-        column.ecdf.points_truncated ? "ECDF point cap 적용" : "전체 bounded point 표시",
+        `${text("표시")} ${points.length.toLocaleString()} / payload ${column.ecdf.point_count.toLocaleString()}`,
+        text(column.ecdf.points_truncated ? "ECDF point cap 적용" : "전체 bounded point 표시"),
       ]}
       chartId={`graphical-ecdf-${column.column_id}`}
       compact
       connectPoints="step"
-      description={`${column.display_name}의 bounded ECDF points`}
+      description={`${column.display_name} ${text("의 bounded ECDF points")}`}
       emptyLabel="ECDF point 없음"
       formatValue={(value) => formatAnalysisNumber(value)}
       points={interactivePoints}

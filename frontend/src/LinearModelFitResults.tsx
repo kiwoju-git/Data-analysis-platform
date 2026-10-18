@@ -11,12 +11,16 @@ import {
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
 import { observedDiagnosticPoints } from "./linearModelDiagnosticPoints";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 interface LinearModelFitResultsProps {
   result: LinearModelResult;
 }
 
 export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
+  const { locale } = useI18n();
   const [residualPlotsOpen, setResidualPlotsOpen] = useState(false);
   const [residualType, setResidualType] = useState<"raw" | "standardized">("raw");
   const topDiagnosticPoints = result.diagnostics.diagnostic_points.points
@@ -33,7 +37,7 @@ export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
               <h4 id="linear-model-selection-title">후진 제거 결과</h4>
               <p>
                 Alpha to remove {formatModelNumber(result.model_selection.alpha_to_remove)} · 강한
-                계층 원칙 · {selectionStopLabel(result.model_selection.stop_reason)}
+                계층 원칙 · {selectionStopLabel(result.model_selection.stop_reason, locale)}
               </p>
             </div>
           </div>
@@ -47,7 +51,7 @@ export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
             <span>최종 항</span>
             <strong>{result.model_selection.final_terms.length.toLocaleString()}개</strong>
             <span>종료 이유</span>
-            <strong>{selectionStopLabel(result.model_selection.stop_reason)}</strong>
+            <strong>{selectionStopLabel(result.model_selection.stop_reason, locale)}</strong>
           </div>
           <div className="table-wrap">
             <table className="result-table">
@@ -220,7 +224,7 @@ export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
               </table>
             </div>
             {!result.anova.lack_of_fit.available ? (
-              <p className="cell-subtle">적합결여 계산 불가: {lackOfFitReason(result.anova.lack_of_fit.reason)}</p>
+              <p className="cell-subtle">적합결여 계산 불가: {lackOfFitReason(result.anova.lack_of_fit.reason, locale)}</p>
             ) : null}
             <p className="cell-subtle">
               상호작용이나 2차항이 포함된 경우 주효과 검정은 다른 고차항을 포함한 조건부
@@ -266,7 +270,7 @@ export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
             </fieldset>
             <div className="linear-model-four-in-one analysis-result-grid">
               <ChartPanel title="잔차 정규확률도">
-                {renderResidualQqChart(result, residualType)}
+                {renderResidualQqChart(result, residualType, locale)}
               </ChartPanel>
               <ChartPanel title="잔차 히스토그램">
                 <InteractiveHistogramChart
@@ -284,12 +288,14 @@ export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
                 {renderResidualPayloadChart(
                   result.residual_plots.residuals_vs_fits[residualType],
                   residualType,
+                  locale,
                 )}
               </ChartPanel>
               <ChartPanel title="잔차 대 관측순서">
                 {renderResidualPayloadChart(
                   result.residual_plots.residuals_vs_order[residualType],
                   residualType,
+                  locale,
                 )}
               </ChartPanel>
             </div>
@@ -319,8 +325,8 @@ export function LinearModelFitResults({ result }: LinearModelFitResultsProps) {
           <strong>{result.diagnostics.influence.high_cooks_distance_count.toLocaleString()}개</strong>
         </div>
         <div className="linear-model-diagnostic-layout analysis-result-grid">
-          <ChartPanel title="Observed vs Fitted">{renderObservedFittedChart(result)}</ChartPanel>
-          <ChartPanel title="Leverage vs Cook's D">{renderInfluenceChart(result)}</ChartPanel>
+          <ChartPanel title="Observed vs Fitted">{renderObservedFittedChart(result, locale)}</ChartPanel>
+          <ChartPanel title="Leverage vs Cook's D">{renderInfluenceChart(result, locale)}</ChartPanel>
         </div>
       </section>
 
@@ -366,19 +372,20 @@ function ChartPanel({ title, children }: { title: string; children: React.ReactN
   );
 }
 
-function renderResidualQqChart(result: LinearModelResult, kind: "raw" | "standardized") {
+function renderResidualQqChart(result: LinearModelResult, kind: "raw" | "standardized", locale: AppLocale) {
+  const text = (source: string) => translateSystemText(source, locale);
   const payload = result.residual_plots?.qq_plots[kind];
   if (!payload) return null;
   const points = payload.points.map((point) => ({
-    ariaLabel: `순위 ${point.rank}, 이론 분위수 ${formatModelNumber(point.theoretical_quantile)}, 잔차 ${formatModelNumber(point.residual)}`,
+    ariaLabel: `${text("순위")} ${point.rank}, ${text("이론 분위수")} ${formatModelNumber(point.theoretical_quantile)}, ${text("잔차")} ${formatModelNumber(point.residual)}`,
     className: "qq-point interactive-chart-point",
     details: [
-      { label: "행 index", value: point.row_index.toLocaleString() },
-      { label: "이론 분위수", value: formatModelNumber(point.theoretical_quantile) },
-      { label: "잔차", value: formatModelNumber(point.residual) },
+      { label: text("행 index"), value: point.row_index.toLocaleString() },
+      { label: text("이론 분위수"), value: formatModelNumber(point.theoretical_quantile) },
+      { label: text("잔차"), value: formatModelNumber(point.residual) },
     ],
     id: `linear-residual-qq-${kind}-${point.rank}`,
-    title: `순위 ${point.rank}`,
+    title: `${text("순위")} ${point.rank}`,
     x: point.theoretical_quantile,
     y: point.residual,
   }));
@@ -388,8 +395,8 @@ function renderResidualQqChart(result: LinearModelResult, kind: "raw" | "standar
   return (
     <InteractiveScatterChart
       annotations={[
-        `표시 ${points.length.toLocaleString()} / 전체 ${payload.n.toLocaleString()}`,
-        payload.truncated ? "결정적 분위수 축약 적용" : "전체 point 표시",
+        `${text("표시")} ${points.length.toLocaleString()} / ${text("전체")} ${payload.n.toLocaleString()}`,
+        text(payload.truncated ? "결정적 분위수 축약 적용" : "전체 point 표시"),
       ]}
       chartId={`linear-model-residual-qq-${kind}`}
       compact
@@ -398,7 +405,7 @@ function renderResidualQqChart(result: LinearModelResult, kind: "raw" | "standar
       formatValue={formatModelNumber}
       points={points}
       referenceLines={line ? [{
-        label: "정규확률 기준선",
+        label: text("정규확률 기준선"),
         x1: xRange.min,
         x2: xRange.max,
         y1: line.intercept + line.slope * xRange.min,
@@ -416,18 +423,20 @@ function renderResidualQqChart(result: LinearModelResult, kind: "raw" | "standar
 function renderResidualPayloadChart(
   payload: LinearModelResidualScatter,
   kind: "raw" | "standardized",
+  locale: AppLocale,
 ) {
+  const text = (source: string) => translateSystemText(source, locale);
   const isOrder = payload.x_kind === "order";
   const points: InteractiveScatterPoint[] = payload.points.map((point) => ({
-    ariaLabel: `행 ${point.row_index}, ${isOrder ? "관측순서" : "적합값"} ${formatModelNumber(isOrder ? point.order : point.fitted)}, 잔차 ${formatModelNumber(point.residual)}`,
+    ariaLabel: `${text("행")} ${point.row_index}, ${text(isOrder ? "관측순서" : "적합값")} ${formatModelNumber(isOrder ? point.order : point.fitted)}, ${text("잔차")} ${formatModelNumber(point.residual)}`,
     className: "diagnostic-point",
     details: [
-      { label: "행 index", value: point.row_index.toLocaleString() },
-      { label: isOrder ? "관측순서" : "적합값", value: formatModelNumber(isOrder ? point.order : point.fitted) },
-      { label: kind === "raw" ? "일반 잔차" : "표준화 잔차", value: formatModelNumber(point.residual) },
+      { label: text("행 index"), value: point.row_index.toLocaleString() },
+      { label: text(isOrder ? "관측순서" : "적합값"), value: formatModelNumber(isOrder ? point.order : point.fitted) },
+      { label: text(kind === "raw" ? "일반 잔차" : "표준화 잔차"), value: formatModelNumber(point.residual) },
     ],
     id: `linear-residual-${payload.x_kind}-${kind}-${point.row_index}`,
-    title: `행 ${point.row_index}`,
+    title: `${text("행")} ${point.row_index}`,
     x: isOrder ? point.order : point.fitted,
     y: point.residual,
   }));
@@ -436,19 +445,19 @@ function renderResidualPayloadChart(
   return (
     <InteractiveScatterChart
       annotations={[
-        `표시 ${points.length.toLocaleString()} / 전체 ${payload.n.toLocaleString()}`,
-        payload.truncated ? "결정적 point cap 적용" : "전체 point 표시",
+        `${text("표시")} ${points.length.toLocaleString()} / ${text("전체")} ${payload.n.toLocaleString()}`,
+        text(payload.truncated ? "결정적 point cap 적용" : "전체 point 표시"),
       ]}
       chartId={`linear-model-residual-${payload.x_kind}-${kind}`}
       compact
       connectPoints={isOrder ? "line" : undefined}
-      description={isOrder
+      description={text(isOrder
         ? "회귀에 사용된 row snapshot 순서에 따른 잔차를 보여주며 시간 인과성을 뜻하지 않습니다."
-        : "적합값에 따른 잔차 분포를 보여줍니다."}
+        : "적합값에 따른 잔차 분포를 보여줍니다.")}
       emptyLabel="잔차 point 없음"
       formatValue={formatModelNumber}
       points={points}
-      referenceLines={[{ label: "잔차 0 기준선", x1: xRange.min, x2: xRange.max, y1: 0, y2: 0 }]}
+      referenceLines={[{ label: text("잔차 0 기준선"), x1: xRange.min, x2: xRange.max, y1: 0, y2: 0 }]}
       title={isOrder ? "Residuals versus Order" : "Residuals versus Fits"}
       xLabel={isOrder ? "Observation order" : "Fitted value"}
       xRange={xRange}
@@ -458,32 +467,33 @@ function renderResidualPayloadChart(
   );
 }
 
-function renderObservedFittedChart(result: LinearModelResult) {
+function renderObservedFittedChart(result: LinearModelResult, locale: AppLocale) {
+  const text = (source: string) => translateSystemText(source, locale);
   const sourcePoints = observedDiagnosticPoints(result);
   const range = paddedNumericRange(sourcePoints.flatMap((point) => [point.fitted, point.observed]));
   const points: InteractiveScatterPoint[] = sourcePoints.map((point) => ({
-    ariaLabel: `행 ${point.rowIndex}, 실제값 ${formatModelNumber(point.observed)}, 예측값 ${formatModelNumber(point.fitted)}`,
+    ariaLabel: `${text("행")} ${point.rowIndex}, ${text("실제값")} ${formatModelNumber(point.observed)}, ${text("예측값")} ${formatModelNumber(point.fitted)}`,
     className: "diagnostic-point",
     details: [
-      { label: "행 index", value: point.rowIndex.toLocaleString() },
-      { label: "실제값", value: formatModelNumber(point.observed) },
-      { label: "예측값", value: formatModelNumber(point.fitted) },
-      { label: "잔차", value: formatModelNumber(point.residual) },
+      { label: text("행 index"), value: point.rowIndex.toLocaleString() },
+      { label: text("실제값"), value: formatModelNumber(point.observed) },
+      { label: text("예측값"), value: formatModelNumber(point.fitted) },
+      { label: text("잔차"), value: formatModelNumber(point.residual) },
     ],
     id: `observed-${point.rowIndex}`,
-    title: `행 ${point.rowIndex}`,
+    title: `${text("행")} ${point.rowIndex}`,
     x: point.fitted,
     y: point.observed,
   }));
   return (
     <InteractiveScatterChart
-      annotations={[`표시 ${points.length.toLocaleString()} / 전체 ${result.sample.n_used.toLocaleString()}`]}
+      annotations={[`${text("표시")} ${points.length.toLocaleString()} / ${text("전체")} ${result.sample.n_used.toLocaleString()}`]}
       chartId="linear-model-observed-fitted"
       description="실제 관측값과 회귀모형 예측값을 비교하며 점선은 y=x 기준선입니다."
       emptyLabel="진단 point 없음"
       formatValue={formatModelNumber}
       points={points}
-      referenceLines={[{ label: "y=x 기준선", x1: range.min, x2: range.max, y1: range.min, y2: range.max }]}
+      referenceLines={[{ label: text("y=x 기준선"), x1: range.min, x2: range.max, y1: range.min, y2: range.max }]}
       title="Observed vs Fitted"
       xLabel="Fitted"
       xRange={range}
@@ -493,7 +503,8 @@ function renderObservedFittedChart(result: LinearModelResult) {
   );
 }
 
-function renderInfluenceChart(result: LinearModelResult) {
+function renderInfluenceChart(result: LinearModelResult, locale: AppLocale) {
+  const text = (source: string) => translateSystemText(source, locale);
   const source = result.diagnostics.diagnostic_points.points.filter(
     (point) => point.cooks_distance !== null && Number.isFinite(point.cooks_distance),
   );
@@ -503,15 +514,15 @@ function renderInfluenceChart(result: LinearModelResult) {
     const cooks = point.cooks_distance ?? 0;
     const warning = point.leverage > result.diagnostics.leverage.threshold || cooks > result.diagnostics.influence.cooks_distance_threshold;
     return {
-      ariaLabel: `행 ${point.row_index}, leverage ${formatModelNumber(point.leverage)}, Cook's D ${formatModelNumber(cooks)}`,
+      ariaLabel: `${text("행")} ${point.row_index}, leverage ${formatModelNumber(point.leverage)}, Cook's D ${formatModelNumber(cooks)}`,
       className: "influence-point",
       details: [
-        { label: "행 index", value: point.row_index.toLocaleString() },
+        { label: text("행 index"), value: point.row_index.toLocaleString() },
         { label: "Leverage", value: formatModelNumber(point.leverage) },
         { label: "Cook's D", value: formatModelNumber(cooks) },
       ],
       id: `influence-${point.row_index}`,
-      title: `행 ${point.row_index}`,
+      title: `${text("행")} ${point.row_index}`,
       warning,
       x: point.leverage,
       y: cooks,
@@ -519,15 +530,15 @@ function renderInfluenceChart(result: LinearModelResult) {
   });
   return (
     <InteractiveScatterChart
-      annotations={["기준 초과는 검토 후보이며 자동 제외 기준이 아닙니다."]}
+      annotations={[text("기준 초과는 검토 후보이며 자동 제외 기준이 아닙니다.")]}
       chartId="linear-model-leverage-cook"
       description="각 진단점의 leverage와 Cook's D를 보여줍니다."
       emptyLabel="영향점 point 없음"
       formatValue={formatModelNumber}
       points={points}
       referenceLines={[
-        { label: "Leverage 기준", x1: result.diagnostics.leverage.threshold, x2: result.diagnostics.leverage.threshold, y1: yRange.min, y2: yRange.max },
-        { label: "Cook's D 기준", x1: xRange.min, x2: xRange.max, y1: result.diagnostics.influence.cooks_distance_threshold, y2: result.diagnostics.influence.cooks_distance_threshold },
+        { label: text("Leverage 기준"), x1: result.diagnostics.leverage.threshold, x2: result.diagnostics.leverage.threshold, y1: yRange.min, y2: yRange.max },
+        { label: text("Cook's D 기준"), x1: xRange.min, x2: xRange.max, y1: result.diagnostics.influence.cooks_distance_threshold, y2: result.diagnostics.influence.cooks_distance_threshold },
       ]}
       title="Leverage vs Cook's D"
       xLabel="Leverage"
@@ -542,23 +553,28 @@ function anovaSourceLabel(source: string): string {
   return ({ Regression: "Regression", Error: "Error", Total: "Total", "Lack-of-Fit": "Lack-of-Fit", "Pure Error": "Pure Error" } as Record<string, string>)[source] ?? source;
 }
 
-function lackOfFitReason(reason: string | null): string {
+function lackOfFitReason(reason: string | null, locale: AppLocale): string {
   const labels: Record<string, string> = {
     no_replicated_predictor_settings: "반복된 predictor 조합이 없어 순수오차와 적합결여를 분리할 수 없습니다.",
     no_lack_of_fit_degrees_of_freedom: "적합결여 자유도가 없습니다.",
     pure_error_variance_zero: "반복점의 순수오차 분산이 0입니다.",
   };
-  return reason === null ? "계산 조건을 충족하지 않습니다." : labels[reason] ?? reason;
+  if (reason === null) return translateSystemText("계산 조건을 충족하지 않습니다.", locale);
+  return Object.prototype.hasOwnProperty.call(labels, reason)
+    ? translateSystemText(labels[reason], locale)
+    : reason;
 }
 
-function selectionStopLabel(reason: string): string {
+function selectionStopLabel(reason: string, locale: AppLocale): string {
   const labels: Record<string, string> = {
     all_removal_p_values_at_or_below_alpha: "제거 기준 충족 항 없음",
     no_eligible_terms: "계층 원칙상 제거 가능 항 없음",
     intercept_only: "상수항 모형 도달",
     method_none: "모형 선택 없음",
   };
-  return labels[reason] ?? reason;
+  return Object.prototype.hasOwnProperty.call(labels, reason)
+    ? translateSystemText(labels[reason], locale)
+    : reason;
 }
 
 function formatPercent(value: number | null | undefined): string {

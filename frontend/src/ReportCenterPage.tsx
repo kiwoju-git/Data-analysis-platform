@@ -20,7 +20,7 @@ import {
 } from "./browserNavigation";
 import {
   reportCreationCapabilities,
-  reportWorkflowCapabilities,
+  localizedReportWorkflowCapabilities,
 } from "./reportCenterCapabilities";
 import { analysisMethodDisplayLabel } from "./analysisNavigation";
 import { useAnalysisExportState } from "./useAnalysisExportState";
@@ -547,6 +547,7 @@ function SelectedReportActions({
 }
 
 function ReportCapabilityMatrix() {
+  const { locale } = useI18n();
   return (
     <section
       className="report-capability-section"
@@ -571,7 +572,7 @@ function ReportCapabilityMatrix() {
             </tr>
           </thead>
           <tbody>
-            {reportWorkflowCapabilities.map((item) => (
+            {localizedReportWorkflowCapabilities(locale).map((item) => (
               <tr key={item.methodId}>
                 <td>
                   <strong>{item.label}</strong>

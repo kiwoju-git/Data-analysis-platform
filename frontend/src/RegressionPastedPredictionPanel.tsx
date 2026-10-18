@@ -1,3 +1,6 @@
+import { translateSystemText as systemText } from "./i18n/translate";
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+
 import { useMemo, useRef, useState } from "react";
 
 import type {
@@ -12,10 +15,12 @@ import {
 } from "./api/regression";
 import {
   parseRegressionPastedPredictionPreview,
+  regressionPredictionPreviewHeaders,
   type RegressionPredictionDelimiter,
 } from "./regressionPastedPredictionPreview";
 import { RegressionPredictionResultsTable } from "./RegressionPredictionResultsTable";
 import { useI18n } from "./i18n/LocaleProvider";
+import { localizedErrorDisplay } from "./i18n/errorMessages";
 
 interface RegressionPastedPredictionPanelProps {
   modelResult: LinearModelResult;
@@ -28,6 +33,7 @@ export function RegressionPastedPredictionPanel({
   modelResult,
   onSelectDataset,
 }: RegressionPastedPredictionPanelProps) {
+  const { locale } = useI18n();
   const [content, setContent] = useState("");
   const [hasHeader, setHasHeader] = useState(false);
   const [delimiter, setDelimiter] = useState<Delimiter>("auto");
@@ -38,12 +44,14 @@ export function RegressionPastedPredictionPanel({
     useState<RegressionPastedPredictionResponse | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ cause: unknown } | null>(null);
+  const errorDisplay = error === null ? null : localizedErrorDisplay(error.cause, locale);
   const headerChoiceTouched = useRef(false);
   const tablePreview = useMemo(
     () => parseRegressionPastedPredictionPreview(content, delimiter, hasHeader),
     [content, delimiter, hasHeader],
   );
+  const displayHeaders = regressionPredictionPreviewHeaders(tablePreview, locale);
   const manifest = modelResult.model_manifest;
   const canCheck =
     manifest !== undefined &&
@@ -102,7 +110,7 @@ export function RegressionPastedPredictionPanel({
       setPreflight(result);
     } catch (caught) {
       setPreflight(null);
-      setError(errorMessage(caught));
+      setError({ cause: caught });
     } finally {
       setIsChecking(false);
     }
@@ -128,7 +136,7 @@ export function RegressionPastedPredictionPanel({
       setPrediction(result);
     } catch (caught) {
       setPrediction(null);
-      setError(errorMessage(caught));
+      setError({ cause: caught });
     } finally {
       setIsPredicting(false);
     }
@@ -224,7 +232,7 @@ export function RegressionPastedPredictionPanel({
                     <td>{predictorKindLabel(modelResult, predictor.column_id)}</td>
                     <td>
                       <select
-                        aria-label={`${predictor.display_name} 붙여넣은 열`}
+                        aria-label={`${predictor.display_name} ${systemText("붙여넣은 열", locale)}`}
                         value={
                           columnMappings[predictor.column_id] ??
                           defaultMapping(tablePreview.headers, predictor, predictorIndex, modelResult)
@@ -240,7 +248,7 @@ export function RegressionPastedPredictionPanel({
                         <option value="">선택</option>
                         {tablePreview.headers.map((header, index) => (
                           <option key={`${index}-${header}`} value={String(index)}>
-                            {header}
+                            {displayHeaders[index]}
                           </option>
                         ))}
                       </select>
@@ -256,7 +264,7 @@ export function RegressionPastedPredictionPanel({
               <thead>
                 <tr>
                   {tablePreview.headers.map((header, index) => (
-                    <th key={`${index}-${header}`} scope="col">{header}</th>
+                    <th key={`${index}-${header}`} scope="col">{displayHeaders[index]}</th>
                   ))}
                 </tr>
               </thead>
@@ -287,7 +295,9 @@ export function RegressionPastedPredictionPanel({
           </button>
         </div>
       </div>
-      {error !== null ? <div className="error-box" role="alert">오류 코드: {error}</div> : null}
+      {errorDisplay !== null ? <div className="error-box" role="alert">{errorDisplay.message}
+        <span className="cell-subtle">{errorDisplay.code}{errorDisplay.correlationId ? ` (${errorDisplay.correlationId})` : ""}</span>
+      </div> : null}
       {preflight !== null ? <PastedPreflightSummary preflight={preflight} /> : null}
       {prediction !== null ? <PastedPredictionResults prediction={prediction} /> : null}
     </section>
@@ -335,15 +345,16 @@ function PastedPreflightSummary({
 }: {
   preflight: RegressionPastedPredictionPreflightResponse;
 }) {
+  const { locale } = useI18n();
   return (
     <div className={preflight.prediction_ready ? "success-box" : "error-box"} role="status">
       <strong>{preflight.prediction_ready ? "예측 준비 완료" : "입력을 확인하세요"}</strong>
       <p>
         사용 가능 {preflight.row_count_usable.toLocaleString()} / 전체 {preflight.row_count_total.toLocaleString()}행
-        {preflight.row_count_excluded > 0 ? ` · 제외 ${preflight.row_count_excluded.toLocaleString()}행` : ""}
+        {preflight.row_count_excluded > 0 ? ` · ${systemText("제외", locale)} ${preflight.row_count_excluded.toLocaleString()} ${systemText("행", locale)}` : ""}
       </p>
       {preflight.issues.map((issue) => (
-        <p key={`${issue.code}-${issue.count ?? ""}`}>{issue.message}{issue.count === null ? "" : ` (${issue.count})`}</p>
+        <p key={`${issue.code}-${issue.count ?? ""}`}><ApiNoticeText notice={issue} />{issue.count === null ? "" : ` (${issue.count})`}</p>
       ))}
     </div>
   );
@@ -362,7 +373,7 @@ function PastedPredictionResults({ prediction }: { prediction: RegressionPastedP
       {prediction.prediction_uncertainty_kind === "point_only" ? <p className="notice-box">{t("reg.pointOnly")}</p> : null}
       <RegressionPredictionResultsTable mappings={prediction.mappings} rows={prediction.rows} />
       {prediction.truncated ? <div className="notice-box">화면에는 앞 {prediction.row_limit.toLocaleString()}행만 표시합니다.</div> : null}
-      {prediction.warnings.map((warning) => <div className="notice-box" key={warning.code}>{warning.message}</div>)}
+      {prediction.warnings.map((warning) => <div className="notice-box" key={warning.code}><ApiNoticeText notice={warning} /></div>)}
     </>
   );
 }
@@ -401,14 +412,10 @@ function defaultMapping(
 }
 
 function predictorKindLabel(result: LinearModelResult, columnId: string): string {
-  return result.training_domain?.predictors.find((item) => item.column_id === columnId)?.kind === "categorical" ? "범주형" : "숫자형";
+  return result.training_domain?.predictors.find((item) => item.column_id === columnId)?.kind === "categorical" ? systemText("범주형") : systemText("숫자형");
 }
 
 function pastePlaceholder(result: LinearModelResult): string {
   const headers = result.predictors.map((predictor) => predictor.display_name).join("\t");
-  return `${headers}\n${result.predictors.map(() => "값").join("\t")}`;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "regression_pasted_prediction_failed";
+  return `${headers}\n${result.predictors.map(() => systemText("값")).join("\t")}`;
 }

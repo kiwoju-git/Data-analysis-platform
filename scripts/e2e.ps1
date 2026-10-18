@@ -7,7 +7,8 @@ param(
     [switch]$KeepWorkspace,
     [switch]$FactorialWorkflowOnly,
     [switch]$GprReportOnly,
-    [switch]$RefinedUiOnly
+    [switch]$RefinedUiOnly,
+    [switch]$ApiTranslationOnly
 )
 
 Set-StrictMode -Version Latest
@@ -58,6 +59,9 @@ try {
     }
     if ($RefinedUiOnly) {
         $Args += "--refined-ui-only"
+    }
+    if ($ApiTranslationOnly) {
+        $Args += "--api-translation-only"
     }
 
     & $Python @Args

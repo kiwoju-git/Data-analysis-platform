@@ -1,3 +1,7 @@
+import { getCurrentLocale } from "./i18n/store";
+import { t, translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 export const MAX_PASTE_PREVIEW_ROWS = 200;
 export const MAX_PASTE_PREVIEW_COLUMNS = 100;
 export const MAX_PASTE_PREVIEW_CELLS = 20_000;
@@ -6,16 +10,22 @@ export const MAX_PASTE_PREVIEW_SCAN_CHARACTERS = 2_000_000;
 export type PastePreviewDelimiter = "\t" | "," | ";" | "|" | null;
 export type PastePreviewLineEnding = "CRLF" | "LF" | "CR" | "mixed" | "none";
 
-export interface PastePreviewWarning {
+export type PastePreviewWarning = {
   code:
     | "paste_preview_ragged_rows"
     | "paste_preview_trailing_empty_cells"
-    | "paste_preview_truncated"
-    | "paste_preview_scan_truncated"
     | "paste_preview_unbalanced_quote"
     | "paste_preview_formula_like_text";
   message: string;
-}
+} | {
+  code: "paste_preview_truncated";
+  message: string;
+  params: { rows: number; columns: number; cells: number };
+} | {
+  code: "paste_preview_scan_truncated";
+  message: string;
+  params: { characters: number };
+};
 
 export interface PastedTablePreview {
   delimiter: PastePreviewDelimiter;
@@ -224,12 +234,14 @@ export function parsePastedTablePreview(
     warnings.push({
       code: "paste_preview_truncated",
       message: `미리보기는 첫 ${maxRows}행 ${maxColumns}열, 최대 ${maxCells.toLocaleString()}개 셀만 표시합니다. 전체 원문은 변경 없이 등록됩니다.`,
+      params: { rows: maxRows, columns: maxColumns, cells: maxCells },
     });
   }
   if (countsAreLowerBounds) {
     warnings.push({
       code: "paste_preview_scan_truncated",
       message: `브라우저 응답성을 위해 앞 ${maxScanCharacters.toLocaleString()}자만 구조 검사했습니다. 표시된 행·열 수는 최소값이며 서버가 전체 원문을 다시 검증합니다.`,
+      params: { characters: maxScanCharacters },
     });
   }
   if (formulaLikeCellCount > 0) {
@@ -310,12 +322,29 @@ export function spreadsheetColumnLabel(columnIndex: number): string {
   return label;
 }
 
-export function pastedDelimiterLabel(delimiter: PastePreviewDelimiter): string {
+export function pastedDelimiterLabel(delimiter: PastePreviewDelimiter, locale: AppLocale = getCurrentLocale()): string {
   if (delimiter === "\t") return "Tab";
   if (delimiter === ",") return "Comma";
   if (delimiter === ";") return "Semicolon";
   if (delimiter === "|") return "Pipe";
-  return "단일 열";
+  return translateSystemText("단일 열", locale);
+}
+
+export function pastedPreviewWarningMessage(warning: PastePreviewWarning, locale: AppLocale = getCurrentLocale()): string {
+  switch (warning.code) {
+    case "paste_preview_ragged_rows":
+      return translateSystemText("행마다 열 수가 다릅니다. 최종 구조는 파싱 확정 단계에서 다시 확인하세요.", locale);
+    case "paste_preview_trailing_empty_cells":
+      return translateSystemText("마지막 열이 빈 행이 있습니다.", locale);
+    case "paste_preview_unbalanced_quote":
+      return translateSystemText("따옴표 구조를 완전히 해석하지 못해 원문 보기로 전환했습니다.", locale);
+    case "paste_preview_formula_like_text":
+      return translateSystemText("수식처럼 보이는 값은 계산하지 않고 문자로 표시합니다.", locale);
+    case "paste_preview_truncated":
+      return t("paste.preview.truncated", { ...warning.params, cells: warning.params.cells.toLocaleString() }, locale);
+    case "paste_preview_scan_truncated":
+      return t("paste.preview.scanTruncated", { characters: warning.params.characters.toLocaleString() }, locale);
+  }
 }
 
 export function utf8ByteCount(text: string): number {

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { getAnalysisRunErrorDetails } from "../../analysisRunErrors";
+import { useI18n } from "../../i18n/LocaleProvider";
 import { BayesianRecommendationPanel } from "./BayesianRecommendationPanel";
 import { BayesianStudyBuilder } from "./BayesianStudyBuilder";
 import { BayesianStudyCatalog } from "./BayesianStudyCatalog";
@@ -278,7 +279,8 @@ export function BayesianOptimizationWorkspace() {
 }
 
 function BayesianError({ code }: { code: string }) {
-  const details = getAnalysisRunErrorDetails(code);
+  const { locale } = useI18n();
+  const details = getAnalysisRunErrorDetails(code, locale);
   return (
     <div className="error-box" role="alert">
       <strong>{details.title}</strong>

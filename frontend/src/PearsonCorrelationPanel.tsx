@@ -1,3 +1,8 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 import { PearsonResultChart } from "./charts/PearsonResultChart";
 import type {
   AnalysisResultEnvelope,
@@ -45,6 +50,7 @@ export function PearsonCorrelationPanel({
   onXColumnChange,
   onYColumnChange,
 }: PearsonCorrelationPanelProps) {
+  const { locale } = useI18n();
   const canRun =
     version !== null &&
     xColumnId !== null &&
@@ -135,7 +141,7 @@ export function PearsonCorrelationPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -196,7 +202,7 @@ export function PearsonCorrelationPanel({
                   <tbody>
                     <tr>
                       <td>{formatAnalysisNumber(result.association.correlation)}</td>
-                      <td>{confidenceIntervalLabel(result)}</td>
+                      <td>{confidenceIntervalLabel(result, locale)}</td>
                       <td>{formatAnalysisNumber(result.test.p_value)}</td>
                       <td>{formatAnalysisNumber(result.association.r_squared)}</td>
                       <td>{formatAnalysisNumber(result.association.covariance)}</td>
@@ -248,10 +254,10 @@ export function PearsonCorrelationPanel({
   );
 }
 
-function confidenceIntervalLabel(result: PearsonCorrelationResult): string {
+function confidenceIntervalLabel(result: PearsonCorrelationResult, locale: AppLocale): string {
   const { lower, upper, level } = result.confidence_interval;
   if (lower === null || upper === null) {
-    return "계산 불가";
+    return translateSystemText("계산 불가", locale);
   }
   return `${formatPercent(level)} CI ${formatAnalysisNumber(lower)} - ${formatAnalysisNumber(
     upper,

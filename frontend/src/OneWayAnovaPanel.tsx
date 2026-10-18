@@ -1,3 +1,8 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -61,6 +66,7 @@ export function OneWayAnovaPanel({
   onResponseColumnChange,
   onRun,
 }: OneWayAnovaPanelProps) {
+  const { locale } = useI18n();
   const [anovaType, setAnovaType] = useState<"standard" | "welch">("standard");
   const [posthocMethod, setPosthocMethod] = useState<
     "none" | "tukey_kramer" | "dunnett" | "games_howell"
@@ -107,7 +113,7 @@ export function OneWayAnovaPanel({
         if (cancelled) return;
         setGroupLevels(preflight.levels);
         if (preflight.truncated) {
-          setGroupLevelsError("그룹 수준이 20개를 초과하여 Dunnett 비교를 실행할 수 없습니다.");
+          setGroupLevelsError("dunnett_group_level_limit_exceeded");
         } else {
           setControlGroupLabel(preflight.levels[0]?.value ?? null);
         }
@@ -199,7 +205,7 @@ export function OneWayAnovaPanel({
                   <option value="dunnett">Dunnett - 기준군과 비교</option>
                 </> : <option value="games_howell">Games-Howell - 모든 그룹 쌍</option>}
               </select>
-              <span className="cell-subtext">{posthocDescription(posthocMethod)}</span>
+              <span className="cell-subtext">{posthocDescription(posthocMethod, locale)}</span>
             </label>
             {posthocMethod === "dunnett" ? (
               <label>
@@ -208,7 +214,7 @@ export function OneWayAnovaPanel({
                   <option value="">{isLoadingGroupLevels ? "그룹 수준 확인 중" : "선택"}</option>
                   {groupLevels.map((level) => <option key={level.value} value={level.value}>{level.display_label} (N {level.n_used.toLocaleString()})</option>)}
                 </select>
-                {groupLevelsError !== null ? <span className="field-error">{groupLevelsError}</span> : null}
+                {groupLevelsError !== null ? <span className="field-error">{groupLevelErrorLabel(groupLevelsError, locale)}</span> : null}
               </label>
             ) : null}
             <label className="checkbox-row">
@@ -220,7 +226,7 @@ export function OneWayAnovaPanel({
           <button className="primary-button" disabled={isRunningAnalysis || !canRun} onClick={() => onRun({ anovaType, posthocMethod, posthocPolicy, controlGroupLabel })} type="button">
             {isRunningAnalysis ? "실행 중" : "일원분산분석 실행"}
           </button>
-          {analysisResult?.warnings.length ? <ul className="warning-list" aria-label="분석 경고">{analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}>{warning.message}</li>)}</ul> : null}
+          {analysisResult?.warnings.length ? <ul className="warning-list" aria-label="분석 경고">{analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>)}</ul> : null}
           {result !== null ? <OneWayAnovaResults result={result} /> : null}
         </>
       )}
@@ -229,6 +235,7 @@ export function OneWayAnovaPanel({
 }
 
 function OneWayAnovaResults({ result }: { result: OneWayAnovaResult }) {
+  const { locale } = useI18n();
   const varianceModel = result.variance_model ?? (result.anova_type === "welch" ? "unequal" : "equal");
   const posthocMethod = result.posthoc.method;
   const isDunnett = posthocMethod === "dunnett";
@@ -237,7 +244,7 @@ function OneWayAnovaResults({ result }: { result: OneWayAnovaResult }) {
       <span>사용 N</span><strong>{result.n_used.toLocaleString()} / {result.n_total.toLocaleString()}</strong>
       <span>분산 가정</span><strong>{varianceModel === "unequal" ? "등분산 가정 안 함" : "등분산 가정"}</strong>
       <span>전체 검정</span><strong>{varianceModel === "unequal" ? "Welch 일원분산분석" : "표준 일원분산분석"}</strong>
-      <span>사후비교</span><strong>{posthocMethodLabel(posthocMethod)}</strong>
+      <span>사후비교</span><strong>{posthocMethodLabel(posthocMethod, locale)}</strong>
       {isDunnett ? <><span>Dunnett 기준군</span><strong>{result.posthoc.control_group_label ?? result.control_group_label ?? "-"}</strong></> : null}
     </div>
     <div className="table-wrap"><table className="result-table"><thead><tr><th>F</th><th>분자 df</th><th>분모 df</th><th>p-value</th><th>효과크기</th><th>결정</th></tr></thead><tbody><tr>
@@ -251,15 +258,26 @@ function OneWayAnovaResults({ result }: { result: OneWayAnovaResult }) {
   </>;
 }
 
-function posthocDescription(method: string): string {
-  if (method === "tukey_kramer") return "모든 그룹 쌍의 평균을 비교하고 family-wise error를 제어합니다.";
-  if (method === "dunnett") return "선택한 기준 그룹과 나머지 그룹의 평균을 비교합니다.";
-  if (method === "games_howell") return "등분산을 가정하지 않고 모든 그룹 쌍을 비교합니다.";
-  return "그룹별 요약과 전체 검정만 계산합니다.";
+function posthocDescription(method: string, locale: AppLocale): string {
+  if (method === "tukey_kramer") return translateSystemText("모든 그룹 쌍의 평균을 비교하고 family-wise error를 제어합니다.", locale);
+  if (method === "dunnett") return translateSystemText("선택한 기준 그룹과 나머지 그룹의 평균을 비교합니다.", locale);
+  if (method === "games_howell") return translateSystemText("등분산을 가정하지 않고 모든 그룹 쌍을 비교합니다.", locale);
+  return translateSystemText("그룹별 요약과 전체 검정만 계산합니다.", locale);
 }
 
-function posthocMethodLabel(method: string): string {
-  return { tukey_kramer: "Tukey-Kramer", dunnett: "Dunnett", games_howell: "Games-Howell", none: "없음" }[method] ?? method;
+function posthocMethodLabel(method: string, locale: AppLocale): string {
+  if (method === "none") return translateSystemText("없음", locale);
+  if (method === "tukey_kramer") return "Tukey-Kramer";
+  if (method === "dunnett") return "Dunnett";
+  if (method === "games_howell") return "Games-Howell";
+  return method;
+}
+
+function groupLevelErrorLabel(code: string, locale: AppLocale): string {
+  if (code === "dunnett_group_level_limit_exceeded") {
+    return translateSystemText("그룹 수준이 20개를 초과하여 Dunnett 비교를 실행할 수 없습니다.", locale);
+  }
+  return code;
 }
 
 function formatAnalysisNumber(value: number | null | undefined): string {

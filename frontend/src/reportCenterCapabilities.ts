@@ -1,3 +1,6 @@
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 export interface ReportCreationCapabilities {
   json: boolean;
   csv: boolean;
@@ -84,3 +87,14 @@ export const reportWorkflowCapabilities: readonly ReportWorkflowCapability[] = [
     workflowPath: "/analysis/doe/doe.bayesian_optimization",
   },
 ] as const;
+
+export function localizedReportWorkflowCapabilities(locale?: AppLocale): readonly ReportWorkflowCapability[] {
+  return reportWorkflowCapabilities.map((item) => ({
+    ...item,
+    label: translateSystemText(item.label, locale),
+    storedResult: translateSystemText(item.storedResult, locale),
+    json: translateSystemText(item.json, locale),
+    csv: translateSystemText(item.csv, locale),
+    html: translateSystemText(item.html, locale),
+  }));
+}

@@ -1,4 +1,6 @@
 import type { GraphPreviewType } from "./api";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 export interface GraphBuilderDefinition {
   graphType: GraphPreviewType;
@@ -76,10 +78,22 @@ export const graphBuilderDefinitions: readonly GraphBuilderDefinition[] = [
   },
 ] as const;
 
-export function graphBuilderDefinition(graphType: GraphPreviewType): GraphBuilderDefinition {
+export function localizedGraphBuilderDefinitions(locale?: AppLocale): readonly GraphBuilderDefinition[] {
+  return graphBuilderDefinitions.map((definition) => localizedDefinition(definition, locale));
+}
+
+export function graphBuilderDefinition(graphType: GraphPreviewType, locale?: AppLocale): GraphBuilderDefinition {
   const definition = graphBuilderDefinitions.find((item) => item.graphType === graphType);
   if (definition === undefined) {
     throw new Error("graph_builder_type_not_found");
   }
-  return definition;
+  return localizedDefinition(definition, locale);
+}
+
+function localizedDefinition(definition: GraphBuilderDefinition, locale?: AppLocale): GraphBuilderDefinition {
+  return {
+    ...definition,
+    label: translateSystemText(definition.label, locale),
+    description: translateSystemText(definition.description, locale),
+  };
 }

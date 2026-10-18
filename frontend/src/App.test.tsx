@@ -341,33 +341,33 @@ describe("App", () => {
 
   it("defines guidance for all 36 documented six-module workflows", () => {
     expect(analysisMethodGuidanceIds).toHaveLength(36);
-    expect(getAnalysisMethodGuidance("eda.descriptive").roleRequirements[0]).toMatchObject({
+    expect(getAnalysisMethodGuidance("eda.descriptive", "ko").roleRequirements[0]).toMatchObject({
       label: "분석 변수",
       required: true,
     });
     expect(
-      getAnalysisMethodGuidance("doe.response_optimizer").preflightChecks,
+      getAnalysisMethodGuidance("doe.response_optimizer", "ko").preflightChecks,
     ).toContain("설계영역");
-    expect(getAnalysisMethodGuidance("eda.normality").preflightChecks).toContain("표본 수 범위");
-    expect(getAnalysisMethodGuidance("doe.factorial_design").optionChecklist).toContain(
+    expect(getAnalysisMethodGuidance("eda.normality", "ko").preflightChecks).toContain("표본 수 범위");
+    expect(getAnalysisMethodGuidance("doe.factorial_design", "ko").optionChecklist).toContain(
       "랜덤 seed",
     );
-    expect(getAnalysisMethodGuidance("doe.factorial_design").plainLanguage).toContain(
+    expect(getAnalysisMethodGuidance("doe.factorial_design", "ko").plainLanguage).toContain(
       "효과 추정",
     );
-    expect(getAnalysisMethodGuidance("doe.response_surface").plainLanguage).toContain(
+    expect(getAnalysisMethodGuidance("doe.response_surface", "ko").plainLanguage).toContain(
       "full quadratic OLS",
     );
-    expect(getAnalysisMethodGuidance("regression.predict").plainLanguage).toContain(
+    expect(getAnalysisMethodGuidance("regression.predict", "ko").plainLanguage).toContain(
       "Predict 전용 워크플로",
     );
-    expect(getAnalysisMethodGuidance("regression.predict").plainLanguage).toContain(
+    expect(getAnalysisMethodGuidance("regression.predict", "ko").plainLanguage).toContain(
       "회귀모형 적합 화면에서도 같은 dedicated API",
     );
-    expect(getAnalysisMethodGuidance("doe.bayesian_optimization").plainLanguage).toContain(
+    expect(getAnalysisMethodGuidance("doe.bayesian_optimization", "ko").plainLanguage).toContain(
       "pending/completed/abandoned trial",
     );
-    expect(getAnalysisMethodGuidance("doe.bayesian_optimization").plainLanguage).toContain(
+    expect(getAnalysisMethodGuidance("doe.bayesian_optimization", "ko").plainLanguage).toContain(
       "추천은 관측값이나 전역 최적 보장이 아닙니다",
     );
   });
@@ -1798,14 +1798,14 @@ describe("App", () => {
       1,
       "/api/v1/analysis-runs?limit=20&offset=0&dataset_version_id=version-1&method_id=eda.descriptive&status=succeeded&stale=false&result_available=true",
       expect.objectContaining({
-        headers: { Accept: "application/json", "Accept-Language": "ko" },
+        headers: new Headers({ Accept: "application/json", "Accept-Language": "ko" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       `/api/v1/analysis-runs/${restored.analysis_id}/result`,
       expect.objectContaining({
-        headers: { Accept: "application/json", "Accept-Language": "ko" },
+        headers: new Headers({ Accept: "application/json", "Accept-Language": "ko" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -1813,14 +1813,14 @@ describe("App", () => {
       `/api/v1/analysis-runs/${restored.analysis_id}/exports`,
       expect.objectContaining({
         method: "GET",
-        headers: { Accept: "application/json", "Accept-Language": "ko" },
+        headers: new Headers({ Accept: "application/json", "Accept-Language": "ko" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       `/api/v1/analysis-runs/comparison?left_analysis_id=${comparison.left.analysis_id}&right_analysis_id=${comparison.right.analysis_id}`,
       expect.objectContaining({
-        headers: { Accept: "application/json", "Accept-Language": "ko" },
+        headers: new Headers({ Accept: "application/json", "Accept-Language": "ko" }),
       }),
     );
   });
@@ -1958,7 +1958,7 @@ describe("App", () => {
       1,
       "/api/v1/analysis-runs/analysis-1/exports/export-1/deletion-preflight",
       expect.objectContaining({
-        headers: { Accept: "application/json", "Accept-Language": "ko" },
+        headers: new Headers({ Accept: "application/json", "Accept-Language": "ko" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -2030,7 +2030,7 @@ describe("App", () => {
       1,
       "/api/v1/analysis-runs/analysis-1/deletion-preflight",
       expect.objectContaining({
-        headers: { Accept: "application/json", "Accept-Language": "ko" },
+        headers: new Headers({ Accept: "application/json", "Accept-Language": "ko" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(

@@ -7,15 +7,11 @@ export function getApiBaseUrl(): string {
 }
 
 import { getCurrentLocale } from "../i18n/store";
-import { resolveLocalizedText, t, translateKnownSource } from "../i18n/translate";
-import { regularizedWarningKeys } from "../i18n/regularizedMessages";
 
 export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const headers = localeHeaders(init?.headers);
-  const body = typeof init?.body === "string" ? resolveLocalizedText(init.body) : init?.body;
+  const headers = localeHeaders(init?.headers ?? (input instanceof Request ? input.headers : undefined));
   try {
-    const response = await fetch(input, { ...init, body, headers });
-    return localizedJsonResponse(response);
+    return await fetch(input, { ...init, headers });
   } catch (error) {
     if (error instanceof TypeError) {
       throw new Error("api_unreachable");
@@ -24,63 +20,10 @@ export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Pr
   }
 }
 
-function localizedJsonResponse(response: Response): Response {
-  const readJson = response.json.bind(response);
-  Object.defineProperty(response, "json", {
-    configurable: true,
-    value: async () => localizeApiPayload(await readJson(), getCurrentLocale()),
-  });
-  return response;
-}
-
-export function localizeApiPayload(
-  value: unknown,
-  locale = getCurrentLocale(),
-  contextKey: string | null = null,
-): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => localizeApiPayload(item, locale, contextKey));
-  }
-  if (typeof value !== "object" || value === null) return value;
-  const record = value as Record<string, unknown>;
-  const localized = Object.fromEntries(
-    Object.entries(record).map(([key, item]) => [key, localizeApiPayload(item, locale, key)]),
-  );
-  const messageContainer =
-    contextKey === "error" ||
-    contextKey === "errors" ||
-    contextKey === "issue" ||
-    contextKey === "issues" ||
-    contextKey === "warning" ||
-    contextKey === "warnings" ||
-    typeof record.severity === "string" ||
-    typeof record.correlation_id === "string";
-  if (
-    messageContainer &&
-    typeof record.code === "string" &&
-    typeof record.message === "string"
-  ) {
-    const regularizedKey = regularizedWarningKeys[record.code];
-    localized.message = regularizedKey !== undefined ? t(regularizedKey, {}, locale) : locale === "ko"
-      ? record.message
-      : translateKnownSource(record.message, locale) ?? t("warnings.generic", {}, locale);
-  }
-  return localized;
-}
-
 function localeHeaders(existing: HeadersInit | undefined): HeadersInit {
-  if (existing instanceof Headers) {
-    const headers = new Headers(existing);
-    headers.set("Accept-Language", getCurrentLocale());
-    return headers;
-  }
-  if (Array.isArray(existing)) {
-    return [
-      ...existing.filter(([name]) => name.toLowerCase() !== "accept-language"),
-      ["Accept-Language", getCurrentLocale()],
-    ];
-  }
-  return { ...existing, "Accept-Language": getCurrentLocale() };
+  const headers = new Headers(existing);
+  headers.set("Accept-Language", getCurrentLocale());
+  return headers;
 }
 
 export class ApiRequestError extends Error {

@@ -1,3 +1,8 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 import { IndividualsResultChart } from "./charts/QualityResultCharts";
 import type {
   AnalysisResultEnvelope,
@@ -37,6 +42,7 @@ export function IndividualsChartPanel({
   onRun,
   onValueColumnChange,
 }: IndividualsChartPanelProps) {
+  const { locale } = useI18n();
   const canRun = version !== null && valueColumnId !== null && filterValidationError === null;
 
   return (
@@ -104,7 +110,7 @@ export function IndividualsChartPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -112,7 +118,7 @@ export function IndividualsChartPanel({
             <>
               <div className="metadata-grid" aria-label="I-MR 관리도 요약">
                 <span>전체 상태</span>
-                <strong>{overallSignalStatus(result)}</strong>
+                <strong>{overallSignalStatus(result, locale)}</strong>
                 <span>측정값</span>
                 <strong>{result.value.display_name}</strong>
                 <span>순서</span>
@@ -272,10 +278,10 @@ function summarizeSignals(result: IndividualsChartResult) {
   );
 }
 
-function overallSignalStatus(result: IndividualsChartResult): string {
-  return result.signals.length > 0
+function overallSignalStatus(result: IndividualsChartResult, locale: AppLocale): string {
+  return translateSystemText(result.signals.length > 0
     ? "특별원인 신호 있음"
-    : "현재 활성화된 관리도 규칙에서 신호 없음";
+    : "현재 활성화된 관리도 규칙에서 신호 없음", locale);
 }
 
 function formatOrderSource(result: IndividualsChartResult): string {

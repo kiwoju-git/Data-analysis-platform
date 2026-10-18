@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { localizeApiPayload } from "../api/client";
+import { presentApiNotice } from "./apiNoticePresentation";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { initialLocale, LocaleProvider } from "./LocaleProvider";
 import {
@@ -67,14 +67,11 @@ describe("localization foundation", () => {
     expect(formatLocaleDateTime("2026-08-09T00:26:00Z", "ko")).toContain("2026");
   });
 
-  it("localizes machine warning messages but never translates ordinary user records", () => {
-    const warning = localizeApiPayload(
-      { warnings: [{ code: "api_connection_failed", message: "API 연결 실패" }] },
-      "en",
-    ) as { warnings: Array<{ message: string }> };
-    expect(warning.warnings[0].message).toBe("API connection failure");
-
-    const userRecord = { code: "A", message: "사용자가 입력한 메모" };
-    expect(localizeApiPayload(userRecord, "en")).toEqual(userRecord);
+  it("localizes an explicitly identified notice without modifying its source", () => {
+    const notice = { code: "api_connection_failed", message: "API 연결 실패" };
+    expect(presentApiNotice(notice, "en").message).toBe("API connection failure");
+    expect(notice.message).toBe("API 연결 실패");
+    expect(presentApiNotice({ code: "unknown", message: "사용자가 입력한 메모" }, "en").message)
+      .toBe("사용자가 입력한 메모");
   });
 });

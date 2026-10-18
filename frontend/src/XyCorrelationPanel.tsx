@@ -1,3 +1,8 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
@@ -45,6 +50,7 @@ export function XyCorrelationPanel({
   onToggleXColumn,
   onToggleYColumn,
 }: XyCorrelationPanelProps) {
+  const { locale } = useI18n();
   const canRun =
     version !== null &&
     xColumnIds.length > 0 &&
@@ -136,7 +142,7 @@ export function XyCorrelationPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -193,7 +199,7 @@ export function XyCorrelationPanel({
                           </span>
                         </td>
                         <td>{formatPairNumber(pair.association?.correlation ?? null)}</td>
-                        <td>{confidenceIntervalLabel(pair)}</td>
+                        <td>{confidenceIntervalLabel(pair, locale)}</td>
                         <td>{formatPairNumber(pair.test?.p_value ?? null)}</td>
                         <td>{formatPairNumber(pair.association?.r_squared ?? null)}</td>
                         <td>
@@ -300,13 +306,13 @@ function heatmapCellStyle(value: number | null): { backgroundColor?: string; col
   };
 }
 
-function confidenceIntervalLabel(pair: XyCorrelationPairResult): string {
+function confidenceIntervalLabel(pair: XyCorrelationPairResult, locale: AppLocale): string {
   if (pair.confidence_interval === null) {
     return "NA";
   }
   const { lower, upper, level } = pair.confidence_interval;
   if (lower === null || upper === null) {
-    return "계산 불가";
+    return translateSystemText("계산 불가", locale);
   }
   return `${formatPercent(level)} CI ${formatPairNumber(lower)} - ${formatPairNumber(upper)}`;
 }

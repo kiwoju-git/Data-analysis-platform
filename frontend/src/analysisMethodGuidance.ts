@@ -1,4 +1,6 @@
-import { translationToken } from "./i18n/translate";
+import { getCurrentLocale } from "./i18n/store";
+import { translateSystemText, translationToken } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 export interface MethodRoleRequirement {
   label: string;
@@ -765,23 +767,51 @@ const fallbackGuidance: AnalysisMethodGuidance = {
   resultFocus: ["구조화 결과 계약"],
 };
 
-export function getAnalysisMethodGuidance(methodId: string): AnalysisMethodGuidance {
-  return guidanceById[methodId] ?? { ...fallbackGuidance, methodId };
+export function getAnalysisMethodGuidance(
+  methodId: string,
+  locale: AppLocale = getCurrentLocale(),
+): AnalysisMethodGuidance {
+  const guidance = Object.prototype.hasOwnProperty.call(guidanceById, methodId)
+    ? guidanceById[methodId]
+    : { ...fallbackGuidance, methodId };
+  const displayText = (source: string) => translateSystemText(source, locale);
+  return {
+    ...guidance,
+    cardTags: guidance.cardTags?.map((tag) => ({
+      ...tag,
+      label: displayText(tag.label),
+    })),
+    roleRequirements: guidance.roleRequirements.map((role) => ({
+      ...role,
+      label: displayText(role.label),
+      detail: displayText(role.detail),
+    })),
+    optionChecklist: guidance.optionChecklist.map(displayText),
+    preflightChecks: guidance.preflightChecks.map(displayText),
+    resultFocus: guidance.resultFocus.map(displayText),
+    plainLanguage: guidance.plainLanguage === undefined
+      ? undefined
+      : displayText(guidance.plainLanguage),
+    commonErrors: guidance.commonErrors?.map(displayText),
+  };
 }
 
-export function getMethodCardTags(methodId: string): readonly MethodCardTag[] {
-  const guidance = getAnalysisMethodGuidance(methodId);
+export function getMethodCardTags(
+  methodId: string,
+  locale: AppLocale = getCurrentLocale(),
+): readonly MethodCardTag[] {
+  const guidance = getAnalysisMethodGuidance(methodId, locale);
   if (guidance.cardTags !== undefined) {
     return guidance.cardTags.slice(0, 4);
   }
   return [
     {
       category: "design",
-      label: guidance.roleRequirements[0]?.label ?? "입력 역할 확인",
+      label: guidance.roleRequirements[0]?.label ?? translateSystemText("입력 역할 확인", locale),
     },
     {
       category: "target",
-      label: guidance.resultFocus[0] ?? "결과 해석",
+      label: guidance.resultFocus[0] ?? translateSystemText("결과 해석", locale),
     },
   ];
 }

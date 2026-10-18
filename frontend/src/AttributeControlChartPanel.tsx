@@ -1,3 +1,7 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+
 import { AttributeResultChart } from "./charts/QualityResultCharts";
 import { useState } from "react";
 
@@ -72,6 +76,7 @@ export function AttributeControlChartPanel({
   onPhaseChange,
   onRun,
 }: AttributeControlChartPanelProps) {
+  const { locale } = useI18n();
   const [limitSetDeletionConfirmed, setLimitSetDeletionConfirmed] = useState(false);
   const needsDenominator = chartType !== "c";
   const phase2Ready =
@@ -87,8 +92,9 @@ export function AttributeControlChartPanel({
     (chartType !== "c" || constantOpportunityConfirmed) &&
     phase2Ready &&
     filterValidationError === null;
-  const countLabel = chartType === "p" || chartType === "np" ? "불량품 수" : "결점 수";
-  const denominatorLabel = chartType === "u" ? "검사 기회" : "표본 크기";
+  const countLabel = translateSystemText(chartType === "p" || chartType === "np" ? "불량품 수" : "결점 수", locale);
+  const denominatorLabel = translateSystemText(chartType === "u" ? "검사 기회" : "표본 크기", locale);
+  const chartPurpose = chartOptions.find((option) => option.type === chartType)?.purpose;
 
   return (
     <section className="analysis-run-panel" data-analysis-execution={methodId}>
@@ -144,7 +150,7 @@ export function AttributeControlChartPanel({
                   onChartTypeChange(option.type);
                 }}
                 role="radio"
-                title={option.purpose}
+                title={translateSystemText(option.purpose, locale)}
                 type="button"
               >
                 {option.label}
@@ -274,7 +280,7 @@ export function AttributeControlChartPanel({
               ) : null}
               {phase2State?.preflight?.issues.map((issue) => (
                 <div className="error-banner" key={issue.code}>
-                  {issue.message} ({issue.code})
+                  <ApiNoticeText notice={issue} showCode={false} /> ({issue.code})
                 </div>
               ))}
               {!phase2State?.isLoading && (phase2State?.limitSets.length ?? 0) === 0 ? (
@@ -336,7 +342,7 @@ export function AttributeControlChartPanel({
             )}
             <div className="option-note">
               <strong>{chartType.toUpperCase()} chart</strong>
-              <span>{chartOptions.find((option) => option.type === chartType)?.purpose}</span>
+              <span>{chartPurpose === undefined ? undefined : translateSystemText(chartPurpose, locale)}</span>
             </div>
           </div>
           <button
@@ -350,7 +356,7 @@ export function AttributeControlChartPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}

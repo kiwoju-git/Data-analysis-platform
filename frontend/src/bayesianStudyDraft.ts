@@ -6,6 +6,8 @@ import type {
   BayesianStudyResponse,
 } from "./api";
 import { parseDoeFactorDomainDraft } from "./doe/factorDomain";
+import { t, translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
 
 export interface FactorDraft {
   key: number;
@@ -75,32 +77,33 @@ export function bayesianStudyCloseBlocker(
 
 export function bayesianRecommendationStatus(
   recommendation: BayesianRecommendationResponse,
+  locale?: AppLocale,
 ): { label: string; description: string; className: string } {
   const currentState = recommendation.current_trial?.state ?? recommendation.trial.state;
   if (recommendation.is_latest === false) {
     return {
-      label: "과거 추천",
-      description: `과거 recommendation snapshot이며 현재 연결 trial 상태는 ${currentState}입니다.`,
+      label: translateSystemText("과거 추천", locale),
+      description: t("bayesian.recommendation.historicalDescription", { state: currentState }, locale),
       className: "",
     };
   }
   if (currentState === "completed") {
     return {
-      label: "관측 완료",
-      description: "추천 당시 예측과 이후 저장된 실제 관측값을 구분해 표시합니다.",
+      label: translateSystemText("관측 완료", locale),
+      description: translateSystemText("추천 당시 예측과 이후 저장된 실제 관측값을 구분해 표시합니다.", locale),
       className: "status-ready",
     };
   }
   if (currentState === "abandoned") {
     return {
-      label: "중단됨",
-      description: "중단된 추천이며 동일 조건은 향후 추천 후보에서 제외됩니다.",
+      label: translateSystemText("중단됨", locale),
+      description: translateSystemText("중단된 추천이며 동일 조건은 향후 추천 후보에서 제외됩니다.", locale),
       className: "status-error",
     };
   }
   return {
-    label: "확인 대기",
-    description: "관측값이 아닌 다음 확인 실험 후보입니다.",
+    label: translateSystemText("확인 대기", locale),
+    description: translateSystemText("관측값이 아닌 다음 확인 실험 후보입니다.", locale),
     className: "status-warning",
   };
 }

@@ -209,7 +209,7 @@ export function AnalysisWorkbench({
     effectiveRestoredState.restoredAnalysisResult ?? selectedAnalysisResult;
   const selectedHypothesisTags =
     selectedMethod?.module_id === "hypothesis"
-      ? getMethodCardTags(selectedMethod.method_id)
+      ? getMethodCardTags(selectedMethod.method_id, locale)
       : [];
   const selectMethod = (moduleId: AnalysisModuleId, methodId: string | null) => {
     setIsMethodHelpOpen(false);
@@ -366,7 +366,8 @@ export function AnalysisWorkbench({
 }
 
 function AnalysisRunErrorNotice({ errorCode }: { errorCode: string }) {
-  const details = getAnalysisRunErrorDetails(errorCode);
+  const { locale } = useI18n();
+  const details = getAnalysisRunErrorDetails(errorCode, locale);
   return (
     <div className="error-box analysis-error-box" role="alert">
       <h4>{details.title}</h4>

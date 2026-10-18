@@ -1,3 +1,8 @@
+import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
+import type { AppLocale } from "./i18n/types";
+
 import { RunResultChart } from "./charts/QualityResultCharts";
 import type {
   AnalysisResultEnvelope,
@@ -37,6 +42,7 @@ export function RunChartPanel({
   onRun,
   onValueColumnChange,
 }: RunChartPanelProps) {
+  const { locale } = useI18n();
   const canRun = version !== null && valueColumnId !== null && filterValidationError === null;
 
   return (
@@ -108,7 +114,7 @@ export function RunChartPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
               ))}
             </ul>
           ) : null}
@@ -128,7 +134,7 @@ export function RunChartPanel({
                 <span>Run count</span>
                 <strong>{result.runs.run_count.toLocaleString()}</strong>
                 <span>Runs test</span>
-                <strong>{formatRunChartRunsTest(result)}</strong>
+                <strong>{formatRunChartRunsTest(result, locale)}</strong>
                 <span>Trend 신호</span>
                 <strong>
                   {countRunChartSignals(result, "run_chart_trend").toLocaleString()}개
@@ -232,6 +238,7 @@ export function RunChartPanel({
 }
 
 function ApproximateRandomnessTests({ result }: { result: RunChartResult }) {
+  const { locale } = useI18n();
   const tests = result.approximate_randomness_tests;
   if (tests === undefined) {
     return (
@@ -302,7 +309,7 @@ function ApproximateRandomnessTests({ result }: { result: RunChartResult }) {
             card.available && card.pValue !== null && card.pValue <= tests.alpha;
           return (
             <article className="metric-card" key={card.key}>
-              <span>{card.label}</span>
+              <span>{translateSystemText(card.label, locale)}</span>
               <strong>
                 {card.available
                   ? `p=${formatRunChartNumber(card.pValue)}`
@@ -329,7 +336,7 @@ function ApproximateRandomnessTests({ result }: { result: RunChartResult }) {
                   </div>
                   <div>
                     <dt>tie/flat 정책</dt>
-                    <dd>{card.policy}</dd>
+                    <dd>{translateSystemText(card.policy, locale)}</dd>
                   </div>
                 </dl>
               </details>
@@ -356,11 +363,11 @@ function formatRunChartOrder(result: RunChartResult): string {
   return `${result.order.display_name} numeric asc`;
 }
 
-function formatRunChartRunsTest(result: RunChartResult): string {
+function formatRunChartRunsTest(result: RunChartResult, locale: AppLocale): string {
   if (!result.runs_test.available) {
     return result.runs_test.skipped_reason === null
-      ? "계산 안 함"
-      : `계산 안 함 · ${result.runs_test.skipped_reason}`;
+      ? translateSystemText("계산 안 함", locale)
+      : `${translateSystemText("계산 안 함", locale)} · ${result.runs_test.skipped_reason}`;
   }
   return `low p=${formatRunChartNumber(result.runs_test.p_value_low)} · high p=${formatRunChartNumber(
     result.runs_test.p_value_high,

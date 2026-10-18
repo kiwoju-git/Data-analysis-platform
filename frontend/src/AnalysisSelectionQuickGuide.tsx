@@ -1,4 +1,6 @@
 import type { AnalysisModuleId } from "./api";
+import { useI18n } from "./i18n/LocaleProvider";
+import { translateSystemText } from "./i18n/translate";
 
 interface AnalysisSelectionQuickGuideProps {
   selectedModuleId: AnalysisModuleId;
@@ -184,6 +186,7 @@ export function AnalysisSelectionQuickGuide({
   selectedModuleId,
   onSelectMethod,
 }: AnalysisSelectionQuickGuideProps) {
+  const { locale } = useI18n();
   if (selectedModuleId === "hypothesis") {
     return (
       <details className="analysis-selection-guide">
@@ -195,7 +198,7 @@ export function AnalysisSelectionQuickGuide({
         <div className="analysis-selection-guide-grid">
           {hypothesisGroups.map((group) => (
             <section aria-labelledby={`guide-${group.title}`} key={group.title}>
-              <h3 id={`guide-${group.title}`}>{group.title}</h3>
+              <h3 id={`guide-${group.title}`}>{translateSystemText(group.title, locale)}</h3>
               <div className="analysis-selection-guide-actions">
                 {group.items.map((item) => (
                   <button
@@ -204,11 +207,11 @@ export function AnalysisSelectionQuickGuide({
                     onClick={() => onSelectMethod(item.moduleId, item.methodId)}
                     type="button"
                   >
-                    {item.label} → {item.methodLabel}
+                    {translateSystemText(item.label, locale)} → {translateSystemText(item.methodLabel, locale)}
                   </button>
                 ))}
               </div>
-              {group.note !== undefined ? <p className="muted-copy">{group.note}</p> : null}
+              {group.note !== undefined ? <p className="muted-copy">{translateSystemText(group.note, locale)}</p> : null}
             </section>
           ))}
         </div>
@@ -232,7 +235,7 @@ export function AnalysisSelectionQuickGuide({
               onClick={() => onSelectMethod(item.moduleId, item.methodId)}
               type="button"
             >
-              {item.label} → {item.methodLabel}
+              {translateSystemText(item.label, locale)} → {translateSystemText(item.methodLabel, locale)}
             </button>
           ))}
         </div>
@@ -255,9 +258,9 @@ export function AnalysisSelectionQuickGuide({
                 onClick={() => onSelectMethod(item.moduleId, item.methodId)}
                 type="button"
               >
-                {item.label} → {item.methodLabel}
+                {translateSystemText(item.label, locale)} → {translateSystemText(item.methodLabel, locale)}
               </button>
-              <p className="muted-copy">{item.description}</p>
+              <p className="muted-copy">{translateSystemText(item.description, locale)}</p>
             </section>
           ))}
         </div>

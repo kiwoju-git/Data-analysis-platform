@@ -16,6 +16,9 @@ import {
   formatNumber,
 } from "./bayesianDisplay";
 import { DoeSettingsTable } from "../../doe/DoeSettingsTable";
+import { useI18n } from "../../i18n/LocaleProvider";
+import { translateSystemText } from "../../i18n/translate";
+import type { AppLocale } from "../../i18n/types";
 
 const EXPLORATION_OPTIONS: Array<{
   value: BayesianExplorationProfile;
@@ -79,6 +82,7 @@ export function BayesianRecommendationPanel({
   onBudgetChange: (value: string) => void;
   onRecommend: () => void;
 }) {
+  const { locale } = useI18n();
   const parsedBatchSize =
     executionMode === "sequential_single" ? 1 : Number(batchSize);
   const parsedBudget = Number(totalTrialBudget);
@@ -128,7 +132,7 @@ export function BayesianRecommendationPanel({
           fields={[
             {
               key: "execution-mode",
-              label: "실행 방식",
+              label: translateSystemText("실행 방식", locale),
               control: (
                 <fieldset
                   className="segmented-fieldset doe-table-segmented"
@@ -160,13 +164,13 @@ export function BayesianRecommendationPanel({
                 </fieldset>
               ),
               helper:
-                executionMode === "sequential_single"
+                translateSystemText(executionMode === "sequential_single"
                   ? "실제 결과를 입력한 뒤 GP를 갱신하여 다음 조건을 추천합니다."
-                  : "같은 관측 이력을 기준으로 생성하며, batch 전체가 종료될 때까지 다음 추천을 차단합니다.",
+                  : "같은 관측 이력을 기준으로 생성하며, batch 전체가 종료될 때까지 다음 추천을 차단합니다.", locale),
             },
             {
               key: "batch-size",
-              label: "한 번에 추천할 실험 수",
+              label: translateSystemText("한 번에 추천할 실험 수", locale),
               controlId: "bayesian-recommendation-batch-size",
               control: (
                 <input
@@ -183,14 +187,14 @@ export function BayesianRecommendationPanel({
                 />
               ),
               helper:
-                executionMode === "sequential_single"
+                translateSystemText(executionMode === "sequential_single"
                   ? "순차 방식은 1개로 고정됩니다."
-                  : "동시에 수행 가능한 수를 2~8개에서 선택하세요.",
+                  : "동시에 수행 가능한 수를 2~8개에서 선택하세요.", locale),
               helperId: "bayesian-recommendation-batch-size-help",
             },
             {
               key: "budget",
-              label: "전체 trial 예산",
+              label: translateSystemText("전체 trial 예산", locale),
               controlId: "bayesian-recommendation-budget",
               control: (
                 <input
@@ -202,7 +206,7 @@ export function BayesianRecommendationPanel({
                   onChange={(event) => onBudgetChange(event.currentTarget.value)}
                 />
               ),
-              helper: `현재 ${study.trial_count}개 · hard limit ${study.recommendation_hard_trial_limit}개`,
+              helper: `${translateSystemText("현재", locale)} ${study.trial_count} · hard limit ${study.recommendation_hard_trial_limit}`,
               helperId: "bayesian-recommendation-budget-help",
             },
           ]}
@@ -213,12 +217,12 @@ export function BayesianRecommendationPanel({
           fields={[
             {
               key: "goal",
-              label: "최적화 목표",
-              control: <strong>{objectiveSummary(study)}</strong>,
+              label: translateSystemText("최적화 목표", locale),
+              control: <strong>{objectiveSummary(study, locale)}</strong>,
             },
             {
               key: "acquisition",
-              label: "획득함수",
+              label: translateSystemText("획득함수", locale),
               control: (
                 <strong>
                   {targetGoal
@@ -236,8 +240,8 @@ export function BayesianRecommendationPanel({
             <div className="bayesian-exploration-options">
               {EXPLORATION_OPTIONS.map((option) => (
                 <label key={option.value} className={explorationProfile === option.value ? "is-selected" : ""}>
-                  <span><input type="radio" name="bayesian-exploration-profile" value={option.value} checked={explorationProfile === option.value} onChange={() => onExplorationProfileChange(option.value)} /><strong>{option.label}</strong></span>
-                  <small>{option.description}</small>
+                  <span><input type="radio" name="bayesian-exploration-profile" value={option.value} checked={explorationProfile === option.value} onChange={() => onExplorationProfileChange(option.value)} /><strong>{translateSystemText(option.label, locale)}</strong></span>
+                  <small>{translateSystemText(option.description, locale)}</small>
                 </label>
               ))}
             </div>
@@ -245,7 +249,7 @@ export function BayesianRecommendationPanel({
           {explorationProfile === "custom" ? (
             <DoeSettingsTable ariaLabel="Bayesian 사용자 탐색 설정" fields={[{
               key: "xi",
-              label: "표준화 ξ (0~10)",
+              label: translateSystemText("표준화 ξ (0~10)", locale),
               controlId: "bayesian-custom-xi",
               control: <input id="bayesian-custom-xi" inputMode="decimal" value={customXi} onChange={(event) => onCustomXiChange(event.currentTarget.value)} />,
             }]} />
@@ -311,6 +315,7 @@ function BayesianBatchResult({
 }: {
   batch: BayesianRecommendationBatchResponse;
 }) {
+  const { locale } = useI18n();
   return (
     <section aria-labelledby="bayesian-batch-result-title">
       <div className="panel-heading">
@@ -321,7 +326,7 @@ function BayesianBatchResult({
             생성되었습니다.
           </p>
         </div>
-        <span className="status-pill">{batchStateLabel(batch.batch_state)}</span>
+        <span className="status-pill">{batchStateLabel(batch.batch_state, locale)}</span>
       </div>
       <div className="table-wrap">
         <table className="result-table bayesian-batch-result-table">
@@ -361,6 +366,7 @@ function BatchItemRow({
 }: {
   item: BayesianRecommendationBatchItemResponse;
 }) {
+  const { locale } = useI18n();
   return (
     <tr>
       <td>{item.rank}</td>
@@ -369,7 +375,7 @@ function BatchItemRow({
       <td>{formatNumber(item.posterior_standard_deviation)}</td>
       <td>{formatNumber(item.acquisition_value)}</td>
       <td>
-        <strong>{batchReasonText(item)}</strong>
+        <strong>{batchReasonText(item, locale)}</strong>
         <details>
           <summary>왜 이 조건?</summary>
           <dl className="bayesian-reason-metrics">
@@ -468,7 +474,8 @@ function LegacyRecommendationResult({
 }: {
   recommendation: BayesianRecommendationResponse;
 }) {
-  const status = bayesianRecommendationStatus(recommendation);
+  const { locale } = useI18n();
+  const status = bayesianRecommendationStatus(recommendation, locale);
   return (
     <section aria-labelledby="bayesian-legacy-recommendation-title">
       <div className="panel-heading">
@@ -508,27 +515,28 @@ function LegacyRecommendationResult({
   );
 }
 
-function objectiveSummary(study: BayesianStudyResponse) {
+function objectiveSummary(study: BayesianStudyResponse, locale: AppLocale) {
   if (study.objective.goal_type === "match_target") {
     const tolerance =
       study.objective.target_tolerance === null
         ? ""
         : ` ± ${formatNumber(study.objective.target_tolerance)}`;
-    return `${study.objective.name} 목표 ${formatNumber(
+    return `${study.objective.name} ${translateSystemText("목표", locale)} ${formatNumber(
       study.objective.target_value ?? Number.NaN,
     )}${tolerance}`;
   }
   return `${study.objective.name} ${
-    study.objective.goal_type === "maximize" ? "최대화" : "최소화"
+    translateSystemText(study.objective.goal_type === "maximize" ? "최대화" : "최소화", locale)
   }`;
 }
 
 function batchStateLabel(
   state: BayesianRecommendationBatchResponse["batch_state"],
+  locale: AppLocale,
 ) {
-  if (state === "pending") return "실험 대기";
-  if (state === "partially_completed") return "일부 종료";
-  if (state === "completed") return "전체 완료";
-  if (state === "abandoned") return "전체 포기";
-  return "완료·포기 혼합";
+  if (state === "pending") return translateSystemText("실험 대기", locale);
+  if (state === "partially_completed") return translateSystemText("일부 종료", locale);
+  if (state === "completed") return translateSystemText("전체 완료", locale);
+  if (state === "abandoned") return translateSystemText("전체 포기", locale);
+  return translateSystemText("완료·포기 혼합", locale);
 }
