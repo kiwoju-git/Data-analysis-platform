@@ -7,6 +7,7 @@ import platform
 import sqlite3
 from pathlib import Path
 from uuid import UUID, uuid4
+from xml.etree import ElementTree
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10723,6 +10724,25 @@ def test_analysis_result_csv_export_detects_result_checksum_mismatch_without_art
     ).exists()
 
 
+def _assert_report_table_numbers(body, section_id, header, expected) -> None:
+    section_start = body.index(f'data-report-section="{section_id}"')
+    table_start = body.index("<table", section_start)
+    table_end = body.index("</table>", table_start) + len("</table>")
+    table = ElementTree.fromstring(body[table_start:table_end])
+    headers = ["".join(cell.itertext()) for cell in table.findall("./thead/tr/th")]
+    column_index = headers.index(header)
+    rows = table.findall("./tbody/tr")
+    assert len(rows) == len(expected)
+    for row, (stored, visible) in zip(rows, expected, strict=True):
+        cell = row.findall("td")[column_index]
+        assert "".join(cell.itertext()) == visible
+        if isinstance(stored, float):
+            assert cell.get("title") == repr(stored)
+            assert cell.get("aria-label") == repr(stored)
+        else:
+            assert visible == str(stored)
+
+
 def test_analysis_result_html_report_export_creates_escaped_downloadable_artifact(
     tmp_path,
 ) -> None:
@@ -10817,9 +10837,11 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert "<details open" not in export_text
     assert "Content-Security-Policy" in export_text
     assert "default-src 'none'" in export_text
-    assert "<th>Mean</th>" in export_body
-    assert "<td>1.5</td>" in export_body
-    assert "<td>0.7071067812</td>" in export_body
+    stored_column = json.loads(source_before)["result"]["columns"][0]
+    _assert_report_table_numbers(export_body, "summary", "Mean", [(stored_column["mean"], "1.5")])
+    _assert_report_table_numbers(
+        export_body, "summary", "Sample SD", [(stored_column["std"], "0.7071067812")]
+    )
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in export_body
     assert "<svg" not in export_body  # Descriptive statistics is table-only.
     assert "<script>alert(1)</script>" not in export_text
@@ -10836,7 +10858,9 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert '<html lang="ko">' in korean_export_text
     assert "변수별 요약" in korean_export_body
     assert '<div data-report-section="distribution_summary"' in korean_export_body
-    assert "<th>평균</th>" in korean_export_body and "<td>1.5</td>" in korean_export_body
+    _assert_report_table_numbers(
+        korean_export_body, "summary", "평균", [(stored_column["mean"], "1.5")]
+    )
     assert "<summary>기술 정보</summary>" in korean_export_text
     assert unsupported_locale_response.status_code == 422
     assert source_path.read_bytes() == source_before
@@ -10961,7 +10985,7 @@ def test_analysis_result_html_report_export_renders_eda_method_specific_sections
     assert "경험적 누적분포" in graph_body
     assert "normal-fit" in graph_body
     assert graph_body.count("<svg") == 5
-    assert "<th>평균</th>" in graph_body and "<td>1.5</td>" in graph_body
+    _assert_report_table_numbers(graph_body, "summary", "평균", [(1.5, "1.5")])
     assert "표준정규 이론 분위수" in graph_body and "누적확률" in graph_body
 
     normality_body = normality_text.split("<details", 1)[0]
@@ -10986,8 +11010,9 @@ def test_analysis_result_html_report_export_renders_eda_method_specific_sections
         "interpretation",
     ):
         assert f'data-report-section="{section_id}"' in equal_body
-    assert "그룹 요약" in equal_body and "<td>12.5</td>" in equal_body
-    assert "<td>20</td>" in equal_body and "<td>10</td>" in equal_body
+    assert "그룹 요약" in equal_body
+    _assert_report_table_numbers(equal_body, "groups", "평균", [(12.5, "12.5"), (20.0, "20")])
+    _assert_report_table_numbers(equal_body, "groups", "N", [(10, "10"), (10, "10")])
     assert "levene_brown_forsythe" in equal_body
     assert "classical_levene_mean_centered" in equal_body
     assert "표준편차 다중 비교구간" in equal_body and "<svg" in equal_body

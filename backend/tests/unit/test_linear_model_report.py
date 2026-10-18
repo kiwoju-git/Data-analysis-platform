@@ -3,6 +3,7 @@ from copy import deepcopy
 from html import escape
 from math import sin
 from types import SimpleNamespace
+from xml.etree import ElementTree
 
 import pytest
 
@@ -42,6 +43,31 @@ def _payload(kind="ols", selection="none", count=130):
     )
 
 
+def _assert_stored_numeric_column(markup, header, stored_values):
+    table = ElementTree.fromstring(f"<root>{markup}</root>").find(".//table")
+    assert table is not None
+    headers = ["".join(cell.itertext()) for cell in table.findall("./thead/tr/th")]
+    column_index = headers.index(header)
+    rows = table.findall("./tbody/tr")
+    assert len(rows) == len(stored_values)
+    # Precision is column-wide: distinct stored floats must have distinct visible labels.
+    distinct_values = set(stored_values)
+    digits = next(
+        digits
+        for digits in range(10, 18)
+        if len({format(value, f".{digits}g") for value in distinct_values}) == len(distinct_values)
+    )
+    labels = []
+    for row, value in zip(rows, stored_values, strict=True):
+        cell = row.findall("td")[column_index]
+        label = "".join(cell.itertext())
+        assert label == format(value, f".{digits}g")
+        assert cell.get("title") == repr(value)
+        assert cell.get("aria-label") == repr(value)
+        labels.append(label)
+    assert len(set(labels)) == len(distinct_values)
+
+
 @pytest.mark.parametrize("locale", ["en", "ko"])
 @pytest.mark.parametrize("selection", ["none", "backward_elimination"])
 def test_ols_report_uses_saved_coefficients_anova_selection_and_full_diagnostics(
@@ -64,12 +90,18 @@ def test_ols_report_uses_saved_coefficients_anova_selection_and_full_diagnostics
     assert escape(payload["response"]["display_name"]) in html
     assert escape(payload["equation"]["display_equation"]) in html
     coefficients = next(s.markup for s in prepared.body.sections if s.section_id == "coefficients")
-    for row in payload["coefficients"]:
-        assert format(row["statistic"], ".10g") in coefficients
-        assert format(row["confidence_interval"]["lower"], ".10g") in coefficients
+    _assert_stored_numeric_column(
+        coefficients, "T", [row["statistic"] for row in payload["coefficients"]]
+    )
+    _assert_stored_numeric_column(
+        coefficients,
+        "CI lower",
+        [row["confidence_interval"]["lower"] for row in payload["coefficients"]],
+    )
     anova = next(s.markup for s in prepared.body.sections if s.section_id == "anova")
-    for row in payload["anova"]["rows"]:
-        assert format(row["adjusted_ss"], ".10g") in anova
+    _assert_stored_numeric_column(
+        anova, "Adjusted SS", [row["adjusted_ss"] for row in payload["anova"]["rows"]]
+    )
     raw = next(s.markup for s in prepared.body.sections if s.section_id == "residuals_raw")
     assert raw.count("<circle") == 390
     assert ("Residual (mg)" if locale == "en" else "잔차 (mg)") in raw

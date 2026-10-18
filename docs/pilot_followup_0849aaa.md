@@ -108,6 +108,8 @@ ignored `.tmp` diagnostics, never committed user data.
   not reported as success. Serial run also had 847 passes / 2 timeouts; isolated
   lazy-loader rerun had 5 passes / 1 timeout. No timeout was raised or test removed.
   Clean native CI is a separate required run, not an assumed pass.
+  A later unchanged-timeout full local run completed: 96 files / 850 tests passed
+  (`.tmp/pilot-frontend-final.log`, 114.75 seconds).
 - First full backend run encountered a stale tutorial method-version expectation
   and was stopped after further progress; it is not a completed/full pass.
   Tutorial version metadata was updated, all 18 stored numeric expectations and
@@ -144,6 +146,20 @@ ignored `.tmp` diagnostics, never committed user data.
   fixes that reproduced UI defect. Two test fixes distinguished an accessible
   textbox role from a wrapping-label text query, and simulated all API transports
   failing rather than incorrectly treating one failed request as global offline.
+- Exact committed checkpoint `ba82dee` built UI repeated the long-group,
+  CSV ingestion and BF/F form journeys successfully
+  (`.tmp/pilot-ba82dee-groups.log`).
+- First native feature CI `39142728713`: Linux backend completed with
+  2432 passed / 7 failed / 12 skipped. Six failures were old report assertions
+  requiring bare `<td>` or `.10g` strings instead of the new exact-value title
+  and adaptive visible precision. One was the canonical ordered E2E marker
+  list missing four registered pilot steps. They are corrected without removing
+  numeric assertions or weakening the CI gate. The failed run remains evidence,
+  not a release-ready result; subsequent source requires a new full run.
+  The same seven failures occurred on native Python 3.11. Focused report
+  reproduction was 6 failed; after the assertions were corrected the two API
+  cases, OLS reports and numeric/prediction reports passed 50 tests. The complete
+  OpenAPI/frontend contract file passed 233 tests after the marker correction.
 
 The final aggregate CI outcome, exact source SHA, archive bytes and installation
 receipt belong to the new Release validation asset. This checkpoint does not

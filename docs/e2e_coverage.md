@@ -816,6 +816,10 @@ browser critical path.
 - `verify saved GP prediction request context` (full flow)
 - `verify two-editor schema concurrency` (full flow)
 - `verify chart axis formatting`
+- `verify privacy-safe local pilot feedback`
+- `verify pilot CSV ingestion group identity`
+- `verify pilot small-scale GP prediction and reports`
+- `verify pilot long-group analyses and reports`
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`
