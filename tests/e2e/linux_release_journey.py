@@ -591,6 +591,12 @@ def verify_pilot_legacy(browser, base: str, output: Path, seed: dict) -> dict:
         context.close()
 
 
+def _report_download_button_name(locale: str, *, managed: bool) -> str:
+    if locale == "ko":
+        return "다운로드"
+    return "Download" if managed else "download"
+
+
 def restore_pilot(
     page: Page, base: str, output: Path, original: dict, request: RequestJson
 ) -> dict:
@@ -674,14 +680,16 @@ def restore_pilot(
                 selected.locator("[data-view-stored-source]").click()
             assert snapshot.value.json()["payload"] == saved["snapshot"]["payload"]
         else:
-            selected = page.locator(".report-center-selected .analysis-export-panel")
+            selected = page.locator(".report-selected-result .analysis-export-panel")
             row = selected.locator(".export-list-item").filter(
                 has_text=descriptor["sha256"][:12]
             )
         expect(row).to_have_count(1)
         with page.expect_download() as download:
             row.get_by_role(
-                "button", name="Download" if locale == "en" else "다운로드", exact=True
+                "button",
+                name=_report_download_button_name(locale, managed=managed),
+                exact=True,
             ).click()
         path = output / f"{descriptor['export_id']}.html"
         download.value.save_as(path)

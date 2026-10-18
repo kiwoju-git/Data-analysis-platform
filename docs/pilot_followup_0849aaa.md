@@ -269,6 +269,38 @@ ignored `.tmp` diagnostics, never committed user data.
   (`.tmp/pilot-schema-green-f586bb0.log`), and suite-partition tests passed
   64 cases in 1.25 seconds. Ruff and diff checks passed. This fixes a fixture
   ordering defect; another native full/browser/archive gate is still required.
+- Native run `39151820654` at `66aa34621614896d32e446f1789e3783283484ee`
+  passed Linux full checks (2439 backend passed/12 Windows-only skips, 850
+  frontend tests, typecheck/build/localization) and the complete source browser
+  E2E. Python 3.11 passed 2439/12 separately. Linux archive packaging and initial
+  application/pilot journeys ran, but the first same-install restart failed in
+  the new pilot report-download locator. Failure artifact `12145644476` has
+  verified ZIP SHA-256
+  `4671fc019d296ed6cb9d1d6f1316f9bb2346d4266d0903421a919e44cbb5dddf`.
+  Its actual HTML contains the correct owner/hash report row under
+  `report-selected-result`, while the test looked for `report-center-selected`.
+  This is a test selector mismatch, not loss of the stored report.
+- A complete local built-UI replay then exposed the second exact-label mismatch:
+  English generic exports render `download`, while managed reports render
+  `Download`. The failing English DOM and trace are preserved under
+  `.tmp/e2e-pilot-archive-local-label-red/resume-1`. The test now uses the actual
+  container and exact KO/EN label for each report kind, retaining owner/hash
+  selection, downloaded-byte equality and SHA checks. A source/DOM contract and
+  four catalog-label cases prevent the same fixture drift; receipt tests passed
+  19 cases in 0.94 seconds, with Ruff check/format passing.
+- The corrected complete local rehearsal passed initial pilot analysis, two real
+  server stop/restarts, and server-stopped offline HTML inspection:
+  `.tmp/pilot-archive-local-green.log` and
+  `.tmp/e2e-pilot-archive-local-green/receipt.json`. It restored nine analyses
+  including three BASE legacy records, downloaded the original 17 reports on
+  both restarts, opened all 17 offline with zero HTTP requests, reproduced saved
+  GP prediction values, and preserved 66 registered/source artifact hashes.
+  An earlier ignored harness incorrectly reset locale on every navigation;
+  that harness-only failure was corrected to the actual release runner's
+  if-missing default and is not counted as a passing run. This rehearsal uses
+  Windows source-backed FastAPI plus built UI, not a Linux archive installation
+  or a different-installation-folder acceptance claim. The next native archive
+  run must still pass before publication; product code is unchanged here.
 
 The final aggregate CI outcome, exact source SHA, archive bytes and installation
 receipt belong to the new Release validation asset. This checkpoint does not

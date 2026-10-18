@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 import importlib
+import inspect
+import json
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,28 @@ def modules(monkeypatch):
     return importlib.import_module("verify_linux_release"), importlib.import_module(
         "linux_release_journey"
     )
+
+
+def test_resume_report_selector_matches_rendered_report_center(modules):
+    _, journey = modules
+    root = Path(__file__).resolve().parents[3]
+    page_source = (root / "frontend/src/ReportCenterPage.tsx").read_text(encoding="utf-8")
+    restore_source = inspect.getsource(journey.restore_pilot)
+    assert 'className="report-selected-result"' in page_source
+    assert 'page.locator(".report-selected-result .analysis-export-panel")' in restore_source
+    assert "report-center-selected" not in restore_source
+
+
+@pytest.mark.parametrize("locale", ["ko", "en"])
+@pytest.mark.parametrize("managed", [False, True])
+def test_resume_download_button_matches_exact_catalog_label(modules, locale, managed):
+    _, journey = modules
+    root = Path(__file__).resolve().parents[3]
+    catalog = json.loads(
+        (root / "frontend/src/i18n/catalog.generated.json").read_text(encoding="utf-8")
+    )
+    key = "managedReports.download" if managed else catalog["sourceToKey"]["다운로드"]
+    assert journey._report_download_button_name(locale, managed=managed) == catalog[locale][key]
 
 
 @pytest.fixture
