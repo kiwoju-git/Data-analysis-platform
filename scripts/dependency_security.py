@@ -184,8 +184,9 @@ def main() -> int:
                 "Python audits require --target-python, --audit-python and --lock"
             )
         audit_python(
-            args.target_python.resolve(),
-            args.audit_python.resolve(),
+            # Resolving Linux venv symlinks selects the base interpreter instead.
+            args.target_python.absolute(),
+            args.audit_python.absolute(),
             args.lock.resolve(),
             args.output_dir.resolve(),
             args.profile,
