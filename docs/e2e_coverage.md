@@ -1,5 +1,24 @@
 # Browser E2E Coverage
 
+## Startup and Child-Page Diagnostics (2026-10-18)
+
+`app_readiness.wait_for_app_ready` distinguishes mounted UI, evaluated runtime
+compatibility, LocaleProvider application and the requested route's actual
+content. `refined_ui.py` uses DOMContentLoaded rather than network inactivity,
+and selects the exact version ID returned by its synthetic fixture creation.
+Every child context closes in finally. Failure JSON/HTML/screenshots and a
+Playwright trace belong to that child page, not the parent critical-path page.
+Windows CI uploads `refined-ui/**` and `startup/**`, including traces and metadata.
+
+Focused isolated runner:
+`powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -RefinedUiOnly
+-DiagnosticsRoot .\.tmp\e2e-remediation-focused`.
+`startup_readiness.py` covers saved/default/invalid locale, storage getter/getItem/
+setItem exceptions, in-memory switches, reload, held App and runtime responses,
+failed App imports and initial render failures. It deliberately exercises one
+diagnostic failure path; that expected synthetic exception is not a product
+failure or a hidden retry. See `end_to_end_remediation.md` for actual outcomes.
+
 ## Charts, Desktop Resize and Linux (2026-10-08)
 
 `result_charts.py`: pointer/focus/pin/roving, viewport tooltip coordinates,
@@ -85,7 +104,7 @@ Read-only recheck against an already running instance (requires a registered
 dataset, does not fit models or modify stored data):
 
 ```powershell
-.\.venv\Scripts\python.exe .\tests\e2e\refined_ui.py --url http://127.0.0.1:8600 --diagnostics .\.tmp\refined-ui\verified
+.\.venv\Scripts\python.exe .\tests\e2e\refined_ui.py --url http://127.0.0.1:8600 --dataset-version-id <synthetic-version-uuid> --diagnostics .\.tmp\refined-ui\verified
 ```
 
 See [the UI record](refined_ui_design.md) for this change's exact final checks.
@@ -616,6 +635,8 @@ browser critical path.
   - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
     `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
     overflow and keep the language/API controls visible.
+- `verify startup readiness and storage recovery` (focused startup/refined mode)
+- `verify refined UI with exact synthetic version` (focused mode)
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`
@@ -663,6 +684,7 @@ browser critical path.
 - `verify lazy panel direct routes`
 - `verify lazy panel error boundary`
 - `verify refined UI, compact navigation and preserved drafts`
+- `verify startup readiness and storage recovery` (full critical path)
 - `verify graph builder page heading`
 - `verify graph builder result heading`
 - `verify graph builder provenance`

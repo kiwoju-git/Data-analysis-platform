@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { localizeApiPayload } from "../api/client";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -13,6 +13,24 @@ import {
 import { t } from "./translate";
 
 describe("localization foundation", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("mounts even when the browser localStorage getter throws", () => {
+    vi.stubGlobal("window", {
+      get localStorage() { throw new DOMException("private details", "SecurityError"); },
+    });
+    expect(() => renderToStaticMarkup(
+      <LocaleProvider><LanguageSwitcher /></LocaleProvider>,
+    )).not.toThrow();
+  });
+
+  it("tolerates a blocked getItem and a missing window", () => {
+    expect(initialLocale({ getItem: () => { throw new Error("denied"); } })).toBe("en");
+    expect(() => renderToStaticMarkup(
+      <LocaleProvider><LanguageSwitcher /></LocaleProvider>,
+    )).not.toThrow();
+  });
+
   it("uses English when no valid browser preference exists", () => {
     expect(initialLocale(null)).toBe("en");
     expect(initialLocale({ getItem: () => null })).toBe("en");

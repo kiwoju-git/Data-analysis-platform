@@ -1,13 +1,16 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 
-import App from "./App";
+import "./App.css";
+import { ApplicationContent, ApplicationErrorBoundary } from "./ApplicationBoundary";
 import { LocaleProvider } from "./i18n/LocaleProvider";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <LocaleProvider>
-      <App />
-    </LocaleProvider>
+    <ApplicationErrorBoundary>
+      <LocaleProvider>
+        <ApplicationContent />
+      </LocaleProvider>
+    </ApplicationErrorBoundary>
   </React.StrictMode>,
 );

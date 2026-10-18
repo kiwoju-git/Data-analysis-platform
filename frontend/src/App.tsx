@@ -4651,6 +4651,7 @@ export default function App() {
     requestedAnalysisDomain === null ? null : t(requestedAnalysisDomain.labelKey);
   return (
     <AppChrome
+      runtimeReady={runtimeCompatibility.state.kind === "compatible"}
       activeDatasetSelectorProps={activeDatasetSelectorProps}
       activePage={appRoute.page}
       canOpenAnalysis={selectedMethod !== null || analysisCatalog !== null}

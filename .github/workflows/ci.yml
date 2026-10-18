@@ -73,6 +73,8 @@ jobs:
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\logs\*.log
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\screenshots\*.png
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\html\*.html
+            ${{ runner.temp }}\datalab-e2e-diagnostics\refined-ui\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\startup\**
           if-no-files-found: ignore
 
   linux:

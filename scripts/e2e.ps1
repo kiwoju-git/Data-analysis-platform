@@ -6,7 +6,8 @@ param(
     [switch]$InstallBrowsers,
     [switch]$KeepWorkspace,
     [switch]$FactorialWorkflowOnly,
-    [switch]$GprReportOnly
+    [switch]$GprReportOnly,
+    [switch]$RefinedUiOnly
 )
 
 Set-StrictMode -Version Latest
@@ -54,6 +55,9 @@ try {
     }
     if ($GprReportOnly) {
         $Args += "--gpr-report-only"
+    }
+    if ($RefinedUiOnly) {
+        $Args += "--refined-ui-only"
     }
 
     & $Python @Args

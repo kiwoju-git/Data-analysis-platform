@@ -1,6 +1,10 @@
 {
   "version": 1,
   "en": {
+    "startup.loading": "Loading Statistical Twin...",
+    "startup.failed": "Statistical Twin could not start.",
+    "startup.recovery": "Reload the page to try again. Unsaved inputs may need to be entered again. Stored datasets and results are not changed.",
+    "startup.reload": "Reload",
     "charts.runOrder": "Run order",
     "charts.partIndex": "Part index",
     "charts.operatorIndex": "Operator index",
@@ -3939,6 +3943,10 @@
     "twoVariances.warning.two_variances_display_points_limited": "Charts display at most 500 points per group; calculations use every usable row."
   },
   "ko": {
+    "startup.loading": "Statistical Twin을 불러오고 있습니다.",
+    "startup.failed": "Statistical Twin을 시작하지 못했습니다.",
+    "startup.recovery": "페이지를 다시 불러오세요. 저장하지 않은 입력은 다시 입력해야 할 수 있습니다. 저장된 데이터셋과 결과는 변경되지 않습니다.",
+    "startup.reload": "다시 불러오기",
     "charts.runOrder": "실행 순서",
     "charts.partIndex": "부품 번호",
     "charts.operatorIndex": "측정자 번호",

@@ -14,7 +14,7 @@ export function RuntimeCompatibilityGate({
 }) {
   if (state.kind === "checking") {
     return (
-      <main className="runtime-gate-page" aria-busy="true">
+      <main className="runtime-gate-page" data-runtime-state={state.kind} aria-busy="true">
         <h1>Statistical Twin</h1>
         <p role="status">프런트엔드와 백엔드 호환성을 확인하고 있습니다.</p>
       </main>
@@ -22,7 +22,7 @@ export function RuntimeCompatibilityGate({
   }
   if (state.kind === "compatible") return null;
   return (
-    <main className="runtime-gate-page" aria-labelledby="runtime-mismatch-title">
+    <main className="runtime-gate-page" data-runtime-state={state.kind} aria-labelledby="runtime-mismatch-title">
       <section className="runtime-mismatch-panel" role="alert">
         <h1 id="runtime-mismatch-title">프런트엔드와 백엔드 버전이 일치하지 않습니다.</h1>
         <p>관리, 삭제, Predict, Response Optimizer와 Bayesian 작업은 안전을 위해 차단했습니다.</p>

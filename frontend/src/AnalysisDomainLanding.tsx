@@ -60,7 +60,7 @@ export function AnalysisDomainLanding({
   );
 
   return (
-    <section className="analysis-domain-landing" aria-label={t(domain.labelKey)}>
+    <section className="analysis-domain-landing" data-domain-id={domain.id} aria-label={t(domain.labelKey)}>
       {mappingNotice}
       {grouped ? (
         <div className="analysis-method-groups">

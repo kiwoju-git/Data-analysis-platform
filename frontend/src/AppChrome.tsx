@@ -29,6 +29,7 @@ export interface AppChromeProps {
   children: ReactNode;
   healthClassName: string;
   healthLabel: string;
+  runtimeReady?: boolean;
   locale?: AppLocale;
   activePage: AppRoute["page"];
   activeDatasetSelectorProps: ActiveDatasetVersionSelectorProps;
@@ -48,6 +49,7 @@ export function AppChrome({
   children,
   healthClassName,
   healthLabel,
+  runtimeReady = false,
   locale = getCurrentLocale(),
   activePage,
   activeDatasetSelectorProps,
@@ -139,7 +141,7 @@ export function AppChrome({
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-runtime-state={runtimeReady ? "compatible" : "checking"}>
       <header className="mobile-shell-header">
         <a
           aria-label="Statistical Twin 홈으로 이동"

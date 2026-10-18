@@ -35,7 +35,8 @@ from playwright.sync_api import (
 from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
-from refined_ui import verify_refined_ui
+from refined_ui import create_refined_ui_fixture, verify_refined_ui
+from startup_readiness import verify_startup_readiness
 from regularized_regression import verify_regularized_regression
 from result_charts import verify_chart_interactions, verify_result_chart_models
 from desktop_resize import verify_desktop_resize
@@ -209,6 +210,7 @@ def main() -> int:
     parser.add_argument("--keep-workspace", action="store_true")
     parser.add_argument("--factorial-workflow-only", action="store_true")
     parser.add_argument("--gpr-report-only", action="store_true")
+    parser.add_argument("--refined-ui-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -314,6 +316,7 @@ def main() -> int:
             backend_base_url,
             args.factorial_workflow_only,
             args.gpr_report_only,
+            args.refined_ui_only,
         )
         print("E2E critical path passed")
         return 0
@@ -611,11 +614,19 @@ def run_browser_flow(
     backend_base_url: str,
     factorial_only: bool = False,
     gpr_report_only: bool = False,
+    refined_ui_only: bool = False,
 ) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            if refined_ui_only:
+                diagnostics.step("verify startup readiness and storage recovery")
+                verify_startup_readiness(browser, frontend_base_url, diagnostics.root / "startup")
+                version_id = create_refined_ui_fixture(browser, frontend_base_url)
+                diagnostics.step("verify refined UI with exact synthetic version")
+                verify_refined_ui(browser, frontend_base_url, diagnostics.root / "refined-ui", version_id)
+                return
             verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
             verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
@@ -830,23 +841,32 @@ def run_browser_flow(
             diagnostics.step("verify lazy panel error boundary")
             verify_lazy_panel_error_boundary(context, frontend_base_url)
             diagnostics.step("verify refined UI, compact navigation and preserved drafts")
-            verify_refined_ui(browser, frontend_base_url, diagnostics.root / "refined-ui")
+            version_id = create_refined_ui_fixture(browser, frontend_base_url)
+            verify_refined_ui(browser, frontend_base_url, diagnostics.root / "refined-ui", version_id)
+            diagnostics.step("verify startup readiness and storage recovery")
+            verify_startup_readiness(browser, frontend_base_url, diagnostics.root / "startup")
             variance_context = browser.new_context(accept_downloads=True)
             variance_page = variance_context.new_page()
             variance_page.goto(frontend_base_url, wait_until="networkidle")
             verify_two_variances(variance_page, diagnostics, backend_base_url)
             variance_context.close()
         except PlaywrightTimeoutError as exc:
+            child_diagnostics = getattr(exc, "e2e_child_diagnostics", None)
             message = (
                 f"Playwright wait timed out during '{diagnostics.current_step_label}': "
-                f"{describe_page(page)}"
+                f"{child_diagnostics or describe_page(page)}"
             )
             diagnostics.record(f"[e2e] {message}")
             diagnostics.record(str(exc))
-            diagnostics.capture_page_failure(page)
+            if child_diagnostics is None:
+                diagnostics.capture_page_failure(page)
             raise AssertionError(message) from exc
-        except Exception:
-            diagnostics.capture_page_failure(page)
+        except Exception as exc:
+            child_diagnostics = getattr(exc, "e2e_child_diagnostics", None)
+            if child_diagnostics is None:
+                diagnostics.capture_page_failure(page)
+            else:
+                diagnostics.record(f"[e2e] actual child-page diagnostics: {child_diagnostics}")
             raise
         finally:
             browser.close()

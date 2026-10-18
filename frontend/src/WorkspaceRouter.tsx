@@ -96,6 +96,7 @@ export function WorkspaceRouter({
   return (
     <section
       className="workspace"
+      data-page={routePage}
       aria-labelledby={labelledBy}
     >
       {routePage === "analysis" ? <AnalysisPage {...analysisPageProps} /> : null}

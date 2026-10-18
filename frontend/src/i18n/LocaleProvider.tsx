@@ -10,6 +10,7 @@ import {
 
 import { setCurrentLocale } from "./store";
 import { getCurrentLocale } from "./store";
+import { readBrowserLocaleStorage } from "./browserStorage";
 import { t, type TranslationKey, type TranslationParams } from "./translate";
 import {
   formatCount,
@@ -50,7 +51,7 @@ export function initialLocale(storage: Pick<Storage, "getItem"> | null): AppLoca
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<AppLocale>(() => {
-    const resolved = initialLocale(typeof window === "undefined" ? null : window.localStorage);
+    const resolved = initialLocale(readBrowserLocaleStorage());
     setCurrentLocale(resolved);
     return resolved;
   });
@@ -58,7 +59,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     setCurrentLocale(nextLocale);
     setLocaleState(nextLocale);
     try {
-      window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+      readBrowserLocaleStorage()?.setItem(LOCALE_STORAGE_KEY, nextLocale);
     } catch {
       // A blocked localStorage must not prevent an in-memory language switch.
     }
@@ -66,6 +67,8 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = locale;
+    document.documentElement.dataset.appLocale = locale;
+    return () => { delete document.documentElement.dataset.appLocale; };
   }, [locale]);
 
   const value = useMemo<LocaleContextValue>(
