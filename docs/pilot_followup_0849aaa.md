@@ -207,6 +207,37 @@ ignored `.tmp` diagnostics, never committed user data.
   with Node 22 on PATH, root `backend` on PYTHONPATH, TEMP/TMP on D: and numerical
   threads capped at one. Only the harness-owned servers were stopped. This
   source-browser success does not assert a new native CI or archive pass.
+- A complete local source `workflows` run then exposed a genuine mobile-header
+  regression, separate from the injected-request fixture issue. At 390px in
+  Korean, the new feedback action left the language control at y=111.39 and
+  wrapped API status to y=163.39. Both were visible and page width stayed 390px,
+  but the existing same-row/left-to-right assertion correctly failed. The
+  mobile-only two-column grid now places feedback on its own first row and
+  keeps language/API controls on the second; desktop styles and existing test
+  assertions are unchanged. The focused source localization replay passed in
+  KO/EN (`.tmp/pilot-localization-green-fa5e101.log`); Korean language/API y
+  positions are now 163.39/166.39 with overlapping vertical extents and no
+  page overflow. Installed ui-ux-pro-max guidance on compact label overflow and
+  responsive wrapping was consulted while preserving existing tokens.
+- The next full source run found a test-observation limit, not a failed lazy
+  import: the Resource Timing buffer contained exactly 250 entries and no
+  `ReportCenterPage`, while a separately attached Playwright response listener
+  recorded `/src/ReportCenterPage.tsx` HTTP 200. The actual page displayed the
+  Report Center heading, five saved-result rows and no loading placeholder
+  (`.tmp/e2e-pilot-lazy-probe-fa5e101/lazy-page-observation.json`). The long-lived
+  E2E Workbench context now sets a bounded 4096-entry Resource Timing buffer
+  before navigation. Exact lazy-module assertions and their 10-second timeout
+  remain unchanged; application resource timing and loading code are untouched.
+- The complete source `workflows` suite finally passed after those two fixes
+  (`.tmp/pilot-workflows-final-fa5e101.log`, 17:12:17-17:23:40 UTC). It retained
+  chart interactions/models, long-group reports, desktop/locale checks and the
+  entire legacy workflow, including PLS/GP models and prediction, kernel compare,
+  DOE/BO, saved reports, refined UI, startup recovery and Two Variances. It used
+  the same Python/Node/D: temporary environment as the context suite, with
+  `--suite workflows --backend-port 8051 --frontend-port 5271` and a fresh
+  synthetic workspace. The ignored runner wrapper only printed tracebacks and
+  recorded resource observations; it delegated to the unchanged suite dispatcher.
+  This is local Windows source/Vite evidence, not the new native Release gate.
 
 The final aggregate CI outcome, exact source SHA, archive bytes and installation
 receipt belong to the new Release validation asset. This checkpoint does not

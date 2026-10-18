@@ -35,6 +35,16 @@
 .feedback-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .feedback-actions button { display: inline-flex; align-items: center; gap: 6px; }
 .feedback-notice { min-block-size: 1.5em; margin-block-end: 0; }
+@media (max-width: 760px) {
+  .topbar-actions.topbar-feedback-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .topbar-feedback-actions > .feedback-entry {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
 @media (max-width: 520px) {
   .feedback-dialog { padding: 16px; }
   .feedback-fields { grid-template-columns: minmax(0, 1fr); gap: 0; }

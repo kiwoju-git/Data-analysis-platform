@@ -794,6 +794,9 @@ def run_browser_flow(
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
             verify_localization_shell(browser, frontend_base_url, diagnostics)
             context = browser.new_context(accept_downloads=True)
+            # Preserve lazy-module evidence across the long source/Vite workflow;
+            # Chromium's default 250-entry resource buffer fills before Reports.
+            context.add_init_script("performance.setResourceTimingBufferSize(4096);")
             context.add_init_script(
                 "if (window.localStorage.getItem('statistical-twin.locale') === null) "
                 "window.localStorage.setItem('statistical-twin.locale', 'ko');"
