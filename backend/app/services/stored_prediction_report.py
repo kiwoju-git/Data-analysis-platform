@@ -39,7 +39,7 @@ PREDICTION_REPORT_DEFINITION = ReportDefinition(
     "stored_regression_prediction",
     (1, 2, 3),
     "stored_regression_prediction",
-    "1.0.0",
+    "1.1.0",
     (
         ReportVariantDefinition(
             "stored_prediction",
@@ -260,6 +260,7 @@ def _render(
                         text("New-observation PI upper", "새 관측값 예측구간 상한"),
                     ],
                     table_rows,
+                    numeric_column_groups=((2, 3), (4, 5)),
                 ),
             ),
             ReportSection(

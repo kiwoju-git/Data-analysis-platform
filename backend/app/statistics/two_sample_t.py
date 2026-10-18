@@ -45,6 +45,7 @@ class TwoSampleTGroupColumn:
 
 @dataclass
 class _GroupAccumulator:
+    group_value: str
     group_label: str
     group_index: int
     values: list[float] = field(default_factory=list)
@@ -94,14 +95,15 @@ def calculate_two_sample_t(
             n_excluded_non_numeric_response += 1
             continue
 
-        group_label = _safe_group_label(group_value)
-        group = groups.get(group_label)
+        group_key = group_value.strip()
+        group = groups.get(group_key)
         if group is None:
             group = _GroupAccumulator(
-                group_label=group_label,
+                group_value=group_key,
+                group_label=_safe_group_label(group_key),
                 group_index=len(groups),
             )
-            groups[group_label] = group
+            groups[group_key] = group
         group.values.append(response_number)
 
     group_list = list(groups.values())
@@ -120,7 +122,7 @@ def calculate_two_sample_t(
         null_difference=null_difference,
     )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "two_sample_t_test",
         "method": "welch_two_sample_t" if variance_assumption == "welch" else "student_t_test",
         "variance_assumption": variance_assumption,
@@ -202,6 +204,7 @@ def _column_payload(
 def _group_summary(group: _GroupAccumulator) -> dict[str, object]:
     values = sorted(group.values)
     return {
+        "group_value": group.group_value,
         "group_label": group.group_label,
         "group_index": group.group_index,
         "n": len(values),
@@ -275,6 +278,10 @@ def _test_result(
         n_2=n_2,
     )
     return {
+        "group_1_value": group_1.group_value,
+        "group_2_value": group_2.group_value,
+        "group_1_index": group_1.group_index,
+        "group_2_index": group_2.group_index,
         "group_1_label": group_1.group_label,
         "group_2_label": group_2.group_label,
         "estimate": estimate,

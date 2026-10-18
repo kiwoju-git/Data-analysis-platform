@@ -220,6 +220,7 @@ export interface EqualVarianceColumnRef {
 }
 
 export interface EqualVarianceGroupSummary {
+  group_value?: string;
   group_label: string;
   group_index: number;
   n: number;
@@ -234,12 +235,22 @@ export interface EqualVarianceGroupSummary {
 }
 
 export interface EqualVarianceMultipleComparisonGroup {
+  group_value?: string;
   group_label: string;
   group_index: number;
   n: number;
   sample_standard_deviation: number;
   comparison_interval: { lower: number; upper: number };
   allocation: number;
+}
+
+export interface EqualVariancePairIdentity {
+  left_group: string;
+  right_group: string;
+  left_group_index?: number;
+  right_group_index?: number;
+  left_group_value?: string;
+  right_group_value?: string;
 }
 
 export interface EqualVarianceMultipleComparisons {
@@ -249,8 +260,8 @@ export interface EqualVarianceMultipleComparisons {
   p_value: number | null;
   reject_equal_variances: boolean | null;
   groups: EqualVarianceMultipleComparisonGroup[];
-  non_overlapping_pairs: Array<{ left_group: string; right_group: string }>;
-  pairwise_p_values: Array<{ left_group: string; right_group: string; p_value: number }>;
+  non_overlapping_pairs: EqualVariancePairIdentity[];
+  pairwise_p_values: Array<EqualVariancePairIdentity & { p_value: number }>;
   warnings: string[];
 }
 

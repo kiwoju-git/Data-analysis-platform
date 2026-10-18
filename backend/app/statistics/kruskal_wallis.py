@@ -46,6 +46,7 @@ class KruskalWallisGroupColumn:
 
 @dataclass
 class _GroupAccumulator:
+    group_value: str
     group_label: str
     group_index: int
     values: list[float] = field(default_factory=list)
@@ -93,14 +94,15 @@ def calculate_kruskal_wallis(
             n_excluded_non_numeric_response += 1
             continue
 
-        group_label = _safe_group_label(group_value)
-        group = groups.get(group_label)
+        group_key = group_value.strip()
+        group = groups.get(group_key)
         if group is None:
             group = _GroupAccumulator(
-                group_label=group_label,
+                group_value=group_key,
+                group_label=_safe_group_label(group_key),
                 group_index=len(groups),
             )
-            groups[group_label] = group
+            groups[group_key] = group
         group.values.append(response_number)
 
     group_list = list(groups.values())
@@ -131,7 +133,7 @@ def calculate_kruskal_wallis(
     )
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "kruskal_wallis_test",
         "method": "kruskal_wallis",
         "missing_policy": "complete_case",
@@ -241,6 +243,7 @@ def _group_summary(
     q1, q3 = _quartiles(values)
     iqr = None if q1 is None or q3 is None else q3 - q1
     return {
+        "group_value": group.group_value,
         "group_label": group.group_label,
         "group_index": group.group_index,
         "n": len(values),
@@ -408,6 +411,10 @@ def _dunn_comparisons(
             raw_p_values.append(raw_p_value)
             raw_comparisons.append(
                 {
+                    "group_1_value": left.group_value,
+                    "group_2_value": right.group_value,
+                    "group_1_index": left.group_index,
+                    "group_2_index": right.group_index,
                     "group_1_label": left.group_label,
                     "group_2_label": right.group_label,
                     "mean_rank_difference": mean_rank_left - mean_rank_right,

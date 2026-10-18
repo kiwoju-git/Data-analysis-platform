@@ -4,6 +4,12 @@ from html import escape
 from typing import Any
 
 from app.i18n.report_text import ReportLocale, report_text
+from app.services.report_numeric_axis import (
+    numeric_axis_plan,
+    numeric_axis_ticks,
+    numeric_fraction,
+    padded_range,
+)
 from app.services.stored_report_primitives import report_plot, report_table, report_value
 
 
@@ -14,12 +20,12 @@ def ratio_interval_svg(payload: dict[str, Any], locale: ReportLocale, scale: str
     lower = interval["lower"]["value"]
     upper = interval["upper"]["value"]
     finite = [estimate, null_ratio, lower] + ([] if upper is None else [upper])
-    low, high = min(finite), max(finite)
-    pad = (high - low or 1) * 0.1
-    low, high = max(0, low - pad), high + pad
+    low, high = padded_range(min(finite), max(finite), 0.1)
+    low = max(0, low)
+    axis = numeric_axis_plan(low, high)
 
     def x(value: float) -> float:
-        return 75 + (value - low) / (high - low) * 500
+        return 75 + numeric_fraction(value, low, high) * 500
 
     title = report_text(locale, en="Ratio confidence interval", ko="비율 신뢰구간")
     comparison = report_text(locale, en="Comparison", ko="비교")
@@ -35,11 +41,11 @@ def ratio_interval_svg(payload: dict[str, Any], locale: ReportLocale, scale: str
         f'<line x1="{x(null_ratio):.3f}" x2="{x(null_ratio):.3f}" y1="30" y2="150" '
         'stroke="#777" stroke-dasharray="4 3"/>',
         f'<text x="{x(null_ratio):.3f}" y="22" text-anchor="middle" font-size="10">'
-        f"{escape(null_label)} {null_ratio:.6g}</text>",
+        f"{escape(null_label)} {null_ratio!r}</text>",
         f'<line x1="{x(lower):.3f}" x2="{end:.3f}" y1="85" y2="85" '
         'stroke="#225aa7" stroke-width="2"/>',
         f'<circle cx="{x(estimate):.3f}" cy="85" r="4" fill="#225aa7" '
-        f'data-value="{estimate!r}"><title>{estimate:.10g}</title></circle>',
+        f'data-value="{estimate!r}"><title>{estimate!r}</title></circle>',
     ]
     if upper is None:
         parts.append(
@@ -47,11 +53,20 @@ def ratio_interval_svg(payload: dict[str, Any], locale: ReportLocale, scale: str
             'fill="none" stroke="#225aa7"/><text x="575" y="112" '
             f'text-anchor="end" font-size="11">{escape(unbounded)}</text>'
         )
-    for index in range(5):
-        value = low + (high - low) * index / 4
+    for value, label in numeric_axis_ticks(axis):
         parts.append(
             f'<text x="{x(value):.3f}" y="170" text-anchor="middle" '
-            f'font-size="10">{value:.4g}</text>'
+            f'font-size="10">{escape(label)}</text>'
+        )
+    if axis.offset:
+        offset_explanation = report_text(
+            locale, en="Add base to tick labels", ko="눈금에 더하는 기준값"
+        )
+        parts.append(
+            f'<text x="575" y="10" text-anchor="end" font-size="10" '
+            f'data-axis="x" data-axis-offset="{axis.offset!r}">'
+            f"<title>{escape(scale)}: {escape(offset_explanation)} {axis.offset!r}</title>"
+            f"x: {axis.offset:+.17g}</text>"
         )
     parts.append(
         f'<text x="325" y="193" text-anchor="middle" font-size="12">{escape(scale)}</text></svg>'

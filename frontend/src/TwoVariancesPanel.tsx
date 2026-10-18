@@ -152,11 +152,11 @@ export function TwoVariancesResults({ result, sourceKey }: { result: TwoVariance
     <p>{t("twoVariances.statistic")}: {fmt(result.test.statistic)} · DF {result.test.df1}, {result.test.df2} · p = {fmt(result.test.p_value)} · alpha = {fmt(result.test.alpha)}</p>
     <div className="analysis-result-grid">
       <InteractiveScatterChart chartId="two-variances-groups" sourceKey={sourceKey} title={t("twoVariances.groupPlot")} description={t("twoVariances.filteredRow")}
-        points={points} formatValue={fmt} emptyLabel={t("charts.noData")} xLabel={result.group_column.display_name} yLabel={result.response.display_name} yUnit={result.response.unit}
+        points={points} emptyLabel={t("charts.noData")} xLabel={result.group_column.display_name} yLabel={result.response.display_name} yUnit={result.response.unit}
         xRange={{ min: .5, max: 2.5 }} yRange={paddedNumericRange(points.map((point) => point.y))} xTicks={result.groups.map((group, index) => ({ value: index + 1, label: group.label }))}
         annotations={[t("charts.displayCount", { shown: points.length, total: result.sample.n_used })]} />
       {interval.available && <InteractiveScatterChart chartId="two-variances-ratio" sourceKey={sourceKey} title={t("twoVariances.interval")} description={intervalText}
-        formatValue={fmt} emptyLabel={t("charts.noData")} xLabel={t(result.ratio_estimate.scale === "variance" ? "twoVariances.varianceRatio" : "twoVariances.sdRatio")} yLabel={t("twoVariances.comparison")}
+        emptyLabel={t("charts.noData")} xLabel={t(result.ratio_estimate.scale === "variance" ? "twoVariances.varianceRatio" : "twoVariances.sdRatio")} yLabel={t("twoVariances.comparison")}
         xRange={ratioRange} yRange={{ min: 0, max: 2 }} yTicks={[{ value: 1, label: t("twoVariances.ratio") }]}
         points={[{ id: "ratio", x: result.ratio_estimate.value, y: 1, title: t("twoVariances.ratio"), ariaLabel: intervalText, className: "scatter-point", details: [{ label: t("twoVariances.interval"), value: intervalText }] }]}
         referenceLines={[{ label: t("twoVariances.nullRatio"), x1: result.hypothesis.ratio, x2: result.hypothesis.ratio, y1: 0, y2: 2 },

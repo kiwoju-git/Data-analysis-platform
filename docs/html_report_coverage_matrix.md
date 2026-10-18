@@ -5,11 +5,26 @@ reader schemas are joined in the [generated capability matrix](generated/analysi
 It is source-declaration evidence, not a replacement for per-source report checks
 or the executed [journey matrix](remediation_journey_matrix.md).
 
-## Current A11 Contract
+## Pilot Follow-up Output Versions
+
+The current pilot contract is API **24**, metadata **22**. Full group identity
+readers accept equal-variance schemas 1/2/3 and two-sample-t/Kruskal-Wallis
+schemas 1/2. New generic reports identify renderer **2.1.0**; completed/stored
+prediction and dedicated workflow reports identify **1.1.0**. These renderer
+changes add precision-aware axes/tables and full saved group names, not new
+statistical estimates. Existing export files and checksums are unchanged.
+Column context preserves differences between float values; paired interval
+columns share precision, including a one-row prediction. Legacy truncated group
+labels remain readable with an explicit full-name limitation.
+See [numeric display](numeric_display_contract.md),
+[group identity](group_identity_contract.md) and the
+[execution ledger](pilot_followup_0849aaa.md) for scope and actual evidence.
+
+## Historical A11 Contract
 
 Generic HTML artifact schema **4** records locale, exact source SHA-256, renderer
 version, rendered section IDs and `full`/`summary` level. Existing files are not
-rewritten. API contract remains 23 for this integrated remediation; method/result
+rewritten. A11 introduced API contract 23 for that integrated remediation; method/result
 versions and metadata schema 20 are unchanged by report display changes.
 
 A12 is a separate managed-source extension under API 23 with metadata 21. Its

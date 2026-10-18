@@ -1,8 +1,16 @@
 """Escaped tables and static SVG projections of already stored result values."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from html import escape
 from math import isfinite
+
+from app.services.report_numeric_axis import (
+    numeric_axis_plan,
+    numeric_axis_ticks,
+    numeric_fraction,
+    padded_range,
+)
 
 
 def report_number(value: object) -> float:
@@ -27,10 +35,80 @@ def report_value(value: object) -> str:
     return str(value)
 
 
-def report_table(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> str:
+@dataclass(frozen=True)
+class ReportNumericColumnContext:
+    values: tuple[int | float, ...]
+    significant_digits: int
+
+
+ReportNumericFormatter = Callable[[float, ReportNumericColumnContext], str]
+
+
+def _numeric_comparison_label(value: int | float, digits: int) -> str:
+    return str(value) if isinstance(value, int) else format(value, f".{digits}g")
+
+
+def report_table(
+    headers: Sequence[str],
+    rows: Sequence[Sequence[object]],
+    *,
+    numeric_columns: Mapping[int, ReportNumericFormatter | None] | None = None,
+    numeric_column_groups: Sequence[Sequence[int]] = (),
+) -> str:
+    contexts: dict[int, ReportNumericColumnContext] = {}
+    for index in range(len(headers)):
+        if numeric_columns is not None and index not in numeric_columns:
+            continue
+        values = tuple(
+            value
+            for row in rows
+            if len(row) > index
+            and isinstance(value := row[index], int | float)
+            and not isinstance(value, bool)
+        )
+        if any(isinstance(value, float) and not isfinite(value) for value in values):
+            raise ValueError("analysis_report_payload_invalid")
+        digits = 10
+        distinct = set(values)
+        while digits < 17 and len(
+            {_numeric_comparison_label(value, digits) for value in distinct}
+        ) < len(distinct):
+            digits += 1
+        contexts[index] = ReportNumericColumnContext(values, digits)
+
+    # Interval endpoints occupy separate columns but must share display precision.
+    for group in numeric_column_groups:
+        if any(index not in contexts for index in group):
+            raise ValueError("analysis_report_numeric_column_group_invalid")
+        values = tuple(value for index in group for value in contexts[index].values)
+        digits = max((contexts[index].significant_digits for index in group), default=10)
+        distinct = set(values)
+        while digits < 17 and len(
+            {_numeric_comparison_label(value, digits) for value in distinct}
+        ) < len(distinct):
+            digits += 1
+        context = ReportNumericColumnContext(values, digits)
+        for index in group:
+            contexts[index] = context
+
+    def cell(index: int, value: object) -> str:
+        context = contexts.get(index)
+        if isinstance(value, float) and context is not None:
+            formatter = numeric_columns.get(index) if numeric_columns is not None else None
+            label = (
+                formatter(value, context)
+                if formatter
+                else format(value, f".{context.significant_digits}g")
+            )
+            if value == 0 and formatter is None:
+                label = "0"
+            exact = escape(repr(value), quote=True)
+            return f'<td title="{exact}" aria-label="{exact}">{escape(label)}</td>'
+        return f"<td>{escape(report_value(value))}</td>"
+
     head = "".join(f"<th>{escape(header)}</th>" for header in headers)
     body = "".join(
-        "<tr>" + "".join(f"<td>{escape(report_value(value))}</td>" for value in row) + "</tr>"
+        "<tr>" + "".join(cell(index, value) for index, value in enumerate(row)) + "</tr>"
         for row in rows
     )
     return (
@@ -103,19 +181,16 @@ def report_plot(
         xmax = ymax = bound
     bottom = 535 if square else 230
     height = bottom - 35
-    xpad = (xmax - xmin or max(abs(xmin), 1)) * 0.06
-    ypad = (ymax - ymin or max(abs(ymin), 1)) * 0.06
-    xmin, xmax, ymin, ymax = xmin - xpad, xmax + xpad, ymin - ypad, ymax + ypad
-    report_number(xmax - xmin)
-    report_number(ymax - ymin)
+    xmin, xmax = padded_range(xmin, xmax)
+    ymin, ymax = padded_range(ymin, ymax)
     if xmax <= xmin or ymax <= ymin:
         raise ValueError("analysis_report_payload_invalid")
 
     def sx(x: float) -> float:
-        return 75 + (x - xmin) / (xmax - xmin) * 500
+        return 75 + numeric_fraction(x, xmin, xmax) * 500
 
     def sy(y: float) -> float:
-        return bottom - (y - ymin) / (ymax - ymin) * height
+        return bottom - numeric_fraction(y, ymin, ymax) * height
 
     legend_count = len(series) + len(reference_lines) + len(reference_segments)
     parts = [
@@ -126,14 +201,17 @@ def report_plot(
         f'<g fill="none" stroke="#637083"><path d="M75 35V{bottom}H575"/></g>',
     ]
     for axis, specified, low, high in (("x", x_ticks, xmin, xmax), ("y", y_ticks, ymin, ymax)):
-        ticks = (
-            specified
-            if specified is not None
-            else [
-                (low + (high - low) * (index / 4), f"{low + (high - low) * (index / 4):.4g}")
-                for index in range(5)
-            ]
-        )
+        plan = numeric_axis_plan(low, high)
+        ticks = specified if specified is not None else numeric_axis_ticks(plan)
+        if specified is None and plan.offset:
+            label = x_label if axis == "x" else y_label
+            parts.append(
+                f'<text x="{575 if axis == "x" else 75}" y="{12 if axis == "x" else 25}" '
+                f'text-anchor="{"end" if axis == "x" else "start"}" font-size="10" '
+                f'data-axis="{axis}" data-axis-offset="{plan.offset!r}">'
+                f'<title>{escape(label)}: {plan.offset!r} + tick</title>'
+                f'{axis}: {plan.offset:+.17g}</text>'
+            )
         for value, label in ticks:
             report_number(value)
             if axis == "x":
@@ -176,9 +254,9 @@ def report_plot(
         parts.append(
             f'<line {coordinates} stroke="#777" stroke-dasharray="4 3" '
             f'data-reference-axis="{axis}" data-value="{value!r}">'
-            f"<title>{escape(label)}: {value:.10g}</title></line>"
+            f"<title>{escape(label)}: {value!r}</title></line>"
             f'<text x="75" y="{bottom+62+(len(series)+index)*17}" font-size="11">'
-            f"{escape(label)}: {value:.10g}</text>"
+            f"{escape(label)}: {value!r}</text>"
         )
     for index, (label, x1, y1, x2, y2) in enumerate(reference_segments):
         legend_y = bottom + 62 + (len(series) + len(reference_lines) + index) * 17
@@ -188,8 +266,8 @@ def report_plot(
             f'stroke="#777" stroke-dasharray="4 3" '
             f'data-reference-segment="{escape(label, quote=True)}" '
             f'data-x1="{x1!r}" data-y1="{y1!r}" data-x2="{x2!r}" data-y2="{y2!r}">'
-            f"<title>{escape(label)}: ({x1:.10g}, {y1:.10g}), "
-            f"({x2:.10g}, {y2:.10g})</title></line>"
+            f"<title>{escape(label)}: ({x1!r}, {y1!r}), "
+            f"({x2!r}, {y2!r})</title></line>"
             f'<line x1="75" x2="95" y1="{legend_y-4}" y2="{legend_y-4}" '
             f'stroke="#777" stroke-dasharray="4 3"/>'
             f'<text x="102" y="{legend_y}" font-size="11">'
@@ -216,7 +294,7 @@ def report_plot(
             parts.append(
                 f'{geometry} fill="{color}" data-marker="{shape}" '
                 f'data-x="{x!r}" data-y="{y!r}"><title>{escape(point_label)}: '
-                f"{x:.10g}, {y:.10g}</title></{tag}>"
+                f"{x!r}, {y!r}</title></{tag}>"
             )
         parts.append(
             f'<text x="75" y="{bottom+62+index*17}" fill="{color}" font-size="11">'
@@ -230,7 +308,7 @@ def report_plot(
             f'width="{sx(upper)-sx(lower):.3f}" height="{sy(0)-sy(value):.3f}" '
             f'fill="#225aa7" fill-opacity="0.7" stroke="#fff" '
             f'data-lower="{lower!r}" data-upper="{upper!r}" data-value="{value!r}">'
-            f"<title>{escape(label)}: [{lower:.10g}, {upper:.10g}], {value:.10g}</title></rect>"
+            f"<title>{escape(label)}: [{lower!r}, {upper!r}], {value!r}</title></rect>"
         )
     for x, y, label, raw_x, raw_y in vectors:
         report_number(raw_x)
@@ -245,7 +323,7 @@ def report_plot(
         )
         parts.append(
             f'<g data-raw-x="{raw_x!r}" data-raw-y="{raw_y!r}">'
-            f"<title>{escape(label)}: {raw_x:.10g}, {raw_y:.10g}</title>"
+            f"<title>{escape(label)}: {raw_x!r}, {raw_y!r}</title>"
             f'<line x1="{sx(0):.3f}" y1="{sy(0):.3f}" x2="{sx(x):.3f}" '
             f'y2="{sy(y):.3f}" stroke="#26775a"/>'
             f'<polygon points="{arrow}" fill="#26775a"/></g>'
@@ -296,13 +374,13 @@ def report_grid(
             return [values[0] - padding, values[0] + padding]
         return [
             values[0] - (values[1] - values[0]) / 2 if categorical else values[0],
-            *[a + (b - a) / 2 for a, b in zip(values, values[1:], strict=False)],
+            *[a / 2 + b / 2 for a, b in zip(values, values[1:], strict=False)],
             values[-1] + (values[-1] - values[-2]) / 2 if categorical else values[-1],
         ]
 
     xe, ye = edges(xs), edges(ys)
-    report_number(xe[-1] - xe[0])
-    report_number(ye[-1] - ye[0])
+    for edge in [*xe, *ye]:
+        report_number(edge)
     if xe[-1] <= xe[0] or ye[-1] <= ye[0]:
         raise ValueError("analysis_report_payload_invalid")
     low, high = value_range or (min(v for _, _, v, _ in cells), max(v for _, _, v, _ in cells))
@@ -313,10 +391,10 @@ def report_grid(
         raise ValueError("analysis_report_payload_invalid")
 
     def sx(value: float) -> float:
-        return 85 + (value - xe[0]) / (xe[-1] - xe[0]) * 420
+        return 85 + numeric_fraction(value, xe[0], xe[-1]) * 420
 
     def sy(value: float) -> float:
-        return 320 - (value - ye[0]) / (ye[-1] - ye[0]) * 280
+        return 320 - numeric_fraction(value, ye[0], ye[-1]) * 280
 
     def color(value: float) -> str:
         fraction = (value - low) / (high - low) if high != low else 0.5
@@ -333,20 +411,26 @@ def report_grid(
             f'<rect x="{sx(xe[ix]):.3f}" y="{sy(ye[iy+1]):.3f}" '
             f'width="{sx(xe[ix+1])-sx(xe[ix]):.3f}" height="{sy(ye[iy])-sy(ye[iy+1]):.3f}" '
             f'fill="{color(value)}" data-x="{x!r}" data-y="{y!r}" data-value="{value!r}">'
-            f"<title>{escape(label)}: {value:.10g}</title></rect>"
+            f"<title>{escape(label)}: {value!r}</title></rect>"
         )
     for axis, supplied, values in (("x", x_ticks, xs), ("y", y_ticks, ys)):
+        plan = numeric_axis_plan(values[0], values[-1])
         ticks = (
             supplied
             if supplied is not None
-            else [
-                (
-                    values[0] + (values[-1] - values[0]) * (i / 4),
-                    f"{values[0] + (values[-1]-values[0])*(i/4):.4g}",
-                )
-                for i in range(5 if len(values) > 1 else 1)
-            ]
+            else numeric_axis_ticks(plan)
+            if len(values) > 1
+            else [(values[0], report_value(values[0]))]
         )
+        if supplied is None and plan.offset:
+            label = x_label if axis == "x" else y_label
+            parts.append(
+                f'<text x="{505 if axis == "x" else 85}" y="{14 if axis == "x" else 28}" '
+                f'text-anchor="{"end" if axis == "x" else "start"}" font-size="10" '
+                f'data-axis="{axis}" data-axis-offset="{plan.offset!r}">'
+                f'<title>{escape(label)}: {plan.offset!r} + tick</title>'
+                f'{axis}: {plan.offset:+.17g}</text>'
+            )
         for value, label in ticks:
             report_number(value)
             coordinates = (
@@ -415,12 +499,10 @@ def report_horizontal_bars(
     if not all(isfinite(value) for _, value in values):
         raise ValueError("analysis_report_payload_invalid")
     low, high = min(0, min(value for _, value in values)), max(0, max(value for _, value in values))
-    padding = (high - low or 1) * 0.06
-    low, high = low - padding, high + padding
-    report_number(high - low)
+    low, high = padded_range(low, high)
 
     def x(value: float) -> float:
-        return 190 + (value - low) / (high - low) * 400
+        return 190 + numeric_fraction(value, low, high) * 400
 
     pages = []
     for offset in range(0, len(values), 12):
@@ -440,13 +522,12 @@ def report_horizontal_bars(
                 f"<title>{escape(label)}</title>{escape(short_label(label, 22))}</text>",
                 f'<rect x="{min(x(0),x(value)):.3f}" y="{y-7}" '
                 f'width="{abs(x(value)-x(0)):.3f}" height="14" fill="#225aa7" '
-                f'data-value="{value!r}"><title>{escape(label)}: {value:.10g}</title></rect>',
+                f'data-value="{value!r}"><title>{escape(label)}: {value!r}</title></rect>',
             ]
-        for index in range(5):
-            value = low + (high - low) * (index / 4)
+        for value, label in numeric_axis_ticks(numeric_axis_plan(low, high)):
             parts.append(
                 f'<text x="{x(value):.3f}" y="{bottom+15}" text-anchor="middle" '
-                f'font-size="10">{value:.4g}</text>'
+                f'font-size="10">{escape(label)}</text>'
             )
         parts.append(
             f'<text x="390" y="{bottom+40}" text-anchor="middle" font-size="12">'

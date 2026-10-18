@@ -54,7 +54,7 @@ def synthetic_release(root: Path, *, installed: bool = True) -> tuple[dict, Path
     identity = {
         "source_commit": "a" * 40,
         "release_version": "2026.10.3",
-        "api_contract_version": 23,
+        "api_contract_version": 24,
         "metadata_schema_version": 22,
         "required_capabilities": {"asset_management": True},
         "python_target": "3.12",

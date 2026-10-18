@@ -3,9 +3,10 @@ import { useState } from "react";
 
 import type {
   RegressionPastedPredictionMapping,
-  RegressionPredictionInterval,
   RegressionPredictionRow,
 } from "./api";
+import { useI18n } from "./i18n/LocaleProvider";
+import { formatExactNumericValue, formatInterval, formatMeasurement } from "./statisticalNumberFormat";
 
 interface PredictionResultRow extends RegressionPredictionRow {
   predictor_values?: Record<string, number | string>;
@@ -128,12 +129,13 @@ function PredictionSummaryRows({ expanded, hasInputs, hasIntervals, mappings, on
   row: PredictionResultRow;
   rowNumber: number;
 }) {
+  const { locale } = useI18n();
   return (
     <>
       <tr>
         <td>{rowNumber.toLocaleString()}</td>
-        <td className="regression-prediction-number">{formatNumber(row.predicted_mean)}</td>
-        {hasIntervals ? <><td className="regression-prediction-interval">{formatInterval(row.mean_confidence_interval)}</td><td className="regression-prediction-interval">{formatInterval(row.prediction_interval)}</td></> : null}
+        <td className="regression-prediction-number" title={formatExactNumericValue(row.predicted_mean)}>{formatMeasurement(row.predicted_mean, locale)}</td>
+        {hasIntervals ? <><td className="regression-prediction-interval">{formatInterval(row.mean_confidence_interval, locale)}</td><td className="regression-prediction-interval">{formatInterval(row.prediction_interval, locale)}</td></> : null}
         <td className="regression-prediction-status">{statusLabel(row.warnings)}</td>
         {mappings.length > 0 ? <td>{hasInputs ? <button aria-expanded={expanded} className="secondary-button compact-button" onClick={onToggle} type="button">{expanded ? "조건 닫기" : "조건 보기"}</button> : "-"}</td> : null}
       </tr>
@@ -153,6 +155,7 @@ function FullPredictionTable({ mappings, rowNumberOffset, rows }: {
   rowNumberOffset: number;
   rows: PredictionResultRow[];
 }) {
+  const { locale } = useI18n();
   const hasIntervals = rows.some((row) => row.mean_confidence_interval !== null || row.prediction_interval !== null);
   const minWidth = 70 + mappings.reduce((total, mapping) => total + (mapping.predictor_kind === "categorical" ? 170 : 140), 0) + (hasIntervals ? 610 : 290);
   return (
@@ -170,7 +173,7 @@ function FullPredictionTable({ mappings, rowNumberOffset, rows }: {
         <tbody>{rows.map((row) => <tr key={row.row_index}>
           <td>{(row.row_index + rowNumberOffset + 1).toLocaleString()}</td>
           {mappings.map((mapping) => <td className="regression-prediction-input-value" key={mapping.source_column_id}>{String(row.predictor_values?.[mapping.source_column_id] ?? "-")}</td>)}
-          <td className="regression-prediction-number">{formatNumber(row.predicted_mean)}</td>{hasIntervals ? <><td className="regression-prediction-interval">{formatInterval(row.mean_confidence_interval)}</td><td className="regression-prediction-interval">{formatInterval(row.prediction_interval)}</td></> : null}<td className="regression-prediction-status">{statusLabel(row.warnings)}</td>
+          <td className="regression-prediction-number" title={formatExactNumericValue(row.predicted_mean)}>{formatMeasurement(row.predicted_mean, locale)}</td>{hasIntervals ? <><td className="regression-prediction-interval">{formatInterval(row.mean_confidence_interval, locale)}</td><td className="regression-prediction-interval">{formatInterval(row.prediction_interval, locale)}</td></> : null}<td className="regression-prediction-status">{statusLabel(row.warnings)}</td>
         </tr>)}</tbody>
       </table>
     </div>
@@ -179,12 +182,4 @@ function FullPredictionTable({ mappings, rowNumberOffset, rows }: {
 
 function statusLabel(warnings: string[]): string {
   return warnings.length === 0 ? systemText("범위 안") : warnings.join(", ");
-}
-
-function formatNumber(value: number): string {
-  return Number.isFinite(value) ? value.toLocaleString("ko-KR", { maximumSignificantDigits: 6 }) : "-";
-}
-
-function formatInterval(interval: RegressionPredictionInterval | null): string {
-  return interval === null ? "-" : `[${formatNumber(interval.lower)}, ${formatNumber(interval.upper)}]`;
 }

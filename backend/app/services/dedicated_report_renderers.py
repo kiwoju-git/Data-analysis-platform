@@ -36,7 +36,7 @@ def _definition(
         summary,
         schemas,
         "dedicated_" + variant,
-        "1",
+        "1.1.0",
         (
             ReportVariantDefinition(
                 variant,

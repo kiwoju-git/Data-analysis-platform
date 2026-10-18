@@ -4,6 +4,12 @@ Status: implemented for the first Gate B2 slice.
 
 Method ID: `hypothesis.two_sample_t`
 
+Current method version: `0.2.0`; result schema 2. Full stripped group values now
+define identity; abbreviated labels are display-only. Exactly two full groups
+are required, and first-encounter contrast direction is unchanged. Group summaries
+and the contrast preserve complete values and indexes. Legacy schema 1 is readable
+without artifact rewriting. See [Group identity contract](group_identity_contract.md).
+
 Implementation:
 
 - Backend domain module: `backend/app/statistics/two_sample_t.py`

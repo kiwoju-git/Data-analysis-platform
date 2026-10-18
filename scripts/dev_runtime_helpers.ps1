@@ -1,4 +1,4 @@
-$script:ExpectedApiContractVersion = 23
+$script:ExpectedApiContractVersion = 24
 $script:MinimumMetadataSchemaVersion = 22
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",

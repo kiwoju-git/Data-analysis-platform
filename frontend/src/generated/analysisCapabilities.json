@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "api_contract_version": 23,
+  "api_contract_version": 24,
   "metadata_schema_version": 22,
   "methods": [
     {
@@ -32,7 +32,7 @@
             2
           ],
           "renderer_id": "descriptive_statistics",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "descriptive_v1",
@@ -130,7 +130,7 @@
             2
           ],
           "renderer_id": "graphical_summary",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "graphical_v1",
@@ -284,7 +284,7 @@
             2
           ],
           "renderer_id": "normality_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -344,7 +344,7 @@
             1
           ],
           "renderer_id": "principal_components_analysis",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -428,7 +428,7 @@
             1
           ],
           "renderer_id": "one_sample_t_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "one_sample_t",
@@ -512,7 +512,7 @@
             1
           ],
           "renderer_id": "paired_t_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "paired_t",
@@ -570,7 +570,7 @@
     },
     {
       "method_id": "hypothesis.two_sample_t",
-      "method_version": "0.1.0",
+      "method_version": "0.2.0",
       "module_id": "hypothesis",
       "label_ko": "2-표본 t-검정",
       "label_en": "2-Sample t-Test",
@@ -593,10 +593,11 @@
           "method_id": "hypothesis.two_sample_t",
           "summary_type": "two_sample_t_test",
           "accepted_schemas": [
-            1
+            1,
+            2
           ],
           "renderer_id": "two_sample_t_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "two_sample_t",
@@ -681,7 +682,7 @@
             2
           ],
           "renderer_id": "one_way_anova",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "anova_standard",
@@ -819,7 +820,7 @@
             2
           ],
           "renderer_id": "equivalence_tost",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "tost_one_sample",
@@ -904,7 +905,7 @@
             2
           ],
           "renderer_id": "equivalence_tost",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "tost_two_sample",
@@ -989,7 +990,7 @@
             2
           ],
           "renderer_id": "equivalence_tost",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "tost_paired",
@@ -1073,7 +1074,7 @@
             1
           ],
           "renderer_id": "one_sample_wilcoxon_signed_rank_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "wilcoxon",
@@ -1158,7 +1159,7 @@
             2
           ],
           "renderer_id": "mann_whitney_u_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "mann_whitney",
@@ -1220,7 +1221,7 @@
     },
     {
       "method_id": "hypothesis.kruskal_wallis",
-      "method_version": "0.1.0",
+      "method_version": "0.2.0",
       "module_id": "hypothesis",
       "label_ko": "Kruskal-Wallis",
       "label_en": "Kruskal-Wallis",
@@ -1243,10 +1244,11 @@
           "method_id": "hypothesis.kruskal_wallis",
           "summary_type": "kruskal_wallis_test",
           "accepted_schemas": [
-            1
+            1,
+            2
           ],
           "renderer_id": "kruskal_wallis_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "kruskal_wallis",
@@ -1334,7 +1336,7 @@
             1
           ],
           "renderer_id": "one_proportion_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "one_proportion",
@@ -1422,7 +1424,7 @@
             1
           ],
           "renderer_id": "two_proportion_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "two_proportion",
@@ -1514,7 +1516,7 @@
             1
           ],
           "renderer_id": "chi_square_association",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "chi_square",
@@ -1610,7 +1612,7 @@
             1
           ],
           "renderer_id": "pearson_correlation",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -1670,7 +1672,7 @@
             1
           ],
           "renderer_id": "xy_correlation_matrix",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -1748,7 +1750,7 @@
             6
           ],
           "renderer_id": "linear_model",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "ols",
@@ -1892,7 +1894,7 @@
             1
           ],
           "renderer_id": "partial_least_squares_regression",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "pls",
@@ -1955,7 +1957,7 @@
             1
           ],
           "renderer_id": "completed_prediction_report",
-          "renderer_version": "1.0.0",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "completed_prediction",
@@ -2068,7 +2070,7 @@
             3
           ],
           "renderer_id": "gaussian_process_regression",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "single",
@@ -2188,7 +2190,7 @@
             1
           ],
           "renderer_id": "completed_prediction_report",
-          "renderer_version": "1.0.0",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "completed_prediction",
@@ -2258,7 +2260,7 @@
             3
           ],
           "renderer_id": "stored_regression_prediction",
-          "renderer_version": "1.0.0",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "stored_prediction",
@@ -2328,7 +2330,7 @@
             3
           ],
           "renderer_id": "dedicated_factorial",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "factorial",
@@ -2391,7 +2393,7 @@
             1
           ],
           "renderer_id": "dedicated_doe_prediction",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "doe_prediction",
@@ -2455,7 +2457,7 @@
             1
           ],
           "renderer_id": "dedicated_response_surface",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "response_surface",
@@ -2539,7 +2541,7 @@
             2
           ],
           "renderer_id": "dedicated_response_optimizer",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "response_optimizer",
@@ -2621,7 +2623,7 @@
             3
           ],
           "renderer_id": "dedicated_general_factorial",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "general_factorial",
@@ -2684,7 +2686,7 @@
             1
           ],
           "renderer_id": "dedicated_doe_prediction",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "doe_prediction",
@@ -2749,7 +2751,7 @@
             2
           ],
           "renderer_id": "dedicated_lhs",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "lhs",
@@ -2825,7 +2827,7 @@
             1
           ],
           "renderer_id": "dedicated_bayesian",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "bayesian",
@@ -2907,7 +2909,7 @@
             3
           ],
           "renderer_id": "attribute_control_chart",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -2971,7 +2973,7 @@
             1
           ],
           "renderer_id": "subgroup_chart",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3035,7 +3037,7 @@
             1
           ],
           "renderer_id": "individuals_chart",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3100,7 +3102,7 @@
             2
           ],
           "renderer_id": "run_chart",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3168,7 +3170,7 @@
             1
           ],
           "renderer_id": "capability_analysis",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3206,7 +3208,7 @@
     },
     {
       "method_id": "eda.equal_variances",
-      "method_version": "0.2.0",
+      "method_version": "0.3.0",
       "module_id": "exploration",
       "label_ko": "등분산 검정",
       "label_en": "Test for Equal Variances",
@@ -3230,10 +3232,11 @@
           "summary_type": "equal_variances_test",
           "accepted_schemas": [
             1,
-            2
+            2,
+            3
           ],
           "renderer_id": "equal_variances_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "equal_variances_v1",
@@ -3282,6 +3285,51 @@
             },
             {
               "variant_id": "equal_variances_v2",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "tests",
+                  "core": true
+                },
+                {
+                  "section_id": "multiple_summary",
+                  "core": false
+                },
+                {
+                  "section_id": "comparison_intervals",
+                  "core": false
+                },
+                {
+                  "section_id": "pairwise",
+                  "core": false
+                },
+                {
+                  "section_id": "non_overlap",
+                  "core": false
+                },
+                {
+                  "section_id": "additional_tests",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "equal_variances_v3",
               "sections": [
                 {
                   "section_id": "settings",
@@ -3383,7 +3431,7 @@
             1
           ],
           "renderer_id": "two_variances_test",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3439,7 +3487,7 @@
             1
           ],
           "renderer_id": "gage_rr",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3507,7 +3555,7 @@
             1
           ],
           "renderer_id": "gage_run_chart",
-          "renderer_version": "2.0.0",
+          "renderer_version": "2.1.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3566,7 +3614,7 @@
             3
           ],
           "renderer_id": "stored_regression_prediction",
-          "renderer_version": "1.0.0",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "stored_prediction",
@@ -3615,7 +3663,7 @@
             2
           ],
           "renderer_id": "dedicated_regression_optimizer",
-          "renderer_version": "1",
+          "renderer_version": "1.1.0",
           "variants": [
             {
               "variant_id": "regression_optimizer",

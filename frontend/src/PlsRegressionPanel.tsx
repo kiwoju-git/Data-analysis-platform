@@ -17,6 +17,7 @@ import { CompactSettingsTable } from "./components/CompactSettingsTable";
 import { NumericColumnPicker } from "./components/NumericColumnPicker";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
 import { useI18n } from "./i18n/LocaleProvider";
+import { formatExactNumericValue, formatMeasurement } from "./statisticalNumberFormat";
 
 export interface PlsRunConfig {
   responseColumnId: string;
@@ -558,7 +559,7 @@ function PlsPointPrediction({ result, analysisId }: { result: PlsRegressionResul
           <input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal"
             onChange={(event) => { const value = event.currentTarget.value; changeRows((current) => current.map((item) => item.id === row.id ? { ...item, values: { ...item.values, [predictor.column_id]: value } } : item)); }}
             type="text" value={row.values[predictor.column_id] ?? ""} />
-        </td>)}<td>{predicted === undefined ? "-" : number(predicted.predicted_value)}</td>
+        </td>)}<td title={formatExactNumericValue(predicted?.predicted_value)}>{formatMeasurement(predicted?.predicted_value, locale)}</td>
           <td>{predicted === undefined ? "-" : predicted.warnings.length === 0 ? t("pls.ready") : predicted.warnings.map((warning, index) => <span key={`${index}:${warning}`}>{index > 0 ? "; " : ""}{warning === "prediction_extrapolation_risk" ? t("pls.extrapolation") : <code>{warning}</code>}</span>)}</td>
           <td><button aria-label={`${t("pls.deleteRow")} ${index + 1}`} onClick={() => changeRows((current) => current.length === 1 ? [emptyPredictionRow(`pls-row-${nextId.current++}`, result)] : current.filter((item) => item.id !== row.id))} type="button">{t("pls.deleteRow")}</button></td></tr>;
       })}</tbody>

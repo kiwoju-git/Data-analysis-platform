@@ -26,7 +26,7 @@ export function IndividualsResultChart({ series, label, chartKind, unit }: {
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId={`quality-${chartKind}`} sourceKey={chartKind} title={label} description={t("charts.controlSignals")}
     annotations={[t("charts.displayCount", { shown: points.length, total: series.point_count })]} points={points} connectPoints="line"
-    yFormatValue={number} emptyLabel={t("charts.noData")} xLabel={t(series.x_axis === "order_rank" ? "charts.orderRank" : "charts.canonicalPosition")}
+    emptyLabel={t("charts.noData")} xLabel={t(series.x_axis === "order_rank" ? "charts.orderRank" : "charts.canonicalPosition")}
     yLabel={chartKind === "moving_range" ? t("charts.movingRange") : label} yUnit={unit} xRange={xRange} yRange={paddedNumericRange(points.map((point) => point.y))}
     xTicks={integerChartTicks(xRange)} referenceLines={limitLines(series, xRange)} />;
 }
@@ -42,7 +42,7 @@ export function SubgroupResultChart({ series, label, unit, kind }: { series: Sub
   }));
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId={`quality-${kind}`} sourceKey={kind} title={label} description={label} points={points} connectPoints="line"
-    annotations={[t("charts.displayCount", { shown: points.length, total: series.point_count })]} yFormatValue={number} emptyLabel={t("charts.noData")}
+    annotations={[t("charts.displayCount", { shown: points.length, total: series.point_count })]} emptyLabel={t("charts.noData")}
     xLabel={t("charts.subgroupOrder")} yLabel={label} yUnit={unit} xRange={xRange} yRange={paddedNumericRange(points.map((point) => point.y))}
     xTicks={integerChartTicks(xRange)} referenceLines={limitLines(series, xRange)} />;
 }
@@ -61,7 +61,7 @@ export function RunResultChart({ result }: { result: {
   }));
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="quality-run" title={`${result.value.display_name} Run Chart`} description={t("charts.runMedian")}
-    annotations={[]} yFormatValue={number} emptyLabel={t("charts.noData")} points={points} connectPoints="line"
+    annotations={[]} emptyLabel={t("charts.noData")} points={points} connectPoints="line"
     xLabel={t(result.chart.x_axis === "order_rank" ? "charts.orderRank" : "charts.canonicalPosition")} yLabel={result.value.display_name} yUnit={result.value.unit}
     xRange={xRange} xTicks={integerChartTicks(xRange)} yRange={paddedNumericRange(points.map((point) => point.y))}
     referenceLines={[{ label: `${t("charts.runMedian")}: ${number(result.center_line)}`, x1: xRange.min, x2: xRange.max, y1: result.center_line, y2: result.center_line, className: "quality-center-line" }]} />;
@@ -91,6 +91,6 @@ export function AttributeResultChart({ result }: { result: Pick<AttributeControl
     });
   }
   return <InteractiveScatterChart chartId={`quality-${result.chart_type}`} title={`${result.chart_type.toUpperCase()} Chart`} description={label}
-    annotations={[t("charts.displayCount", { shown: points.length, total: result.chart.point_count })]} points={points} connectPoints="line" yFormatValue={number} emptyLabel={t("charts.noData")}
+    annotations={[t("charts.displayCount", { shown: points.length, total: result.chart.point_count })]} points={points} connectPoints="line" emptyLabel={t("charts.noData")}
     xLabel={t("charts.canonicalPosition")} yLabel={label} xRange={xRange} xTicks={integerChartTicks(xRange)} yRange={paddedNumericRange(points.map((point) => point.y))} referenceLines={lines} />;
 }

@@ -4,6 +4,12 @@ Status: implemented for the current Gate B2 slice.
 
 Method ID: `hypothesis.kruskal_wallis`
 
+Current method version: `0.2.0`; result schema 2. Full stripped group values now
+define identity; abbreviated labels are display-only. Group summaries and Dunn
+pairs preserve complete values and encounter-order indexes, keeping rank and
+p-value associations independent of label collisions. Legacy schema 1 remains
+readable without rewriting. See [Group identity contract](group_identity_contract.md).
+
 Implementation:
 
 - Backend domain module: `backend/app/statistics/kruskal_wallis.py`

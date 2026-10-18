@@ -2,6 +2,7 @@
 
 import copy
 import json
+import re
 import sys
 from html import escape
 from typing import Any
@@ -195,7 +196,12 @@ def test_tost_independent_reports_both_actual_samples_and_difference_direction()
     assert (
         samples.markup and "Test sample" in samples.markup and "Reference sample" in samples.markup
     )
-    assert f"<td>{result['samples']['reference']['mean']:.10g}</td>" in samples.markup
+    assert re.search(
+        r"<td(?:\s[^>]*)?>"
+        + re.escape(f"{result['samples']['reference']['mean']:.10g}")
+        + r"</td>",
+        samples.markup,
+    )
     assert result["estimate_definition"] in body.render()
     assert "0.9" in body.render()
     assert (
@@ -231,7 +237,12 @@ def test_large_posthoc_payload_is_not_truncated_at_screen_row_limit() -> None:
     result = payload("kruskal_wallis")
     pair = result["posthoc"]["comparisons"][0]
     result["posthoc"]["comparisons"] = [
-        {**pair, "group_1_label": f"synthetic stored group {index}"} for index in range(121)
+        {
+            **pair,
+            "group_1_label": f"synthetic stored group {index}",
+            "group_1_value": f"synthetic stored group {index}",
+        }
+        for index in range(121)
     ]
     body = render_hypothesis_report(result, "en")
     section = next(item for item in body.sections if item.section_id == "posthoc")

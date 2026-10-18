@@ -2,6 +2,7 @@
 
 import copy
 import json
+import re
 import sys
 from html import escape
 from typing import Any
@@ -64,7 +65,7 @@ def definition(method: str, result: dict[str, Any]) -> ReportDefinition:
     return ReportDefinition(
         method,
         result["summary_type"],
-        (1, 2),
+        (1, 2, 3) if method == "eda.equal_variances" else (1, 2),
         "basic_eda",
         "1",
         BASIC_EDA_REPORT_VARIANTS_BY_METHOD[method],
@@ -100,18 +101,29 @@ def test_equal_variances_preserves_every_group_pair_and_additional_test(locale: 
     sections = {section.section_id: section.markup or "" for section in body.sections}
     for group in result["groups"]:
         for field in ("group_label", "n", "mean", "median", "variance", "std", "min", "max"):
-            assert f"<td>{escape(report_value(group[field]))}</td>" in sections["groups"]
+            assert re.search(
+                r"<td(?:\s[^>]*)?>" + re.escape(escape(report_value(group[field]))) + r"</td>",
+                sections["groups"],
+            )
     multiple = result["multiple_comparisons"]
     assert len(multiple["pairwise_p_values"]) == 3
     for pair in multiple["pairwise_p_values"]:
         for field in ("left_group", "right_group", "p_value"):
-            assert f"<td>{escape(report_value(pair[field]))}</td>" in sections["pairwise"]
+            assert re.search(
+                r"<td(?:\s[^>]*)?>" + re.escape(escape(report_value(pair[field]))) + r"</td>",
+                sections["pairwise"],
+            )
     for group in multiple["groups"]:
-        assert f"<td>{report_value(group['allocation'])}</td>" in sections["comparison_intervals"]
+        assert re.search(
+            r"<td(?:\s[^>]*)?>" + re.escape(report_value(group["allocation"])) + r"</td>",
+            sections["comparison_intervals"],
+        )
         for bound in ("lower", "upper"):
-            assert (
-                f"<td>{report_value(group['comparison_interval'][bound])}</td>"
-                in sections["comparison_intervals"]
+            assert re.search(
+                r"<td(?:\s[^>]*)?>"
+                + re.escape(report_value(group["comparison_interval"][bound]))
+                + r"</td>",
+                sections["comparison_intervals"],
             )
     assert "classical_levene_mean_centered" in sections["additional_tests"]
     assert "levene_brown_forsythe" in sections["tests"]
@@ -326,7 +338,10 @@ def test_ad_critical_levels_remain_proportions_not_false_percentages() -> None:
     assert "Significance level (proportion)" in markup
     assert "Significance level (%)" not in markup
     for item in result["columns"][0]["anderson_darling"]["critical_values"]:
-        assert f"<td>{report_value(item['significance_level'])}</td>" in markup
+        assert re.search(
+            r"<td(?:\s[^>]*)?>" + re.escape(report_value(item["significance_level"])) + r"</td>",
+            markup,
+        )
 
 
 @pytest.mark.parametrize(

@@ -71,7 +71,7 @@ describe("display-only chart tick formatting", () => {
     expect(ticks(html)).toContain("X:0.00");
     expect(ticks(html)).toContain("User zero");
     expect(ticks(html)).not.toContain("Invalid");
-    expect(xFormat.mock.calls.flat().every(Number.isFinite)).toBe(true);
+    expect(xFormat.mock.calls.every(([value]) => Number.isFinite(value))).toBe(true);
     expect(yFormat).not.toHaveBeenCalled();
   });
 

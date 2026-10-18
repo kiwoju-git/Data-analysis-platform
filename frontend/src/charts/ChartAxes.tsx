@@ -1,6 +1,8 @@
 import { useI18n } from "../i18n/LocaleProvider";
 import { scaleChartValue, type NumericRange } from "./chartScale";
-import { axisTitle, formatChartTick, numericChartTicks, wrapAxisTitle, type ChartLayout, type ChartTickFormatter } from "./chartLayout";
+import { axisTitle, formattedAxisTicks, wrapAxisTitle, type ChartLayout, type ChartTickFormatter } from "./chartLayout";
+import { numericAxisPlan } from "./numericAxisPlan";
+import { formatExactNumericValue } from "../statisticalNumberFormat";
 
 export interface AxisSpec {
   label: string;
@@ -13,16 +15,24 @@ export interface AxisSpec {
 export function ChartAxes({ x, y, layout, grid = true }: {
   x: AxisSpec; y: AxisSpec; layout: ChartLayout; grid?: boolean;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const { plot } = layout;
   const xAt = (value: number) => scaleChartValue(value, x.range, plot.left, plot.left + plot.width);
   const yAt = (value: number) => scaleChartValue(value, y.range, plot.top + plot.height, plot.top);
   const xTitle = axisTitle(x.label, x.unit);
   const yTitle = axisTitle(y.label, y.unit);
-  const defaultFormat: ChartTickFormatter = (value) => formatChartTick(value, locale);
-  const xTicks = (x.ticks ?? numericChartTicks(x.range, 5, x.formatTick ?? defaultFormat)).filter((tick) => Number.isFinite(tick.value) && tick.value >= x.range.min && tick.value <= x.range.max);
-  const yTicks = (y.ticks ?? numericChartTicks(y.range, 5, y.formatTick ?? defaultFormat)).filter((tick) => Number.isFinite(tick.value) && tick.value >= y.range.min && tick.value <= y.range.max);
+  const xPlan = numericAxisPlan(x.range); const yPlan = numericAxisPlan(y.range);
+  const xOffset = x.ticks || x.formatTick ? 0 : xPlan.offset;
+  const yOffset = y.ticks || y.formatTick ? 0 : yPlan.offset;
+  const xTicks = (x.ticks ?? formattedAxisTicks(xPlan, locale, x.formatTick)).filter((tick) => Number.isFinite(tick.value) && tick.value >= x.range.min && tick.value <= x.range.max);
+  const yTicks = (y.ticks ?? formattedAxisTicks(yPlan, locale, y.formatTick)).filter((tick) => Number.isFinite(tick.value) && tick.value >= y.range.min && tick.value <= y.range.max);
   return <g className="chart-axes">
+    {[["x", xOffset, xTitle], ["y", yOffset, yTitle]].map(([axis, offset, title]) => typeof offset === "number" && offset !== 0 ?
+      <text key={axis} className="chart-axis-offset chart-tick-label" data-axis={axis} data-axis-offset={offset}
+        textAnchor={axis === "x" ? "end" : "start"} x={axis === "x" ? plot.left + plot.width : plot.left} y={Math.max(10, axis === "x" ? plot.top - 13 : plot.top - 2)}>
+        <title>{t("charts.axisOffsetExplanation", { axis: title, offset: formatExactNumericValue(offset) })}</title>
+        {`${axis}: ${offset > 0 ? "+" : ""}${formatExactNumericValue(offset)}`}
+      </text> : null)}
     {xTicks.map((tick, index) => <g key={`${tick.value}-${index}`}>
       {grid && <line className="chart-grid-line" x1={xAt(tick.value)} x2={xAt(tick.value)} y1={plot.top} y2={plot.top + plot.height} />}
       <text className="chart-tick-label" textAnchor="middle" x={xAt(tick.value)} y={plot.top + plot.height + 17}>{tick.label}</text>

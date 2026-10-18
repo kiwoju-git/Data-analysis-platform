@@ -532,7 +532,7 @@ def _two_sample_t_group_labels(result: dict[str, object]) -> list[str]:
     for group in groups:
         if not isinstance(group, dict):
             continue
-        label = group.get("group_label")
+        label = group.get("group_value", group.get("group_label"))
         if isinstance(label, str):
             labels.append(label)
     return labels
@@ -942,8 +942,8 @@ def _kruskal_wallis_comparison(
     right_response_column_id = _comparison_string(right_response.get("column_id"))
     left_group_column_id = _comparison_string(left_group.get("column_id"))
     right_group_column_id = _comparison_string(right_group.get("column_id"))
-    left_group_labels = _group_labels_from_result(left.result)
-    right_group_labels = _group_labels_from_result(right.result)
+    left_group_labels = _group_labels_from_result(left.result, prefer_full_value=True)
+    right_group_labels = _group_labels_from_result(right.result, prefer_full_value=True)
     return KruskalWallisComparison(
         summary_type="kruskal_wallis_test",
         left_response_column_id=left_response_column_id,
@@ -1010,7 +1010,9 @@ def _kruskal_wallis_comparison(
     )
 
 
-def _group_labels_from_result(result: dict[str, object]) -> list[str]:
+def _group_labels_from_result(
+    result: dict[str, object], *, prefer_full_value: bool = False
+) -> list[str]:
     groups = result.get("groups")
     if not isinstance(groups, list):
         return []
@@ -1018,7 +1020,11 @@ def _group_labels_from_result(result: dict[str, object]) -> list[str]:
     for group in groups:
         if not isinstance(group, dict):
             continue
-        label = group.get("group_label")
+        label = (
+            group.get("group_value", group.get("group_label"))
+            if prefer_full_value
+            else group.get("group_label")
+        )
         if isinstance(label, str):
             labels.append(label)
     return labels

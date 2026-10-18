@@ -1,4 +1,7 @@
 import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { GroupIdentityDetails } from "./GroupIdentityDetails";
+import { groupDisplayLabel, pairGroupLabel } from "./groupIdentity";
 
 import type {
   AnalysisResultEnvelope,
@@ -54,6 +57,7 @@ export function TwoSampleTPanel({
   onRun,
   onVarianceAssumptionChange,
 }: TwoSampleTPanelProps) {
+  const { locale } = useI18n();
   const canRun =
     version !== null &&
     responseColumnId !== null &&
@@ -178,7 +182,7 @@ export function TwoSampleTPanel({
               <div className="metadata-grid" aria-label="2-표본 t-검정 요약">
                 <span>비교 방향</span>
                 <strong>
-                  {result.contrast.group_1_label} - {result.contrast.group_2_label}
+                  {pairGroupLabel(result.contrast.group_1_index, result.contrast.group_1_label, result.groups, locale)} - {pairGroupLabel(result.contrast.group_2_index, result.contrast.group_2_label, result.groups, locale)}
                 </strong>
                 <span>사용 N</span>
                 <strong>
@@ -227,8 +231,8 @@ export function TwoSampleTPanel({
                   </thead>
                   <tbody>
                     {result.groups.map((group) => (
-                      <tr key={`${group.group_index}-${group.group_label}`}>
-                        <td>{group.group_label}</td>
+                      <tr key={group.group_index} data-group-index={group.group_index}>
+                        <td>{groupDisplayLabel(group, result.groups, locale)}</td>
                         <td>{group.n}</td>
                         <td>{formatAnalysisNumber(group.mean)}</td>
                         <td>{formatAnalysisNumber(group.std)}</td>
@@ -242,6 +246,7 @@ export function TwoSampleTPanel({
                   </tbody>
                 </table>
               </div>
+              <GroupIdentityDetails groups={result.groups} />
             </>
           ) : null}
         </>

@@ -11,6 +11,8 @@ import type {
   EqualVariancesResult,
 } from "./api";
 import { InteractiveVarianceComparisonIntervalsChart } from "./charts/InteractiveVarianceComparisonIntervalsChart";
+import { GroupIdentityDetails } from "./GroupIdentityDetails";
+import { groupDisplayLabel } from "./groupIdentity";
 
 interface EqualVariancesPanelProps {
   alpha: number;
@@ -99,14 +101,14 @@ export function EqualVariancesPanel({
               {analysisResult.warnings.map((warning, index) => <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>)}
             </ul>
           ) : null}
-          {result !== null ? <EqualVarianceResults result={result} /> : null}
+          {result !== null ? <EqualVarianceResults result={result} sourceKey={analysisResult?.analysis_id} /> : null}
         </>
       )}
     </section>
   );
 }
 
-function EqualVarianceResults({ result }: { result: EqualVariancesResult }) {
+function EqualVarianceResults({ result, sourceKey }: { result: EqualVariancesResult; sourceKey?: string }) {
   const { locale } = useI18n();
   const isCurrent = result.schema_version >= 2 && result.multiple_comparisons && result.levene;
   return (
@@ -140,6 +142,7 @@ function EqualVarianceResults({ result }: { result: EqualVariancesResult }) {
           <p>다중 비교구간 · alpha = {formatAnalysisNumber(result.alpha)}</p>
           <InteractiveVarianceComparisonIntervalsChart
             chartId="equal-variances-comparison-intervals"
+            sourceKey={sourceKey}
             groupName={result.group.display_name}
             result={result.multiple_comparisons!}
             responseName={result.response.display_name}
@@ -159,9 +162,10 @@ function EqualVarianceResults({ result }: { result: EqualVariancesResult }) {
       ) : null}
       <div className="table-wrap">
         <table className="result-table"><thead><tr><th>그룹</th><th>N</th><th>평균</th><th>중앙값</th><th>분산</th><th>표준편차</th><th>범위</th></tr></thead><tbody>
-          {result.groups.map((group) => <tr key={`${group.group_index}-${group.group_label}`}><td>{group.group_label}</td><td>{group.n}</td><td>{formatAnalysisNumber(group.mean)}</td><td>{formatAnalysisNumber(group.median)}</td><td>{formatAnalysisNumber(group.variance)}</td><td>{formatAnalysisNumber(group.std)}</td><td>{formatAnalysisNumber(group.min)} - {formatAnalysisNumber(group.max)}</td></tr>)}
+          {result.groups.map((group) => <tr key={group.group_index} data-group-index={group.group_index}><td>{groupDisplayLabel(group, result.groups, locale)}</td><td>{group.n}</td><td>{formatAnalysisNumber(group.mean)}</td><td>{formatAnalysisNumber(group.median)}</td><td>{formatAnalysisNumber(group.variance)}</td><td>{formatAnalysisNumber(group.std)}</td><td>{formatAnalysisNumber(group.min)} - {formatAnalysisNumber(group.max)}</td></tr>)}
         </tbody></table>
       </div>
+      <GroupIdentityDetails groups={result.groups} />
     </>
   );
 }

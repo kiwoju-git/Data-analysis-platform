@@ -1,5 +1,16 @@
 # Method Versioning Policy
 
+## F01 Group Identity Correction
+
+New writes use `eda.equal_variances` 0.3.0/result schema 3,
+`hypothesis.two_sample_t` 0.2.0/result schema 2, and
+`hypothesis.kruskal_wallis` 0.2.0/result schema 2. Complete group strings, rather
+than abbreviated labels, define groups. Pair/interval associations include stable
+encounter-order indexes. This corrects numerical results only for inputs whose
+old display abbreviations collided; unaffected-label reference calculations remain
+unchanged. Legacy result schemas remain readable and are not rewritten. No new
+metadata migration is required. See [group identity contract](group_identity_contract.md).
+
 ## Reliability Remediation (2026-10-18)
 
 API 23 covers schema-hash CAS and the additive stored-report capability contract.

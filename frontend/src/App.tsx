@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import "./App.css";
 import "./dashboardNavigation.css";
+import { validStoredGroupIdentities } from "./groupIdentity";
 import {
   createAnalysisRun,
   createFactorialAnalysis,
@@ -5460,7 +5461,8 @@ function isEqualVariancesResult(
   const candidate = value as Record<string, unknown>;
   return (
     candidate.summary_type === "equal_variances_test" &&
-    Array.isArray(candidate.groups) &&
+    [1, 2, 3].includes(candidate.schema_version as number) &&
+    validStoredGroupIdentities(candidate.groups, candidate.schema_version === 3) &&
     Array.isArray(candidate.tests)
   );
 }
@@ -5552,7 +5554,8 @@ function isTwoSampleTResult(
   const candidate = value as Record<string, unknown>;
   return (
     candidate.summary_type === "two_sample_t_test" &&
-    Array.isArray(candidate.groups) &&
+    [1, 2].includes(candidate.schema_version as number) &&
+    validStoredGroupIdentities(candidate.groups, candidate.schema_version === 2) &&
     typeof candidate.contrast === "object" &&
     candidate.contrast !== null
   );
@@ -5582,7 +5585,8 @@ function isKruskalWallisResult(
   const candidate = value as Record<string, unknown>;
   return (
     candidate.summary_type === "kruskal_wallis_test" &&
-    Array.isArray(candidate.groups) &&
+    [1, 2].includes(candidate.schema_version as number) &&
+    validStoredGroupIdentities(candidate.groups, candidate.schema_version === 2) &&
     typeof candidate.test === "object" &&
     candidate.test !== null &&
     typeof candidate.posthoc === "object" &&

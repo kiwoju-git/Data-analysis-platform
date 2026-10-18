@@ -9,9 +9,10 @@ import { InteractiveGridChart } from "./InteractiveGridChart";
 import { paddedNumericRange } from "./chartScale";
 import { integerChartTicks } from "./chartLayout";
 import { gpResidualModel, gpScatterModel, gpSurfaceRequest, gpUncertaintyModel, joinGpSurfaceRows } from "./gpChartModels";
+import { formatExactNumericValue, formatInterval } from "../statisticalNumberFormat";
 
 type Props = { result: GaussianProcessRegressionResult; scope: string };
-const number = (value: number | null) => value !== null && Number.isFinite(value) ? Number(value.toPrecision(7)).toString() : "-";
+const number = formatExactNumericValue;
 
 export function GpScatter({ result, mode, scope }: Props & { mode: "fitted" | "cv" }) {
   const { t } = useI18n();
@@ -22,7 +23,7 @@ export function GpScatter({ result, mode, scope }: Props & { mode: "fitted" | "c
   const range = paddedNumericRange(points.flatMap((point) => [point.x, point.y]));
   const title = t(mode === "fitted" ? "gp.observedFitted" : "gp.observedCv");
   return <InteractiveScatterChart chartId={`gp-${mode}`} sourceKey={`${scope}:${mode}`} title={title} description={title}
-    annotations={[t("charts.displayCount", { shown: points.length, total: result.sample.n_used })]} emptyLabel={t("charts.noData")} formatValue={number} points={points}
+    annotations={[t("charts.displayCount", { shown: points.length, total: result.sample.n_used })]} emptyLabel={t("charts.noData")} points={points}
     xLabel={`${t("gp.observed")} ${result.response.display_name}`} yLabel={`${predictionLabel} ${result.response.display_name}`}
     xUnit={result.response.unit} yUnit={result.response.unit} xRange={range} yRange={range}
     referenceLines={[{ label: "y = x", x1: range.min, y1: range.min, x2: range.max, y2: range.max }]} />;
@@ -35,7 +36,7 @@ export function GpResidualChart({ result, scope }: Props) {
     details: [{ label: t("gp.fitted"), value: number(point.x) }, { label: t("gp.residual"), value: number(point.y) }, { label: t("charts.standardizedResidual"), value: number(point.standardizedResidual) }] }));
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="gp-residual" sourceKey={`${scope}:residual`} title={t("gp.residualDiagnostics")} description={t("gp.residualDiagnostics")}
-    annotations={[]} emptyLabel={t("charts.noData")} formatValue={number} points={points}
+    annotations={[]} emptyLabel={t("charts.noData")} points={points}
     xLabel={t("gp.fitted")} yLabel={t("gp.residual")} xUnit={result.response.unit} yUnit={result.response.unit} xRange={xRange} yRange={paddedNumericRange([0, ...points.map((point) => point.y)])}
     referenceLines={[{ label: "0", x1: xRange.min, x2: xRange.max, y1: 0, y2: 0 }]} />;
 }
@@ -47,7 +48,7 @@ export function GpUncertaintyChart({ result, scope }: Props) {
     details: [{ label: t("gp.newObservationSd"), value: number(point.y) }] }));
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="gp-uncertainty" sourceKey={`${scope}:uncertainty`} title={t("gp.uncertaintyDiagnostics")} description={t("gp.newObservationSd")}
-    annotations={[]} emptyLabel={t("charts.noData")} yFormatValue={number} points={points}
+    annotations={[]} emptyLabel={t("charts.noData")} points={points}
     xLabel={t("gp.row")} yLabel={t("gp.newObservationSd")} yUnit={result.response.unit}
     xRange={xRange} xTicks={integerChartTicks(xRange)} yRange={paddedNumericRange([0, ...points.map((point) => point.y)])} />;
 }
@@ -57,11 +58,11 @@ export function GpProfileChart({ profile, result, scope }: Props & { profile: Ga
   const points: InteractiveScatterPoint[] = profile.points.map((point) => ({ id: `value:${point.value}`, x: point.value, y: point.predicted_mean,
     title: profile.display_name, ariaLabel: `${profile.display_name} ${number(point.value)}, ${number(point.predicted_mean)}`, className: "gp-profile-point",
     details: [{ label: profile.display_name, value: number(point.value) }, { label: t("gp.predictedMean"), value: number(point.predicted_mean) },
-      { label: t("gp.predictiveInterval"), value: `${number(point.predictive_interval_95.lower)} - ${number(point.predictive_interval_95.upper)}` }] }));
+      { label: t("gp.predictiveInterval"), value: formatInterval(point.predictive_interval_95) }] }));
   return <figure className="gp-profile-chart"><figcaption>{profile.display_name}</figcaption>
     <InteractiveScatterChart chartId={`gp-profile-${profile.column_id}`} sourceKey={`${scope}:profile:${profile.column_id}`}
       title={`${t("gp.conditionalProfiles")}: ${profile.display_name}`} description={t("gp.profileNotice")} annotations={[t("gp.profileNotice")]}
-      emptyLabel={t("charts.noData")} formatValue={number} points={points} connectPoints="line"
+      emptyLabel={t("charts.noData")} points={points} connectPoints="line"
       xLabel={profile.display_name} xUnit={result.predictors.find((column) => column.column_id === profile.column_id)?.unit}
       yLabel={`${t("gp.predictedMean")} ${result.response.display_name}`} yUnit={result.response.unit}
       xRange={paddedNumericRange(points.map((point) => point.x))} yRange={paddedNumericRange(profile.points.flatMap((point) => [point.predictive_interval_95.lower, point.predictive_interval_95.upper]))}

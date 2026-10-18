@@ -538,7 +538,7 @@ function ScatterPanel({ panel }: { panel: ScatterPreviewPanel }) {
         chartId={panel.panel_id}
         description="X와 Y의 pairwise complete 관측값입니다. 인과관계를 의미하지 않습니다."
         emptyLabel="표시할 점이 없습니다."
-        formatValue={formatNumber}
+
         points={points}
         title={panel.label}
         xLabel={result.x_column.display_name}
@@ -655,7 +655,7 @@ function SequenceChart({
         connectPoints="line"
         description={`${label}과 기준선`}
         emptyLabel="표시할 점이 없습니다."
-        formatValue={formatNumber}
+
         points={interactivePoints}
         referenceLines={referenceLines}
         title={label}

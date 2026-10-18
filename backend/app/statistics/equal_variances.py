@@ -42,6 +42,7 @@ class EqualVarianceGroupColumn:
 
 @dataclass
 class _GroupAccumulator:
+    group_value: str
     group_label: str
     group_index: int
     values: list[float] = field(default_factory=list)
@@ -83,31 +84,43 @@ def calculate_equal_variances(
             n_excluded_non_numeric_response += 1
             continue
 
-        group_label = _safe_group_label(group_value)
-        group = groups.get(group_label)
+        group_key = group_value.strip()
+        group = groups.get(group_key)
         if group is None:
             group = _GroupAccumulator(
-                group_label=group_label,
+                group_value=group_key,
+                group_label=_safe_group_label(group_key),
                 group_index=len(groups),
             )
-            groups[group_label] = group
+            groups[group_key] = group
         group.values.append(response_number)
 
     n_used = sum(len(group.values) for group in groups.values())
     group_list = list(groups.values())
     multiple_comparisons = _multiple_comparisons(group_list, alpha=alpha)
     comparison_groups = multiple_comparisons.get("groups")
+    # Display labels can collide. Only the calculation-owned index joins intervals.
     if not isinstance(comparison_groups, list):
-        comparison_groups = []
-    intervals_by_label = {
-        str(group["group_label"]): group.get("comparison_interval")
-        for group in comparison_groups
-        if isinstance(group, dict)
-    }
+        raise ValueError("equal_variances_comparison_group_mismatch")
+    intervals_by_index: dict[int, object] = {}
+    for comparison_group in comparison_groups:
+        if not isinstance(comparison_group, dict):
+            raise ValueError("equal_variances_comparison_group_mismatch")
+        index = comparison_group.get("group_index")
+        if (
+            type(index) is not int
+            or index not in range(len(group_list))
+            or index in intervals_by_index
+            or comparison_group.get("group_value") != group_list[index].group_value
+        ):
+            raise ValueError("equal_variances_comparison_group_mismatch")
+        intervals_by_index[index] = comparison_group.get("comparison_interval")
+    if multiple_comparisons["computed"] and len(intervals_by_index) != len(group_list):
+        raise ValueError("equal_variances_comparison_group_mismatch")
     group_summaries = [
         {
             **_group_summary(group),
-            "comparison_interval": intervals_by_label.get(group.group_label),
+            "comparison_interval": intervals_by_index.get(group.group_index),
         }
         for group in group_list
     ]
@@ -132,7 +145,7 @@ def calculate_equal_variances(
     )
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "summary_type": "equal_variances_test",
         "missing_policy": "complete_case",
         "alpha": alpha,
@@ -219,6 +232,7 @@ def _column_payload(
 def _group_summary(group: _GroupAccumulator) -> dict[str, object]:
     values = sorted(group.values)
     return {
+        "group_value": group.group_value,
         "group_label": group.group_label,
         "group_index": group.group_index,
         "n": len(values),
@@ -353,6 +367,7 @@ def _multiple_comparisons(
         center = standard_deviation * sqrt(correction)
         group_payloads.append(
             {
+                "group_value": group.group_value,
                 "group_label": group.group_label,
                 "group_index": group.group_index,
                 "n": len(group.values),
@@ -365,7 +380,7 @@ def _multiple_comparisons(
             }
         )
 
-    non_overlapping_pairs: list[dict[str, str]] = []
+    non_overlapping_pairs: list[dict[str, object]] = []
     pairwise_p_values: list[dict[str, object]] = []
     pairwise_p_value_numbers: list[float] = []
     for (left_index, right_index), scale in pair_scales.items():
@@ -380,6 +395,10 @@ def _multiple_comparisons(
         ) < float(left_interval["lower"]):
             non_overlapping_pairs.append(
                 {
+                    "left_group_index": groups[left_index].group_index,
+                    "right_group_index": groups[right_index].group_index,
+                    "left_group_value": groups[left_index].group_value,
+                    "right_group_value": groups[right_index].group_value,
                     "left_group": groups[left_index].group_label,
                     "right_group": groups[right_index].group_label,
                 }
@@ -393,6 +412,10 @@ def _multiple_comparisons(
         pairwise_p_value_numbers.append(pairwise_p_value)
         pairwise_p_values.append(
             {
+                "left_group_index": groups[left_index].group_index,
+                "right_group_index": groups[right_index].group_index,
+                "left_group_value": groups[left_index].group_value,
+                "right_group_value": groups[right_index].group_value,
                 "left_group": groups[left_index].group_label,
                 "right_group": groups[right_index].group_label,
                 "p_value": pairwise_p_value,

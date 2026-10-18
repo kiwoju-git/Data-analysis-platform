@@ -153,6 +153,35 @@ beforeEach(() => { vi.resetAllMocks(); setCurrentLocale("en"); });
 afterEach(() => { for (const runner of runners.splice(0)) runner.unmount(); setCurrentLocale("ko"); });
 
 describe("direct prediction request ownership regressions", () => {
+  it.each(["ko", "en"] as const)("pilot preserves small GP predictions and distinct intervals in %s", async (locale) => {
+    setCurrentLocale(locale);
+    requests.gp.mockImplementation((_model: string, request: GaussianProcessPointPredictionRequest) => {
+      const response = gpResponse(request);
+      response.rows[0] = { ...response.rows[0], predicted_mean: 1e-6, latent_standard_deviation: 2e-6,
+        predictive_standard_deviation: 0.0004, latent_interval_95: { lower: 1e-6, upper: 2e-6 },
+        predictive_interval_95: { lower: 1000.000001, upper: 1000.000002 } };
+      return Promise.resolve(response);
+    });
+    const { runner, result, analysisId } = mountPrediction("gp"); start(runner); await runner.flush();
+    expect(mean(runner)).toBe("1e-6");
+    const html = renderToStaticMarkup(<>{runner.output}</>);
+    expect(html).toContain("2e-6"); expect(html).toContain("4e-4");
+    expect(html).toContain("[1e-6, 2e-6]");
+    expect(html).toContain("[1,000.000001, 1,000.000002]");
+    setCurrentLocale(locale === "ko" ? "en" : "ko"); runner.update({ result, analysisId });
+    expect(mean(runner)).toBe("1e-6"); expect(requests.gp).toHaveBeenCalledTimes(1);
+    clickAction(runner, (element) => element.props["data-action"] === "download-prediction-snapshot");
+    const saved = JSON.parse(await (requests.download.mock.calls[0][0] as Blob).text()) as { response: GaussianProcessPointPredictionResponse };
+    expect(saved.response.rows[0].predicted_mean).toBe(1e-6);
+    expect(saved.response.rows[0].predictive_interval_95.upper).toBe(1000.000002);
+  });
+  it.each([-1e-6, 0])("pilot preserves actual GP mean %s", async (value) => {
+    requests.gp.mockImplementation((_model: string, request: GaussianProcessPointPredictionRequest) => {
+      const response = gpResponse(request); response.rows[0].predicted_mean = value; return Promise.resolve(response);
+    });
+    const { runner } = mountPrediction("gp"); start(runner); await runner.flush();
+    expect(mean(runner)).toBe(String(value === 0 ? 0 : "-1e-6"));
+  });
   it.each(["gp", "pls"] as const)("captures the explicit %s save choice without locale/edit side effects", (kind) => {
     requests[kind].mockReturnValue(new Promise(() => undefined));
     const { runner, result, analysisId } = mountPrediction(kind);

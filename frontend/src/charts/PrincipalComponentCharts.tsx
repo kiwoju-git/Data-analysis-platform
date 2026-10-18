@@ -22,7 +22,7 @@ export function ScreePlot({ result, analysisId }: ResultProps) {
     details: [{ label: t("pca.eigenvalue"), value: number(row.eigenvalue) }, { label: t("pca.proportion"), value: number(row.proportion) },
       { label: t("pca.cumulativeProportion"), value: number(row.cumulative_proportion) }, { label: t("pca.selected"), value: t(row.selected ? "pca.yes" : "pca.no") }] }));
   return <InteractiveScatterChart chartId="pca-scree" sourceKey={`${analysisId}:scree`} title={t("pca.screePlot")} description={t("pca.screePlotDesc")}
-    annotations={[]} emptyLabel={t("charts.noData")} yFormatValue={number} points={points} connectPoints="line"
+    annotations={[]} emptyLabel={t("charts.noData")} points={points} connectPoints="line"
     xLabel={t("pca.component")} yLabel={t("pca.eigenvalue")}
     xRange={paddedNumericRange(points.map((point) => point.x))} yRange={paddedNumericRange([0, ...points.map((point) => point.y)])}
     xTicks={result.eigenanalysis.map((row) => ({ value: row.component, label: String(row.component) }))} />;
@@ -40,7 +40,7 @@ export function ScorePlot({ result, analysisId, xComponent, yComponent }: PairPr
   const xRange = yComponent === null ? paddedNumericRange(points.map((point) => point.x)) : range;
   return <InteractiveScatterChart chartId="pca-score" sourceKey={`${analysisId}:score:${xComponent}:${yComponent}`} title={t("pca.scorePlot")}
     description={t("pca.scorePlotDesc")} annotations={[t("charts.displayCount", { shown: points.length, total: result.sample.n_used })]}
-    emptyLabel={t("charts.noData")} formatValue={number} points={points} square={yComponent !== null}
+    emptyLabel={t("charts.noData")} points={points} square={yComponent !== null}
     xLabel={yComponent === null ? t("pca.row") : axis(xComponent)} yLabel={axis(yComponent ?? xComponent)}
     xRange={xRange} xTicks={yComponent === null ? integerChartTicks(xRange) : undefined} yRange={yComponent === null ? paddedNumericRange(points.map((point) => point.y)) : range} />;
 }
@@ -57,7 +57,7 @@ export function LoadingPlot({ result, analysisId, xComponent, yComponent }: Pair
     details: [{ label: label(xComponent), value: number(point.x) }, { label: label(yComponent), value: number(point.y) }] }));
   const range = pcaSymmetricRange(points.flatMap((point) => [point.x, point.y]));
   return <InteractiveScatterChart chartId="pca-loading" sourceKey={`${analysisId}:loading:${xComponent}:${yComponent}`} title={t("pca.loadingPlot")}
-    description={t("pca.loadings")} annotations={[]} emptyLabel={t("charts.noData")} formatValue={number} points={points} square
+    description={t("pca.loadings")} annotations={[]} emptyLabel={t("charts.noData")} points={points} square
     xLabel={label(xComponent)} yLabel={label(yComponent)} xRange={range} yRange={range} />;
 }
 
@@ -77,7 +77,7 @@ export function Biplot({ result, analysisId, xComponent, yComponent }: PairProps
   const points = [...scores, ...vectors]; const range = pcaSymmetricRange(points.flatMap((point) => [point.x, point.y]));
   return <InteractiveScatterChart chartId="pca-biplot" sourceKey={`${analysisId}:biplot:${xComponent}:${yComponent}`} title={t("pca.biplot")} description={t("pca.biplotScaleNote")}
     annotations={[t("pca.biplotScaleNote"), `${t("pca.loadingDisplayScale")}: ${number(model.loadingDisplayScale)}`]}
-    emptyLabel={t("charts.noData")} formatValue={number} points={points} square xLabel={`PC${xComponent} score`} yLabel={`PC${yComponent} score`} xRange={range} yRange={range}
+    emptyLabel={t("charts.noData")} points={points} square xLabel={`PC${xComponent} score`} yLabel={`PC${yComponent} score`} xRange={range} yRange={range}
     referenceLines={vectors.map((point) => ({ label: point.title, className: "pca-loading-vector", x1: 0, y1: 0, x2: point.x, y2: point.y, arrow: true }))} />;
 }
 
@@ -88,7 +88,7 @@ export function OutlierPlot({ result, analysisId }: ResultProps) {
     details: [{ label: t("pca.row"), value: String(point.x) }, { label: t("pca.mahalanobis"), value: number(point.y) }, { label: "Alpha", value: number(result.outliers.alpha) }] }));
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="pca-outliers" sourceKey={`${analysisId}:outliers`} title={t("pca.outlierPlot")} description={t("pca.outlierPlotDesc")}
-    annotations={[result.outliers.method, `Alpha: ${number(result.outliers.alpha)}`]} emptyLabel={t("charts.noData")} yFormatValue={number} points={points}
+    annotations={[result.outliers.method, `Alpha: ${number(result.outliers.alpha)}`]} emptyLabel={t("charts.noData")} points={points}
     xLabel={t("pca.row")} yLabel={t("pca.mahalanobis")} xRange={xRange} xTicks={integerChartTicks(xRange)} yRange={paddedNumericRange([0, result.outliers.reference_value, ...points.map((point) => point.y)])}
     referenceLines={[{ label: `${result.outliers.method}; Alpha ${number(result.outliers.alpha)}`, x1: xRange.min, x2: xRange.max, y1: result.outliers.reference_value, y2: result.outliers.reference_value }]} />;
 }

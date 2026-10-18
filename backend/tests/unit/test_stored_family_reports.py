@@ -557,5 +557,12 @@ def test_large_constant_coordinates_have_finite_padding() -> None:
     grid = report_grid("Constant", "X", "Y", "Value", [(1e308, 1e308, 3.0, "large")])
     cell = next(item for item in ET.fromstring(grid).findall("rect") if "data-value" in item.attrib)
     assert float(cell.attrib["width"]) == pytest.approx(420, abs=0.001)
-    with pytest.raises(ValueError, match="analysis_report_payload_invalid"):
-        report_plot("Overflow", "X", "Y", [("S", [(-1e308, 0.0, "low"), (1e308, 0.0, "high")])])
+    extreme = ET.fromstring(
+        report_plot(
+            "Finite extremes", "X", "Y", [("S", [(-1e308, 0.0, "low"), (1e308, 0.0, "high")])]
+        )
+    )
+    projected = extreme.findall("circle")
+    assert len(projected) == 2
+    assert 75 <= float(projected[0].attrib["cx"]) < float(projected[1].attrib["cx"]) <= 575
+    assert [float(item.attrib["data-x"]) for item in projected] == [-1e308, 1e308]

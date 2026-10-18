@@ -1,0 +1,641 @@
+{
+  "fixture_schema_version": 1,
+  "source_commit": "0849aaa279e34a612c5c65d350cfccf220fe581e",
+  "description": "Actual BASE calculation outputs. Legacy EV/KW retain the historical label collision; no suffix reconstruction or result rewrite.",
+  "result_digest_encoding": "SHA-256 of UTF-8 JSON; ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False",
+  "current_app_helpers_used": false,
+  "cases": [
+    {
+      "method_id": "eda.equal_variances",
+      "method_version": "0.2.0",
+      "source_path": "backend/app/statistics/equal_variances.py",
+      "source_file_sha256": "b0596e59ccbd655056be5ca88053305caa29cd91c5754333bc773f6af8593d72",
+      "imports": [
+        "__future__",
+        "collections.abc",
+        "dataclasses",
+        "decimal",
+        "itertools",
+        "math",
+        "scipy",
+        "scipy.optimize",
+        "statistics"
+      ],
+      "input_rows": [
+        [
+          "1",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "2",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "3",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "4",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "5",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "11",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "12",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "13",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "14",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "15",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "21",
+          "C"
+        ],
+        [
+          "22",
+          "C"
+        ],
+        [
+          "23",
+          "C"
+        ],
+        [
+          "24",
+          "C"
+        ],
+        [
+          "25",
+          "C"
+        ],
+        [
+          "31",
+          "D"
+        ],
+        [
+          "32",
+          "D"
+        ],
+        [
+          "33",
+          "D"
+        ],
+        [
+          "34",
+          "D"
+        ],
+        [
+          "35",
+          "D"
+        ]
+      ],
+      "result_sha256": "c98511eb3b6476addaf132f87918761b86de179849977cdd2fee3a91e32389b3",
+      "result": {
+        "schema_version": 2,
+        "summary_type": "equal_variances_test",
+        "missing_policy": "complete_case",
+        "alpha": 0.05,
+        "package_versions": {
+          "numpy": "2.2.6",
+          "scipy": "1.15.3"
+        },
+        "warnings": [
+          "equal_variances_not_method_switch"
+        ],
+        "response": {
+          "column_id": "037d3e4c-c41f-563a-844b-990a2cb9669d",
+          "column_index": 0,
+          "display_name": "response",
+          "data_type": "decimal",
+          "measurement_level": "continuous",
+          "role": "response",
+          "unit": null
+        },
+        "group": {
+          "column_id": "f4a829a0-d724-5d54-a443-3919b88f63c9",
+          "column_index": 1,
+          "display_name": "group",
+          "data_type": "text",
+          "measurement_level": "nominal",
+          "role": "group",
+          "unit": null
+        },
+        "n_total": 20,
+        "n_used": 20,
+        "n_excluded_missing_response": 0,
+        "n_excluded_missing_group": 0,
+        "n_excluded_non_numeric_response": 0,
+        "group_count": 3,
+        "groups": [
+          {
+            "group_label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...",
+            "group_index": 0,
+            "n": 10,
+            "mean": 8.0,
+            "median": 8.0,
+            "variance": 30.0,
+            "std": 5.477225575051661,
+            "min": 1.0,
+            "max": 15.0,
+            "warnings": [],
+            "comparison_interval": null
+          },
+          {
+            "group_label": "C",
+            "group_index": 1,
+            "n": 5,
+            "mean": 23.0,
+            "median": 23.0,
+            "variance": 2.5,
+            "std": 1.5811388300841898,
+            "min": 21.0,
+            "max": 25.0,
+            "warnings": [],
+            "comparison_interval": null
+          },
+          {
+            "group_label": "D",
+            "group_index": 2,
+            "n": 5,
+            "mean": 33.0,
+            "median": 33.0,
+            "variance": 2.5,
+            "std": 1.5811388300841898,
+            "min": 31.0,
+            "max": 35.0,
+            "warnings": [],
+            "comparison_interval": null
+          }
+        ],
+        "multiple_comparisons": {
+          "computed": false,
+          "method": "bonett_nakayama_multiple_comparisons",
+          "alpha": 0.05,
+          "p_value": null,
+          "reject_equal_variances": null,
+          "groups": [],
+          "non_overlapping_pairs": [],
+          "pairwise_p_values": [],
+          "warnings": [
+            "multiple_comparisons_group_n_too_small"
+          ]
+        },
+        "levene": {
+          "method": "levene_brown_forsythe",
+          "center": "median",
+          "computed": true,
+          "statistic": 23.97265625,
+          "p_value": 1.1276113521619612e-05,
+          "alpha": 0.05,
+          "reject_equal_variances": true,
+          "valid_group_n_min": 2,
+          "warnings": []
+        },
+        "additional_tests": [
+          {
+            "method": "classical_levene_mean_centered",
+            "center": "mean",
+            "computed": true,
+            "statistic": 23.97265625,
+            "p_value": 1.1276113521619612e-05,
+            "alpha": 0.05,
+            "reject_equal_variances": true,
+            "valid_group_n_min": 2,
+            "warnings": []
+          }
+        ],
+        "tests": [
+          {
+            "method": "multiple_comparisons",
+            "center": "not_applicable",
+            "computed": false,
+            "statistic": null,
+            "p_value": null,
+            "alpha": 0.05,
+            "reject_equal_variances": null,
+            "valid_group_n_min": 10,
+            "warnings": [
+              "multiple_comparisons_group_n_too_small"
+            ]
+          },
+          {
+            "method": "levene_brown_forsythe",
+            "center": "median",
+            "computed": true,
+            "statistic": 23.97265625,
+            "p_value": 1.1276113521619612e-05,
+            "alpha": 0.05,
+            "reject_equal_variances": true,
+            "valid_group_n_min": 2,
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "method_id": "hypothesis.two_sample_t",
+      "method_version": "0.1.0",
+      "source_path": "backend/app/statistics/two_sample_t.py",
+      "source_file_sha256": "b974ae496e0d4c18b3e616b6e6bf9c23bb023dbda668c042e072953e7c656460",
+      "imports": [
+        "__future__",
+        "collections.abc",
+        "dataclasses",
+        "decimal",
+        "math",
+        "scipy",
+        "statistics"
+      ],
+      "input_rows": [
+        [
+          "1",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "2",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "3",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "4",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "5",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "11",
+          "C"
+        ],
+        [
+          "12",
+          "C"
+        ],
+        [
+          "13",
+          "C"
+        ],
+        [
+          "14",
+          "C"
+        ],
+        [
+          "15",
+          "C"
+        ]
+      ],
+      "result_sha256": "f3543046cb903da413f0fa9ada7970dc604a66cd6e268c3aac94115881aea519",
+      "result": {
+        "schema_version": 1,
+        "summary_type": "two_sample_t_test",
+        "method": "welch_two_sample_t",
+        "variance_assumption": "welch",
+        "missing_policy": "complete_case",
+        "alternative": "two_sided",
+        "alpha": 0.05,
+        "confidence_level": 0.95,
+        "null_difference": 0.0,
+        "package_versions": {
+          "numpy": "2.2.6",
+          "scipy": "1.15.3"
+        },
+        "warnings": [
+          "two_sample_t_independence_assumption",
+          "two_sample_t_not_auto_switched"
+        ],
+        "response": {
+          "column_id": "9ab60537-b7c6-50b2-9a45-cbc08397358b",
+          "column_index": 0,
+          "display_name": "response",
+          "data_type": "decimal",
+          "measurement_level": "continuous",
+          "role": "response",
+          "unit": null
+        },
+        "group": {
+          "column_id": "78c90bfd-9b28-556f-9f2f-5bf89798bd3a",
+          "column_index": 1,
+          "display_name": "group",
+          "data_type": "text",
+          "measurement_level": "nominal",
+          "role": "group",
+          "unit": null
+        },
+        "n_total": 10,
+        "n_used": 10,
+        "n_excluded_missing_response": 0,
+        "n_excluded_missing_group": 0,
+        "n_excluded_non_numeric_response": 0,
+        "group_count": 2,
+        "groups": [
+          {
+            "group_label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...",
+            "group_index": 0,
+            "n": 5,
+            "mean": 3.0,
+            "median": 3.0,
+            "variance": 2.5,
+            "std": 1.5811388300841898,
+            "min": 1.0,
+            "max": 5.0,
+            "warnings": []
+          },
+          {
+            "group_label": "C",
+            "group_index": 1,
+            "n": 5,
+            "mean": 13.0,
+            "median": 13.0,
+            "variance": 2.5,
+            "std": 1.5811388300841898,
+            "min": 11.0,
+            "max": 15.0,
+            "warnings": []
+          }
+        ],
+        "contrast": {
+          "group_1_label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...",
+          "group_2_label": "C",
+          "estimate": -10.0,
+          "estimate_definition": "group_1_mean_minus_group_2_mean",
+          "null_difference": 0.0,
+          "standard_error": 1.0,
+          "statistic": -10.0,
+          "df": 8.0,
+          "p_value": 8.488181527628498e-06,
+          "reject_null": true,
+          "confidence_interval": {
+            "level": 0.95,
+            "alternative": "two_sided",
+            "lower": -12.306004135204166,
+            "upper": -7.693995864795834
+          },
+          "effect_size": {
+            "standardizer": "pooled_sample_sd",
+            "cohen_d": -6.324555320336758,
+            "hedges_g": -5.7125015796590075,
+            "hedges_correction": 0.9032258064516129
+          }
+        }
+      }
+    },
+    {
+      "method_id": "hypothesis.kruskal_wallis",
+      "method_version": "0.1.0",
+      "source_path": "backend/app/statistics/kruskal_wallis.py",
+      "source_file_sha256": "9dbffb7f4b744f0984a85b2a1e289ade196fbb14e5250073394e5dca650e54aa",
+      "imports": [
+        "__future__",
+        "collections",
+        "collections.abc",
+        "dataclasses",
+        "decimal",
+        "math",
+        "scipy",
+        "statistics"
+      ],
+      "input_rows": [
+        [
+          "1",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "2",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "3",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "4",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "5",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-A"
+        ],
+        [
+          "11",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "12",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "13",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "14",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "15",
+          "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-B"
+        ],
+        [
+          "21",
+          "C"
+        ],
+        [
+          "22",
+          "C"
+        ],
+        [
+          "23",
+          "C"
+        ],
+        [
+          "24",
+          "C"
+        ],
+        [
+          "25",
+          "C"
+        ],
+        [
+          "31",
+          "D"
+        ],
+        [
+          "32",
+          "D"
+        ],
+        [
+          "33",
+          "D"
+        ],
+        [
+          "34",
+          "D"
+        ],
+        [
+          "35",
+          "D"
+        ]
+      ],
+      "result_sha256": "4cdf4598087e5f9248736ea26e53926892dcf0b7d7d734b70f432a886d15ac78",
+      "result": {
+        "schema_version": 1,
+        "summary_type": "kruskal_wallis_test",
+        "method": "kruskal_wallis",
+        "missing_policy": "complete_case",
+        "alpha": 0.05,
+        "posthoc_method": "dunn_holm",
+        "posthoc_policy": "after_significant",
+        "tie_correction": 1.0,
+        "has_ties": false,
+        "package_versions": {
+          "numpy": "2.2.6",
+          "scipy": "1.15.3"
+        },
+        "warnings": [
+          "kruskal_wallis_independence_assumption",
+          "kruskal_wallis_not_median_test",
+          "dunn_holm_after_significant"
+        ],
+        "response": {
+          "column_id": "4fcf7a36-268b-533a-a58e-c9408c0266f2",
+          "column_index": 0,
+          "display_name": "response",
+          "data_type": "decimal",
+          "measurement_level": "continuous",
+          "role": "response",
+          "unit": null
+        },
+        "group": {
+          "column_id": "1b929c4a-08a3-56e6-add8-572f8e31213e",
+          "column_index": 1,
+          "display_name": "group",
+          "data_type": "text",
+          "measurement_level": "nominal",
+          "role": "group",
+          "unit": null
+        },
+        "n_total": 20,
+        "n_used": 20,
+        "n_excluded_missing_response": 0,
+        "n_excluded_missing_group": 0,
+        "n_excluded_non_numeric_response": 0,
+        "group_count": 3,
+        "groups": [
+          {
+            "group_label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...",
+            "group_index": 0,
+            "n": 10,
+            "mean": 8.0,
+            "median": 8.0,
+            "q1": 3.0,
+            "q3": 13.0,
+            "iqr": 10.0,
+            "min": 1.0,
+            "max": 15.0,
+            "rank_sum": 55.0,
+            "mean_rank": 5.5,
+            "warnings": []
+          },
+          {
+            "group_label": "C",
+            "group_index": 1,
+            "n": 5,
+            "mean": 23.0,
+            "median": 23.0,
+            "q1": 21.5,
+            "q3": 24.5,
+            "iqr": 3.0,
+            "min": 21.0,
+            "max": 25.0,
+            "rank_sum": 65.0,
+            "mean_rank": 13.0,
+            "warnings": []
+          },
+          {
+            "group_label": "D",
+            "group_index": 2,
+            "n": 5,
+            "mean": 33.0,
+            "median": 33.0,
+            "q1": 31.5,
+            "q3": 34.5,
+            "iqr": 3.0,
+            "min": 31.0,
+            "max": 35.0,
+            "rank_sum": 90.0,
+            "mean_rank": 18.0,
+            "warnings": []
+          }
+        ],
+        "test": {
+          "h_statistic": 16.07142857142857,
+          "df": 2,
+          "p_value": 0.0003236932384041894,
+          "reject_null": true,
+          "effect_size": {
+            "epsilon_squared": 0.8277310924369746,
+            "definition": "max(0,min(1,(H-k+1)/(N-k))) using tie-corrected H",
+            "tie_correction": 1.0
+          }
+        },
+        "posthoc": {
+          "method": "dunn",
+          "multiplicity_method": "holm",
+          "policy": "after_significant",
+          "performed": true,
+          "reason": null,
+          "comparisons": [
+            {
+              "group_1_label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...",
+              "group_2_label": "C",
+              "mean_rank_difference": -7.5,
+              "standard_error": 3.24037034920393,
+              "z_statistic": -2.3145502494313788,
+              "raw_p_value": 0.020637558243972183,
+              "adjusted_p_value": 0.041275116487944366,
+              "reject_holm": true
+            },
+            {
+              "group_1_label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...",
+              "group_2_label": "D",
+              "mean_rank_difference": -12.5,
+              "standard_error": 3.24037034920393,
+              "z_statistic": -3.8575837490522975,
+              "raw_p_value": 0.00011451344802160654,
+              "adjusted_p_value": 0.00034354034406481964,
+              "reject_holm": true
+            },
+            {
+              "group_1_label": "C",
+              "group_2_label": "D",
+              "mean_rank_difference": -5.0,
+              "standard_error": 3.7416573867739413,
+              "z_statistic": -1.3363062095621219,
+              "raw_p_value": 0.18144920772142048,
+              "adjusted_p_value": 0.18144920772142048,
+              "reject_holm": false
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

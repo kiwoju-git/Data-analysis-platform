@@ -202,7 +202,7 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
 - **클릭 순서:** 역할/option 선택 > 사전점검 > `분석 실행`.
 - **실행 전 확인:** 두 group이 독립 표본이라는 설계 가정을 사용자가 확인한다.
 <!-- TUTORIAL_RESULT:hypothesis.two_sample_t:start -->
-- **검증 source:** `hypothesis.two_sample_t` v0.1.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
+- **검증 source:** `hypothesis.two_sample_t` v0.2.0 · input SHA-256 `a59e3b7b52c8740e00e227fc59e3faa85b981890a78478d23aec8a4c00e6d280`
 - **예상 실제 결과 (Welch, 표시 반올림):**
   - Supplier-1: N=123, mean=81.2239; Supplier-2: N=117, mean=79.4633
   - mean difference=1.7606, 95% CI [0.5084, 3.0128], p=0.006055, Hedges g=0.3570

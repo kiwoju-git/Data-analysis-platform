@@ -1,0 +1,4 @@
+.group-identity-details { min-inline-size: 0; max-inline-size: 100%; }
+.group-identity-details table { table-layout: fixed; inline-size: 100%; }
+.group-identity-details th { inline-size: 6rem; }
+.group-identity-details td { overflow-wrap: anywhere; white-space: normal; }

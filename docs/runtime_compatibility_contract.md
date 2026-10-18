@@ -1,5 +1,16 @@
 # Runtime Compatibility Contract
 
+## Pilot Follow-up After 0849aaa
+
+API contract 24 adds full group identity and stable group indexes to newly
+computed Equal Variances (method 0.3.0/result 3), Two-Sample t (0.2.0/result 2)
+and Kruskal-Wallis (0.2.0/result 2) results. Previously accepted stored schemas
+remain readable without rewriting artifact bytes or reconstructing truncated
+names. Metadata remains 22: there is no new SQL structure. Frontend/backend
+and Windows startup use 24; Linux reads the backend contract constant.
+Axis/measurement formatting and local VOC diagnostics are presentation-only.
+Historical contract numbers below describe earlier releases.
+
 ## 2026-10-18 Update
 
 API contract 23 requires `expected_schema_hash` on dataset schema PATCH requests.
@@ -10,7 +21,7 @@ A valid no-op does not mark results stale. Frontend conflict resolution preserve
 the draft and requires an explicit choice before rebasing; no automatic retry
 with a newly fetched hash is allowed.
 
-The backend, frontend and PowerShell startup require contract 23; Linux startup
+The backend, frontend and PowerShell startup require contract 24; Linux startup
 and release builds read the same backend constant. CAS alone uses existing
 columns. A12 added metadata 21 for source-bound LHS/BO reports and the DOE HTML
 schema constraint, not for CAS. A13 advances the current metadata requirement to
@@ -129,7 +140,7 @@ regularized prediction and model-kind optimizer metadata. Metadata schema 19
 and existing artifact ownership remain sufficient; no migration or stored
 checksum rewrite is performed. Exact frontend/backend matching is required.
 
-The frontend expects API contract `23`, schema 22 or later, and every required
+The frontend expects API contract `24`, schema 22 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

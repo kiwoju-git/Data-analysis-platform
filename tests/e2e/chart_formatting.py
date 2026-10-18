@@ -42,6 +42,13 @@ def verify_chart_formatting(browser: Browser, base_url: str, output: Path) -> No
         common = page.locator('[data-chart-id="common-formatter"]')
         expect(chart).to_be_visible()
         initial = _geometry(chart)
+        numeric_charts = {
+            name: page.locator(f'[data-chart-id="numeric-{name}"]')
+            for name in ("narrow-positive", "large-origin", "narrow-negative")
+        }
+        numeric_geometry = {
+            name: _geometry(item) for name, item in numeric_charts.items()
+        }
         first = chart.get_by_role("img", name="Row 7", exact=True)
         first.click()
         expect(first).to_have_attribute("data-selected", "true")
@@ -89,6 +96,27 @@ def verify_chart_formatting(browser: Browser, base_url: str, output: Path) -> No
                 expect(page.get_by_test_id("select-count")).to_have_text("1")
                 expect(page.get_by_test_id("source")).to_have_text("1")
                 assert _geometry(chart) == initial
+                for name, item in numeric_charts.items():
+                    numeric_labels = item.locator(
+                        '.chart-axes > g > text[text-anchor="middle"]'
+                    ).all_text_contents()
+                    assert len(numeric_labels) > 1 and len(set(numeric_labels)) == len(
+                        numeric_labels
+                    ), (name, numeric_labels)
+                    assert _geometry(item) == numeric_geometry[name]
+                    if name == "large-origin":
+                        offset = item.locator('[data-axis="x"][data-axis-offset]')
+                        expect(offset).to_have_attribute(
+                            "data-axis-offset", "1000000000000"
+                        )
+                        expect(offset).to_contain_text("+1000000000000")
+                        expect(offset.locator("title")).to_contain_text("mg/L")
+                    for node in item.locator(".chart-tick-label").all():
+                        box = node.bounding_box()
+                        if box is not None:
+                            assert (
+                                box["x"] >= -1 and box["x"] + box["width"] <= width + 1
+                            )
                 assert page.evaluate(
                     "document.documentElement.scrollWidth <= window.innerWidth + 1"
                 ), f"Page overflow at {locale}/{width}"
@@ -104,6 +132,8 @@ def verify_chart_formatting(browser: Browser, base_url: str, output: Path) -> No
                         "viewport": [width, height],
                         "coordinates_unchanged": True,
                         "pin_retained": True,
+                        "narrow_numeric_ticks_distinct": True,
+                        "large_origin_offset_visible": True,
                     }
                 )
         first.press("Escape")

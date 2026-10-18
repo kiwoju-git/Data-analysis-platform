@@ -3680,7 +3680,7 @@ def test_analysis_run_executes_kruskal_wallis_from_dataset_version(tmp_path) -> 
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.kruskal_wallis",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.kruskal_wallis"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -9841,7 +9841,7 @@ def test_analysis_run_comparison_api_returns_two_sample_t_stored_metrics(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.two_sample_t",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.two_sample_t"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -9863,7 +9863,7 @@ def test_analysis_run_comparison_api_returns_two_sample_t_stored_metrics(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.two_sample_t",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.two_sample_t"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -10358,7 +10358,7 @@ def test_analysis_run_comparison_api_returns_kruskal_wallis_stored_metrics(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.kruskal_wallis",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.kruskal_wallis"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,
@@ -10378,7 +10378,7 @@ def test_analysis_run_comparison_api_returns_kruskal_wallis_stored_metrics(
             "/api/v1/analysis-runs",
             json={
                 "method_id": "hypothesis.kruskal_wallis",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["hypothesis.kruskal_wallis"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "response": response_column_id,

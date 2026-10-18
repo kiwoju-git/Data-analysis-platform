@@ -74,7 +74,7 @@ function FactorialMeanChart({ xFactor, traceFactor, cells, means }: { xFactor: F
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <div className="chart-panel"><h4>{title}</h4><InteractiveScatterChart chartId="factorial-means"
     sourceKey={JSON.stringify([means, xFactor.name, traceFactor?.name])} title={title} description={t("doe.plots.policy")} annotations={[]}
-    points={points} formatValue={factorialNumber} emptyLabel={t("charts.noData")} xLabel={xFactor.name} xUnit={xFactor.unit}
+    points={points} emptyLabel={t("charts.noData")} xLabel={xFactor.name} xUnit={xFactor.unit}
     yLabel={t(means === "fitted_mean" ? "doe.plots.fitted" : "doe.plots.data")} xRange={xRange} yRange={paddedNumericRange(points.map((point) => point.y))}
     xTicks={xFactor.levels.map((level, index) => ({ value: index, label: String(level.actual) }))}
     series={traces.map((trace, index) => ({ id: String(trace.code), label: traceFactor ? `${traceFactor.name}: ${trace.actual}` : xFactor.name,

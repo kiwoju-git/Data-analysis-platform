@@ -2,6 +2,7 @@ import type { EqualVarianceMultipleComparisons } from "../api/types/analysisResu
 import { useI18n } from "../i18n/LocaleProvider";
 import { translateSystemText } from "../i18n/translate";
 import type { AppLocale } from "../i18n/types";
+import { fullGroupName, groupDisplayLabel } from "../groupIdentity";
 import { ChartItemFeedback } from "./ChartItemFeedback";
 import { paddedNumericRange, scaleChartValue } from "./chartScale";
 import { useChartItemInteraction } from "./useChartItemInteraction";
@@ -15,17 +16,19 @@ export function InteractiveVarianceComparisonIntervalsChart({
   groupName,
   result,
   responseName,
+  sourceKey,
 }: {
   chartId: string;
   groupName: string;
   result: EqualVarianceMultipleComparisons;
   responseName: string;
+  sourceKey?: string;
 }) {
   const { locale } = useI18n();
   const text = (source: string) => translateSystemText(source, locale);
   const groups = result.groups;
   const ids = groups.map((group) => `${chartId}-group-${group.group_index}`);
-  const interaction = useChartItemInteraction(ids);
+  const interaction = useChartItemInteraction(ids, { sourceKey });
   if (!result.computed || groups.length === 0) {
     return <div className="empty-state">다중 비교구간을 계산할 수 없습니다.</div>;
   }
@@ -78,15 +81,16 @@ export function InteractiveVarianceComparisonIntervalsChart({
           const selected = interaction.pinnedId === id;
           return (
             <g key={id}>
-              <text className="chart-row-label" x={plot.left - 12} y={y + 4}>{group.group_label}</text>
+              <text className="chart-row-label" x={plot.left - 12} y={y + 4}>{compactGroupLabel(groupDisplayLabel(group, groups, locale))}</text>
               <line className="variance-interval-line" x1={lowerX} x2={upperX} y1={y} y2={y} />
               <line className="variance-interval-cap" x1={lowerX} x2={lowerX} y1={y - 8} y2={y + 8} />
               <line className="variance-interval-cap" x1={upperX} x2={upperX} y1={y - 8} y2={y + 8} />
               <circle className="variance-interval-estimate" cx={estimateX} cy={y} r="5" />
               <rect
-              aria-label={`${group.group_label}, ${text("표준편차")} ${formatNumber(group.sample_standard_deviation)}, ${text("구간")} ${formatNumber(group.comparison_interval.lower)} - ${formatNumber(group.comparison_interval.upper)}`}
+              aria-label={`${fullGroupName(group)}, ${text("표준편차")} ${formatNumber(group.sample_standard_deviation)}, ${text("구간")} ${formatNumber(group.comparison_interval.lower)} - ${formatNumber(group.comparison_interval.upper)}`}
               className={`chart-hit-target ${interaction.stateClass(id)}${selected ? " chart-hit-target-selected" : ""}`}
               data-selected={selected ? "true" : "false"}
+              data-group-index={group.group_index}
               onBlur={() => interaction.clearFocus(id)}
               onClick={() => interaction.activate(id, estimateX, y, "selection")}
               onFocus={() => interaction.activate(id, estimateX, y, "focus")}
@@ -108,20 +112,24 @@ export function InteractiveVarianceComparisonIntervalsChart({
         <text className="chart-axis-label chart-axis-label-end" x={plot.left + plotWidth} y={height - 14}>{formatNumber(range.max)}</text>
         <text className="chart-axis-label chart-axis-label-center" x={plot.left + plotWidth / 2} y={height - 4}>{text("표준편차")}</text>
       </svg>
-      <ChartItemFeedback interaction={interaction} items={groups.map((group, index) => ({ id: ids[index], title: group.group_label, details: groupDetails(group, result, locale) }))} />
+      <ChartItemFeedback interaction={interaction} items={groups.map((group, index) => ({ id: ids[index], title: fullGroupName(group), details: varianceGroupDetails(group, result, locale) }))} />
     </div>
   );
 }
 
-function groupDetails(
+// eslint-disable-next-line react-refresh/only-export-components
+export function varianceGroupDetails(
   group: EqualVarianceMultipleComparisons["groups"][number],
   result: EqualVarianceMultipleComparisons,
   locale: AppLocale,
 ) {
   const text = (source: string) => translateSystemText(source, locale);
   const peers = result.non_overlapping_pairs
-    .filter((pair) => pair.left_group === group.group_label || pair.right_group === group.group_label)
-    .map((pair) => pair.left_group === group.group_label ? pair.right_group : pair.left_group);
+    .filter((pair) => pair.left_group_index !== undefined && pair.right_group_index !== undefined
+      ? pair.left_group_index === group.group_index || pair.right_group_index === group.group_index
+      : result.groups.filter((candidate) => candidate.group_label === group.group_label).length === 1 && (pair.left_group === group.group_label || pair.right_group === group.group_label))
+    .map((pair) => (pair.left_group_index !== undefined ? pair.left_group_index === group.group_index : pair.left_group === group.group_label)
+      ? pair.right_group_value ?? pair.right_group : pair.left_group_value ?? pair.left_group);
   return [
     { label: "N", value: group.n.toLocaleString() },
     { label: text("표본 표준편차"), value: formatNumber(group.sample_standard_deviation) },
@@ -129,6 +137,11 @@ function groupDetails(
     { label: text("구간 상한"), value: formatNumber(group.comparison_interval.upper) },
     { label: text("겹치지 않는 그룹"), value: peers.length > 0 ? peers.join(", ") : text("없음") },
   ];
+}
+
+function compactGroupLabel(label: string): string {
+  const characters = Array.from(label);
+  return characters.length > 18 ? `${characters.slice(0, 15).join("")}...` : label;
 }
 
 function formatNumber(value: number): string {

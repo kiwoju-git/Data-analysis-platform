@@ -1,6 +1,12 @@
 # Equal Variances Method Contract
 
-Status: implemented. Current method version: `eda.equal_variances` `0.2.0`.
+Status: implemented. Current method version: `eda.equal_variances` `0.3.0`; result schema 3.
+
+Schema 3 adds complete `group_value` identities, encounter-order indexes on all
+pair records, and validated index-based interval association. Display abbreviations
+are never grouping keys. Schemas 1/2 remain readable without rewriting artifacts.
+See [Group identity contract](group_identity_contract.md) for F01 regression and
+legacy-label limitations. The schema-2 statistical procedures below are unchanged.
 
 Primary references:
 

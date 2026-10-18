@@ -8,7 +8,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from app.analyses.registry import METHOD_VERSIONS
+from app.statistics.two_sample_t import (
+    TwoSampleTGroupColumn,
+    TwoSampleTResponseColumn,
+    calculate_two_sample_t,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 TUTORIAL_ROOT = REPOSITORY_ROOT / "examples" / "tutorial"
@@ -119,6 +126,54 @@ def test_tutorial_expected_versions_and_input_hashes_match_sources() -> None:
         assert section["method_id"] == method_id
         assert section["method_version"] == METHOD_VERSIONS[method_id]
         assert section["input_file_sha256"] in input_hashes
+
+
+def test_tutorial_short_group_t_test_preserves_recorded_numeric_values() -> None:
+    section = json.loads(EXPECTED_RESULTS_PATH.read_text(encoding="utf-8"))["results"][
+        "hypothesis.two_sample_t"
+    ]
+    expected = section["result"]
+    with (TUTORIAL_ROOT / "studio_process_training.csv").open(
+        "r", encoding="utf-8", newline=""
+    ) as handle:
+        rows = [[row["yield_pct"], row["supplier"]] for row in csv.DictReader(handle)]
+    result = calculate_two_sample_t(
+        rows,
+        TwoSampleTResponseColumn(
+            column_id="yield",
+            column_index=0,
+            display_name="yield_pct",
+            data_type="decimal",
+            measurement_level="continuous",
+            role="response",
+            unit=None,
+        ),
+        TwoSampleTGroupColumn(
+            column_id="supplier",
+            column_index=1,
+            display_name="supplier",
+            data_type="text",
+            measurement_level="nominal",
+            role="group",
+            unit=None,
+        ),
+    )
+    tolerance = {"abs": section["absolute_tolerance"], "rel": section["relative_tolerance"]}
+    assert result["n_total"] == expected["n_total"]
+    assert result["n_used"] == expected["n_used"]
+    assert result["warnings"] == expected["warnings"]
+    for group, saved in zip(result["groups"], expected["groups"], strict=True):
+        assert group["group_value"] == saved["label"]
+        assert group["n"] == saved["n"]
+        assert group["mean"] == pytest.approx(saved["mean"], **tolerance)
+    contrast = result["contrast"]
+    assert contrast["estimate"] == pytest.approx(expected["mean_difference"], **tolerance)
+    assert contrast["p_value"] == pytest.approx(expected["p_value"], **tolerance)
+    assert contrast["effect_size"]["hedges_g"] == pytest.approx(expected["hedges_g"], **tolerance)
+    for bound in ("lower", "upper"):
+        assert contrast["confidence_interval"][bound] == pytest.approx(
+            expected["confidence_interval"][bound], **tolerance
+        )
 
 
 def test_tutorial_markdown_result_blocks_are_in_sync() -> None:

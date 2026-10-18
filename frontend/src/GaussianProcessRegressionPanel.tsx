@@ -19,6 +19,7 @@ import { GpScatter, GpResidualChart, GpUncertaintyChart, GpProfileChart, GpSurfa
 import { useGpPointPrediction } from "./useGpPointPrediction";
 import { PredictionSaveControl } from "./PredictionSaveControl";
 import { GP_POINT_PREDICTION_ROW_LIMIT } from "./gpPredictionSnapshot";
+import { formatExactNumericValue, formatInterval, formatMeasurement } from "./statisticalNumberFormat";
 
 export interface GaussianProcessRunConfig {
   lengthScale: GpLengthScale;
@@ -511,9 +512,8 @@ function NumberField({
 
 function GaussianProcessResults({ result, analysisId }: { result: GaussianProcessRegressionResult; analysisId: string }) {
   const scope = `${analysisId}:selected`;
-  const { t, formatNumber, formatPercent } = useI18n();
-  const metric = (value: number | null) =>
-    value === null ? "-" : formatNumber(value, { maximumSignificantDigits: 7 });
+  const { t, locale, formatPercent } = useI18n();
+  const metric = (value: number | null) => formatMeasurement(value, locale);
   return (
     <div className="gp-results">
       <GpOptimizationEvidence result={result} />
@@ -682,12 +682,12 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function GaussianProcessPrediction({ result, analysisId }: { result: GaussianProcessRegressionResult; analysisId: string }) {
-  const { t, locale, formatNumber } = useI18n();
+  const { t, locale } = useI18n();
   const manifest = result.model_manifest;
   const state = useGpPointPrediction({ analysisId, modelId: manifest?.model_id ?? "", manifestSha256: manifest?.manifest_sha256 ?? "", responseColumnId: result.response.column_id, predictorColumnIds: result.predictors.map((predictor) => predictor.column_id) });
   const error = state.error === null ? null : localizedErrorDisplay(state.error.cause, locale);
   const predictions = new Map(state.snapshot?.response.rows.map((row) => [row.client_row_id, row]) ?? []);
-  const interval = (value: { lower: number; upper: number } | undefined) => value === undefined ? "-" : `[${formatNumber(value.lower)}, ${formatNumber(value.upper)}]`;
+  const interval = (value: { lower: number; upper: number } | undefined) => formatInterval(value, locale);
   return <section className="result-section gp-point-prediction" aria-busy={state.isRunning} data-prediction-state={error !== null ? "error" : state.isRunning ? "running" : state.snapshot !== null ? "ready" : state.isStale ? "stale" : "empty"}>
     <h4>{t("gp.pointPrediction")}</h4><p>{t("gp.pointPredictionHelp")}</p>
     {!state.valid ? <div className="notice-box warning">{t("gp.inputRequired")}</div> : null}
@@ -699,7 +699,7 @@ function GaussianProcessPrediction({ result, analysisId }: { result: GaussianPro
         const predicted = predictions.get(row.id);
         return <tr key={row.id}><td>{index + 1}</td>{result.predictors.map((predictor) => <td key={predictor.column_id}>
           <input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal" onChange={(event) => state.editCell(row.id, predictor.column_id, event.currentTarget.value)} type="text" value={row.values[predictor.column_id] ?? ""} />
-        </td>)}<td>{predicted === undefined ? "-" : formatNumber(predicted.predicted_mean)}</td><td>{predicted === undefined ? "-" : formatNumber(predicted.latent_standard_deviation)}</td><td>{interval(predicted?.latent_interval_95)}</td><td>{predicted === undefined ? "-" : formatNumber(predicted.predictive_standard_deviation)}</td><td>{interval(predicted?.predictive_interval_95)}</td><td>{predicted === undefined ? "-" : predicted.warnings.length === 0 ? t("gp.ready") : predicted.warnings.map((warning, index) => <span key={`${index}:${warning}`}>{index > 0 ? "; " : ""}{warning === "gp_extrapolation" ? t("gp.extrapolation") : <code>{warning}</code>}</span>)}</td>
+        </td>)}<td title={formatExactNumericValue(predicted?.predicted_mean)}>{formatMeasurement(predicted?.predicted_mean, locale)}</td><td title={formatExactNumericValue(predicted?.latent_standard_deviation)}>{formatMeasurement(predicted?.latent_standard_deviation, locale)}</td><td>{interval(predicted?.latent_interval_95)}</td><td title={formatExactNumericValue(predicted?.predictive_standard_deviation)}>{formatMeasurement(predicted?.predictive_standard_deviation, locale)}</td><td>{interval(predicted?.predictive_interval_95)}</td><td>{predicted === undefined ? "-" : predicted.warnings.length === 0 ? t("gp.ready") : predicted.warnings.map((warning, index) => <span key={`${index}:${warning}`}>{index > 0 ? "; " : ""}{warning === "gp_extrapolation" ? t("gp.extrapolation") : <code>{warning}</code>}</span>)}</td>
           <td><button aria-label={`${t("gp.deleteRow")} ${index + 1}`} onClick={() => state.removeRow(row.id)} type="button">{t("gp.deleteRow")}</button></td></tr>;
       })}</tbody>
     </table></div>

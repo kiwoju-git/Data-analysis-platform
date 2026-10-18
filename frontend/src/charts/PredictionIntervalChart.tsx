@@ -2,7 +2,7 @@ import type { RegressionPredictionResponse } from "../api";
 import { useI18n } from "../i18n/LocaleProvider";
 import { InteractiveScatterChart, type ChartInterval, type InteractiveScatterPoint } from "./InteractiveScatterChart";
 import { paddedNumericRange } from "./chartScale";
-import { formatChartTick, integerChartTicks } from "./chartLayout";
+import { integerChartTicks } from "./chartLayout";
 import { formatChartDetailValue } from "./chartNumberFormatting";
 
 export function PredictionIntervalChart({ rows, sourceKey, total }: { rows: RegressionPredictionResponse["rows"]; sourceKey: string; total: number }) {
@@ -23,7 +23,7 @@ export function PredictionIntervalChart({ rows, sourceKey, total }: { rows: Regr
   });
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="regression-prediction" sourceKey={sourceKey} title={t("charts.predictionTitle")} description={t("charts.predictionTitle")}
-    annotations={[t("charts.displayCount", { shown: points.length, total })]} yFormatValue={(value) => formatChartTick(value, locale)} emptyLabel={t("charts.noData")} points={points} intervals={intervals}
+    annotations={[t("charts.displayCount", { shown: points.length, total })]} emptyLabel={t("charts.noData")} points={points} intervals={intervals}
     xLabel={t("charts.predictionRows")} yLabel={t("charts.predictedMean")}
     xRange={xRange} xTicks={integerChartTicks(xRange)} yRange={paddedNumericRange(points.map((point) => point.y))} />;
 }

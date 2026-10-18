@@ -10,10 +10,11 @@ export function paddedNumericRange(values: number[], paddingRatio = 0.04): Numer
   const max = Math.max(...finiteValues);
   if (min === max) {
     const padding = Math.max(1, Math.abs(min) * 0.1);
-    return { min: min - padding, max: max + padding };
+    return { min: Math.max(-Number.MAX_VALUE, min - padding), max: Math.min(Number.MAX_VALUE, max + padding) };
   }
-  const padding = (max - min) * paddingRatio;
-  return { min: min - padding, max: max + padding };
+  const ratio = Number.isFinite(paddingRatio) && paddingRatio >= 0 ? paddingRatio : 0.04;
+  const padding = Number.isFinite(max - min) ? (max - min) * ratio : max * ratio - min * ratio;
+  return { min: Math.max(-Number.MAX_VALUE, min - padding), max: Math.min(Number.MAX_VALUE, max + padding) };
 }
 
 export function scaleChartValue(
@@ -23,7 +24,10 @@ export function scaleChartValue(
   rangeMax: number,
 ): number {
   if (domain.min === domain.max) return (rangeMin + rangeMax) / 2;
-  return rangeMin + ((value - domain.min) / (domain.max - domain.min)) * (rangeMax - rangeMin);
+  const span = domain.max - domain.min;
+  const fraction = Number.isFinite(span) ? (value - domain.min) / span
+    : (value / 2 - domain.min / 2) / (domain.max / 2 - domain.min / 2);
+  return rangeMin + fraction * (rangeMax - rangeMin);
 }
 
 export function expandNumericRange(range: NumericRange, values: readonly number[]): NumericRange {

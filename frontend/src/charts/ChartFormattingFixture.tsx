@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { LocaleProvider, useI18n } from "../i18n/LocaleProvider";
 import { InteractiveScatterChart, type InteractiveScatterChartProps } from "./InteractiveScatterChart";
+import numericCases from "../../../tests/fixtures/numeric_display_cases.json";
 
 const points = [
   { id: "row:7", x: 1, y: 0.25, title: "User \ue000name & <stored>", ariaLabel: "Row 7", className: "scatter-point", details: [{ label: "Saved Y", value: "0.25" }] },
@@ -48,5 +49,10 @@ function FormatterControls() {
       description="Finite saved values only" annotations={[]} emptyLabel="Empty"
       points={[{ ...points[0], x: 2000, y: 2e-8 }]} xLabel="Count" yLabel="Small value"
       xRange={{ min: 1000, max: 5000 }} yRange={{ min: 0, max: 8e-8 }} />
+    {numericCases.filter((item) => ["narrow-positive", "large-origin", "narrow-negative"].includes(item.id)).map((item) =>
+      <InteractiveScatterChart key={item.id} chartId={`numeric-${item.id}`} sourceKey={`numeric:${item.id}`} title={item.id}
+        description="Stored numeric coordinates; adaptive display only" annotations={[]} emptyLabel="Empty"
+        points={[item.min, item.max].map((value, index) => ({ ...points[0], id: `${item.id}:${index}`, x: value, y: index, ariaLabel: `${item.id} ${value}`, details: [{ label: "Saved X", value: String(value) }] }))}
+        xLabel="Stored X" xUnit="mg/L" yLabel="Count" xRange={{ min: item.min, max: item.max }} yRange={{ min: 0, max: 1 }} />)}
   </main>;
 }

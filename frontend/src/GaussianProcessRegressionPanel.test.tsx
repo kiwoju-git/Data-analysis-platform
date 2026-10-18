@@ -11,6 +11,20 @@ import { GpKernelSelectionSettings, gpOptimizerStarts, gpPresets } from "./GpKer
 import { setCurrentLocale } from "./i18n/store";
 
 describe("GaussianProcessRegressionPanel", () => {
+  it("keeps small-scale summary measurements compact without hiding nonzero values", () => {
+    for (const locale of ["en", "ko"] as const) {
+      setCurrentLocale(locale);
+      const result = resultFixture();
+      result.model_summary.training_rmse = 1.235e-16;
+      result.model_summary.training_mae = 4e-20;
+      const before = JSON.stringify(result);
+      const html = renderToString(<GaussianProcessRegressionPanel analysisResult={analysisEnvelope()} filterValidationError={null} isRunningAnalysis={false} methodId="regression.gaussian_process" result={result} version={datasetVersion()} onRun={() => undefined} />);
+      expect(html).toContain("<dd>1.235e-16</dd>");
+      expect(html).toContain("<dd>4e-20</dd>");
+      expect(JSON.stringify(result)).toBe(before);
+    }
+  });
+
   it("keeps candidate selection, WhiteKernel noise and the optimizer budget distinct", () => {
     for (const locale of ["en", "ko"] as const) {
       setCurrentLocale(locale);

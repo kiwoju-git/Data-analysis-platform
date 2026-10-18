@@ -37,7 +37,7 @@ def test_equal_variances_is_hand_checkable_for_group_summaries() -> None:
     assert groups[0]["variance"] == 1.0
     assert groups[1]["group_label"] == "B"
     assert groups[1]["variance"] == 4.0
-    assert result["schema_version"] == 2
+    assert result["schema_version"] == 3
     assert result["multiple_comparisons"]["computed"] is False  # type: ignore[index]
     assert result["multiple_comparisons"]["warnings"] == [  # type: ignore[index]
         "multiple_comparisons_group_n_too_small"

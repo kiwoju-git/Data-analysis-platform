@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from html import escape
 
 from app.i18n.report_text import ReportLocale
+from app.services.group_identity_report import full_group_names, has_legacy_group_labels
 from app.services.inference_report_primitives import (
     Field,
     fields_table,
@@ -90,7 +91,7 @@ BASIC_EDA_REPORT_VARIANTS_BY_METHOD: dict[str, tuple[ReportVariantDefinition, ..
                 "additional_tests",
             ),
         )
-        for schema in (1, 2)
+        for schema in (1, 2, 3)
     ),
 }
 _SETTINGS: tuple[Field, ...] = (
@@ -600,12 +601,21 @@ def _equal_variances(
         ("min", "최솟값", "Minimum"),
         ("max", "최댓값", "Maximum"),
     )
+    group_markup = rows_table(groups, group_fields, locale) if _complete(groups, group_keys) else ""
+    if group_markup and has_legacy_group_labels(result):
+        group_markup += paragraph(
+            "이 저장 결과에는 전체 그룹값이 없습니다. 저장된 라벨을 표시하며 "
+            "축약된 이름을 복원하지 않습니다.",
+            "This saved result does not contain full group values. Stored labels are shown; "
+            "truncated names are not reconstructed.",
+            locale,
+        )
     sections = [
         section(
             "groups",
             "그룹 요약",
             "Group summaries",
-            rows_table(groups, group_fields, locale) if _complete(groups, group_keys) else "",
+            group_markup,
             locale,
         )
     ]
@@ -759,9 +769,12 @@ def render_basic_eda_report(
         "graphical_summary": "eda.graphical_summary",
         "equal_variances_test": "eda.equal_variances",
     }.get(str(summary))
-    if method is None or type(schema) is not int or schema not in (1, 2):
+    allowed = (1, 2, 3) if method == "eda.equal_variances" else (1, 2)
+    if method is None or type(schema) is not int or schema not in allowed:
         return ReportBody("unsupported", (), "unsupported_result_schema")
     variant = BASIC_EDA_REPORT_VARIANTS_BY_METHOD[method][schema - 1]
+    if summary == "equal_variances_test":
+        result = full_group_names(result)
     sections = [_settings(result, str(summary), locale)]
     if summary == "equal_variances_test":
         extra, columns = _equal_variances(result, locale, plots)

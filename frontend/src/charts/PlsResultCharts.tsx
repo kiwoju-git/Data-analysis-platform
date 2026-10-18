@@ -20,7 +20,7 @@ export function LineMetricChart({ result, analysisId }: Props) {
       { label: t("pls.selected"), value: t(point.x === result.component_selection.selected_components ? "pls.yes" : "pls.no") }] }));
   const yRange = paddedNumericRange(points.map((point) => point.y));
   return <InteractiveScatterChart chartId="pls-selection" sourceKey={`${analysisId}:selection`} title={t("pls.modelSelectionPlot")}
-    description={t("pls.modelSelectionPlotDesc")} annotations={[]} emptyLabel={t("charts.noData")} yFormatValue={number} points={points}
+    description={t("pls.modelSelectionPlotDesc")} annotations={[]} emptyLabel={t("charts.noData")} points={points}
     xLabel={t("pls.components")} yLabel="R²" xRange={paddedNumericRange(points.map((point) => point.x))} yRange={yRange}
     xTicks={result.component_selection.rows.map((row) => ({ value: row.components, label: String(row.components) }))}
     series={[{ id: "training", label: t("pls.trainingR"), className: "pls-training-line", connect: "line", pointIds: points.filter((point) => point.seriesId === "training").map((point) => point.id) },
@@ -38,7 +38,7 @@ export function ResponsePlot({ result, analysisId }: Props) {
   const range = paddedNumericRange(points.flatMap((point) => [point.x, point.y]));
   return <InteractiveScatterChart chartId="pls-response" sourceKey={`${analysisId}:response`} title={t("pls.responsePlot")} description={t("pls.responsePlotDesc")}
     annotations={[t("charts.displayCount", { shown: result.diagnostics.points.length, total: result.diagnostics.point_count_total })]}
-    emptyLabel={t("charts.noData")} formatValue={number} points={points} xRange={range} yRange={range}
+    emptyLabel={t("charts.noData")} points={points} xRange={range} yRange={range}
     xLabel={`${t("pls.observed")} ${result.response.display_name}`} yLabel={`${t("pls.predictedValue")} ${result.response.display_name}`} xUnit={result.response.unit} yUnit={result.response.unit}
     referenceLines={[{ label: "y = x", x1: range.min, y1: range.min, x2: range.max, y2: range.max }]}
     series={[{ id: "fitted", label: t("pls.fitted"), className: "pls-training-point", connect: "none", pointIds: points.filter((point) => point.seriesId === "fitted").map((point) => point.id) },
@@ -55,7 +55,7 @@ export function ScorePlot({ result, analysisId }: Props) {
     details: [{ label: xLabel, value: number(point.x) }, { label: yLabel, value: number(point.y) }] }));
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="pls-scores" sourceKey={`${analysisId}:scores`} title={t("pls.scores")} description={t("pls.scoresPlotDesc")}
-    annotations={[t("charts.displayCount", { shown: points.length, total: result.sample.n_used })]} emptyLabel={t("charts.noData")} formatValue={number} points={points}
+    annotations={[t("charts.displayCount", { shown: points.length, total: result.sample.n_used })]} emptyLabel={t("charts.noData")} points={points}
     xLabel={xLabel} yLabel={yLabel} xRange={xRange} xTicks={model.dimensions < 2 ? integerChartTicks(xRange) : undefined} yRange={paddedNumericRange(points.map((point) => point.y))} />;
 }
 

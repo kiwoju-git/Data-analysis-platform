@@ -2,6 +2,8 @@ import { ApiNoticeText } from "./i18n/ApiNoticeText";
 import { useI18n } from "./i18n/LocaleProvider";
 import { translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
+import { GroupIdentityDetails } from "./GroupIdentityDetails";
+import { groupDisplayLabel, pairGroupLabel } from "./groupIdentity";
 
 import type {
   AnalysisResultEnvelope,
@@ -180,8 +182,8 @@ export function KruskalWallisPanel({
                   </thead>
                   <tbody>
                     {result.groups.map((group) => (
-                      <tr key={`${group.group_index}-${group.group_label}`}>
-                        <td>{group.group_label}</td>
+                      <tr key={group.group_index} data-group-index={group.group_index}>
+                        <td>{groupDisplayLabel(group, result.groups, locale)}</td>
                         <td>{group.n}</td>
                         <td>{formatAnalysisNumber(group.median)}</td>
                         <td>{formatAnalysisNumber(group.iqr)}</td>
@@ -206,12 +208,12 @@ export function KruskalWallisPanel({
                       </tr>
                     </thead>
                     <tbody>
-                      {result.posthoc.comparisons.map((comparison) => (
+                      {result.posthoc.comparisons.map((comparison, pairIndex) => (
                         <tr
-                          key={`${comparison.group_1_label}-${comparison.group_2_label}`}
+                          key={comparison.group_1_index !== undefined && comparison.group_2_index !== undefined ? `${comparison.group_1_index}-${comparison.group_2_index}` : `legacy-pair-${pairIndex}`}
                         >
                           <td>
-                            {comparison.group_1_label} vs {comparison.group_2_label}
+                            {pairGroupLabel(comparison.group_1_index, comparison.group_1_label, result.groups, locale)} vs {pairGroupLabel(comparison.group_2_index, comparison.group_2_label, result.groups, locale)}
                           </td>
                           <td>
                             {formatAnalysisNumber(comparison.mean_rank_difference)}
@@ -226,6 +228,7 @@ export function KruskalWallisPanel({
                   </table>
                 </div>
               ) : null}
+              <GroupIdentityDetails groups={result.groups} />
             </>
           ) : null}
         </>

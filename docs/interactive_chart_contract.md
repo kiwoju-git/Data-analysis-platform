@@ -9,13 +9,17 @@ axis-specific formatter, legacy `formatValue`, and common locale formatting.
 An explicit empty tick array still means no ticks. Caller labels are text nodes,
 not translated or parsed back into numbers, including user names/private-use text.
 
-`numericChartTickValues` retains the existing finite 1/2/2.5/5/10 tick positions.
-`numericChartTicks` maps those numbers to labels separately. Common formatting
-uses the current locale (not a module-load snapshot), five significant digits,
-and scientific notation with up to three significant digits for nonzero values
-below 0.001 or at least 1,000,000. Nonfinite display values are `-`, never zero;
-invalid numeric ranges produce no generated ticks. A custom domain formatter
-remains authoritative. No p-value calculation changes.
+F02 (2026-10-19) replaces absolute-coordinate significant-digit rounding with
+bounded nearby-origin 1/2/2.5/5/10 tick generation. `numericChartTicks` maps those
+numbers to labels separately. Default axis precision is spacing-aware and labels
+are checked for collisions; large-baseline narrow domains show an explicit,
+accessible base offset. Standalone `formatChartTick` without context keeps its
+old three/five-significant-digit defaults. Nonfinite display values are `-`,
+never zero; invalid numeric ranges produce no generated ticks. Custom domain
+formatters remain authoritative and may consume optional range/step context.
+See [Numeric Display Contract](numeric_display_contract.md) for the shared
+TS/Python fixture, finite projection and semantic prediction/table boundaries.
+No p-value calculation changes.
 
 Callers must not pass default `Intl.NumberFormat` to measurement axes: its
 three-decimal default can label distinct micro-scale measurements as zero.
@@ -26,8 +30,11 @@ use scientific notation below their decimal resolution. Factorial's existing
 six-significant-digit rounding is retained before the same protection against
 the subsequent three-decimal locale default. Shared table/detail helpers receive
 that tiny-value correction too; normal-value rounding and null markers are kept.
-Two Variances, GP/PCA/PLS precision helpers, and significant-digit QQ/LHS/Graph
-Builder formatters already preserve nonzero tiny values and remain unchanged.
+F02/F03 retains these detail semantics while removing static generic formatters
+from numeric axes so narrow domains also remain distinguishable. GP detail uses
+exact stored values, and GP/PLS/shared prediction tables use semantic measurement
+and paired-interval display helpers. Explicit categorical/ordinal labels and
+genuine custom formatting retain priority.
 
 Percent formatting does not multiply a plotted coordinate or range. Changing
 locale/formatter/viewport does not change stored values, sourceKey, IDs, pin,

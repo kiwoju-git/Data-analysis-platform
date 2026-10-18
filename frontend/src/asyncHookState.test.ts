@@ -1175,7 +1175,7 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 23,
+    api_contract_version: 24,
     metadata_schema_version: 22,
     build_commit: "unknown",
     capabilities: {

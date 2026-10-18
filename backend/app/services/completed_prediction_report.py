@@ -18,7 +18,7 @@ COMPLETED_PREDICTION_REPORT_DEFINITION = ReportDefinition(
     "completed_prediction",
     (1,),
     "completed_prediction_report",
-    "1.0.0",
+    "1.1.0",
     (
         ReportVariantDefinition(
             "completed_prediction",
@@ -122,7 +122,13 @@ def render_completed_prediction(payload: dict[str, Any], locale: ReportLocale) -
             "predictions",
             text("Stored predictions", "저장 예측값"),
             "rendered",
-            report_table(headers, values),
+            report_table(
+                headers,
+                values,
+                numeric_column_groups=((3, 4), (6, 7))
+                if payload["family"] == "gaussian_process"
+                else (),
+            ),
         )
     )
     warnings = [(row["client_row_id"], code) for row in rows for code in row.get("warnings", [])]

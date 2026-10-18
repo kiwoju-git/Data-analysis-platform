@@ -1,5 +1,6 @@
 """Method-aware reports from immutable, stored hypothesis-test payloads."""
 
+from app.services.group_identity_report import full_group_names, has_legacy_group_labels
 from app.services.inference_report_primitives import (
     Field,
     fields_table,
@@ -208,11 +209,24 @@ def _groups(result: dict[str, object], locale: str) -> ReportSection:
             for row in rows
         )
     )
+    markup = rows_table(rows, SAMPLE_FIELDS, locale) if valid and rows else ""
+    if (
+        markup
+        and result.get("summary_type") in {"two_sample_t_test", "kruskal_wallis_test"}
+        and has_legacy_group_labels(result)
+    ):
+        markup += paragraph(
+            "이 저장 결과에는 전체 그룹값이 없습니다. 저장된 라벨을 표시하며 "
+            "축약된 이름을 복원하지 않습니다.",
+            "This saved result does not contain full group values. Stored labels are shown; "
+            "truncated names are not reconstructed.",
+            locale,
+        )
     return section(
         "groups",
         "그룹별 요약",
         "Group summaries",
-        rows_table(rows, SAMPLE_FIELDS, locale) if valid and rows else "",
+        markup,
         locale,
     )
 
@@ -642,10 +656,21 @@ def render_hypothesis_report(result: dict[str, object], locale: str = "ko") -> R
         }.get(str(result.get("design")))
     schema = result.get("schema_version")
     allowed = (
-        (1, 2) if summary in {"one_way_anova", "equivalence_tost", "mann_whitney_u_test"} else (1,)
+        (1, 2)
+        if summary
+        in {
+            "one_way_anova",
+            "equivalence_tost",
+            "mann_whitney_u_test",
+            "two_sample_t_test",
+            "kruskal_wallis_test",
+        }
+        else (1,)
     )
     if variant is None or type(schema) is not int or schema not in allowed:
         return ReportBody("unsupported", (), "unsupported_result_schema")
+    if summary in {"two_sample_t_test", "kruskal_wallis_test"}:
+        result = full_group_names(result)
     sections = [settings(result, locale)]
     sections.append(
         _samples(result, variant, locale)

@@ -11,6 +11,7 @@ export interface TwoSampleTColumnRef {
 }
 
 export interface TwoSampleTGroupSummary {
+  group_value?: string;
   group_label: string;
   group_index: number;
   n: number;
@@ -38,6 +39,10 @@ export interface TwoSampleTEffectSize {
 }
 
 export interface TwoSampleTContrast {
+  group_1_value?: string;
+  group_2_value?: string;
+  group_1_index?: number;
+  group_2_index?: number;
   group_1_label: string;
   group_2_label: string;
   estimate: number;
@@ -176,6 +181,7 @@ export interface KruskalWallisColumnRef {
 }
 
 export interface KruskalWallisGroupSummary {
+  group_value?: string;
   group_label: string;
   group_index: number;
   n: number;
@@ -206,6 +212,10 @@ export interface KruskalWallisTestResult {
 }
 
 export interface KruskalWallisPosthocComparison {
+  group_1_value?: string;
+  group_2_value?: string;
+  group_1_index?: number;
+  group_2_index?: number;
   group_1_label: string;
   group_2_label: string;
   mean_rank_difference: number;

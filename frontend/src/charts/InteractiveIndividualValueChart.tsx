@@ -45,7 +45,6 @@ export function InteractiveIndividualValueChart({
       chartId={chartId}
       description="실제 관측값을 변수 또는 그룹별 point strip으로 표시합니다."
       emptyLabel="표시할 관측값이 없습니다."
-      formatValue={formatNumber}
       points={interactivePoints}
       title="Individual Value Plot"
       xLabel={text("변수 또는 그룹")}

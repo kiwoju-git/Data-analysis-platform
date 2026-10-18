@@ -65,7 +65,6 @@ export function InteractiveQqChart({
       compact
       description={`${columnName} ${text("의 bounded Q-Q points. 마우스, 터치 또는 화살표 키로 값을 확인합니다.")}`}
       emptyLabel="Q-Q point 없음"
-      formatValue={formatNumber}
       points={interactivePoints}
       referenceLines={[
         {
