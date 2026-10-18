@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.storage.metadata import initialize_metadata_store, metadata_db_path
+from app.storage.metadata import MIGRATIONS, initialize_metadata_store, metadata_db_path
 from app.storage.workspace_archive import DEFAULT_LIMITS, checked_path, relative_path
 from app.storage.workspace_backup import (
     WorkspaceBackupError,
@@ -93,6 +93,55 @@ def test_backup_restore_preserves_owned_bytes_and_db_rows(tmp_path: Path) -> Non
             original.execute("SELECT * FROM datasets").fetchall()
             == restored.execute("SELECT * FROM datasets").fetchall()
         )
+
+
+def test_schema20_backup_restores_without_migration_then_upgrades(tmp_path: Path) -> None:
+    root = tmp_path / "legacy workspace"
+    database = metadata_db_path(root)
+    database.parent.mkdir(parents=True)
+    with sqlite3.connect(database) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 20:
+                break
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT INTO schema_migrations(version,name) VALUES (?,?)",
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version=20")
+    before = database.read_bytes()
+    archive = tmp_path / "legacy20.zip"
+    manifest = backup_workspace(root, archive)
+    assert manifest["metadata_schema_version"] == 20
+    archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+    assert "managed_report_artifacts" not in manifest["database"]["row_counts"]
+    restored = tmp_path / "restored legacy"
+    assert restore_workspace(archive, restored) == manifest
+    assert database.read_bytes() == before
+    with sqlite3.connect(metadata_db_path(restored)) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 20
+        assert (
+            connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='managed_report_artifacts'"
+            ).fetchone()
+            is None
+        )
+    initialize_metadata_store(restored)
+    with sqlite3.connect(metadata_db_path(restored)) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 21
+        assert (
+            connection.execute("SELECT COUNT(*) FROM managed_report_artifacts").fetchone()[0] == 0
+        )
+    assert hashlib.sha256(archive.read_bytes()).hexdigest() == archive_sha
+
+
+@pytest.mark.parametrize("version", [19, 22])
+def test_backup_rejects_unrecognized_metadata_version(tmp_path: Path, version: int) -> None:
+    root = _workspace(tmp_path / "unsupported")
+    with sqlite3.connect(metadata_db_path(root)) as connection:
+        connection.execute(f"PRAGMA user_version={version}")
+    with pytest.raises(WorkspaceBackupError, match="unsupported_schema"):
+        backup_workspace(root, tmp_path / "unsupported.zip")
 
 
 def test_lease_refuses_backup_and_restore(tmp_path: Path) -> None:

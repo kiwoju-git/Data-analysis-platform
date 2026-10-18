@@ -62,6 +62,8 @@ import { usePastedDatasetSubmission } from "./usePastedDatasetSubmission";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
 import { useReportCenterState } from "./useReportCenterState";
+import { useManagedReports } from "./useManagedReports";
+import type { ManagedReportDescriptor, ManagedReportList, ReportSourceDescriptor, StoredReportCapability, StoredSourceSnapshot } from "./api/types/reports";
 import { useAssetManagementState } from "./useAssetManagementState";
 import { useProjectOverviewState } from "./useProjectOverviewState";
 import type { AnalysisRunsRouteParams } from "./api/routes";
@@ -76,6 +78,9 @@ function reportCapability(analysisId: string, locale: "en" | "ko", hash = "a"): 
     source_validation: "stored_dependencies_only",
   };
 }
+
+const managedReportMocks = vi.hoisted(() => ({ fetchReportSources: vi.fn(), fetchStoredReportCapability: vi.fn(), fetchStoredSourceSnapshot: vi.fn(), fetchManagedReports: vi.fn(), fetchManagedReport: vi.fn(), createManagedReport: vi.fn(), deleteManagedReport: vi.fn(), fetchManagedReportDownload: vi.fn() }));
+vi.mock("./api/reports", () => managedReportMocks);
 
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
@@ -400,6 +405,209 @@ function exportListResponse(analysisId: string): AnalysisResultExportListRespons
   return { analysis_id: analysisId, exports: [] };
 }
 
+function managedSource(index = 1): ReportSourceDescriptor {
+  return { source: { kind: "analysis_run", analysis_id: `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`, expected_source_sha256: String(index).repeat(64) }, source_ref_sha256: String(index).repeat(64), title: `Synthetic \uE000source-${index}\uE001`, created_at: "2026-10-18T00:00:00Z", stale: false, open_target: "/analysis/exploration/eda.descriptive" };
+}
+function managedArtifact(source = managedSource(), locale: "en" | "ko" = "en"): ManagedReportDescriptor {
+  return { export_id: "20000000-0000-4000-8000-000000000001", source: source.source, source_ref_sha256: source.source_ref_sha256, locale, report_level: "summary", renderer_version: "1", sha256: "b".repeat(64), size_bytes: 100, created_at: source.created_at, stale: true, media_type: "text/html" };
+}
+function managedCapability(source = managedSource(), locale: "en" | "ko" = "en"): StoredReportCapability {
+  return { capability_schema_version: 1, source: source.source, source_ref_sha256: source.source_ref_sha256, title: source.title, locale, stale: true, report_level: "summary", renderer_id: "synthetic", renderer_version: "1", sections: [{ section_id: "saved", title: source.title, status: "rendered", reason: null }], reason: null, html_available: true };
+}
+function managedSnapshot(source = managedSource(), locale: "en" | "ko" = "en"): StoredSourceSnapshot {
+  return { schema_version: 1, source: source.source, source_ref_sha256: source.source_ref_sha256, locale, title: source.title, created_at: source.created_at, stale: true, payload: { stored_name: "<literal>\uE000name\uE001", value: .125 } };
+}
+function managedWindow(query = "?source_kind=analysis_run") {
+  const events = new EventTarget();
+  const location = { href: `http://127.0.0.1:8600/reports${query}`, get search() { return new URL(this.href).search; } };
+  const set = (_state: unknown, _title: string, next: string) => { location.href = new URL(next, location.href).href; };
+  vi.stubGlobal("window", { location, history: { state: {}, pushState: set, replaceState: set }, addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events) });
+  return { location, events };
+}
+
+describe("managed report independent owner lanes", () => {
+  beforeEach(() => {
+    Object.values(managedReportMocks).forEach((mock) => mock.mockReset());
+    managedWindow();
+    managedReportMocks.fetchReportSources.mockResolvedValue({ items: [managedSource()], limit: 20, offset: 0, has_more: false });
+    managedReportMocks.fetchStoredReportCapability.mockImplementation((source: ReportSourceDescriptor["source"], locale: "en" | "ko") => Promise.resolve(managedCapability({ ...managedSource(), source, source_ref_sha256: source.kind === "analysis_run" ? source.expected_source_sha256 : "1".repeat(64) }, locale)));
+    managedReportMocks.fetchManagedReports.mockResolvedValue({ items: [] });
+  });
+
+  it("preserves pending capability and artifact requests when the same source row is selected again", async () => {
+    const source = managedSource();
+    const heldCapability = deferred<StoredReportCapability>();
+    const heldArtifacts = deferred<ManagedReportList>();
+    managedReportMocks.fetchStoredReportCapability.mockReturnValueOnce(heldCapability.promise);
+    managedReportMocks.fetchManagedReports.mockReturnValueOnce(heldArtifacts.promise);
+    const runner = new HookRunner(() => useManagedReports("en", 0), undefined);
+    await runner.flush();
+    await runner.act(() => runner.output.select(source));
+    await runner.act(() => runner.output.select(source));
+    expect(managedReportMocks.fetchStoredReportCapability).toHaveBeenCalledTimes(1);
+    expect(managedReportMocks.fetchManagedReports).toHaveBeenCalledTimes(1);
+    heldCapability.resolve(managedCapability(source));
+    heldArtifacts.resolve({ items: [managedArtifact(source)] });
+    await runner.flush();
+    expect(runner.output.capability.loading).toBe(false);
+    expect(runner.output.capability.value?.source_ref_sha256).toBe(source.source_ref_sha256);
+    expect(runner.output.artifacts.loading).toBe(false);
+    expect(runner.output.artifacts.value?.items).toHaveLength(1);
+    runner.unmount();
+  });
+
+  it("changes only the list lane on kind/page filters and keeps exact selected source and stale capability", async () => {
+    const runner = new HookRunner(() => useManagedReports("en", 0), undefined);
+    await runner.flush();
+    await runner.act(() => runner.output.select(managedSource()));
+    const capability = runner.output.capability.value;
+    expect(capability?.stale).toBe(true);
+    managedReportMocks.fetchReportSources.mockResolvedValue({ items: [], limit: 20, offset: 0, has_more: false });
+    await runner.act(() => runner.output.changeKind("doe_analysis"));
+    await runner.act(() => runner.output.changeOffset(20));
+    expect(runner.output.selected?.source).toEqual(managedSource().source);
+    expect(runner.output.capability.value).toBe(capability);
+    expect(managedReportMocks.fetchStoredReportCapability).toHaveBeenCalledTimes(1);
+    expect(managedReportMocks.fetchManagedReports).toHaveBeenCalledTimes(1);
+    expect(managedReportMocks.fetchReportSources).toHaveBeenLastCalledWith("doe_analysis", 20);
+    runner.unmount();
+  });
+
+  it("ignores late capability and creation after owner/locale/revision changes", async () => {
+    const runner = new HookRunner((props: { locale: "en" | "ko"; revision: number }) => useManagedReports(props.locale, props.revision), { locale: "en", revision: 0 });
+    await runner.flush();
+    const lateCap = deferred<StoredReportCapability>();
+    managedReportMocks.fetchStoredReportCapability.mockReturnValueOnce(lateCap.promise);
+    await runner.act(() => runner.output.select(managedSource()));
+    runner.update({ locale: "ko", revision: 0 }); await runner.flush();
+    lateCap.resolve(managedCapability()); await runner.flush();
+    expect(runner.output.capability.value?.locale).toBe("ko");
+    const lateCreate = deferred<ManagedReportDescriptor>();
+    managedReportMocks.createManagedReport.mockReturnValueOnce(lateCreate.promise);
+    await runner.act(() => runner.output.createReport());
+    expect(managedReportMocks.createManagedReport).toHaveBeenCalledWith(managedSource().source, "ko", "1".repeat(64));
+    await runner.act(() => runner.output.select(managedSource(2)));
+    lateCreate.resolve(managedArtifact(managedSource(), "ko")); await runner.flush();
+    expect(runner.output.selected?.source_ref_sha256).toBe("2".repeat(64));
+    expect(runner.output.linkedReport).toBeNull();
+    expect(runner.output.action.busy).toBe(false);
+    runner.update({ locale: "ko", revision: 1 }); await runner.flush();
+    expect(managedReportMocks.fetchStoredReportCapability).toHaveBeenCalledTimes(4);
+    runner.unmount();
+  });
+
+  it("validates direct report IDs before HTTP and restores an exact source without parsing navigation targets", async () => {
+    managedWindow("?report_id=invalid");
+    const invalid = new HookRunner(() => useManagedReports("en", 0), undefined); await invalid.flush();
+    expect(invalid.output.routeError).toBe("managed_report_query_invalid");
+    expect(managedReportMocks.fetchManagedReport).not.toHaveBeenCalled();
+    expect(managedReportMocks.fetchReportSources).not.toHaveBeenCalled();
+    invalid.unmount();
+    const artifact = managedArtifact();
+    managedWindow(`?report_id=${artifact.export_id}`);
+    managedReportMocks.fetchReportSources.mockResolvedValue({ items: [], limit: 20, offset: 0, has_more: false });
+    managedReportMocks.fetchManagedReport.mockResolvedValue(artifact);
+    const restored = new HookRunner(() => useManagedReports("en", 0), undefined); await restored.flush();
+    expect(restored.output.selected?.source).toEqual(artifact.source);
+    expect(restored.output.linkedReport).toEqual(artifact);
+    expect(restored.output.capability.value?.source_ref_sha256).toBe(artifact.source_ref_sha256);
+    await restored.act(() => restored.output.select(managedSource()));
+    const restoredQuery = new URL(window.location.href).searchParams;
+    expect(restoredQuery.has("report_id")).toBe(false);
+    expect(restoredQuery.get("source_kind")).toBe("regression_prediction");
+    restored.unmount();
+  });
+
+  it("never lets a held direct-link read or deletion replace a newer selection", async () => {
+    const artifact = managedArtifact(); managedWindow(`?report_id=${artifact.export_id}&source_kind=analysis_run`);
+    const held = deferred<ManagedReportDescriptor>(); managedReportMocks.fetchManagedReport.mockReturnValueOnce(held.promise);
+    const runner = new HookRunner(() => useManagedReports("en", 0), undefined); await runner.flush();
+    await runner.act(() => runner.output.select(managedSource(2)));
+    held.resolve(artifact); await runner.flush();
+    expect(runner.output.selected?.source_ref_sha256).toBe("2".repeat(64));
+    const lateDelete = deferred<{ deleted: true }>(); managedReportMocks.deleteManagedReport.mockReturnValueOnce(lateDelete.promise);
+    await runner.act(() => runner.output.deleteReport(managedArtifact(managedSource(2))));
+    await runner.act(() => runner.output.select(managedSource()));
+    lateDelete.resolve({ deleted: true }); await runner.flush();
+    expect(runner.output.selected?.source_ref_sha256).toBe("1".repeat(64));
+    expect(runner.output.action.completed).toBeNull();
+    runner.unmount();
+  });
+
+  it("keeps source discovery available when a valid report link was deleted", async () => {
+    managedWindow(`?report_id=${managedArtifact().export_id}&source_kind=analysis_run`);
+    managedReportMocks.fetchManagedReport.mockRejectedValue(new Error("managed_report_not_found"));
+    const runner = new HookRunner(() => useManagedReports("en", 0), undefined); await runner.flush();
+    expect(runner.output.routeError).toBe("managed_report_not_found");
+    expect(runner.output.selected).toBeNull();
+    expect(runner.output.list.value?.items).toHaveLength(1);
+    await runner.act(() => runner.output.select(managedSource()));
+    expect(runner.output.routeError).toBeNull();
+    expect(runner.output.capability.value?.source_ref_sha256).toBe("1".repeat(64));
+    runner.unmount();
+  });
+
+  it.each(["source", "locale"] as const)("does not resurrect cancelled busy state after %s A-B-A", async (change) => {
+    const runner = new HookRunner<"en" | "ko", ReturnType<typeof useManagedReports>>((locale) => useManagedReports(locale, 0), "en");
+    await runner.flush();
+    await runner.act(() => runner.output.select(managedSource()));
+    const held = deferred<ManagedReportDescriptor>();
+    managedReportMocks.createManagedReport.mockReturnValueOnce(held.promise);
+    await runner.act(() => runner.output.createReport());
+    expect(runner.output.action.busy).toBe(true);
+    if (change === "source") {
+      await runner.act(() => runner.output.select(managedSource(2)));
+      await runner.act(() => runner.output.select(managedSource()));
+    } else {
+      runner.update("ko"); await runner.flush();
+      runner.update("en"); await runner.flush();
+    }
+    expect(runner.output.action.busy).toBe(false);
+    held.resolve(managedArtifact()); await runner.flush();
+    expect(runner.output.linkedReport).toBeNull();
+    expect(runner.output.action.completed).toBeNull();
+    runner.unmount();
+  });
+
+  it("does not turn a failed creation into an automatic retry or accept a foreign response", async () => {
+    const runner = new HookRunner(() => useManagedReports("en", 0), undefined); await runner.flush();
+    await runner.act(() => runner.output.select(managedSource()));
+    managedReportMocks.createManagedReport.mockResolvedValueOnce(managedArtifact(managedSource(2)));
+    await runner.act(() => runner.output.createReport());
+    expect(runner.output.action.error).toBe("managed_report_source_invalid");
+    expect(runner.output.linkedReport).toBeNull();
+    expect(managedReportMocks.createManagedReport).toHaveBeenCalledTimes(1);
+    runner.unmount();
+  });
+
+  it("loads exact snapshots only on intent, preserves list-only filters and rejects obsolete or foreign responses", async () => {
+    const runner = new HookRunner<"en" | "ko", ReturnType<typeof useManagedReports>>((locale) => useManagedReports(locale, 0), "en"); await runner.flush();
+    await runner.act(() => runner.output.select(managedSource()));
+    expect(managedReportMocks.fetchStoredSourceSnapshot).not.toHaveBeenCalled();
+    managedReportMocks.fetchStoredSourceSnapshot.mockResolvedValueOnce(managedSnapshot());
+    await runner.act(() => { void runner.output.loadSnapshot(); });
+    const saved = runner.output.snapshot.value;
+    expect(saved?.payload).toEqual(managedSnapshot().payload);
+    await runner.act(() => runner.output.changeOffset(20));
+    expect(runner.output.snapshot.value).toBe(saved);
+    expect(managedReportMocks.fetchStoredSourceSnapshot).toHaveBeenCalledTimes(1);
+    const held = deferred<StoredSourceSnapshot>();
+    managedReportMocks.fetchStoredSourceSnapshot.mockReturnValueOnce(held.promise);
+    await runner.act(() => { void runner.output.loadSnapshot(); });
+    runner.update("ko"); await runner.flush();
+    expect(runner.output.snapshot.loading).toBe(false);
+    expect(runner.output.snapshot.value).toBeNull();
+    held.resolve(managedSnapshot()); await runner.flush();
+    expect(runner.output.snapshot.value).toBeNull();
+    managedReportMocks.fetchStoredSourceSnapshot.mockResolvedValueOnce(managedSnapshot(managedSource(2), "ko"));
+    await runner.act(() => { void runner.output.loadSnapshot(); });
+    expect(runner.output.snapshot.error).toBe("managed_report_source_invalid");
+    expect(runner.output.snapshot.value).toBeNull();
+    expect(managedReportMocks.fetchStoredSourceSnapshot).toHaveBeenLastCalledWith(managedSource().source, "ko");
+    runner.unmount();
+  });
+});
+
 function exportDeletionPreflight(
   analysisId: string,
   exportId: string,
@@ -638,7 +846,7 @@ function runtimeInfo(
     service: "datalab-studio-api",
     app_version: "0.1.0",
     api_contract_version: 23,
-    metadata_schema_version: 20,
+    metadata_schema_version: 21,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,

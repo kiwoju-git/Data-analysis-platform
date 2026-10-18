@@ -7,7 +7,14 @@ Generic HTML writes artifact schema 4 (actual level/renderer version/section IDs
 existing schema 1-3 exports remain downloadable without rewriting. The capability
 schema is 1 and section renderer version is 2.0.0. No calculation, result or model
 method version changes for this display-only expansion; metadata remains 20 at
-A11. Dedicated managed sources are a separate A12 gate. Historical entries below
+A11. A12 advances metadata to 21 for managed LHS/BO ownership and the DOE HTML
+schema constraint. Managed source/reference/capability/snapshot and completed
+PLS/GP prediction artifacts start at schema 1; dedicated DOE HTML writes schema 2.
+Generic managed-source HTML uses a separate `managed_source_html_report` kind,
+not the existing generic schema-4 export format. Statistical methods, results,
+model manifests, existing JSON/NPZ files and checksums are unchanged. The optional
+`save_result=false` prediction request preserves the old unsaved default.
+Historical entries below
 describe their original release, not the current HTML writer.
 
 ## Result Charts and Two Variances (2026-10-08)

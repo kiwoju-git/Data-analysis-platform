@@ -3,12 +3,18 @@
 ## Stored Report Capability (2026-10-18)
 
 Generic HTML schema 4 uses the existing analysis-artifact ownership and retention
-path; metadata remains 20. Capability reads are read-only and create no artifact.
+path; that A11 change alone needed no migration. Capability reads are read-only and create no artifact.
 HTML creation records the exact source result SHA, actual renderer version and
 section coverage. Unsupported payload or expected-SHA mismatch creates nothing.
 Historical exports are never regenerated on read. File checksum/download/deletion
 guards remain unchanged. Completed PLS/GPR local JSON snapshots are not managed
-reports; dedicated managed source adapters are the separate A12 gate.
+reports. A12 adds opt-in server-completed prediction artifacts and separately
+created managed HTML reports. Metadata 21 adds typed LHS/BO report ownership;
+analysis and DOE reports reuse their existing owner tables. The source snapshot
+viewer is explicit, read-only and distinct from a complete user-facing report.
+See [Managed Report Storage](managed_report_storage_contract.md) and
+[Report Center](report_center_contract.md) for exact sources, migration, stale
+status, file integrity, backup and owner-cascade behavior.
 
 ## GPR Settings and PLS Reports (2026-09-17)
 

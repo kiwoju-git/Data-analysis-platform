@@ -7,6 +7,23 @@ version, rendered section IDs and `full`/`summary` level. Existing files are not
 rewritten. API contract remains 23 for this integrated remediation; method/result
 versions and metadata schema 20 are unchanged by report display changes.
 
+A12 is a separate managed-source extension under API 23 with metadata 21. Its
+source-specific capability is `POST /api/v1/reports/capability`; the explicit
+snapshot view is not a claim that JSON alone is a full report.
+
+| Exact dedicated source | Saved report sections | Honest limit |
+| --- | --- | --- |
+| Completed PLS/GP prediction | Exact request rows, response/model/hash, all saved means and available latent/observation intervals, warnings | PLS has point predictions only; unsaved browser-only JSON cannot become a server source |
+| Legacy dataset/pasted regression prediction | Full saved prediction rows, actual intervals/warnings; pasted inputs | Dataset-prediction legacy inputs were not stored, so that report is summary; no raw-data reconstruction |
+| Factorial/general/RSM analysis | Source design/revision, config, model/ANOVA/coefficient/diagnostic tables, stored diagnostics and RSM grid SVG | Fitted-cell/group-mean values remain full tables; no new marginal/cube calculation or contour regeneration |
+| RSM/regression optimizer | Exact model dependencies/objectives/constraints, saved optimum/predictions/desirability/profiles, confirmation warning | Profiles preserved as saved tables; no new optimum search |
+| LHS design/revision | Complete saved design/factor bounds/seed/settings/quality, explicit response revisions | Empty response list is design-only, not implicit latest responses |
+| BO history/recommendation/batch revision | Exact study/history observations and optional exact saved pending recommendation/batch, uncertainty/acquisition, history SVG | No live-trial overlay or fantasy values relabelled as observations |
+
+All dedicated sections are capability-checked against their saved payload. An old
+source can be readable and stale simultaneously. A missing required section is
+not silently labelled full. Model/source checksums are unchanged by export.
+
 `report_coverage.report_definitions()` and renderer-owned section declarations are
 the source of truth. `GET /api/v1/analysis-runs/{id}/report-capability?locale=en|ko`
 describes the particular stored payload. The catalog exposes the same schema and

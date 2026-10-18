@@ -37,6 +37,15 @@ export interface AttributeControlLimitSetsRouteParams {
 }
 
 export const apiRoutes = {
+  reportSources(sourceKind: import("./types/reports").ReportSourceKind, limit = 20, offset = 0): string {
+    return urlWithQuery("/reports/sources", new URLSearchParams({ source_kind: sourceKind, limit: String(limit), offset: String(offset) }));
+  },
+  storedReportCapability(): string { return apiUrl("/reports/capability"); },
+  storedSourceSnapshot(): string { return apiUrl("/reports/source-snapshot"); },
+  managedReports(): string { return apiUrl("/reports"); },
+  managedReportQuery(): string { return apiUrl("/reports/artifacts/query"); },
+  managedReport(reportId: string): string { return apiUrl(`/reports/${pathId(reportId)}`); },
+  managedReportDownload(reportId: string): string { return apiUrl(`/reports/${pathId(reportId)}/download`); },
   datasetIntakeLimits(): string {
     return apiUrl("/datasets/intake-limits");
   },

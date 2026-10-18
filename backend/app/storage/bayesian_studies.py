@@ -186,6 +186,9 @@ class BayesianStudyDeletionGraphRecord:
     successor_study_ids: tuple[str, ...]
     recommendation_batch_count: int = 0
     recommendation_batch_item_count: int = 0
+    report_count: int = 0
+    report_bytes: int = 0
+    reports_manifest_sha256: str = ""
 
 
 def insert_bayesian_study_bundle(
@@ -319,6 +322,9 @@ def delete_bayesian_study_graph_record(
     *,
     expected: BayesianStudyDeletionGraphRecord,
 ) -> None:
+    from app.storage.managed_report_artifacts import ReportQuarantine, owner_reports
+
+    quarantine = ReportQuarantine(workspace_root, ())
     connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
     try:
         connection.execute("PRAGMA foreign_keys = ON;")
@@ -332,6 +338,8 @@ def delete_bayesian_study_graph_record(
             raise BayesianStorageConflict("bayesian_study_deletion_referenced")
         if current != expected:
             raise BayesianStorageConflict("bayesian_study_deletion_conflict")
+        quarantine.records = owner_reports(connection, study_id=expected.study_id)
+        quarantine.move()
 
         lifecycle = connection.execute(
             "DELETE FROM bayesian_study_lifecycle_events WHERE study_id = ?;",
@@ -397,9 +405,11 @@ def delete_bayesian_study_graph_record(
         connection.commit()
     except Exception:
         connection.rollback()
+        quarantine.rollback()
         raise
     finally:
         connection.close()
+    quarantine.commit()
 
 
 def get_bayesian_study_version_record(
@@ -1596,6 +1606,8 @@ def _deletion_graph_from_connection(
     connection: sqlite3.Connection,
     study_id: str,
 ) -> BayesianStudyDeletionGraphRecord | None:
+    from app.storage.managed_report_artifacts import managed_reports_manifest, owner_reports
+
     study = connection.execute(
         """
         SELECT status, updated_at, current_version
@@ -1688,6 +1700,7 @@ def _deletion_graph_from_connection(
         """,
         (study_id,),
     ).fetchall()
+    reports = owner_reports(connection, study_id=study_id)
     return BayesianStudyDeletionGraphRecord(
         study_id=study_id,
         status=str(study[0]),
@@ -1705,6 +1718,9 @@ def _deletion_graph_from_connection(
         recommendation_batch_item_count=_row_int(counts[6]),
         lifecycle_event_count=_row_int(counts[7]),
         successor_study_ids=tuple(str(row[0]) for row in successors),
+        report_count=len(reports),
+        report_bytes=sum(report.size_bytes for report in reports),
+        reports_manifest_sha256=managed_reports_manifest(reports) if reports else "",
     )
 
 

@@ -153,6 +153,26 @@ beforeEach(() => { vi.resetAllMocks(); setCurrentLocale("en"); });
 afterEach(() => { for (const runner of runners.splice(0)) runner.unmount(); setCurrentLocale("ko"); });
 
 describe("direct prediction request ownership regressions", () => {
+  it.each(["gp", "pls"] as const)("captures the explicit %s save choice without locale/edit side effects", (kind) => {
+    requests[kind].mockReturnValue(new Promise(() => undefined));
+    const { runner, result, analysisId } = mountPrediction(kind);
+    const control = () => nestedComponent(runner.output, "PredictionSaveControl");
+    expect(control().props.checked).toBe(false);
+    start(runner);
+    expect((requests[kind].mock.calls[0][1] as GaussianProcessPointPredictionRequest).save_result).toBe(false);
+    edit(runner, "temperature_c 1", "2");
+    runner.act(() => (control().props.onChange as (value: boolean) => void)(true));
+    setCurrentLocale("ko"); runner.update({ result, analysisId });
+    expect(control().props.checked).toBe(true);
+    expect(requests[kind]).toHaveBeenCalledTimes(1);
+    start(runner);
+    expect((requests[kind].mock.calls[1][1] as GaussianProcessPointPredictionRequest).save_result).toBe(true);
+    expect((requests[kind].mock.calls[0][1] as GaussianProcessPointPredictionRequest).save_result).toBe(false);
+    expect(control().props.disabled).toBe(true);
+    runner.update({ result, analysisId: `${analysisId}-replacement` });
+    expect(control().props.checked).toBe(false);
+    expect(requests[kind]).toHaveBeenCalledTimes(2);
+  });
   it("does not attach a late GP response to an edited input with the same client row ID", async () => {
     const response = deferred<GaussianProcessPointPredictionResponse>(); requests.gp.mockReturnValue(response.promise);
     const { runner } = mountPrediction("gp"); start(runner);

@@ -81,11 +81,11 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$script:ExpectedApiContractVersion = 23" in helper_text
-    assert "$script:MinimumMetadataSchemaVersion = 20" in helper_text
+    assert "$script:MinimumMetadataSchemaVersion = 21" in helper_text
     frontend_runtime = (repo_root / "frontend/src/runtimeCompatibility.ts").read_text(
         encoding="utf-8"
     )
-    assert "MINIMUM_METADATA_SCHEMA_VERSION = 20" in frontend_runtime
+    assert "MINIMUM_METADATA_SCHEMA_VERSION = 21" in frontend_runtime
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
     assert '"graph_builder_preview"' in helper_text
@@ -117,7 +117,7 @@ def test_lan_entry_keeps_api_loopback_and_does_not_widen_cors() -> None:
     assert 'bind_host: str = "127.0.0.1"' in config
 
 
-@pytest.mark.parametrize("schema,expected", [(19, "False"), (20, "True")])
+@pytest.mark.parametrize("schema,expected", [(20, "False"), (21, "True")])
 def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expected: str) -> None:
     repo_root = Path(__file__).resolve().parents[3]
     command = (

@@ -663,6 +663,7 @@ def run_browser_flow(
                 diagnostics.step("verify focused CSV upload error recovery")
                 context = browser.new_context(accept_downloads=True)
                 context.add_init_script(
+                    "if (window.localStorage.getItem('statistical-twin.locale') === null) "
                     "window.localStorage.setItem('statistical-twin.locale', 'ko');"
                 )
                 page = context.new_page()
@@ -715,6 +716,7 @@ def run_browser_flow(
             verify_localization_shell(browser, frontend_base_url, diagnostics)
             context = browser.new_context(accept_downloads=True)
             context.add_init_script(
+                "if (window.localStorage.getItem('statistical-twin.locale') === null) "
                 "window.localStorage.setItem('statistical-twin.locale', 'ko');"
             )
             page = context.new_page()
@@ -2867,6 +2869,7 @@ def verify_pls_regression_and_prediction(
     expect(prediction.get_by_role("heading", name="점예측")).to_be_visible()
     prediction.get_by_label("temperature_c 1").fill("75")
     prediction.get_by_label("pressure_bar 1").fill("8")
+    prediction.locator("[data-save-completed-prediction]").check()
     with page.expect_response(
         lambda response: response.request.method == "POST"
         and response.url.endswith("/pls-point-predictions")
@@ -2874,6 +2877,8 @@ def verify_pls_regression_and_prediction(
         prediction.get_by_role("button", name="점예측 실행").click()
     if not prediction_info.value.ok:
         raise AssertionError(f"PLS prediction failed: {prediction_info.value.text()}")
+    prediction_payload = prediction_info.value.json()
+    prediction_request = prediction_info.value.request.post_data_json
     expect(prediction.locator("tbody tr").first).to_contain_text("준비됨")
     if prediction.locator("tbody tr td").nth(3).inner_text().strip() == "-":
         raise AssertionError("PLS point prediction did not render a numeric value")
@@ -2881,6 +2886,11 @@ def verify_pls_regression_and_prediction(
 
     verify_pls_exports(page, diagnostics, result_info.value.json(),
                        lambda: open_primary_navigation(page, "리포트"))
+    from managed_reports_live import verify_saved_prediction_report
+
+    verify_saved_prediction_report(
+        page, diagnostics, prediction_payload, prediction_request
+    )
 
 
 def verify_gaussian_process_regression_and_prediction(

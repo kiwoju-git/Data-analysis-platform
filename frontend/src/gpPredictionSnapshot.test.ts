@@ -28,10 +28,24 @@ function response(): GaussianProcessPointPredictionResponse {
 const receivedAt = "2026-10-18T04:00:00.000Z";
 
 describe("GP completed prediction snapshot", () => {
+  it("requires explicit opt-in for managed persistence and preserves that request snapshot", () => {
+    const unsaved = captureGpPredictionRequest(source(), drafts());
+    const saved = captureGpPredictionRequest(source(), drafts(), true);
+    expect(unsaved.request.save_result).toBe(false);
+    expect(saved.request.save_result).toBe(true);
+    const savedResponse = { ...response(), saved_prediction: { source: { kind: "regression_prediction", prediction: {
+      storage: "completed_prediction", family: "gaussian_process", source_analysis_id: "analysis-A",
+      source_result_sha256: "b".repeat(64), model_id: "model-A", model_manifest_sha256: "a".repeat(64),
+      prediction_artifact_id: "10000000-0000-4000-8000-000000000001", expected_source_sha256: "c".repeat(64),
+    } }, created_at: receivedAt } };
+    expect(completeGpPredictionSnapshot(saved, savedResponse, receivedAt).request.save_result).toBe(true);
+    expect(saved.request.rows).toEqual(unsaved.request.rows);
+  });
+
   it("captures exact numeric request values with detached source and inputs", () => {
     const originalSource = source(); const originalDrafts = drafts();
     const captured = captureGpPredictionRequest(originalSource, originalDrafts);
-    expect(captured.request).toEqual({ expected_model_manifest_sha256: "a".repeat(64), rows: [
+    expect(captured.request).toEqual({ expected_model_manifest_sha256: "a".repeat(64), save_result: false, rows: [
       { client_row_id: "r1", values: { x1: 0, x2: -2 } },
       { client_row_id: "r2", values: { x1: 1.25, x2: 20 } },
       { client_row_id: "r3", values: { x1: 3, x2: 4 } },

@@ -392,6 +392,7 @@ function detailButtonId(item: WorkspaceAssetDescriptor): string {
 }
 
 function assetTypeLabel(type: WorkspaceAssetDescriptor["asset_type"], subtype: string): string {
+  if (type === "managed_report") return t("managedReports.kindManagedHtml");
   if (type === "doe_analysis") return t("doe.report.analysis");
   if (type === "doe_prediction") return t("doe.report.prediction");
   if (type === "doe_analysis_report") return t("doe.report.html");

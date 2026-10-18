@@ -405,8 +405,9 @@ class BayesianStudyDeletionCounts(BaseModel):
     recommendation_batch_item_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
     lifecycle_event_count: int = Field(ge=0, le=1)
     metadata_record_count: int = Field(ge=4)
-    file_count: Literal[0]
-    file_bytes: Literal[0]
+    report_count: int = Field(default=0, ge=0)
+    file_count: int = Field(ge=0)
+    file_bytes: int = Field(ge=0)
 
 
 class BayesianStudyDeletionPreflightResponse(BaseModel):

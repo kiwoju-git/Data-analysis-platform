@@ -5585,6 +5585,13 @@ td select {
   padding: 16px;
 }
 
+.managed-reports-browser, .prediction-save-control { min-inline-size: 0; }
+.managed-report-kind { display: grid; gap: 6px; max-inline-size: 320px; }
+.managed-reports-browser .report-run-row code, .managed-reports-browser td code { overflow-wrap: anywhere; }
+.managed-report-source-json { white-space: pre-wrap; overflow-wrap: anywhere; max-inline-size: 100%; }
+.stored-source-snapshot { min-inline-size: 0; }
+.stored-source-snapshot dd, .stored-source-snapshot code { overflow-wrap: anywhere; }
+.managed-report-snapshot-json { max-block-size: 480px; overflow: auto; padding: 12px; border: 1px solid var(--border-color, #dce1e6); }
 .analysis-report-capability {
   min-inline-size: 0;
   border-block-start: 1px solid #d8dde5;

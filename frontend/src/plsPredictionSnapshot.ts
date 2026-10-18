@@ -1,4 +1,5 @@
 import type { PlsPointPredictionRequest, PlsPointPredictionResponse } from "./api/types/regression";
+import { savedPredictionDescriptor } from "./savedPredictionDescriptor";
 
 export function plsPredictionSnapshot(analysisId: string, request: PlsPointPredictionRequest,
   response: PlsPointPredictionResponse, receivedAt: string,
@@ -16,11 +17,15 @@ export function plsPredictionSnapshot(analysisId: string, request: PlsPointPredi
       || !Array.isArray(row.warnings) || !row.warnings.every((warning) => typeof warning === "string"))) {
     throw new Error("pls_prediction_snapshot_mismatch");
   }
+  const saved = savedPredictionDescriptor(response.saved_prediction, {
+    saveResult: request.save_result ?? false, family: "pls", analysisId,
+    modelId: source.modelId, manifestSha256: request.expected_model_manifest_sha256,
+  });
   return {
     schema_version: 1 as const, artifact_kind: "pls_point_prediction_snapshot" as const,
     source_analysis_id: analysisId, client_received_at: receivedAt,
     prediction_recalculated_on_export: false as const,
     request: { ...request, rows: request.rows.map((row) => ({ ...row, values: { ...row.values } })) },
-    response: { ...response, rows: response.rows.map((row) => ({ ...row, warnings: [...row.warnings] })) },
+    response: { ...response, ...(saved === null ? {} : { saved_prediction: saved }), rows: response.rows.map((row) => ({ ...row, warnings: [...row.warnings] })) },
   };
 }

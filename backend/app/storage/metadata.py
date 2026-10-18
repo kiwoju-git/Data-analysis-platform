@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 20
+SCHEMA_VERSION: Final = 21
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -225,6 +225,7 @@ class ExperimentDesignDeletionSnapshot:
     prediction_count: int
     report_count: int
     analysis_assets_sha256: str
+    managed_reports_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -1382,6 +1383,113 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         ON experiment_design_analysis_assets(analysis_id, kind, created_at, asset_id);
         """,
     ),
+    Migration(
+        version=21,
+        name="create_managed_report_artifacts",
+        sql="""
+        BEGIN IMMEDIATE;
+        CREATE TABLE experiment_design_analysis_assets_v21 (
+            asset_id TEXT PRIMARY KEY,
+            analysis_id TEXT NOT NULL
+                REFERENCES experiment_design_analyses(analysis_id) ON DELETE CASCADE,
+            kind TEXT NOT NULL CHECK (kind IN ('prediction', 'html_report')),
+            schema_version INTEGER NOT NULL CHECK (
+                (kind='prediction' AND schema_version=1)
+                OR (kind='html_report' AND schema_version IN (1,2))
+            ),
+            locale TEXT CHECK (locale IS NULL OR locale IN ('en', 'ko')),
+            source_analysis_sha256 TEXT NOT NULL CHECK (length(source_analysis_sha256) = 64),
+            sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+            media_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 16777216),
+            content BLOB NOT NULL CHECK (typeof(content) = 'blob' AND length(content) = size_bytes),
+            created_at TEXT NOT NULL
+        );
+        INSERT INTO experiment_design_analysis_assets_v21 (
+            asset_id, analysis_id, kind, schema_version, locale, source_analysis_sha256,
+            sha256, media_type, size_bytes, content, created_at
+        ) SELECT
+            asset_id, analysis_id, kind, schema_version, locale, source_analysis_sha256,
+            sha256, media_type, size_bytes, content, created_at
+        FROM experiment_design_analysis_assets;
+        DROP TABLE experiment_design_analysis_assets;
+        ALTER TABLE experiment_design_analysis_assets_v21
+            RENAME TO experiment_design_analysis_assets;
+        CREATE INDEX idx_experiment_analysis_assets
+        ON experiment_design_analysis_assets(analysis_id, kind, created_at, asset_id);
+        CREATE UNIQUE INDEX uq_bayesian_history_report_owner
+        ON bayesian_observation_history_revisions(study_version_id, history_revision_id);
+        CREATE UNIQUE INDEX uq_bayesian_recommendation_report_owner
+        ON bayesian_recommendations(
+            study_version_id, source_history_revision_id, recommendation_id
+        );
+        CREATE UNIQUE INDEX uq_bayesian_batch_report_owner
+        ON bayesian_recommendation_batches(study_version_id, source_history_revision_id, batch_id);
+        CREATE TABLE managed_report_artifacts (
+            report_id TEXT PRIMARY KEY,
+            source_kind TEXT NOT NULL CHECK (
+                source_kind IN ('lhs_design_revision', 'bayesian_history_revision')
+            ),
+            design_version_id TEXT REFERENCES experiment_design_versions(design_version_id)
+                ON DELETE CASCADE,
+            study_version_id TEXT REFERENCES bayesian_study_versions(study_version_id)
+                ON DELETE CASCADE,
+            history_revision_id TEXT,
+            recommendation_id TEXT,
+            batch_id TEXT,
+            source_ref_json TEXT NOT NULL
+                CHECK (length(CAST(source_ref_json AS BLOB)) BETWEEN 2 AND 65536),
+            source_ref_sha256 TEXT NOT NULL CHECK (
+                length(source_ref_sha256)=64 AND source_ref_sha256 NOT GLOB '*[^0-9a-f]*'
+            ),
+            source_payload_sha256 TEXT NOT NULL CHECK (
+                length(source_payload_sha256)=64
+                AND source_payload_sha256 NOT GLOB '*[^0-9a-f]*'
+            ),
+            artifact_schema_version INTEGER NOT NULL CHECK (artifact_schema_version=1),
+            locale TEXT NOT NULL CHECK (locale IN ('en','ko')),
+            renderer_id TEXT NOT NULL,
+            renderer_version TEXT NOT NULL,
+            report_level TEXT NOT NULL CHECK (report_level IN ('full','summary')),
+            section_manifest_json TEXT NOT NULL
+                CHECK (length(CAST(section_manifest_json AS BLOB)) BETWEEN 2 AND 65536),
+            artifact_path TEXT NOT NULL UNIQUE CHECK (
+                artifact_path='workspaces/reports/' || report_id || '/report.html'
+            ),
+            sha256 TEXT NOT NULL CHECK (
+                length(sha256)=64 AND sha256 NOT GLOB '*[^0-9a-f]*'
+            ),
+            media_type TEXT NOT NULL CHECK (media_type='text/html'),
+            size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 16777216),
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (study_version_id, history_revision_id)
+                REFERENCES bayesian_observation_history_revisions(
+                    study_version_id, history_revision_id
+                ) ON DELETE CASCADE,
+            FOREIGN KEY (study_version_id, history_revision_id, recommendation_id)
+                REFERENCES bayesian_recommendations(
+                    study_version_id, source_history_revision_id, recommendation_id
+                ) ON DELETE CASCADE,
+            FOREIGN KEY (study_version_id, history_revision_id, batch_id)
+                REFERENCES bayesian_recommendation_batches(
+                    study_version_id, source_history_revision_id, batch_id
+                ) ON DELETE CASCADE,
+            CHECK (
+                (source_kind='lhs_design_revision' AND design_version_id IS NOT NULL
+                 AND study_version_id IS NULL AND history_revision_id IS NULL
+                 AND recommendation_id IS NULL AND batch_id IS NULL)
+                OR
+                (source_kind='bayesian_history_revision' AND design_version_id IS NULL
+                 AND study_version_id IS NOT NULL AND history_revision_id IS NOT NULL
+                 AND (recommendation_id IS NULL OR batch_id IS NULL))
+            )
+        );
+        CREATE INDEX idx_managed_report_lhs_owner
+        ON managed_report_artifacts(design_version_id, created_at, report_id);
+        CREATE INDEX idx_managed_report_bo_owner
+        ON managed_report_artifacts(study_version_id, history_revision_id, created_at, report_id);
+        """,
+    ),
 )
 
 
@@ -2371,10 +2479,14 @@ def get_workspace_summary_counts(workspace_root: Path) -> WorkspaceSummaryCounts
                 'analysis_result_json_export',
                 'analysis_result_csv_export',
                 'analysis_result_html_report',
+                'managed_source_html_report',
                 'regression_prediction_csv_export'
             );
             """,
             (),
+        )
+        exports += _connection_count(
+            connection, "SELECT COUNT(*) FROM managed_report_artifacts;", ()
         )
     return WorkspaceSummaryCounts(visible, archived, models, analyses, exports)
 
@@ -2872,13 +2984,33 @@ def list_workspace_asset_catalog_records(
         FROM bayesian_studies study
         LEFT JOIN workspace_asset_user_metadata metadata
             ON metadata.owner_type = 'bayesian_study' AND metadata.owner_id = study.study_id
+
+        UNION ALL
+
+        SELECT report.report_id, 'managed_report', report.source_kind,
+            COALESCE(design.method_id, study.method_id),
+            COALESCE(design.name, study.name), 'Stored HTML report', 'available',
+            report.created_at, report.created_at, 0, NULL, NULL, 0, NULL
+        FROM managed_report_artifacts report
+        LEFT JOIN experiment_design_versions design_version
+            ON design_version.design_version_id=report.design_version_id
+        LEFT JOIN experiment_designs design ON design.design_id=design_version.design_id
+        LEFT JOIN bayesian_study_versions study_version
+            ON study_version.study_version_id=report.study_version_id
+        LEFT JOIN bayesian_studies study ON study.study_id=study_version.study_id
     """
     clauses: list[str] = []
     parameters: list[object] = []
     if category is not None:
         category_types = {
             "datasets": ("dataset_version",),
-            "analyses": ("analysis_run", "doe_analysis", "doe_prediction", "doe_analysis_report"),
+            "analyses": (
+                "analysis_run",
+                "doe_analysis",
+                "doe_prediction",
+                "doe_analysis_report",
+                "managed_report",
+            ),
             "models": ("regression_model",),
             "designs": ("doe_design", "bayesian_study"),
         }.get(category)
@@ -2968,8 +3100,12 @@ def delete_experiment_design_record(
     expected_design_sha256: str,
     expected_counts: tuple[int, int, int, int, int, int, int],
     expected_analysis_assets_sha256: str,
+    expected_managed_reports_sha256: str = "",
 ) -> ExperimentDesignDeletionSnapshot:
-    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+    from app.storage.managed_report_artifacts import ReportQuarantine, owner_reports
+
+    quarantine = ReportQuarantine(workspace_root, ())
+    with quarantine, sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
         connection.execute("BEGIN IMMEDIATE;")
         snapshot = _experiment_design_deletion_snapshot(connection, design_id)
@@ -2989,9 +3125,12 @@ def delete_experiment_design_record(
             snapshot.design_sha256 != expected_design_sha256
             or actual_counts != expected_counts
             or snapshot.analysis_assets_sha256 != expected_analysis_assets_sha256
+            or snapshot.managed_reports_sha256 != expected_managed_reports_sha256
         ):
             connection.rollback()
             raise WorkspaceAssetStorageConflict("doe_design_deletion_conflict")
+        quarantine.records = owner_reports(connection, design_id=design_id)
+        quarantine.move()
         version_ids = [
             str(row[0])
             for row in connection.execute(
@@ -3064,12 +3203,14 @@ def delete_experiment_design_record(
             connection.rollback()
             raise WorkspaceAssetStorageConflict("doe_design_deletion_conflict")
         connection.commit()
-        return snapshot
+    return snapshot
 
 
 def _experiment_design_deletion_snapshot(
     connection: sqlite3.Connection, design_id: str
 ) -> ExperimentDesignDeletionSnapshot | None:
+    from app.storage.managed_report_artifacts import managed_reports_manifest, owner_reports
+
     row = connection.execute(
         """
         SELECT design_id, method_id, method_version, family, name, status,
@@ -3118,6 +3259,7 @@ def _experiment_design_deletion_snapshot(
         WHERE version.design_id = ? ORDER BY asset.asset_id""",
         (design_id,),
     ).fetchall()
+    reports = owner_reports(connection, design_id=design_id)
     return ExperimentDesignDeletionSnapshot(
         design=_experiment_design_from_row(row),
         design_sha256=str(version[0]),
@@ -3127,10 +3269,11 @@ def _experiment_design_deletion_snapshot(
         response_revision_count=int(counts[3]),
         analysis_count=int(counts[4]),
         prediction_count=sum(row[1] == "prediction" for row in assets),
-        report_count=sum(row[1] == "html_report" for row in assets),
+        report_count=sum(row[1] == "html_report" for row in assets) + len(reports),
         analysis_assets_sha256=hashlib.sha256(
             json.dumps(assets, separators=(",", ":")).encode("utf-8")
         ).hexdigest(),
+        managed_reports_sha256=managed_reports_manifest(reports) if reports else "",
     )
 
 

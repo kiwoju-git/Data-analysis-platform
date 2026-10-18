@@ -81,6 +81,9 @@ export interface AnalysisResultExportDeletionPreflightResponse {
     | "analysis_result_json_export"
     | "analysis_result_csv_export"
     | "analysis_result_html_report"
+    | "managed_source_html_report"
+    | "gp_completed_prediction"
+    | "pls_completed_prediction"
     | "regression_prediction_csv_export";
   media_type: string;
   sha256: string;

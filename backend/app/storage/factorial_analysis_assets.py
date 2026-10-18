@@ -36,7 +36,13 @@ _COLUMNS = (
 )
 
 
-def insert_asset(root: Path, record: FactorialAnalysisAsset, content: bytes) -> None:
+def insert_asset(
+    root: Path,
+    record: FactorialAnalysisAsset,
+    content: bytes,
+    *,
+    dependency_asset: tuple[str, str] | None = None,
+) -> None:
     if not 0 < len(content) <= MAX_ASSET_BYTES or len(content) != record.size_bytes:
         raise WorkspaceAssetStorageConflict("doe_analysis_asset_size_invalid")
     if hashlib.sha256(content).hexdigest() != record.sha256:
@@ -54,6 +60,18 @@ def insert_asset(root: Path, record: FactorialAnalysisAsset, content: bytes) -> 
             or hashlib.sha256(source[0].encode("utf-8")).hexdigest() != source[1]
         ):
             raise WorkspaceAssetStorageConflict("doe_factorial_prediction_source_changed")
+        if dependency_asset is not None:
+            dependency = connection.execute(
+                "SELECT sha256,content FROM experiment_design_analysis_assets "
+                "WHERE analysis_id=? AND asset_id=? AND kind='prediction'",
+                (record.analysis_id, dependency_asset[0]),
+            ).fetchone()
+            if (
+                dependency is None
+                or dependency[0] != dependency_asset[1]
+                or hashlib.sha256(bytes(dependency[1])).hexdigest() != dependency[0]
+            ):
+                raise WorkspaceAssetStorageConflict("stored_report_source_changed")
         count = connection.execute(
             "SELECT COUNT(*) FROM experiment_design_analysis_assets WHERE analysis_id=?",
             (record.analysis_id,),

@@ -8,8 +8,9 @@
 - Existing untracked `examples/image2.png` is user-owned and is not staged.
 - `data_prd.md` is absent. AGENTS.md, the addendum, implementation guide,
   task list and current method/runtime contracts govern this work.
-- No existing dataset, workspace, result or model is migrated or rewritten by
-  these display/state changes. All browser fixtures use an isolated workspace.
+- Existing dataset/result/model bytes are not rewritten. A12 adds metadata
+  migration 21 for managed ownership; historical report BLOB/hash values are
+  preserved. All browser fixtures use an isolated workspace.
 - Runtime at baseline: API 22, metadata 20. Statistical method versions are not
   incremented for display-only fixes. Schema CAS will require a coordinated API
   increment; a metadata increment requires an actual additive migration.
@@ -47,12 +48,12 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A07 | Schema CAS | reproduced / fixed / verified | Atomic CAS/no-op/conflict UI; 299 broad backend/18 final backend/119 frontend/six real two-editor browser cases and native A09 passed. |
 | A08 | Workspace/backup | source_confirmed / reproduced / fixed / verified | Exclusive lease/offline archive, actual asset round-trip/CLI; native A09 passed after platform-neutral fault injection fix. |
 | A09 | Chart formatters | source_confirmed / reproduced / fixed / verified (focused) | Axis/legacy/locale precedence wired; coordinates/pin preserved in browser. Whole-check gate remains separate. |
-| A10 | Report Center | source_confirmed / reproduced / fixed / verified (focused) | Independent list/detail/status and exact-owner guards; real-component mocked-transport browser passed. Native checkpoint still running at latest observation. |
-| A11 | Generic reports | source_confirmed / reproduced / fixed (integration in progress) | Stored-only reader, method/schema/section capability, report parity and UI guards; final all-family/native gate pending. |
-| A12 | Dedicated reports | - | After A01-A11; requires exact revision/hash owners. |
-| A13 | Execution capabilities | - | Pending cancellation CAS and grouped counts. |
-| A14 | Capability documentation | - | Pending generated registry/handler/report matrix. |
-| A15 | Release installation identity | - | Pending marker/package identity validation. |
+| A10 | Report Center | source_confirmed / reproduced / fixed / verified (focused) | Independent list/detail/status and exact-owner guards; real-component browser passed. A10 checkpoint was cancelled by a later dispatch; final native gate remains separate. |
+| A11 | Generic reports | source_confirmed / reproduced / fixed / verified (local focused) | Stored-only readers, actual HTML parity and UI guards passed; two checkpoint failures and their corrections are retained below. Final native gate pending. |
+| A12 | Dedicated reports | source_confirmed / reproduced / fixed / verified (local focused) | Six exact source kinds, opt-in server predictions, ownership/retention/backup and actual EN/KO offline-report browser flow passed. Native gate pending. |
+| A13 | Execution capabilities | source_confirmed | Cancellation CAS/grouped counts/startup reason pending; adjacent generic-analysis completion/source-schema races identified for the same stabilization step. |
+| A14 | Capability documentation | source_confirmed | Guidance drift found; generated registry/handler/report matrix pending. |
+| A15 | Release installation identity | source_confirmed | Existing marker content/installed-code mismatch can be missed; pre-import release-owned identity guard pending. |
 
 ## A01 Evidence
 
@@ -712,3 +713,171 @@ made for the failure. Log: `.tmp/remediation-a11-ci-linux.log`.
 A10 run `39102592691` was cancelled by the branch concurrency policy after the
 A11 dispatch; its successful Linux/Python311/security/package jobs are not an
 all-platform completed gate.
+
+Retry `39106093827` at `ecfb5fa` passed Python 3.11 calculation/API and all
+dependency-security jobs, but Windows/Linux Check stopped at Ruff format for
+the corrected catalog test. This omitted formatting step is recorded as a real
+failed gate, not a statistical failure. The single test file was formatted and
+its Ruff lint/format checks rerun. Full checkpoint validation remains pending.
+
+### A12 In Progress: Exact Stored Sources
+
+Six typed source kinds now bind their real workflow owner, revision and hashes.
+Generic prediction sources remain distinct from dedicated DOE sources. PLS/GP
+completed predictions are opt-in server-produced artifacts; browser JSON
+snapshots are not accepted as report sources. Export does not refit or reread
+canonical dataset rows. The request contract remains API 23; additive managed
+LHS/BO ownership records require metadata 21. Existing stored numerical method
+versions/results are not rewritten.
+
+Initial checks (not final A12 verification):
+- Completed PLS/GP prediction persistence/report tests: 3 passed, 3 warnings,
+  27.27 seconds (`.tmp/remediation-a12-completed-predictions.log`). This includes
+  a synthetic direct metadata removal case, not a claim of owner-delete API
+  coverage; actual retention tests are separate.
+- Backup tests: 69 passed, one existing warning, 154.95 seconds
+  (`.tmp/remediation-a12-backup.log`). Schema 20 backups restore unchanged and
+  migrate to 21 only through normal initialization; unsupported 19/22 rejected.
+- Actual-source report roundtrip first run: 4 failed / 4 passed / 3 warnings,
+  81.85 seconds (`.tmp/remediation-a12-api-roundtrip.log`). DOE inserts revealed
+  the existing asset CHECK restricted all schemas to 1. Migration tests now
+  explicitly preserve legacy BLOB/hash bytes while permitting the new report
+  schema. This failure is not yet counted as fixed/verified.
+- Integration review found locale artifact lists mixed EN/KO reports. The
+  source-and-locale filter is corrected with actual API regression coverage.
+  A deferred A-B-A browser action test also found an old busy-state presentation
+  issue; the frontend correction and recheck are still in progress.
+
+No main push or Release publication has occurred. A13-A15 and final aggregate
+gates remain outstanding.
+
+### A11 Frozen Windows Completion
+
+The frozen `4825511` Windows/Python 3.10 check completed with 1 failed, 1810 passed,
+6 skipped and 105 warnings in 2817.97 seconds. The sole failure is the old catalog
+substring assertion already corrected in `ecfb5fa` and formatted in `dc72bb4`.
+`check.ps1` correctly stopped at that backend failure and did not run its later
+frontend gates. This run is not reported as passing or as validation of A12.
+Log: `.tmp/remediation-a11-whole-check.log`.
+
+### A12 Focused Integration Evidence
+
+The fresh-workspace API rerun passed 13 tests / 3 existing warnings in 143.26
+seconds (`.tmp/remediation-a12-api-roundtrip3.log`):
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_managed_report_api.py backend/tests/unit/test_completed_predictions.py -q
+```
+
+It covers actual source creation, both report locales, exact snapshot identity,
+HTML create/list/download/delete, hashes and visible tables/SVG, legacy DOE export
+list compatibility, and offline backup/restore of LHS/BO/DOE/pasted-prediction
+reports to another workspace. Legacy dataset predictions correctly report missing
+stored input values as summary rather than rereading data. The first dataset
+fixture asserted HTTP 201 although that established endpoint returns 200; the
+corrected fixture passed without changing the endpoint (`old-prediction2.log`).
+
+Dedicated reader/render tests passed 15 cases / 3 warnings / 134.22 seconds,
+plus two actual BO attachment cases after the final metadata-stale refinement.
+No-recompute sentinels cover stored design/quality/optimizer/recommendation reads.
+The parser retains saved fitted-cell/profile tables rather than computing new
+marginal/cube/contour plots. Logs: `.tmp/a12-dedicated-source-tests6.log`,
+`.tmp/a12-dedicated-attachment-tests.log`.
+
+Source-bound journal/retention/migration checks passed 21 cases, one Windows
+symlink privilege skip, 22 deselected, 143.18 seconds. Real child processes cover
+crash before/after commit; GP/PLS model-delete then owner-cascade, snapshot-only
+deletion with immutable historical HTML and source capability conflict, NPZ
+manifest mismatch, and legacy DOE BLOB/schema preservation are exercised.
+The earlier missing-snapshot 404/409 failure remains recorded in
+`.tmp/a12-source-bound-final.log`; final `.tmp/a12-source-bound-verified.log` passed.
+
+Independent review also reproduced an out-of-bound header-open ordering defect
+in the legacy prediction reader. The report path now validates its exact owned
+path before calling that loader. The negative test failed before the fix and
+passed afterward (12.66 seconds): `.tmp/a12-prediction-preopen-before.log` and
+`.tmp/a12-prediction-preopen-after.log`.
+
+Frontend full run initially had 725 passes and two existing lazy-import timeouts.
+Unchanged isolated suites passed 6/6, and the unchanged full rerun passed 727/85
+in 70.49 seconds; timeouts were not increased. Logs `.tmp/a12-front-all.log`,
+`.tmp/a12-lazy-isolated.log`, `.tmp/a12-front-all-rerun.log`. A later strict check
+found two new test-only locale literal inference errors; their correction and
+strict rerun are still pending at this ledger entry. Browser mocks passed six
+source kinds, guarded snapshots and four viewport widths in KO/EN; they are not
+substituted for the newly added real-server helper's pending execution.
+
+Further A12 verification:
+- Current runtime/startup, legacy prediction path-safety and offline backup tests:
+  86 passed / 4 existing warnings / 203.79 seconds
+  (`.tmp/remediation-a12-runtime-backup-final.log`).
+- Owner-deleted-between-read regression now returns the stable source-change 409,
+  rather than an internal assertion. Actual PLS/GP snapshot tests passed 3 cases /
+  3 warnings / 19.32 seconds (`.tmp/remediation-a12-owner-race-final.log`).
+- Backend Ruff lint and format passed (335 files). The prior all-backend mypy
+  passed 198 modules; it will be rerun by the checkpoint gate.
+- The final frontend state before the LAN digest correction passed 728 tests in
+  85 files, strict types, build and localization. Same-source re-selection had a
+  real deferred failing test before its no-op correction, not a timeout increase.
+- Review identified `crypto.subtle` availability as an HTTP LAN download issue.
+  A local, pinned hash-library fallback is being verified; no header-only digest
+  bypass is accepted. These earlier frontend checks do not yet cover that change.
+
+HTTP LAN digest correction: pinned MIT `@noble/hashes` 2.4.0 supplies a locally
+bundled fallback only when native SubtleCrypto is absent. Actual received bytes
+and descriptor size/hash are still compared; native operational failures are not
+silently bypassed. Final frontend Vitest passed 738 tests / 86 files / 77.61
+seconds (`.tmp/a12-front-all-digest.log`), followed by strict types, production
+build and localization checks (each exit 0). The SHA implementation is a lazy
+5.33 kB / 2.64 kB gzip chunk. Dependency rationale, independent vectors, malformed
+download tests and measured 16 MiB cost are in
+`docs/download_checksum_compatibility.md`. Linux packaging already inventories
+runtime notices; its verifier now also requires the new library's MIT notice.
+
+Final A12 source-deletion checks: 3 passed / 7 deselected / 35.34 seconds for
+actual generic/DOE report download races, and 1 passed / 9 deselected / 17.54
+seconds for the DOE list/read deletion boundary. Logs:
+`.tmp/remediation-a12-report-delete-race.log`,
+`.tmp/remediation-a12-report-list-race.log`. Repeated backend Ruff lint/format
+passed, and all-backend mypy passed 198 modules
+(`.tmp/remediation-a12-mypy-final.log`).
+
+The first real-server browser run failed before opening the managed source:
+the new test helper tried to read a Playwright prediction response body after a
+page navigation, when Chromium had discarded its response resource. The test
+now captures request/response immediately after prediction, before navigation.
+No application or timeout change was made for this failure. Original diagnostics
+remain in `.tmp/e2e-a12-real-managed` and
+`.tmp/remediation-a12-real-managed-e2e.log`; the corrected run is separate.
+
+The second browser run verified both locales' exact prediction snapshots,
+managed HTML creation/download and offline visible input/prediction values, plus
+the WebCrypto-unavailable KO download. It then failed the EN deep-link locale
+check: the existing main E2E context's init script forcibly wrote KO on every
+new document. That fixture now seeds KO only when no locale has been stored,
+so a real in-app choice survives reload. This is not evidence that LocaleProvider
+caused the historical A01 failure. The failed run and page are preserved under
+`.tmp/e2e-a12-real-managed2`; the next run validates the corrected fixture.
+
+The corrected actual-server browser run exited 0:
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests/e2e/critical_path.py --backend-port 8027 --frontend-port 5257 --gpr-report-only --diagnostics-root .tmp/e2e-a12-real-managed3
+```
+
+It covers PLS analysis/prediction persistence, exact source snapshot, EN/KO HTML
+creation/download, SHA and visible table values, network-offline HTML, report-ID
+deep-link restore, and the forced-absent WebCrypto fallback. HTML ten-significant-
+digit rounding is checked separately from full-precision stored JSON. Existing
+GPR single/compare/settings, chart-formatting, responsive navigation checks in
+that focused runner also passed. The user dev server was not stopped or reused.
+The parent inspected actual center/offline report screenshots and the mocked
+390px layout; this is not a second physical LAN-device test.
+
+Evidence: `.tmp/remediation-a12-real-managed-e2e3.log`,
+`.tmp/e2e-a12-real-managed3/screenshots/managed-prediction-*`,
+`.tmp/e2e-a12-real-managed3/html/managed-prediction-*.html`.
+Mocked four-viewport source-lane testing remains separately recorded. Final
+OpenAPI checks passed 231 tests / 2 warnings (`.tmp/a12-openapi-final.log`).

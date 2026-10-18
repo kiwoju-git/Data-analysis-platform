@@ -4,8 +4,15 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from app.api.v1.schemas.reports import BayesianHistoryReportSource
 from app.core.config import Settings
 from app.main import create_app
+from app.services.report_source_contract import report_source_sha256
+from app.storage.managed_report_artifacts import (
+    create_managed_report,
+    get_managed_report,
+    read_managed_report,
+)
 from app.storage.metadata import metadata_db_path
 
 
@@ -261,6 +268,7 @@ def test_closed_abandoned_study_deletes_its_exact_metadata_graph(tmp_path) -> No
         "recommendation_batch_item_count": 0,
         "lifecycle_event_count": 1,
         "metadata_record_count": 7,
+        "report_count": 0,
         "file_count": 0,
         "file_bytes": 0,
     }
@@ -271,6 +279,58 @@ def test_closed_abandoned_study_deletes_its_exact_metadata_graph(tmp_path) -> No
     assert "objective" not in json.dumps(deleted).lower()
     assert str(tmp_path) not in json.dumps(deleted)
     assert restored.status_code == 404
+
+
+def test_bayesian_report_old_history_survives_new_head_and_owner_delete_cleans_file(tmp_path):
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        study = _create_study(client)
+        history = study["observation_history"]
+        source = BayesianHistoryReportSource(
+            study_id=study["study_id"],
+            study_version_id=study["study_version_id"],
+            definition_sha256=study["definition_sha256"],
+            history_revision_id=history["history_revision_id"],
+            expected_source_sha256=history["observation_history_sha256"],
+        )
+        content = b"<html><body>Stored initial history</body></html>"
+        record = create_managed_report(
+            tmp_path,
+            source=source,
+            expected_source_ref_sha256=report_source_sha256(source),
+            content=content,
+            locale="en",
+            renderer_id="test",
+            renderer_version="1",
+            report_level="summary",
+            section_manifest_json="[]",
+            created_at=study["created_at"],
+        )
+        study = _complete_initial_trials(client, study)
+        assert study["observation_history"]["history_revision_id"] != str(
+            source.history_revision_id
+        )
+        assert read_managed_report(tmp_path, record) == content
+        closed = client.post(
+            f"/api/v1/bayesian-studies/{study['study_id']}/close",
+            json=_close_request(study, target_status="abandoned", reason_code="study_cancelled"),
+        )
+        assert closed.status_code == 200, closed.text
+        endpoint = f"/api/v1/bayesian-studies/{study['study_id']}"
+        preflight = client.get(endpoint + "/deletion-preflight").json()
+        assert preflight["counts"]["report_count"] == preflight["counts"]["file_count"] == 1
+        assert preflight["counts"]["file_bytes"] == len(content)
+        deleted = client.request(
+            "DELETE",
+            endpoint,
+            json={
+                "confirmation_study_id": study["study_id"],
+                "expected_deletion_manifest_sha256": preflight["deletion_manifest_sha256"],
+            },
+        )
+        assert deleted.status_code == 200, deleted.text
+        assert get_managed_report(tmp_path, record.report_id) is None
+        assert not (tmp_path / record.artifact_path).exists()
 
 
 def test_completed_close_is_idempotent_and_blocks_all_mutations(tmp_path) -> None:

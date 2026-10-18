@@ -106,6 +106,7 @@ from app.storage.bayesian_studies import (
     list_bayesian_study_records,
     list_bayesian_trial_records,
 )
+from app.storage.managed_report_artifacts import ManagedReportStorageError
 
 BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
 BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[4]] = 4
@@ -932,7 +933,7 @@ def delete_bayesian_study(
             settings.workspace_root,
             expected=graph,
         )
-    except BayesianStorageConflict as exc:
+    except (BayesianStorageConflict, ManagedReportStorageError) as exc:
         if exc.code == "bayesian_study_deletion_active":
             raise ApiError(
                 code=exc.code,
@@ -1992,7 +1993,7 @@ def _build_bayesian_study_deletion_preflight(
             settings.workspace_root,
             bundle.study.study_id,
         )
-    except BayesianStorageConflict as exc:
+    except (BayesianStorageConflict, ManagedReportStorageError) as exc:
         raise _artifact_error() from exc
     lifecycle_event_id = (
         None if bundle.lifecycle_event is None else bundle.lifecycle_event.lifecycle_event_id
@@ -2046,9 +2047,11 @@ def _build_bayesian_study_deletion_preflight(
             + graph.recommendation_batch_count
             + graph.recommendation_batch_item_count
             + graph.lifecycle_event_count
+            + graph.report_count
         ),
-        file_count=0,
-        file_bytes=0,
+        report_count=graph.report_count,
+        file_count=graph.report_count,
+        file_bytes=graph.report_bytes,
     )
     blockers: list[
         Literal[
@@ -2080,6 +2083,7 @@ def _build_bayesian_study_deletion_preflight(
                 None if bundle.lifecycle_event is None else bundle.lifecycle_event.event_sha256
             ),
             "successor_study_ids": list(graph.successor_study_ids),
+            "reports_manifest_sha256": graph.reports_manifest_sha256,
             "counts": counts.model_dump(mode="json"),
         }
     )

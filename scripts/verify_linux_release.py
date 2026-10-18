@@ -185,7 +185,7 @@ def main() -> int:
         smoke = None
         for index in range(2):
             root = unpack(archive, temp / f"installation-{index}")
-            for dependency in ("react", "react-dom", "lucide-react"):
+            for dependency in ("react", "react-dom", "lucide-react", "noble_hashes"):
                 notices = list(
                     (root / "THIRD_PARTY_NOTICES/frontend").glob(f"{dependency}-*")
                 )

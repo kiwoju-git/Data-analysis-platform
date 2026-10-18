@@ -31,6 +31,8 @@ export function useGpPointPrediction(source: GpPredictionSource) {
   const currentSource = context.capture();
   const initialRows = [emptyRow("gp-row-1", source.predictorColumnIds)];
   const [rowState, setRowState] = useState({ source: currentSource, rows: initialRows });
+  const [saveState, setSaveState] = useState({ source: currentSource, value: false });
+  const saveResult = saveState.source === currentSource && saveState.value;
   const [completed, setCompleted] = useState<{ owner: Ownership; snapshot: GpCompletedPredictionSnapshot } | null>(null);
   const [failure, setFailure] = useState<{ owner: Ownership; cause: unknown } | null>(null);
   const [staleOwner, setStaleOwner] = useState<Ownership | null>(null);
@@ -68,7 +70,7 @@ export function useGpPointPrediction(source: GpPredictionSource) {
     const current = () => owns(owner) && guard.isCurrent(token);
     setCompleted(null); setFailure(null); setStaleOwner(null); setPending({ ...owner, request: token });
     try {
-      const captured = captureGpPredictionRequest(source, rows);
+      const captured = captureGpPredictionRequest(source, rows, saveResult);
       const response = await createGaussianProcessPointPredictions(captured.source.modelId, captured.request);
       if (!current()) return;
       const result = completeGpPredictionSnapshot(captured, response, new Date().toISOString());
@@ -81,7 +83,8 @@ export function useGpPointPrediction(source: GpPredictionSource) {
   }
 
   return {
-    rows, snapshot, error, isRunning, isStale, valid, run,
+    rows, snapshot, error, isRunning, isStale, valid, run, saveResult,
+    setSaveResult: (value: boolean) => setSaveState({ source: currentSource, value }),
     editCell: (rowId: string, columnId: string, value: string) => changeRows((current) => current.map((row) => row.id === rowId ? { ...row, values: { ...row.values, [columnId]: value } } : row)),
     addRow: () => { if (rows.length < GP_POINT_PREDICTION_ROW_LIMIT) changeRows((current) => [...current, emptyRow(`gp-row-${nextId.current++}`, source.predictorColumnIds)]); },
     removeRow: (rowId: string) => changeRows((current) => current.length === 1 ? [emptyRow(`gp-row-${nextId.current++}`, source.predictorColumnIds)] : current.filter((row) => row.id !== rowId)),

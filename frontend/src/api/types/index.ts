@@ -10,6 +10,7 @@ export type * from "./analysisResultsHypothesis";
 export type * from "./analysisRuns";
 export type * from "./analysisExports";
 export type * from "./reportCapabilities";
+export type * from "./reports";
 export type * from "./assets";
 export type * from "./doe";
 export type * from "./regression";

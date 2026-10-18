@@ -26,6 +26,7 @@ import { useReportCenterState } from "./useReportCenterState";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
 import { ReportCenterFeedback } from "./ReportCenterFeedback";
+import { ManagedReportsBrowser } from "./ManagedReportsBrowser";
 
 export function ReportCenterPage({
   catalog,
@@ -47,6 +48,8 @@ export function ReportCenterPage({
   onWorkspaceMutation?: (kind: "analysis_deleted" | "export_deleted") => void;
 }) {
   const [tab, setTab] = useState<"reports" | "history">(initialReportCenterTab);
+  const [sourceView, setSourceView] = useState<"analysis" | "managed">(initialReportSourceView);
+  const { t } = useI18n();
   const onChangeHistoryFilters = historyState?.onChangeAnalysisHistoryFilters;
 
   useEffect(() => {
@@ -60,7 +63,7 @@ export function ReportCenterPage({
   }, [onChangeHistoryFilters, tab]);
 
   useEffect(() => {
-    const syncTab = () => setTab(initialReportCenterTab());
+    const syncTab = () => { setTab(initialReportCenterTab()); setSourceView(initialReportSourceView()); };
     window.addEventListener("popstate", syncTab);
     window.addEventListener(appLocationChangeEvent, syncTab);
     return () => {
@@ -115,12 +118,23 @@ export function ReportCenterPage({
         />
       ) : null}
       {tab === "reports" ? (
-        <ReportBrowser
-          catalog={catalog}
-          currentDatasetVersionId={currentDatasetVersionId}
-          onWorkspaceMutation={onWorkspaceMutation}
-          workspaceAssetRevision={workspaceAssetRevision}
-        />
+        <>
+          <div className="segmented-control" role="group" aria-label={t("managedReports.view")}>
+            {(["analysis", "managed"] as const).map((view) => <button key={view} type="button" aria-pressed={sourceView === view} className={sourceView === view ? "segment-active" : ""} onClick={() => {
+              setSourceView(view);
+              const url = new URL(window.location.href);
+              if (view === "managed") url.searchParams.set("source_kind", "regression_prediction");
+              else { url.searchParams.delete("source_kind"); url.searchParams.delete("report_id"); }
+              pushAppLocation(`${url.pathname}${url.search}${url.hash}`);
+            }}>{t(view === "analysis" ? "managedReports.analysisView" : "managedReports.managedView")}</button>)}
+          </div>
+          {sourceView === "analysis" ? <ReportBrowser
+            catalog={catalog}
+            currentDatasetVersionId={currentDatasetVersionId}
+            onWorkspaceMutation={onWorkspaceMutation}
+            workspaceAssetRevision={workspaceAssetRevision}
+          /> : <ManagedReportsBrowser workspaceRevision={workspaceAssetRevision} />}
+        </>
       ) : null}
     </div>
   );
@@ -592,6 +606,10 @@ function ReportCapabilityMatrix({ catalog }: { catalog: AnalysisMethodListRespon
 
 function initialReportCenterTab(): "reports" | "history" {
   return queryValue("tab") === "history" ? "history" : "reports";
+}
+
+function initialReportSourceView(): "analysis" | "managed" {
+  return queryValue("source_kind") !== null || queryValue("report_id") !== null ? "managed" : "analysis";
 }
 
 function queryValue(name: string): string | null {

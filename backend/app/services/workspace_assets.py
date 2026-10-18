@@ -124,6 +124,10 @@ def update_workspace_asset_metadata(
 
 
 def _open_target(record: WorkspaceAssetCatalogRecord) -> WorkspaceAssetOpenTarget:
+    if record.asset_type == "managed_report":
+        return WorkspaceAssetOpenTarget(
+            path=f"/reports?report_id={record.asset_id}", label="Open stored report"
+        )
     if record.asset_type in {"doe_analysis", "doe_prediction", "doe_analysis_report"}:
         design_kind = (
             "general" if record.method_id == "doe.general_factorial_design" else "two_level"

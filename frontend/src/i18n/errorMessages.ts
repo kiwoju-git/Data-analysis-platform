@@ -13,6 +13,7 @@ const errorKeys: Readonly<Record<string, TranslationKey>> = {
   analysis_report_capability_required: "reportCapability.notReady",
   analysis_report_capability_failed: "reportCapability.unknown",
   analysis_report_capability_invalid: "reportCapability.unknown",
+  prediction_saved_result_invalid: "prediction.savedInvalid",
   analysis_report_source_changed: "reportCapability.sourceChanged",
   analysis_report_source_mismatch: "reportCapability.sourceChanged",
   ...regularizedErrorKeys,

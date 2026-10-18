@@ -363,15 +363,24 @@ def _validated_owned_files(
                 artifact_id=artifact.artifact_id,
             )
         )
+    if regression_model is not None and run.method_id == "regression.gaussian_process":
+        _validate_gp_numeric_relation(settings.workspace_root, run, artifacts, regression_model)
+    source_artifacts = [
+        artifact
+        for artifact in artifacts
+        if artifact.kind not in ANALYSIS_RESULT_EXPORT_DOWNLOAD_KINDS
+    ]
     if run.status == AnalysisRunState.SUCCEEDED.value:
         if run.method_id == REGRESSION_PREDICTION_METHOD_ID:
             validate_regression_prediction_consistency(
                 settings, UUID(run.analysis_id), verify_rows=True
             )
         elif run.method_id == REGRESSION_PASTED_PREDICTION_METHOD_ID:
-            _validate_pasted_prediction_artifact_relation(settings.workspace_root, run, artifacts)
+            _validate_pasted_prediction_artifact_relation(
+                settings.workspace_root, run, source_artifacts
+            )
         elif run.method_id == REGRESSION_LINEAR_MODEL_OPTIMIZER_METHOD_ID:
-            if artifacts:
+            if source_artifacts:
                 raise _artifact_error("analysis_run_artifact_metadata_invalid")
         else:
             _validate_row_snapshot_relation(run, artifacts)
@@ -421,6 +430,21 @@ def _expected_artifact_contract(
         ):
             raise _artifact_error("analysis_run_artifact_metadata_invalid")
         return expected, REGRESSION_MODEL_MEDIA_TYPE
+    if artifact.kind == "gaussian_process_model_numeric_state":
+        if (
+            regression_model is None
+            or regression_model.analysis_id != run.analysis_id
+            or regression_model.method_id != "regression.gaussian_process"
+            or run.method_id != "regression.gaussian_process"
+        ):
+            raise _artifact_error("analysis_run_artifact_metadata_invalid")
+        return (
+            Path("workspaces")
+            / "analyses"
+            / run.analysis_id
+            / f"model-{regression_model.model_id}.npz",
+            "application/x-npz",
+        )
     if artifact.kind in ANALYSIS_RESULT_EXPORT_DOWNLOAD_KINDS:
         try:
             export_id = str(UUID(artifact.artifact_id))
@@ -431,6 +455,36 @@ def _expected_artifact_contract(
         except (ValueError, ApiError) as exc:
             raise _artifact_error("analysis_run_artifact_metadata_invalid") from exc
     raise _artifact_error("analysis_run_artifact_kind_unsupported")
+
+
+def _validate_gp_numeric_relation(
+    root: Path,
+    run: AnalysisRunRecord,
+    artifacts: list[AnalysisArtifactRecord],
+    model: RegressionModelRecord,
+) -> None:
+    numeric = [item for item in artifacts if item.kind == "gaussian_process_model_numeric_state"]
+    manifests = [item for item in artifacts if item.kind == REGRESSION_MODEL_ARTIFACT_KIND]
+    if len(numeric) != 1 or len(manifests) != 1:
+        raise _artifact_error("analysis_run_artifact_metadata_invalid")
+    try:
+        path = root / manifests[0].path
+        if not 0 < path.stat().st_size <= 16 * 1024 * 1024:
+            raise ValueError("invalid manifest size")
+        manifest = json.loads(path.read_bytes())
+        state = manifest["prediction_state"]["numeric_artifact"]
+        if (
+            manifest["model_id"] != model.model_id
+            or manifest["analysis_id"] != run.analysis_id
+            or manifest["manifest_kind"] != "gaussian_process_model_manifest"
+            or any(
+                state[key] != getattr(numeric[0], key)
+                for key in ("kind", "path", "sha256", "media_type")
+            )
+        ):
+            raise ValueError("invalid numeric artifact relation")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise _artifact_error("analysis_run_artifact_metadata_invalid") from exc
 
 
 def _validate_pasted_prediction_artifact_relation(

@@ -1,6 +1,6 @@
 import type { AnalysisMethodDescriptor } from "./api";
 import { getCurrentLocale } from "./i18n/store";
-import { translateSystemText } from "./i18n/translate";
+import { t, translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
 
 export function availabilityLabel(method: AnalysisMethodDescriptor, locale?: AppLocale): string {
@@ -58,6 +58,9 @@ export function comparisonNumberCell(value: number | null): string {
 }
 
 export function exportKindLabel(kind: string): string {
+  if (kind === "managed_source_html_report") return t("managedReports.kindManagedHtml");
+  if (kind === "gp_completed_prediction") return t("managedReports.kindGpPrediction");
+  if (kind === "pls_completed_prediction") return t("managedReports.kindPlsPrediction");
   if (kind === "analysis_result_json_export") {
     return "JSON";
   }

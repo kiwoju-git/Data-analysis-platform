@@ -97,7 +97,7 @@ def create_pls_point_predictions(
     response = manifest.get("response")
     if not isinstance(response, dict) or not isinstance(response.get("column_id"), str):
         raise _error("pls_model_manifest_invalid", status.HTTP_409_CONFLICT)
-    return PlsPointPredictionResponse(
+    completed = PlsPointPredictionResponse(
         model_id=model_id,
         model_manifest_sha256=model.manifest_sha256,
         response_column_id=response["column_id"],
@@ -105,6 +105,23 @@ def create_pls_point_predictions(
         intervals_supported=False,
         rows=output,
     )
+    if body.save_result:
+        from app.services.completed_predictions import save_completed_prediction
+
+        if source_run.result_sha256 is None:
+            raise _error("pls_prediction_model_stale", status.HTTP_409_CONFLICT)
+        completed.saved_prediction = save_completed_prediction(
+            settings,
+            family="pls",
+            source_analysis_id=model.analysis_id,
+            source_result_sha256=source_run.result_sha256,
+            model_id=model_id,
+            model_manifest_sha256=model.manifest_sha256,
+            manifest=manifest,
+            request=body,
+            response=completed,
+        )
+    return completed
 
 
 def _predictors(manifest: dict[str, Any]) -> list[dict[str, Any]]:

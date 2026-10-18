@@ -48,6 +48,72 @@ class FrontendResultTypeFileContract:
 # OperationContract here in the same change so backend pytest catches route drift.
 FRONTEND_ROUTE_CONTRACTS = [
     OperationContract(
+        route_name="storedSourceSnapshot",
+        method="post",
+        path="/api/v1/reports/source-snapshot",
+        success_status="200",
+        response_schema="StoredSourceSnapshot",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="reportSources",
+        method="get",
+        path="/api/v1/reports/sources",
+        success_status="200",
+        response_schema="ReportSourceList",
+        parameters=frozenset({("source_kind", "query"), ("limit", "query"), ("offset", "query")}),
+    ),
+    OperationContract(
+        route_name="storedReportCapability",
+        method="post",
+        path="/api/v1/reports/capability",
+        success_status="200",
+        response_schema="StoredReportCapability",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="managedReports",
+        method="post",
+        path="/api/v1/reports",
+        success_status="201",
+        response_schema="ManagedReportDescriptor",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="managedReportQuery",
+        method="post",
+        path="/api/v1/reports/artifacts/query",
+        success_status="200",
+        response_schema="ManagedReportList",
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="managedReport",
+        method="get",
+        path="/api/v1/reports/{export_id}",
+        success_status="200",
+        response_schema="ManagedReportDescriptor",
+        parameters=frozenset({("export_id", "path")}),
+    ),
+    OperationContract(
+        route_name="managedReport",
+        method="delete",
+        path="/api/v1/reports/{export_id}",
+        success_status="200",
+        response_schema=None,
+        parameters=frozenset({("export_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="managedReportDownload",
+        method="post",
+        path="/api/v1/reports/{export_id}/download",
+        success_status="200",
+        response_schema=None,
+        parameters=frozenset({("export_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="twoVariancesPreflight",
         method="post",
         path="/api/v1/analysis-methods/quality.two_variances/preflight",
@@ -1591,6 +1657,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "recommendation_count",
                 "lifecycle_event_count",
                 "metadata_record_count",
+                "report_count",
                 "file_count",
                 "file_bytes",
             }
@@ -1609,7 +1676,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "file_bytes",
             }
         ),
-        property_consts=(("study_count", 1), ("file_count", 0), ("file_bytes", 0)),
+        property_consts=(("study_count", 1),),
     ),
     SchemaComponentContract(
         name="BayesianStudyDeletionPreflightResponse",
@@ -4070,3 +4137,15 @@ def test_frontend_result_summary_literals_match_backend_handler_specs() -> None:
     } | set(NON_ANALYSIS_RUN_RESULT_SUMMARY_TYPES)
 
     assert frontend_summary_types == backend_summary_types
+
+
+@pytest.mark.parametrize("field", ["report_count", "file_count", "file_bytes"])
+def test_bayesian_report_retention_counts_are_nonnegative_not_fixed_zero(
+    openapi_schema: dict[str, Any], field: str
+) -> None:
+    value = openapi_schema["components"]["schemas"]["BayesianStudyDeletionCounts"]["properties"][
+        field
+    ]
+    assert value["type"] == "integer"
+    assert value["minimum"] == 0
+    assert "const" not in value

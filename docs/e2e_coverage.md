@@ -1,5 +1,19 @@
 # Browser E2E Coverage
 
+## Managed Stored Reports
+
+`tests/e2e/managed_reports.py` exercises the real React component with explicit
+synthetic HTTP mocks: six source kinds, exact-source snapshot, independent query
+lanes, A-B-A action cancellation, locale/source races, report deep links, hash-bound
+downloads/deletion, and KO/EN at 1440/1280/1024/390. It does not prove persistence.
+
+The actual critical path's PLS stage additionally opts into server-completed
+prediction storage. `managed_reports_live.py` checks the exact request/result
+snapshot, KO/EN HTML creation/download SHA, offline standalone HTML and restored
+report ID against a real synthetic server. It also runs through the existing
+`--gpr-report-only` narrowed path. Execution status is recorded in the remediation
+ledger; the existence of this helper is not itself a passing browser result.
+
 ## Report Center Request Context
 
 `scripts/e2e.ps1 -ReportCenterContextOnly` runs stage

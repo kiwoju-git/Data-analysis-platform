@@ -26,7 +26,7 @@ from typing import Any
 from urllib.parse import quote
 from uuid import uuid4
 
-from app.storage.metadata import MIGRATIONS, SCHEMA_VERSION
+from app.storage.metadata import MIGRATIONS
 from app.storage.workspace_archive import (
     CHUNK_SIZE,
     DEFAULT_LIMITS,
@@ -66,22 +66,11 @@ _EXPORT_KINDS = {
     "analysis_result_csv_export": "analysis-result.csv",
     "analysis_result_html_report": "analysis-result.html",
     "regression_prediction_csv_export": "regression-prediction.csv",
+    "gp_completed_prediction": "completed-prediction.json",
+    "pls_completed_prediction": "completed-prediction.json",
+    "managed_source_html_report": "managed-report.html",
 }
-_TABLES = frozenset(
-    "schema_migrations datasets dataset_versions dataset_columns analysis_runs "
-    "analysis_artifacts jobs dataset_artifacts regression_models experiment_designs "
-    "experiment_design_versions experiment_runs experiment_run_responses "
-    "experiment_design_analyses experiment_response_revisions "
-    "experiment_response_revision_values experiment_response_heads "
-    "experiment_design_analysis_response_revisions bayesian_studies "
-    "bayesian_study_versions bayesian_trials bayesian_observation_history_revisions "
-    "bayesian_observation_history_heads bayesian_recommendations "
-    "attribute_control_limit_sets bayesian_study_lifecycle_events "
-    "dataset_version_user_metadata regression_model_user_metadata "
-    "dataset_version_lineage bayesian_recommendation_batches "
-    "bayesian_recommendation_batch_items workspace_asset_user_metadata "
-    "experiment_design_analysis_assets".split()
-)
+SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21})
 
 
 def _check_limits(limits: BackupLimits) -> None:
@@ -169,23 +158,24 @@ def _schema_definition(connection: sqlite3.Connection) -> tuple[tuple[str, ...],
     )
 
 
-@lru_cache(maxsize=1)
-def _known_schema_definition() -> tuple[tuple[str, ...], ...]:
+@lru_cache(maxsize=2)
+def _known_schema_definition(version: int) -> tuple[tuple[str, ...], ...]:
     # Compile only application-owned DDL in RAM. Never migrate the source/restore DB.
     with closing(sqlite3.connect(":memory:")) as reference:
         for migration in MIGRATIONS:
-            reference.executescript(migration.sql)
+            if migration.version <= version:
+                reference.executescript(migration.sql)
         return _schema_definition(reference)
 
 
 def _validate_database(connection: sqlite3.Connection, limits: BackupLimits) -> dict[str, int]:
     version = connection.execute("PRAGMA user_version").fetchone()[0]
-    if version != SCHEMA_VERSION:
+    if version not in SUPPORTED_BACKUP_METADATA_VERSIONS:
         raise WorkspaceBackupError("workspace_backup_unsupported_schema")
     schema_filter = "name NOT GLOB 'sqlite_*'"
     if connection.execute(f"SELECT COUNT(*) FROM sqlite_master WHERE {schema_filter}").fetchone()[
         0
-    ] != len(_known_schema_definition()):
+    ] != len(_known_schema_definition(version)):
         raise WorkspaceBackupError("workspace_backup_unsupported_inventory")
     if connection.execute(
         f"SELECT 1 FROM sqlite_master WHERE {schema_filter} AND "
@@ -199,17 +189,18 @@ def _validate_database(connection: sqlite3.Connection, limits: BackupLimits) -> 
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'"
         )
     }
-    if tables != _TABLES:
+    expected_tables = {item[1] for item in _known_schema_definition(version) if item[0] == "table"}
+    if tables != expected_tables:
         raise WorkspaceBackupError("workspace_backup_unsupported_inventory")
-    if _schema_definition(connection) != _known_schema_definition():
+    if _schema_definition(connection) != _known_schema_definition(version):
         raise WorkspaceBackupError("workspace_backup_unsupported_inventory")
-    if connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] != SCHEMA_VERSION:
+    if connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0] != version:
         raise WorkspaceBackupError("workspace_backup_unsupported_schema")
     migrations = [
         row[0]
         for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version")
     ]
-    if migrations != list(range(1, SCHEMA_VERSION + 1)):
+    if migrations != list(range(1, version + 1)):
         raise WorkspaceBackupError("workspace_backup_unsupported_schema")
     if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
         raise WorkspaceBackupError("workspace_backup_database_invalid")
@@ -234,6 +225,8 @@ def _validate_database(connection: sqlite3.Connection, limits: BackupLimits) -> 
 
 
 def _validate_database_assets(connection: sqlite3.Connection, limits: BackupLimits) -> None:
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 21:
+        _validate_managed_reports(connection, limits)
     if connection.execute(
         "SELECT 1 FROM experiment_design_analysis_assets " "WHERE length(content) > ? LIMIT 1",
         (min(limits.max_file_bytes, 16777216),),
@@ -274,6 +267,34 @@ def _validate_database_assets(connection: sqlite3.Connection, limits: BackupLimi
                 hashlib.sha256(row[0].encode("utf-8")).hexdigest(), row[1]
             ):
                 raise WorkspaceBackupError("workspace_backup_asset_corrupt")
+
+
+def _validate_managed_reports(connection: sqlite3.Connection, limits: BackupLimits) -> None:
+    from app.storage.managed_report_artifacts import (
+        MANAGED_REPORT_COLUMNS,
+        ManagedReportArtifact,
+        ManagedReportStorageError,
+        validate_managed_report_record,
+    )
+
+    if connection.execute(
+        "SELECT 1 FROM managed_report_artifacts WHERE size_bytes>? "
+        "OR length(CAST(source_ref_json AS BLOB))>? "
+        "OR length(CAST(section_manifest_json AS BLOB))>? LIMIT 1",
+        (
+            limits.max_file_bytes,
+            min(limits.max_manifest_bytes, 65536),
+            min(limits.max_manifest_bytes, 65536),
+        ),
+    ).fetchone():
+        raise WorkspaceBackupError("workspace_backup_limit_exceeded")
+    try:
+        for row in connection.execute(
+            f"SELECT {','.join(MANAGED_REPORT_COLUMNS)} FROM managed_report_artifacts"
+        ):
+            validate_managed_report_record(connection, ManagedReportArtifact(*row))
+    except ManagedReportStorageError as exc:
+        raise WorkspaceBackupError("workspace_backup_asset_corrupt") from exc
 
 
 def _inventory(
@@ -441,6 +462,17 @@ def _inventory(
             None,
             f"attribute_control_limit_sets:{row[0]}",
         )
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 21:
+        for row in connection.execute(
+            "SELECT report_id,artifact_path,sha256,size_bytes FROM managed_report_artifacts"
+        ):
+            add(
+                row[1],
+                f"workspaces/reports/{row[0]}/report.html",
+                row[2],
+                row[3],
+                f"managed_report_artifacts:{row[0]}",
+            )
     for item in files.values():
         item["owners"].sort()
     return files, legacy_paths
@@ -572,6 +604,7 @@ def backup_workspace(
                         )
                 with closing(_read_only(copied_db, start, limits)) as connection:
                     row_counts = _validate_database(connection, limits)
+                    metadata_version = connection.execute("PRAGMA user_version").fetchone()[0]
                     files, legacy_paths = _inventory(connection, limits)
                 _scan_managed(root, {*files, _DATABASE}, limits, start)
                 db_size, db_sha = stream_file(
@@ -616,7 +649,7 @@ def backup_workspace(
                     _validate_model_references(root, files, limits)
                     manifest = {
                         "schema_version": 1,
-                        "metadata_schema_version": SCHEMA_VERSION,
+                        "metadata_schema_version": metadata_version,
                         "legacy_windows_paths": legacy_paths,
                         "scope": "registered_workspace_assets",
                         "database": {"path": _DATABASE, "row_counts": row_counts},
@@ -702,7 +735,7 @@ def _verify_to_stage(
             or type(manifest.get("schema_version")) is not int
             or manifest.get("schema_version") != 1
             or type(manifest.get("metadata_schema_version")) is not int
-            or manifest.get("metadata_schema_version") != SCHEMA_VERSION
+            or manifest.get("metadata_schema_version") not in SUPPORTED_BACKUP_METADATA_VERSIONS
             or manifest.get("scope") != "registered_workspace_assets"
             or type(manifest.get("legacy_windows_paths")) is not bool
         ):
@@ -728,6 +761,7 @@ def _verify_to_stage(
                 (
                     "workspaces/datasets/",
                     "workspaces/analyses/",
+                    "workspaces/reports/",
                     "artifacts/attribute-control-limit-sets/",
                 )
             ):
@@ -759,9 +793,11 @@ def _verify_to_stage(
                 raise WorkspaceBackupError("workspace_backup_asset_corrupt")
     with closing(_read_only(stage / _DATABASE, start, limits)) as connection:
         row_counts = _validate_database(connection, limits)
+        metadata_version = connection.execute("PRAGMA user_version").fetchone()[0]
         expected, legacy = _inventory(connection, limits)
     if (
-        legacy != manifest["legacy_windows_paths"]
+        metadata_version != manifest["metadata_schema_version"]
+        or legacy != manifest["legacy_windows_paths"]
         or manifest.get("database") != {"path": _DATABASE, "row_counts": row_counts}
         or set(files) != {*expected, _DATABASE}
     ):

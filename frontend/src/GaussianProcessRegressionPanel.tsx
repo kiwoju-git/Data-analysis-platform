@@ -17,6 +17,7 @@ import { GpKernelSelectionSettings, gpOptimizerStarts, gpKernelName } from "./Gp
 import { MAX_GP_OPTIMIZER_STARTS } from "./gpCapabilities";
 import { GpScatter, GpResidualChart, GpUncertaintyChart, GpProfileChart, GpSurfaceChart } from "./charts/GaussianProcessCharts";
 import { useGpPointPrediction } from "./useGpPointPrediction";
+import { PredictionSaveControl } from "./PredictionSaveControl";
 import { GP_POINT_PREDICTION_ROW_LIMIT } from "./gpPredictionSnapshot";
 
 export interface GaussianProcessRunConfig {
@@ -633,6 +634,7 @@ function GaussianProcessPrediction({ result, analysisId }: { result: GaussianPro
           <td><button aria-label={`${t("gp.deleteRow")} ${index + 1}`} onClick={() => state.removeRow(row.id)} type="button">{t("gp.deleteRow")}</button></td></tr>;
       })}</tbody>
     </table></div>
+    <PredictionSaveControl checked={state.saveResult} disabled={state.isRunning} onChange={state.setSaveResult} saved={state.snapshot?.response.saved_prediction} />
     <div className="button-row"><button className="secondary-button" disabled={state.rows.length >= GP_POINT_PREDICTION_ROW_LIMIT} onClick={state.addRow} type="button">{t("gp.addRow")}</button><button className="primary-button" disabled={!state.valid || state.isRunning || manifest === undefined} onClick={() => void state.run()} type="button">{state.isRunning ? t("gp.predicting") : t("gp.runPrediction")}</button></div>
     {state.snapshot !== null ? <div className="button-row"><button type="button" data-action="download-prediction-snapshot" onClick={() => {
       const snapshot = state.snapshot;

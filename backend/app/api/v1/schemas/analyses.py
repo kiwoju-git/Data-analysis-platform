@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.api.v1.schemas.report_capabilities import MethodReportContract
+from app.api.v1.schemas.reports import SavedPredictionDescriptor
 
 
 class AnalysisModuleId(str, Enum):
@@ -1795,6 +1796,9 @@ class AnalysisResultExportDeletionPreflightResponse(BaseModel):
         "analysis_result_csv_export",
         "analysis_result_html_report",
         "regression_prediction_csv_export",
+        "managed_source_html_report",
+        "gp_completed_prediction",
+        "pls_completed_prediction",
     ]
     media_type: str
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -2008,6 +2012,7 @@ class PlsPointPredictionRequest(BaseModel):
 
     expected_model_manifest_sha256: str = Field(min_length=64, max_length=64)
     rows: list[PlsPointPredictionInputRow] = Field(min_length=1, max_length=10_000)
+    save_result: bool = False
 
 
 class PlsPointPredictionRow(BaseModel):
@@ -2027,6 +2032,7 @@ class PlsPointPredictionResponse(BaseModel):
     row_count: int = Field(ge=1)
     intervals_supported: Literal[False] = False
     rows: list[PlsPointPredictionRow]
+    saved_prediction: SavedPredictionDescriptor | None = None
 
 
 class GaussianProcessPointPredictionInputRow(BaseModel):
@@ -2041,6 +2047,7 @@ class GaussianProcessPointPredictionRequest(BaseModel):
 
     expected_model_manifest_sha256: str = Field(min_length=64, max_length=64)
     rows: list[GaussianProcessPointPredictionInputRow] = Field(min_length=1, max_length=2000)
+    save_result: bool = False
 
 
 class GaussianProcessPredictionInterval(BaseModel):
@@ -2072,6 +2079,7 @@ class GaussianProcessPointPredictionResponse(BaseModel):
     interval_kind: Literal["latent_and_new_observation"] = "latent_and_new_observation"
     confidence_level: float = Field(default=0.95, ge=0.95, le=0.95)
     rows: list[GaussianProcessPointPredictionRow]
+    saved_prediction: SavedPredictionDescriptor | None = None
 
 
 class RegressionResponseOptimizationGoal(BaseModel):

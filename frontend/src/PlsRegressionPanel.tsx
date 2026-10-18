@@ -12,6 +12,7 @@ import { triggerBrowserDownload } from "./api/client";
 import { createLatestRequestGuard } from "./latestRequest";
 import { createSourceContextGuard, type SourceContextToken } from "./sourceContextGuard";
 import { plsPredictionSnapshot } from "./plsPredictionSnapshot";
+import { PredictionSaveControl } from "./PredictionSaveControl";
 import { CompactSettingsTable } from "./components/CompactSettingsTable";
 import { NumericColumnPicker } from "./components/NumericColumnPicker";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
@@ -449,6 +450,8 @@ function PlsPointPrediction({ result, analysisId }: { result: PlsRegressionResul
   const currentSource = context.capture();
   type Ownership = { source: SourceContextToken<string>; draft: number };
   const [rowState, setRowState] = useState({ source: currentSource, rows: [emptyPredictionRow("pls-row-1", result)] });
+  const [saveState, setSaveState] = useState({ source: currentSource, value: false });
+  const saveResult = saveState.source === currentSource && saveState.value;
   const [completed, setCompleted] = useState<{ owner: Ownership; snapshot: ReturnType<typeof plsPredictionSnapshot> } | null>(null);
   const [failure, setFailure] = useState<{ owner: Ownership; cause: unknown } | null>(null);
   const [pending, setPending] = useState<(Ownership & { request: symbol }) | null>(null);
@@ -483,7 +486,7 @@ function PlsPointPrediction({ result, analysisId }: { result: PlsRegressionResul
     const current = () => owns(owner) && guard.isCurrent(token);
     setCompleted(null); setFailure(null); setStaleOwner(null); setPending({ ...owner, request: token });
     try {
-      const request = { expected_model_manifest_sha256: manifest.manifest_sha256, rows: rows.map((row) => ({ client_row_id: row.id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, Number(row.values[predictor.column_id])])) })) };
+      const request = { expected_model_manifest_sha256: manifest.manifest_sha256, save_result: saveResult, rows: rows.map((row) => ({ client_row_id: row.id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, Number(row.values[predictor.column_id])])) })) };
       const response = await createPlsPointPredictions(manifest.model_id, request);
       if (!current()) return;
       const accepted = plsPredictionSnapshot(analysisId, request, response, new Date().toISOString(), { modelId: manifest.model_id, responseColumnId: result.response.column_id });
@@ -516,6 +519,7 @@ function PlsPointPrediction({ result, analysisId }: { result: PlsRegressionResul
           <td><button aria-label={`${t("pls.deleteRow")} ${index + 1}`} onClick={() => changeRows((current) => current.length === 1 ? [emptyPredictionRow(`pls-row-${nextId.current++}`, result)] : current.filter((item) => item.id !== row.id))} type="button">{t("pls.deleteRow")}</button></td></tr>;
       })}</tbody>
     </table></div>
+    <PredictionSaveControl checked={saveResult} disabled={isRunning} onChange={(value) => setSaveState({ source: currentSource, value })} saved={snapshot?.response.saved_prediction} />
     <div className="button-row"><button className="secondary-button" onClick={() => changeRows((current) => [...current, emptyPredictionRow(`pls-row-${nextId.current++}`, result)])} type="button">{t("pls.addRow")}</button><button className="primary-button" disabled={!valid || isRunning || manifest === undefined} onClick={() => void run()} type="button">{isRunning ? t("pls.predicting") : t("pls.runPrediction")}</button></div>
     {exportControl}
   </section>;

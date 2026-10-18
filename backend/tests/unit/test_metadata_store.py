@@ -91,6 +91,7 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (18, "create_bayesian_recommendation_batches"),
         (19, "create_workspace_asset_user_metadata"),
         (20, "create_factorial_analysis_owned_assets"),
+        (21, "create_managed_report_artifacts"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -166,6 +167,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (18, "create_bayesian_recommendation_batches"),
         (19, "create_workspace_asset_user_metadata"),
         (20, "create_factorial_analysis_owned_assets"),
+        (21, "create_managed_report_artifacts"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -253,6 +255,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (18, "create_bayesian_recommendation_batches"),
         (19, "create_workspace_asset_user_metadata"),
         (20, "create_factorial_analysis_owned_assets"),
+        (21, "create_managed_report_artifacts"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -372,6 +375,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (18, "create_bayesian_recommendation_batches"),
         (19, "create_workspace_asset_user_metadata"),
         (20, "create_factorial_analysis_owned_assets"),
+        (21, "create_managed_report_artifacts"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -545,6 +549,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (18, "create_bayesian_recommendation_batches"),
         (19, "create_workspace_asset_user_metadata"),
         (20, "create_factorial_analysis_owned_assets"),
+        (21, "create_managed_report_artifacts"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -605,6 +610,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (18, "create_bayesian_recommendation_batches"),
         (19, "create_workspace_asset_user_metadata"),
         (20, "create_factorial_analysis_owned_assets"),
+        (21, "create_managed_report_artifacts"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -673,6 +679,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (18, "create_bayesian_recommendation_batches"),
         (19, "create_workspace_asset_user_metadata"),
         (20, "create_factorial_analysis_owned_assets"),
+        (21, "create_managed_report_artifacts"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -737,6 +744,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (18, "create_bayesian_recommendation_batches"),
         (19, "create_workspace_asset_user_metadata"),
         (20, "create_factorial_analysis_owned_assets"),
+        (21, "create_managed_report_artifacts"),
     ]
     assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION
@@ -971,7 +979,7 @@ def test_initialize_metadata_store_upgrades_v17_with_batch_tables(
             ).fetchall()
         }
 
-    assert user_version == 20
+    assert user_version == SCHEMA_VERSION
     assert batch_table == ("bayesian_recommendation_batches",)
     assert item_table == ("bayesian_recommendation_batch_items",)
     assert "latest_recommendation_batch_id" in lifecycle_columns
@@ -1176,7 +1184,7 @@ def test_initialize_metadata_store_upgrades_v16_with_empty_dataset_lineage(
 
     assert table == ("dataset_version_lineage",)
     assert count == 0
-    assert user_version == 20
+    assert user_version == SCHEMA_VERSION
 
 
 def test_attribute_control_limit_set_metadata_round_trip_and_filters(tmp_path) -> None:

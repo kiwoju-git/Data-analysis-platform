@@ -87,6 +87,79 @@ Evidence: `asyncHookState.test.ts` deferred-response regressions,
 fixture mocks HTTP with synthetic records and is not a backend/export-integrity test;
 the existing full critical path still exercises real saved report/export APIs.
 
+## A12 Managed Stored Sources
+
+The existing generic analysis browser and its `analysis_id` deep links remain
+unchanged. A second, explicit "Stored sources" view uses a typed six-kind source
+union: `analysis_run`, `regression_prediction`, `doe_analysis`,
+`doe_optimizer_result`, `lhs_design_revision`, and `bayesian_history_revision`.
+Dedicated workflow IDs are never passed off as generic analysis IDs. The client
+uses the complete returned immutable source reference and `source_ref_sha256`;
+`open_target` is only a validated same-origin navigation link, never an identity
+parser. History/recommendation attachments and response revisions retain their
+own IDs and checksums.
+
+- `GET /reports/sources` is paged and requires one source kind; the dedicated
+  view defaults to `regression_prediction`. List kind/page changes preserve the
+  exact selected source, capability, artifacts and action state.
+- Capability, artifact listing, source selection and create/download/delete
+  requests have independent guarded lanes. Source, locale, workspace revision
+  and unmount invalidate obsolete callbacks. A completed obsolete export stays
+  server-owned and discoverable but cannot replace a newer selection or trigger
+  its browser download. A failed creation never automatically retries the POST.
+- "View exact saved source" explicitly requests `POST /reports/source-snapshot`
+  with that complete reference and locale. Its independently guarded lane checks
+  source/hash/locale, rejects obsolete responses and never auto-loads on selection
+  or filters. The returned original stored payload is escaped read-only JSON in
+  an internally scrollable region, clearly not a complete HTML report. Filters
+  retain it; source/locale/workspace changes invalidate it. The separate "Open
+  workflow" link does not claim every workflow can restore an old exact revision.
+- `POST /reports/capability` is authoritative for full/summary/unsupported
+  coverage, section reasons, stale state and exact source reference. Unknown
+  capability disables HTML without falsely promising a dedicated JSON endpoint.
+  Creation binds `expected_source_ref_sha256`; returned descriptor identity and
+  locale must match the request. The browser verifies HTML byte count and SHA-256
+  before triggering a download, with the existing UTF-8 filename sanitizer.
+- `/reports?report_id=<UUID>` restores the returned report descriptor and exact
+  source. Invalid/duplicate IDs or source-kind parameters cause an explicit
+  error without HTTP. A valid but deleted report yields a recoverable error and
+  keeps the source catalog available. No raw source payload/hash enters the URL.
+- Deleting a report is explicitly confirmed and sends its source plus artifact
+  checksum. This removes the generated report, not its source result or model.
+  The asset type is `managed_report`; normal owning-source retention rules still
+  govern cascades. Existing generic export listings may also contain managed
+  HTML and completed-prediction JSON, labelled distinctly.
+
+### Completed PLS and GP Predictions
+
+The point prediction form has a "Save completed prediction" checkbox **before**
+execution, initially unchecked. `save_result` is captured with the submitted
+rows, model ID and manifest checksum. Locale/draft edits do not submit a request;
+changing the source resets this opt-in. The selected value is disabled while its
+request owns the pending state. Only a matching successful response can expose
+the optional server `saved_prediction` descriptor. Missing or mismatched saved
+identity is an error, not a claimed save success.
+
+This is separate from the existing local JSON snapshot download. The snapshot
+retains the exact request/response and optional saved descriptor without fitting
+or predicting again. A checkbox change after completion does not save the old
+result. Completed prediction JSON is not described as an HTML report. Surface
+preview requests remain unsaved unless their existing caller explicitly requests
+otherwise; this change adds no automatic background prediction persistence.
+
+The installed ui-ux-pro-max guidance for explicit confirmation and success
+feedback was used within the existing dense workbench: compact source filters,
+one stable detail section, progressive provenance/section disclosure, adjacent
+retry controls and report-only deletion confirmation. No new visual framework,
+chart library, remote font or dependency was introduced.
+
+Validation is deliberately split: deferred hook and snapshot tests verify
+ownership, source validation and opt-in capture; `tests/e2e/managed_reports.py`
+uses real React/Chromium with **synthetic mocked HTTP** for six kinds, held
+responses, deep links, downloads and EN/KO viewport checks. It does not establish
+backend persistence/rendering correctness. Backend storage/export and live-app
+integration tests must validate those separately.
+
 ## Original P0 Scope
 
 `/reports` is the central discovery and export surface for persisted analysis results. It reuses
@@ -141,7 +214,11 @@ The loopback CORS policy exposes only `Content-Disposition` and `ETag` to the lo
 download names can retain their generated extension and checksum metadata remains readable. The
 generated filename is ID-derived and contains no original filename or workspace path.
 
-## Dedicated workflow capability matrix
+## Original P0 Dedicated Workflow Matrix
+
+This table records the earlier P0 boundary. A12's managed-source API above
+supersedes it for new managed exports; current support and coverage come from the
+exact stored source's backend capability, not this historical table.
 
 | Workflow | Stored result | CSV | HTML |
 | --- | --- | --- | --- |
@@ -163,17 +240,21 @@ the UI must not label one as another.
 - Filters, list rows, paging, creation, download, and deletion have visible loading/error states.
 - Format and stale state are communicated in text, not color alone.
 - Latest-request guards prevent older list/result responses from replacing the current selection.
+- Re-selecting the same exact managed source/hash preserves its pending detail requests,
+  completed snapshot, and action state; it does not cancel them without restarting a lane.
 - Empty lists and unavailable stored results are explicit, not successful empty reports.
 
 ## Security and privacy
 
-- List responses contain metadata only; the page never renders the selected raw result body.
+- List responses contain metadata only. A12's explicit exact-source inspection can
+  render the verified stored payload as escaped, read-only JSON; it never reads raw
+  dataset files and is not represented as an HTML analysis report.
 - Client errors show stable codes, never traceback, SQL, raw cells, filenames, or absolute paths.
 - Existing backend HTML escaping and CSP remain mandatory.
 - The page stores no raw data in browser storage and performs no external request.
 
 ## Follow-up boundary
 
-Predict, Response Optimizer, RSM, and Bayesian HTML reports require separate typed contracts,
+The original dedicated HTML follow-up now uses A12's separate typed contracts,
 redaction tests, restore/tamper tests, and E2E coverage. PDF/Word engines, multi-analysis report
 editing, chart-image export, and arbitrary report HTML are outside P0.

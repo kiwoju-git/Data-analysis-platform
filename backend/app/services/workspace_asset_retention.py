@@ -51,6 +51,7 @@ from app.services.regression_models import (
     get_regression_model_manifest,
     validate_regression_prediction_consistency,
 )
+from app.storage.managed_report_artifacts import recover_managed_report_files
 from app.storage.metadata import (
     AnalysisArtifactRecord,
     AnalysisRunRecord,
@@ -69,6 +70,7 @@ from app.storage.metadata import (
     list_analysis_run_records,
     list_regression_prediction_records_by_source,
 )
+from app.storage.source_bound_artifacts import recover_source_bound_artifact_files
 
 REGRESSION_MODEL_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[3] = 3
 REGRESSION_MODEL_DELETION_SCHEMA_VERSION: Literal[3] = 3
@@ -444,7 +446,15 @@ def recover_workspace_asset_quarantine_files(
             deleted += 1
         else:
             pending += 1
-    return WorkspaceAssetQuarantineRecovery(restored, deleted, pending)
+    report_restored, report_deleted, report_pending = recover_managed_report_files(workspace_root)
+    source_preserved, source_deleted, source_pending = recover_source_bound_artifact_files(
+        workspace_root
+    )
+    return WorkspaceAssetQuarantineRecovery(
+        restored + report_restored + source_preserved,
+        deleted + report_deleted + source_deleted,
+        pending + report_pending + source_pending,
+    )
 
 
 def _regression_model_context(

@@ -80,6 +80,12 @@ from app.storage.metadata import (
     insert_analysis_artifact_record,
     list_analysis_artifact_records,
 )
+from app.storage.source_bound_artifacts import (
+    SOURCE_BOUND_ARTIFACT_KINDS,
+    SourceBoundArtifactError,
+    read_source_bound_artifact,
+)
+from app.storage.workspace_archive import WorkspaceBackupError, checked_path
 
 ANALYSIS_RESULT_JSON_EXPORT_SCHEMA_VERSION = 1
 ANALYSIS_RESULT_JSON_EXPORT_KIND: Literal["analysis_result_json_export"] = (
@@ -165,6 +171,9 @@ ANALYSIS_RESULT_EXPORT_DOWNLOAD_KINDS = {
     ANALYSIS_RESULT_CSV_EXPORT_KIND,
     ANALYSIS_RESULT_HTML_REPORT_KIND,
     REGRESSION_PREDICTION_CSV_EXPORT_KIND,
+    "managed_source_html_report",
+    "gp_completed_prediction",
+    "pls_completed_prediction",
 }
 ANALYSIS_RESULT_EXPORT_DELETION_PREFLIGHT_SCHEMA_VERSION: Literal[1] = 1
 ANALYSIS_RESULT_EXPORT_DELETION_SCHEMA_VERSION: Literal[1] = 1
@@ -173,6 +182,9 @@ AnalysisResultExportKind = Literal[
     "analysis_result_csv_export",
     "analysis_result_html_report",
     "regression_prediction_csv_export",
+    "managed_source_html_report",
+    "gp_completed_prediction",
+    "pls_completed_prediction",
 ]
 _ANALYSIS_EXPORT_QUARANTINE_PATTERN = re.compile(
     r"^\.delete-([0-9a-fA-F-]{36})-([0-9a-f]{32})\.quarantine$"
@@ -736,12 +748,6 @@ def get_analysis_result_export_download(
     export_id: UUID,
 ) -> AnalysisResultExportDownload:
     record = get_analysis_run_record(settings.workspace_root, str(analysis_id))
-    if record is not None and record.method_id == REGRESSION_PREDICTION_METHOD_ID:
-        validate_regression_prediction_consistency(
-            settings,
-            analysis_id,
-            verify_rows=True,
-        )
     artifact = get_analysis_artifact_record(
         settings.workspace_root,
         str(analysis_id),
@@ -753,6 +759,12 @@ def get_analysis_result_export_download(
             message="요청한 분석 결과 내보내기 파일을 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
+    if (
+        record is not None
+        and record.method_id == REGRESSION_PREDICTION_METHOD_ID
+        and artifact.kind != "managed_source_html_report"
+    ):
+        validate_regression_prediction_consistency(settings, analysis_id, verify_rows=True)
     if artifact.media_type != _analysis_export_expected_media_type(artifact.kind):
         raise ApiError(
             code="analysis_export_metadata_invalid",
@@ -774,7 +786,11 @@ def get_analysis_result_export_download(
             status_code=status.HTTP_409_CONFLICT,
         )
 
-    export_bytes = export_path.read_bytes()
+    export_bytes = (
+        _read_completed_export(settings.workspace_root, artifact)
+        if artifact.kind in SOURCE_BOUND_ARTIFACT_KINDS
+        else export_path.read_bytes()
+    )
     if hashlib.sha256(export_bytes).hexdigest() != artifact.sha256:
         raise ApiError(
             code="analysis_export_checksum_mismatch",
@@ -810,7 +826,28 @@ def _safe_analysis_export_path(
             message="저장된 분석 결과 내보내기 메타데이터가 올바르지 않습니다.",
             status_code=status.HTTP_409_CONFLICT,
         )
-    return workspace_root / relative_path
+    path = workspace_root / relative_path
+    if artifact_kind in SOURCE_BOUND_ARTIFACT_KINDS:
+        try:
+            return checked_path(path)
+        except WorkspaceBackupError as exc:
+            raise ApiError(
+                code="analysis_export_path_invalid",
+                message="The stored export path cannot be verified.",
+                status_code=409,
+            ) from exc
+    return path
+
+
+def _read_completed_export(root: Path, artifact: AnalysisArtifactRecord) -> bytes:
+    try:
+        return read_source_bound_artifact(root, artifact)
+    except SourceBoundArtifactError as exc:
+        raise ApiError(
+            code="analysis_export_checksum_mismatch",
+            message="The stored export cannot be verified.",
+            status_code=409,
+        ) from exc
 
 
 def _analysis_export_relative_path(
@@ -826,6 +863,17 @@ def _analysis_export_relative_path(
         return _result_html_report_relative_path(analysis_id, export_id)
     if artifact_kind == REGRESSION_PREDICTION_CSV_EXPORT_KIND:
         return _prediction_csv_export_relative_path(analysis_id, export_id)
+    if artifact_kind in {
+        "managed_source_html_report",
+        "gp_completed_prediction",
+        "pls_completed_prediction",
+    }:
+        suffix = (
+            "managed-report.html"
+            if artifact_kind == "managed_source_html_report"
+            else "completed-prediction.json"
+        )
+        return Path("workspaces") / "analyses" / analysis_id / "exports" / f"{export_id}.{suffix}"
     raise ApiError(
         code="analysis_export_not_found",
         message="요청한 분석 결과 내보내기 파일을 찾을 수 없습니다.",
@@ -834,14 +882,18 @@ def _analysis_export_relative_path(
 
 
 def _analysis_export_expected_media_type(artifact_kind: str) -> str:
-    if artifact_kind == ANALYSIS_RESULT_JSON_EXPORT_KIND:
+    if artifact_kind in {
+        ANALYSIS_RESULT_JSON_EXPORT_KIND,
+        "gp_completed_prediction",
+        "pls_completed_prediction",
+    }:
         return ANALYSIS_RESULT_JSON_EXPORT_MEDIA_TYPE
     if artifact_kind in {
         ANALYSIS_RESULT_CSV_EXPORT_KIND,
         REGRESSION_PREDICTION_CSV_EXPORT_KIND,
     }:
         return ANALYSIS_RESULT_CSV_EXPORT_MEDIA_TYPE
-    if artifact_kind == ANALYSIS_RESULT_HTML_REPORT_KIND:
+    if artifact_kind in {ANALYSIS_RESULT_HTML_REPORT_KIND, "managed_source_html_report"}:
         return ANALYSIS_RESULT_HTML_REPORT_MEDIA_TYPE
     raise ApiError(
         code="analysis_export_not_found",
@@ -862,8 +914,6 @@ def _analysis_export_deletion_context(
             message="요청한 분석 실행을 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    if record.method_id == REGRESSION_PREDICTION_METHOD_ID:
-        validate_regression_prediction_consistency(settings, analysis_id, verify_rows=True)
     artifact = get_analysis_artifact_record(
         settings.workspace_root,
         str(analysis_id),
@@ -875,6 +925,11 @@ def _analysis_export_deletion_context(
             message="요청한 분석 결과 내보내기 파일을 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
+    if (
+        record.method_id == REGRESSION_PREDICTION_METHOD_ID
+        and artifact.kind != "managed_source_html_report"
+    ):
+        validate_regression_prediction_consistency(settings, analysis_id, verify_rows=True)
     if artifact.media_type != _analysis_export_expected_media_type(artifact.kind):
         raise ApiError(
             code="analysis_export_metadata_invalid",
@@ -901,6 +956,8 @@ def _analysis_export_deletion_context(
             status_code=status.HTTP_409_CONFLICT,
         )
     file_bytes = export_path.stat().st_size
+    if artifact.kind in SOURCE_BOUND_ARTIFACT_KINDS:
+        _read_completed_export(settings.workspace_root, artifact)
     if _file_sha256(export_path) != artifact.sha256:
         raise ApiError(
             code="analysis_export_checksum_mismatch",
@@ -994,7 +1051,11 @@ def _analysis_export_download_filename(
     export_id: UUID,
     artifact_kind: str,
 ) -> str:
-    if artifact_kind == ANALYSIS_RESULT_JSON_EXPORT_KIND:
+    if artifact_kind in {
+        ANALYSIS_RESULT_JSON_EXPORT_KIND,
+        "gp_completed_prediction",
+        "pls_completed_prediction",
+    }:
         suffix = "json"
     elif artifact_kind in {
         ANALYSIS_RESULT_CSV_EXPORT_KIND,

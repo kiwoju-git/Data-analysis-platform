@@ -1,5 +1,6 @@
 import { apiErrorCode, fetchApi, filenameFromContentDisposition, triggerBrowserDownload } from "./client";
 import { apiRoutes } from "./routes";
+import { downloadSha256 } from "./downloadDigest";
 import type { DoeFactorialAnalysisResponse, GeneralFactorialAnalysisResponse } from "./types/doe";
 import type { DoeAnalysisTermCatalog, DoeAnalysisAssetDescriptor, DoeAnalysisAssetList, DoeAnalysisDeletionPreflight, DoePredictionPreflightRequest, DoePredictionPreflightResponse, DoePredictionResponse } from "./types/doeModelWorkflow";
 
@@ -46,8 +47,7 @@ export async function downloadFactorialAsset(design: string, analysis: string, a
   if (!response.ok) throw new Error(await apiErrorCode(response, "doe_factorial_workflow_failed"));
   const blob = await response.blob();
   const bytes = await blob.arrayBuffer();
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  const sha = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+  const sha = await downloadSha256(bytes);
   if (sha !== asset.sha256 || bytes.byteLength !== asset.size_bytes) throw new Error("doe_factorial_asset_checksum_mismatch");
   const filename = filenameFromContentDisposition(response.headers.get("content-disposition"))
     ?? `factorial-${asset.asset_id}.${asset.kind === "html_report" ? "html" : "json"}`;

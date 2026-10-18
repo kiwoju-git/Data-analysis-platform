@@ -2,6 +2,7 @@ import type {
   GaussianProcessPointPredictionRequest,
   GaussianProcessPointPredictionResponse,
 } from "./api/types/regression";
+import { savedPredictionDescriptor } from "./savedPredictionDescriptor";
 
 export const GP_POINT_PREDICTION_ROW_LIMIT = 2000;
 
@@ -47,6 +48,7 @@ export function gpPredictionSourceKey(source: GpPredictionSource): string {
 export function captureGpPredictionRequest(
   source: GpPredictionSource,
   rows: readonly GpPredictionDraftRow[],
+  saveResult = false,
 ): GpPredictionRequestSnapshot {
   validateSource(source);
   if (!Array.isArray(rows) || rows.length < 1 || rows.length > GP_POINT_PREDICTION_ROW_LIMIT) {
@@ -71,7 +73,7 @@ export function captureGpPredictionRequest(
   });
   return {
     source: { ...source, predictorColumnIds: [...source.predictorColumnIds] },
-    request: { expected_model_manifest_sha256: source.manifestSha256, rows: requestRows },
+    request: { expected_model_manifest_sha256: source.manifestSha256, save_result: saveResult, rows: requestRows },
   };
 }
 
@@ -98,6 +100,10 @@ export function completeGpPredictionSnapshot(
     return fail();
   }
   const seen = new Set<string>();
+  const saved = savedPredictionDescriptor(response.saved_prediction, {
+    saveResult: captured.request.save_result ?? false, family: "gaussian_process",
+    analysisId: captured.source.analysisId, modelId: captured.source.modelId, manifestSha256: captured.source.manifestSha256,
+  });
   const rows = response.rows.map((row: unknown) => {
     if (!isRecord(row) || !validRowId(row.client_row_id) || !requestedIds.has(row.client_row_id)
       || seen.has(row.client_row_id) || !finiteNumber(row.predicted_mean)
@@ -128,9 +134,11 @@ export function completeGpPredictionSnapshot(
     prediction_recalculated_on_export: false,
     request: {
       expected_model_manifest_sha256: captured.request.expected_model_manifest_sha256,
+      save_result: captured.request.save_result ?? false,
       rows: captured.request.rows.map((row) => ({ client_row_id: row.client_row_id, values: { ...row.values } })),
     },
     response: {
+      ...(saved === null ? {} : { saved_prediction: saved }),
       model_id: captured.source.modelId,
       model_manifest_sha256: captured.source.manifestSha256,
       response_column_id: captured.source.responseColumnId,

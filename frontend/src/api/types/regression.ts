@@ -163,6 +163,7 @@ export interface RegressionModelCatalogResponse {
 
 export interface PlsPointPredictionRequest {
   expected_model_manifest_sha256: string;
+  save_result?: boolean;
   rows: Array<{
     client_row_id: string;
     values: Record<string, number>;
@@ -170,6 +171,7 @@ export interface PlsPointPredictionRequest {
 }
 
 export interface PlsPointPredictionResponse {
+  saved_prediction?: import("./reports").SavedPredictionDescriptor | null;
   model_id: string;
   model_manifest_sha256: string;
   response_column_id: string;
@@ -184,6 +186,7 @@ export interface PlsPointPredictionResponse {
 
 export interface GaussianProcessPointPredictionRequest {
   expected_model_manifest_sha256: string;
+  save_result?: boolean;
   rows: Array<{
     client_row_id: string;
     values: Record<string, number>;
@@ -191,6 +194,7 @@ export interface GaussianProcessPointPredictionRequest {
 }
 
 export interface GaussianProcessPointPredictionResponse {
+  saved_prediction?: import("./reports").SavedPredictionDescriptor | null;
   model_id: string;
   model_manifest_sha256: string;
   response_column_id: string;

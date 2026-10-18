@@ -157,7 +157,7 @@ export interface DoePredictionResponse {
   warnings: string[];
 }
 export interface DoeAnalysisAssetDescriptor {
-  asset_id: string; analysis_id: string; kind: "prediction" | "html_report"; schema_version: 1;
+  asset_id: string; analysis_id: string; kind: "prediction" | "html_report"; schema_version: 1 | 2;
   locale: "en" | "ko" | null; source_analysis_sha256: string; sha256: string; media_type: string;
   size_bytes: number; created_at: string;
 }

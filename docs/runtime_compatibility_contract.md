@@ -11,17 +11,27 @@ the draft and requires an explicit choice before rebasing; no automatic retry
 with a newly fetched hash is allowed.
 
 The backend, frontend and PowerShell startup require contract 23; Linux startup
-and release builds read the same backend constant. Metadata remains 20 because
-the CAS uses existing columns. Statistical method/result/model versions and
+and release builds read the same backend constant. CAS alone uses existing
+columns. A12 advances the current metadata requirement to 21 for source-bound
+LHS/BO reports and the DOE HTML schema constraint, not for CAS. Statistical method/result/model versions and
 historical artifact bytes are unchanged. Historical notes below retain their
 original numbers and are not current handshake requirements.
 
 A11 adds report capability schema 1 under this same integrated API 23 update.
 Catalog method report declarations and stored-result capability use the same
 renderer contracts. Generic HTML artifact schema 4 adds level/renderer/sections;
-optional expected source SHA binds a create request to its capability. Metadata
-and analysis result/model schemas do not change, and old HTML bytes are not
+optional expected source SHA binds a create request to its capability. A11 alone
+does not change metadata or analysis result/model schemas, and old HTML bytes are not
 rewritten. See `html_report_coverage_matrix.md` for the actual per-payload scope.
+
+A12 adds typed `/api/v1/reports` source, capability, explicit read-only snapshot,
+create/list/download/delete APIs under the integrated API 23 contract. The six
+source kinds are discriminated unions, with exact revision and source hashes.
+PLS/GP point-prediction requests add `save_result=false`; successful opt-in saves
+return a server-created `saved_prediction` reference. Existing requests and
+stored prediction/model numerical values retain their prior meaning. New DOE
+HTML assets use schema 2; existing schema 1 HTML/prediction bytes are preserved.
+See `managed_report_storage_contract.md` for migration, deletion and recovery.
 
 ## 2026-10-08 Update
 

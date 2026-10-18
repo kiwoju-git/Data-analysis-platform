@@ -225,8 +225,9 @@ export interface BayesianStudyDeletionCounts {
   recommendation_batch_item_count: number;
   lifecycle_event_count: number;
   metadata_record_count: number;
-  file_count: 0;
-  file_bytes: 0;
+  report_count?: number;
+  file_count: number;
+  file_bytes: number;
 }
 
 export interface BayesianStudyDeletionPreflightResponse {

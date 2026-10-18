@@ -6,6 +6,7 @@ export type WorkspaceAssetType =
   | "doe_analysis"
   | "doe_prediction"
   | "doe_analysis_report"
+  | "managed_report"
   | "bayesian_study";
 
 export type WorkspaceAssetCategory = "datasets" | "analyses" | "models" | "designs";

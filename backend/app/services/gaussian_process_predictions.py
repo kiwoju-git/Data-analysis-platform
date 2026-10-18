@@ -133,13 +133,30 @@ def create_gaussian_process_point_predictions(
     response = manifest.get("response")
     if not isinstance(response, dict) or not isinstance(response.get("column_id"), str):
         raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
-    return GaussianProcessPointPredictionResponse(
+    completed = GaussianProcessPointPredictionResponse(
         model_id=model_id,
         model_manifest_sha256=model.manifest_sha256,
         response_column_id=response["column_id"],
         row_count=len(output),
         rows=output,
     )
+    if body.save_result:
+        from app.services.completed_predictions import save_completed_prediction
+
+        if source_run.result_sha256 is None:
+            raise _error("gp_prediction_model_stale", status.HTTP_409_CONFLICT)
+        completed.saved_prediction = save_completed_prediction(
+            settings,
+            family="gaussian_process",
+            source_analysis_id=model.analysis_id,
+            source_result_sha256=source_run.result_sha256,
+            model_id=model_id,
+            model_manifest_sha256=model.manifest_sha256,
+            manifest=manifest,
+            request=body,
+            response=completed,
+        )
+    return completed
 
 
 def _load_state(

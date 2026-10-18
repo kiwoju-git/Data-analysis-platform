@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator, model_validator
 
 
 class WorkflowModel(BaseModel):
@@ -327,13 +327,19 @@ class DoeAnalysisAssetDescriptor(WorkflowModel):
     asset_id: UUID
     analysis_id: UUID
     kind: Literal["prediction", "html_report"]
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     locale: Literal["en", "ko"] | None
     source_analysis_sha256: str
     sha256: str
     media_type: str
     size_bytes: int
     created_at: str
+
+    @model_validator(mode="after")
+    def supported_asset_schema(self) -> DoeAnalysisAssetDescriptor:
+        if self.kind == "prediction" and self.schema_version != 1:
+            raise ValueError("Prediction artifacts require schema 1.")
+        return self
 
 
 class DoeAnalysisAssetList(WorkflowModel):

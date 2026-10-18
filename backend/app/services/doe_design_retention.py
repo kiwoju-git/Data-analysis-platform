@@ -13,6 +13,7 @@ from app.api.v1.schemas.doe import (
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import utc_now
+from app.storage.managed_report_artifacts import ManagedReportStorageError
 from app.storage.metadata import (
     ExperimentDesignDeletionSnapshot,
     WorkspaceAssetStorageConflict,
@@ -24,7 +25,7 @@ from app.storage.metadata import (
 def get_doe_design_deletion_preflight(
     settings: Settings, design_id: UUID
 ) -> DoeDesignDeletionPreflightResponse:
-    snapshot = get_experiment_design_deletion_snapshot(settings.workspace_root, str(design_id))
+    snapshot = _snapshot(settings, design_id)
     if snapshot is None:
         raise _not_found()
     counts = _counts(snapshot)
@@ -43,7 +44,7 @@ def delete_doe_design(
 ) -> DoeDesignDeleteResponse:
     if body.confirmation_design_id != design_id:
         raise _conflict()
-    snapshot = get_experiment_design_deletion_snapshot(settings.workspace_root, str(design_id))
+    snapshot = _snapshot(settings, design_id)
     if snapshot is None:
         raise _not_found()
     manifest = _manifest(snapshot)
@@ -65,8 +66,9 @@ def delete_doe_design(
             expected_design_sha256=snapshot.design_sha256,
             expected_counts=counts_tuple,
             expected_analysis_assets_sha256=snapshot.analysis_assets_sha256,
+            expected_managed_reports_sha256=snapshot.managed_reports_sha256,
         )
-    except WorkspaceAssetStorageConflict as exc:
+    except (WorkspaceAssetStorageConflict, ManagedReportStorageError) as exc:
         raise _conflict() from exc
     return DoeDesignDeleteResponse(
         deletion_schema_version=1,
@@ -89,6 +91,13 @@ def _counts(snapshot: ExperimentDesignDeletionSnapshot) -> DoeDesignDeletionCoun
     )
 
 
+def _snapshot(settings: Settings, design_id: UUID) -> ExperimentDesignDeletionSnapshot | None:
+    try:
+        return get_experiment_design_deletion_snapshot(settings.workspace_root, str(design_id))
+    except (WorkspaceAssetStorageConflict, ManagedReportStorageError) as exc:
+        raise _conflict() from exc
+
+
 def _manifest(snapshot: ExperimentDesignDeletionSnapshot) -> str:
     payload = {
         "schema_version": 1,
@@ -98,6 +107,7 @@ def _manifest(snapshot: ExperimentDesignDeletionSnapshot) -> str:
         "status": snapshot.design.status,
         "counts": _counts(snapshot).model_dump(mode="json"),
         "analysis_assets_sha256": snapshot.analysis_assets_sha256,
+        "managed_reports_sha256": snapshot.managed_reports_sha256,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

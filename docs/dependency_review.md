@@ -32,6 +32,7 @@ This file records direct dependencies introduced for the Gate A scaffold. Transi
 | --- | --- | --- | --- | --- |
 | `react` | `18.3.1` | UI rendering. | Bundled locally; no CDN. | MIT |
 | `react-dom` | `18.3.1` | Browser DOM rendering. | Bundled locally; no CDN. | MIT |
+| `@noble/hashes` | `2.4.0` | SHA-256 fallback for checksum-verified downloads on trusted HTTP LAN origins without WebCrypto. | Lazy local `sha2.js` sub-import; zero runtime dependencies, pure JavaScript, CPU-only; Node >=20.19.0. | MIT |
 | `vite` | `8.0.16` | Local dev server and build tool. | Dev server binds to `127.0.0.1`; requires Node `^20.19.0 || >=22.12.0`. | MIT |
 | `@vitejs/plugin-react` | `6.0.2` | React transform for Vite. | Build-time only; requires Node `^20.19.0 || >=22.12.0`. | MIT |
 | `typescript` | `5.6.3` | Strict TypeScript compilation. | Build-time only. | Apache-2.0 |
@@ -39,6 +40,10 @@ This file records direct dependencies introduced for the Gate A scaffold. Transi
 | `eslint` and plugins | pinned in `frontend/package.json` | Frontend linting. | Build/test-time only. | MIT |
 
 ## Review Notes
+
+- The 2026-10-18 `@noble/hashes` review and local compatibility/performance
+  evidence are in `docs/download_checksum_compatibility.md`. The fallback never
+  replaces byte verification with a response-header claim.
 
 - Standard library alone is insufficient for the required FastAPI backend and React/Vite frontend.
 - No dependency is added for telemetry, external data upload, GPU, PyTorch, PyCaret, Optuna, SHAP, LIME, Docker, Redis, or a CDN.
