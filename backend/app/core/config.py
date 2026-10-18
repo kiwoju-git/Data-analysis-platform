@@ -22,7 +22,13 @@ class Settings(BaseSettings):
     bind_host: str = "127.0.0.1"
     bind_port: int = 8000
     git_commit: str | None = None
-    max_upload_bytes: int = 100 * 1024 * 1024
+    max_upload_bytes: int = Field(default=100 * 1024 * 1024, gt=0)
+    max_request_bytes: int | None = Field(default=None, gt=0)
+    max_multipart_overhead_bytes: int = Field(default=1024 * 1024, gt=0)
+    max_multipart_fields: int = Field(default=16, ge=0, le=1000)
+    max_multipart_field_bytes: int = Field(default=64 * 1024, gt=0)
+    max_dataset_rows: int = Field(default=1_048_576, gt=0)
+    max_dataset_columns: int = Field(default=16_384, gt=0)
     workspace_root: Path = Field(default_factory=default_workspace_root)
     frontend_dist: Path | None = None
     trusted_lan: bool = False
@@ -33,6 +39,20 @@ class Settings(BaseSettings):
             "http://localhost:8600",
         ],
     )
+
+    @property
+    def request_byte_limit(self) -> int:
+        # JSON escapes can consume six wire bytes per original ASCII byte.
+        # Keep the existing UTF-8 paste/file allowance, including custom limits.
+        return self.max_request_bytes or (
+            6 * self.max_upload_bytes + self.max_multipart_overhead_bytes
+        )
+
+    @property
+    def upload_request_byte_limit(self) -> int:
+        return min(
+            self.request_byte_limit, self.max_upload_bytes + self.max_multipart_overhead_bytes
+        )
 
     @field_validator("bind_host")
     @classmethod

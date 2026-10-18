@@ -8,6 +8,98 @@ on:
       - main
 
 jobs:
+  security-python:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            python: "3.10"
+            target: py310-win
+            profile: dev
+            lock: backend/requirements-py310-win.lock
+          - os: ubuntu-24.04
+            python: "3.11"
+            target: py311-linux
+            profile: runtime
+            lock: backend/requirements-py311-linux-runtime.lock
+          - os: ubuntu-24.04
+            python: "3.11"
+            target: py311-linux
+            profile: dev
+            lock: backend/requirements-py311-linux-dev.lock
+          - os: ubuntu-24.04
+            python: "3.12"
+            target: py312-linux
+            profile: runtime
+            lock: backend/requirements-py312-linux-runtime.lock
+          - os: ubuntu-24.04
+            python: "3.12"
+            target: py312-linux
+            profile: dev
+            lock: backend/requirements-py312-linux-dev.lock
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install isolated audit tool and exact target lock
+        shell: pwsh
+        run: |
+          python -m venv .security-target
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m venv .security-tool
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $suffix = if ($IsWindows) { 'Scripts/python.exe' } else { 'bin/python' }
+          $target = Join-Path '.security-target' $suffix
+          $auditor = Join-Path '.security-tool' $suffix
+          & $target -m pip install --require-hashes --only-binary=:all: -r '${{ matrix.lock }}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $auditor -m pip install --only-binary=:all: 'pip-audit==2.10.1'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/dependency_security.py --target-python $target --audit-python $auditor --lock '${{ matrix.lock }}' --profile '${{ matrix.profile }}' --output-dir .tmp/security
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-security-${{ matrix.target }}-${{ matrix.profile }}
+          path: .tmp/security
+          if-no-files-found: error
+
+  security-npm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm --prefix frontend ci
+      - name: Runtime and development dependency audit
+        run: python scripts/dependency_security.py --frontend frontend --output-dir .tmp/security
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-security-npm
+          path: .tmp/security
+          if-no-files-found: error
+
+  dependency-security:
+    if: always()
+    needs: [security-python, security-npm]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require all dependency audits
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python -c 'import json,os; assert all(j["result"] == "success" for j in json.loads(os.environ["RESULTS"]).values())'
+
   windows:
     runs-on: windows-latest
     timeout-minutes: 45

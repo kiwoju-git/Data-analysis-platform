@@ -310,5 +310,5 @@ export function gpFixture(): GaussianProcessRegressionResult {
       manifest_schema_version: 1,
       manifest_sha256: "a".repeat(64),
     },
-  } as GaussianProcessRegressionResult;
+  };
 }

@@ -11,6 +11,7 @@ from app.api.v1.schemas.datasets import (
     DatasetCellCorrectionRequest,
     DatasetCellCorrectionResponse,
     DatasetDeletionDependencyPage,
+    DatasetIntakeLimits,
     DatasetParsingConfirmationRequest,
     DatasetProfileResponse,
     DatasetRowsPreviewResponse,
@@ -27,6 +28,7 @@ from app.api.v1.schemas.datasets import (
     DatasetVersionResponse,
     PastedDatasetRequest,
 )
+from app.core.request_limits import LimitedDatasetUploadRoute
 from app.services.dataset_cell_corrections import create_dataset_cell_correction
 from app.services.dataset_profiles import get_dataset_profile
 from app.services.dataset_upload import create_dataset_from_pasted_text, create_dataset_from_upload
@@ -47,8 +49,24 @@ from app.services.dataset_versions import (
 )
 from app.services.group_level_preflights import get_group_level_preflight
 
-router = APIRouter(prefix="/datasets", tags=["datasets"])
+router = APIRouter(prefix="/datasets", tags=["datasets"], route_class=LimitedDatasetUploadRoute)
 version_router = APIRouter(prefix="/dataset-versions", tags=["dataset-versions"])
+
+
+@router.get("/intake-limits", response_model=DatasetIntakeLimits)
+def read_dataset_intake_limits(request: Request) -> DatasetIntakeLimits:
+    settings = request.app.state.settings
+    return DatasetIntakeLimits(
+        file_bytes=settings.max_upload_bytes,
+        paste_utf8_bytes=settings.max_upload_bytes,
+        json_request_bytes=settings.request_byte_limit,
+        multipart_request_bytes=settings.upload_request_byte_limit,
+        multipart_files=1,
+        multipart_fields=settings.max_multipart_fields,
+        multipart_field_bytes=settings.max_multipart_field_bytes,
+        parsed_rows=settings.max_dataset_rows,
+        parsed_columns=settings.max_dataset_columns,
+    )
 
 
 @version_router.get("", response_model=DatasetVersionCatalogResponse)
@@ -73,7 +91,7 @@ def list_dataset_version_catalog_route(
 )
 async def upload_dataset(
     request: Request,
-    file: Annotated[UploadFile, File(...)],
+    file: Annotated[UploadFile, File(..., json_schema_extra={"format": "binary"})],
 ) -> DatasetUploadResponse:
     return await create_dataset_from_upload(
         upload_file=file,

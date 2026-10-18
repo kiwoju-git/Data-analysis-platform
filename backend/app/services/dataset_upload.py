@@ -7,8 +7,10 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import UploadFile, status
+from starlette.concurrency import run_in_threadpool
 
 from app.api.v1.schemas.datasets import DatasetUploadResponse, PastedDatasetRequest
+from app.core.async_ownership import await_owned_io
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.parsing_options import build_parsing_suggestion, detect_dataset_format
@@ -32,8 +34,19 @@ async def create_dataset_from_upload(
     upload_file: UploadFile,
     settings: Settings,
 ) -> DatasetUploadResponse:
+    # Shield the entire write/sniff/metadata transaction. FastAPI must not close
+    # UploadFile.file while its worker still owns it, even after disconnect.
+    return await await_owned_io(
+        run_in_threadpool(_create_dataset_from_upload, upload_file, settings)
+    )
+
+
+def _create_dataset_from_upload(
+    upload_file: UploadFile,
+    settings: Settings,
+) -> DatasetUploadResponse:
     safe_filename = sanitize_filename(upload_file.filename)
-    stored_upload = await _store_upload(upload_file, settings, safe_filename)
+    stored_upload = _store_upload(upload_file, settings, safe_filename)
     return _create_dataset_response_from_stored_upload(
         stored_upload=stored_upload,
         safe_filename=safe_filename,
@@ -118,7 +131,7 @@ def sanitize_filename(filename: str | None) -> str:
     return cleaned[:180]
 
 
-async def _store_upload(
+def _store_upload(
     upload_file: UploadFile,
     settings: Settings,
     safe_filename: str,
@@ -134,7 +147,7 @@ async def _store_upload(
     try:
         with temp_path.open("wb") as handle:
             while True:
-                chunk = await upload_file.read(CHUNK_SIZE)
+                chunk = upload_file.file.read(CHUNK_SIZE)
                 if not chunk:
                     break
 

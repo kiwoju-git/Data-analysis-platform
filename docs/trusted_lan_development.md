@@ -72,11 +72,12 @@ the local network adapter. No runtime code, Python/GPU dependency, native wheel,
 font/CDN or telemetry is added. Node 22, Windows and offline-after-install usage
 are unchanged. The lockfile pins exact resolved versions.
 
-LAN exposure prompted a targeted audit of the existing Vite toolchain. Only
-PostCSS and nanoid transitive security patches were updated, not the UI/statistical
-libraries. Remaining npm audit findings in ESLint's brace-expansion/js-yaml and
-Vitest/mocker are recorded separately; Vitest stays loopback and is not an exposed
-application service. No claim of a clean dependency-security audit is made.
+LAN exposure prompted a targeted audit of the existing Vite toolchain. Initial
+PostCSS/nanoid patches were followed by the 2026-10-18 security remediation for
+the ESLint dependency chain, brace-expansion, js-yaml, source-map-js and Vitest.
+Current checks and exact scope are in [dependency/upload security](dependency_upload_security.md).
+A clean advisory lookup is time-bound, not a guarantee against unknown issues.
+Vitest mock plugins remain absent from the application Vite server.
 
 Official references: [Vite host/proxy/CORS security](https://vite.dev/config/server-options),
 [PostCSS advisory](https://github.com/advisories/GHSA-r28c-9q8g-f849),

@@ -1,5 +1,9 @@
 # Linux x86_64 exact direct pins; numerical runtime versions match Windows.
-fastapi==0.115.6
+pip==26.2.1
+setuptools==83.0.0
+fastapi==0.135.4
+starlette==1.7.0
+annotated-doc==0.0.4
 numpy==2.2.6
 pydantic-settings==2.7.0
 python-multipart==0.0.32

@@ -22,6 +22,7 @@ from app.api.v1.workspace import router as workspace_router
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.request_limits import RequestBodyLimitMiddleware
 from app.core.trusted_lan import TrustedLanMiddleware
 from app.services.analysis_run_exports import recover_analysis_export_quarantine_files
 from app.services.analysis_run_retention import recover_analysis_run_quarantine_files
@@ -69,6 +70,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=create_lifespan(app_settings),
     )
     app.state.settings = app_settings
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_request_bytes=app_settings.request_byte_limit,
+        max_upload_request_bytes=app_settings.upload_request_byte_limit,
+    )
     if app_settings.frontend_dist is not None and not app_settings.trusted_lan:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 

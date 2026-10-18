@@ -112,7 +112,7 @@ def confirm_dataset_parsing(
     options = request.parsing
     _validate_confirmation_options(dataset.detected_format, options)
 
-    parsed_schema = _scan_dataset_schema(source_path, options)
+    parsed_schema = _scan_dataset_schema(source_path, options, settings)
     columns = _build_column_records(parsed_schema, request.columns)
     parsing_options_json = _dump_parsing_options(options)
 
@@ -732,18 +732,31 @@ def _remove_artifact_files(
             continue
 
 
-def _scan_dataset_schema(path: Path, options: ConfirmedParsingOptions) -> _ParsedSchema:
+def _scan_dataset_schema(
+    path: Path, options: ConfirmedParsingOptions, settings: Settings
+) -> _ParsedSchema:
     if options.kind == "delimited_text":
-        return _scan_delimited_schema(path, options)
+        return _scan_delimited_schema(path, options, settings)
     if options.kind == "xlsx":
-        return _scan_xlsx_schema(path, options)
+        return _scan_xlsx_schema(path, options, settings)
     raise ApiError(
         code="unsupported_parsing_kind",
         message="지원하지 않는 파싱 방식입니다.",
     )
 
 
-def _scan_delimited_schema(path: Path, options: ConfirmedParsingOptions) -> _ParsedSchema:
+def _check_parsed_dimensions(row_count: int, column_count: int, settings: Settings) -> None:
+    if row_count > settings.max_dataset_rows or column_count > settings.max_dataset_columns:
+        raise ApiError(
+            "dataset_dimensions_exceeded",
+            "The parsed dataset exceeds the configured row or column limit; no rows were sampled.",
+            413,
+        )
+
+
+def _scan_delimited_schema(
+    path: Path, options: ConfirmedParsingOptions, settings: Settings
+) -> _ParsedSchema:
     if options.encoding is None or options.delimiter is None:
         raise ApiError(
             code="incomplete_parsing_options",
@@ -758,7 +771,9 @@ def _scan_delimited_schema(path: Path, options: ConfirmedParsingOptions) -> _Par
                 headers = _read_header(reader, options.header_row)
             else:
                 first_data_row = _read_data_start_row(reader, _first_data_row_number(options))
+                _check_parsed_dimensions(1, len(first_data_row), settings)
                 headers = _generated_headers(len(first_data_row))
+            _check_parsed_dimensions(0, len(headers), settings)
             inferences = [_ColumnInference() for _ in headers]
             row_count = 0
 
@@ -770,6 +785,7 @@ def _scan_delimited_schema(path: Path, options: ConfirmedParsingOptions) -> _Par
                 if _is_blank_row(row):
                     continue
                 row_count += 1
+                _check_parsed_dimensions(row_count, len(row), settings)
                 _observe_row(row, inferences, options)
     except UnicodeDecodeError as exc:
         raise ApiError(
@@ -795,15 +811,19 @@ def _scan_delimited_schema(path: Path, options: ConfirmedParsingOptions) -> _Par
     )
 
 
-def _scan_xlsx_schema(path: Path, options: ConfirmedParsingOptions) -> _ParsedSchema:
+def _scan_xlsx_schema(
+    path: Path, options: ConfirmedParsingOptions, settings: Settings
+) -> _ParsedSchema:
     rows = iter_xlsx_sheet_rows(path, options.xlsx_sheet_name)
     first_data_row: list[str] | None = None
     if options.has_header:
         headers = _read_xlsx_header(rows, options.header_row)
     else:
         first_data_row = _read_xlsx_data_start_row(rows, _first_data_row_number(options))
+        _check_parsed_dimensions(1, len(first_data_row), settings)
         headers = _generated_headers(len(first_data_row))
 
+    _check_parsed_dimensions(0, len(headers), settings)
     inferences = [_ColumnInference() for _ in headers]
     row_count = 0
     if first_data_row is not None:
@@ -817,6 +837,7 @@ def _scan_xlsx_schema(path: Path, options: ConfirmedParsingOptions) -> _ParsedSc
         if _is_blank_row(sheet_row.cells):
             continue
         row_count += 1
+        _check_parsed_dimensions(row_count, len(sheet_row.cells), settings)
         _observe_row(sheet_row.cells, inferences, options)
 
     if row_count == 0:
