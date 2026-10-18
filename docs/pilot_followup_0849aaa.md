@@ -182,6 +182,31 @@ ignored `.tmp` diagnostics, never committed user data.
   graphical summary/mobile, saved analysis and HTML download/body rendering
   (`.tmp/pilot-report-built-46e4fe6.log`). These are local focused checks, not a
   subsequent native CI or packaged-archive pass.
+- Native CI `39145371170` at `122b7ec` reached the feedback browser fixture but
+  failed its expected catalog-retry button. The actual child trace, with no
+  page errors or failed assets, recorded two initial `limit=20` catalog GETs:
+  the one-shot fixture supplied 422 to the first and allowed 200 for the second.
+  Dev StrictMode effect replay therefore cleared the expected error. Artifact
+  `12143049140` was checked against ZIP SHA-256
+  `660cdbd0b7ac4eae2ab8865635239fc99a7a2dd6986603bae4a1f36903f24c6a`;
+  its feedback child HTML, screenshot, JSON and trace are preserved.
+  Local source Vite reproduced the same 422/200 ordering and failure in
+  `.tmp/pilot-feedback-source-red-122b7ec.log`, unlike the prior built-UI pass.
+  The fixture now rejects all initial catalog requests until the visible error,
+  sets the context offline, removes that injected route, then checks the actual
+  user retry's transport failure. The error, privacy, downloads and keyboard
+  assertions remain unchanged; no product code, StrictMode, timeout or retry
+  policy was changed.
+- The corrected source feedback fixture passed four KO/EN loaded/startup cases
+  (`.tmp/pilot-feedback-source-green-122b7ec.log`). Its receipt records four
+  injected initial catalog errors per locale rather than assuming one request.
+  The broader source Vite `context` suite then exited 0, covering analysis
+  completion, Report Center context, API translation, chart formatting and
+  feedback (`.tmp/pilot-context-source-122b7ec.log`). The exact suite command was
+  `.tmp/remediation-a04-source/.venv/Scripts/python.exe tests/e2e/critical_path.py --suite context --backend-port 8051 --frontend-port 5271 --diagnostics-root .tmp/e2e-pilot-context-source-122b7ec --workspace-root .tmp/pilot-temp-agent3`,
+  with Node 22 on PATH, root `backend` on PYTHONPATH, TEMP/TMP on D: and numerical
+  threads capped at one. Only the harness-owned servers were stopped. This
+  source-browser success does not assert a new native CI or archive pass.
 
 The final aggregate CI outcome, exact source SHA, archive bytes and installation
 receipt belong to the new Release validation asset. This checkpoint does not

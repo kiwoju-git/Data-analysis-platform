@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from playwright.sync_api import Browser, expect, sync_playwright
+from playwright.sync_api import Browser, Route, expect, sync_playwright
 
 from app_readiness import diagnosed_page, wait_for_app_ready
 
@@ -54,9 +54,12 @@ def verify_pilot_feedback(browser: Browser, base_url: str, output: Path) -> None
             init_script=f"Object.defineProperty(navigator, 'clipboard', {{configurable:true, value:{value}}});",
         ) as page:
             page.set_viewport_size({"width": 1440, "height": 900})
-            page.route(
-                "**/api/v1/dataset-versions?*",
-                lambda route: route.fulfill(
+            catalog_error_responses = 0
+
+            def reject_initial_catalog(route: Route) -> None:
+                nonlocal catalog_error_responses
+                catalog_error_responses += 1
+                route.fulfill(
                     status=422,
                     json={
                         "error": {
@@ -68,16 +71,21 @@ def verify_pilot_feedback(browser: Browser, base_url: str, output: Path) -> None
                         "column_name": "SECRET_COLUMN",
                         "filename": "SECRET_FILE.csv",
                     },
-                ),
-                times=1,
-            )
+                )
+
+            # Dev StrictMode can replay the initial effect; both requests must
+            # see the same injected failure before the explicit offline retry.
+            catalog_route = "**/api/v1/dataset-versions?*"
+            page.route(catalog_route, reject_initial_catalog)
             page.goto(base_url + "/home", wait_until="domcontentloaded")
             wait_for_app_ready(page, locale, "/home")
             retry = page.locator(
                 ".active-dataset-operational-row.context-bar-error button"
             )
             expect(retry).to_be_visible()
+            assert catalog_error_responses > 0
             page.context.set_offline(True)
+            page.unroute(catalog_route, reject_initial_catalog)
             with page.expect_event(
                 "requestfailed",
                 predicate=lambda request: "/api/v1/dataset-versions?" in request.url,
@@ -163,15 +171,14 @@ def verify_pilot_feedback(browser: Browser, base_url: str, output: Path) -> None
                     "focus_trap_and_restore": True,
                     "viewports": [1440, 390],
                     "catalog_error_response_injected": True,
+                    "catalog_error_response_count": catalog_error_responses,
                     "offline_failure_trigger": "visible catalog retry",
                 }
             )
         with diagnosed_page(
             browser, output, f"feedback-startup-{locale}", locale=locale
         ) as page:
-            page.route(
-                "**/api/v1/**", lambda route: route.abort("connectionrefused")
-            )
+            page.route("**/api/v1/**", lambda route: route.abort("connectionrefused"))
             page.goto(base_url + "/home", wait_until="domcontentloaded")
             expect(
                 page.locator('.runtime-gate-page[data-runtime-state="blocked"]')
