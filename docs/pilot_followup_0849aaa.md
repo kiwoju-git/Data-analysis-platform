@@ -160,6 +160,28 @@ ignored `.tmp` diagnostics, never committed user data.
   reproduction was 6 failed; after the assertions were corrected the two API
   cases, OLS reports and numeric/prediction reports passed 50 tests. The complete
   OpenAPI/frontend contract file passed 233 tests after the marker correction.
+- Native feature CI `39143732852` at `46e4fe6` completed the Linux full checks:
+  2439 backend tests passed / 12 skipped, and 96 frontend files / 850 tests
+  passed. Its browser job then failed an outdated GPR profile tooltip assertion:
+  the stored endpoints were still exactly 10 and 12, while the visible interval
+  changed from `10 - 12` to `[10, 12]`. The expectation now checks the exact
+  bracketed interval; no computation, timeout or tolerance changed. Artifact
+  `12142263718` preserves the actual child failure screenshot. Its downloaded
+  ZIP SHA-256 was verified as
+  `5919c1922c26811059fb51accafce784291c734ec7a96c07e2f1a52866a4f4e6`.
+  The parent's "no browser page" message referred to its uninitialized legacy
+  page, not the separate chart-fixture context; it did not discard that child
+  screenshot.
+- After that correction, current-source production-built synthetic chart
+  fixtures passed both `verify_chart_interactions` and
+  `verify_result_chart_models` in local Windows Chromium, including exact
+  profile values, surface request validation, and 1440/1024/390px checks
+  (`.tmp/pilot-chart-built-46e4fe6.log`). A separate fresh-workspace built-UI run
+  passed `verify_reporting_summary_variance_and_scatter`, including the new
+  equal-variances schema 3/full-group identity assertion, Graph Builder,
+  graphical summary/mobile, saved analysis and HTML download/body rendering
+  (`.tmp/pilot-report-built-46e4fe6.log`). These are local focused checks, not a
+  subsequent native CI or packaged-archive pass.
 
 The final aggregate CI outcome, exact source SHA, archive bytes and installation
 receipt belong to the new Release validation asset. This checkpoint does not

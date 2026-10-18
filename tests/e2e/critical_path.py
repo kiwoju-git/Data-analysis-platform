@@ -2259,8 +2259,19 @@ def verify_reporting_summary_variance_and_scatter(
     if equal_variances_payload.get("method_id") != "eda.equal_variances":
         raise AssertionError("equal variances response used the wrong method")
     equal_variances_result = equal_variances_payload.get("result", {})
-    if equal_variances_result.get("schema_version") != 2:
-        raise AssertionError("equal variances response did not use result schema 2")
+    if equal_variances_result.get("schema_version") != 3:
+        raise AssertionError("equal variances response did not use result schema 3")
+    groups = equal_variances_result.get("groups", [])
+    if not groups or any(
+        not isinstance(group.get("group_value"), str)
+        or not group["group_value"]
+        or type(group.get("group_index")) is not int
+        or group["group_index"] != index
+        for index, group in enumerate(groups)
+    ):
+        raise AssertionError("equal variances response lost full group identity")
+    if len({group["group_value"] for group in groups}) != len(groups):
+        raise AssertionError("equal variances response repeated a full group identity")
     diagnostics.record(
         "[e2e] equal variances response received; "
         f"result keys={sorted(equal_variances_result.keys())}"

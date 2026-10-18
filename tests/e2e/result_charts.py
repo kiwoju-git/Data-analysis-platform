@@ -285,7 +285,7 @@ def verify_result_chart_models(browser: Browser, base_url: str, output: Path) ->
         profile.locator("[tabindex]").first.press("End")
         expect(profile.locator("[tabindex]").last).to_be_focused()
         expect(page.get_by_role("tooltip").locator("dd")).to_have_text(
-            ["1", "11", "10 - 12"]
+            ["1", "11", "[10, 12]"]
         )
         profile.locator("[tabindex]").last.press("Escape")
         assert (
