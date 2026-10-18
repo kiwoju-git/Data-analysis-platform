@@ -1,5 +1,18 @@
 # Browser E2E Coverage
 
+## Schema Concurrency
+
+Stage `verify two-editor schema concurrency` opens independent browser contexts
+on the same synthetic version and uses actual schema PATCH/409 responses. A stale
+editor must retain its draft and original expected hash. Re-edit and discard do
+not write; Apply stages only local deltas against the displayed latest schema,
+and an explicit Save is still required. Another intervening writer must produce
+another conflict, never a silent overwrite. Delayed latest-schema reads cannot
+reactivate an old dataset. Both locales verify unchanged canonical upload/result
+hashes and the legitimate stale-analysis flag. `scripts/e2e.ps1
+-SchemaConcurrencyOnly` selects this stage; child traces capture each actual tab.
+Execution outcomes, including failed attempts, are in the remediation ledger.
+
 ## Direct GP Prediction Context
 
 Stage `verify saved GP prediction request context` uses two real saved synthetic
@@ -675,6 +688,7 @@ browser critical path.
   - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
     `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
     overflow and keep the language/API controls visible.
+- `verify two-editor schema concurrency` (focused schema mode)
 - `verify saved GP prediction request context` (focused prediction mode)
 - `verify dataset source context under delayed responses` (focused dataset mode)
 - `verify API translation boundary with synthetic inputs` (focused transport mode)
@@ -683,6 +697,7 @@ browser critical path.
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)
 - `verify saved GP prediction request context` (full flow)
+- `verify two-editor schema concurrency` (full flow)
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`

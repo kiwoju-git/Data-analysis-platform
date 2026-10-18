@@ -591,7 +591,7 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 22,
+    api_contract_version: 23,
     metadata_schema_version: 20,
     build_commit: "unknown",
     capabilities: {
@@ -675,7 +675,7 @@ function workflowVersion(index: number): DatasetVersionResponse {
   return {
     version_id: item.version_id, dataset_id: item.dataset_id,
     version_number: 1, row_count: 2, column_count: 1,
-    schema_hash: `schema-${index}`, created_at: item.created_at,
+    schema_hash: index.toString(16).padStart(64, "0"), created_at: item.created_at,
     source_sha256: "a".repeat(64), canonical_artifact: null,
     parsing: {
       kind: "delimited_text", encoding: "utf-8", delimiter: ",", quote_char: '"',
@@ -713,7 +713,7 @@ function workflowProfile(version: DatasetVersionResponse): DatasetProfileRespons
 }
 
 function workflowSchema(version: DatasetVersionResponse): DatasetSchemaResponse {
-  return { version_id: version.version_id, dataset_id: version.dataset_id, schema_hash: "changed-a", columns: version.columns };
+  return { version_id: version.version_id, dataset_id: version.dataset_id, schema_hash: "a".repeat(64), columns: version.columns };
 }
 
 function workflowDeletion(version: DatasetVersionResponse): DatasetVersionDeleteResponse {
@@ -913,7 +913,7 @@ describe("A05 dataset source isolation", () => {
     old.resolve(workflowSchema(h.versions[0]));
     await h.runner.flush();
     expect(h.runner.output.datasetPageProps.schemaDrafts[0].display_name).toBe("new unsaved label");
-    expect(h.runner.output.version?.schema_hash).toBe("changed-a");
+    expect(h.runner.output.version?.schema_hash).toBe("a".repeat(64));
     expect(h.callbacks.onSchemaChanged).toHaveBeenCalledOnce();
     h.runner.unmount();
   });
@@ -929,11 +929,11 @@ describe("A05 dataset source isolation", () => {
     apiMocks.uploadDataset.mockReturnValueOnce(intake.promise);
     await h.upload();
     await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { display_name: "still unsaved" }));
-    const updated = { ...h.versions[0], schema_hash: "changed-a", columns: [{ ...h.versions[0].columns[0], display_name: "saved label" }] };
+    const updated = { ...h.versions[0], schema_hash: "a".repeat(64), columns: [{ ...h.versions[0].columns[0], display_name: "saved label" }] };
     apiMocks.fetchDatasetProfile.mockResolvedValueOnce(workflowProfile(updated));
     schemaSave.resolve({ ...workflowSchema(updated), columns: updated.columns });
     await h.runner.flush();
-    expect(h.runner.output.version?.schema_hash).toBe("changed-a");
+    expect(h.runner.output.version?.schema_hash).toBe("a".repeat(64));
     expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledOnce();
     expect(h.runner.output.version?.columns[0].display_name).toBe("saved label");
     expect(h.runner.output.datasetPageProps.schemaDrafts[0].display_name).toBe("still unsaved");
@@ -944,7 +944,7 @@ describe("A05 dataset source isolation", () => {
     await h.runner.flush();
     expect(h.runner.output.datasetPageProps.upload?.dataset_id).toBe(h.versions[1].dataset_id);
     expect(h.runner.output.version?.version_id).toBe(h.versions[0].version_id);
-    expect(h.runner.output.profile?.schema_hash).toBe("changed-a");
+    expect(h.runner.output.profile?.schema_hash).toBe("a".repeat(64));
     h.runner.unmount();
   });
 
@@ -959,12 +959,12 @@ describe("A05 dataset source isolation", () => {
     await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { display_name: "newer label" }));
     await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
     const columns = [{ ...h.versions[0].columns[0], display_name: "newer label" }];
-    newSave.resolve({ ...workflowSchema(h.versions[0]), schema_hash: "newest-schema", columns });
+    newSave.resolve({ ...workflowSchema(h.versions[0]), schema_hash: "c".repeat(64), columns });
     await h.runner.flush();
     const versionReads = apiMocks.fetchDatasetVersion.mock.calls.length;
     oldSave.resolve(workflowSchema(h.versions[0]));
     await h.runner.flush();
-    expect(h.runner.output.version?.schema_hash).toBe("newest-schema");
+    expect(h.runner.output.version?.schema_hash).toBe("c".repeat(64));
     expect(h.runner.output.version?.columns[0].display_name).toBe("newer label");
     expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledTimes(versionReads);
     h.runner.unmount();
@@ -1204,7 +1204,7 @@ describe("A05 dataset source isolation", () => {
     await h.runner.act(() => h.runner.output.onDatasetDeleted(workflowDeletion(h.versions[1])));
     old.resolve(workflowSchema(h.versions[0]));
     await h.runner.flush();
-    expect(h.runner.output.version?.schema_hash).toBe("changed-a");
+    expect(h.runner.output.version?.schema_hash).toBe("a".repeat(64));
     expect(h.callbacks.onSchemaChanged).toHaveBeenCalledOnce();
     h.runner.unmount();
   });
@@ -1279,6 +1279,259 @@ describe("A05 dataset source isolation", () => {
       expect(runner.output.isAwaitingSubmit).toBe(false);
     }
     runner.unmount();
+  });
+});
+
+describe("A07 schema compare-and-swap", () => {
+  const conflictError = () => Object.assign(new Error("private conflict"), { code: "dataset_schema_conflict", status: 409 });
+
+  it("preserves committed state and existing analysis callbacks after a successful schema no-op", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const before = h.runner.output;
+    apiMocks.updateDatasetSchema.mockResolvedValueOnce({ ...workflowSchema(h.versions[0]), schema_hash: h.versions[0].schema_hash });
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { unit: " " }));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(h.callbacks.onSchemaChanged).not.toHaveBeenCalled();
+    expect(h.runner.output.version).toBe(before.version);
+    expect(h.runner.output.profile).toBe(before.profile);
+    expect(h.runner.output.datasetPageProps.preview).toBe(before.datasetPageProps.preview);
+    expect(apiMocks.fetchDatasetProfile).toHaveBeenCalledOnce();
+    expect(apiMocks.fetchRowsPreview).toHaveBeenCalledOnce();
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].unit).toBe("");
+    expect(h.runner.output.datasetPageProps.isSavingSchema).toBe(false);
+    h.runner.unmount();
+  });
+
+  it("allows pending auxiliary reads and newer draft edits to survive a schema no-op", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const profile = deferred<DatasetProfileResponse>();
+    const preview = deferred<DatasetRowsPreviewResponse>();
+    const save = deferred<DatasetSchemaResponse>();
+    apiMocks.fetchDatasetProfile.mockReturnValueOnce(profile.promise);
+    apiMocks.fetchRowsPreview.mockReturnValueOnce(preview.promise);
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(save.promise);
+    await h.runner.act(() => {
+      h.runner.output.datasetPageProps.onLoadDatasetProfile(h.versions[0].version_id);
+      h.runner.output.datasetPageProps.onLoadRowsPreview(h.versions[0].version_id, 0);
+      h.runner.output.datasetPageProps.onSaveSchema();
+    });
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { display_name: "new draft" }));
+    save.resolve({ ...workflowSchema(h.versions[0]), schema_hash: h.versions[0].schema_hash });
+    await h.runner.flush();
+    expect(apiMocks.fetchDatasetProfile).toHaveBeenCalledTimes(2);
+    expect(apiMocks.fetchRowsPreview).toHaveBeenCalledTimes(2);
+    expect(h.runner.output.datasetPageProps.isLoadingProfile).toBe(true);
+    expect(h.runner.output.datasetPageProps.isLoadingPreview).toBe(true);
+    expect(h.callbacks.onSchemaChanged).not.toHaveBeenCalled();
+    const nextProfile = workflowProfile(h.versions[0]);
+    const nextPreview = workflowPreview(h.versions[0]);
+    profile.resolve(nextProfile);
+    preview.resolve(nextPreview);
+    await h.runner.flush();
+    expect(h.runner.output.profile).toBe(nextProfile);
+    expect(h.runner.output.datasetPageProps.preview).toBe(nextPreview);
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].display_name).toBe("new draft");
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(conflictError());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(apiMocks.updateDatasetSchema.mock.calls[1][1]).toMatchObject({ expected_schema_hash: h.versions[0].schema_hash });
+    expect(h.runner.output.datasetPageProps.schemaConflict?.status).toBe("ready");
+    h.runner.unmount();
+  });
+
+  async function conflictHarness() {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { display_name: "local \uE000user\uE001" }));
+    const latest = { ...h.versions[0], schema_hash: "b".repeat(64), columns: [{ ...h.versions[0].columns[0], unit: "mg", role: "response" as const }] };
+    apiMocks.fetchDatasetVersion.mockResolvedValueOnce(latest);
+    apiMocks.fetchDatasetProfile.mockResolvedValueOnce(workflowProfile(latest));
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(conflictError());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    return { ...h, latest };
+  }
+
+  it("stages only local field changes on the displayed latest base without issuing a write", async () => {
+    const h = await conflictHarness();
+    const calls = apiMocks.updateDatasetSchema.mock.calls.length;
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaConflictApply?.());
+    expect(apiMocks.updateDatasetSchema).toHaveBeenCalledTimes(calls);
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0]).toMatchObject({ display_name: "local \uE000user\uE001", unit: "mg", role: "response" });
+    expect(h.runner.output.datasetPageProps.schemaStaged).toBe(true);
+    expect(h.runner.output.datasetPageProps.schemaConflict).toBeNull();
+    apiMocks.updateDatasetSchema.mockResolvedValueOnce({ ...workflowSchema(h.latest), columns: [{ ...h.latest.columns[0], display_name: "local \uE000user\uE001" }] });
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(apiMocks.updateDatasetSchema.mock.calls[1][1]).toMatchObject({ expected_schema_hash: h.latest.schema_hash });
+    h.runner.unmount();
+  });
+
+  it("preserves a re-edited draft and original base with no request until explicit Save", async () => {
+    const h = await conflictHarness();
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaConflictEdit?.());
+    expect(apiMocks.updateDatasetSchema).toHaveBeenCalledOnce();
+    expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledTimes(2);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { unit: "local second unit" }));
+    expect(h.runner.output.datasetPageProps.schemaConflict?.baseHash).toBe(h.versions[0].schema_hash);
+    expect(h.runner.output.datasetPageProps.schemaComparison?.find((item) => item.field === "unit")).toMatchObject({ draft: "local second unit", latest: "mg", conflicting: true });
+    h.runner.unmount();
+  });
+
+  it("requires confirmation to discard and never writes when loading the latest draft", async () => {
+    const h = await conflictHarness();
+    h.confirm.mockReturnValueOnce(false);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaConflictDiscard?.());
+    expect(h.runner.output.datasetPageProps.schemaConflict?.status).toBe("ready");
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].display_name).toContain("local");
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaConflictDiscard?.());
+    expect(h.runner.output.datasetPageProps.schemaConflict).toBeNull();
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0]).toMatchObject({ display_name: h.latest.columns[0].display_name, unit: "mg", role: "response" });
+    expect(apiMocks.updateDatasetSchema).toHaveBeenCalledOnce();
+    apiMocks.updateDatasetSchema.mockResolvedValueOnce(workflowSchema(h.latest));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(apiMocks.updateDatasetSchema.mock.calls[1][1]).toMatchObject({ expected_schema_hash: h.latest.schema_hash });
+    h.runner.unmount();
+  });
+
+  it("handles a second conflict after explicit Apply without silently rebasing again", async () => {
+    const h = await conflictHarness();
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaConflictApply?.());
+    const newer = { ...h.latest, schema_hash: "c".repeat(64), columns: [{ ...h.latest.columns[0], unit: "g" }] };
+    apiMocks.fetchDatasetVersion.mockResolvedValueOnce(newer);
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(conflictError());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(h.runner.output.datasetPageProps.schemaConflict).toMatchObject({ status: "ready", baseHash: h.latest.schema_hash, latest: newer });
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].unit).toBe("mg");
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaConflictApply?.());
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].unit).toBe("g");
+    expect(apiMocks.updateDatasetSchema).toHaveBeenCalledTimes(2);
+    h.runner.unmount();
+  });
+
+  it("retries only the failed latest read while preserving edits and the original base", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    apiMocks.fetchDatasetVersion.mockRejectedValueOnce(Object.assign(new Error("sensitive"), { code: "network_error" }));
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(conflictError());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(h.runner.output.datasetPageProps.schemaConflict).toMatchObject({ status: "failed", errorCode: "network_error" });
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { unit: "keep" }));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaConflictRetry?.());
+    expect(apiMocks.updateDatasetSchema).toHaveBeenCalledOnce();
+    expect(h.runner.output.datasetPageProps.schemaConflict?.status).toBe("ready");
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].unit).toBe("keep");
+    h.runner.unmount();
+  });
+
+  it.each(["switch", "aba", "delete", "unmount"] as const)("ignores a late comparison after %s", async (action) => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const held = deferred<DatasetVersionResponse>();
+    apiMocks.fetchDatasetVersion.mockReturnValueOnce(held.promise);
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(conflictError());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    if (action === "switch" || action === "aba") await h.select(2);
+    if (action === "aba") await h.select(1);
+    if (action === "delete") await h.runner.act(() => h.runner.output.onDatasetDeleted(workflowDeletion(h.versions[0])));
+    if (action === "unmount") h.runner.unmount();
+    const previous = h.runner.output.version;
+    held.resolve({ ...h.versions[0], schema_hash: "b".repeat(64) });
+    await h.runner.flush();
+    expect(h.runner.output.version).toBe(previous);
+    expect(h.callbacks.onSchemaChanged).not.toHaveBeenCalled();
+    h.runner.unmount();
+  });
+
+  it("does not cancel newer intake when comparison publishes known committed metadata", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const held = deferred<DatasetVersionResponse>();
+    apiMocks.fetchDatasetVersion.mockReturnValueOnce(held.promise);
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(conflictError());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.file("new.csv");
+    const intake = deferred<DatasetUploadResponse>();
+    apiMocks.uploadDataset.mockReturnValueOnce(intake.promise);
+    await h.upload();
+    held.resolve({ ...h.versions[0], schema_hash: "b".repeat(64) });
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.isUploading).toBe(true);
+    intake.resolve(workflowUpload(2));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.upload?.dataset_id).toBe(h.versions[1].dataset_id);
+    expect(h.runner.output.datasetPageProps.schemaConflict?.status).toBe("ready");
+    h.runner.unmount();
+  });
+
+  it("submits the draft base hash with schema changes", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    apiMocks.updateDatasetSchema.mockResolvedValueOnce(workflowSchema(h.versions[0]));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { unit: "kg" }));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(apiMocks.updateDatasetSchema.mock.calls[0][1]).toMatchObject({ expected_schema_hash: h.versions[0].schema_hash });
+    h.runner.unmount();
+  });
+
+  it("advances the base only for a clean acknowledged draft and rejects malformed bases before PATCH", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    apiMocks.updateDatasetSchema.mockResolvedValueOnce(workflowSchema(h.versions[0]));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    apiMocks.updateDatasetSchema.mockResolvedValueOnce(workflowSchema(h.versions[0]));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(apiMocks.updateDatasetSchema.mock.calls[1][1]).toMatchObject({ expected_schema_hash: "a".repeat(64) });
+    h.versions[1].schema_hash = "invalid-short-hash";
+    await h.select(2);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(apiMocks.updateDatasetSchema).toHaveBeenCalledTimes(2);
+    expect(h.runner.output.flowError).toBe("dataset_schema_base_invalid");
+    h.runner.unmount();
+  });
+
+  it("does not publish a latest response with mismatched column identity", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    apiMocks.fetchDatasetVersion.mockResolvedValueOnce({ ...h.versions[0], schema_hash: "b".repeat(64), columns: [{ ...h.versions[0].columns[0], column_id: "other-column" }] });
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(conflictError());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(h.runner.output.datasetPageProps.schemaConflict).toMatchObject({ status: "failed", errorCode: "dataset_schema_comparison_mismatch" });
+    expect(h.runner.output.version).toEqual(h.versions[0]);
+    expect(h.callbacks.onSchemaChanged).not.toHaveBeenCalled();
+    h.runner.unmount();
+  });
+
+  it("does not silently rebase newer edits onto an acknowledged earlier save", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const first = deferred<DatasetSchemaResponse>();
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(first.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { unit: "new unit" }));
+    first.resolve(workflowSchema(h.versions[0]));
+    await h.runner.flush();
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(Object.assign(new Error("conflict"), { code: "dataset_schema_conflict", status: 409 }));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(apiMocks.updateDatasetSchema.mock.calls[1][1]).toMatchObject({ expected_schema_hash: h.versions[0].schema_hash });
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].unit).toBe("new unit");
+    h.runner.unmount();
+  });
+
+  it("loads latest metadata for conflict comparison without replacing the user's draft or retrying the write", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { unit: "local unit" }));
+    const latest = { ...h.versions[0], schema_hash: "b".repeat(64), columns: [{ ...h.versions[0].columns[0], role: "response" as const }] };
+    apiMocks.fetchDatasetVersion.mockResolvedValueOnce(latest);
+    apiMocks.fetchDatasetProfile.mockResolvedValueOnce(workflowProfile(latest));
+    apiMocks.updateDatasetSchema.mockRejectedValueOnce(Object.assign(new Error("private conflict message"), { code: "dataset_schema_conflict", status: 409 }));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledTimes(2);
+    expect(apiMocks.updateDatasetSchema).toHaveBeenCalledOnce();
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].unit).toBe("local unit");
+    expect(h.runner.output.version?.schema_hash).toBe(latest.schema_hash);
+    expect(h.callbacks.onSchemaChanged).toHaveBeenCalledWith(latest.columns);
+    h.runner.unmount();
   });
 });
 

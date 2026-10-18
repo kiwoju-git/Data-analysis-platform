@@ -2527,30 +2527,76 @@ def update_dataset_schema_records(
     schema_hash: str,
     columns: list[DatasetColumnRecord],
     *,
+    expected_schema_hash: str,
     stale_updated_at: str,
-) -> None:
+) -> str:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
-        with connection:
-            connection.execute(
+        try:
+            connection.execute("BEGIN IMMEDIATE;")
+            version = connection.execute(
+                "SELECT schema_hash, column_count FROM dataset_versions WHERE version_id = ?;",
+                (version_id,),
+            ).fetchone()
+            if version is None:
+                raise DatasetVersionStorageConflict("dataset_version_not_found")
+            if version[0] != expected_schema_hash:
+                raise DatasetVersionStorageConflict("dataset_schema_conflict")
+
+            stored_columns = connection.execute(
+                """
+                SELECT column_id, display_name, measurement_level, role, unit
+                FROM dataset_columns WHERE version_id = ? ORDER BY column_index;
+                """,
+                (version_id,),
+            ).fetchall()
+            updated_columns = [
+                (
+                    column.column_id,
+                    column.display_name,
+                    column.measurement_level,
+                    column.role,
+                    column.unit,
+                )
+                for column in columns
+            ]
+            if (
+                len(stored_columns) != version[1]
+                or len(updated_columns) != version[1]
+                or len({column.column_id for column in columns}) != version[1]
+                or any(column.version_id != version_id for column in columns)
+                or [row[0] for row in stored_columns] != [row[0] for row in updated_columns]
+            ):
+                raise DatasetVersionStorageConflict("dataset_schema_conflict")
+
+            # Even an unchanged save must pass the current-hash check under the write lock.
+            if stored_columns == updated_columns:
+                connection.commit()
+                return str(version[0])
+            if version[0] == schema_hash:
+                raise DatasetVersionStorageConflict("dataset_schema_conflict")
+
+            changed = connection.execute(
                 """
                 UPDATE dataset_versions
                 SET schema_hash = ?
-                WHERE version_id = ?;
+                WHERE version_id = ? AND schema_hash = ?;
                 """,
-                (schema_hash, version_id),
+                (schema_hash, version_id, expected_schema_hash),
             )
-            connection.executemany(
-                """
-                UPDATE dataset_columns
-                SET
-                    display_name = ?,
-                    measurement_level = ?,
-                    role = ?,
-                    unit = ?
-                WHERE column_id = ? AND version_id = ?;
-                """,
-                [
+            if changed.rowcount != 1:
+                raise DatasetVersionStorageConflict("dataset_schema_conflict")
+            for column in columns:
+                changed = connection.execute(
+                    """
+                    UPDATE dataset_columns
+                    SET
+                        display_name = ?,
+                        measurement_level = ?,
+                        role = ?,
+                        unit = ?
+                    WHERE column_id = ? AND version_id = ?;
+                    """,
                     (
                         column.display_name,
                         column.measurement_level,
@@ -2558,10 +2604,10 @@ def update_dataset_schema_records(
                         column.unit,
                         column.column_id,
                         version_id,
-                    )
-                    for column in columns
-                ],
-            )
+                    ),
+                )
+                if changed.rowcount != 1:
+                    raise DatasetVersionStorageConflict("dataset_schema_conflict")
             connection.execute(
                 """
                 UPDATE analysis_runs
@@ -2570,6 +2616,17 @@ def update_dataset_schema_records(
                 """,
                 (stale_updated_at, version_id),
             )
+            connection.commit()
+            return schema_hash
+        except DatasetVersionStorageConflict:
+            connection.rollback()
+            raise
+        except sqlite3.IntegrityError as exc:
+            connection.rollback()
+            raise DatasetVersionStorageConflict("dataset_schema_conflict") from exc
+        except Exception:
+            connection.rollback()
+            raise
 
 
 def insert_analysis_run_record(workspace_root: Path, record: AnalysisRunRecord) -> None:

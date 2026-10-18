@@ -6,6 +6,7 @@ import json
 import platform
 import subprocess
 import sys
+import traceback
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -161,6 +162,10 @@ def diagnosed_page(
             "python": platform.python_version(),
             "browser": browser.version,
             "stage": name,
+            "failure_type": type(failure).__name__,
+            "failure_traceback": traceback.format_exception(
+                type(failure), failure, failure.__traceback__
+            ),
             **source_identity(),
         }
         # Diagnostics must not replace the original failure if the renderer crashed.

@@ -16,8 +16,9 @@ import { PasteDatasetPanel } from "./PasteDatasetPanel";
 import type { SchemaDraft } from "./schemaPresets";
 import { appLocationChangeEvent } from "./browserNavigation";
 import { DatasetIntakeLimits } from "./DatasetIntakeLimits";
+import type { SchemaConflictProps } from "./datasetSchemaDraft";
 
-export interface DatasetPreparationPageProps {
+export interface DatasetPreparationPageProps extends SchemaConflictProps {
   canApplyBayesianPreset: boolean;
   canConfirm: boolean;
   delimiterOptions: string[];
@@ -99,6 +100,7 @@ export function DatasetPreparationPage({
   onSaveSchema,
   onSchemaDraftChange,
   onUpload,
+  ...schemaConflictProps
 }: DatasetPreparationPageProps) {
   useEffect(() => {
     const reveal = () => revealDatasetSection();
@@ -164,6 +166,7 @@ export function DatasetPreparationPage({
       ) : null}
       {version !== null ? (
         <DatasetVersionPanel
+          {...schemaConflictProps}
           canApplyBayesianPreset={canApplyBayesianPreset}
           isLoadingPreview={isLoadingPreview}
           isLoadingProfile={isLoadingProfile}

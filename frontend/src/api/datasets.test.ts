@@ -19,7 +19,7 @@ const calls = [
     }, columns: [],
   }) },
   { label: "version", code: "dataset_version_not_found", invoke: () => fetchDatasetVersion(versionId) },
-  { label: "schema", code: "dataset_schema_conflict", invoke: () => updateDatasetSchema(versionId, { columns: [] }) },
+  { label: "schema", code: "dataset_schema_conflict", invoke: () => updateDatasetSchema(versionId, { expected_schema_hash: "a".repeat(64), columns: [] }) },
   { label: "preview", code: "rows_preview_failed", invoke: () => fetchRowsPreview(versionId, 0, 10) },
   { label: "profile", code: "dataset_profile_failed", invoke: () => fetchDatasetProfile(versionId) },
 ] as const;
@@ -28,7 +28,7 @@ describe("dataset workflow transport errors", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it.each(calls)("preserves typed $label errors through the workflow presentation boundary", async ({ code, invoke }) => {
-    const status = code === "dataset_version_not_found" ? 404 : 422;
+    const status = code === "dataset_version_not_found" ? 404 : code === "dataset_schema_conflict" ? 409 : 422;
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({
       error: { code, message: rawText, correlation_id: "synthetic-correlation" },
     }), { status }))));
@@ -54,5 +54,16 @@ describe("dataset workflow transport errors", () => {
     });
     vi.stubGlobal("fetch", fetch);
     expect(await createDatasetFromPastedText({ content: rawText, original_filename: "synthetic.txt" })).toEqual(payload);
+  });
+
+  it("serializes the supplied immutable schema base hash without rewriting user fields", async () => {
+    const request = { expected_schema_hash: "b".repeat(64), columns: [{ column_id: "column-1", display_name: rawText, unit: "kg", measurement_level: "continuous" as const, role: "feature" as const }] };
+    vi.stubGlobal("fetch", vi.fn((_url: unknown, options: RequestInit) => {
+      expect(options.method).toBe("PATCH");
+      if (typeof options.body !== "string") throw new Error("Expected JSON request body");
+      expect(JSON.parse(options.body)).toEqual(request);
+      return Promise.resolve(new Response(JSON.stringify({ schema_hash: "c".repeat(64) })));
+    }));
+    await updateDatasetSchema(versionId, request);
   });
 });

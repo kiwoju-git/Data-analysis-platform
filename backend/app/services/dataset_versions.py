@@ -52,6 +52,7 @@ from app.storage.metadata import (
     DatasetRecord,
     DatasetVersionLineageRecord,
     DatasetVersionRecord,
+    DatasetVersionStorageConflict,
     WorkspaceAssetStorageConflict,
     count_dataset_version_catalog_records,
     get_dataset_artifact_record,
@@ -317,23 +318,41 @@ def update_dataset_schema(
 ) -> DatasetSchemaResponse:
     version = _get_existing_version(settings, version_id)
     current_columns = list_dataset_column_records(settings.workspace_root, str(version_id))
+    if len(current_columns) != version.column_count:
+        _get_existing_version(settings, version_id)
+        raise ApiError(
+            code="dataset_schema_conflict",
+            message="데이터셋 스키마가 변경되었습니다. 최신 스키마를 확인한 뒤 다시 저장하세요.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
     updated_columns = _apply_schema_updates(current_columns, request)
-    if _schema_update_is_noop(current_columns, updated_columns):
-        return dataset_schema_response_from_records(version, current_columns)
-
     schema_hash = _schema_hash_for_records(
         source_sha256=version.source_sha256,
         parsing_options_json=version.parsing_options_json,
         row_count=version.row_count,
         columns=updated_columns,
     )
-    update_dataset_schema_records(
-        settings.workspace_root,
-        str(version_id),
-        schema_hash,
-        updated_columns,
-        stale_updated_at=_utc_now(),
-    )
+    try:
+        schema_hash = update_dataset_schema_records(
+            settings.workspace_root,
+            str(version_id),
+            schema_hash,
+            updated_columns,
+            expected_schema_hash=request.expected_schema_hash,
+            stale_updated_at=_utc_now(),
+        )
+    except DatasetVersionStorageConflict as exc:
+        if exc.code == "dataset_version_not_found":
+            raise ApiError(
+                code=exc.code,
+                message="요청한 데이터셋 버전을 찾을 수 없습니다.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            ) from exc
+        raise ApiError(
+            code="dataset_schema_conflict",
+            message="데이터셋 스키마가 변경되었습니다. 최신 스키마를 확인한 뒤 다시 저장하세요.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
     updated_version = DatasetVersionRecord(
         version_id=version.version_id,
         dataset_id=version.dataset_id,
@@ -523,22 +542,6 @@ def _apply_schema_updates(
             ),
         )
     return updated_columns
-
-
-def _schema_update_is_noop(
-    current_columns: list[DatasetColumnRecord],
-    updated_columns: list[DatasetColumnRecord],
-) -> bool:
-    if len(current_columns) != len(updated_columns):
-        return False
-    return all(
-        current.column_id == updated.column_id
-        and current.display_name == updated.display_name
-        and current.measurement_level == updated.measurement_level
-        and current.role == updated.role
-        and current.unit == updated.unit
-        for current, updated in zip(current_columns, updated_columns, strict=True)
-    )
 
 
 def _read_canonical_preview_rows(

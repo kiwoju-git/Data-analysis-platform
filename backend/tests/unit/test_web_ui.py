@@ -41,7 +41,7 @@ def test_explicit_spa_and_assets_do_not_mask_api_or_unknown_paths(tmp_path: Path
             assert 'id="root"' in response.text
             assert response.headers["cache-control"] == "no-store"
         assert client.get("/", follow_redirects=False).headers["location"] == "/home"
-        assert client.get("/api/v1/runtime-info").json()["api_contract_version"] == 22
+        assert client.get("/api/v1/runtime-info").json()["api_contract_version"] == 23
         assert (
             client.get("/api/v1/runtime-info", headers={"Host": "untrusted.example"}).status_code
             == 400

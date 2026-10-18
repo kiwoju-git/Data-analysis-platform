@@ -40,6 +40,7 @@ from startup_readiness import verify_startup_readiness
 from api_translation_boundary import verify_api_translation_boundary
 from dataset_context import verify_dataset_context
 from gp_prediction_context import verify_gp_prediction_context
+from schema_concurrency import verify_schema_concurrency
 from regularized_regression import verify_regularized_regression
 from result_charts import verify_chart_interactions, verify_result_chart_models
 from desktop_resize import verify_desktop_resize
@@ -217,6 +218,7 @@ def main() -> int:
     parser.add_argument("--api-translation-only", action="store_true")
     parser.add_argument("--dataset-context-only", action="store_true")
     parser.add_argument("--gp-prediction-context-only", action="store_true")
+    parser.add_argument("--schema-concurrency-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -326,6 +328,7 @@ def main() -> int:
             args.api_translation_only,
             args.dataset_context_only,
             args.gp_prediction_context_only,
+            args.schema_concurrency_only,
         )
         print("E2E critical path passed")
         return 0
@@ -627,11 +630,16 @@ def run_browser_flow(
     api_translation_only: bool = False,
     dataset_context_only: bool = False,
     gp_prediction_context_only: bool = False,
+    schema_concurrency_only: bool = False,
 ) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            if schema_concurrency_only:
+                diagnostics.step("verify two-editor schema concurrency")
+                verify_schema_concurrency(browser, frontend_base_url, diagnostics.root / "schema-concurrency", isolated_workspace=True)
+                return
             if gp_prediction_context_only:
                 diagnostics.step("verify saved GP prediction request context")
                 verify_gp_prediction_context(browser, frontend_base_url, diagnostics.root / "gp-prediction-context", isolated_workspace=True)
@@ -658,6 +666,8 @@ def run_browser_flow(
                 verify_dataset_context(browser, frontend_base_url, diagnostics.root / "dataset-context", isolated_workspace=True)
                 diagnostics.step("verify saved GP prediction request context")
                 verify_gp_prediction_context(browser, frontend_base_url, diagnostics.root / "gp-prediction-context", isolated_workspace=True)
+                diagnostics.step("verify two-editor schema concurrency")
+                verify_schema_concurrency(browser, frontend_base_url, diagnostics.root / "schema-concurrency", isolated_workspace=True)
             verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
             verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
@@ -1856,6 +1866,11 @@ def verify_help_report_and_manage_routes(
     open_primary_navigation(page, "리포트")
     expect(page.get_by_role("heading", name="리포트 센터")).to_be_visible()
     expect_lazy_workspace_page(page, "ReportCenterPage")
+    # Earlier isolated fixtures intentionally retain their saved analyses. Scope
+    # this assertion to the current dataset instead of assuming an empty catalog.
+    current_only = page.get_by_role("checkbox", name="현재 데이터셋만", exact=True)
+    expect(current_only).to_be_enabled()
+    current_only.check()
     report_rows = page.locator(".report-run-row")
     expect(report_rows).to_have_count(2, timeout=20_000)
     report_rows.first.click()

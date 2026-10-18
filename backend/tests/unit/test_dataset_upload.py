@@ -703,6 +703,7 @@ def test_dataset_schema_can_be_read_and_updated_without_changing_original_names(
         update_response = client.patch(
             f"/api/v1/dataset-versions/{version_id}/schema",
             json={
+                "expected_schema_hash": version["schema_hash"],
                 "columns": [
                     {
                         "column_id": first_column["column_id"],
@@ -747,6 +748,7 @@ def test_dataset_schema_update_rejects_duplicate_display_names_without_echoing_v
         response = client.patch(
             f"/api/v1/dataset-versions/{version['version_id']}/schema",
             json={
+                "expected_schema_hash": version["schema_hash"],
                 "columns": [
                     {
                         "column_id": columns[0]["column_id"],
@@ -780,6 +782,7 @@ def test_dataset_schema_update_rejects_unknown_column(tmp_path) -> None:
         response = client.patch(
             f"/api/v1/dataset-versions/{version['version_id']}/schema",
             json={
+                "expected_schema_hash": version["schema_hash"],
                 "columns": [
                     {
                         "column_id": str(uuid4()),

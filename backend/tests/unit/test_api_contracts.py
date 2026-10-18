@@ -8275,6 +8275,7 @@ def test_regression_prediction_blocks_stale_source_model_but_allows_schema_noop(
         noop_response = client.patch(
             f"/api/v1/dataset-versions/{version['version_id']}/schema",
             json={
+                "expected_schema_hash": version["schema_hash"],
                 "columns": [
                     {
                         "column_id": first_column["column_id"],
@@ -8293,6 +8294,7 @@ def test_regression_prediction_blocks_stale_source_model_but_allows_schema_noop(
         changed_response = client.patch(
             f"/api/v1/dataset-versions/{version['version_id']}/schema",
             json={
+                "expected_schema_hash": version["schema_hash"],
                 "columns": [
                     {
                         "column_id": first_column["column_id"],
@@ -9488,6 +9490,7 @@ def test_analysis_run_list_api_returns_paginated_history_without_internal_paths(
         patch_response = client.patch(
             f"/api/v1/dataset-versions/{first_version['version_id']}/schema",
             json={
+                "expected_schema_hash": first_version["schema_hash"],
                 "columns": [
                     {
                         "column_id": first_column["column_id"],
@@ -11847,6 +11850,7 @@ def test_dataset_schema_update_marks_existing_analysis_run_stale(tmp_path) -> No
         noop_patch_response = client.patch(
             f"/api/v1/dataset-versions/{version['version_id']}/schema",
             json={
+                "expected_schema_hash": version["schema_hash"],
                 "columns": [
                     {
                         "column_id": first_column["column_id"],
@@ -11862,6 +11866,7 @@ def test_dataset_schema_update_marks_existing_analysis_run_stale(tmp_path) -> No
         patch_response = client.patch(
             f"/api/v1/dataset-versions/{version['version_id']}/schema",
             json={
+                "expected_schema_hash": version["schema_hash"],
                 "columns": [
                     {
                         "column_id": first_column["column_id"],

@@ -10,7 +10,8 @@ param(
     [switch]$RefinedUiOnly,
     [switch]$ApiTranslationOnly,
     [switch]$DatasetContextOnly,
-    [switch]$GpPredictionContextOnly
+    [switch]$GpPredictionContextOnly,
+    [switch]$SchemaConcurrencyOnly
 )
 
 Set-StrictMode -Version Latest
@@ -70,6 +71,9 @@ try {
     }
     if ($GpPredictionContextOnly) {
         $Args += "--gp-prediction-context-only"
+    }
+    if ($SchemaConcurrencyOnly) {
+        $Args += "--schema-concurrency-only"
     }
 
     & $Python @Args

@@ -8,8 +8,11 @@ import type { SchemaDraftPatch } from "./datasetPreparationTypes";
 import type { SchemaDraft } from "./schemaPresets";
 import { useI18n } from "./i18n/LocaleProvider";
 import { translateSystemText } from "./i18n/translate";
+import { useRef } from "react";
+import type { SchemaConflictProps } from "./datasetSchemaDraft";
+import { DatasetSchemaConflict } from "./DatasetSchemaConflict";
 
-interface DatasetSchemaSectionProps {
+interface DatasetSchemaSectionProps extends SchemaConflictProps {
   canApplyBayesianPreset: boolean;
   isSavingSchema: boolean;
   schemaDrafts: SchemaDraft[];
@@ -27,8 +30,10 @@ export function DatasetSchemaSection({
   onApplyBayesianPreset,
   onSaveSchema,
   onSchemaDraftChange,
+  ...conflictProps
 }: DatasetSchemaSectionProps) {
   const { locale } = useI18n();
+  const schemaTable = useRef<HTMLTableElement>(null);
   return (
     <>
       <div className="schema-actions">
@@ -41,7 +46,7 @@ export function DatasetSchemaSection({
           ) : null}
           <button
             className="secondary-button"
-            disabled={isSavingSchema}
+            disabled={isSavingSchema || conflictProps.schemaConflict?.status === "loading"}
             onClick={onSaveSchema}
             type="button"
           >
@@ -53,8 +58,12 @@ export function DatasetSchemaSection({
         역할은 분석에서의 사용 목적이며, 숫자형/범주형 판정은 데이터 타입과 측정 수준을
         기준으로 합니다.
       </p>
+      <DatasetSchemaConflict {...conflictProps} onSchemaConflictEdit={() => {
+        conflictProps.onSchemaConflictEdit?.();
+        schemaTable.current?.querySelector<HTMLInputElement>("input")?.focus();
+      }} />
       <div className="table-wrap">
-        <table className="schema-table">
+        <table className="schema-table" ref={schemaTable}>
           <thead>
             <tr>
               <th>컬럼</th>

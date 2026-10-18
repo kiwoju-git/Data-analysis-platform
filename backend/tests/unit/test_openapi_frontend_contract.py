@@ -3402,6 +3402,16 @@ def openapi_schema() -> dict[str, Any]:
     return create_app().openapi()
 
 
+def test_dataset_schema_update_requires_lowercase_source_hash(
+    openapi_schema: dict[str, Any],
+) -> None:
+    schema = openapi_schema["components"]["schemas"]["DatasetSchemaUpdateRequest"]
+    assert set(schema["required"]) == {"expected_schema_hash", "columns"}
+    assert schema["properties"]["expected_schema_hash"]["type"] == "string"
+    assert schema["properties"]["expected_schema_hash"]["pattern"] == r"^[0-9a-f]{64}$"
+    assert schema["additionalProperties"] is False
+
+
 @pytest.mark.parametrize(
     "contract",
     FRONTEND_ROUTE_CONTRACTS,

@@ -1,5 +1,21 @@
 # Runtime Compatibility Contract
 
+## 2026-10-18 Update
+
+API contract 23 requires `expected_schema_hash` on dataset schema PATCH requests.
+The value identifies the schema on which the user's draft was based. Storage
+checks it atomically with column/hash/stale updates; a stale draft returns
+`409 dataset_schema_conflict`, including when its values match a newer schema.
+A valid no-op does not mark results stale. Frontend conflict resolution preserves
+the draft and requires an explicit choice before rebasing; no automatic retry
+with a newly fetched hash is allowed.
+
+The backend, frontend and PowerShell startup require contract 23; Linux startup
+and release builds read the same backend constant. Metadata remains 20 because
+the CAS uses existing columns. Statistical method/result/model versions and
+historical artifact bytes are unchanged. Historical notes below retain their
+original numbers and are not current handshake requirements.
+
 ## 2026-10-08 Update
 
 API contract22 adds the Two Variances preflight/execution contract; minimum
@@ -67,7 +83,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `21`);
+- `api_contract_version` (currently `23`);
 - the actual metadata schema constant (currently `20`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
@@ -88,7 +104,7 @@ regularized prediction and model-kind optimizer metadata. Metadata schema 19
 and existing artifact ownership remain sufficient; no migration or stored
 checksum rewrite is performed. Exact frontend/backend matching is required.
 
-The frontend expects API contract `20`, schema 20 or later, and every required
+The frontend expects API contract `23`, schema 20 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

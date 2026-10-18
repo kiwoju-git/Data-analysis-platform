@@ -1,0 +1,10 @@
+.schema-conflict {
+  min-inline-size: 0;
+  padding-block: 12px;
+  border-block: 1px solid #d5dce6;
+}
+.schema-conflict h4, .schema-conflict p { margin-block: 0 8px; }
+.schema-conflict .button-row { flex-wrap: wrap; margin-block-start: 12px; }
+.schema-conflict .button-row button { display: inline-flex; align-items: center; gap: 6px; }
+.schema-conflict .table-wrap { max-inline-size: 100%; overflow-x: auto; }
+.schema-conflict td { overflow-wrap: anywhere; min-inline-size: 5rem; max-inline-size: 18rem; }

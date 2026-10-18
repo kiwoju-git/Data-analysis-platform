@@ -486,6 +486,7 @@ class DatasetColumnSchemaUpdate(BaseModel):
 class DatasetSchemaUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    expected_schema_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     columns: list[DatasetColumnSchemaUpdate] = Field(min_length=1)
 
 

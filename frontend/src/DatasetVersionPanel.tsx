@@ -12,8 +12,9 @@ import { DatasetProfileSection } from "./DatasetProfileSection";
 import { DatasetSchemaSection } from "./DatasetSchemaSection";
 import type { SchemaDraftPatch } from "./datasetPreparationTypes";
 import type { SchemaDraft } from "./schemaPresets";
+import type { SchemaConflictProps } from "./datasetSchemaDraft";
 
-interface DatasetVersionPanelProps {
+interface DatasetVersionPanelProps extends SchemaConflictProps {
   canApplyBayesianPreset: boolean;
   isLoadingPreview: boolean;
   isLoadingProfile: boolean;
@@ -61,6 +62,7 @@ export function DatasetVersionPanel({
   onPreviewLimitChange,
   onSaveSchema,
   onSchemaDraftChange,
+  ...schemaConflictProps
 }: DatasetVersionPanelProps) {
   const createdAt = formatCreatedAt(version.created_at);
 
@@ -142,6 +144,7 @@ export function DatasetVersionPanel({
         error={profileError}
       />
       <DatasetSchemaSection
+        {...schemaConflictProps}
         canApplyBayesianPreset={canApplyBayesianPreset}
         isSavingSchema={isSavingSchema}
         schemaDrafts={schemaDrafts}

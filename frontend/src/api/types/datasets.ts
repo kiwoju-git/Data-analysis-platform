@@ -374,6 +374,7 @@ export interface DatasetColumnSchemaUpdate {
 }
 
 export interface DatasetSchemaUpdateRequest {
+  expected_schema_hash: string;
   columns: DatasetColumnSchemaUpdate[];
 }
 

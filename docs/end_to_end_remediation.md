@@ -44,7 +44,7 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A04 | Transport/i18n | reproduced / fixed (integration rerun pending) | Request bytes and response objects remain untouched; explicit display boundaries replace compiler tokens. Frozen Windows full browser/frontend checks passed. Integrated CI exposed a missing documentation step marker; corrected locally, native CI rerun pending. |
 | A05 | Dataset context | reproduced / fixed (native integration pending) | 101 focused tests and all 16 real-server en/ko browser scenarios passed, including same-active schema, native file-cancel and replacement paste ownership. Whole native checkpoint CI remains required. |
 | A06 | GPR direct prediction | reproduced / fixed (native integration pending) | Five pre-fix component regressions; 80 focused tests and 18 real-model en/ko browser cases passed. Exact ID validation and detached JSON snapshots preserve both uncertainty kinds. |
-| A07 | Schema CAS | - | Pending transaction/API implementation. |
+| A07 | Schema CAS | reproduced / fixed (native integration pending) | Atomic expected-hash CAS, explicit draft comparison/reapply and no-op preservation; 299 backend focused, 18 final backend, 119 frontend focused, six real two-editor browser cases passed. |
 | A08 | Workspace/backup | - | Pending lease and archive validation. |
 | A09 | Chart formatters | - | Pending display-contract tests. |
 | A10 | Report Center | - | Pending independent query-lane tests. |
@@ -281,3 +281,73 @@ reordered-response screenshot was inspected. These are synthetic and untracked.
 The E2E step-inventory test passed (one test / 216 deselected); an initial command
 pointed at the wrong test module and selected no tests, not a pass. Full Windows/
 Linux and whole-product checks remain separate gates before main/Release.
+
+Native A06 run `39096843917` at `a5f1dbd` passed Linux full checks: 1402 backend
+tests / 11 skips / 97 warnings, 75 frontend files / 612 tests, localization,
+typecheck/build/lint and source-runner loopback/LAN lifecycle. Python 3.11 and
+dependency-security also succeeded. Linux browser E2E passed the new transport,
+dataset and GP stages, then failed an old Report Center assumption: it expected
+two global results, but the new GP fixture correctly retained two additional
+saved models/analyses. The test now explicitly selects the current-dataset filter
+before asserting that dataset's two results. No saved fixture is deleted to hide
+the difference. The corrected whole browser flow still requires rerun.
+Log: `.tmp/remediation-a06-ci-linux.log`; failed-page artifact:
+`39096843917/artifacts/12125436449`. Windows was still running when recorded.
+
+## A07 Evidence
+
+Frontend pre-fix tests reproduced three failures: missing expected hash and no
+latest-schema comparison after a conflict. Backend pre-fix testing confirmed
+that an omitted expected hash incorrectly succeeded (one failure). The CAS now
+checks owner/hash/no-op/columns/stale flags under one `BEGIN IMMEDIATE` boundary.
+Review additionally required no-op preservation of an existing opaque schema
+hash even when the current hash function would produce a different value.
+
+Runtime 23 checks passed locally: backend health/startup/web-serving checks,
+19 passed / one platform-permission skip / three deprecation warnings, and
+frontend runtime compatibility, four passed. Backend command used root
+`PYTHONPATH` with the integrated locked environment; log
+`.tmp/remediation-a07-runtime.log`. These are runtime checks, not completed CAS
+or browser acceptance. Metadata remains 20 and methods are unchanged.
+
+The backend CAS-focused suite passed 299 tests; final CAS/API rechecks passed
+18 tests. The first real two-editor browser run failed after the successful
+merge save: its fixture expected private-use characters in the saved display
+label, whereas the existing schema-label policy removes non-printable characters.
+The corrected test separately checks unchanged request text and the normalized
+stored label. No production label policy was changed. Child-page diagnostics
+now include the actual exception location as well as page/context evidence.
+This failed run is retained at `.tmp/e2e-remediation-a07-schema-1`.
+
+The frozen local A05 full check at `053a789` passed Ruff, mypy and 1410 backend
+tests / three skips / 97 warnings (1862.22 seconds), then failed on the same five
+obsolete localization source mappings already fixed in A06. Windows CI at that
+checkpoint passed 1411 backend tests / two skips / 97 warnings before the same
+localization failure. Neither run reached frontend tests or browser E2E.
+
+The corrected A07 browser run passed all six cases (apply/discard/late comparison
+in Korean and English). A second concurrent write after accepting the comparison
+is rejected again; only the explicit final save commits. Canonical/source hashes
+and previously saved result bytes remain unchanged, and its stale flag is true.
+Resize/locale change issues no PATCH. Evidence is in
+`.tmp/e2e-remediation-a07-schema-2`; command:
+
+```powershell
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests\e2e\critical_path.py --backend-port 8037 --frontend-port 5237 --schema-concurrency-only --diagnostics-root .tmp/e2e-remediation-a07-schema-2 --keep-workspace
+```
+
+The no-op UI regression failed two tests before correction; its final focused
+suite passed 119 tests in five files. Full frontend Vitest passed 641 tests in
+77 files. Localization passed 2900 source strings / 3993 keys. Scoped frontend
+lint, strict typecheck, E2E Ruff and the documentation step-inventory test passed.
+An initial inventory command selected no tests in the wrong module; it was not
+counted as a pass. The successful test is in `test_openapi_frontend_contract.py`.
+Independent source review found no new blocking issue; it is not execution
+evidence. Late analysis completion after a schema change remains the separate
+A13 persistence review, not a solved property of the current schema transaction.
+
+The A05 dataset-context browser suite was rerun against A07 and all 16 cases
+passed (`.tmp/e2e-remediation-a07-dataset-regression`, ports 8035/5235,
+`--dataset-context-only`). Production build also passed; its existing large-chunk
+warning remains a performance advisory, not a suppressed failure. This checkpoint
+is ready for whole-product/native integration, not for main or Release publication.

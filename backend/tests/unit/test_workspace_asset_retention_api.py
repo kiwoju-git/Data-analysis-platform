@@ -433,6 +433,7 @@ def test_limit_set_can_be_deleted_after_source_schema_marks_analysis_stale(
         changed = client.patch(
             f"/api/v1/dataset-versions/{version_id}/schema",
             json={
+                "expected_schema_hash": schema["schema_hash"],
                 "columns": [
                     {
                         "column_id": column["column_id"],
@@ -441,7 +442,7 @@ def test_limit_set_can_be_deleted_after_source_schema_marks_analysis_stale(
                         "role": column["role"],
                         "unit": column["unit"],
                     }
-                ]
+                ],
             },
         )
         source = client.get(f"/api/v1/analysis-runs/{limit_set['source_analysis_id']}")

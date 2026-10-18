@@ -28,6 +28,10 @@ import { createSourceContextGuard } from "./sourceContextGuard";
 import { appLocationChangeEvent } from "./browserNavigation";
 import { t } from "./i18n/translate";
 import { datasetRequestErrorCode as requestErrorCode } from "./datasetRequestErrors";
+import {
+  compareSchemaDraft, createSchemaDraftBase, datasetSchemaIsUnchanged, rebaseSchemaDraft, schemaDraftsFromColumns,
+  validSchemaHash, type SchemaConflictState, type SchemaDraftBase,
+} from "./datasetSchemaDraft";
 
 const defaultPreviewLimit = 10;
 const defaultMissingTokens = ["", "NA", "N/A", "null", "N/T"];
@@ -120,6 +124,8 @@ export function useDatasetWorkflow({
   const [parsingOptions, setParsingOptions] = useState<ConfirmedParsingOptions | null>(null);
   const [version, setVersion] = useState<DatasetVersionResponse | null>(null);
   const [schemaDrafts, setSchemaDrafts] = useState<SchemaDraft[]>([]);
+  const [schemaConflict, setSchemaConflict] = useState<SchemaConflictState | null>(null);
+  const [schemaStaged, setSchemaStaged] = useState(false);
   const [preview, setPreview] = useState<DatasetRowsPreviewResponse | null>(null);
   const [profile, setProfile] = useState<DatasetProfileResponse | null>(null);
   const [pastedHeaderPreference, setPastedHeaderPreference] = useState<boolean | null>(null);
@@ -144,6 +150,9 @@ export function useDatasetWorkflow({
   const committed = useRef<DatasetVersionResponse | null>(null);
   const committedGeneration = useRef(0);
   const schemaWriteSequence = useRef(0);
+  const schemaBase = useRef<SchemaDraftBase | null>(null);
+  const schemaComparisonGuard = useRef(createLatestRequestGuard());
+  const latestSchema = useRef<DatasetVersionResponse | null>(null);
   const pending = useRef<string | null>(null);
   const activationInFlight = useRef(false);
   const readsInFlight = useRef({ preview: false, profile: false });
@@ -168,6 +177,7 @@ export function useDatasetWorkflow({
     if (context.current.isDisposed()) context.current = createSourceContextGuard(sourceIdentity(committed.current));
     const ownedContext = context.current;
     const ownedLanes = lanes.current;
+    const ownedComparisonGuard = schemaComparisonGuard.current;
     const restoredId = readDatasetVersionIdFromUrl() ?? readStoredDatasetVersionId();
     if (restoredId !== null) void navigation.current.activate(restoredId, true);
     const onLocationChange = (event: Event) => {
@@ -196,6 +206,7 @@ export function useDatasetWorkflow({
       mounted.current = false;
       ownedContext.dispose();
       for (const lane of Object.values(ownedLanes)) lane.cancel();
+      ownedComparisonGuard.cancel();
       window.removeEventListener?.("popstate", onLocationChange);
       window.removeEventListener?.(appLocationChangeEvent, onLocationChange);
       window.removeEventListener?.("beforeunload", beforeUnload);
@@ -271,6 +282,8 @@ export function useDatasetWorkflow({
       cellDirty.current = false;
       schemaDirty.current = false;
       schemaRevision.current += 1;
+      clearSchemaConflict();
+      schemaBase.current = committed.current === null ? null : createSchemaDraftBase(committed.current);
       const drafts = schemaDraftsFromColumns(committed.current?.columns ?? []);
       schemaDraftsRef.current = drafts;
       setSchemaDrafts(drafts);
@@ -279,6 +292,8 @@ export function useDatasetWorkflow({
   }
 
   function publishVersion(next: DatasetVersionResponse) {
+    clearSchemaConflict();
+    schemaBase.current = createSchemaDraftBase(next);
     advanceSource(next);
     committedGeneration.current += 1;
     committed.current = next;
@@ -309,18 +324,21 @@ export function useDatasetWorkflow({
   // A schema write mutates the retained version. Reconcile its acknowledged
   // metadata without replacing a newer intake draft or cancelling its request.
   function publishSchema(next: DatasetVersionResponse, preserveDraft: boolean) {
-    committedGeneration.current += 1;
-    committed.current = next;
-    setVersion(next);
+    const unchanged = datasetSchemaIsUnchanged(committed.current, next);
     if (!preserveDraft) {
+      schemaBase.current = createSchemaDraftBase(next);
       const drafts = schemaDraftsFromColumns(next.columns);
       schemaDraftsRef.current = drafts;
       setSchemaDrafts(drafts);
       schemaDirty.current = false;
     }
+    setIsSavingSchema(false);
+    if (unchanged) return;
+    committedGeneration.current += 1;
+    committed.current = next;
+    setVersion(next);
     for (const lane of ["schema", "cell", "preview", "profile"] as const) lanes.current[lane].cancel();
     readsInFlight.current = { preview: false, profile: false };
-    setIsSavingSchema(false);
     setPreview(null);
     setProfile(null);
     setPreviewError(null);
@@ -399,6 +417,7 @@ export function useDatasetWorkflow({
       persist(committed.current);
       return;
     }
+    clearSchemaConflict();
     advanceSource();
     pending.current = versionId;
     activationInFlight.current = true;
@@ -527,32 +546,94 @@ export function useDatasetWorkflow({
   async function handleSaveSchema() {
     const current = committed.current;
     if (!mounted.current || current === null || activationInFlight.current) return;
+    const base = schemaBase.current;
+    if (base === null || base.versionId !== current.version_id || base.datasetId !== current.dataset_id || !validSchemaHash(base.schemaHash)) {
+      setFlowError("dataset_schema_base_invalid");
+      return;
+    }
+    clearSchemaConflict();
     const ticket = begin("schema");
     const generation = committedGeneration.current;
     const sequence = ++schemaWriteSequence.current;
     const revision = schemaRevision.current;
     const submitted = schemaDraftsRef.current;
+    const ownsCommittedSchema = () => mounted.current && committedGeneration.current === generation &&
+      schemaWriteSequence.current === sequence && committed.current?.version_id === current.version_id &&
+      committed.current.dataset_id === current.dataset_id && committed.current.schema_hash === current.schema_hash;
     setIsSavingSchema(true);
     setFlowError(null);
     try {
       const response = await updateDatasetSchema(current.version_id, {
+        expected_schema_hash: base.schemaHash,
         columns: submitted.map((draft) => ({
           column_id: draft.column_id, display_name: draft.display_name,
           measurement_level: draft.measurement_level, role: draft.role,
           unit: draft.unit.trim() === "" ? null : draft.unit.trim(),
         })),
       });
-      const sameCommittedSchema = mounted.current && committedGeneration.current === generation &&
-        schemaWriteSequence.current === sequence && committed.current?.version_id === current.version_id &&
-        committed.current.dataset_id === current.dataset_id && committed.current.schema_hash === current.schema_hash;
-      if (!isCurrent(ticket) && !sameCommittedSchema) return;
-      if (response.version_id !== current.version_id || response.dataset_id !== current.dataset_id) throw contextMismatch();
+      if (!isCurrent(ticket) && !ownsCommittedSchema()) return;
+      if (response.version_id !== current.version_id || response.dataset_id !== current.dataset_id || !validSchemaHash(response.schema_hash)) throw contextMismatch();
       publishSchema({ ...current, schema_hash: response.schema_hash, columns: response.columns }, revision !== schemaRevision.current);
     } catch (error) {
-      if (isCurrent(ticket)) setFlowError(requestErrorCode(error, "schema_update_failed"));
+      if (!isCurrent(ticket) && !ownsCommittedSchema()) return;
+      if (requestErrorCode(error, "schema_update_failed") === "dataset_schema_conflict" &&
+          typeof error === "object" && error !== null && "status" in error && error.status === 409) {
+        setIsSavingSchema(false);
+        void loadSchemaComparison();
+      } else {
+        setFlowError(requestErrorCode(error, "schema_update_failed"));
+      }
     } finally {
       if (isCurrent(ticket)) setIsSavingSchema(false);
     }
+  }
+
+  function clearSchemaConflict() {
+    schemaComparisonGuard.current.cancel();
+    latestSchema.current = null;
+    setSchemaConflict(null);
+    setSchemaStaged(false);
+  }
+
+  async function loadSchemaComparison() {
+    const current = committed.current;
+    const base = schemaBase.current;
+    if (!mounted.current || current === null || base === null || activationInFlight.current) return;
+    const token = schemaComparisonGuard.current.begin();
+    const generation = committedGeneration.current;
+    const sequence = schemaWriteSequence.current;
+    const ownsComparison = () => mounted.current && schemaComparisonGuard.current.isCurrent(token) &&
+      committedGeneration.current === generation && schemaWriteSequence.current === sequence && schemaBase.current === base;
+    latestSchema.current = null;
+    setSchemaConflict({ status: "loading", baseHash: base.schemaHash, latest: null, errorCode: null });
+    try {
+      const latest = await fetchDatasetVersion(current.version_id);
+      if (!ownsComparison()) return;
+      compareSchemaDraft(base, schemaDraftsRef.current, latest);
+      publishSchema(latest, true);
+      latestSchema.current = latest;
+      setSchemaConflict({ status: "ready", baseHash: base.schemaHash, latest, errorCode: null });
+    } catch (error) {
+      if (!ownsComparison()) return;
+      setSchemaConflict({ status: "failed", baseHash: base.schemaHash, latest: null,
+        errorCode: requestErrorCode(error, "dataset_schema_comparison_failed") });
+    }
+  }
+
+  function resolveSchemaConflict(apply: boolean) {
+    const latest = latestSchema.current;
+    const base = schemaBase.current;
+    if (!mounted.current || latest === null || base === null || activationInFlight.current ||
+        committed.current?.version_id !== latest.version_id || committed.current.schema_hash !== latest.schema_hash) return;
+    if (!apply && !window.confirm(t("dataset.schemaConflict.confirmDiscard"))) return;
+    const drafts = apply ? rebaseSchemaDraft(base, schemaDraftsRef.current, latest) : schemaDraftsFromColumns(latest.columns);
+    schemaBase.current = createSchemaDraftBase(latest);
+    schemaDraftsRef.current = drafts;
+    setSchemaDrafts(drafts);
+    schemaRevision.current += 1;
+    schemaDirty.current = apply;
+    clearSchemaConflict();
+    setSchemaStaged(apply);
   }
 
   function updateSchemaDraft(columnId: string, patch: SchemaDraftPatch) {
@@ -595,6 +676,8 @@ export function useDatasetWorkflow({
     advanceSource(deletesActive ? null : current);
     if (deletesIntake || deletesActive) clearIntake();
     if (deletesActive) {
+      clearSchemaConflict();
+      schemaBase.current = null;
       committedGeneration.current += 1;
       committed.current = null;
       setVersion(null);
@@ -624,6 +707,13 @@ export function useDatasetWorkflow({
     parsingOptions, pastedHeaderPreference, preview, previewLimit, previewOffset,
     profile, schemaDrafts, selectedFile, upload, version, previewError, profileError,
     isSwitchingVersion, draftResetRevision,
+    schemaConflict, schemaStaged,
+    schemaComparison: schemaConflict?.status === "ready" && schemaConflict.latest !== null && schemaBase.current !== null
+      ? compareSchemaDraft(schemaBase.current, schemaDrafts, schemaConflict.latest) : [],
+    onSchemaConflictApply: () => resolveSchemaConflict(true),
+    onSchemaConflictDiscard: () => resolveSchemaConflict(false),
+    onSchemaConflictEdit: () => { setSchemaStaged(false); },
+    onSchemaConflictRetry: () => { void loadSchemaComparison(); },
     onApplyBayesianPreset: handleApplyBayesianPreset,
     onCellEditDirtyChange: (dirty: boolean) => { cellDirty.current = dirty; },
     onPasteDraftChange: (dirty: boolean, reason: "user" | "reset" = "user") => {
@@ -709,14 +799,4 @@ export function parsingSuggestionToConfirmation(
     missing_tokens: defaultMissingTokens,
     xlsx_sheet_name: null,
   };
-}
-
-function schemaDraftsFromColumns(columns: DatasetColumnResponse[]): SchemaDraft[] {
-  return columns.map((column) => ({
-    column_id: column.column_id,
-    display_name: column.display_name,
-    measurement_level: column.measurement_level,
-    role: column.role,
-    unit: column.unit ?? "",
-  }));
 }
