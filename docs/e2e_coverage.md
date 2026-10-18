@@ -1,5 +1,33 @@
 # Browser E2E Coverage
 
+## Pilot Boundary Additions
+
+The four existing Windows shards remain separate. Their new stages are:
+
+- context: `verify privacy-safe local pilot feedback` (loaded and startup-offline
+  dialogs, keyboard containment, clipboard absent/rejected, local download,
+  diagnostic allowlist in KO/EN).
+- data: `verify pilot CSV ingestion group identity` (actual CSV upload/parsing,
+  long group names preserved; no index-based dataset selection).
+- prediction: `verify pilot small-scale GP prediction and reports` (actual GP
+  fit and direct prediction; finite small mean/latent and observation SD/interval,
+  narrow profile axes, immutable source, saved predictions and managed reports).
+- workflows: `verify pilot long-group analyses and reports` (paste, filters,
+  equal variance/Kruskal/t forms, four full identities, three-group-t rejection,
+  exact saved restore and KO/EN HTML downloads).
+
+`analysis_completion.py` additionally delays real committed responses while
+options switch A-B-A, filters change, or the POST response disconnects. A lost
+response does not authorize replaying POST or deleting the committed artifact.
+The formatter fixture includes shared narrow/large-offset numeric cases.
+
+Linux verification keeps its previous core receipt and adds a separately
+required pilot receipt: actual BF/F Two Variances forms, the long-group and
+small-GP journeys, exact-source restart checks and offline HTML. A test's
+registration or source inspection is not execution evidence. Actual source,
+Windows/Linux CI and exact-archive runs are recorded in
+[the pilot ledger](pilot_followup_0849aaa.md).
+
 ## Windows CI Partitions
 
 `scripts/e2e.ps1 -Suite full` remains the default complete ordered journey.

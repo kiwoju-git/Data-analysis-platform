@@ -51,6 +51,8 @@ from chart_formatting import verify_chart_formatting
 from report_center_context import verify_report_center_context
 from desktop_resize import verify_desktop_resize
 from two_variances import verify_two_variances
+from pilot_feedback import verify_pilot_feedback
+from pilot_edge_cases import verify_pilot_groups, verify_pilot_ingestion, verify_pilot_prediction
 
 SAMPLE_DATA = """Group\tValue
 A\t10
@@ -212,18 +214,20 @@ C\t96.0\t89\t19.5
 SUITE_STAGES = {
     "context": (
         "analysis_completion", "report_center_context", "api_translation", "chart_formatting",
+        "pilot_feedback",
     ),
-    "data": ("dataset_context", "schema_concurrency"),
-    "prediction": ("gp_prediction_context",),
+    "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
+    "prediction": ("gp_prediction_context", "pilot_prediction"),
     "workflows": (
         "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell",
-        "legacy_workflow",
+        "pilot_groups", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
     "analysis_completion", "report_center_context", "api_translation", "dataset_context",
     "gp_prediction_context", "schema_concurrency", "chart_interactions", "result_chart_models",
-    "chart_formatting", "desktop_resize", "localization_shell", "legacy_workflow",
+    "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
+    "pilot_groups", "desktop_resize", "localization_shell", "legacy_workflow",
 )
 
 
@@ -773,6 +777,18 @@ def run_browser_flow(
             if "chart_formatting" in stages:
                 diagnostics.step("verify chart axis formatting")
                 verify_chart_formatting(browser, frontend_base_url, diagnostics.root / "chart-formatting")
+            if "pilot_feedback" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify privacy-safe local pilot feedback")
+                verify_pilot_feedback(browser, frontend_base_url, diagnostics.root / "pilot-feedback")
+            if "pilot_ingestion" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify pilot CSV ingestion group identity")
+                verify_pilot_ingestion(browser, frontend_base_url, diagnostics.root / "pilot-ingestion")
+            if "pilot_prediction" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify pilot small-scale GP prediction and reports")
+                verify_pilot_prediction(browser, frontend_base_url, diagnostics.root / "pilot-prediction")
+            if "pilot_groups" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify pilot long-group analyses and reports")
+                verify_pilot_groups(browser, frontend_base_url, diagnostics.root / "pilot-groups")
             if "legacy_workflow" not in stages:
                 return
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)

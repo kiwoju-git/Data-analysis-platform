@@ -451,6 +451,300 @@ def _restore_analysis(page: Page, base: str, version_id: str, analysis: dict) ->
     expect(page.locator(spec[2]).locator(spec[3])).to_be_visible()
 
 
+def run_pilot_initial(base: str, output: Path, legacy_seed: dict) -> dict:
+    """Additional built-UI evidence stays separate from the original release gate."""
+    from pilot_edge_cases import (
+        verify_pilot_groups,
+        verify_pilot_ingestion,
+        verify_pilot_prediction,
+        verify_pilot_two_variances,
+    )
+
+    output.mkdir(parents=True, exist_ok=True)
+    receipt = {"schema_version": 1, "status": "running", "phase": "initial"}
+    path = output / "pilot-receipt.json"
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            for name, verify in (
+                ("ingestion", verify_pilot_ingestion),
+                ("groups", verify_pilot_groups),
+                ("prediction", verify_pilot_prediction),
+                ("two_variances", verify_pilot_two_variances),
+            ):
+                receipt[name] = verify(browser, base, output / name)
+                assert receipt[name]["status"] == "succeeded"
+                path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+            receipt["legacy"] = verify_pilot_legacy(
+                browser, base, output / "legacy", legacy_seed
+            )
+            receipt["status"] = "succeeded"
+            return receipt
+        except Exception:
+            receipt["status"] = "failed"
+            raise
+        finally:
+            path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+            browser.close()
+
+
+def pilot_analyses(receipt: dict) -> list[dict]:
+    assert receipt["schema_version"] == 1 and receipt["status"] == "succeeded"
+    return [
+        *receipt["groups"]["analyses"],
+        *receipt["two_variances"]["analyses"],
+        {"envelope": receipt["prediction"]["envelope"]},
+        *receipt["legacy"]["analyses"],
+    ]
+
+
+def pilot_reports(receipt: dict) -> list[dict]:
+    return [
+        *receipt["groups"]["reports"],
+        *receipt["two_variances"]["reports"],
+        receipt["prediction"]["generic_report"],
+        *receipt["prediction"]["saved"]["reports"],
+        *receipt["legacy"]["reports"],
+    ]
+
+
+def _restore_group_analysis(page: Page, base: str, envelope: dict) -> None:
+    method = envelope["method_id"]
+    module = "exploration" if method.startswith("eda.") else "hypothesis"
+    route = f"/analysis/{module}/{method}"
+    _open(page, base, route, envelope["dataset_version_id"])
+    history = page.locator(".compact-analysis-history")
+    history.get_by_role("button", name="최근 이력 열기", exact=True).click()
+    row = history.locator(".compact-history-list article").filter(has_text=method)
+    expect(row).to_have_count(1)
+    with page.expect_response(
+        lambda r: r.request.method == "GET"
+        and r.url.endswith(f"/analysis-runs/{envelope['analysis_id']}/result")
+    ) as restored:
+        row.get_by_role("button", name="결과 불러오기", exact=True).click()
+    assert restored.value.json() == envelope
+    expect(
+        page.locator(
+            f'[data-analysis-execution="{method}"] [data-group-identity-legacy]'
+        )
+    ).to_be_visible()
+
+
+def verify_pilot_legacy(browser, base: str, output: Path, seed: dict) -> dict:
+    from pilot_edge_cases import _api, _locale, _report
+
+    assert seed["status"] == "seeded_new_workspace"
+    assert (
+        seed["existing_records_modified"] is False
+        and seed["analysis_calculations_executed"] == 0
+    )
+    output.mkdir(parents=True, exist_ok=True)
+    receipt = {"status": "running", "seed": seed, "analyses": [], "reports": []}
+    context = browser.new_context(
+        accept_downloads=True, viewport={"width": 1440, "height": 900}
+    )
+    context.add_init_script(
+        "if (!localStorage.getItem('statistical-twin.locale')) localStorage.setItem('statistical-twin.locale','ko')"
+    )
+    context.tracing.start(screenshots=True, snapshots=True, sources=False)
+    page = context.new_page()
+    fit_calls = []
+    page.on(
+        "request",
+        lambda r: fit_calls.append(r.url)
+        if r.method == "POST" and urlsplit(r.url).path == "/api/v1/analysis-runs"
+        else None,
+    )
+    try:
+        for case in seed["cases"]:
+            envelope = _api(
+                page, base, f"/api/v1/analysis-runs/{case['analysis_id']}/result"
+            )
+            assert (
+                envelope["method_id"] == case["method_id"]
+                and envelope["method_version"] == case["method_version"]
+            )
+            assert payload_digest(envelope["result"]) == case["result_payload_sha256"]
+            assert envelope["result"]["schema_version"] == case["result_schema_version"]
+            _restore_group_analysis(page, base, envelope)
+            receipt["analyses"].append({"envelope": envelope, "seed": case})
+            for locale in ("ko", "en"):
+                _locale(page, locale)
+                expect(page.locator("[data-group-identity-legacy]")).to_be_visible()
+                page.screenshot(
+                    path=str(output / f"{case['method_id']}-{locale}.png"),
+                    full_page=True,
+                )
+            _locale(page, "ko")
+            for locale in ("ko", "en"):
+                artifact = _report(page, base, envelope, output, locale)
+                assert (
+                    artifact["descriptor"]["source_result_sha256"]
+                    == case["artifact_file_sha256"]
+                )
+                receipt["reports"].append(artifact)
+        assert not fit_calls
+        receipt.update(status="succeeded", analysis_post_count=0)
+        return receipt
+    finally:
+        context.tracing.stop(path=str(output / "legacy-trace.zip"))
+        context.close()
+
+
+def restore_pilot(
+    page: Page, base: str, output: Path, original: dict, request: RequestJson
+) -> dict:
+    """Read saved pilot sources and download the original report, never export again."""
+    output.mkdir(parents=True, exist_ok=True)
+    receipt = {"schema_version": 1, "phase": "resume", "analyses": [], "reports": []}
+    for entry in pilot_analyses(original):
+        envelope = entry["envelope"]
+        analysis_id = envelope["analysis_id"]
+        restored = request(base, f"/api/v1/analysis-runs/{analysis_id}/result")
+        assert restored == envelope
+        if "seed" in entry:
+            _restore_group_analysis(page, base, envelope)
+            capability = request(
+                base, f"/api/v1/analysis-runs/{analysis_id}/report-capability?locale=en"
+            )
+            assert (
+                capability["source_result_sha256"]
+                == entry["seed"]["artifact_file_sha256"]
+            )
+        receipt["analyses"].append(
+            {
+                "analysis_id": analysis_id,
+                "result_payload_sha256": payload_digest(restored["result"]),
+            }
+        )
+    prediction = original["prediction"]
+    envelope = prediction["envelope"]
+    _restore_analysis(
+        page,
+        base,
+        prediction["version"]["version_id"],
+        {
+            "method_id": envelope["method_id"],
+            "analysis_id": envelope["analysis_id"],
+            "envelope": envelope,
+        },
+    )
+    saved = prediction["saved"]
+    pointer = envelope["result"]["model_manifest"]
+    manifest = request(base, f"/api/v1/regression-models/{pointer['model_id']}")
+    assert manifest["manifest_sha256"] == pointer["manifest_sha256"]
+    completed, sent = _predict(
+        page,
+        envelope["result"],
+        "gaussian_process",
+        save=False,
+        rows=saved["request"]["rows"],
+    )
+    assert completed.get("saved_prediction") is None
+    assert sent["rows"] == saved["request"]["rows"]
+    assert completed["rows"] == saved["prediction"]["rows"]
+    receipt["prediction"] = {
+        "manifest_sha256": manifest["manifest_sha256"],
+        "rows": completed["rows"],
+        "same_saved_model_prediction": True,
+    }
+    for artifact in pilot_reports(original):
+        descriptor = artifact["descriptor"]
+        locale = artifact.get("locale", descriptor.get("locale", "en"))
+        page.locator(".language-switcher button").filter(
+            has_text="ENG" if locale == "en" else "KOR"
+        ).click()
+        managed = artifact in saved["reports"]
+        route = (
+            f"/reports?report_id={descriptor['export_id']}"
+            if managed
+            else f"/reports?analysis_id={descriptor['analysis_id']}"
+        )
+        page.goto(base + route, wait_until="domcontentloaded")
+        wait_for_app_ready(page, locale, "/reports")
+        if managed:
+            selected = page.locator(
+                f'[data-managed-report-selection="{saved["source_ref_sha256"]}"]'
+            )
+            row = selected.locator(f'[data-managed-report="{descriptor["export_id"]}"]')
+            with page.expect_response(
+                lambda r: r.request.method == "POST"
+                and r.url.endswith("/reports/source-snapshot")
+            ) as snapshot:
+                selected.locator("[data-view-stored-source]").click()
+            assert snapshot.value.json()["payload"] == saved["snapshot"]["payload"]
+        else:
+            selected = page.locator(".report-center-selected .analysis-export-panel")
+            row = selected.locator(".export-list-item").filter(
+                has_text=descriptor["sha256"][:12]
+            )
+        expect(row).to_have_count(1)
+        with page.expect_download() as download:
+            row.get_by_role(
+                "button", name="Download" if locale == "en" else "다운로드", exact=True
+            ).click()
+        path = output / f"{descriptor['export_id']}.html"
+        download.value.save_as(path)
+        assert path.read_bytes() == Path(artifact["path"]).read_bytes()
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == descriptor["sha256"]
+        receipt["reports"].append(
+            {"export_id": descriptor["export_id"], "sha256": descriptor["sha256"]}
+        )
+    page.locator(".language-switcher button").filter(has_text="KOR").click()
+    receipt["status"] = "succeeded"
+    return receipt
+
+
+def verify_pilot_offline(page: Page, output: Path, receipt: dict) -> dict:
+    """Called in the existing server-stopped/offline context, including pilot HTML."""
+    from pilot_edge_cases import GROUPS
+
+    checks = []
+    saved = receipt["prediction"]["saved"]
+    for artifact in pilot_reports(receipt):
+        descriptor = artifact["descriptor"]
+        path = Path(artifact["path"])
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == descriptor["sha256"]
+        if artifact in saved["reports"]:
+            verify_prediction_html(
+                page, path, saved["snapshot"]["payload"], descriptor["locale"]
+            )
+        else:
+            page.goto(path.resolve().as_uri())
+            expect(page.locator("table").first).to_be_visible()
+            if (
+                artifact in receipt["two_variances"]["reports"]
+                or artifact == receipt["prediction"]["generic_report"]
+            ):
+                expect(page.locator("svg").first).to_be_visible()
+            if artifact in receipt["groups"]["reports"]:
+                for group in GROUPS[:2]:
+                    expect(
+                        page.locator("table").get_by_text(group, exact=True).first
+                    ).to_be_visible()
+            if artifact in receipt["legacy"]["reports"]:
+                notice = (
+                    "Stored labels" if artifact["locale"] == "en" else "저장된 라벨"
+                )
+                expect(
+                    page.locator("[data-report-section]").filter(has_text=notice).first
+                ).to_be_visible()
+            assert page.locator("script, link[href], img[src]").count() == 0
+        page.screenshot(
+            path=str(output / f"pilot-offline-{descriptor['export_id']}.png"),
+            full_page=True,
+        )
+        checks.append(
+            {"export_id": descriptor["export_id"], "sha256": descriptor["sha256"]}
+        )
+    return {
+        "schema_version": 1,
+        "phase": "offline",
+        "status": "succeeded",
+        "reports": checks,
+    }
+
+
 def run_resume(base: str, output: Path, original: dict, request: RequestJson) -> dict:
     runtime = request(base, "/api/v1/runtime-info")
     for field in (
@@ -611,6 +905,9 @@ def run_resume(base: str, output: Path, original: dict, request: RequestJson) ->
                     "Restored model, exact point inputs/outputs and report bytes: "
                     + saved["family"]
                 )
+            evidence.data["pilot_receipt"] = restore_pilot(
+                page, base, output / "pilot", original["pilot_receipt"], request
+            )
             assert not fit_calls, fit_calls
             evidence.data["analysis_post_count"] = 0
             evidence.data["status"] = "succeeded"
@@ -679,6 +976,9 @@ def run_offline(output: Path, original: dict) -> dict:
                 expect(page.locator("svg").first).to_be_visible()
                 assert page.locator("table").count() > 0
                 assert page.locator("script, link[href], img[src]").count() == 0
+            pilot_receipt = verify_pilot_offline(
+                page, output, original["pilot_receipt"]
+            )
             assert not network_requests, network_requests
             return {
                 "schema_version": 2,
@@ -692,6 +992,7 @@ def run_offline(output: Path, original: dict) -> dict:
                     "chromium": browser.version,
                 },
                 "reports": checks,
+                "pilot_receipt": pilot_receipt,
                 "http_request_count": 0,
                 "browser_network_offline": True,
             }

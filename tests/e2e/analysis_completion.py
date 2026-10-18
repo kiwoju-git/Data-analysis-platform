@@ -132,12 +132,38 @@ def _case(
     analysis_id = held.payload["analysis_id"]
     status_path = f"/api/v1/analysis-runs/{analysis_id}"
     expect(page.locator(".pca-results")).to_have_count(0)
-    if kind == "configuration":
+    if kind in ("configuration", "configuration-aba"):
         page.locator("#pca-matrix-type").select_option("covariance")
+        if kind == "configuration-aba":
+            page.locator("#pca-matrix-type").select_option("correlation")
         held.release()
         expect(page.locator(".pca-results")).to_have_count(0)
         expect(panel.locator(".primary-button")).to_be_enabled()
         assert not any(call["path"] == status_path for call in calls)
+    elif kind == "filter":
+        controls = page.locator(".filter-panel")
+        controls.get_by_role(
+            "button",
+            name="조건 추가" if locale == "ko" else "Add condition",
+            exact=True,
+        ).click()
+        row = controls.locator(".filter-row").last
+        row.locator("select").first.select_option(version["columns"][0]["column_id"])
+        row.locator("select").nth(1).select_option("gt")
+        row.locator("input").fill("3")
+        held.release()
+        expect(page.locator(".pca-results")).to_have_count(0)
+        expect(panel.locator(".primary-button")).to_be_enabled()
+        assert not any(call["path"] == status_path for call in calls)
+    elif kind == "disconnected-post":
+        # The server committed the request. A lost response is not permission to
+        # replay its POST or delete its successful artifact.
+        assert held.route is not None
+        held.route.abort("connectionreset")
+        expect(panel.locator(".primary-button")).to_be_enabled()
+        expect(page.locator(".pca-results")).to_have_count(0)
+        expect(page.get_by_role("alert").first).to_be_visible()
+        _frames(page)
     elif kind == "dataset-aba":
         page.locator("#active-dataset-version").select_option(other["version_id"])
         expect(page.locator("#active-dataset-version")).to_have_value(
@@ -243,7 +269,9 @@ def _case(
                 lambda response: urlsplit(response.url).path == path
                 and response.status == 503
             ):
-                page.locator("#active-dataset-version").select_option(other["version_id"])
+                page.locator("#active-dataset-version").select_option(
+                    other["version_id"]
+                )
             error = page.locator('[data-dataset-request-error="activation"]')
             expect(error).to_contain_text("service_unavailable")
             expect(error.locator("button")).to_be_enabled()
@@ -293,6 +321,9 @@ def verify_analysis_completion(
     for locale in ("ko", "en"):
         for kind in (
             "configuration",
+            "configuration-aba",
+            "filter",
+            "disconnected-post",
             "dataset-aba",
             "cross-tab-schema",
             "verification-retry",

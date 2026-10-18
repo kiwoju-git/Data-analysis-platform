@@ -27,7 +27,7 @@ runtime compatibility is recorded above. See [method contract](docs/two_variance
 
 Windows PowerShell/Python3.10 remains supported. Linux source/CI adds Python3.11
 and3.12; the offline archive targets Ubuntu24.04 x86_64/Python3.12 only. It ships
-built UI and hash-locked wheels, not Python itself. Release 2026.10.2 defaults to
+built UI and hash-locked wheels, not Python itself. The Linux release defaults to
 `0.0.0.0:8600` for owner-approved trusted LAN use; `run.sh --local-only` restores
 loopback. All peers share read/write/delete access without login or TLS, so
 restrict firewall access and never expose it to the Internet. Runtime requires
@@ -35,6 +35,46 @@ no Node/Git/CDN. See [installation guide](README-linux.md) and
 [packaging contract](docs/linux_release_contract.md). Availability and actual
 validation are recorded in the GitHub prerelease assets; source support alone is
 not an archive validation pass.
+
+#### Install and Run the Linux Release
+
+Download the Linux `.tar.gz` and `SHA256SUMS` from the
+[2026.10.4 pilot prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-pilot-2026.10.4).
+The supported target is Ubuntu 24.04, x86_64, CPython 3.12 with `venv` and `pip`
+already installed. Python itself is not bundled. Node.js and Git are not needed.
+Verify the archive against the published checksum before extraction:
+
+```bash
+sha256sum -c SHA256SUMS
+tar -xzf statistical-twin-linux-2026.10.4-ubuntu24.04-x86_64-py312.tar.gz
+cd statistical-twin-linux
+bash install.sh
+bash run.sh
+```
+
+`install.sh` verifies release files and installs the bundled hash-locked wheels
+without network access. It does not use `sudo` or modify system Python. Default
+listening is `0.0.0.0:8600`; on an approved LAN peer open
+`http://<server-IP>:8600`, not `http://0.0.0.0:8600`. The server computer can use
+`http://127.0.0.1:8600`. For access only from the server computer:
+
+```bash
+bash run.sh --local-only
+```
+
+This is a shared operator workspace, **not an authenticated multi-user service**.
+All allowed peers can read/change/delete the same workspace. No login, RBAC or
+TLS is provided and the installer does not change firewall rules. Restrict access
+to trusted company peers; do not expose port 8600 to the public Internet.
+Stop the application before replacing an installation, keep the previous release
+directory, and use the [offline backup/restore commands](docs/workspace_backup.md)
+before upgrading an existing workspace. Never copy an old `.venv` into a new
+release: mixed installed-code identities are rejected.
+
+Release assets include exact-source validation, SHA-256 and scoped rollback
+instructions. [Pilot follow-up evidence](docs/pilot_followup_0849aaa.md) separates
+calculation, API, source-browser and completed-archive checks. A release link is
+not a claim of publication until its assets and successful gates are available.
 
 ### GPR Reproducibility and Report Parity
 

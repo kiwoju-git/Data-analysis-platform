@@ -12,7 +12,7 @@ Verify the downloaded archive against the accompanying SHA256SUMS, then:
 
 ```sh
 sha256sum -c SHA256SUMS
-tar -xzf statistical-twin-linux-2026.10.3-ubuntu24.04-x86_64-py312.tar.gz
+tar -xzf statistical-twin-linux-2026.10.4-ubuntu24.04-x86_64-py312.tar.gz
 cd statistical-twin-linux
 ./install.sh
 ./run.sh
@@ -101,7 +101,7 @@ Windows trusted-LAN development policy is unchanged.
 ## Identity and Integrity
 
 `BUILD_INFO.json` records source commit, API contract, metadata schema, Python
-target and lock hash. Release version (for example 2026.10.3) is independent of
+target and lock hash. Release version (for example 2026.10.4) is independent of
 app_version and API contract. `FILES.sha256` verifies packaged files at install
 and launch. The release-owned `release_bootstrap.py` runs with `-I -S -B` before
 importing installed app code: no current-directory/PYTHONPATH import, `.pth`

@@ -433,6 +433,189 @@ def require_unchanged_artifacts(workspace: Path, expected: dict[str, str]) -> No
         raise ValueError("A previously persisted source/model/report artifact changed")
 
 
+def require_pilot_receipts(smoke: dict, restarts: list[dict], offline: dict) -> dict:
+    """Supplement, never replace, the existing strict archive/identity evidence."""
+    receipt = smoke.get("pilot_receipt", {})
+    if receipt.get("schema_version") != 1 or receipt.get("status") != "succeeded":
+        raise ValueError("Missing completed archive pilot UI receipt")
+    for name in ("ingestion", "groups", "prediction", "two_variances", "legacy"):
+        if receipt.get(name, {}).get("status") != "succeeded":
+            raise ValueError(f"Incomplete pilot UI journey: {name}")
+    groups = receipt["groups"]
+    variances = receipt["two_variances"]
+    prediction = receipt["prediction"]
+    legacy = receipt["legacy"]
+    seed = legacy["seed"]
+    if (
+        seed["status"] != "seeded_new_workspace"
+        or seed["existing_records_modified"] is not False
+        or seed["analysis_calculations_executed"] != 0
+    ):
+        raise ValueError("Legacy records were not independently provisioned")
+    if (
+        seed["source_commit"] != "0849aaa279e34a612c5c65d350cfccf220fe581e"
+        or legacy["analysis_post_count"] != 0
+    ):
+        raise ValueError("Legacy source identity or no-recalculation proof differs")
+    if {entry["envelope"]["method_id"] for entry in groups["analyses"]} != {
+        "eda.equal_variances",
+        "hypothesis.kruskal_wallis",
+        "hypothesis.two_sample_t",
+    }:
+        raise ValueError("Pilot group-method coverage is incomplete")
+    if {entry["envelope"]["result"]["method"] for entry in variances["analyses"]} != {
+        "brown_forsythe",
+        "normal_f",
+    }:
+        raise ValueError("Both visible Two Variances forms must run")
+    if not variances["preflight"]["eligible"] or any(
+        entry.get("execution_evidence") != "visible built/source UI form with preflight"
+        for entry in variances["analyses"]
+    ):
+        raise ValueError("API-only Two Variances is not pilot form evidence")
+    analyses = [
+        *groups["analyses"],
+        *variances["analyses"],
+        {"envelope": prediction["envelope"]},
+        *legacy["analyses"],
+    ]
+    expected_analyses = {
+        entry["envelope"]["analysis_id"]: hashlib.sha256(
+            json.dumps(
+                entry["envelope"]["result"],
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode()
+        ).hexdigest()
+        for entry in analyses
+    }
+    legacy_versions = {
+        "eda.equal_variances": ("0.2.0", 2),
+        "hypothesis.kruskal_wallis": ("0.1.0", 1),
+        "hypothesis.two_sample_t": ("0.1.0", 1),
+    }
+    seed_cases = {case["analysis_id"]: case for case in seed["cases"]}
+    if len(seed_cases) != 3 or len(legacy["analyses"]) != 3:
+        raise ValueError("Legacy seeded source coverage is incomplete")
+    if {item["envelope"]["method_id"] for item in legacy["analyses"]} != set(
+        legacy_versions
+    ):
+        raise ValueError("Legacy seeded method coverage differs")
+    for item in legacy["analyses"]:
+        envelope = item["envelope"]
+        case = seed_cases.get(envelope["analysis_id"], {})
+        if (
+            case.get("result_payload_sha256")
+            != expected_analyses[envelope["analysis_id"]]
+            or case.get("method_id") != envelope["method_id"]
+            or (envelope["method_version"], envelope["result"]["schema_version"])
+            != legacy_versions[envelope["method_id"]]
+        ):
+            raise ValueError("Legacy saved source bytes or version differs")
+    for item in legacy["reports"]:
+        descriptor = item["descriptor"]
+        case = seed_cases.get(descriptor["analysis_id"], {})
+        if descriptor["source_result_sha256"] != case.get("artifact_file_sha256"):
+            raise ValueError("Legacy report source checksum differs")
+    reports = [
+        *groups["reports"],
+        *variances["reports"],
+        prediction["generic_report"],
+        *prediction["saved"]["reports"],
+        *legacy["reports"],
+    ]
+    expected_reports = {
+        entry["descriptor"]["export_id"]: entry["descriptor"]["sha256"]
+        for entry in reports
+    }
+    if (
+        len(analyses) != 9
+        or len(expected_analyses) != 9
+        or len(reports) != 17
+        or len(expected_reports) != 17
+    ):
+        raise ValueError("Pilot source/report identities are incomplete or duplicated")
+    for stage in [*restarts, offline]:
+        proof = stage.get("pilot_receipt", {})
+        if proof.get("schema_version") != 1 or proof.get("status") != "succeeded":
+            raise ValueError("Pilot restart/offline receipt is missing")
+        actual_reports = {
+            entry["export_id"]: entry["sha256"] for entry in proof["reports"]
+        }
+        if (
+            len(proof["reports"]) != len(expected_reports)
+            or actual_reports != expected_reports
+        ):
+            raise ValueError("Pilot report bytes changed or were not restored")
+        if stage in restarts:
+            actual = {
+                entry["analysis_id"]: entry["result_payload_sha256"]
+                for entry in proof["analyses"]
+            }
+            if (
+                len(proof["analyses"]) != len(expected_analyses)
+                or actual != expected_analyses
+            ):
+                raise ValueError("Pilot analysis payload changed or was not restored")
+            if (
+                proof["prediction"].get("same_saved_model_prediction") is not True
+                or proof["prediction"]["rows"] != prediction["prediction"]["rows"]
+            ):
+                raise ValueError("Pilot saved GP prediction differs after restart")
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "analysis_count": 9,
+        "report_count": 17,
+        "restart_count": len(restarts),
+        "offline_report_count": 17,
+        "legacy_analysis_count": 3,
+    }
+
+
+def seed_pilot_legacy_records(
+    repo: Path, root: Path, workspace: Path, output: Path, env: dict
+) -> dict:
+    """Trusted verification-only provisioning, separate from the black-box browser."""
+    receipt = output / "pilot-legacy-seed.json"
+    with (output / "pilot-legacy-seed.log").open("wb") as log:
+        completed = subprocess.run(
+            [
+                str(root / ".venv/bin/python"),
+                "-I",
+                "-B",
+                str(repo / "tests/e2e/seed_pilot_legacy.py"),
+                "--workspace-root",
+                str(workspace),
+                "--fixture",
+                str(
+                    repo
+                    / "backend/tests/reference/fixtures/group_identity_legacy_base.json"
+                ),
+                "--output",
+                str(receipt),
+            ],
+            cwd=root,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            timeout=180,
+            check=False,
+        )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "Legacy verification-only provisioning failed; inspect seed log"
+        )
+    result = json.loads(receipt.read_text(encoding="utf-8"))
+    if (
+        result.get("status") != "seeded_new_workspace"
+        or result.get("existing_records_modified") is not False
+    ):
+        raise ValueError("Legacy provisioning receipt is incomplete")
+    return result
+
+
 def wait_ready(base: str, process: subprocess.Popen, expected: dict) -> dict:
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
@@ -536,6 +719,7 @@ def main() -> int:
         offline = None
         artifact_hashes: dict[str, str] = {}
         initial_evidence = output / "initial/application-smoke.json"
+        legacy_seed = None
         for index in range(2):
             root = unpack(archive, temp / f"installation {index} 검증")
             for dependency in ("react", "react-dom", "lucide-react", "noble_hashes"):
@@ -589,6 +773,13 @@ def main() -> int:
             assert (
                 not workspace.exists() or index == 1
             ), "Installer must not create a workspace"
+            if index == 0:
+                legacy_seed = seed_pilot_legacy_records(
+                    repo, root, workspace, output, env
+                )
+                # The test provisioner must not mutate installed application bytes.
+                if bootstrap_identity(root, env, "verify-installed") != installed:
+                    raise ValueError("Legacy setup changed the installed application")
             command = [str(root / "run.sh"), "--workspace-root", str(workspace)]
             # Omit --port at 8600 to exercise the published launcher default itself.
             if args.port != 8600:
@@ -625,7 +816,12 @@ def main() -> int:
                             )
                             wait_ready(base, process, expected)
                             smoke = run_browser_stage(
-                                repo, output / "initial", "--url", base
+                                repo,
+                                output / "initial",
+                                "--url",
+                                base,
+                                "--legacy-seed-receipt",
+                                str(output / "pilot-legacy-seed.json"),
                             )
                         else:
                             restarts.append(
@@ -664,6 +860,7 @@ def main() -> int:
             raise RuntimeError("Release verification phases are incomplete")
         if file_sha256(archive) != archive_sha256:
             raise ValueError("Archive bytes changed during validation")
+        pilot_checks = require_pilot_receipts(smoke, restarts, offline)
         report = {
             "schema_version": 2,
             "status": "passed",
@@ -694,6 +891,8 @@ def main() -> int:
             "local_only_interface_connection_rejected": True,
             "company_peer_or_firewall_tested": False,
             "application": smoke,
+            "pilot_checks": pilot_checks,
+            "pilot_legacy_provisioning": legacy_seed,
         }
         (output / "validation-report.json").write_text(
             json.dumps(report, indent=2) + "\n", encoding="utf-8"

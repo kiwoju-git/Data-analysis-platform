@@ -111,8 +111,8 @@ def verify_network_guards(base: str) -> list[str]:
     return [name for name, *_ in checks]
 
 
-def verify_application(base: str, output: Path) -> dict:
-    from linux_release_journey import payload_digest, run_initial
+def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
+    from linux_release_journey import payload_digest, run_initial, run_pilot_initial
 
     result = run_initial(base, output, request)
     version = result["version"]
@@ -182,6 +182,7 @@ def verify_application(base: str, output: Path) -> dict:
             == analysis["result_payload_sha256"]
         )
     result["network_guard_checks"] = verify_network_guards(base)
+    result["pilot_receipt"] = run_pilot_initial(base, output / "pilot", legacy_seed)
     result["checks"] = [
         "visible paste and parsing confirmation",
         "visible PCA/PLS/GPR execution",
@@ -193,6 +194,9 @@ def verify_application(base: str, output: Path) -> dict:
         "built-UI readiness",
         "interface-IP same-origin mutation",
         "Host/Origin rejection",
+        "pilot CSV and long-group visible forms",
+        "pilot small-scale GP prediction and managed reports",
+        "pilot visible BF/F Two Variances forms with preflight",
     ]
     result["offline_html_verified"] = False
     return result
@@ -217,6 +221,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--legacy-seed-receipt", type=Path)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--resume-evidence", type=Path)
     modes.add_argument("--offline-reports", type=Path)
@@ -225,6 +230,14 @@ def main() -> None:
         parser.error("Run validation without Python optimization")
     if not args.offline_reports and not args.url:
         parser.error("--url is required for initial and resume journeys")
+    if (
+        not args.offline_reports
+        and not args.resume_evidence
+        and args.legacy_seed_receipt is None
+    ):
+        parser.error(
+            "--legacy-seed-receipt is required for the initial archive journey"
+        )
     args.output.mkdir(parents=True, exist_ok=True)
     if args.offline_reports:
         from linux_release_journey import run_offline
@@ -245,7 +258,10 @@ def main() -> None:
         name = "resume-smoke.json"
     else:
         try:
-            result = verify_application(args.url, args.output)
+            legacy_seed = json.loads(
+                args.legacy_seed_receipt.read_text(encoding="utf-8")
+            )
+            result = verify_application(args.url, args.output, legacy_seed)
         except Exception:
             journal = args.output / "journey-evidence.json"
             if journal.exists():

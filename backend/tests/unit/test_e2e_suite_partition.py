@@ -36,6 +36,10 @@ STAGE_CALLS = {
     "chart_interactions": "verify_chart_interactions",
     "result_chart_models": "verify_result_chart_models",
     "chart_formatting": "verify_chart_formatting",
+    "pilot_feedback": "verify_pilot_feedback",
+    "pilot_ingestion": "verify_pilot_ingestion",
+    "pilot_prediction": "verify_pilot_prediction",
+    "pilot_groups": "verify_pilot_groups",
     "desktop_resize": "verify_desktop_resize",
     "localization_shell": "verify_localization_shell",
 }
@@ -59,6 +63,10 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "chart_interactions",
         "result_chart_models",
         "chart_formatting",
+        "pilot_feedback",
+        "pilot_ingestion",
+        "pilot_prediction",
+        "pilot_groups",
         "desktop_resize",
         "localization_shell",
         "legacy_workflow",
@@ -69,7 +77,10 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert set(union.values()) == {1}
     for partition in partitions:
         assert partition == tuple(stage for stage in driver.FULL_STAGE_ORDER if stage in partition)
-    assert driver.suite_stage_ids("prediction") == ("gp_prediction_context",)
+    assert driver.suite_stage_ids("prediction") == ("gp_prediction_context", "pilot_prediction")
+    assert "pilot_feedback" in driver.suite_stage_ids("context")
+    assert "pilot_ingestion" in driver.suite_stage_ids("data")
+    assert "pilot_groups" in driver.suite_stage_ids("workflows")
 
 
 @pytest.mark.parametrize("suite", ["full", "workflows", "context", "data", "prediction"])
