@@ -5,12 +5,12 @@ import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
   DatasetVersionResponse,
-  PlsPointPredictionResponse,
   PlsRegressionResult,
 } from "./api";
 import { createPlsPointPredictions } from "./api/regression";
 import { triggerBrowserDownload } from "./api/client";
 import { createLatestRequestGuard } from "./latestRequest";
+import { createSourceContextGuard, type SourceContextToken } from "./sourceContextGuard";
 import { plsPredictionSnapshot } from "./plsPredictionSnapshot";
 import { CompactSettingsTable } from "./components/CompactSettingsTable";
 import { NumericColumnPicker } from "./components/NumericColumnPicker";
@@ -439,66 +439,84 @@ function PlsResults({ result, analysisId }: { result: PlsRegressionResult; analy
 function PlsPointPrediction({ result, analysisId }: { result: PlsRegressionResult; analysisId: string }) {
   const { t, locale } = useI18n();
   const nextId = useRef(2);
-  const [rows, setRows] = useState<PredictionRowDraft[]>([emptyPredictionRow("pls-row-1", result)]);
-  const [prediction, setPrediction] = useState<PlsPointPredictionResponse | null>(null);
-  const [snapshot, setSnapshot] = useState<ReturnType<typeof plsPredictionSnapshot> | null>(null);
   const guard = useRef(createLatestRequestGuard()).current;
-  const [isRunning, setIsRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const manifest = result.model_manifest;
+  const sourceKey = JSON.stringify([analysisId, manifest?.model_id, manifest?.manifest_sha256, result.response.column_id, result.predictors.map((predictor) => predictor.column_id)]);
+  const context = useRef(createSourceContextGuard(sourceKey)).current;
+  const draft = useRef(0);
+  const mounted = useRef(true);
+  if (context.capture().source !== sourceKey) { context.advance(sourceKey); guard.cancel(); }
+  const currentSource = context.capture();
+  type Ownership = { source: SourceContextToken<string>; draft: number };
+  const [rowState, setRowState] = useState({ source: currentSource, rows: [emptyPredictionRow("pls-row-1", result)] });
+  const [completed, setCompleted] = useState<{ owner: Ownership; snapshot: ReturnType<typeof plsPredictionSnapshot> } | null>(null);
+  const [failure, setFailure] = useState<{ owner: Ownership; cause: unknown } | null>(null);
+  const [pending, setPending] = useState<(Ownership & { request: symbol }) | null>(null);
+  const [staleOwner, setStaleOwner] = useState<Ownership | null>(null);
+  const owns = (owner: Ownership) => mounted.current && context.isCurrent(owner.source) && owner.draft === draft.current;
+  const rows = rowState.source === currentSource ? rowState.rows : [emptyPredictionRow("pls-row-1", result)];
+  const snapshot = completed !== null && owns(completed.owner) ? completed.snapshot : null;
+  const error = failure !== null && owns(failure.owner) ? localizedErrorDisplay(failure.cause, locale) : null;
+  const isRunning = pending !== null && owns(pending) && guard.isCurrent(pending.request);
+  const isStale = staleOwner !== null && owns(staleOwner);
+  const predictions = new Map(snapshot?.response.rows.map((row) => [row.client_row_id, row]) ?? []);
   const valid = rows.every((row) => result.predictors.every((predictor) => finiteInput(row.values[predictor.column_id])));
 
   useEffect(() => {
-    setRows([emptyPredictionRow("pls-row-1", result)]);
-    setPrediction(null);
-    setError(null);
-  }, [manifest?.model_id, result]);
+    mounted.current = true;
+    return () => { mounted.current = false; guard.cancel(); };
+  }, [guard]);
 
-  useEffect(() => {
-    guard.cancel(); setSnapshot(null); setPrediction(null); setIsRunning(false);
-    return () => guard.cancel();
-  }, [rows, guard]);
+  function changeRows(change: (current: PredictionRowDraft[]) => PredictionRowDraft[]) {
+    if (!context.isCurrent(currentSource)) return;
+    const invalidated = snapshot !== null || isRunning || isStale;
+    draft.current += 1; guard.cancel();
+    setStaleOwner(invalidated ? { source: currentSource, draft: draft.current } : null);
+    setCompleted(null); setFailure(null); setPending(null);
+    setRowState((current) => ({ source: currentSource, rows: change(current.source === currentSource ? current.rows : [emptyPredictionRow("pls-row-1", result)]) }));
+  }
 
   async function run(): Promise<void> {
-    if (manifest === undefined || !valid) return;
+    if (manifest === undefined || !valid || !context.isCurrent(currentSource)) return;
+    const owner = { source: currentSource, draft: draft.current };
     const token = guard.begin();
-    setIsRunning(true); setError(null); setPrediction(null);
+    const current = () => owns(owner) && guard.isCurrent(token);
+    setCompleted(null); setFailure(null); setStaleOwner(null); setPending({ ...owner, request: token });
     try {
       const request = { expected_model_manifest_sha256: manifest.manifest_sha256, rows: rows.map((row) => ({ client_row_id: row.id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, Number(row.values[predictor.column_id])])) })) };
       const response = await createPlsPointPredictions(manifest.model_id, request);
-      if (!guard.isCurrent(token)) return;
-      setPrediction(response);
-      setSnapshot(plsPredictionSnapshot(analysisId, request, response, new Date().toISOString()));
-    } catch (caught) {
-      if (!guard.isCurrent(token)) return;
-      const display = localizedErrorDisplay(caught, locale);
-      setError(`${display.message} (${display.code})`);
-    } finally { if (guard.isCurrent(token)) setIsRunning(false); }
+      if (!current()) return;
+      const accepted = plsPredictionSnapshot(analysisId, request, response, new Date().toISOString(), { modelId: manifest.model_id, responseColumnId: result.response.column_id });
+      setCompleted({ owner, snapshot: accepted });
+    } catch (cause) {
+      if (current()) setFailure({ owner, cause });
+    } finally { if (current()) setPending(null); }
   }
 
   const exportControl = snapshot === null ? null : <div className="button-row">
-    <button type="button" onClick={() => triggerBrowserDownload(new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" }), `pls-prediction-${snapshot.response.model_id}.json`)}>{t("pls.prediction.export")}</button>
+    <button type="button" data-action="download-prediction-snapshot" onClick={() => triggerBrowserDownload(new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" }), `pls-prediction-${snapshot.response.model_id}.json`)}>{t("pls.prediction.export")}</button>
     <p className="field-help">{t("pls.prediction.separate")}</p>
   </div>;
 
-  return <section className="result-section pls-point-prediction">
+  return <section className="result-section pls-point-prediction" aria-busy={isRunning} data-prediction-state={error !== null ? "error" : isRunning ? "running" : snapshot !== null ? "ready" : isStale ? "stale" : "empty"}>
     <h4>{t("pls.pointPrediction")}</h4><p>{t("pls.pointPredictionHelp")}</p>
     {!valid ? <div className="notice-box warning">{t("pls.inputRequired")}</div> : null}
-    {error !== null ? <div className="notice-box error">{error}</div> : null}
+    {isStale ? <div className="notice-box warning" role="status">{t("prediction.inputChanged")}</div> : null}
+    {error !== null ? <div className="notice-box error" role="alert">{error.message} ({error.code})</div> : null}
     <div className="table-wrap"><table className="result-table pls-prediction-grid">
       <thead><tr><th>{t("pls.row")}</th>{result.predictors.map((predictor) => <th key={predictor.column_id}>{predictor.display_name}</th>)}<th>{t("pls.predictedValue")}</th><th>{t("pls.status")}</th><th /></tr></thead>
       <tbody>{rows.map((row, index) => {
-        const predicted = prediction?.rows.find((item) => item.client_row_id === row.id);
+        const predicted = predictions.get(row.id);
         return <tr key={row.id}><td>{index + 1}</td>{result.predictors.map((predictor) => <td key={predictor.column_id}>
           <input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal"
-            onChange={(event) => { const value = event.currentTarget.value; setRows((current) => current.map((item) => item.id === row.id ? { ...item, values: { ...item.values, [predictor.column_id]: value } } : item)); }}
+            onChange={(event) => { const value = event.currentTarget.value; changeRows((current) => current.map((item) => item.id === row.id ? { ...item, values: { ...item.values, [predictor.column_id]: value } } : item)); }}
             type="text" value={row.values[predictor.column_id] ?? ""} />
         </td>)}<td>{predicted === undefined ? "-" : number(predicted.predicted_value)}</td>
-          <td>{predicted?.warnings.includes("prediction_extrapolation_risk") ? t("pls.extrapolation") : predicted === undefined ? "-" : t("pls.ready")}</td>
-          <td><button aria-label={`${t("pls.deleteRow")} ${index + 1}`} onClick={() => setRows((current) => current.length === 1 ? [emptyPredictionRow(`pls-row-${nextId.current++}`, result)] : current.filter((item) => item.id !== row.id))} type="button">{t("pls.deleteRow")}</button></td></tr>;
+          <td>{predicted === undefined ? "-" : predicted.warnings.length === 0 ? t("pls.ready") : predicted.warnings.map((warning, index) => <span key={`${index}:${warning}`}>{index > 0 ? "; " : ""}{warning === "prediction_extrapolation_risk" ? t("pls.extrapolation") : <code>{warning}</code>}</span>)}</td>
+          <td><button aria-label={`${t("pls.deleteRow")} ${index + 1}`} onClick={() => changeRows((current) => current.length === 1 ? [emptyPredictionRow(`pls-row-${nextId.current++}`, result)] : current.filter((item) => item.id !== row.id))} type="button">{t("pls.deleteRow")}</button></td></tr>;
       })}</tbody>
     </table></div>
-    <div className="button-row"><button onClick={() => setRows((current) => [...current, emptyPredictionRow(`pls-row-${nextId.current++}`, result)])} type="button">{t("pls.addRow")}</button><button className="primary-button" disabled={!valid || isRunning || manifest === undefined} onClick={() => void run()} type="button">{isRunning ? t("pls.predicting") : t("pls.runPrediction")}</button></div>
+    <div className="button-row"><button className="secondary-button" onClick={() => changeRows((current) => [...current, emptyPredictionRow(`pls-row-${nextId.current++}`, result)])} type="button">{t("pls.addRow")}</button><button className="primary-button" disabled={!valid || isRunning || manifest === undefined} onClick={() => void run()} type="button">{isRunning ? t("pls.predicting") : t("pls.runPrediction")}</button></div>
     {exportControl}
   </section>;
 }

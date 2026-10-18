@@ -87,7 +87,7 @@ export function GeneralFactorialDesignPanel({
   const termCatalog = useDoeTermCatalog(design?.design_id ?? null, Number(interactionOrder), modelSelection);
   const [confidence, setConfidence] = useState(0.95);
   const [pending, setPending] = useState<"create" | "save" | "analysis" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | { kind: "invalid_response" } | null>(null);
 
   const validation = useMemo(
     () => validateGeneralDraft(name, factors, replicates, seed, randomize, interactionOrder),
@@ -177,7 +177,7 @@ export function GeneralFactorialDesignPanel({
       value: Number(responses[run.run_order]),
     }));
     if (values.some((item) => !Number.isFinite(item.value) || !responses[item.run_order]?.trim())) {
-      setError(t("doe.response.invalid"));
+      setError({ kind: "invalid_response" });
       return;
     }
     setPending("save");
@@ -429,7 +429,7 @@ export function GeneralFactorialDesignPanel({
         연속 요인의 2차 곡률 최적화가 목적이면 반응표면법을 검토하세요.
       </div>
       {validation.issue !== null ? <div className="notice-box notice-warning">{generalFactorialDraftIssueLabel(validation.issue, locale)}</div> : null}
-      {error !== null ? <div className="error-box">오류 코드: {error}</div> : null}
+      {error !== null ? <div className="error-box" role="alert">{typeof error === "string" ? <><span>오류 코드:</span> {error}</> : t("doe.response.invalid", {}, locale)}</div> : null}
       <DoeActionBar summary={`최대 256 runs · 현재 ${validation.runCount.toLocaleString()} runs`}>
         <button className="primary-button" disabled={pending !== null || validation.request === null} onClick={() => void onCreate()} type="button">
           {pending === "create" ? "생성 중" : "일반 완전요인 설계 생성"}

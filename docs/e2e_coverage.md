@@ -1,5 +1,17 @@
 # Browser E2E Coverage
 
+## Direct GP Prediction Context
+
+Stage `verify saved GP prediction request context` uses two real saved synthetic
+GP models. It holds an actual prediction response while editing/deleting rows,
+submitting newer input or restoring another saved model. Valid shuffled responses
+are joined by client row ID; duplicate/missing/foreign IDs and a mismatched model
+are rejected. Downloaded JSON retains exact request/response values and model
+provenance. Locale/resize must not issue prediction or fit requests. Stored source
+payloads remain equal before and after the tests. Both locales are exercised;
+`scripts/e2e.ps1 -GpPredictionContextOnly` selects this suite. Execution evidence,
+including fixture failures, belongs in the remediation ledger, not this inventory.
+
 ## Dataset Context Remediation
 
 Stage `verify dataset source context under delayed responses` uses synthetic
@@ -663,12 +675,14 @@ browser critical path.
   - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
     `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
     overflow and keep the language/API controls visible.
+- `verify saved GP prediction request context` (focused prediction mode)
 - `verify dataset source context under delayed responses` (focused dataset mode)
 - `verify API translation boundary with synthetic inputs` (focused transport mode)
 - `verify startup readiness and storage recovery` (focused startup/refined mode)
 - `verify refined UI with exact synthetic version` (focused mode)
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)
+- `verify saved GP prediction request context` (full flow)
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`

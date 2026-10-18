@@ -43,7 +43,7 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A03 | Dependencies/uploads | reproduced / verified | Native security locks, streaming/multipart limits, worker ownership and visible intake limits passed full local checks and all native CI jobs at 1213457. See dependency_upload_security.md. |
 | A04 | Transport/i18n | reproduced / fixed (integration rerun pending) | Request bytes and response objects remain untouched; explicit display boundaries replace compiler tokens. Frozen Windows full browser/frontend checks passed. Integrated CI exposed a missing documentation step marker; corrected locally, native CI rerun pending. |
 | A05 | Dataset context | reproduced / fixed (native integration pending) | 101 focused tests and all 16 real-server en/ko browser scenarios passed, including same-active schema, native file-cancel and replacement paste ownership. Whole native checkpoint CI remains required. |
-| A06 | GPR direct prediction | - | Pending snapshot/identity tests. |
+| A06 | GPR direct prediction | reproduced / fixed (native integration pending) | Five pre-fix component regressions; 80 focused tests and 18 real-model en/ko browser cases passed. Exact ID validation and detached JSON snapshots preserve both uncertainty kinds. |
 | A07 | Schema CAS | - | Pending transaction/API implementation. |
 | A08 | Workspace/backup | - | Pending lease and archive validation. |
 | A09 | Chart formatters | - | Pending display-contract tests. |
@@ -236,3 +236,48 @@ The profile-retry screenshot was visually inspected; this confirms recovery and
 preserved dataset content, not a complete English-copy audit. Existing awkward
 English profile labels and untranslated warning prose remain A11/A14 display
 work, distinct from the protected API transport boundary.
+
+### A05 Native Checkpoint
+
+At `053a789`, CI run `39095990487` passed Python 3.11 (1402 passed, 11 skipped,
+97 warnings) and all five exact-install Python security profiles plus npm
+runtime/all audits (zero advisories and zero skipped packages). Linux backend
+also passed 1402 tests with 11 skips, then localization rejected five unused
+source mappings left by A05's semantic error/message replacements. Only those
+obsolete `sourceToKey` entries were removed; historical translation keys remain.
+The root localization rerun passed with 2900 source strings / 3968 keys, including
+A06. This does not make the failed checkpoint green; a new native run is required.
+
+## A06 Evidence
+
+GPR prediction now captures analysis/model/manifest/response identity, exact
+predictor order, request row IDs/values and input revision. Edits, row changes,
+source changes and new requests revoke old success/error/finally ownership.
+Completion validates the complete response before publishing; row order may
+change, but missing/duplicate/foreign IDs and wrong model identity are rejected.
+The separate JSON download is not a managed Report Center artifact. PLS's
+existing snapshot validation now precedes display, and both workflows retain
+unknown warning codes as escaped text. Training/model artifacts are unchanged.
+
+Five component regressions failed before the fix. The post-fix focused suite
+passed 80 tests in six files; scoped ESLint (11 files), strict TypeScript and
+diff checks passed. The pure/node tests do not substitute for browser evidence.
+
+The real-model browser run exited zero with nine scenarios per locale:
+edit, delete, replacement request, model replacement, reordered rows, duplicate
+IDs, missing IDs, foreign IDs and foreign model identity. It uses two genuinely
+saved synthetic GP models and holds completed server responses. Locale/resize
+does not issue another prediction. Exported means/intervals are compared at full
+JSON precision; visible table rounding uses the existing three-decimal policy.
+Both original analysis envelopes and stored model hashes remain unchanged.
+
+```powershell
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests\e2e\critical_path.py --backend-port 8036 --frontend-port 5236 --gp-prediction-context-only --diagnostics-root .tmp/e2e-remediation-a06-prediction-1 --keep-workspace
+```
+
+Evidence: `.tmp/remediation-a06-prediction-e2e-1.log` and the 18 per-case
+trace/screenshot/evidence records under that diagnostics root. The completed
+reordered-response screenshot was inspected. These are synthetic and untracked.
+The E2E step-inventory test passed (one test / 216 deselected); an initial command
+pointed at the wrong test module and selected no tests, not a pass. Full Windows/
+Linux and whole-product checks remain separate gates before main/Release.

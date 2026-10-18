@@ -9,7 +9,8 @@ param(
     [switch]$GprReportOnly,
     [switch]$RefinedUiOnly,
     [switch]$ApiTranslationOnly,
-    [switch]$DatasetContextOnly
+    [switch]$DatasetContextOnly,
+    [switch]$GpPredictionContextOnly
 )
 
 Set-StrictMode -Version Latest
@@ -66,6 +67,9 @@ try {
     }
     if ($DatasetContextOnly) {
         $Args += "--dataset-context-only"
+    }
+    if ($GpPredictionContextOnly) {
+        $Args += "--gp-prediction-context-only"
     }
 
     & $Python @Args

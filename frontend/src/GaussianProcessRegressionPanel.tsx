@@ -4,10 +4,9 @@ import type {
   AnalysisResultEnvelope,
   DatasetColumnResponse,
   DatasetVersionResponse,
-  GaussianProcessPointPredictionResponse,
   GaussianProcessRegressionResult,
 } from "./api";
-import { createGaussianProcessPointPredictions } from "./api/regression";
+import { triggerBrowserDownload } from "./api/client";
 import { CompactSettingsTable } from "./components/CompactSettingsTable";
 import { NumericColumnPicker } from "./components/NumericColumnPicker";
 import { localizedErrorDisplay } from "./i18n/errorMessages";
@@ -17,6 +16,8 @@ import { GpOptimizationSettings, gpLengthPreset, gpLengthValue } from "./GpOptim
 import { GpKernelSelectionSettings, gpOptimizerStarts, gpKernelName } from "./GpKernelSelectionSettings";
 import { MAX_GP_OPTIMIZER_STARTS } from "./gpCapabilities";
 import { GpScatter, GpResidualChart, GpUncertaintyChart, GpProfileChart, GpSurfaceChart } from "./charts/GaussianProcessCharts";
+import { useGpPointPrediction } from "./useGpPointPrediction";
+import { GP_POINT_PREDICTION_ROW_LIMIT } from "./gpPredictionSnapshot";
 
 export interface GaussianProcessRunConfig {
   lengthScale: GpLengthScale;
@@ -50,11 +51,6 @@ interface Props {
   result: GaussianProcessRegressionResult | null;
   version: DatasetVersionResponse | null;
   onRun: (config: GaussianProcessRunConfig) => void;
-}
-
-interface PredictionRowDraft {
-  id: string;
-  values: Record<string, string>;
 }
 
 const warningKeys = {
@@ -542,7 +538,7 @@ function GaussianProcessResults({ result, analysisId }: { result: GaussianProces
         </section>
       ) : null}
 
-      {result.model_manifest !== undefined ? <GaussianProcessPrediction result={result} /> : null}
+      {result.model_manifest !== undefined ? <GaussianProcessPrediction result={result} analysisId={analysisId} /> : null}
     </div>
   );
 }
@@ -615,31 +611,36 @@ function Metric({ label, value }: { label: string; value: string }) {
   return <div><dt>{label}</dt><dd>{value}</dd></div>;
 }
 
-function GaussianProcessPrediction({ result }: { result: GaussianProcessRegressionResult }) {
+function GaussianProcessPrediction({ result, analysisId }: { result: GaussianProcessRegressionResult; analysisId: string }) {
   const { t, locale, formatNumber } = useI18n();
-  const nextId = useRef(2);
-  const [rows, setRows] = useState<PredictionRowDraft[]>([emptyPredictionRow("gp-row-1", result)]);
-  const [prediction, setPrediction] = useState<GaussianProcessPointPredictionResponse | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const manifest = result.model_manifest;
-  const valid = rows.every((row) => result.predictors.every((predictor) => finiteInput(row.values[predictor.column_id])));
-  useEffect(() => { setRows([emptyPredictionRow("gp-row-1", result)]); setPrediction(null); setError(null); }, [manifest?.model_id, result]);
-  async function run(): Promise<void> {
-    if (manifest === undefined || !valid) return;
-    setIsRunning(true); setError(null); setPrediction(null);
-    try {
-      setPrediction(await createGaussianProcessPointPredictions(manifest.model_id, { expected_model_manifest_sha256: manifest.manifest_sha256, rows: rows.map((row) => ({ client_row_id: row.id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, Number(row.values[predictor.column_id])])) })) }));
-    } catch (caught) {
-      const display = localizedErrorDisplay(caught, locale); setError(`${display.message} (${display.code})`);
-    } finally { setIsRunning(false); }
-  }
+  const state = useGpPointPrediction({ analysisId, modelId: manifest?.model_id ?? "", manifestSha256: manifest?.manifest_sha256 ?? "", responseColumnId: result.response.column_id, predictorColumnIds: result.predictors.map((predictor) => predictor.column_id) });
+  const error = state.error === null ? null : localizedErrorDisplay(state.error.cause, locale);
+  const predictions = new Map(state.snapshot?.response.rows.map((row) => [row.client_row_id, row]) ?? []);
   const interval = (value: { lower: number; upper: number } | undefined) => value === undefined ? "-" : `[${formatNumber(value.lower)}, ${formatNumber(value.upper)}]`;
-  return <section className="result-section gp-point-prediction"><h4>{t("gp.pointPrediction")}</h4><p>{t("gp.pointPredictionHelp")}</p>{!valid ? <div className="notice-box warning">{t("gp.inputRequired")}</div> : null}{error !== null ? <div className="notice-box error">{error}</div> : null}<div className="table-wrap"><table className="result-table gp-prediction-grid"><thead><tr><th>{t("gp.row")}</th>{result.predictors.map((predictor) => <th key={predictor.column_id}>{predictor.display_name}</th>)}<th>{t("gp.predictedMean")}</th><th>{t("gp.latentSd")}</th><th>{t("gp.latentInterval")}</th><th>{t("gp.predictiveSd")}</th><th>{t("gp.predictiveInterval")}</th><th>{t("gp.status")}</th><th /></tr></thead><tbody>{rows.map((row, index) => { const predicted = prediction?.rows.find((item) => item.client_row_id === row.id); return <tr key={row.id}><td>{index + 1}</td>{result.predictors.map((predictor) => <td key={predictor.column_id}><input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal" onChange={(event) => { const value = event.currentTarget.value; setRows((current) => current.map((item) => item.id === row.id ? { ...item, values: { ...item.values, [predictor.column_id]: value } } : item)); setPrediction(null); }} type="text" value={row.values[predictor.column_id] ?? ""}/></td>)}<td>{predicted === undefined ? "-" : formatNumber(predicted.predicted_mean)}</td><td>{predicted === undefined ? "-" : formatNumber(predicted.latent_standard_deviation)}</td><td>{interval(predicted?.latent_interval_95)}</td><td>{predicted === undefined ? "-" : formatNumber(predicted.predictive_standard_deviation)}</td><td>{interval(predicted?.predictive_interval_95)}</td><td>{predicted?.warnings.includes("gp_extrapolation") ? t("gp.extrapolation") : predicted === undefined ? "-" : t("gp.ready")}</td><td><button aria-label={`${t("gp.deleteRow")} ${index + 1}`} onClick={() => setRows((current) => current.length === 1 ? [emptyPredictionRow(`gp-row-${nextId.current++}`, result)] : current.filter((item) => item.id !== row.id))} type="button">{t("gp.deleteRow")}</button></td></tr>; })}</tbody></table></div><div className="button-row"><button onClick={() => setRows((current) => [...current, emptyPredictionRow(`gp-row-${nextId.current++}`, result)])} type="button">{t("gp.addRow")}</button><button className="primary-button" disabled={!valid || isRunning || manifest === undefined} onClick={() => void run()} type="button">{isRunning ? t("gp.predicting") : t("gp.runPrediction")}</button></div></section>;
+  return <section className="result-section gp-point-prediction" aria-busy={state.isRunning} data-prediction-state={error !== null ? "error" : state.isRunning ? "running" : state.snapshot !== null ? "ready" : state.isStale ? "stale" : "empty"}>
+    <h4>{t("gp.pointPrediction")}</h4><p>{t("gp.pointPredictionHelp")}</p>
+    {!state.valid ? <div className="notice-box warning">{t("gp.inputRequired")}</div> : null}
+    {state.isStale ? <div className="notice-box warning" role="status">{t("prediction.inputChanged")}</div> : null}
+    {error !== null ? <div className="notice-box error" role="alert">{error.message} ({error.code})</div> : null}
+    <div className="table-wrap"><table className="result-table gp-prediction-grid">
+      <thead><tr><th>{t("gp.row")}</th>{result.predictors.map((predictor) => <th key={predictor.column_id}>{predictor.display_name}</th>)}<th>{t("gp.predictedMean")}</th><th>{t("gp.latentSd")}</th><th>{t("gp.latentInterval")}</th><th>{t("gp.predictiveSd")}</th><th>{t("gp.predictiveInterval")}</th><th>{t("gp.status")}</th><th /></tr></thead>
+      <tbody>{state.rows.map((row, index) => {
+        const predicted = predictions.get(row.id);
+        return <tr key={row.id}><td>{index + 1}</td>{result.predictors.map((predictor) => <td key={predictor.column_id}>
+          <input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal" onChange={(event) => state.editCell(row.id, predictor.column_id, event.currentTarget.value)} type="text" value={row.values[predictor.column_id] ?? ""} />
+        </td>)}<td>{predicted === undefined ? "-" : formatNumber(predicted.predicted_mean)}</td><td>{predicted === undefined ? "-" : formatNumber(predicted.latent_standard_deviation)}</td><td>{interval(predicted?.latent_interval_95)}</td><td>{predicted === undefined ? "-" : formatNumber(predicted.predictive_standard_deviation)}</td><td>{interval(predicted?.predictive_interval_95)}</td><td>{predicted === undefined ? "-" : predicted.warnings.length === 0 ? t("gp.ready") : predicted.warnings.map((warning, index) => <span key={`${index}:${warning}`}>{index > 0 ? "; " : ""}{warning === "gp_extrapolation" ? t("gp.extrapolation") : <code>{warning}</code>}</span>)}</td>
+          <td><button aria-label={`${t("gp.deleteRow")} ${index + 1}`} onClick={() => state.removeRow(row.id)} type="button">{t("gp.deleteRow")}</button></td></tr>;
+      })}</tbody>
+    </table></div>
+    <div className="button-row"><button className="secondary-button" disabled={state.rows.length >= GP_POINT_PREDICTION_ROW_LIMIT} onClick={state.addRow} type="button">{t("gp.addRow")}</button><button className="primary-button" disabled={!state.valid || state.isRunning || manifest === undefined} onClick={() => void state.run()} type="button">{state.isRunning ? t("gp.predicting") : t("gp.runPrediction")}</button></div>
+    {state.snapshot !== null ? <div className="button-row"><button type="button" data-action="download-prediction-snapshot" onClick={() => {
+      const snapshot = state.snapshot;
+      if (snapshot !== null) triggerBrowserDownload(new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" }), `gp-prediction-${snapshot.response.model_id}.json`);
+    }}>{t("gp.prediction.export")}</button><p className="field-help">{t("gp.prediction.separate")}</p></div> : null}
+  </section>;
 }
 
-function emptyPredictionRow(id: string, result: GaussianProcessRegressionResult): PredictionRowDraft { return { id, values: Object.fromEntries(result.predictors.map((predictor) => [predictor.column_id, ""])) }; }
-function finiteInput(value: string | undefined): boolean { return value !== undefined && value.trim().length > 0 && Number.isFinite(Number(value)); }
 function isNumericColumn(column: DatasetColumnResponse): boolean { return column.role !== "id" && (column.data_type === "integer" || column.data_type === "decimal"); }
 function kernelLabel(value: GaussianProcessRegressionResult["method"]["kernel_preset"], t: ReturnType<typeof useI18n>["t"]): string { return t(value === "matern_5_2_ard" ? "gp.kernel.matern52" : value === "matern_3_2_ard" ? "gp.kernel.matern32" : value === "rbf_ard" ? "gp.kernel.rbf" : "gp.kernel.rq"); }
 function noiseKey(value: GaussianProcessRegressionResult["method"]["noise_mode"]): "estimate" | "fixed" | "nearNoiseless" { return value === "near_noiseless" ? "nearNoiseless" : value; }

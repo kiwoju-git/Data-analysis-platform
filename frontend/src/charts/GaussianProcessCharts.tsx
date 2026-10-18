@@ -75,7 +75,8 @@ export function GpSurfaceChart({ result, scope }: Props) {
   const [yColumnId, setYColumnId] = useState(initialSurface?.y_column_id ?? "");
   const [surface, setSurface] = useState(initialSurface);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ cause: unknown } | null>(null);
+  const errorDisplay = error === null ? null : localizedErrorDisplay(error.cause, locale);
   const guard = useRef(createLatestRequestGuard()).current;
   const manifest = result.model_manifest;
   const source = `${scope}:${manifest?.model_id ?? ""}:${manifest?.manifest_sha256 ?? ""}`;
@@ -98,8 +99,7 @@ export function GpSurfaceChart({ result, scope }: Props) {
       setSurface(joinGpSurfaceRows(snapshot, response));
     } catch (caught) {
       if (!current()) return;
-      if (caught instanceof Error && caught.message === "gp_surface_response_invalid") setError(`${t("gp.surfaceResponseInvalid")} (gp_surface_response_invalid)`);
-      else { const display = localizedErrorDisplay(caught, locale); setError(`${display.message} (${display.code})`); }
+      setError({ cause: caught });
     } finally { if (current()) setIsGenerating(false); }
   }
   if (surface === null) return null;
@@ -115,7 +115,7 @@ export function GpSurfaceChart({ result, scope }: Props) {
       <label><span>{t("gp.surfaceY")}</span><select value={yColumnId} onChange={(event) => setYColumnId(event.currentTarget.value)}>{result.predictors.map((predictor) => <option key={predictor.column_id} value={predictor.column_id} disabled={predictor.column_id === xColumnId}>{predictor.display_name}</option>)}</select></label>
       <button type="button" disabled={manifest === undefined || xColumnId === yColumnId} onClick={() => void generateSurface()}>{isGenerating ? t("gp.generatingSurface") : t("gp.generateSurface")}</button>
     </div>
-    {error !== null && <div className="notice-box error" role="alert">{error}</div>}
+    {errorDisplay !== null && <div className="notice-box error" role="alert">{errorDisplay.message} ({errorDisplay.code})</div>}
     <InteractiveGridChart chartId="gp-surface" sourceKey={`${source}:${surface.x_column_id}:${surface.y_column_id}:${view}`} title={t("gp.surface")} description={t("gp.surfaceNotice")}
       xLabel={surface.x_display_name} yLabel={surface.y_display_name} valueLabel={valueLabel}
       xUnit={result.predictors.find((column) => column.column_id === surface.x_column_id)?.unit} yUnit={result.predictors.find((column) => column.column_id === surface.y_column_id)?.unit} valueUnit={result.response.unit}

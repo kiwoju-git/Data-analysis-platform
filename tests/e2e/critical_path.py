@@ -39,6 +39,7 @@ from refined_ui import create_refined_ui_fixture, verify_refined_ui
 from startup_readiness import verify_startup_readiness
 from api_translation_boundary import verify_api_translation_boundary
 from dataset_context import verify_dataset_context
+from gp_prediction_context import verify_gp_prediction_context
 from regularized_regression import verify_regularized_regression
 from result_charts import verify_chart_interactions, verify_result_chart_models
 from desktop_resize import verify_desktop_resize
@@ -215,6 +216,7 @@ def main() -> int:
     parser.add_argument("--refined-ui-only", action="store_true")
     parser.add_argument("--api-translation-only", action="store_true")
     parser.add_argument("--dataset-context-only", action="store_true")
+    parser.add_argument("--gp-prediction-context-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -323,6 +325,7 @@ def main() -> int:
             args.refined_ui_only,
             args.api_translation_only,
             args.dataset_context_only,
+            args.gp_prediction_context_only,
         )
         print("E2E critical path passed")
         return 0
@@ -623,11 +626,16 @@ def run_browser_flow(
     refined_ui_only: bool = False,
     api_translation_only: bool = False,
     dataset_context_only: bool = False,
+    gp_prediction_context_only: bool = False,
 ) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            if gp_prediction_context_only:
+                diagnostics.step("verify saved GP prediction request context")
+                verify_gp_prediction_context(browser, frontend_base_url, diagnostics.root / "gp-prediction-context", isolated_workspace=True)
+                return
             if dataset_context_only:
                 diagnostics.step("verify dataset source context under delayed responses")
                 verify_dataset_context(browser, frontend_base_url, diagnostics.root / "dataset-context", isolated_workspace=True)
@@ -648,6 +656,8 @@ def run_browser_flow(
                 verify_api_translation_boundary(browser, frontend_base_url, diagnostics.root / "api-boundary", isolated_workspace=True)
                 diagnostics.step("verify dataset source context under delayed responses")
                 verify_dataset_context(browser, frontend_base_url, diagnostics.root / "dataset-context", isolated_workspace=True)
+                diagnostics.step("verify saved GP prediction request context")
+                verify_gp_prediction_context(browser, frontend_base_url, diagnostics.root / "gp-prediction-context", isolated_workspace=True)
             verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
             verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
