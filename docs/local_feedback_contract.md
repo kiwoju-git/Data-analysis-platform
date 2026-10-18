@@ -53,8 +53,11 @@ The complete JSON document is always available in a read-only selectable preview
 Copy, JSON download, and plain-text download export that same reviewed text only
 after an explicit action. Clipboard absence/rejection exposes manual selection;
 raw clipboard/download exceptions are never displayed. Closing discards the
-dialog draft. Native modal semantics constrain focus; Escape/close returns focus
-to the opener. Existing tokens and Lucide icons are reused without a redesign.
+dialog draft. Native modal semantics make the background inert; explicit Tab and
+Shift+Tab boundary wrapping keeps focus within the visible controls. Native
+dialog behavior alone may move focus into browser chrome at the last control.
+Escape/close returns focus to the opener. Existing tokens and Lucide icons are
+reused without a redesign.
 
 ## Verification
 

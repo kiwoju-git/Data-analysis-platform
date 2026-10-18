@@ -100,6 +100,17 @@ export function FeedbackDialog({ context = {}, onClose }: {
       aria-modal="true"
       className="feedback-dialog"
       onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), select:not(:disabled), textarea:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+        )).filter((item) => item.closest("[hidden]") === null && item.getClientRects().length > 0);
+        const first = items[0];
+        const last = items[items.length - 1];
+        const target = event.shiftKey && document.activeElement === first
+          ? last : !event.shiftKey && document.activeElement === last ? first : null;
+        if (target) { event.preventDefault(); target.focus(); }
+      }}
       ref={dialog}
     >
       <div className="feedback-heading">
