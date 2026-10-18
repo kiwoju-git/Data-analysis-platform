@@ -11,7 +11,8 @@ param(
     [switch]$ApiTranslationOnly,
     [switch]$DatasetContextOnly,
     [switch]$GpPredictionContextOnly,
-    [switch]$SchemaConcurrencyOnly
+    [switch]$SchemaConcurrencyOnly,
+    [switch]$UploadRecoveryOnly
 )
 
 Set-StrictMode -Version Latest
@@ -74,6 +75,9 @@ try {
     }
     if ($SchemaConcurrencyOnly) {
         $Args += "--schema-concurrency-only"
+    }
+    if ($UploadRecoveryOnly) {
+        $Args += "--upload-recovery-only"
     }
 
     & $Python @Args

@@ -27,6 +27,7 @@ from dashboard_navigation import verify_dashboard_navigation
 from playwright.sync_api import (
     Browser,
     BrowserContext,
+    Dialog,
     Locator,
     Page,
     expect,
@@ -39,6 +40,7 @@ from refined_ui import create_refined_ui_fixture, verify_refined_ui
 from startup_readiness import verify_startup_readiness
 from api_translation_boundary import verify_api_translation_boundary
 from dataset_context import verify_dataset_context
+from app_readiness import wait_for_app_ready
 from gp_prediction_context import verify_gp_prediction_context
 from schema_concurrency import verify_schema_concurrency
 from regularized_regression import verify_regularized_regression
@@ -219,6 +221,7 @@ def main() -> int:
     parser.add_argument("--dataset-context-only", action="store_true")
     parser.add_argument("--gp-prediction-context-only", action="store_true")
     parser.add_argument("--schema-concurrency-only", action="store_true")
+    parser.add_argument("--upload-recovery-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -329,6 +332,7 @@ def main() -> int:
             args.dataset_context_only,
             args.gp_prediction_context_only,
             args.schema_concurrency_only,
+            args.upload_recovery_only,
         )
         print("E2E critical path passed")
         return 0
@@ -631,11 +635,26 @@ def run_browser_flow(
     dataset_context_only: bool = False,
     gp_prediction_context_only: bool = False,
     schema_concurrency_only: bool = False,
+    upload_recovery_only: bool = False,
 ) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            if upload_recovery_only:
+                diagnostics.step("verify focused CSV upload error recovery")
+                context = browser.new_context(accept_downloads=True)
+                context.add_init_script(
+                    "window.localStorage.setItem('statistical-twin.locale', 'ko');"
+                )
+                page = context.new_page()
+                page.goto(f"{frontend_base_url}/home", wait_until="domcontentloaded")
+                wait_for_app_ready(page, "ko", "/home")
+                verify_csv_file_upload_and_error_recovery(
+                    page, Path(tempfile.mkdtemp(prefix="datalab-e2e-csv-upload-"))
+                )
+                diagnostics.capture_page(page, "csv-upload-error-recovery.png")
+                return
             if schema_concurrency_only:
                 diagnostics.step("verify two-editor schema concurrency")
                 verify_schema_concurrency(browser, frontend_base_url, diagnostics.root / "schema-concurrency", isolated_workspace=True)
@@ -4068,7 +4087,23 @@ def verify_csv_file_upload_and_error_recovery(page: Page, temp_dir: Path) -> Non
         page.get_by_role("button", name="업로드").click()
         expect(page.get_by_role("alert")).to_contain_text("empty_file", timeout=15_000)
 
-        page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
+        replacement_dialogs: list[tuple[str, str]] = []
+
+        def approve_replacement(dialog: Dialog) -> None:
+            replacement_dialogs.append((dialog.type, dialog.message))
+            dialog.accept()
+
+        page.once("dialog", approve_replacement)
+        try:
+            page.get_by_label("원본 데이터 파일").set_input_files(str(csv_path))
+        finally:
+            page.remove_listener("dialog", approve_replacement)
+        assert replacement_dialogs == [
+            ("confirm", "저장하지 않은 입력이 있습니다. 변경을 버리고 이동하시겠습니까?")
+        ]
+        assert page.get_by_label("원본 데이터 파일").evaluate(
+            "input => input.files[0]?.name"
+        ) == csv_path.name
         expect(page.get_by_role("alert")).not_to_be_visible()
         page.get_by_role("button", name="업로드").click()
         expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(

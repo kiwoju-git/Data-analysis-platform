@@ -1,5 +1,19 @@
 # Browser E2E Coverage
 
+## CSV Upload Recovery
+
+`scripts/e2e.ps1 -UploadRecoveryOnly` runs the existing CSV recovery scenario
+without the preceding analysis suites. Stage `verify focused CSV upload error recovery`
+waits for the mounted, compatible Korean app, submits an empty file, then
+explicitly approves exactly one expected replacement confirmation. It asserts
+the native FileList contains the new file, the old `empty_file` alert disappears,
+and the valid CSV reaches parsing and dataset creation. The original full-flow
+assertions remain unchanged; this mode does not suppress alerts or bypass the
+discard confirmation. `csv-upload-error-recovery.png` records the completed
+synthetic dataset. Cancelled replacement retains the prior FileList/error in
+the Node workflow tests; real native cancellation is also covered by the A05
+dataset-context browser suite.
+
 ## Schema Concurrency
 
 Stage `verify two-editor schema concurrency` opens independent browser contexts
@@ -688,6 +702,7 @@ browser critical path.
   - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
     `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
     overflow and keep the language/API controls visible.
+- `verify focused CSV upload error recovery` (focused upload mode)
 - `verify two-editor schema concurrency` (focused schema mode)
 - `verify saved GP prediction request context` (focused prediction mode)
 - `verify dataset source context under delayed responses` (focused dataset mode)

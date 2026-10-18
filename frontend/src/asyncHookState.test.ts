@@ -794,6 +794,37 @@ function datasetWorkflowHarness() {
 }
 
 describe("A05 dataset source isolation", () => {
+  it.each([false, true])("preserves failed-upload context unless replacement is approved: %s", async (approved) => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    await h.file("failed-upload.csv");
+    apiMocks.uploadDataset.mockRejectedValueOnce(Object.assign(new Error("empty_file"), { code: "empty_file" }));
+    await h.upload();
+    expect(h.runner.output.flowError).toBe("empty_file");
+    h.confirm.mockReturnValueOnce(approved);
+    await h.file("replacement.csv");
+    expect(h.confirm).toHaveBeenCalledOnce();
+    expect(h.runner.output.datasetPageProps.selectedFile?.name).toBe(approved ? "replacement.csv" : "failed-upload.csv");
+    expect(h.runner.output.flowError).toBe(approved ? null : "empty_file");
+    expect(h.runner.output.version).toEqual(h.versions[0]);
+    h.runner.unmount();
+  });
+
+  it("does not resurrect an upload error after an approved newer file selection", async () => {
+    const h = datasetWorkflowHarness();
+    await h.file("old-upload.csv");
+    const old = deferred<DatasetUploadResponse>();
+    apiMocks.uploadDataset.mockReturnValueOnce(old.promise);
+    await h.upload();
+    await h.file("new-upload.csv");
+    old.reject(Object.assign(new Error("empty_file"), { code: "empty_file" }));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.selectedFile?.name).toBe("new-upload.csv");
+    expect(h.runner.output.flowError).toBeNull();
+    expect(h.runner.output.datasetPageProps.isUploading).toBe(false);
+    h.runner.unmount();
+  });
+
   it("preserves the committed dataset when only a new file draft is selected", async () => {
     const h = datasetWorkflowHarness();
     await h.select(1);

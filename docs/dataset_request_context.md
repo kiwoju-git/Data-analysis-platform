@@ -69,6 +69,15 @@ empty, silently finished section. Retry reads only the committed version and doe
 not submit a new upload or analysis. A successful retry does not discard the intake
 draft. Stale failures cannot replace current error or loading state.
 
+A failed upload still owns the selected file draft. Replacing it requires the
+existing discard confirmation. Cancelling that confirmation restores the prior
+native FileList and retains its error; accepting it clears the old error and
+invalidates late responses before selecting the new file. Browser recovery tests
+must explicitly approve this one expected confirmation rather than relying on
+Playwright's default dialog dismissal. The Linux full E2E failure at
+`verify_csv_file_upload_and_error_recovery` was this missing test action, not an
+old upload response overwriting an accepted new selection.
+
 User-facing error text is localized static text plus a validated machine code.
 Arbitrary exception messages, server prose, user data and raw cell values are not
 rendered as workflow errors.
