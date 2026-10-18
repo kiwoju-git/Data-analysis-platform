@@ -715,8 +715,16 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "doe.response_surface",
         "doe.bayesian_optimization",
     }
-    assert "p_value" not in response.text
-    assert "statistic" not in response.text
+    def assert_no_calculated_results(value):
+        if isinstance(value, dict):
+            assert not {"p_value", "statistic", "result"}.intersection(value)
+            for child in value.values():
+                assert_no_calculated_results(child)
+        elif isinstance(value, list):
+            for child in value:
+                assert_no_calculated_results(child)
+
+    assert_no_calculated_results(payload)
 
 
 def test_analysis_run_routes_predict_to_dedicated_api_without_fake_result(

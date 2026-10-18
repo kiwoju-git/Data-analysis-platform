@@ -699,3 +699,16 @@ Whole-backend/native A11 checkpoint and later A12-A15 gates remain separate.
 Final actual HTML API rerun (`-m pytest backend/tests/unit/test_api_contracts.py
 -k analysis_result_html_report -q`) passed eight tests / 226 deselected / four
 existing warnings in 31.30 seconds. Log `.tmp/remediation-a11-html-api-final.log`.
+
+### A11 Whole-Suite Catalog Assertion Correction
+
+Native Linux run `39105316544` at `4825511` reported 1 failed, 1805 passed,
+11 skipped, 105 warnings (267.58 seconds). The catalog test prohibited the
+substring `statistic` anywhere in serialized metadata, including the legitimate
+`descriptive_statistics` report summary type. It now recursively rejects actual
+`statistic`, `p_value`, or `result` fields instead of banning text in descriptors.
+This preserves the no-fabricated-result gate; no production/numerical change was
+made for the failure. Log: `.tmp/remediation-a11-ci-linux.log`.
+A10 run `39102592691` was cancelled by the branch concurrency policy after the
+A11 dispatch; its successful Linux/Python311/security/package jobs are not an
+all-platform completed gate.
