@@ -94,6 +94,7 @@ This is not a physical Windows 11 or Linux execution claim.
 | `node scripts/check_frontend_localization.mjs` | A01/A02 | Passed: 2934 source strings / 3940 keys. |
 | `powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 8031 -FrontendPort 5231 -RefinedUiOnly -DiagnosticsRoot .tmp/e2e-remediation-focused-1 -KeepWorkspace` | A01/A02 | Startup scenarios passed; fixture creation then failed with dev_origin_not_allowed because the test API client omitted Origin. Fixed the fixture's same-origin header, not the LAN guard. Rerun pending. |
 | Same focused command with `-DiagnosticsRoot .tmp/e2e-remediation-focused-2` | A01/A02 | Passed, including startup scenarios and both locales/four viewports; subsequent boundary extraction/diagnostic metadata refinements still require the final whole-suite run. |
+| Same focused command with `-DiagnosticsRoot .tmp/e2e-remediation-focused-3` | A01 review-fix rerun | Passed: blocked storage, held/failed App chunk, initial render failure, pending runtime/catalog, child diagnostic capture, exact dataset selection, both locales and four viewports. |
 | `npm --prefix frontend test -- --run` | A01/A02 | 56 files / 401 tests passed. |
 | `npm --prefix frontend run build` | A01/A02 | Passed; existing large-chunk warning retained. |
 | `npm --prefix frontend run lint` | A01/A02 | No errors; 9 existing refresh warnings, plus 1 new entry-point warning subsequently removed by extracting ApplicationContent. Targeted ESLint then passed without warnings. |
@@ -101,7 +102,7 @@ This is not a physical Windows 11 or Linux execution claim.
 | Same backend command after document synchronization | A01/A02 rerun | 227 passed. |
 | `powershell -ExecutionPolicy Bypass -File scripts/check.ps1` | A01/A02 integrated | In progress; `.tmp/remediation-a01-a02-check.log`. |
 | `.venv\Scripts\python.exe -m pytest backend/tests/unit/test_e2e_diagnostics.py -q` | A01 review fixes | 5 passed. |
-| `powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 8031 -FrontendPort 5231 -DiagnosticsRoot .tmp/e2e-remediation-a01-final -KeepWorkspace` | A01/A02 final local E2E | In progress; `.tmp/remediation-a01-e2e-final.log`. |
+| `powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 8031 -FrontendPort 5231 -DiagnosticsRoot .tmp/e2e-remediation-a01-final -KeepWorkspace` | A01/A02 local E2E | Failed in the new catalog-pending negative test: readiness correctly rejected the missing landing, but the test assumed Playwright's error text included the attribute name. It includes the locator/expected value instead. Corrected the assertion and always release held requests; no product timeout increase. Full suite is not counted as passed. |
 | `npm --prefix frontend audit --omit=dev --json` | A03 baseline | Exit 0; no reported runtime advisories at lookup time. |
 | `npm --prefix frontend audit --json` | A03 baseline | Exit 1; 14 affected package entries (12 high, 2 moderate), including indirect impact. Not 14 independent vulnerabilities. |
 
@@ -111,5 +112,8 @@ are under `.tmp/e2e-remediation-baseline/refined-ui`. The latter is only partial
 baseline evidence, as explained above. The root error screenshot was inspected:
 existing workbench tokens, readable recovery text, no raw exception/stack.
 
-No Linux checks, new CI, release publication or main push has completed for this
-remediation. Historical successes are not validation evidence for these changes.
+A01/A02 checkpoint `456695365f493cbb2572236b0270c6a68d565500` was pushed to
+the feature branch, not main. [Checkpoint CI](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/39087043940)
+was started; it includes the subsequently corrected negative-test assertion.
+No release publication or main push has completed for this remediation.
+Historical successes are not validation evidence for these changes.

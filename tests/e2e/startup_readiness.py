@@ -90,11 +90,12 @@ def verify_startup_readiness(browser: Browser, base_url: str, root: Path) -> Non
         try:
             wait_for_app_ready(page, "en", route_path, timeout_ms=250)
         except AssertionError as error:
-            assert "data-domain-id" in str(error)
+            assert ".analysis-domain-landing" in str(error)
         else:
             raise AssertionError("An unloaded domain must not be reported ready")
-        for route in held:
-            route.continue_()
+        finally:
+            for route in held:
+                route.continue_()
         wait_for_app_ready(page, "en", route_path)
 
     for name, rendering_error in (
