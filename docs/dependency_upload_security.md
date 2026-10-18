@@ -60,6 +60,14 @@ inventory is separate. Empty, skipped, mismatched or failed audits fail the gate
 No advisory exceptions exist. Future exceptions require ID, scope, rationale,
 owner and expiry; blanket ignore flags are not an accepted policy.
 
+Interpreter paths are made absolute without dereferencing venv executable
+symlinks. In candidate run 39090939567 (source 5839914), all four Linux security
+jobs stopped before pip-audit because the CLI resolved both venv Python paths to
+the hosted base interpreter. The uploaded inventory confirmed the base toolcache
+site-packages, not the installed hash-locked target. This failed run is not a
+clean security audit. A portable CLI regression and a Linux real-symlink venv
+test guard this boundary; native audits must be rerun on the corrected commit.
+
 CI covers all five Python profiles and npm runtime/all profiles. Windows has one
 combined dev lock containing runtime dependencies, not a separate runtime-only
 environment. The aggregate requires every audit to succeed. Only public package
@@ -122,3 +130,16 @@ passed with ports 8033/5233 (`scripts/e2e.ps1`, diagnostics
 `.tmp/e2e-remediation-a03`). Whole checks and candidate CI remain pending until
 recorded in the main remediation ledger. No A03 main
 push or Release publication has occurred.
+
+The same candidate Linux application run had 1398 passes, 11 skips and one
+failure: the new `datasetIntakeLimits` frontend route was missing from the
+backend OpenAPI operation contract table. The GET path and response schema are
+now registered in that table; no application route or intake policy changed.
+
+Post-fix focused Windows checks (the A03 worktree's own Python 3.10 environment):
+`python -m pytest backend/tests/unit/test_dependency_security.py
+backend/tests/unit/test_openapi_frontend_contract.py -q` passed 220 tests, skipped
+the one Linux-only real-symlink test, and emitted two existing Starlette
+deprecation warnings. The portable interpreter-path regression failed before
+the fix and passed afterward. Targeted Ruff lint/format checks passed. These
+results do not replace the required full-check and native Linux audit reruns.

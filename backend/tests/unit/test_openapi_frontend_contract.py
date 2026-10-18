@@ -121,6 +121,13 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"multipart/form-data"}),
     ),
     OperationContract(
+        route_name="datasetIntakeLimits",
+        method="get",
+        path="/api/v1/datasets/intake-limits",
+        success_status="200",
+        response_schema="DatasetIntakeLimits",
+    ),
+    OperationContract(
         route_name="datasetPaste",
         method="post",
         path="/api/v1/datasets/paste",
