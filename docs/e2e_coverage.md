@@ -744,6 +744,7 @@ browser critical path.
   - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
     `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
     overflow and keep the language/API controls visible.
+- `verify current analysis completion ownership` (focused completion mode)
 - `verify Report Center request context` (focused report mode)
 - `verify focused chart formatting and interaction` (focused chart mode)
 - `verify focused CSV upload error recovery` (focused upload mode)
@@ -753,6 +754,7 @@ browser critical path.
 - `verify API translation boundary with synthetic inputs` (focused transport mode)
 - `verify startup readiness and storage recovery` (focused startup/refined mode)
 - `verify refined UI with exact synthetic version` (focused mode)
+- `verify current analysis completion ownership` (full flow)
 - `verify Report Center request context` (full flow)
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)

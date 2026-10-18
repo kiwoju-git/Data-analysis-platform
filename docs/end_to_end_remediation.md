@@ -1075,3 +1075,59 @@ are included in the feature checkpoint.
 The final A13 production build (including strict TypeScript) exited 0,
 `.tmp/remediation-a13-build-final.log`; Vite completed in 4.69 seconds with the
 existing >500 kB chunk warning. No chunk threshold was raised to hide it.
+
+A13 checkpoint `c513917798e3b8f0aac55054b969cc4336d90e4c` was pushed to the
+feature branch only. [Native validation run](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/39114414729)
+is pending/in progress, not passed. Main remains at BASE_SHA and no remediation
+Release has been published. The [T01-T18 journey matrix](remediation_journey_matrix.md)
+separates required behavior, actual test boundaries and remaining archive work.
+
+### A13 Native Marker Failure and Correction
+
+The new Python 3.11 native run failed one documentation contract assertion:
+1984 passed, 12 skipped, 105 warnings, 310.03 seconds
+(`.tmp/remediation-a13-ci-python311.log`). The focused and full completion-stage
+markers were described later in the E2E document but omitted from its ordered
+`Current Step Markers` list. The earlier 233-test local OpenAPI run preceded
+adding those runner stages and did not validate the final runner/document pair.
+Both exact entries are now added; the test is not relaxed. Linux packaging was
+skipped by the upstream gate. This failed checkpoint is not a successful release.
+
+Native Linux 3.12 reported the same sole assertion: 1984 passed, 12 skipped,
+105 warnings, 300.71 seconds (`.tmp/remediation-a13-ci-linux.log`). Ruff/format
+(339 files) and mypy (199 modules) passed; frontend, source lifecycle and browser
+stages did not run after pytest exited 1. After correcting the ordered list,
+the entire local OpenAPI/frontend contract file passed 233 tests / 2 warnings /
+11.15 seconds (`.tmp/remediation-a13-openapi-marker-correction.log`). A new native
+run is still required for integrated success.
+
+### Journey Evidence Review
+
+Independent T01-T18 source review identified evidence gaps rather than new
+statistical defects. The matrix now distinguishes hook/API/browser/actual file
+checks, real-server versus mocked transport, and JSON-value versus artifact-file
+hashes. Archive UI prediction/restart and installed-code identity remain A15 work.
+
+The previously unproven last-page Report Center case now has two deferred-hook
+variants (selected owner deleted or a different selection retained) and a
+KO/EN actual-component browser extension. The backend transport is deliberately
+mocked for this stage; existing real retention/API tests remain separate.
+
+```powershell
+npm --prefix frontend test -- --run src/asyncHookState.test.ts
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests/e2e/critical_path.py --backend-port 8027 --frontend-port 5257 --report-center-context-only --diagnostics-root .tmp/e2e-a14-report-last-page
+```
+
+Results: 170 hook tests passed in 6.14 seconds; browser command exited 0 for both
+locales, including the existing capability/context cases. The new browser case
+deletes the only owner on offset 20, verifies an empty-page response followed by
+offset 0, both pagination buttons disabled, cleared deleted selection, preserved
+other URL context and no additional detail read. Logs:
+`.tmp/remediation-a14-report-last-page-unit.log`,
+`.tmp/remediation-a14-report-last-page-browser.log`; child evidence remains under
+the named diagnostics directory and outside Git. No production report behavior
+was changed for these added assertions.
+
+The added hook tests also passed strict TypeScript via
+`npm --prefix frontend run typecheck` (exit 0,
+`.tmp/remediation-a14-report-test-typecheck.log`).

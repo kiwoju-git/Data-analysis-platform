@@ -30,6 +30,7 @@ def _status(analysis_id: str) -> dict[str, object]:
         "created_at": "2026-10-18T00:00:00Z",
         "updated_at": "2026-10-18T00:00:00Z",
         "completed_at": "2026-10-18T00:00:00Z",
+        "failure_code": None,
     }
 
 
@@ -83,9 +84,13 @@ def verify_report_center_context(browser: Browser, base_url: str, output: Path) 
     evidence: list[dict[str, object]] = []
     for locale in ("ko", "en"):
         requests: list[tuple[str, str]] = []
+        list_offsets: list[int] = []
         modes: dict[str, str] = {}
         held: list[tuple[Route, dict[str, object]]] = []
-        state = {"hold_list": False, "hold_delete": False, "status_failure": False}
+        state = {
+            "hold_list": False, "hold_delete": False, "status_failure": False,
+            "paginated": False, "last_deleted": False,
+        }
 
         def serve(route: Route) -> None:
             parsed = urlparse(route.request.url)
@@ -94,19 +99,29 @@ def verify_report_center_context(browser: Browser, base_url: str, output: Path) 
             root = "/api/v1/analysis-runs"
             if path == root:
                 query = parse_qs(parsed.query)
+                offset = int(query.get("offset", ["0"])[0])
+                list_offsets.append(offset)
                 runs = [_status(ANALYSIS_A), _status(ANALYSIS_B)]
                 if query.get("stale") == ["false"]:
                     runs = [runs[1]]
+                if state["paginated"]:
+                    runs = (
+                        [_status(ANALYSIS_A)] + [
+                            _status(f"10000000-0000-4000-8000-{index:012d}")
+                            for index in range(3, 22)
+                        ]
+                        if offset == 0 else [] if state["last_deleted"] else [_status(ANALYSIS_B)]
+                    )
                 payload = {
                     "dataset_version_id": query.get("dataset_version_id", [None])[0],
                     "method_id": None,
                     "status": query.get("status", [None])[0],
                     "stale": None,
                     "result_available": True,
-                    "offset": int(query.get("offset", ["0"])[0]),
+                    "offset": offset,
                     "limit": 20,
                     "returned_count": len(runs),
-                    "has_more": False,
+                    "has_more": state["paginated"] and offset == 0 and not state["last_deleted"],
                     "runs": runs,
                 }
                 if state["hold_list"]:
@@ -154,6 +169,8 @@ def verify_report_center_context(browser: Browser, base_url: str, output: Path) 
                 else:
                     route.fulfill(json=_status(analysis_id))
             elif suffix[1:] == ["deletion"] and route.request.method == "DELETE":
+                if state["paginated"] and analysis_id == ANALYSIS_B:
+                    state["last_deleted"] = True
                 payload = {"analysis_id": analysis_id, "cleanup_status": "deleted"}
                 if state["hold_delete"]:
                     held.append((route, payload))
@@ -414,12 +431,39 @@ def verify_report_center_context(browser: Browser, base_url: str, output: Path) 
             expect(panel).to_have_count(0)
             assert "analysis_id" not in parse_qs(urlparse(page.url).query)
             assert parse_qs(urlparse(page.url).query)["keep"] == ["source"]
+
+            modes.pop(ANALYSIS_B)
+            state["hold_delete"] = False
+            state["paginated"] = True
+            page.locator(".report-browser > .panel-heading button").click()
+            expect(page.locator(".report-run-row")).to_have_count(20)
+            pagination = page.locator(".report-browser .analysis-history-pagination")
+            pagination.get_by_role("button").last.click()
+            expect(page.locator(".report-run-row")).to_have_count(1)
+            page.locator(f'.report-run-row[data-analysis-id="{ANALYSIS_B}"]').click()
+            expect(panel).to_have_attribute("data-analysis-id", ANALYSIS_B)
+            detail_reads = [request for request in requests if request[1].endswith("/result")]
+            offset_start = len(list_offsets)
+            panel.locator(".report-analysis-deletion > button").click()
+            confirmation = panel.locator(".report-analysis-deletion .error-box")
+            expect(confirmation).to_be_visible()
+            confirmation.get_by_role("button").first.click()
+            expect(panel).to_have_count(0)
+            expect(page.locator(".report-run-row")).to_have_count(20)
+            expect(pagination.get_by_role("button").first).to_be_disabled()
+            expect(pagination.get_by_role("button").last).to_be_disabled()
+            assert state["last_deleted"] is True
+            assert 20 in list_offsets[offset_start:] and list_offsets[-1] == 0
+            assert [request for request in requests if request[1].endswith("/result")] == detail_reads
+            assert "analysis_id" not in parse_qs(urlparse(page.url).query)
+            assert parse_qs(urlparse(page.url).query)["keep"] == ["source"]
             evidence.append(
                 {
                     "locale": locale,
                     "strict_mode": True,
                     "requests": requests,
                     "viewports": [1440, 1280, 1024, 390],
+                    "last_page_delete_offsets": list_offsets[offset_start:],
                 }
             )
     (output / "report-center-evidence.json").write_text(

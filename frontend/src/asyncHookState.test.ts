@@ -2952,6 +2952,42 @@ describe("async workbench hooks", () => {
     runner.unmount();
   });
 
+  it.each([true, false])("backs out of a deleted last Report Center page without refetching detail (selected owner deleted: %s)", async (selectedDeleted) => {
+    const selectedId = selectedDeleted ? reportIdA : reportIdB;
+    const browser = reportWindow(`&analysis_id=${selectedId}`);
+    const item = {
+      analysis_id: reportIdA, method_id: "eda.descriptive", method_version: "0.1.0",
+      dataset_version_id: "dataset-a", status: "succeeded" as const, stale: false,
+      result_available: true, artifact_count: 1, failure_code: null,
+      created_at: "2026-10-18T00:00:00Z", updated_at: "2026-10-18T00:00:00Z",
+      completed_at: "2026-10-18T00:00:00Z",
+    };
+    let deleted = false;
+    apiMocks.fetchAnalysisRuns.mockImplementation((query: AnalysisRunsRouteParams) => {
+      const runs = query.offset === 20 && deleted ? [] : [{ ...item, analysis_id: query.offset === 20 ? reportIdA : reportIdB }];
+      return Promise.resolve({ ...historyResponse("dataset-a"), offset: query.offset,
+        returned_count: runs.length, runs, has_more: query.offset === 0 && !deleted });
+    });
+    apiMocks.fetchAnalysisRunResult.mockResolvedValue(reportResult(selectedId));
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.flush();
+    await runner.act(() => runner.output.onChangeOffset(20));
+    expect(runner.output.offset).toBe(20);
+    apiMocks.fetchAnalysisRuns.mockClear();
+    deleted = true;
+    await runner.act(() => runner.output.onSelectedAnalysisDeleted(reportIdA));
+    expect(apiMocks.fetchAnalysisRuns.mock.calls.map(([query]) => query.offset)).toEqual([20, 0]);
+    expect(runner.output.offset).toBe(0);
+    expect(runner.output.list?.runs.map((row) => row.analysis_id)).toEqual([reportIdB]);
+    expect(runner.output.selectedAnalysisId).toBe(selectedDeleted ? null : reportIdB);
+    expect(runner.output.selectedResult?.analysis_id ?? null).toBe(selectedDeleted ? null : reportIdB);
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledOnce();
+    expect(new URL(browser.location.href).searchParams.get("analysis_id")).toBe(selectedDeleted ? null : reportIdB);
+    expect(browser.location.href).toContain("tab=reports");
+    expect(browser.location.href).toContain("#saved");
+    runner.unmount();
+  });
+
   it("preserves independently loaded stale Report Center status across list filters", async () => {
     reportWindow(`&analysis_id=${reportIdA}`);
     apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
