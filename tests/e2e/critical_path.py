@@ -2446,34 +2446,70 @@ def delete_one_saved_analysis_run(page: Page) -> None:
 def verify_schema_stale_behavior(page: Page) -> None:
     open_primary_navigation(page, "데이터셋")
     expect(page.locator("#version-title")).to_contain_text("v2", timeout=15_000)
+    version_id = page.locator("#active-dataset-version").input_value()
+    schema_path = f"/api/v1/dataset-versions/{version_id}/schema"
+    # Adversarial delivery latency, not a readiness sleep: retain the real response
+    # and require the application to publish it before attempting navigation.
+    page.evaluate("""path => {
+        const original = window.fetch;
+        window.schemaSaveDeliveryProbe = { original, delivered: 0 };
+        window.fetch = async function(...args) {
+            const response = await original.apply(this, args);
+            const request = args[0];
+            const url = request instanceof Request ? request.url : String(request);
+            const method = args[1]?.method ?? (request instanceof Request ? request.method : 'GET');
+            if (method === 'PATCH' && new URL(url, location.href).pathname === path) {
+                await new Promise(resolve => setTimeout(resolve, 750));
+                window.schemaSaveDeliveryProbe.delivered += 1;
+            }
+            return response;
+        };
+    }""", schema_path)
 
-    page.get_by_role("button", name="스키마 저장").click()
-    expect(page.get_by_role("button", name="스키마 저장")).to_be_enabled(timeout=15_000)
+    def save_schema(*, changed: bool) -> None:
+        with page.expect_response(
+            lambda response: response.request.method == "PATCH"
+            and urllib.parse.urlsplit(response.url).path == schema_path
+        ) as saved:
+            page.get_by_role("button", name="스키마 저장").click()
+        response = saved.value
+        assert response.status == 200
+        expected_hash = response.request.post_data_json["expected_schema_hash"]
+        assert (response.json()["schema_hash"] != expected_hash) is changed
+        expect(page.get_by_role("button", name="스키마 저장")).to_be_enabled(timeout=15_000)
 
-    open_primary_navigation(page, "분석")
-    select_method_card(page, "가설 검정", "2-표본 t-검정")
-    compact_history = page.locator(".compact-analysis-history")
-    compact_history.get_by_role("button", name="최근 이력 열기").click()
-    expect(page.locator(".compact-history-list article")).to_have_count(
-        1, timeout=15_000
-    )
-    expect(page.locator(".compact-history-list .stale-badge")).to_have_count(0)
+    try:
+        save_schema(changed=False)
+        open_primary_navigation(page, "분석")
+        select_method_card(page, "가설 검정", "2-표본 t-검정")
+        compact_history = page.locator(".compact-analysis-history")
+        compact_history.get_by_role("button", name="최근 이력 열기").click()
+        expect(page.locator(".compact-history-list article")).to_have_count(
+            1, timeout=15_000
+        )
+        expect(page.locator(".compact-history-list .stale-badge")).to_have_count(0)
 
-    open_primary_navigation(page, "데이터셋")
-    value_display_input = page.get_by_label("Value 표시명")
-    value_display_input.fill("Measurement Value")
-    page.get_by_role("button", name="스키마 저장").click()
-    expect(value_display_input).to_have_value("Measurement Value", timeout=15_000)
+        open_primary_navigation(page, "데이터셋")
+        value_display_input = page.get_by_label("Value 표시명")
+        value_display_input.fill("Measurement Value")
+        save_schema(changed=True)
+        expect(value_display_input).to_have_value("Measurement Value", timeout=15_000)
 
-    open_primary_navigation(page, "분석")
-    select_method_card(page, "가설 검정", "2-표본 t-검정")
-    compact_history = page.locator(".compact-analysis-history")
-    compact_history.get_by_role("button", name="최근 이력 열기").click()
-    expect(page.locator(".compact-history-list article")).to_have_count(
-        1, timeout=15_000
-    )
-    expect(page.locator(".compact-history-list .stale-badge")).to_have_count(1)
-    expect(page.get_by_text("stale", exact=True).first).to_be_visible()
+        open_primary_navigation(page, "분석")
+        select_method_card(page, "가설 검정", "2-표본 t-검정")
+        compact_history = page.locator(".compact-analysis-history")
+        compact_history.get_by_role("button", name="최근 이력 열기").click()
+        expect(page.locator(".compact-history-list article")).to_have_count(
+            1, timeout=15_000
+        )
+        expect(page.locator(".compact-history-list .stale-badge")).to_have_count(1)
+        expect(page.get_by_text("stale", exact=True).first).to_be_visible()
+        assert page.evaluate("window.schemaSaveDeliveryProbe.delivered") == 2
+    finally:
+        page.evaluate("""() => {
+            window.fetch = window.schemaSaveDeliveryProbe.original;
+            delete window.schemaSaveDeliveryProbe;
+        }""")
 
 
 def verify_linear_model_fit_and_prediction(

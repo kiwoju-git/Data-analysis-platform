@@ -238,6 +238,37 @@ ignored `.tmp` diagnostics, never committed user data.
   synthetic workspace. The ignored runner wrapper only printed tracebacks and
   recorded resource observations; it delegated to the unchanged suite dispatcher.
   This is local Windows source/Vite evidence, not the new native Release gate.
+- Native run `39149656686` at `f586bb0a4ca05a3b6dff4f947641240144d3d0f5`
+  passed Linux full checks: backend 2439 passed/12 skipped/105 warnings in
+  325.47 seconds, Ruff check/format, mypy (202 files), localization (2875 source
+  strings/4149 keys), frontend lint (0 errors/9 warnings), typecheck, 96 Vitest
+  files/850 tests, and production build. Python 3.11 separately passed
+  2439/12/105 in 339.08 seconds. Both logs locate all 12 skips in
+  `test_dev_startup_contract.py`; its source marker explains that the PowerShell
+  entrypoint checks are Windows-only (the runs did not emit `-rs` details).
+  Linux source-runner loopback/LAN, port refusal and owned shutdown also passed.
+  Full browser E2E subsequently failed at schema-stale navigation, so the Linux
+  job failed and Release packaging was skipped, not accepted.
+- Failure artifact `12144494804` was digest-verified:
+  `527e1b3f360664db0f2549f99cd58ebe4482b14c219d91eef24990951e1057b5`.
+  Its actual HTML/screenshot show the renamed column committed but the browser
+  remaining on Datasets. That legacy context did not record a trace. A focused
+  real source/Vite reproduction held only client delivery after the actual
+  schema PATCH 200 response and reproduced the same failure: navigation raised
+  the existing unsaved-change confirmation before the response was published;
+  Playwright dismissed it, correctly leaving the page unchanged. Evidence is
+  `.tmp/e2e-pilot-schema-red-f586bb0/schema-save-delivery.json` and its trace.
+- The schema-stale E2E now waits for the exact active-version PATCH 200 and the
+  ready save button before navigating. It also verifies the no-op hash stays
+  equal, the changed hash differs, and existing zero/one stale badges remain
+  correct. A test-only 750ms delivery wrapper for that exact endpoint preserves
+  the real response, exercises both saves, asserts two deliveries and restores
+  fetch in `finally`. This is adversarial latency, not a readiness sleep or an
+  increased timeout; product saving/navigation code is unchanged.
+  The focused source browser replay passed with no confirmation dialog
+  (`.tmp/pilot-schema-green-f586bb0.log`), and suite-partition tests passed
+  64 cases in 1.25 seconds. Ruff and diff checks passed. This fixes a fixture
+  ordering defect; another native full/browser/archive gate is still required.
 
 The final aggregate CI outcome, exact source SHA, archive bytes and installation
 receipt belong to the new Release validation asset. This checkpoint does not
