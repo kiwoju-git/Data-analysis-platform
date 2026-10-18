@@ -45,6 +45,7 @@ export interface GaussianProcessRunConfig {
 }
 
 interface Props {
+  onAnalysisInputChange?: () => void;
   analysisResult: AnalysisResultEnvelope | null;
   filterValidationError: string | null;
   isRunningAnalysis: boolean;
@@ -71,6 +72,7 @@ const warningKeys = {
 } as const;
 
 export function GaussianProcessRegressionPanel({
+  onAnalysisInputChange,
   analysisResult,
   filterValidationError,
   isRunningAnalysis,
@@ -185,7 +187,10 @@ export function GaussianProcessRegressionPanel({
               <span>{t("gp.response")}</span>
               <select
                 value={responseColumnId}
-                onChange={(event) => setResponseColumnId(event.currentTarget.value)}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setResponseColumnId(event.currentTarget.value);
+                }}
               >
                 <option value="">{t("gp.select")}</option>
                 {numericColumns.map((column) => (
@@ -203,13 +208,25 @@ export function GaussianProcessRegressionPanel({
               legend={t("gp.predictors")}
               maximumSelection={12}
               minimumSelection={1}
-              onClear={() => setPredictorColumnIds([])}
-              onToggle={togglePredictor}
+              onClear={() => {
+                onAnalysisInputChange?.();
+                setPredictorColumnIds([]);
+              }}
+              onToggle={(...args) => {
+                onAnalysisInputChange?.();
+                togglePredictor(...args);
+              }}
               selectedColumnIds={predictorColumnIds}
             />
           </div>
 
-          <GpKernelSelectionSettings value={kernelSelection} onChange={setCandidateSelection} onModeChange={setKernelSelectionMode} noiseMode={noiseMode} disabled={isRunningAnalysis} />
+          <GpKernelSelectionSettings value={kernelSelection} onChange={(...args) => {
+            onAnalysisInputChange?.();
+            setCandidateSelection(...args);
+          }} onModeChange={(...args) => {
+            onAnalysisInputChange?.();
+            setKernelSelectionMode(...args);
+          }} noiseMode={noiseMode} disabled={isRunningAnalysis} />
           <CompactSettingsTable
             ariaLabel={t("gp.basicSettings")}
             className="gp-settings-table"
@@ -221,7 +238,10 @@ export function GaussianProcessRegressionPanel({
                   <select
                     value={kernelPreset}
                     onChange={(event) =>
-                      setKernelPreset(event.currentTarget.value as GaussianProcessRunConfig["kernelPreset"])
+                      {
+                        onAnalysisInputChange?.();
+                        setKernelPreset(event.currentTarget.value as GaussianProcessRunConfig["kernelPreset"]);
+                      }
                     }
                   >
                     <option value="matern_5_2_ard">{t("gp.kernel.matern52")}</option>
@@ -238,7 +258,10 @@ export function GaussianProcessRegressionPanel({
                   <select
                     value={noiseMode}
                     onChange={(event) =>
-                      setNoiseMode(event.currentTarget.value as GaussianProcessRunConfig["noiseMode"])
+                      {
+                        onAnalysisInputChange?.();
+                        setNoiseMode(event.currentTarget.value as GaussianProcessRunConfig["noiseMode"]);
+                      }
                     }
                   >
                     <option value="estimate">{t("gp.noise.estimate")}</option>
@@ -256,6 +279,7 @@ export function GaussianProcessRegressionPanel({
                       checked={standardizePredictors}
                       onChange={(event) => {
                         if (!window.confirm(t("gp.optimization.resetCoordinates"))) return;
+                        onAnalysisInputChange?.();
                         setStandardizePredictors(event.currentTarget.checked);
                         setLengthDraft(gpLengthPreset(event.currentTarget.checked));
                       }}
@@ -272,7 +296,10 @@ export function GaussianProcessRegressionPanel({
                   <label className="doe-table-toggle">
                     <input
                       checked={normalizeResponse}
-                      onChange={(event) => setNormalizeResponse(event.currentTarget.checked)}
+                      onChange={(event) => {
+                        onAnalysisInputChange?.();
+                        setNormalizeResponse(event.currentTarget.checked);
+                      }}
                       type="checkbox"
                     />
                     <span>{t("gp.normalizeResponse")}</span>
@@ -288,7 +315,10 @@ export function GaussianProcessRegressionPanel({
               <input
                 min="0.000000000001"
                 onChange={(event) =>
-                  setFixedNoiseStandardDeviation(Number(event.currentTarget.value))
+                  {
+                    onAnalysisInputChange?.();
+                    setFixedNoiseStandardDeviation(Number(event.currentTarget.value));
+                  }
                 }
                 step="any"
                 type="number"
@@ -303,9 +333,12 @@ export function GaussianProcessRegressionPanel({
               <select
                 value={validationMethod}
                 onChange={(event) =>
-                  setValidationMethod(
+                  {
+                    onAnalysisInputChange?.();
+                    setValidationMethod(
                     event.currentTarget.value as GaussianProcessRunConfig["validationMethod"],
-                  )
+                  );
+                  }
                 }
               >
                 <option value="k_fold">{t("gp.validation.kFold")}</option>
@@ -319,7 +352,10 @@ export function GaussianProcessRegressionPanel({
                 disabled={validationMethod !== "k_fold"}
                 max={10}
                 min={2}
-                onChange={(event) => setCvFolds(Number(event.currentTarget.value))}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setCvFolds(Number(event.currentTarget.value));
+                }}
                 type="number"
                 value={cvFolds}
               />
@@ -329,14 +365,20 @@ export function GaussianProcessRegressionPanel({
               <input
                 checked={cvShuffle}
                 disabled={validationMethod !== "k_fold"}
-                onChange={(event) => setCvShuffle(event.currentTarget.checked)}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setCvShuffle(event.currentTarget.checked);
+                }}
                 type="checkbox"
               />
             </label>
             <label>
               <span>{t("gp.seed")}</span>
               <input
-                onChange={(event) => setRandomSeed(Number(event.currentTarget.value))}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setRandomSeed(Number(event.currentTarget.value));
+                }}
                 type="number"
                 value={randomSeed}
               />
@@ -345,16 +387,43 @@ export function GaussianProcessRegressionPanel({
 
           <details>
             <summary>{t("gp.advanced")}</summary>
-            <GpOptimizationSettings draft={lengthDraft} onChange={setLengthDraft} optimizer={optimizer}
-              onOptimizerChange={setOptimizer} standardized={standardizePredictors} />
+            <GpOptimizationSettings draft={lengthDraft} onChange={(...args) => {
+              onAnalysisInputChange?.();
+              setLengthDraft(...args);
+            }} optimizer={optimizer}
+              onOptimizerChange={(...args) => {
+                onAnalysisInputChange?.();
+                setOptimizer(...args);
+              }} standardized={standardizePredictors} />
             <div className="option-grid option-grid-wide gp-advanced-grid">
-              <NumberField label={t("gp.jitter")} min={1e-12} step="any" value={jitter} onChange={setJitter} />
-              <NumberField label={t("gp.finalRestarts")} max={10} min={0} value={optimizerRestarts} onChange={setOptimizerRestarts} />
-              <NumberField label={t("gp.cvRestarts")} max={5} min={0} value={cvOptimizerRestarts} onChange={setCvOptimizerRestarts} />
-              <NumberField label={t("gp.plotLimit")} max={2000} min={100} value={plotPointLimit} onChange={setPlotPointLimit} />
-              <NumberField label={t("gp.profilePoints")} max={80} min={10} value={profilePoints} onChange={setProfilePoints} />
-              <NumberField label={t("gp.surfaceGrid")} max={40} min={10} value={surfaceGridSize} onChange={setSurfaceGridSize} />
-              <NumberField label={t("gp.timeBudget")} max={600} min={5} value={timeBudgetSeconds} onChange={setTimeBudgetSeconds} />
+              <NumberField label={t("gp.jitter")} min={1e-12} step="any" value={jitter} onChange={(...args) => {
+                onAnalysisInputChange?.();
+                setJitter(...args);
+              }} />
+              <NumberField label={t("gp.finalRestarts")} max={10} min={0} value={optimizerRestarts} onChange={(...args) => {
+                onAnalysisInputChange?.();
+                setOptimizerRestarts(...args);
+              }} />
+              <NumberField label={t("gp.cvRestarts")} max={5} min={0} value={cvOptimizerRestarts} onChange={(...args) => {
+                onAnalysisInputChange?.();
+                setCvOptimizerRestarts(...args);
+              }} />
+              <NumberField label={t("gp.plotLimit")} max={2000} min={100} value={plotPointLimit} onChange={(...args) => {
+                onAnalysisInputChange?.();
+                setPlotPointLimit(...args);
+              }} />
+              <NumberField label={t("gp.profilePoints")} max={80} min={10} value={profilePoints} onChange={(...args) => {
+                onAnalysisInputChange?.();
+                setProfilePoints(...args);
+              }} />
+              <NumberField label={t("gp.surfaceGrid")} max={40} min={10} value={surfaceGridSize} onChange={(...args) => {
+                onAnalysisInputChange?.();
+                setSurfaceGridSize(...args);
+              }} />
+              <NumberField label={t("gp.timeBudget")} max={600} min={5} value={timeBudgetSeconds} onChange={(...args) => {
+                onAnalysisInputChange?.();
+                setTimeBudgetSeconds(...args);
+              }} />
             </div>
           </details>
           <p className="field-help gp-applied-settings">{t("gp.optimization.summary", { optimizer: optimizer === "bfgs" ? "BFGS" : "L-BFGS-B", lower: lengthDraft.lower, initial: lengthDraft.initial, upper: lengthDraft.upper })} {t(standardizePredictors ? "gp.optimization.scaledUnits" : "gp.optimization.rawUnits")}</p>

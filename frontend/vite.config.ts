@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => ({
   test: {
     environment: "node",
     globals: true,
+    maxWorkers: 2,
     setupFiles: ["./src/testSetup.ts"],
   },
 }));

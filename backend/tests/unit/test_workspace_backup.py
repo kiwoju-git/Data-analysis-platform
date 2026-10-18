@@ -95,47 +95,57 @@ def test_backup_restore_preserves_owned_bytes_and_db_rows(tmp_path: Path) -> Non
         )
 
 
-def test_schema20_backup_restores_without_migration_then_upgrades(tmp_path: Path) -> None:
+@pytest.mark.parametrize("legacy_schema", [20, 21])
+def test_legacy_backup_restores_without_migration_then_upgrades(
+    tmp_path: Path, legacy_schema: int
+) -> None:
     root = tmp_path / "legacy workspace"
     database = metadata_db_path(root)
     database.parent.mkdir(parents=True)
     with sqlite3.connect(database) as connection:
         for migration in MIGRATIONS:
-            if migration.version > 20:
+            if migration.version > legacy_schema:
                 break
             connection.executescript(migration.sql)
             connection.execute(
                 "INSERT INTO schema_migrations(version,name) VALUES (?,?)",
                 (migration.version, migration.name),
             )
-        connection.execute("PRAGMA user_version=20")
+        connection.execute(f"PRAGMA user_version={legacy_schema}")
     before = database.read_bytes()
-    archive = tmp_path / "legacy20.zip"
+    archive = tmp_path / f"legacy{legacy_schema}.zip"
     manifest = backup_workspace(root, archive)
-    assert manifest["metadata_schema_version"] == 20
+    assert manifest["metadata_schema_version"] == legacy_schema
     archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
-    assert "managed_report_artifacts" not in manifest["database"]["row_counts"]
+    assert ("managed_report_artifacts" in manifest["database"]["row_counts"]) == (
+        legacy_schema >= 21
+    )
     restored = tmp_path / "restored legacy"
     assert restore_workspace(archive, restored) == manifest
     assert database.read_bytes() == before
     with sqlite3.connect(metadata_db_path(restored)) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 20
-        assert (
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == legacy_schema
+        assert bool(
             connection.execute(
                 "SELECT 1 FROM sqlite_master WHERE name='managed_report_artifacts'"
             ).fetchone()
-            is None
-        )
+        ) == (legacy_schema >= 21)
+        assert "failure_code" not in {
+            row[1] for row in connection.execute("PRAGMA table_info(analysis_runs)")
+        }
     initialize_metadata_store(restored)
     with sqlite3.connect(metadata_db_path(restored)) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 21
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
+        assert "failure_code" in {
+            row[1] for row in connection.execute("PRAGMA table_info(analysis_runs)")
+        }
         assert (
             connection.execute("SELECT COUNT(*) FROM managed_report_artifacts").fetchone()[0] == 0
         )
     assert hashlib.sha256(archive.read_bytes()).hexdigest() == archive_sha
 
 
-@pytest.mark.parametrize("version", [19, 22])
+@pytest.mark.parametrize("version", [19, 23])
 def test_backup_rejects_unrecognized_metadata_version(tmp_path: Path, version: int) -> None:
     root = _workspace(tmp_path / "unsupported")
     with sqlite3.connect(metadata_db_path(root)) as connection:

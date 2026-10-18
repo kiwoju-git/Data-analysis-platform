@@ -26,6 +26,7 @@ export interface OneWayAnovaExecutionOptions {
 }
 
 interface OneWayAnovaPanelProps {
+  onAnalysisInputChange?: () => void;
   alpha: number;
   analysisResult: AnalysisResultEnvelope | null;
   confidenceLevel: number;
@@ -47,6 +48,7 @@ interface OneWayAnovaPanelProps {
 }
 
 export function OneWayAnovaPanel({
+  onAnalysisInputChange,
   alpha,
   analysisResult,
   confidenceLevel,
@@ -162,33 +164,51 @@ export function OneWayAnovaPanel({
           <div className="option-grid">
             <label>
               <span>반응 변수</span>
-              <select aria-label="반응 변수" value={responseColumnId ?? ""} onChange={(event) => onResponseColumnChange(event.currentTarget.value)}>
+              <select aria-label="반응 변수" value={responseColumnId ?? ""} onChange={(event) => {
+                onAnalysisInputChange?.();
+                onResponseColumnChange(event.currentTarget.value);
+              }}>
                 <option value="">선택</option>
                 {responseColumns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}
               </select>
             </label>
             <label>
               <span>그룹 변수</span>
-              <select aria-label="그룹 변수" value={groupColumnId ?? ""} onChange={(event) => onGroupColumnChange(event.currentTarget.value)}>
+              <select aria-label="그룹 변수" value={groupColumnId ?? ""} onChange={(event) => {
+                onAnalysisInputChange?.();
+                onGroupColumnChange(event.currentTarget.value);
+              }}>
                 <option value="">선택</option>
                 {groupColumns.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}
               </select>
             </label>
             <label>
               <span>유의수준 alpha</span>
-              <input max="0.5" min="0.001" step="0.001" type="number" value={alpha} onChange={(event) => onAlphaChange(Number(event.currentTarget.value))} />
+              <input max="0.5" min="0.001" step="0.001" type="number" value={alpha} onChange={(event) => {
+                onAnalysisInputChange?.();
+                onAlphaChange(Number(event.currentTarget.value));
+              }} />
             </label>
             <label>
               <span>신뢰수준</span>
-              <input max="0.999" min="0.001" step="0.001" type="number" value={confidenceLevel} onChange={(event) => onConfidenceLevelChange(Number(event.currentTarget.value))} />
+              <input max="0.999" min="0.001" step="0.001" type="number" value={confidenceLevel} onChange={(event) => {
+                onAnalysisInputChange?.();
+                onConfidenceLevelChange(Number(event.currentTarget.value));
+              }} />
             </label>
           </div>
 
           <fieldset className="segmented-fieldset">
             <legend>분산 가정</legend>
             <div className="segmented-control">
-              <label><input checked={anovaType === "standard"} name="anova-variance-model" type="radio" onChange={() => changeAnovaType("standard")} /><span>등분산 가정</span></label>
-              <label><input checked={anovaType === "welch"} name="anova-variance-model" type="radio" onChange={() => changeAnovaType("welch")} /><span>등분산 가정 안 함</span></label>
+              <label><input checked={anovaType === "standard"} name="anova-variance-model" type="radio" onChange={() => {
+                onAnalysisInputChange?.();
+                changeAnovaType("standard");
+              }} /><span>등분산 가정</span></label>
+              <label><input checked={anovaType === "welch"} name="anova-variance-model" type="radio" onChange={() => {
+                onAnalysisInputChange?.();
+                changeAnovaType("welch");
+              }} /><span>등분산 가정 안 함</span></label>
             </div>
             <p className="cell-subtext">
               {anovaType === "standard" ? "공통 오차분산을 사용하는 표준 일원분산분석입니다." : "그룹별 분산이 다를 수 있다고 보는 Welch 일원분산분석입니다."}
@@ -198,7 +218,10 @@ export function OneWayAnovaPanel({
           <div className="option-grid">
             <label>
               <span>사후비교</span>
-              <select aria-label="사후비교" value={posthocMethod} onChange={(event) => setPosthocMethod(event.currentTarget.value as typeof posthocMethod)}>
+              <select aria-label="사후비교" value={posthocMethod} onChange={(event) => {
+                onAnalysisInputChange?.();
+                setPosthocMethod(event.currentTarget.value as typeof posthocMethod);
+              }}>
                 <option value="none">사후비교 안 함</option>
                 {anovaType === "standard" ? <>
                   <option value="tukey_kramer">Tukey-Kramer - 모든 그룹 쌍</option>
@@ -210,7 +233,10 @@ export function OneWayAnovaPanel({
             {posthocMethod === "dunnett" ? (
               <label>
                 <span>기준 그룹</span>
-                <select aria-label="기준 그룹" disabled={isLoadingGroupLevels || groupLevelsError !== null} value={controlGroupLabel ?? ""} onChange={(event) => setControlGroupLabel(event.currentTarget.value || null)}>
+                <select aria-label="기준 그룹" disabled={isLoadingGroupLevels || groupLevelsError !== null} value={controlGroupLabel ?? ""} onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setControlGroupLabel(event.currentTarget.value || null);
+                }}>
                   <option value="">{isLoadingGroupLevels ? "그룹 수준 확인 중" : "선택"}</option>
                   {groupLevels.map((level) => <option key={level.value} value={level.value}>{level.display_label} (N {level.n_used.toLocaleString()})</option>)}
                 </select>
@@ -218,7 +244,10 @@ export function OneWayAnovaPanel({
               </label>
             ) : null}
             <label className="checkbox-row">
-              <input checked={posthocPolicy === "after_significant"} type="checkbox" onChange={(event) => setPosthocPolicy(event.currentTarget.checked ? "after_significant" : "when_requested")} />
+              <input checked={posthocPolicy === "after_significant"} type="checkbox" onChange={(event) => {
+                onAnalysisInputChange?.();
+                setPosthocPolicy(event.currentTarget.checked ? "after_significant" : "when_requested");
+              }} />
               <span>전체 ANOVA가 유의한 경우에만 사후비교</span>
             </label>
           </div>

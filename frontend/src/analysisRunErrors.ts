@@ -1,5 +1,5 @@
 import { getCurrentLocale } from "./i18n/store";
-import { translateSystemText } from "./i18n/translate";
+import { t, translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
 
 export interface AnalysisRunErrorDetails {
@@ -652,6 +652,13 @@ export function getAnalysisRunErrorDetails(
   code: string,
   locale: AppLocale = getCurrentLocale(),
 ): AnalysisRunErrorDetails {
+  if (["analysis_completion_source_changed", "analysis_completion_source_missing", "analysis_completion_dependency_invalid", "analysis_completion_verification_failed"].includes(code)) {
+    return {
+      title: t("analysisCompletion.title", undefined, locale),
+      message: t(code === "analysis_completion_verification_failed" ? "analysisCompletion.verificationFailed" : "analysisCompletion.sourceChanged", undefined, locale),
+      action: t("analysisCompletion.recovery", undefined, locale),
+    };
+  }
   const exact = Object.prototype.hasOwnProperty.call(exactErrorDetails, code)
     ? exactErrorDetails[code]
     : undefined;

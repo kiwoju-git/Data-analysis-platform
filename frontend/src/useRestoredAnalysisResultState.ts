@@ -9,6 +9,8 @@ import {
 import { createLatestRequestGuard } from "./latestRequest";
 
 interface UseRestoredAnalysisResultStateOptions {
+  onRestoreIntent?: () => void;
+  onRestoreCommitted?: () => void;
   analysisCatalog: AnalysisMethodListResponse | null;
   currentAnalysisId: string | null;
   currentDatasetVersionId: string | null;
@@ -18,6 +20,8 @@ interface UseRestoredAnalysisResultStateOptions {
 }
 
 export function useRestoredAnalysisResultState({
+  onRestoreIntent,
+  onRestoreCommitted,
   analysisCatalog,
   currentAnalysisId,
   currentDatasetVersionId,
@@ -33,36 +37,52 @@ export function useRestoredAnalysisResultState({
   const [isRestoringAnalysisResult, setIsRestoringAnalysisResult] = useState(false);
   const restoreRequest = useRef(createLatestRequestGuard()).current;
 
-  const resetRestoredAnalysisResultState = useCallback(() => {
+  const cancelPendingRestore = useCallback(() => {
     restoreRequest.cancel();
-    setRestoredAnalysisResult(null);
     setRestoredAnalysisResultError(null);
     setIsRestoringAnalysisResult(false);
   }, [restoreRequest]);
+  const resetRestoredAnalysisResultState = useCallback(() => {
+    cancelPendingRestore();
+    setRestoredAnalysisResult(null);
+  }, [cancelPendingRestore]);
 
   async function restoreAnalysisRun(analysisId: string) {
+    onRestoreIntent?.();
     const request = restoreRequest.begin();
     setIsRestoringAnalysisResult(true);
     setRestoredAnalysisResultError(null);
+    let response: AnalysisResultEnvelope;
     try {
-      const response = await fetchAnalysisRunResult(analysisId);
+      response = await fetchAnalysisRunResult(analysisId);
       if (!restoreRequest.isCurrent(request)) {
         return;
       }
-      setRestoredAnalysisResult(response);
-      const method = analysisCatalog?.methods.find(
-        (candidate) => candidate.method_id === response.method_id,
-      );
-      if (method !== undefined) {
-        onSelectMethod(method.module_id, method.method_id);
+      if (response.analysis_id !== analysisId) {
+        throw new Error("analysis_result_fetch_failed");
       }
-      await onRefreshAnalysisResultExports(analysisId);
     } catch (error) {
       if (restoreRequest.isCurrent(request)) {
-        setRestoredAnalysisResult(null);
         setRestoredAnalysisResultError(
           error instanceof Error ? error.message : "analysis_result_fetch_failed",
         );
+        setIsRestoringAnalysisResult(false);
+      }
+      return;
+    }
+    onRestoreCommitted?.();
+    setRestoredAnalysisResult(response);
+    const method = analysisCatalog?.methods.find(
+      (candidate) => candidate.method_id === response.method_id,
+    );
+    if (method !== undefined) {
+      onSelectMethod(method.module_id, method.method_id);
+    }
+    try {
+      await onRefreshAnalysisResultExports(analysisId);
+    } catch {
+      if (restoreRequest.isCurrent(request)) {
+        setRestoredAnalysisResultError("analysis_export_list_fetch_failed");
       }
     } finally {
       if (restoreRequest.isCurrent(request)) {
@@ -95,6 +115,7 @@ export function useRestoredAnalysisResultState({
     onRestoreAnalysisRun: (analysisId: string) => {
       void restoreAnalysisRun(analysisId);
     },
+    cancelPendingRestore,
     resetRestoredAnalysisResultState,
   };
 }

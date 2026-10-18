@@ -40,6 +40,7 @@ interface UseAttributeControlPhase2StateOptions {
   denominatorColumnId: string | null;
   phase: AttributeControlPhase;
   targetDatasetVersionId: string | null;
+  targetSchemaHash?: string | null;
 }
 
 export function useAttributeControlPhase2State({
@@ -49,6 +50,7 @@ export function useAttributeControlPhase2State({
   denominatorColumnId,
   phase,
   targetDatasetVersionId,
+  targetSchemaHash,
 }: UseAttributeControlPhase2StateOptions): AttributeControlPhase2State {
   const [limitSets, setLimitSets] = useState<AttributeControlLimitSetResponse[]>([]);
   const [selectedLimitSetId, setSelectedLimitSetId] = useState<string | null>(null);
@@ -116,6 +118,7 @@ export function useAttributeControlPhase2State({
     phase,
     preflightRequest,
     targetDatasetVersionId,
+    targetSchemaHash,
   ]);
 
   const selectedLimitSet =
@@ -173,6 +176,7 @@ export function useAttributeControlPhase2State({
     preflightRequest,
     selectedLimitSet,
     targetDatasetVersionId,
+    targetSchemaHash,
   ]);
 
   useEffect(() => {

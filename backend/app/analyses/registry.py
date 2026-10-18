@@ -1,4 +1,6 @@
+from app.analyses.execution_capabilities import method_resource_limits
 from app.api.v1.schemas.analyses import (
+    AnalysisExecutionCapability,
     AnalysisExecutionMode,
     AnalysisMethodDescriptor,
     AnalysisMethodListResponse,
@@ -132,6 +134,9 @@ def _planned(
         label_en=label_en,
         availability=MethodAvailability.PLANNED,
         execution_mode=AnalysisExecutionMode.INLINE,
+        execution_capability=AnalysisExecutionCapability(
+            lifecycle="unavailable", cancellation_support="none", progress_support="none"
+        ),
         requires_dataset=requires_dataset,
         order=order,
         disabled_reason=disabled_reason,
@@ -157,6 +162,10 @@ def _available(
         label_en=label_en,
         availability=MethodAvailability.AVAILABLE,
         execution_mode=execution_mode,
+        resource_limits=method_resource_limits(method_id),
+        execution_capability=AnalysisExecutionCapability(
+            lifecycle="synchronous_request", cancellation_support="none", progress_support="none"
+        ),
         requires_dataset=requires_dataset,
         source_prerequisite=source_prerequisite,
         report_contract=method_report_contract(method_id),
@@ -183,12 +192,16 @@ def _disabled(
         label_en=label_en,
         availability=MethodAvailability.DISABLED,
         execution_mode=AnalysisExecutionMode.INLINE,
+        execution_capability=AnalysisExecutionCapability(
+            lifecycle="unavailable", cancellation_support="none", progress_support="none"
+        ),
         requires_dataset=requires_dataset,
         order=order,
         disabled_reason=disabled_reason,
     )
 
 
+# Audited budgets: docs/execution_capability_contract.md#audited-resource-limits.
 METHODS: tuple[AnalysisMethodDescriptor, ...] = (
     _available(
         method_id="eda.descriptive",

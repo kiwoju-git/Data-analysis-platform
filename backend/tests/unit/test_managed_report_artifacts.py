@@ -29,6 +29,7 @@ from app.storage.bayesian_studies import (
 )
 from app.storage.metadata import (
     MIGRATIONS,
+    SCHEMA_VERSION,
     ExperimentDesignRecord,
     ExperimentDesignVersionRecord,
     WorkspaceAssetStorageConflict,
@@ -208,7 +209,7 @@ def test_schema20_upgrade_is_additive_and_preserves_legacy_rows_and_files(tmp_pa
     legacy.write_bytes(b"legacy unchanged")
     with closing(sqlite3.connect(metadata_db_path(root))) as connection:
         before = connection.execute("SELECT * FROM experiment_design_versions").fetchall()
-    assert initialize_metadata_store(root).schema_version == 21
+    assert initialize_metadata_store(root).schema_version == SCHEMA_VERSION
     with closing(sqlite3.connect(metadata_db_path(root))) as connection:
         assert connection.execute("SELECT * FROM experiment_design_versions").fetchall() == before
         assert connection.execute("SELECT count(*) FROM managed_report_artifacts").fetchone() == (

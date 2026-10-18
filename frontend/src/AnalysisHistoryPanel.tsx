@@ -1,5 +1,6 @@
 import { translateSystemText as systemText } from "./i18n/translate";
 import { useState } from "react";
+import { useI18n } from "./i18n/LocaleProvider";
 
 import type {
   AnalysisMethodListResponse,
@@ -230,6 +231,7 @@ export function AnalysisHistoryPanel({
                 <p>
                   v{run.method_version} · {run.status} · {formatDateTime(run.created_at)}
                 </p>
+                <AnalysisRunFailure code={run.failure_code} />
                 <div className="method-meta">
                   <span>{run.result_available ? "result 있음" : "result 없음"}</span>
                   <span>{run.artifact_count.toLocaleString()} artifacts</span>
@@ -445,6 +447,17 @@ export function AnalysisHistoryPanel({
         </div>
       ) : null}
     </section>
+  );
+}
+
+export function AnalysisRunFailure({ code }: { code: string | null }) {
+  const { t } = useI18n();
+  if (code == null) return null;
+  return (
+    <p className="analysis-run-failure" data-failure-code={code}>
+      {code === "execution_interrupted_on_restart" ? t("execution.interrupted_on_restart") : t("execution.failure_code")}
+      {" "}<code>{code}</code>
+    </p>
   );
 }
 

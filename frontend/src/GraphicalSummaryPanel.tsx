@@ -11,6 +11,7 @@ import type {
 import { GraphicalSummaryColumnVisuals } from "./GraphicalSummaryColumnVisuals";
 
 interface GraphicalSummaryPanelProps {
+  onAnalysisInputChange?: () => void;
   analysisResult: AnalysisResultEnvelope | null;
   filterValidationError: string | null;
   graphicalColumns: DatasetColumnResponse[];
@@ -26,6 +27,7 @@ interface GraphicalSummaryPanelProps {
 const maxGraphicalColumns = 20;
 
 export function GraphicalSummaryPanel({
+  onAnalysisInputChange,
   analysisResult,
   filterValidationError,
   graphicalColumns,
@@ -52,6 +54,7 @@ export function GraphicalSummaryPanel({
                   checked={selectedColumnIds.includes(column.column_id)}
                   type="checkbox"
                   onChange={(event) => {
+                    onAnalysisInputChange?.();
                     onToggleColumn(column.column_id, event.currentTarget.checked);
                   }}
                 />
@@ -68,7 +71,10 @@ export function GraphicalSummaryPanel({
               step="0.01"
               type="number"
               value={confidenceLevel}
-              onChange={(event) => setConfidenceLevel(Number(event.currentTarget.value))}
+              onChange={(event) => {
+                onAnalysisInputChange?.();
+                setConfidenceLevel(Number(event.currentTarget.value));
+              }}
             />
           </label>
           <button

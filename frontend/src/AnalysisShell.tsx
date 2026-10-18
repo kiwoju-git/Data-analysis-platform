@@ -169,6 +169,9 @@ export interface AnalysisShellProps {
   analysisFilterValidationError: string | null;
   analysisFilterValidationMessage: string | null;
   analysisRunError: string | null;
+  analysisRunErrorCause?: unknown;
+  onAnalysisInputChange?: () => void;
+  onRetryAnalysisVerification?: () => void;
   analysisResult: AnalysisResultEnvelope | null;
   workbenchComparisonState?: AnalysisWorkbenchComparisonState;
   workbenchExportState?: AnalysisWorkbenchExportState;
@@ -565,6 +568,9 @@ export function AnalysisShell({
   analysisFilterValidationError,
   analysisFilterValidationMessage,
   analysisRunError,
+  analysisRunErrorCause,
+  onAnalysisInputChange,
+  onRetryAnalysisVerification,
   analysisResult,
   workbenchComparisonState,
   workbenchExportState,
@@ -1029,9 +1035,13 @@ export function AnalysisShell({
         <div className="notice-box">분석 메서드 조회 중</div>
       ) : null}
       {analysisCatalog !== null ? (
+        <>
+        {onRetryAnalysisVerification !== undefined ? <button type="button" className="secondary-button"
+          disabled={isRunningAnalysis} onClick={onRetryAnalysisVerification}>{t("analysisCompletion.retry")}</button> : null}
         <AnalysisWorkbench
           activeDomain={resolvedAnalysisDomain}
           analysisRunError={analysisRunError}
+          analysisRunErrorCause={analysisRunErrorCause}
           catalog={analysisCatalog}
           comparisonState={workbenchComparisonState}
           exportState={workbenchExportState}
@@ -1087,7 +1097,7 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return (
-                <GraphicalSummaryPanel
+                <GraphicalSummaryPanel onAnalysisInputChange={onAnalysisInputChange}
                   analysisResult={graphicalSummaryAnalysisResult}
                   filterValidationError={analysisFilterValidationError}
                   graphicalColumns={graphicalSummaryColumns}
@@ -1288,7 +1298,7 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return (
-                <MannWhitneyPanel
+                <MannWhitneyPanel onAnalysisInputChange={onAnalysisInputChange}
                   alpha={mannWhitneyAlpha}
                   alternative={mannWhitneyAlternative}
                   analysisResult={mannWhitneyAnalysisResult}
@@ -1317,7 +1327,7 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return (
-                <OneWayAnovaPanel
+                <OneWayAnovaPanel onAnalysisInputChange={onAnalysisInputChange}
                   alpha={oneWayAnovaAlpha}
                   analysisResult={oneWayAnovaAnalysisResult}
                   confidenceLevel={oneWayAnovaConfidenceLevel}
@@ -1502,7 +1512,7 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return (
-                <LinearModelPanel
+                <LinearModelPanel onAnalysisInputChange={onAnalysisInputChange}
                   alpha={linearModelAlpha}
                   analysisResult={linearModelAnalysisResult}
                   confidenceLevel={linearModelConfidenceLevel}
@@ -1545,7 +1555,7 @@ export function AnalysisShell({
             if (
               method.method_id === "quality.two_variances" && method.availability === "available"
             ) {
-              return <TwoVariancesPanel version={version} filterDrafts={analysisFilterDrafts}
+              return <TwoVariancesPanel onAnalysisInputChange={onAnalysisInputChange} version={version} filterDrafts={analysisFilterDrafts}
                 filterValidationError={analysisFilterValidationError} isRunningAnalysis={isRunningAnalysis}
                 analysisResult={twoVariancesAnalysisResult} result={twoVariancesResult} onRun={onRunTwoVariancesAnalysis} />;
             }
@@ -1554,7 +1564,7 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return (
-                <PrincipalComponentsPanel
+                <PrincipalComponentsPanel onAnalysisInputChange={onAnalysisInputChange}
                   analysisResult={principalComponentsAnalysisResult}
                   filterValidationError={analysisFilterValidationError}
                   isRunningAnalysis={isRunningAnalysis}
@@ -1570,7 +1580,7 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return (
-                <PlsRegressionPanel
+                <PlsRegressionPanel onAnalysisInputChange={onAnalysisInputChange}
                   analysisResult={plsAnalysisResult}
                   filterValidationError={analysisFilterValidationError}
                   isRunningAnalysis={isRunningAnalysis}
@@ -1586,7 +1596,7 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return (
-                <GaussianProcessRegressionPanel
+                <GaussianProcessRegressionPanel onAnalysisInputChange={onAnalysisInputChange}
                   analysisResult={gaussianProcessAnalysisResult}
                   filterValidationError={analysisFilterValidationError}
                   isRunningAnalysis={isRunningAnalysis}
@@ -1832,7 +1842,7 @@ export function AnalysisShell({
               method.availability === "available"
             ) {
               return (
-                <TwoSampleEquivalencePanel
+                <TwoSampleEquivalencePanel onAnalysisInputChange={onAnalysisInputChange}
                   alpha={equivalenceTostAlpha}
                   analysisResult={equivalenceTostAnalysisResult}
                   filterDrafts={analysisFilterDrafts}
@@ -1906,6 +1916,7 @@ export function AnalysisShell({
             return null;
           }}
         />
+        </>
       ) : null}
     </section>
     </ChartSourceContext.Provider>

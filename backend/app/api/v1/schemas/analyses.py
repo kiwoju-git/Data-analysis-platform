@@ -53,6 +53,32 @@ class AnalysisModuleDescriptor(BaseModel):
     order: int
 
 
+class AnalysisExecutionCapability(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lifecycle: Literal["synchronous_request", "unavailable"]
+    cancellation_support: Literal["none", "cooperative", "process"]
+    progress_support: Literal["none", "polling"]
+
+
+class AnalysisResourceLimit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    value: int = Field(gt=0)
+    unit: Literal[
+        "predictors",
+        "rows",
+        "components",
+        "starts",
+        "restarts",
+        "seconds",
+        "workers",
+        "points_per_group",
+    ]
+    variant: str | None = None
+
+
 class AnalysisMethodDescriptor(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -63,6 +89,8 @@ class AnalysisMethodDescriptor(BaseModel):
     label_en: str
     availability: MethodAvailability
     execution_mode: AnalysisExecutionMode
+    execution_capability: AnalysisExecutionCapability
+    resource_limits: list[AnalysisResourceLimit] | None = None
     requires_dataset: bool
     source_prerequisite: AnalysisSourcePrerequisite | None = None
     order: int
@@ -1260,6 +1288,7 @@ class AnalysisRunStatusResponse(BaseModel):
     created_at: str
     updated_at: str
     completed_at: str | None
+    failure_code: str | None
 
 
 class AnalysisRunListItemResponse(BaseModel):
@@ -1276,6 +1305,7 @@ class AnalysisRunListItemResponse(BaseModel):
     created_at: str
     updated_at: str
     completed_at: str | None
+    failure_code: str | None
 
 
 class AnalysisRunListResponse(BaseModel):

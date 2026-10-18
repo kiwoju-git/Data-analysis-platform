@@ -1,5 +1,6 @@
 import {
   apiErrorCode,
+  apiRequestError,
   fetchApi,
   filenameFromContentDisposition,
   triggerBrowserDownload,
@@ -104,7 +105,7 @@ export async function createAnalysisRun(
   });
 
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "analysis_run_failed"));
+    throw await apiRequestError(response, "analysis_run_failed");
   }
 
   return (await response.json()) as AnalysisResultEnvelope;
@@ -129,7 +130,7 @@ export async function fetchAnalysisRunStatus(analysisId: string): Promise<Analys
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "analysis_status_fetch_failed"));
+    throw await apiRequestError(response, "analysis_status_fetch_failed");
   }
   return (await response.json()) as AnalysisRunStatusResponse;
 }

@@ -10,6 +10,7 @@ import { InteractiveScatterChart } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
 
 interface Props {
+  onAnalysisInputChange?: () => void;
   version: DatasetVersionResponse | null;
   filterDrafts: AnalysisFilterDraft[];
   filterValidationError: string | null;
@@ -28,7 +29,8 @@ const warningKeys: Record<string, TranslationKey> = {
   two_variances_display_points_limited: "twoVariances.warning.two_variances_display_points_limited",
 };
 
-export function TwoVariancesPanel({ version, filterDrafts, filterValidationError, isRunningAnalysis, analysisResult, result, onRun }: Props) {
+export function TwoVariancesPanel({
+  onAnalysisInputChange, version, filterDrafts, filterValidationError, isRunningAnalysis, analysisResult, result, onRun }: Props) {
   const { t } = useI18n();
   const [responseId, setResponseId] = useState("");
   const [groupId, setGroupId] = useState("");
@@ -79,24 +81,47 @@ export function TwoVariancesPanel({ version, filterDrafts, filterValidationError
   }
   return <section className="analysis-run-panel" data-analysis-execution="quality.two_variances">
     <div className="option-grid">
-      <label>{t("twoVariances.response")}<select value={responseId} onChange={(event) => setResponseId(event.target.value)}><option value="">{t("twoVariances.choose")}</option>{numeric.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}</select></label>
-      <label>{t("twoVariances.group")}<select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">{t("twoVariances.choose")}</option>{columns.filter((column) => column.column_id !== responseId).map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}</select></label>
+      <label>{t("twoVariances.response")}<select value={responseId} onChange={(event) => {
+        onAnalysisInputChange?.();
+        setResponseId(event.target.value);
+      }}><option value="">{t("twoVariances.choose")}</option>{numeric.map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}</select></label>
+      <label>{t("twoVariances.group")}<select value={groupId} onChange={(event) => {
+        onAnalysisInputChange?.();
+        setGroupId(event.target.value);
+      }}><option value="">{t("twoVariances.choose")}</option>{columns.filter((column) => column.column_id !== responseId).map((column) => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}</select></label>
     </div>
     <button type="button" className="secondary-button" disabled={!responseId || !groupId || !filters || busy || isRunningAnalysis} onClick={() => void checkGroups()}>{t(busy ? "twoVariances.checking" : "twoVariances.checkGroups")}</button>
     {error && <p role="alert">{t("twoVariances.preflightError")} <code>{error}</code></p>}
     {preflight && <><p>{t("twoVariances.sample", { used: preflight.n_used, excluded: preflight.n_excluded })}</p>
       <div className="table-wrap"><table><thead><tr><th>{t("twoVariances.group")}</th><th>N</th></tr></thead><tbody>{preflight.groups.map((group) => <tr key={group.key}><td title={group.key}>{group.key}</td><td>{group.n_used}</td></tr>)}</tbody></table></div>
-      {!preflight.eligible ? <p role="alert">{t("twoVariances.twoGroupsRequired")}</p> : <div className="option-grid"><label>{t("twoVariances.numerator")}<select value={numerator} onChange={(event) => setNumerator(event.target.value)}>{preflight.groups.map((group) => <option key={group.key} value={group.key}>{group.key}</option>)}</select><span>{t("twoVariances.denominator")}: {denominator}</span></label></div>}
+      {!preflight.eligible ? <p role="alert">{t("twoVariances.twoGroupsRequired")}</p> : <div className="option-grid"><label>{t("twoVariances.numerator")}<select value={numerator} onChange={(event) => {
+        onAnalysisInputChange?.();
+        setNumerator(event.target.value);
+      }}>{preflight.groups.map((group) => <option key={group.key} value={group.key}>{group.key}</option>)}</select><span>{t("twoVariances.denominator")}: {denominator}</span></label></div>}
     </>}
     <div className="option-grid">
       <label>{t("twoVariances.method")}<select value={method} onChange={(event) => {
-        const next = event.target.value as TwoVariancesOptions["method"]; setMethod(next);
+        onAnalysisInputChange?.();
+        const next = event.target.value as TwoVariancesOptions["method"];
+        setMethod(next);
         if (next === "brown_forsythe") { setRatio("1"); setAlternative("two_sided"); }
       }}><option value="brown_forsythe">{t("twoVariances.bf")}</option><option value="normal_f">{t("twoVariances.f")}</option></select></label>
-      <label>{t("twoVariances.scale")}<select value={scale} onChange={(event) => setScale(event.target.value as TwoVariancesOptions["ratio_scale"])}><option value="variance">{t("twoVariances.variance")}</option><option value="standard_deviation">{t("twoVariances.sd")}</option></select></label>
-      <label>{t("twoVariances.nullRatio")}<input type="number" step="any" min="0" value={ratio} disabled={method === "brown_forsythe"} onChange={(event) => setRatio(event.target.value)} /></label>
-      <label>{t("twoVariances.alternative")}<select value={alternative} disabled={method === "brown_forsythe"} onChange={(event) => setAlternative(event.target.value as TwoVariancesOptions["alternative"])}>{(["two_sided", "less", "greater"] as const).map((value) => <option key={value} value={value}>{t(`twoVariances.${value}`)}</option>)}</select></label>
-      <label>{t("twoVariances.confidence")}<input type="number" min="0.5" max="0.9999" step="0.01" value={confidence} onChange={(event) => setConfidence(event.target.value)} /></label>
+      <label>{t("twoVariances.scale")}<select value={scale} onChange={(event) => {
+        onAnalysisInputChange?.();
+        setScale(event.target.value as TwoVariancesOptions["ratio_scale"]);
+      }}><option value="variance">{t("twoVariances.variance")}</option><option value="standard_deviation">{t("twoVariances.sd")}</option></select></label>
+      <label>{t("twoVariances.nullRatio")}<input type="number" step="any" min="0" value={ratio} disabled={method === "brown_forsythe"} onChange={(event) => {
+        onAnalysisInputChange?.();
+        setRatio(event.target.value);
+      }} /></label>
+      <label>{t("twoVariances.alternative")}<select value={alternative} disabled={method === "brown_forsythe"} onChange={(event) => {
+        onAnalysisInputChange?.();
+        setAlternative(event.target.value as TwoVariancesOptions["alternative"]);
+      }}>{(["two_sided", "less", "greater"] as const).map((value) => <option key={value} value={value}>{t(`twoVariances.${value}`)}</option>)}</select></label>
+      <label>{t("twoVariances.confidence")}<input type="number" min="0.5" max="0.9999" step="0.01" value={confidence} onChange={(event) => {
+        onAnalysisInputChange?.();
+        setConfidence(event.target.value);
+      }} /></label>
     </div>
     <p>{t(method === "brown_forsythe" ? "twoVariances.bfLimit" : "twoVariances.fWarning")}</p>
     <p>{t("twoVariances.independence")}</p>

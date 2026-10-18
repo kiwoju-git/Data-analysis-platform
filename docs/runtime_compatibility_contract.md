@@ -12,8 +12,10 @@ with a newly fetched hash is allowed.
 
 The backend, frontend and PowerShell startup require contract 23; Linux startup
 and release builds read the same backend constant. CAS alone uses existing
-columns. A12 advances the current metadata requirement to 21 for source-bound
-LHS/BO reports and the DOE HTML schema constraint, not for CAS. Statistical method/result/model versions and
+columns. A12 added metadata 21 for source-bound LHS/BO reports and the DOE HTML
+schema constraint, not for CAS. A13 advances the current metadata requirement to
+22 for a nullable analysis-run failure code used by interrupted-execution recovery.
+Statistical method/result/model versions and
 historical artifact bytes are unchanged. Historical notes below retain their
 original numbers and are not current handshake requirements.
 
@@ -32,6 +34,12 @@ return a server-created `saved_prediction` reference. Existing requests and
 stored prediction/model numerical values retain their prior meaning. New DOE
 HTML assets use schema 2; existing schema 1 HTML/prediction bytes are preserved.
 See `managed_report_storage_contract.md` for migration, deletion and recovery.
+
+A13 explicitly declares method execution/cancellation/progress capabilities and
+persists `execution_interrupted_on_restart` for abandoned nonterminal runs, after
+the exclusive workspace lease is acquired. The integrated API remains 23. Offline
+backup/restore accepts exact metadata schemas 20, 21 and 22 without migrating the
+source or restored database; normal server startup applies pending migrations.
 
 ## 2026-10-08 Update
 
@@ -101,7 +109,7 @@ source.
 
 - service and app version;
 - `api_contract_version` (currently `23`);
-- the actual metadata schema constant (currently `20`);
+- the actual metadata schema constant (currently `22`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
   deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and
@@ -121,7 +129,7 @@ regularized prediction and model-kind optimizer metadata. Metadata schema 19
 and existing artifact ownership remain sufficient; no migration or stored
 checksum rewrite is performed. Exact frontend/backend matching is required.
 
-The frontend expects API contract `23`, schema 20 or later, and every required
+The frontend expects API contract `23`, schema 22 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

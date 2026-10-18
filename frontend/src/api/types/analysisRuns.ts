@@ -18,6 +18,7 @@ export interface AnalysisRunListItem {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  failure_code: string | null;
 }
 
 export interface AnalysisRunListResponse {
@@ -46,6 +47,7 @@ export interface AnalysisRunStatusResponse {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  failure_code: string | null;
 }
 
 export interface AnalysisRunDeletionCounts {

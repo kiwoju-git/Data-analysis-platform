@@ -14,6 +14,10 @@ Generic managed-source HTML uses a separate `managed_source_html_report` kind,
 not the existing generic schema-4 export format. Statistical methods, results,
 model manifests, existing JSON/NPZ files and checksums are unchanged. The optional
 `save_result=false` prediction request preserves the old unsaved default.
+A13 adds nullable `analysis_runs.failure_code` in metadata 22 so interrupted
+executions retain their reason across restarts. API 23 includes the execution
+capability/status fields; this does not change statistical method/result/model
+versions. Backups preserve schemas 20, 21 and 22 without automatic migration.
 Historical entries below
 describe their original release, not the current HTML writer.
 

@@ -7,7 +7,12 @@ from test_factorial_prediction import _analyze
 
 from app.core.config import Settings
 from app.main import create_app
-from app.storage.metadata import initialize_metadata_store, metadata_db_path
+from app.storage.metadata import (
+    MIGRATIONS,
+    SCHEMA_VERSION,
+    initialize_metadata_store,
+    metadata_db_path,
+)
 
 
 @pytest.mark.parametrize("locale", ["en", "ko"])
@@ -157,24 +162,60 @@ def test_design_deletion_counts_and_cascades_reports(tmp_path):
 
 
 def test_metadata_19_upgrade_does_not_rewrite_existing_analysis_bytes(tmp_path):
-    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+    fixture_root = tmp_path / "current fixture"
+    legacy_root = tmp_path / "legacy19"
+    with TestClient(create_app(Settings(workspace_root=fixture_root))) as client:
         _, _, _base = _analyze(client)
-    with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+    database = metadata_db_path(legacy_root)
+    database.parent.mkdir(parents=True)
+    with sqlite3.connect(database) as connection:
+        for migration in MIGRATIONS:
+            if migration.version > 19:
+                break
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT INTO schema_migrations(version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
+        connection.execute("PRAGMA user_version=19")
+        # Copy synthetic stored bytes into the actual legacy schema, not a
+        # current database with only its version number downgraded.
+        connection.execute(
+            "ATTACH DATABASE ? AS fixture",
+            (str(metadata_db_path(fixture_root)),),
+        )
+        for table in (
+            "experiment_designs",
+            "experiment_design_versions",
+            "experiment_runs",
+            "experiment_run_responses",
+            "experiment_response_revisions",
+            "experiment_response_revision_values",
+            "experiment_response_heads",
+            "experiment_design_analyses",
+            "experiment_design_analysis_response_revisions",
+        ):
+            connection.execute(f"INSERT INTO main.{table} SELECT * FROM fixture.{table}")
         before = connection.execute(
             "SELECT config_json,result_json,result_sha256 FROM experiment_design_analyses"
         ).fetchall()
-        connection.execute("DROP TABLE experiment_design_analysis_assets")
-        connection.execute("DELETE FROM schema_migrations WHERE version=20")
-        connection.execute("PRAGMA user_version=19")
-    initialize_metadata_store(tmp_path)
-    with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
+        assert len(before) == 1
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert (
+            connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='experiment_design_analysis_assets'"
+            ).fetchone()
+            is None
+        )
+    initialize_metadata_store(legacy_root)
+    with sqlite3.connect(database) as connection:
         assert (
             connection.execute(
                 "SELECT config_json,result_json,result_sha256 FROM experiment_design_analyses"
             ).fetchall()
             == before
         )
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 20
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 

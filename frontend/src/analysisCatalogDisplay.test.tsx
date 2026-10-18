@@ -15,6 +15,11 @@ const method: AnalysisMethodDescriptor = {
   label_en: "Two Variances",
   availability: "available",
   execution_mode: "inline",
+  execution_capability: {
+    lifecycle: "synchronous_request",
+    cancellation_support: "none",
+    progress_support: "none",
+  },
   requires_dataset: true,
   order: 1,
   disabled_reason: null,

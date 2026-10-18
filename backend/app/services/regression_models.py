@@ -41,7 +41,7 @@ from app.api.v1.schemas.analyses import (
 from app.api.v1.schemas.linear_model_manifests import LINEAR_MODEL_MANIFEST_ADAPTER
 from app.core.config import Settings
 from app.core.errors import ApiError
-from app.services.analysis_run_execution import runtime_build_provenance
+from app.services.analysis_run_execution import raise_completion_conflict, runtime_build_provenance
 from app.services.analysis_run_results import (
     StoredAnalysisRunResult,
     load_analysis_run_result_base,
@@ -55,8 +55,11 @@ from app.statistics.linear_model_columns import classify_linear_model_predictor
 from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
+    AnalysisCompletionDependencies,
+    AnalysisModelDependency,
     AnalysisRunRecord,
     DatasetColumnRecord,
+    DatasetSchemaDependency,
     WorkspaceAssetStorageConflict,
     count_regression_model_catalog_records,
     get_analysis_run_record,
@@ -1853,10 +1856,29 @@ def _persist_prediction_response(
                     created_at=completed_at,
                 ),
             ],
+            dependencies=AnalysisCompletionDependencies(
+                datasets=(
+                    DatasetSchemaDependency(
+                        str(response.target_dataset_version_id), response.target_schema_hash
+                    ),
+                    DatasetSchemaDependency(
+                        str(response.source_dataset_version_id),
+                        response.provenance.source_schema_hash_at_fit,
+                    ),
+                ),
+                model=AnalysisModelDependency(
+                    str(response.model_id),
+                    str(response.source_analysis_id),
+                    str(response.source_dataset_version_id),
+                    response.model_manifest_sha256,
+                    response.provenance.source_schema_hash_at_fit,
+                ),
+            ),
         )
-    except Exception:
+    except Exception as exc:
         _remove_file_if_exists(result_path)
         _remove_file_if_exists(settings.workspace_root / rows_relative_path)
+        raise_completion_conflict(exc)
         raise
 
 

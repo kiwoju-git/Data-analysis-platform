@@ -44,6 +44,11 @@ const analysisCatalog: AnalysisMethodListResponse = {
       label_en: label,
       availability: "available" as const,
       execution_mode: "inline" as const,
+      execution_capability: {
+        lifecycle: "synchronous_request" as const,
+        cancellation_support: "none" as const,
+        progress_support: "none" as const,
+      },
       requires_dataset: true,
       order: index + 1,
       disabled_reason: null,

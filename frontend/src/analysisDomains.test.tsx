@@ -232,6 +232,11 @@ function descriptor(methodId: string, order: number): AnalysisMethodDescriptor {
     availability: "available",
     disabled_reason: null,
     execution_mode: methodId.startsWith("doe.") ? "dedicated" : "inline",
+    execution_capability: {
+      lifecycle: "synchronous_request",
+      cancellation_support: "none",
+      progress_support: "none",
+    },
     label_en: methodId,
     label_ko:
       methodId === "eda.equal_variances"

@@ -23,6 +23,7 @@ export interface PrincipalComponentsRunConfig {
 }
 
 interface Props {
+  onAnalysisInputChange?: () => void;
   analysisResult: AnalysisResultEnvelope | null;
   filterValidationError: string | null;
   isRunningAnalysis: boolean;
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function PrincipalComponentsPanel({
+  onAnalysisInputChange,
   analysisResult,
   filterValidationError,
   isRunningAnalysis,
@@ -86,15 +88,21 @@ export function PrincipalComponentsPanel({
             legend={t("pca.variables")}
             maximumSelection={50}
             minimumSelection={2}
-            onClear={() => setColumnIds([])}
+            onClear={() => {
+              onAnalysisInputChange?.();
+              setColumnIds([]);
+            }}
             onToggle={(columnId, checked) =>
-              setColumnIds((current) =>
+              {
+                onAnalysisInputChange?.();
+                setColumnIds((current) =>
                 checked
                   ? current.includes(columnId)
                     ? current
                     : [...current, columnId]
                   : current.filter((candidate) => candidate !== columnId),
-              )
+              );
+              }
             }
             selectedColumnIds={columnIds}
           />
@@ -110,7 +118,10 @@ export function PrincipalComponentsPanel({
                     id="pca-matrix-type"
                     value={matrixType}
                     onChange={(event) =>
-                      setMatrixType(event.currentTarget.value as "correlation" | "covariance")
+                      {
+                        onAnalysisInputChange?.();
+                        setMatrixType(event.currentTarget.value as "correlation" | "covariance");
+                      }
                     }
                   >
                     <option value="correlation">{t("pca.correlationMatrix")}</option>
@@ -128,9 +139,12 @@ export function PrincipalComponentsPanel({
                     id="pca-component-selection"
                     value={componentSelection}
                     onChange={(event) =>
-                      setComponentSelection(
+                      {
+                        onAnalysisInputChange?.();
+                        setComponentSelection(
                         event.currentTarget.value as PrincipalComponentsRunConfig["componentSelection"],
-                      )
+                      );
+                      }
                     }
                   >
                     <option value="all">{t("pca.allComponents")}</option>
@@ -154,7 +168,10 @@ export function PrincipalComponentsPanel({
                       min={1}
                       type="number"
                       value={componentCount}
-                      onChange={(event) => setComponentCount(Number(event.currentTarget.value))}
+                      onChange={(event) => {
+                        onAnalysisInputChange?.();
+                        setComponentCount(Number(event.currentTarget.value));
+                      }}
                     />
                   ) : (
                     <input
@@ -165,7 +182,10 @@ export function PrincipalComponentsPanel({
                       step={0.01}
                       type="number"
                       value={cumulativeThreshold}
-                      onChange={(event) => setCumulativeThreshold(Number(event.currentTarget.value))}
+                      onChange={(event) => {
+                        onAnalysisInputChange?.();
+                        setCumulativeThreshold(Number(event.currentTarget.value));
+                      }}
                     />
                   ),
               },
@@ -181,7 +201,10 @@ export function PrincipalComponentsPanel({
                     step={0.001}
                     type="number"
                     value={outlierAlpha}
-                    onChange={(event) => setOutlierAlpha(Number(event.currentTarget.value))}
+                    onChange={(event) => {
+                      onAnalysisInputChange?.();
+                      setOutlierAlpha(Number(event.currentTarget.value));
+                    }}
                   />
                 ),
               },
@@ -196,7 +219,10 @@ export function PrincipalComponentsPanel({
                 min={100}
                 type="number"
                 value={plotPointLimit}
-                onChange={(event) => setPlotPointLimit(Number(event.currentTarget.value))}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setPlotPointLimit(Number(event.currentTarget.value));
+                }}
               />
             </label>
           </details>

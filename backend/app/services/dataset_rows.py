@@ -19,10 +19,7 @@ from app.storage.metadata import (
     DatasetColumnRecord,
     DatasetRecord,
     DatasetVersionRecord,
-    get_dataset_artifact_record,
-    get_dataset_record,
-    get_dataset_version_record,
-    list_dataset_column_records,
+    get_dataset_rows_metadata_snapshot,
 )
 
 
@@ -38,15 +35,16 @@ class DatasetRowsContext:
 
 
 def get_dataset_rows_context(settings: Settings, version_id: UUID) -> DatasetRowsContext:
-    version = get_dataset_version_record(settings.workspace_root, str(version_id))
-    if version is None:
+    snapshot = get_dataset_rows_metadata_snapshot(settings.workspace_root, str(version_id))
+    if snapshot is None:
         raise ApiError(
             code="dataset_version_not_found",
             message="요청한 데이터셋 버전을 찾을 수 없습니다.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    dataset = get_dataset_record(settings.workspace_root, version.dataset_id)
+    version = snapshot.version
+    dataset = snapshot.dataset
     if dataset is None:
         raise ApiError(
             code="dataset_not_found",
@@ -61,12 +59,8 @@ def get_dataset_rows_context(settings: Settings, version_id: UUID) -> DatasetRow
             message="현재 분석은 구분 텍스트와 XLSX 데이터셋 버전만 지원합니다.",
         )
 
-    columns = list_dataset_column_records(settings.workspace_root, version.version_id)
-    canonical_rows_artifact = get_dataset_artifact_record(
-        settings.workspace_root,
-        version.version_id,
-        CANONICAL_ROWS_KIND,
-    )
+    columns = list(snapshot.columns)
+    canonical_rows_artifact = snapshot.canonical_rows
     if canonical_rows_artifact is None:
         raise ApiError(
             code="canonical_artifact_missing",

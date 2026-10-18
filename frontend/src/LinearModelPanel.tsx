@@ -39,6 +39,7 @@ import {
 export type LinearModelPredictionRowsState = RegressionPredictionRowsState;
 
 interface LinearModelPanelProps {
+  onAnalysisInputChange?: () => void;
   alpha: number;
   analysisResult: AnalysisResultEnvelope | null;
   confidenceLevel: number;
@@ -78,6 +79,7 @@ interface LinearModelPanelProps {
 }
 
 export function LinearModelPanel({
+  onAnalysisInputChange,
   alpha,
   analysisResult,
   confidenceLevel,
@@ -171,7 +173,10 @@ export function LinearModelPanel({
             <div className="regression-estimator-options">{(["ols", "ridge", "lasso", "elastic_net"] as const).map((kind) =>
               <label key={kind} className={kind === estimator ? "is-selected" : ""}>
                 <input type="radio" name="regression-estimator" value={kind} checked={kind === estimator}
-                  onChange={() => setEstimator(kind)} /><span>{t(`reg.${kind}`)}</span>
+                  onChange={() => {
+                    onAnalysisInputChange?.();
+                    setEstimator(kind);
+                  }} /><span>{t(`reg.${kind}`)}</span>
               </label>)}</div>
           </fieldset>
           <div className="option-grid option-grid-wide">
@@ -319,7 +324,10 @@ export function LinearModelPanel({
               </label>
             ) : null}
           </div> : regularizedConfig !== null ? <RegularizationSettingsPanel config={regularizedConfig} rowCount={version.row_count}
-            onChange={(config) => setRegularizedDrafts((drafts) => ({ ...drafts, [config.estimator]: config }))} /> : null}
+            onChange={(config) => {
+              onAnalysisInputChange?.();
+              setRegularizedDrafts((drafts) => ({ ...drafts, [config.estimator]: config }));
+            }} /> : null}
           <button
             className="primary-button"
             disabled={isRunningAnalysis || !canRun}

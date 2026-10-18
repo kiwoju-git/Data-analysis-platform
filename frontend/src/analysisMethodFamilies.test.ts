@@ -63,6 +63,11 @@ function descriptor(methodId: string): AnalysisMethodDescriptor {
     availability: "available",
     disabled_reason: null,
     execution_mode: "inline",
+    execution_capability: {
+      lifecycle: "synchronous_request",
+      cancellation_support: "none",
+      progress_support: "none",
+    },
     label_en: methodId,
     label_ko: methodId,
     method_id: methodId,

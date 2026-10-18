@@ -51,6 +51,19 @@ export type MethodAvailability = "available" | "planned" | "disabled";
 
 export type AnalysisExecutionMode = "inline" | "job" | "dedicated";
 
+export interface AnalysisExecutionCapability {
+  lifecycle: "synchronous_request" | "unavailable";
+  cancellation_support: "none" | "cooperative" | "process";
+  progress_support: "none" | "polling";
+}
+
+export interface AnalysisResourceLimit {
+  name: string;
+  value: number;
+  unit: "predictors" | "rows" | "components" | "starts" | "restarts" | "seconds" | "workers" | "points_per_group";
+  variant?: string | null;
+}
+
 export type AnalysisSourcePrerequisite =
   | "regression_model"
   | "response_surface_analysis";
@@ -70,6 +83,8 @@ export interface AnalysisMethodDescriptor {
   label_en: string;
   availability: MethodAvailability;
   execution_mode: AnalysisExecutionMode;
+  execution_capability: AnalysisExecutionCapability;
+  resource_limits?: AnalysisResourceLimit[] | null;
   requires_dataset: boolean;
   source_prerequisite?: AnalysisSourcePrerequisite | null;
   order: number;

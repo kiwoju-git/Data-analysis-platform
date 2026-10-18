@@ -49,6 +49,20 @@ describe("attribute control chart run errors", () => {
     expect(getAnalysisRunErrorDetails("analysis_run_failed")).toEqual(english);
   });
 
+  it.each([
+    "analysis_completion_source_changed", "analysis_completion_source_missing",
+    "analysis_completion_dependency_invalid", "analysis_completion_verification_failed",
+  ])("provides locale-aware completion recovery for %s", (code) => {
+    const english = getAnalysisRunErrorDetails(code, "en");
+    const korean = getAnalysisRunErrorDetails(code, "ko");
+    expect(english.title).not.toBe(korean.title);
+    expect(english.message).not.toBe(korean.message);
+    expect(english.action).not.toBe(korean.action);
+    expect(JSON.stringify(english)).not.toMatch(/[\uAC00-\uD7AF\uE000\uE001]/u);
+    expect(JSON.stringify(korean)).toMatch(/[\uAC00-\uD7AF]/u);
+    expect(english.message).not.toBe(getAnalysisRunErrorDetails("unknown_failure", "en").message);
+  });
+
   it("matches codes literally instead of translating token-shaped input", () => {
     const fallback = getAnalysisRunErrorDetails("unknown_failure", "en");
     expect(getAnalysisRunErrorDetails("분석 실행 실패", "en")).toEqual(fallback);

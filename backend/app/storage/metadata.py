@@ -1,13 +1,14 @@
 import hashlib
 import json
 import sqlite3
-from contextlib import closing
-from dataclasses import dataclass
+from contextlib import closing, nullcontext
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 21
+SCHEMA_VERSION: Final = 22
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -136,6 +137,35 @@ class DatasetArtifactRecord:
 
 
 @dataclass(frozen=True)
+class DatasetRowsMetadataSnapshot:
+    version: DatasetVersionRecord
+    dataset: DatasetRecord | None
+    columns: tuple[DatasetColumnRecord, ...]
+    canonical_rows: DatasetArtifactRecord | None
+
+
+@dataclass(frozen=True)
+class DatasetSchemaDependency:
+    version_id: str
+    schema_hash: str
+
+
+@dataclass(frozen=True)
+class AnalysisModelDependency:
+    model_id: str
+    analysis_id: str
+    dataset_version_id: str
+    manifest_sha256: str
+    schema_hash: str
+
+
+@dataclass(frozen=True)
+class AnalysisCompletionDependencies:
+    datasets: tuple[DatasetSchemaDependency, ...]
+    model: AnalysisModelDependency | None = None
+
+
+@dataclass(frozen=True)
 class DatasetVersionDependencyCounts:
     analysis_run_count: int
     regression_model_count: int
@@ -243,6 +273,28 @@ class AnalysisRunRecord:
     updated_at: str
     completed_at: str | None
     app_version: str
+    failure_code: str | None = None
+
+
+CancellationOutcome = Literal["requested", "already_requested", "terminal", "missing"]
+
+
+@dataclass(frozen=True)
+class AnalysisCancellationResult:
+    outcome: CancellationOutcome
+    record: AnalysisRunRecord | None
+
+
+@dataclass(frozen=True)
+class JobCancellationResult:
+    outcome: CancellationOutcome
+    record: "JobRecord | None"
+
+
+@dataclass(frozen=True)
+class InterruptedExecutionRecovery:
+    analysis_run_count: int
+    job_count: int
 
 
 @dataclass(frozen=True)
@@ -1490,11 +1542,50 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         ON managed_report_artifacts(study_version_id, history_revision_id, created_at, report_id);
         """,
     ),
+    Migration(
+        version=22,
+        name="persist_interrupted_execution_reason",
+        sql="""
+        BEGIN IMMEDIATE;
+        ALTER TABLE analysis_runs ADD COLUMN failure_code TEXT;
+        """,
+    ),
 )
 
 
 def metadata_db_path(workspace_root: Path) -> Path:
     return workspace_root / METADATA_DB_RELATIVE_PATH
+
+
+def recover_interrupted_executions(
+    workspace_root: Path, *, updated_at: str | None = None
+) -> InterruptedExecutionRecovery:
+    """Settle orphan metadata only; the caller must hold the workspace lease."""
+    timestamp = updated_at or datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace(
+        "+00:00", "Z"
+    )
+    with closing(sqlite3.connect(metadata_db_path(workspace_root))) as connection:
+        with connection:
+            connection.execute("BEGIN IMMEDIATE;")
+            runs = connection.execute(
+                """
+                UPDATE analysis_runs
+                SET status = 'failed', failure_code = 'execution_interrupted_on_restart',
+                    updated_at = ?, completed_at = ?
+                WHERE status IN ('queued', 'running', 'cancel_requested');
+                """,
+                (timestamp, timestamp),
+            ).rowcount
+            jobs = connection.execute(
+                """
+                UPDATE jobs
+                SET state = 'failed', error_code = 'execution_interrupted_on_restart',
+                    updated_at = ?, completed_at = ?
+                WHERE state IN ('queued', 'running', 'cancel_requested');
+                """,
+                (timestamp, timestamp),
+            ).rowcount
+    return InterruptedExecutionRecovery(analysis_run_count=runs, job_count=jobs)
 
 
 def initialize_metadata_store(workspace_root: Path) -> MetadataStoreInfo:
@@ -2273,6 +2364,46 @@ def _dataset_catalog_visibility_clause(
     raise ValueError("unsupported_dataset_catalog_visibility")
 
 
+def get_dataset_rows_metadata_snapshot(
+    workspace_root: Path, version_id: str
+) -> DatasetRowsMetadataSnapshot | None:
+    # Close this read transaction before any file reads or numerical work.
+    with closing(sqlite3.connect(metadata_db_path(workspace_root))) as connection:
+        with connection:
+            connection.execute("BEGIN;")
+            row = connection.execute(
+                "SELECT version_id,dataset_id,version_number,source_sha256,parsing_options_json,"
+                "row_count,column_count,schema_hash,created_at FROM dataset_versions "
+                "WHERE version_id = ?;",
+                (version_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            version = _dataset_version_from_row(row)
+            dataset_row = connection.execute(
+                "SELECT dataset_id,original_filename,safe_filename,media_type,detected_format,"
+                "stored_path,sha256,size_bytes,created_at FROM datasets WHERE dataset_id = ?;",
+                (version.dataset_id,),
+            ).fetchone()
+            columns = connection.execute(
+                "SELECT column_id,version_id,column_index,original_name,display_name,data_type,"
+                "measurement_level,role,unit FROM dataset_columns WHERE version_id = ? "
+                "ORDER BY column_index;",
+                (version_id,),
+            ).fetchall()
+            artifact = connection.execute(
+                "SELECT artifact_id,version_id,kind,path,sha256,media_type,size_bytes,created_at "
+                "FROM dataset_artifacts WHERE version_id = ? AND kind = 'canonical_rows';",
+                (version_id,),
+            ).fetchone()
+            return DatasetRowsMetadataSnapshot(
+                version=version,
+                dataset=None if dataset_row is None else DatasetRecord(*dataset_row),
+                columns=tuple(_dataset_column_from_row(item) for item in columns),
+                canonical_rows=None if artifact is None else _dataset_artifact_from_row(artifact),
+            )
+
+
 def get_dataset_version_record(
     workspace_root: Path,
     version_id: str,
@@ -2760,9 +2891,19 @@ def update_dataset_schema_records(
                 """
                 UPDATE analysis_runs
                 SET stale = 1, updated_at = ?
-                WHERE dataset_version_id = ?;
+                WHERE dataset_version_id = ?
+                   OR (
+                       method_id IN (
+                           'regression.predict', 'regression.predict_pasted',
+                           'regression.linear_model_optimizer'
+                       )
+                       AND json_extract(
+                           CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END,
+                           '$.model_id'
+                       ) IN (SELECT model_id FROM regression_models WHERE dataset_version_id = ?)
+                   );
                 """,
-                (stale_updated_at, version_id),
+                (stale_updated_at, version_id, version_id),
             )
             connection.commit()
             return schema_hash
@@ -2777,22 +2918,89 @@ def update_dataset_schema_records(
             raise
 
 
-def insert_analysis_run_record(workspace_root: Path, record: AnalysisRunRecord) -> None:
+def _analysis_completion_record(
+    connection: sqlite3.Connection,
+    record: AnalysisRunRecord,
+    dependencies: AnalysisCompletionDependencies | None,
+) -> AnalysisRunRecord:
+    if dependencies is None:
+        return record
+    captured: dict[str, str] = {}
+    stale = record.stale
+    for dependency in dependencies.datasets:
+        if not dependency.schema_hash or (
+            dependency.version_id in captured
+            and captured[dependency.version_id] != dependency.schema_hash
+        ):
+            raise AnalysisRunStorageConflict("analysis_completion_dependency_invalid")
+        captured[dependency.version_id] = dependency.schema_hash
+        current = connection.execute(
+            "SELECT v.schema_hash FROM dataset_versions v JOIN datasets d "
+            "ON d.dataset_id=v.dataset_id WHERE v.version_id=?;",
+            (dependency.version_id,),
+        ).fetchone()
+        if current is None:
+            raise AnalysisRunStorageConflict("analysis_completion_source_missing")
+        stale = stale or current[0] != dependency.schema_hash
+    if not captured or record.dataset_version_id not in captured:
+        raise AnalysisRunStorageConflict("analysis_completion_dependency_invalid")
+    model = dependencies.model
+    if model is not None:
+        if captured.get(model.dataset_version_id) != model.schema_hash:
+            raise AnalysisRunStorageConflict("analysis_completion_dependency_invalid")
+        current_model = connection.execute(
+            "SELECT m.analysis_id,m.dataset_version_id,m.manifest_sha256,m.schema_hash,"
+            "a.stale,a.status,a.result_sha256 FROM regression_models m "
+            "JOIN analysis_runs a ON a.analysis_id=m.analysis_id WHERE m.model_id=?;",
+            (model.model_id,),
+        ).fetchone()
+        if current_model is None:
+            raise AnalysisRunStorageConflict("analysis_completion_source_missing")
+        if (
+            tuple(current_model[:4])
+            != (
+                model.analysis_id,
+                model.dataset_version_id,
+                model.manifest_sha256,
+                model.schema_hash,
+            )
+            or current_model[5] != "succeeded"
+            or current_model[6] is None
+        ):
+            raise AnalysisRunStorageConflict("analysis_completion_source_changed")
+        stale = stale or bool(current_model[4])
+    return replace(record, stale=stale)
+
+
+def insert_analysis_run_record(
+    workspace_root: Path,
+    record: AnalysisRunRecord,
+    *,
+    dependencies: AnalysisCompletionDependencies | None = None,
+) -> None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
         with connection:
-            _insert_analysis_run(connection, record)
+            connection.execute("BEGIN IMMEDIATE;")
+            _insert_analysis_run(
+                connection, _analysis_completion_record(connection, record, dependencies)
+            )
 
 
 def insert_analysis_run_record_with_artifacts(
     workspace_root: Path,
     record: AnalysisRunRecord,
     artifacts: list[AnalysisArtifactRecord],
+    *,
+    dependencies: AnalysisCompletionDependencies | None = None,
 ) -> None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
         with connection:
-            _insert_analysis_run(connection, record)
+            connection.execute("BEGIN IMMEDIATE;")
+            _insert_analysis_run(
+                connection, _analysis_completion_record(connection, record, dependencies)
+            )
             for artifact in artifacts:
                 _insert_analysis_artifact(connection, artifact)
 
@@ -2802,11 +3010,16 @@ def insert_analysis_run_record_with_artifacts_and_regression_model(
     record: AnalysisRunRecord,
     artifacts: list[AnalysisArtifactRecord],
     regression_model: RegressionModelRecord,
+    *,
+    dependencies: AnalysisCompletionDependencies | None = None,
 ) -> None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
         with connection:
-            _insert_analysis_run(connection, record)
+            connection.execute("BEGIN IMMEDIATE;")
+            _insert_analysis_run(
+                connection, _analysis_completion_record(connection, record, dependencies)
+            )
             for artifact in artifacts:
                 _insert_analysis_artifact(connection, artifact)
             _insert_regression_model(connection, regression_model)
@@ -3987,7 +4200,8 @@ def get_analysis_run_record(
                 created_at,
                 updated_at,
                 completed_at,
-                app_version
+                app_version,
+                failure_code
             FROM analysis_runs
             WHERE analysis_id = ?;
             """,
@@ -4010,6 +4224,7 @@ def list_analysis_run_records(
     result_available: bool | None,
     limit: int,
     offset: int,
+    _connection: sqlite3.Connection | None = None,
 ) -> list[AnalysisRunRecord]:
     where_conditions: list[str] = []
     parameters: list[object] = []
@@ -4037,7 +4252,12 @@ def list_analysis_run_records(
         where_clause = "WHERE " + " AND ".join(f"({condition})" for condition in where_conditions)
     parameters.extend([limit, offset])
 
-    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+    manager = (
+        closing(sqlite3.connect(metadata_db_path(workspace_root)))
+        if _connection is None
+        else nullcontext(_connection)
+    )
+    with manager as connection:
         rows = connection.execute(
             f"""
             SELECT
@@ -4053,7 +4273,8 @@ def list_analysis_run_records(
                 created_at,
                 updated_at,
                 completed_at,
-                app_version
+                app_version,
+                failure_code
             FROM analysis_runs
             {where_clause}
             ORDER BY created_at DESC, rowid DESC
@@ -4063,6 +4284,47 @@ def list_analysis_run_records(
         ).fetchall()
 
     return [_analysis_run_from_row(row) for row in rows]
+
+
+def list_analysis_run_page_with_artifact_counts(
+    workspace_root: Path,
+    *,
+    dataset_version_id: str | None,
+    method_id: str | None,
+    status: str | None,
+    stale: bool | None,
+    result_available: bool | None,
+    limit: int,
+    offset: int,
+) -> tuple[list[AnalysisRunRecord], dict[str, int], bool]:
+    if not 1 <= limit <= 100 or offset < 0:
+        raise ValueError("Invalid analysis history page")
+    with closing(sqlite3.connect(metadata_db_path(workspace_root))) as connection:
+        with connection:
+            connection.execute("BEGIN;")
+            records = list_analysis_run_records(
+                workspace_root,
+                dataset_version_id=dataset_version_id,
+                method_id=method_id,
+                status=status,
+                stale=stale,
+                result_available=result_available,
+                limit=limit + 1,
+                offset=offset,
+                _connection=connection,
+            )
+            has_more = len(records) > limit
+            visible = records[:limit]
+            counts = {record.analysis_id: 0 for record in visible}
+            if counts:
+                placeholders = ",".join("?" for _ in counts)
+                rows = connection.execute(
+                    f"SELECT analysis_id, COUNT(*) FROM analysis_artifacts "
+                    f"WHERE analysis_id IN ({placeholders}) GROUP BY analysis_id;",
+                    tuple(counts),
+                ).fetchall()
+                counts.update({str(row[0]): _row_int(row[1]) for row in rows})
+    return visible, counts, has_more
 
 
 def get_regression_model_record(
@@ -4565,7 +4827,7 @@ def list_regression_prediction_records_by_source(
             """
             SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
                    status, result_path, result_sha256, stale, created_at, updated_at,
-                   completed_at, app_version
+                   completed_at, app_version, failure_code
             FROM analysis_runs
             WHERE method_id = 'regression.predict'
             ORDER BY created_at DESC, analysis_id;
@@ -4857,43 +5119,44 @@ def update_analysis_run_status_record(
     status: str,
     updated_at: str,
 ) -> AnalysisRunRecord | None:
-    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
-        connection.execute("PRAGMA foreign_keys = ON;")
+    if status != "cancel_requested":
+        raise ValueError("Only a conditional cancellation request is supported")
+    return request_analysis_run_cancellation_record(workspace_root, analysis_id, updated_at).record
+
+
+def request_analysis_run_cancellation_record(
+    workspace_root: Path, analysis_id: str, updated_at: str
+) -> AnalysisCancellationResult:
+    query = """
+        SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
+               status, result_path, result_sha256, stale, created_at, updated_at,
+               completed_at, app_version, failure_code
+        FROM analysis_runs WHERE analysis_id = ?;
+    """
+    with closing(sqlite3.connect(metadata_db_path(workspace_root))) as connection:
         with connection:
-            connection.execute(
+            connection.execute("BEGIN IMMEDIATE;")
+            row = connection.execute(query, (analysis_id,)).fetchone()
+            if row is None:
+                return AnalysisCancellationResult("missing", None)
+            record = _analysis_run_from_row(row)
+            if record.status == "cancel_requested":
+                return AnalysisCancellationResult("already_requested", record)
+            if record.status not in {"queued", "running"}:
+                return AnalysisCancellationResult("terminal", record)
+            changed = connection.execute(
                 """
-                UPDATE analysis_runs
-                SET status = ?, updated_at = ?
-                WHERE analysis_id = ?;
+                UPDATE analysis_runs SET status = 'cancel_requested', updated_at = ?
+                WHERE analysis_id = ? AND status IN ('queued', 'running');
                 """,
-                (status, updated_at, analysis_id),
-            )
-            row = connection.execute(
-                """
-                SELECT
-                    analysis_id,
-                    method_id,
-                    method_version,
-                    dataset_version_id,
-                    config_json,
-                    status,
-                    result_path,
-                    result_sha256,
-                    stale,
-                    created_at,
-                    updated_at,
-                    completed_at,
-                    app_version
-                FROM analysis_runs
-                WHERE analysis_id = ?;
-                """,
-                (analysis_id,),
-            ).fetchone()
-
-    if row is None:
-        return None
-
-    return _analysis_run_from_row(row)
+                (updated_at, analysis_id),
+            ).rowcount
+            if changed != 1:
+                raise AnalysisRunStorageConflict("analysis_run_state_changed")
+            current = connection.execute(query, (analysis_id,)).fetchone()
+            if current is None:
+                raise AnalysisRunStorageConflict("analysis_run_not_found")
+            return AnalysisCancellationResult("requested", _analysis_run_from_row(current))
 
 
 def insert_analysis_artifact_record(
@@ -4986,7 +5249,8 @@ def delete_analysis_run_record(
                 created_at,
                 updated_at,
                 completed_at,
-                app_version
+                app_version,
+                failure_code
             FROM analysis_runs
             WHERE analysis_id = ?;
             """,
@@ -5075,7 +5339,7 @@ def delete_regression_model_record(
             """
             SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
                    status, result_path, result_sha256, stale, created_at, updated_at,
-                   completed_at, app_version
+                   completed_at, app_version, failure_code
             FROM analysis_runs
             WHERE analysis_id = ?;
             """,
@@ -5150,7 +5414,7 @@ def delete_regression_model_with_prediction_records(
             """
             SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
                    status, result_path, result_sha256, stale, created_at, updated_at,
-                   completed_at, app_version
+                   completed_at, app_version, failure_code
             FROM analysis_runs WHERE analysis_id = ?;
             """,
             (expected_source_run.analysis_id,),
@@ -5181,7 +5445,7 @@ def delete_regression_model_with_prediction_records(
             """
             SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
                    status, result_path, result_sha256, stale, created_at, updated_at,
-                   completed_at, app_version
+                   completed_at, app_version, failure_code
             FROM analysis_runs WHERE method_id = 'regression.predict';
             """
         ).fetchall()
@@ -5203,7 +5467,7 @@ def delete_regression_model_with_prediction_records(
                 """
                 SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
                        status, result_path, result_sha256, stale, created_at, updated_at,
-                       completed_at, app_version
+                       completed_at, app_version, failure_code
                 FROM analysis_runs WHERE analysis_id = ?;
                 """,
                 (expected_run.analysis_id,),
@@ -5280,7 +5544,7 @@ def delete_attribute_control_limit_set_record(
             """
             SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
                    status, result_path, result_sha256, stale, created_at, updated_at,
-                   completed_at, app_version
+                   completed_at, app_version, failure_code
             FROM analysis_runs
             WHERE analysis_id = ?;
             """,
@@ -5372,9 +5636,10 @@ def _insert_analysis_run(
             created_at,
             updated_at,
             completed_at,
-            app_version
+            app_version,
+            failure_code
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """,
         (
             record.analysis_id,
@@ -5390,6 +5655,7 @@ def _insert_analysis_run(
             record.updated_at,
             record.completed_at,
             record.app_version,
+            record.failure_code,
         ),
     )
 
@@ -5490,42 +5756,41 @@ def update_job_cancellation_record(
     job_id: str,
     updated_at: str,
 ) -> JobRecord | None:
-    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
-        connection.execute("PRAGMA foreign_keys = ON;")
+    return request_job_cancellation_record(workspace_root, job_id, updated_at).record
+
+
+def request_job_cancellation_record(
+    workspace_root: Path, job_id: str, updated_at: str
+) -> JobCancellationResult:
+    query = """
+        SELECT job_id, analysis_id, job_type, state, progress, cancel_requested,
+               error_code, created_at, updated_at, completed_at
+        FROM jobs WHERE job_id = ?;
+    """
+    with closing(sqlite3.connect(metadata_db_path(workspace_root))) as connection:
         with connection:
-            connection.execute(
+            connection.execute("BEGIN IMMEDIATE;")
+            row = connection.execute(query, (job_id,)).fetchone()
+            if row is None:
+                return JobCancellationResult("missing", None)
+            record = _job_from_row(row)
+            if record.state == "cancel_requested":
+                return JobCancellationResult("already_requested", record)
+            if record.state not in {"queued", "running"}:
+                return JobCancellationResult("terminal", record)
+            changed = connection.execute(
                 """
-                UPDATE jobs
-                SET state = 'cancel_requested',
-                    cancel_requested = 1,
-                    updated_at = ?
-                WHERE job_id = ?;
+                UPDATE jobs SET state = 'cancel_requested', cancel_requested = 1, updated_at = ?
+                WHERE job_id = ? AND state IN ('queued', 'running');
                 """,
                 (updated_at, job_id),
-            )
-            row = connection.execute(
-                """
-                SELECT
-                    job_id,
-                    analysis_id,
-                    job_type,
-                    state,
-                    progress,
-                    cancel_requested,
-                    error_code,
-                    created_at,
-                    updated_at,
-                    completed_at
-                FROM jobs
-                WHERE job_id = ?;
-                """,
-                (job_id,),
-            ).fetchone()
-
-    if row is None:
-        return None
-
-    return _job_from_row(row)
+            ).rowcount
+            if changed != 1:
+                raise AnalysisRunStorageConflict("job_state_changed")
+            current = connection.execute(query, (job_id,)).fetchone()
+            if current is None:
+                raise AnalysisRunStorageConflict("job_not_found")
+            return JobCancellationResult("requested", _job_from_row(current))
 
 
 def _dataset_version_from_row(row: tuple[object, ...]) -> DatasetVersionRecord:
@@ -5584,6 +5849,7 @@ def _analysis_run_from_row(row: tuple[object, ...]) -> AnalysisRunRecord:
         updated_at=str(row[10]),
         completed_at=None if row[11] is None else str(row[11]),
         app_version=str(row[12]),
+        failure_code=None if row[13] is None else str(row[13]),
     )
 
 
@@ -6001,7 +6267,7 @@ def _connection_dataset_version_cascade_snapshot(
         """
         SELECT analysis_id, method_id, method_version, dataset_version_id, config_json,
                status, result_path, result_sha256, stale, created_at, updated_at,
-               completed_at, app_version
+               completed_at, app_version, failure_code
         FROM analysis_runs;
         """
     ).fetchall()

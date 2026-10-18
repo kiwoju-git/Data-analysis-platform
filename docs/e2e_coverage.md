@@ -1007,6 +1007,15 @@ not as a second executable GP method. Requested diagnostics use
 
 ## Maintenance Checklist
 
+The `verify current analysis completion ownership` stage uses an isolated
+synthetic dataset and real analysis/storage endpoints. It delays HTTP publication
+after server completion to inspect input/source changes, checks status-only
+verification retry, cross-tab stale state, and locale/resize preservation.
+Run it separately with `critical_path.py --analysis-completion-only`.
+It complements atomic backend completion tests: delaying a browser response is
+not proof of database transaction isolation. Execution evidence is recorded in
+`end_to_end_remediation.md`, not inferred from the helper's presence.
+
 The 2026-09-18 critical path now uses same-origin `/api` proxying instead of a
 browser loopback API address. Its native HTTP cleanup helpers supply an explicit
 Origin, matching the new development CSRF boundary; browser requests continue

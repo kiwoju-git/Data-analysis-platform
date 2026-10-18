@@ -75,6 +75,7 @@ function storeDatasetVersionId(versionId: string | null): void {
 }
 
 export interface DatasetWorkflowCallbacks {
+  onCommittedSourceIntent?: () => void;
   onDatasetReset: () => void;
   onDatasetColumnsChanged: (columns: DatasetColumnResponse[]) => void;
   onDatasetVersionCreated?: () => void;
@@ -114,6 +115,7 @@ function contextMismatch(): Error {
 }
 
 export function useDatasetWorkflow({
+  onCommittedSourceIntent,
   onDatasetColumnsChanged,
   onDatasetReset,
   onDatasetVersionCreated = () => undefined,
@@ -158,8 +160,8 @@ export function useDatasetWorkflow({
   const readsInFlight = useRef({ preview: false, profile: false });
   const context = useRef(createSourceContextGuard<DatasetSourceIdentity | null>(null));
   const lanes = useRef(Object.fromEntries(requestLaneNames.map((name) => [name, createLatestRequestGuard()])) as Record<RequestLane, ReturnType<typeof createLatestRequestGuard>>);
-  const callbacks = useRef({ onDatasetColumnsChanged, onDatasetReset, onDatasetVersionCreated, onSchemaChanged });
-  callbacks.current = { onDatasetColumnsChanged, onDatasetReset, onDatasetVersionCreated, onSchemaChanged };
+  const callbacks = useRef({ onDatasetColumnsChanged, onDatasetReset, onDatasetVersionCreated, onSchemaChanged, onCommittedSourceIntent });
+  callbacks.current = { onDatasetColumnsChanged, onDatasetReset, onDatasetVersionCreated, onSchemaChanged, onCommittedSourceIntent };
   const cellDirty = useRef(false);
   const pasteDirty = useRef(false);
   const schemaDirty = useRef(false);
@@ -420,6 +422,7 @@ export function useDatasetWorkflow({
     clearSchemaConflict();
     advanceSource();
     pending.current = versionId;
+    callbacks.current.onCommittedSourceIntent?.();
     activationInFlight.current = true;
     setPendingVersionId(versionId);
     const ticket = begin("activation");
@@ -523,6 +526,7 @@ export function useDatasetWorkflow({
   async function handleConfirmParsing() {
     if (!mounted.current || upload === null || parsingOptions === null) return;
     if ((cellDirty.current || schemaDirty.current) && !window.confirm(t("dataset.workflow.discardUnsaved"))) return;
+    callbacks.current.onCommittedSourceIntent?.();
     advanceSource();
     const ticket = begin("confirmation");
     setIsConfirming(true);
@@ -557,6 +561,9 @@ export function useDatasetWorkflow({
     const sequence = ++schemaWriteSequence.current;
     const revision = schemaRevision.current;
     const submitted = schemaDraftsRef.current;
+    if (compareSchemaDraft(base, submitted, current).some((change) => change.localChanged)) {
+      callbacks.current.onCommittedSourceIntent?.();
+    }
     const ownsCommittedSchema = () => mounted.current && committedGeneration.current === generation &&
       schemaWriteSequence.current === sequence && committed.current?.version_id === current.version_id &&
       committed.current.dataset_id === current.dataset_id && committed.current.schema_hash === current.schema_hash;
@@ -728,6 +735,7 @@ export function useDatasetWorkflow({
       const current = committed.current;
       if (!mounted.current || current === null || activationInFlight.current) return null;
       if (request.confirmation_parent_version_id !== current.version_id || request.expected_parent_schema_hash !== current.schema_hash) throw contextMismatch();
+      callbacks.current.onCommittedSourceIntent?.();
       const ticket = begin("cell");
       setFlowError(null);
       try {

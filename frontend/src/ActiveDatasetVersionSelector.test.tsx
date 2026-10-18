@@ -131,6 +131,38 @@ describe("ActiveDatasetVersionSelector", () => {
     expect(html).toContain('value="child-version-2" selected');
     expect(html).toContain("데이터셋 v2");
   });
+
+  it.each(["ko", "en"] as const)("shows committed A after failed B activation without discarding B's retry identity (%s)", (locale) => {
+    setCurrentLocale(locale);
+    const current = version();
+    const target = catalogItem({ version_id: "replacement-b", dataset_id: "dataset-b" });
+    const props = {
+      catalogState: catalogState({ activeItem: target, catalog: {
+        offset: 1, limit: 1, total: 2, returned: 1, has_previous: true, has_next: false, versions: [target],
+      } }),
+      isSwitching: false, pendingVersionId: target.version_id, version: current,
+      activationError: "service_unavailable", onRetrySwitch: vi.fn(), onSelect: vi.fn(),
+    };
+    const html = renderToString(<ActiveDatasetVersionSelector {...props} />);
+    expect(html).toContain(`value="${current.version_id}" selected`);
+    expect(html).not.toContain(`value="${target.version_id}" selected`);
+    expect(html).toContain('data-dataset-request-error="activation"');
+    expect(html).toContain("service_unavailable");
+    expect(props.pendingVersionId).toBe("replacement-b");
+  });
+
+  it("retains the requested identity for initial failed restore and while an explicit switch is busy", () => {
+    const target = catalogItem({ version_id: "replacement-b", dataset_id: "dataset-b" });
+    const state = catalogState({ activeItem: target, catalog: {
+      offset: 0, limit: 2, total: 2, returned: 2, has_previous: false, has_next: false, versions: [catalogItem(), target],
+    } });
+    for (const [current, isSwitching] of [[null, false], [version(), true]] as const) {
+      const html = renderToString(<ActiveDatasetVersionSelector catalogState={state} version={current}
+        isSwitching={isSwitching} pendingVersionId={target.version_id} activationError="service_unavailable"
+        onRetrySwitch={vi.fn()} onSelect={vi.fn()} />);
+      expect(html).toContain('value="replacement-b" selected');
+    }
+  });
 });
 
 function catalogState(

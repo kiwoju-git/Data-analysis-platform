@@ -21,7 +21,7 @@ from app.api.v1.schemas.analyses import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
-from app.services.analysis_run_execution import runtime_build_provenance
+from app.services.analysis_run_execution import raise_completion_conflict, runtime_build_provenance
 from app.services.analysis_run_results import load_analysis_run_result_base
 from app.services.regression_models import get_regression_model_manifest
 from app.statistics.regression_response_optimizer import (
@@ -30,7 +30,10 @@ from app.statistics.regression_response_optimizer import (
 )
 from app.storage.atomic import atomic_write_bytes
 from app.storage.metadata import (
+    AnalysisCompletionDependencies,
+    AnalysisModelDependency,
     AnalysisRunRecord,
+    DatasetSchemaDependency,
     get_analysis_run_record,
     insert_analysis_run_record,
     list_analysis_run_records,
@@ -141,7 +144,21 @@ def create_regression_response_optimization(
         result=result,
         created_at=created_at,
     )
-    _persist(settings, response, config_payload)
+    _persist(
+        settings,
+        response,
+        config_payload,
+        dependencies=AnalysisCompletionDependencies(
+            datasets=(DatasetSchemaDependency(str(model.dataset_version_id), model.schema_hash),),
+            model=AnalysisModelDependency(
+                str(model.model_id),
+                str(model.analysis_id),
+                str(model.dataset_version_id),
+                model.manifest_sha256,
+                model.schema_hash,
+            ),
+        ),
+    )
     return response
 
 
@@ -226,6 +243,8 @@ def _persist(
     settings: Settings,
     response: RegressionResponseOptimizationResponse,
     config_payload: dict[str, Any],
+    *,
+    dependencies: AnalysisCompletionDependencies,
 ) -> None:
     envelope = AnalysisResultEnvelope(
         analysis_id=response.optimization_id,
@@ -269,12 +288,14 @@ def _persist(
                 completed_at=response.created_at,
                 app_version=APP_VERSION,
             ),
+            dependencies=dependencies,
         )
-    except Exception:
+    except Exception as exc:
         try:
             path.unlink()
         except FileNotFoundError:
             pass
+        raise_completion_conflict(exc)
         raise
 
 

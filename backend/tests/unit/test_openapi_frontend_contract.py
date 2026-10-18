@@ -2193,6 +2193,16 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         required_fields=frozenset({"row_index", "values"}),
     ),
     SchemaComponentContract(
+        name="AnalysisExecutionCapability",
+        properties=frozenset({"lifecycle", "cancellation_support", "progress_support"}),
+        required_fields=frozenset({"lifecycle", "cancellation_support", "progress_support"}),
+    ),
+    SchemaComponentContract(
+        name="AnalysisResourceLimit",
+        properties=frozenset({"name", "value", "unit", "variant"}),
+        required_fields=frozenset({"name", "value", "unit"}),
+    ),
+    SchemaComponentContract(
         name="AnalysisMethodDescriptor",
         properties=frozenset(
             {
@@ -2203,6 +2213,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "label_en",
                 "availability",
                 "execution_mode",
+                "execution_capability",
+                "resource_limits",
                 "requires_dataset",
                 "source_prerequisite",
                 "order",
@@ -2218,6 +2230,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "label_en",
                 "availability",
                 "execution_mode",
+                "execution_capability",
                 "requires_dataset",
                 "order",
             }
@@ -2226,6 +2239,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("module_id", "AnalysisModuleId"),
             ("availability", "MethodAvailability"),
             ("execution_mode", "AnalysisExecutionMode"),
+            ("execution_capability", "AnalysisExecutionCapability"),
         ),
         property_any_of_refs=(("source_prerequisite", frozenset({"AnalysisSourcePrerequisite"})),),
     ),
@@ -2253,6 +2267,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "created_at",
                 "updated_at",
                 "completed_at",
+                "failure_code",
             }
         ),
         required_fields=frozenset(
@@ -2268,6 +2283,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "created_at",
                 "updated_at",
                 "completed_at",
+                "failure_code",
             }
         ),
         property_refs=(("status", "AnalysisRunState"),),

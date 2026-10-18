@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import "./App.css";
 import "./dashboardNavigation.css";
@@ -57,6 +57,9 @@ import {
 } from "./api";
 import { AppChrome } from "./AppChrome";
 import type { AnalysisShellProps } from "./AnalysisShell";
+import { useCurrentAnalysisExecution } from "./useCurrentAnalysisExecution";
+import { analysisCompletionMatches, analysisStatusMatches } from "./analysisExecutionContext";
+import { fetchAnalysisRunStatus } from "./api/analyses";
 import type { DescriptiveQuickGraphState } from "./DescriptiveAnalysisPanel";
 import type { OneWayAnovaExecutionOptions } from "./OneWayAnovaPanel";
 import type { MannWhitneyExecutionOptions } from "./MannWhitneyPanel";
@@ -341,7 +344,6 @@ export default function App() {
   >("none");
   const [linearModelAlphaToRemove, setLinearModelAlphaToRemove] = useState(0.10);
   const [analysisFilterDrafts, setAnalysisFilterDrafts] = useState<AnalysisFilterDraft[]>([]);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResultEnvelope | null>(null);
   const [descriptiveQuickGraphState, setDescriptiveQuickGraphState] =
     useState<DescriptiveQuickGraphState>({
       columnId: null,
@@ -353,7 +355,12 @@ export default function App() {
   const descriptiveQuickGraphCacheRef = useRef(new Map<string, GraphicalSummaryResult>());
   const [datasetStateRevision, setDatasetStateRevision] = useState(0);
   const [workspaceAssetRevision, setWorkspaceAssetRevision] = useState(0);
-  const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
+  const [isGagePreflightRunning, setIsGagePreflightRunning] = useState(false);
+  const gagePreflightRequest = useRef(0);
+  useEffect(() => () => {
+    gagePreflightRequest.current += 1;
+    descriptiveQuickGraphRequestIdRef.current += 1;
+  }, []);
   const [factorialDesign, setFactorialDesign] = useState<FactorialDesignResponse | null>(null);
   const [factorialDesignError, setFactorialDesignError] = useState<string | null>(null);
   const [isCreatingFactorialDesign, setIsCreatingFactorialDesign] = useState(false);
@@ -379,6 +386,7 @@ export default function App() {
     confirmNavigation: confirmDatasetNavigation,
     onDatasetDeleted,
   } = useDatasetWorkflow({
+    onCommittedSourceIntent: invalidatePendingAnalysis,
     onDatasetVersionCreated: () => {
       publishWorkspaceMutation("dataset_created");
     },
@@ -418,7 +426,7 @@ export default function App() {
       setSelectedLinearModelQuadraticColumnIds([]);
       setSelectedLinearModelInteractionKeys([]);
       setAnalysisFilterDrafts([]);
-      setAnalysisResult(null);
+      invalidateAnalysisInput();
     },
     onDatasetColumnsChanged: (columns) => {
       setSelectedDescriptiveColumnIds(defaultDescriptiveColumnIds(columns));
@@ -506,7 +514,7 @@ export default function App() {
       setSelectedLinearModelQuadraticColumnIds([]);
       setSelectedLinearModelInteractionKeys([]);
       setAnalysisFilterDrafts([]);
-      setAnalysisResult(null);
+      invalidateAnalysisInput();
     },
     onSchemaChanged: (columns) => {
       setDatasetStateRevision((revision) => revision + 1);
@@ -586,9 +594,35 @@ export default function App() {
       );
       setSelectedLinearModelQuadraticColumnIds([]);
       setSelectedLinearModelInteractionKeys([]);
-      setAnalysisResult(null);
+      invalidateAnalysisInput();
     },
   });
+  const currentAnalysis = useCurrentAnalysisExecution({
+    datasetVersionId: version?.version_id ?? null,
+    schemaHash: version?.schema_hash ?? null,
+    methodId: selectedMethod?.method_id ?? null,
+    methodVersion: selectedMethod?.method_version ?? null,
+    workspace: appRoute.page,
+    sourceChanging: activeDatasetSelectorProps.isSwitching || datasetPageProps.isConfirming || datasetPageProps.isSavingSchema,
+  }, () => {
+    restoredAnalysisResultState.resetRestoredAnalysisResultState();
+    gagePreflightRequest.current += 1;
+    setIsGagePreflightRunning(false);
+  });
+  const analysisRouteRef = useRef(appRoute);
+  const invalidateCurrentAnalysis = currentAnalysis.invalidate;
+  analysisRouteRef.current = appRoute;
+  const analysisResult = currentAnalysis.result;
+  const isRunningAnalysis = currentAnalysis.isRunning || isGagePreflightRunning;
+  function invalidatePendingAnalysis() {
+    currentAnalysis.invalidate(false);
+    restoredAnalysisResultState.cancelPendingRestore();
+    gagePreflightRequest.current += 1;
+    setIsGagePreflightRunning(false);
+    descriptiveQuickGraphRequestIdRef.current += 1;
+    setDescriptiveQuickGraphState((previous) => previous.status === "loading"
+      ? { columnId: null, result: null, error: null, status: "idle" } : previous);
+  }
   const currentAnalysisId = analysisResult?.analysis_id ?? null;
   const currentDatasetVersionId = version?.version_id ?? null;
   const analysisExportState = useAnalysisExportState({
@@ -608,6 +642,8 @@ export default function App() {
     resetKey: datasetStateRevision,
   });
   const restoredAnalysisResultState = useRestoredAnalysisResultState({
+    onRestoreIntent: invalidatePendingAnalysis,
+    onRestoreCommitted: () => currentAnalysis.invalidate(),
     analysisCatalog,
     currentAnalysisId,
     currentDatasetVersionId,
@@ -625,6 +661,14 @@ export default function App() {
     restoredAnalysisResultState.restoredAnalysisResult?.analysis_id ?? null;
   const resetRestoredAnalysisResultState =
     restoredAnalysisResultState.resetRestoredAnalysisResultState;
+  const cancelPendingRestore = restoredAnalysisResultState.cancelPendingRestore;
+  const invalidateAnalysisInput = useCallback(() => {
+    invalidateCurrentAnalysis();
+    gagePreflightRequest.current += 1;
+    setIsGagePreflightRunning(false);
+    descriptiveQuickGraphRequestIdRef.current += 1;
+    resetRestoredAnalysisResultState();
+  }, [invalidateCurrentAnalysis, resetRestoredAnalysisResultState]);
   const publishedAnalysisDeletionRef = useRef<string | null>(null);
   const publishedExportDeletionRef = useRef<string | null>(null);
 
@@ -637,7 +681,7 @@ export default function App() {
       setWorkspaceAssetRevision((revision) => revision + 1);
     }
     if (analysisResult?.analysis_id === deletedAnalysisRunId) {
-      setAnalysisResult(null);
+      invalidateAnalysisInput();
     }
     if (restoredAnalysisRunId === deletedAnalysisRunId) {
       resetRestoredAnalysisResultState();
@@ -657,6 +701,7 @@ export default function App() {
     comparisonRightAnalysisId,
     deletedAnalysisRunId,
     exportListAnalysisId,
+    invalidateAnalysisInput,
     resetAnalysisComparisonState,
     resetAnalysisExportState,
     resetRestoredAnalysisResultState,
@@ -714,7 +759,16 @@ export default function App() {
     }
 
     function handleRouteChange() {
-      setAppRoute(currentAppRoute());
+      const next = currentAppRoute();
+      if (JSON.stringify(analysisRouteRef.current) !== JSON.stringify(next)) {
+        invalidateCurrentAnalysis(false);
+        cancelPendingRestore();
+        gagePreflightRequest.current += 1;
+        setIsGagePreflightRunning(false);
+        descriptiveQuickGraphRequestIdRef.current += 1;
+      }
+      analysisRouteRef.current = next;
+      setAppRoute(next);
     }
 
     window.addEventListener("popstate", handleRouteChange);
@@ -725,7 +779,7 @@ export default function App() {
       window.removeEventListener("hashchange", handleRouteChange);
       window.removeEventListener(appLocationChangeEvent, handleRouteChange);
     };
-  }, []);
+  }, [invalidateCurrentAnalysis, cancelPendingRestore]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -895,6 +949,7 @@ export default function App() {
     [selectedAttributeControlChartCountColumnId, version],
   );
   const attributeControlPhase2State = useAttributeControlPhase2State({
+    targetSchemaHash: version?.schema_hash ?? null,
     chartType: selectedAttributeControlChartType,
     constantOpportunityConfirmed: attributeControlChartConstantOpportunityConfirmed,
     countColumnId: selectedAttributeControlChartCountColumnId,
@@ -1218,11 +1273,11 @@ export default function App() {
       result: null,
       status: "idle",
     });
-  }, [analysisFilterDrafts, version?.version_id]);
+  }, [analysisFilterDrafts, version?.version_id, version?.schema_hash]);
 
   function handleAnalysisFilterDraftsChange(drafts: AnalysisFilterDraft[]) {
     setAnalysisFilterDrafts(drafts);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   async function handleCreateFactorialDesign(request: FactorialDesignCreateRequest) {
@@ -1313,7 +1368,7 @@ export default function App() {
         ? Array.from(new Set([...current, columnId]))
         : current.filter((id) => id !== columnId),
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleToggleGraphicalSummaryColumn(columnId: string, checked: boolean) {
@@ -1322,7 +1377,7 @@ export default function App() {
         ? Array.from(new Set([...current, columnId]))
         : current.filter((id) => id !== columnId),
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleToggleNormalityColumn(columnId: string, checked: boolean) {
@@ -1331,12 +1386,12 @@ export default function App() {
         ? Array.from(new Set([...current, columnId]))
         : current.filter((id) => id !== columnId),
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleNormalityAlphaChange(alpha: number) {
     setNormalityAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleEqualVariancesResponseColumnChange(columnId: string) {
@@ -1347,67 +1402,67 @@ export default function App() {
         version === null ? null : defaultEqualVariancesGroupColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleEqualVariancesGroupColumnChange(columnId: string) {
     setSelectedEqualVariancesGroupColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleEqualVariancesAlphaChange(alpha: number) {
     setEqualVariancesAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleTResponseColumnChange(columnId: string) {
     setSelectedOneSampleTResponseColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleTNullMeanChange(nullMean: number) {
     setOneSampleTNullMean(nullMean);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleTAlphaChange(alpha: number) {
     setOneSampleTAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleTConfidenceLevelChange(confidenceLevel: number) {
     setOneSampleTConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleTAlternativeChange(alternative: string) {
     setOneSampleTAlternative(alternative);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleEquivalenceTostResponseColumnChange(columnId: string) {
     setSelectedEquivalenceTostResponseColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleEquivalenceTostReferenceMeanChange(referenceMean: number) {
     setEquivalenceTostReferenceMean(referenceMean);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleEquivalenceTostLowerBoundChange(lowerBound: number) {
     setEquivalenceTostLowerBound(lowerBound);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleEquivalenceTostUpperBoundChange(upperBound: number) {
     setEquivalenceTostUpperBound(upperBound);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleEquivalenceTostAlphaChange(alpha: number) {
     setEquivalenceTostAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePairedTBeforeColumnChange(columnId: string) {
@@ -1418,62 +1473,62 @@ export default function App() {
         version === null ? null : defaultPairedTAfterColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePairedTAfterColumnChange(columnId: string) {
     setSelectedPairedTAfterColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePairedTNullDifferenceChange(nullDifference: number) {
     setPairedTNullDifference(nullDifference);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePairedTAlphaChange(alpha: number) {
     setPairedTAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePairedTConfidenceLevelChange(confidenceLevel: number) {
     setPairedTConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePairedTAlternativeChange(alternative: string) {
     setPairedTAlternative(alternative);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleWilcoxonResponseColumnChange(columnId: string) {
     setSelectedOneSampleWilcoxonResponseColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleWilcoxonNullLocationChange(nullLocation: number) {
     setOneSampleWilcoxonNullLocation(nullLocation);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleWilcoxonAlphaChange(alpha: number) {
     setOneSampleWilcoxonAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleWilcoxonAlternativeChange(alternative: string) {
     setOneSampleWilcoxonAlternative(alternative);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleWilcoxonMethodChange(method: string) {
     setOneSampleWilcoxonMethod(method);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneSampleWilcoxonZeroMethodChange(zeroMethod: string) {
     setOneSampleWilcoxonZeroMethod(zeroMethod);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoSampleTResponseColumnChange(columnId: string) {
@@ -1484,32 +1539,32 @@ export default function App() {
         version === null ? null : defaultTwoSampleTGroupColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoSampleTGroupColumnChange(columnId: string) {
     setSelectedTwoSampleTGroupColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoSampleTAlphaChange(alpha: number) {
     setTwoSampleTAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoSampleTConfidenceLevelChange(confidenceLevel: number) {
     setTwoSampleTConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoSampleTAlternativeChange(alternative: string) {
     setTwoSampleTAlternative(alternative);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoSampleTVarianceAssumptionChange(varianceAssumption: string) {
     setTwoSampleTVarianceAssumption(varianceAssumption);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleMannWhitneyResponseColumnChange(columnId: string) {
@@ -1520,27 +1575,27 @@ export default function App() {
         version === null ? null : defaultMannWhitneyGroupColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleMannWhitneyGroupColumnChange(columnId: string) {
     setSelectedMannWhitneyGroupColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleMannWhitneyAlphaChange(alpha: number) {
     setMannWhitneyAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleMannWhitneyAlternativeChange(alternative: string) {
     setMannWhitneyAlternative(alternative);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleMannWhitneyMethodChange(method: string) {
     setMannWhitneyMethod(method);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleKruskalWallisResponseColumnChange(columnId: string) {
@@ -1551,17 +1606,17 @@ export default function App() {
         version === null ? null : defaultKruskalWallisGroupColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleKruskalWallisGroupColumnChange(columnId: string) {
     setSelectedKruskalWallisGroupColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleKruskalWallisAlphaChange(alpha: number) {
     setKruskalWallisAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneWayAnovaResponseColumnChange(columnId: string) {
@@ -1572,57 +1627,57 @@ export default function App() {
         version === null ? null : defaultOneWayAnovaGroupColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneWayAnovaGroupColumnChange(columnId: string) {
     setSelectedOneWayAnovaGroupColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneWayAnovaAlphaChange(alpha: number) {
     setOneWayAnovaAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneWayAnovaConfidenceLevelChange(confidenceLevel: number) {
     setOneWayAnovaConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneProportionResponseColumnChange(columnId: string) {
     setSelectedOneProportionResponseColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneProportionEventLevelChange(eventLevel: string) {
     setOneProportionEventLevel(eventLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneProportionNullProportionChange(nullProportion: number) {
     setOneProportionNullProportion(nullProportion);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneProportionAlphaChange(alpha: number) {
     setOneProportionAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneProportionConfidenceLevelChange(confidenceLevel: number) {
     setOneProportionConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneProportionAlternativeChange(alternative: string) {
     setOneProportionAlternative(alternative);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleOneProportionCiMethodChange(ciMethod: string) {
     setOneProportionCiMethod(ciMethod);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoProportionResponseColumnChange(columnId: string) {
@@ -1633,32 +1688,32 @@ export default function App() {
         version === null ? null : defaultTwoProportionGroupColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoProportionGroupColumnChange(columnId: string) {
     setSelectedTwoProportionGroupColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoProportionEventLevelChange(eventLevel: string) {
     setTwoProportionEventLevel(eventLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoProportionAlphaChange(alpha: number) {
     setTwoProportionAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoProportionConfidenceLevelChange(confidenceLevel: number) {
     setTwoProportionConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleTwoProportionAlternativeChange(alternative: string) {
     setTwoProportionAlternative(alternative);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleChiSquareAssociationRowColumnChange(columnId: string) {
@@ -1671,17 +1726,17 @@ export default function App() {
           : defaultChiSquareAssociationColumnColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleChiSquareAssociationColumnColumnChange(columnId: string) {
     setSelectedChiSquareAssociationColumnColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleChiSquareAssociationAlphaChange(alpha: number) {
     setChiSquareAssociationAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePearsonXColumnChange(columnId: string) {
@@ -1692,22 +1747,22 @@ export default function App() {
         version === null ? null : defaultPearsonYColumnId(version.columns, nextColumnId),
       );
     }
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePearsonYColumnChange(columnId: string) {
     setSelectedPearsonYColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePearsonAlphaChange(alpha: number) {
     setPearsonAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handlePearsonConfidenceLevelChange(confidenceLevel: number) {
     setPearsonConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleToggleXyCorrelationXColumn(columnId: string, checked: boolean) {
@@ -1716,7 +1771,7 @@ export default function App() {
         ? Array.from(new Set([...current, columnId]))
         : current.filter((id) => id !== columnId),
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleToggleXyCorrelationYColumn(columnId: string, checked: boolean) {
@@ -1725,28 +1780,28 @@ export default function App() {
         ? Array.from(new Set([...current, columnId]))
         : current.filter((id) => id !== columnId),
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleXyCorrelationAlphaChange(alpha: number) {
     setXyCorrelationAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleXyCorrelationConfidenceLevelChange(confidenceLevel: number) {
     setXyCorrelationConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleAttributeControlChartTypeChange(chartType: AttributeControlChartType) {
     setSelectedAttributeControlChartType(chartType);
     setAttributeControlChartConstantOpportunityConfirmed(false);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleAttributeControlChartPhaseChange(phase: AttributeControlPhase) {
     setAttributeControlChartPhase(phase);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleAttributeControlChartCountColumnChange(columnId: string) {
@@ -1755,17 +1810,17 @@ export default function App() {
     setSelectedAttributeControlChartDenominatorColumnId((current) =>
       current === nextColumnId ? null : current,
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleAttributeControlChartDenominatorColumnChange(columnId: string) {
     setSelectedAttributeControlChartDenominatorColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleAttributeControlChartConstantOpportunityConfirmedChange(confirmed: boolean) {
     setAttributeControlChartConstantOpportunityConfirmed(confirmed);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleIndividualsChartValueColumnChange(columnId: string) {
@@ -1774,12 +1829,12 @@ export default function App() {
     setSelectedIndividualsChartOrderColumnId((current) =>
       current === nextColumnId ? null : current,
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleIndividualsChartOrderColumnChange(columnId: string | null) {
     setSelectedIndividualsChartOrderColumnId(columnId);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleSubgroupChartValueColumnChange(columnId: string) {
@@ -1788,49 +1843,49 @@ export default function App() {
     setSelectedSubgroupChartSubgroupColumnId((current) =>
       current === nextColumnId ? null : current,
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleSubgroupChartSubgroupColumnChange(columnId: string) {
     setSelectedSubgroupChartSubgroupColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleSubgroupChartTypeChange(chartType: SubgroupChartType) {
     setSelectedSubgroupChartType(chartType);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleRunChartValueColumnChange(columnId: string) {
     const nextColumnId = columnId.length > 0 ? columnId : null;
     setSelectedRunChartValueColumnId(nextColumnId);
     setSelectedRunChartOrderColumnId((current) => (current === nextColumnId ? null : current));
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleRunChartOrderColumnChange(columnId: string) {
     setSelectedRunChartOrderColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleCapabilityValueColumnChange(columnId: string) {
     setSelectedCapabilityValueColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleCapabilityLslChange(value: string) {
     setCapabilityLsl(value);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleCapabilityUslChange(value: string) {
     setCapabilityUsl(value);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleCapabilityTargetChange(value: string) {
     setCapabilityTarget(value);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function resetGageRrSelection(columns: DatasetColumnResponse[]) {
@@ -1846,7 +1901,7 @@ export default function App() {
     setSelectedGageRunChartOrderColumnId(null);
     setGageRrPreflight(null);
     setGageRrPreflightError(null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleGageRrMeasurementColumnChange(columnId: string) {
@@ -1864,7 +1919,7 @@ export default function App() {
     setSelectedGageRunChartOrderColumnId(null);
     setGageRrPreflight(null);
     setGageRrPreflightError(null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleGageRrPartColumnChange(columnId: string) {
@@ -1874,7 +1929,7 @@ export default function App() {
     );
     setGageRrPreflight(null);
     setGageRrPreflightError(null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleGageRrOperatorColumnChange(columnId: string) {
@@ -1884,7 +1939,7 @@ export default function App() {
     );
     setGageRrPreflight(null);
     setGageRrPreflightError(null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleGageRrReplicateColumnChange(columnId: string) {
@@ -1894,12 +1949,12 @@ export default function App() {
     );
     setGageRrPreflight(null);
     setGageRrPreflightError(null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleGageRunChartOrderColumnChange(columnId: string) {
     setSelectedGageRunChartOrderColumnId(columnId.length > 0 ? columnId : null);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleLinearModelResponseColumnChange(columnId: string) {
@@ -1910,7 +1965,7 @@ export default function App() {
       pruneLinearModelExtraTerms(nextPredictorIds);
       return nextPredictorIds;
     });
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleToggleLinearModelPredictorColumn(columnId: string, checked: boolean) {
@@ -1924,7 +1979,7 @@ export default function App() {
       pruneLinearModelExtraTerms(nextPredictorIds);
       return nextPredictorIds;
     });
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function pruneLinearModelExtraTerms(nextPredictorIds: string[]) {
@@ -1946,24 +2001,24 @@ export default function App() {
         ? Array.from(new Set([...current, columnId]))
         : current.filter((id) => id !== columnId),
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleToggleLinearModelInteractionTerm(key: string, checked: boolean) {
     setSelectedLinearModelInteractionKeys((current) =>
       checked ? Array.from(new Set([...current, key])) : current.filter((id) => id !== key),
     );
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleLinearModelAlphaChange(alpha: number) {
     setLinearModelAlpha(alpha);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   function handleLinearModelConfidenceLevelChange(confidenceLevel: number) {
     setLinearModelConfidenceLevel(confidenceLevel);
-    setAnalysisResult(null);
+    invalidateAnalysisInput();
   }
 
   async function handleRunDescriptiveAnalysis() {
@@ -1973,22 +2028,21 @@ export default function App() {
       selectedMethod.method_id !== "eda.descriptive" ||
       selectedDescriptiveColumnIds.length === 0
     ) {
-      setFlowError("descriptive_columns_required");
+      currentAnalysis.setValidationError("descriptive_columns_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2002,11 +2056,8 @@ export default function App() {
           missing_policy: "available_case_by_column",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2017,22 +2068,21 @@ export default function App() {
       selectedMethod.method_id !== "eda.graphical_summary" ||
       selectedGraphicalSummaryColumnIds.length === 0
     ) {
-      setFlowError("graphical_summary_columns_required");
+      currentAnalysis.setValidationError("graphical_summary_columns_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2047,11 +2097,8 @@ export default function App() {
           confidence_level: confidenceLevel,
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2062,26 +2109,25 @@ export default function App() {
       selectedMethod.method_id !== "eda.normality" ||
       selectedNormalityColumnIds.length === 0
     ) {
-      setFlowError("normality_columns_required");
+      currentAnalysis.setValidationError("normality_columns_required");
       return;
     }
     if (normalityAlpha <= 0 || normalityAlpha >= 1) {
-      setFlowError("invalid_normality_alpha");
+      currentAnalysis.setValidationError("invalid_normality_alpha");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2098,11 +2144,8 @@ export default function App() {
           qq_point_limit: 1000,
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2112,30 +2155,29 @@ export default function App() {
       selectedEqualVariancesResponseColumnId === null ||
       selectedEqualVariancesGroupColumnId === null
     ) {
-      setFlowError("equal_variances_columns_required");
+      currentAnalysis.setValidationError("equal_variances_columns_required");
       return;
     }
     if (selectedEqualVariancesResponseColumnId === selectedEqualVariancesGroupColumnId) {
-      setFlowError("equal_variances_same_response_and_group");
+      currentAnalysis.setValidationError("equal_variances_same_response_and_group");
       return;
     }
     if (equalVariancesAlpha <= 0 || equalVariancesAlpha >= 1) {
-      setFlowError("invalid_equal_variances_alpha");
+      currentAnalysis.setValidationError("invalid_equal_variances_alpha");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: "eda.equal_variances",
         method_version: methodVersion,
         dataset_version_id: version.version_id,
@@ -2154,11 +2196,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2169,34 +2208,33 @@ export default function App() {
       selectedMethod.method_id !== "hypothesis.one_sample_t" ||
       selectedOneSampleTResponseColumnId === null
     ) {
-      setFlowError("one_sample_t_response_required");
+      currentAnalysis.setValidationError("one_sample_t_response_required");
       return;
     }
     if (oneSampleTAlpha <= 0 || oneSampleTAlpha >= 1) {
-      setFlowError("invalid_one_sample_t_alpha");
+      currentAnalysis.setValidationError("invalid_one_sample_t_alpha");
       return;
     }
     if (oneSampleTConfidenceLevel <= 0 || oneSampleTConfidenceLevel >= 1) {
-      setFlowError("invalid_one_sample_t_confidence_level");
+      currentAnalysis.setValidationError("invalid_one_sample_t_confidence_level");
       return;
     }
     if (!Number.isFinite(oneSampleTNullMean)) {
-      setFlowError("invalid_one_sample_t_null_mean");
+      currentAnalysis.setValidationError("invalid_one_sample_t_null_mean");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2216,11 +2254,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2231,41 +2266,40 @@ export default function App() {
       selectedMethod.method_id !== "hypothesis.equivalence_tost" ||
       selectedEquivalenceTostResponseColumnId === null
     ) {
-      setFlowError("equivalence_tost_response_required");
+      currentAnalysis.setValidationError("equivalence_tost_response_required");
       return;
     }
     if (!Number.isFinite(equivalenceTostReferenceMean)) {
-      setFlowError("invalid_equivalence_tost_reference_mean");
+      currentAnalysis.setValidationError("invalid_equivalence_tost_reference_mean");
       return;
     }
     if (
       !Number.isFinite(equivalenceTostLowerBound) ||
       !Number.isFinite(equivalenceTostUpperBound)
     ) {
-      setFlowError("invalid_equivalence_tost_bounds");
+      currentAnalysis.setValidationError("invalid_equivalence_tost_bounds");
       return;
     }
     if (equivalenceTostLowerBound >= equivalenceTostUpperBound) {
-      setFlowError("equivalence_tost_bounds_order_invalid");
+      currentAnalysis.setValidationError("equivalence_tost_bounds_order_invalid");
       return;
     }
     if (equivalenceTostAlpha <= 0 || equivalenceTostAlpha >= 0.5) {
-      setFlowError("invalid_equivalence_tost_alpha");
+      currentAnalysis.setValidationError("invalid_equivalence_tost_alpha");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2286,11 +2320,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2303,22 +2334,21 @@ export default function App() {
       selectedTwoSampleTResponseColumnId === null ||
       selectedTwoSampleTGroupColumnId === null
     ) {
-      setFlowError("equivalence_tost_columns_required");
+      currentAnalysis.setValidationError("equivalence_tost_columns_required");
       return;
     }
     if (!validEquivalenceSettings(equivalenceTostLowerBound, equivalenceTostUpperBound, equivalenceTostAlpha)) {
-      setFlowError("invalid_equivalence_tost_bounds");
+      currentAnalysis.setValidationError("invalid_equivalence_tost_bounds");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(analysisFilterDrafts, version.columns);
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2336,11 +2366,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2352,22 +2379,21 @@ export default function App() {
       selectedPairedTBeforeColumnId === null ||
       selectedPairedTAfterColumnId === selectedPairedTBeforeColumnId
     ) {
-      setFlowError("equivalence_tost_columns_required");
+      currentAnalysis.setValidationError("equivalence_tost_columns_required");
       return;
     }
     if (!validEquivalenceSettings(equivalenceTostLowerBound, equivalenceTostUpperBound, equivalenceTostAlpha)) {
-      setFlowError("invalid_equivalence_tost_bounds");
+      currentAnalysis.setValidationError("invalid_equivalence_tost_bounds");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(analysisFilterDrafts, version.columns);
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2382,11 +2408,8 @@ export default function App() {
           missing_policy: "complete_pair",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2398,38 +2421,37 @@ export default function App() {
       selectedPairedTBeforeColumnId === null ||
       selectedPairedTAfterColumnId === null
     ) {
-      setFlowError("paired_t_columns_required");
+      currentAnalysis.setValidationError("paired_t_columns_required");
       return;
     }
     if (selectedPairedTBeforeColumnId === selectedPairedTAfterColumnId) {
-      setFlowError("paired_t_same_before_and_after_column");
+      currentAnalysis.setValidationError("paired_t_same_before_and_after_column");
       return;
     }
     if (pairedTAlpha <= 0 || pairedTAlpha >= 1) {
-      setFlowError("invalid_paired_t_alpha");
+      currentAnalysis.setValidationError("invalid_paired_t_alpha");
       return;
     }
     if (pairedTConfidenceLevel <= 0 || pairedTConfidenceLevel >= 1) {
-      setFlowError("invalid_paired_t_confidence_level");
+      currentAnalysis.setValidationError("invalid_paired_t_confidence_level");
       return;
     }
     if (!Number.isFinite(pairedTNullDifference)) {
-      setFlowError("invalid_paired_t_null_difference");
+      currentAnalysis.setValidationError("invalid_paired_t_null_difference");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2451,11 +2473,8 @@ export default function App() {
           missing_policy: "complete_pair",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2466,30 +2485,29 @@ export default function App() {
       selectedMethod.method_id !== "hypothesis.one_sample_wilcoxon" ||
       selectedOneSampleWilcoxonResponseColumnId === null
     ) {
-      setFlowError("one_sample_wilcoxon_response_required");
+      currentAnalysis.setValidationError("one_sample_wilcoxon_response_required");
       return;
     }
     if (oneSampleWilcoxonAlpha <= 0 || oneSampleWilcoxonAlpha >= 1) {
-      setFlowError("invalid_one_sample_wilcoxon_alpha");
+      currentAnalysis.setValidationError("invalid_one_sample_wilcoxon_alpha");
       return;
     }
     if (!Number.isFinite(oneSampleWilcoxonNullLocation)) {
-      setFlowError("invalid_one_sample_wilcoxon_null_location");
+      currentAnalysis.setValidationError("invalid_one_sample_wilcoxon_null_location");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2510,11 +2528,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2526,34 +2541,33 @@ export default function App() {
       selectedTwoSampleTResponseColumnId === null ||
       selectedTwoSampleTGroupColumnId === null
     ) {
-      setFlowError("two_sample_t_columns_required");
+      currentAnalysis.setValidationError("two_sample_t_columns_required");
       return;
     }
     if (selectedTwoSampleTResponseColumnId === selectedTwoSampleTGroupColumnId) {
-      setFlowError("two_sample_t_same_response_and_group");
+      currentAnalysis.setValidationError("two_sample_t_same_response_and_group");
       return;
     }
     if (twoSampleTAlpha <= 0 || twoSampleTAlpha >= 1) {
-      setFlowError("invalid_two_sample_t_alpha");
+      currentAnalysis.setValidationError("invalid_two_sample_t_alpha");
       return;
     }
     if (twoSampleTConfidenceLevel <= 0 || twoSampleTConfidenceLevel >= 1) {
-      setFlowError("invalid_two_sample_t_confidence_level");
+      currentAnalysis.setValidationError("invalid_two_sample_t_confidence_level");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2576,11 +2590,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2590,11 +2601,11 @@ export default function App() {
       selectedMethod === null ||
       selectedMethod.method_id !== "hypothesis.mann_whitney"
     ) {
-      setFlowError("mann_whitney_columns_required");
+      currentAnalysis.setValidationError("mann_whitney_columns_required");
       return;
     }
     if (mannWhitneyAlpha <= 0 || mannWhitneyAlpha >= 1) {
-      setFlowError("invalid_mann_whitney_alpha");
+      currentAnalysis.setValidationError("invalid_mann_whitney_alpha");
       return;
     }
     if (
@@ -2606,7 +2617,7 @@ export default function App() {
         !options.group2Value ||
         options.group1Value === options.group2Value)
     ) {
-      setFlowError("mann_whitney_stacked_selection_required");
+      currentAnalysis.setValidationError("mann_whitney_stacked_selection_required");
       return;
     }
     if (
@@ -2615,22 +2626,21 @@ export default function App() {
         !options.sample2ColumnId ||
         options.sample1ColumnId === options.sample2ColumnId)
     ) {
-      setFlowError("mann_whitney_sample_columns_required");
+      currentAnalysis.setValidationError("mann_whitney_sample_columns_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2669,11 +2679,8 @@ export default function App() {
               missing_policy: "available_case_by_sample",
             },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2685,30 +2692,29 @@ export default function App() {
       selectedKruskalWallisResponseColumnId === null ||
       selectedKruskalWallisGroupColumnId === null
     ) {
-      setFlowError("kruskal_wallis_columns_required");
+      currentAnalysis.setValidationError("kruskal_wallis_columns_required");
       return;
     }
     if (selectedKruskalWallisResponseColumnId === selectedKruskalWallisGroupColumnId) {
-      setFlowError("kruskal_wallis_same_response_and_group");
+      currentAnalysis.setValidationError("kruskal_wallis_same_response_and_group");
       return;
     }
     if (kruskalWallisAlpha <= 0 || kruskalWallisAlpha >= 1) {
-      setFlowError("invalid_kruskal_wallis_alpha");
+      currentAnalysis.setValidationError("invalid_kruskal_wallis_alpha");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2729,11 +2735,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2745,34 +2748,33 @@ export default function App() {
       selectedOneWayAnovaResponseColumnId === null ||
       selectedOneWayAnovaGroupColumnId === null
     ) {
-      setFlowError("one_way_anova_columns_required");
+      currentAnalysis.setValidationError("one_way_anova_columns_required");
       return;
     }
     if (selectedOneWayAnovaResponseColumnId === selectedOneWayAnovaGroupColumnId) {
-      setFlowError("one_way_anova_same_response_and_group");
+      currentAnalysis.setValidationError("one_way_anova_same_response_and_group");
       return;
     }
     if (oneWayAnovaAlpha <= 0 || oneWayAnovaAlpha >= 1) {
-      setFlowError("invalid_one_way_anova_alpha");
+      currentAnalysis.setValidationError("invalid_one_way_anova_alpha");
       return;
     }
     if (oneWayAnovaConfidenceLevel <= 0 || oneWayAnovaConfidenceLevel >= 1) {
-      setFlowError("invalid_one_way_anova_confidence_level");
+      currentAnalysis.setValidationError("invalid_one_way_anova_confidence_level");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2797,11 +2799,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2814,34 +2813,33 @@ export default function App() {
       selectedOneProportionResponseColumnId === null ||
       eventLevel.length === 0
     ) {
-      setFlowError("one_proportion_response_and_event_required");
+      currentAnalysis.setValidationError("one_proportion_response_and_event_required");
       return;
     }
     if (oneProportionNullProportion <= 0 || oneProportionNullProportion >= 1) {
-      setFlowError("invalid_one_proportion_null_proportion");
+      currentAnalysis.setValidationError("invalid_one_proportion_null_proportion");
       return;
     }
     if (oneProportionAlpha <= 0 || oneProportionAlpha >= 1) {
-      setFlowError("invalid_one_proportion_alpha");
+      currentAnalysis.setValidationError("invalid_one_proportion_alpha");
       return;
     }
     if (oneProportionConfidenceLevel <= 0 || oneProportionConfidenceLevel >= 1) {
-      setFlowError("invalid_one_proportion_confidence_level");
+      currentAnalysis.setValidationError("invalid_one_proportion_confidence_level");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2863,11 +2861,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2881,34 +2876,33 @@ export default function App() {
       selectedTwoProportionGroupColumnId === null ||
       eventLevel.length === 0
     ) {
-      setFlowError("two_proportion_response_group_and_event_required");
+      currentAnalysis.setValidationError("two_proportion_response_group_and_event_required");
       return;
     }
     if (selectedTwoProportionResponseColumnId === selectedTwoProportionGroupColumnId) {
-      setFlowError("two_proportion_same_response_and_group");
+      currentAnalysis.setValidationError("two_proportion_same_response_and_group");
       return;
     }
     if (twoProportionAlpha <= 0 || twoProportionAlpha >= 1) {
-      setFlowError("invalid_two_proportion_alpha");
+      currentAnalysis.setValidationError("invalid_two_proportion_alpha");
       return;
     }
     if (twoProportionConfidenceLevel <= 0 || twoProportionConfidenceLevel >= 1) {
-      setFlowError("invalid_two_proportion_confidence_level");
+      currentAnalysis.setValidationError("invalid_two_proportion_confidence_level");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2930,11 +2924,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -2946,30 +2937,29 @@ export default function App() {
       selectedChiSquareAssociationRowColumnId === null ||
       selectedChiSquareAssociationColumnColumnId === null
     ) {
-      setFlowError("chi_square_row_and_column_required");
+      currentAnalysis.setValidationError("chi_square_row_and_column_required");
       return;
     }
     if (selectedChiSquareAssociationRowColumnId === selectedChiSquareAssociationColumnColumnId) {
-      setFlowError("chi_square_same_row_and_column");
+      currentAnalysis.setValidationError("chi_square_same_row_and_column");
       return;
     }
     if (chiSquareAssociationAlpha <= 0 || chiSquareAssociationAlpha >= 1) {
-      setFlowError("invalid_chi_square_alpha");
+      currentAnalysis.setValidationError("invalid_chi_square_alpha");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -2988,11 +2978,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3004,34 +2991,33 @@ export default function App() {
       selectedPearsonXColumnId === null ||
       selectedPearsonYColumnId === null
     ) {
-      setFlowError("pearson_columns_required");
+      currentAnalysis.setValidationError("pearson_columns_required");
       return;
     }
     if (selectedPearsonXColumnId === selectedPearsonYColumnId) {
-      setFlowError("pearson_same_x_and_y_column");
+      currentAnalysis.setValidationError("pearson_same_x_and_y_column");
       return;
     }
     if (pearsonAlpha <= 0 || pearsonAlpha >= 1) {
-      setFlowError("invalid_pearson_alpha");
+      currentAnalysis.setValidationError("invalid_pearson_alpha");
       return;
     }
     if (pearsonConfidenceLevel <= 0 || pearsonConfidenceLevel >= 1) {
-      setFlowError("invalid_pearson_confidence_level");
+      currentAnalysis.setValidationError("invalid_pearson_confidence_level");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3051,11 +3037,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3067,30 +3050,29 @@ export default function App() {
       selectedXyCorrelationXColumnIds.length === 0 ||
       selectedXyCorrelationYColumnIds.length === 0
     ) {
-      setFlowError("xy_correlation_columns_required");
+      currentAnalysis.setValidationError("xy_correlation_columns_required");
       return;
     }
     if (xyCorrelationAlpha <= 0 || xyCorrelationAlpha >= 1) {
-      setFlowError("invalid_xy_correlation_alpha");
+      currentAnalysis.setValidationError("invalid_xy_correlation_alpha");
       return;
     }
     if (xyCorrelationConfidenceLevel <= 0 || xyCorrelationConfidenceLevel >= 1) {
-      setFlowError("invalid_xy_correlation_confidence_level");
+      currentAnalysis.setValidationError("invalid_xy_correlation_confidence_level");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3110,11 +3092,8 @@ export default function App() {
           missing_policy: "pairwise_complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3125,16 +3104,15 @@ export default function App() {
       selectedMethod.method_id !== "quality.run_chart" ||
       selectedRunChartValueColumnId === null
     ) {
-      setFlowError("run_chart_value_column_required");
+      currentAnalysis.setValidationError("run_chart_value_column_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
@@ -3156,7 +3134,7 @@ export default function App() {
         roles.order = selectedRunChartOrderColumnId;
         options.order_column_id = selectedRunChartOrderColumnId;
       }
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3167,11 +3145,8 @@ export default function App() {
         roles,
         options,
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3182,11 +3157,11 @@ export default function App() {
       selectedMethod.method_id !== "quality.capability" ||
       selectedCapabilityValueColumnId === null
     ) {
-      setFlowError("capability_value_column_required");
+      currentAnalysis.setValidationError("capability_value_column_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
@@ -3194,15 +3169,15 @@ export default function App() {
     const usl = parseCapabilityOptionalNumber(capabilityUsl);
     const target = parseCapabilityOptionalNumber(capabilityTarget);
     if (lsl.kind === "error" || usl.kind === "error" || target.kind === "error") {
-      setFlowError("capability_spec_limits_invalid");
+      currentAnalysis.setValidationError("capability_spec_limits_invalid");
       return;
     }
     if (lsl.value === null && usl.value === null) {
-      setFlowError("capability_spec_limit_required");
+      currentAnalysis.setValidationError("capability_spec_limit_required");
       return;
     }
     if (lsl.value !== null && usl.value !== null && lsl.value >= usl.value) {
-      setFlowError("capability_spec_limits_invalid");
+      currentAnalysis.setValidationError("capability_spec_limits_invalid");
       return;
     }
     if (
@@ -3210,18 +3185,17 @@ export default function App() {
       ((lsl.value !== null && target.value < lsl.value) ||
         (usl.value !== null && target.value > usl.value))
     ) {
-      setFlowError("capability_target_outside_spec");
+      currentAnalysis.setValidationError("capability_target_outside_spec");
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3241,11 +3215,8 @@ export default function App() {
           histogram_bin_limit: 30,
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3271,7 +3242,8 @@ export default function App() {
       return;
     }
 
-    setIsRunningAnalysis(true);
+    const request = ++gagePreflightRequest.current;
+    setIsGagePreflightRunning(true);
     setFlowError(null);
     setGageRrPreflightError(null);
     try {
@@ -3283,14 +3255,15 @@ export default function App() {
         replicate_column_id: selectedGageRrReplicateColumnId,
         missing_policy: "complete_case",
       });
-      setGageRrPreflight(response);
+      if (request === gagePreflightRequest.current) setGageRrPreflight(response);
     } catch (error) {
+      if (request !== gagePreflightRequest.current) return;
       setGageRrPreflight(null);
       setGageRrPreflightError(
         error instanceof Error ? error.message : "gage_rr_preflight_failed",
       );
     } finally {
-      setIsRunningAnalysis(false);
+      if (request === gagePreflightRequest.current) setIsGagePreflightRunning(false);
     }
   }
 
@@ -3304,11 +3277,11 @@ export default function App() {
       selectedGageRrOperatorColumnId === null ||
       selectedGageRrReplicateColumnId === null
     ) {
-      setFlowError("gage_rr_columns_required");
+      currentAnalysis.setValidationError("gage_rr_columns_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
     if (
@@ -3320,14 +3293,13 @@ export default function App() {
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3349,12 +3321,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
-      setGageRrPreflightError(null);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3368,11 +3336,11 @@ export default function App() {
       selectedGageRrOperatorColumnId === null ||
       selectedGageRrReplicateColumnId === null
     ) {
-      setFlowError("gage_run_chart_columns_required");
+      currentAnalysis.setValidationError("gage_run_chart_columns_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
     const selectedColumns = new Set([
@@ -3382,12 +3350,11 @@ export default function App() {
       selectedGageRrReplicateColumnId,
     ]);
     if (selectedColumns.size < 4) {
-      setFlowError("gage_run_chart_distinct_columns_required");
+      currentAnalysis.setValidationError("gage_run_chart_distinct_columns_required");
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
@@ -3411,7 +3378,7 @@ export default function App() {
         roles.order = selectedGageRunChartOrderColumnId;
         options.order_column_id = selectedGageRunChartOrderColumnId;
       }
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3422,11 +3389,8 @@ export default function App() {
         roles,
         options,
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3445,16 +3409,15 @@ export default function App() {
           attributeControlPhase2State.preflight?.ready !== true ||
           attributeControlPhase2State.isLoading))
     ) {
-      setFlowError("attribute_control_chart_required_inputs_missing");
+      currentAnalysis.setValidationError("attribute_control_chart_required_inputs_missing");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
@@ -3493,7 +3456,7 @@ export default function App() {
         ] = selectedAttributeControlChartDenominatorColumnId;
         options.denominator_column_id = selectedAttributeControlChartDenominatorColumnId;
       }
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3504,11 +3467,8 @@ export default function App() {
         roles,
         options,
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "attribute_control_chart_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "attribute_control_chart_failed");
     }
   }
 
@@ -3558,6 +3518,8 @@ export default function App() {
     const requestKey = JSON.stringify({
       columnId,
       datasetVersionId: version.version_id,
+      schemaHash: version.schema_hash,
+      methodVersion: method.method_version,
       filterConditions,
     });
     const cached = descriptiveQuickGraphCacheRef.current.get(requestKey);
@@ -3600,6 +3562,15 @@ export default function App() {
       if (!isGraphicalSummaryResult(response.result)) {
         throw new Error("graphical_summary_result_invalid");
       }
+      if (!analysisCompletionMatches(response, {
+        method_id: method.method_id, method_version: method.method_version,
+        dataset_version_id: version.version_id, roles: {}, options: {},
+        filter_snapshot: { expression_version: 1, conditions: filterConditions },
+      }, version.schema_hash)) throw new Error("analysis_completion_source_changed");
+      const status = await fetchAnalysisRunStatus(response.analysis_id);
+      if (requestId !== descriptiveQuickGraphRequestIdRef.current) return;
+      if (!analysisStatusMatches(status, response)) throw new Error("analysis_completion_verification_failed");
+      if (status.stale) throw new Error("analysis_completion_source_changed");
       descriptiveQuickGraphCacheRef.current.set(requestKey, response.result);
       setDescriptiveQuickGraphState({
         columnId,
@@ -3632,16 +3603,15 @@ export default function App() {
       selectedMethod.method_id !== "quality.individuals_chart" ||
       selectedIndividualsChartValueColumnId === null
     ) {
-      setFlowError("individuals_chart_value_column_required");
+      currentAnalysis.setValidationError("individuals_chart_value_column_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
@@ -3661,7 +3631,7 @@ export default function App() {
         roles.order = selectedIndividualsChartOrderColumnId;
         options.order_column_id = selectedIndividualsChartOrderColumnId;
       }
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3672,11 +3642,8 @@ export default function App() {
         roles,
         options,
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3688,22 +3655,21 @@ export default function App() {
       selectedSubgroupChartValueColumnId === null ||
       selectedSubgroupChartSubgroupColumnId === null
     ) {
-      setFlowError("subgroup_chart_required_columns_missing");
+      currentAnalysis.setValidationError("subgroup_chart_required_columns_missing");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3723,11 +3689,8 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3738,45 +3701,44 @@ export default function App() {
       selectedMethod.method_id !== "regression.linear_model" ||
       selectedLinearModelResponseColumnId === null
     ) {
-      setFlowError("linear_model_response_column_required");
+      currentAnalysis.setValidationError("linear_model_response_column_required");
       return;
     }
     if (selectedLinearModelPredictorColumnIds.length === 0) {
-      setFlowError("linear_model_predictors_required");
+      currentAnalysis.setValidationError("linear_model_predictors_required");
       return;
     }
     if (selectedLinearModelPredictorColumnIds.includes(selectedLinearModelResponseColumnId)) {
-      setFlowError("linear_model_response_predictor_overlap");
+      currentAnalysis.setValidationError("linear_model_response_predictor_overlap");
       return;
     }
     if (config.estimator === "ols" && (linearModelAlpha <= 0 || linearModelAlpha >= 1)) {
-      setFlowError("invalid_linear_model_alpha");
+      currentAnalysis.setValidationError("invalid_linear_model_alpha");
       return;
     }
     if (config.estimator === "ols" && (linearModelConfidenceLevel <= 0 || linearModelConfidenceLevel >= 1)) {
-      setFlowError("invalid_linear_model_confidence_level");
+      currentAnalysis.setValidationError("invalid_linear_model_confidence_level");
       return;
     }
     if (
       config.estimator === "ols" && linearModelSelectionMethod === "backward_elimination" &&
       (linearModelAlphaToRemove <= 0 || linearModelAlphaToRemove >= 1)
     ) {
-      setFlowError("invalid_linear_model_alpha_to_remove");
+      currentAnalysis.setValidationError("invalid_linear_model_alpha_to_remove");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
 
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3812,11 +3774,8 @@ export default function App() {
           } : config),
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3826,21 +3785,20 @@ export default function App() {
       selectedMethod === null ||
       selectedMethod.method_id !== "regression.partial_least_squares"
     ) {
-      setFlowError("pls_response_required");
+      currentAnalysis.setValidationError("pls_response_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3868,11 +3826,8 @@ export default function App() {
           plot_point_limit: config.plotPointLimit,
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -3882,21 +3837,20 @@ export default function App() {
       selectedMethod === null ||
       selectedMethod.method_id !== "eda.principal_components"
     ) {
-      setFlowError("pca_variable_count_invalid");
+      currentAnalysis.setValidationError("pca_variable_count_invalid");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3913,28 +3867,23 @@ export default function App() {
           missing_policy: "complete_case",
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
   async function handleRunTwoVariancesAnalysis(options: TwoVariancesOptions) {
     if (!version || selectedMethod?.method_id !== "quality.two_variances") return;
-    if (analysisFilterValidationError) { setFlowError(analysisFilterValidationError); return; }
-    setIsRunningAnalysis(true); setFlowError(null);
+    if (analysisFilterValidationError) { currentAnalysis.setValidationError(analysisFilterValidationError); return; }
+    currentAnalysis.setValidationError(null);
     try {
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id, method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
         filter_snapshot: { expression_version: 1, conditions: serializeAnalysisFilterDrafts(analysisFilterDrafts, version.columns) },
         roles: { response: options.response_column_id, group: options.group_column_id }, options: { ...options },
       });
-      setAnalysisResult(response);
-    } catch (error) { setFlowError(error instanceof Error ? error.message : "analysis_run_failed"); }
-    finally { setIsRunningAnalysis(false); }
+    } catch (error) { currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed"); }
   }
 
   async function handleRunGaussianProcessAnalysis(config: GaussianProcessRunConfig) {
@@ -3943,21 +3892,20 @@ export default function App() {
       selectedMethod === null ||
       selectedMethod.method_id !== "regression.gaussian_process"
     ) {
-      setFlowError("gp_response_required");
+      currentAnalysis.setValidationError("gp_response_required");
       return;
     }
     if (analysisFilterValidationError !== null) {
-      setFlowError(analysisFilterValidationError);
+      currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
-    setIsRunningAnalysis(true);
-    setFlowError(null);
+    currentAnalysis.setValidationError(null);
     try {
       const filterConditions = serializeAnalysisFilterDrafts(
         analysisFilterDrafts,
         version.columns,
       );
-      const response = await createAnalysisRun({
+      await currentAnalysis.execute({
         method_id: selectedMethod.method_id,
         method_version: selectedMethod.method_version,
         dataset_version_id: version.version_id,
@@ -3992,11 +3940,8 @@ export default function App() {
           time_budget_seconds: config.timeBudgetSeconds,
         },
       });
-      setAnalysisResult(response);
     } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "analysis_run_failed");
-    } finally {
-      setIsRunningAnalysis(false);
+      currentAnalysis.setValidationError(error instanceof Error ? error.message : "analysis_run_failed");
     }
   }
 
@@ -4059,9 +4004,7 @@ export default function App() {
 
   function handleAssetsDeleted(response: DatasetVersionDeleteResponse) {
     onDatasetDeleted(response);
-    setDatasetStateRevision((revision) => revision + 1);
     publishWorkspaceMutation("dataset_deleted");
-    setAnalysisResult(null);
   }
 
   function handleOpenManagePage(
@@ -4099,6 +4042,10 @@ export default function App() {
 
   function handleSelectAnalysisMethod(moduleId: AnalysisModuleId, methodId: string | null) {
     if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
+    currentAnalysis.invalidate(false);
+    cancelPendingRestore();
+    gagePreflightRequest.current += 1;
+    setIsGagePreflightRunning(false);
     analysisExportState.clearAnalysisExportErrors();
     if (methodId !== null && typeof window !== "undefined") {
       pushAppLocation(
@@ -4152,7 +4099,11 @@ export default function App() {
     analysisFilterDrafts,
     analysisFilterValidationError,
     analysisFilterValidationMessage,
-    analysisRunError: flowError,
+    analysisRunError: currentAnalysis.error ?? flowError,
+    analysisRunErrorCause: currentAnalysis.errorCause,
+    onAnalysisInputChange: invalidateAnalysisInput,
+    onRetryAnalysisVerification: currentAnalysis.canRetryVerification
+      ? () => { void currentAnalysis.retryVerification(); } : undefined,
     analysisResult: descriptiveAnalysisResult,
     workbenchComparisonState: analysisComparisonState,
     workbenchExportState: analysisExportState,
@@ -4399,7 +4350,7 @@ export default function App() {
     onAttributeControlChartPhaseChange: handleAttributeControlChartPhaseChange,
     onAttributeControlChartLimitSetChange: (limitSetId: string) => {
       attributeControlPhase2State.onSelectLimitSet(limitSetId);
-      setAnalysisResult(null);
+      invalidateAnalysisInput();
     },
     onAttributeControlChartTypeChange: handleAttributeControlChartTypeChange,
     onCapabilityLslChange: handleCapabilityLslChange,

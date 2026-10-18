@@ -51,7 +51,7 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A10 | Report Center | source_confirmed / reproduced / fixed / verified (focused) | Independent list/detail/status and exact-owner guards; real-component browser passed. A10 checkpoint was cancelled by a later dispatch; final native gate remains separate. |
 | A11 | Generic reports | source_confirmed / reproduced / fixed / verified (local focused) | Stored-only readers, actual HTML parity and UI guards passed; two checkpoint failures and their corrections are retained below. Final native gate pending. |
 | A12 | Dedicated reports | source_confirmed / reproduced / fixed / verified (local focused) | Six exact source kinds, opt-in server predictions, ownership/retention/backup and actual EN/KO offline-report browser flow passed. Native gate pending. |
-| A13 | Execution capabilities | source_confirmed | Cancellation CAS/grouped counts/startup reason pending; adjacent generic-analysis completion/source-schema races identified for the same stabilization step. |
+| A13 | Execution capabilities | source_confirmed / reproduced / fixed / verified (local focused/browser) | Unsupported cancellation, atomic terminal protection, grouped counts, lease-owned recovery and transactional completion dependencies passed focused checks. Twelve real-server KO/EN current-result cases passed after fixing a reproduced failed-activation selector mismatch; final native gates remain pending. |
 | A14 | Capability documentation | source_confirmed | Guidance drift found; generated registry/handler/report matrix pending. |
 | A15 | Release installation identity | source_confirmed | Existing marker content/installed-code mismatch can be missed; pre-import release-owned identity guard pending. |
 
@@ -881,3 +881,197 @@ Evidence: `.tmp/remediation-a12-real-managed-e2e3.log`,
 `.tmp/e2e-a12-real-managed3/html/managed-prediction-*.html`.
 Mocked four-viewport source-lane testing remains separately recorded. Final
 OpenAPI checks passed 231 tests / 2 warnings (`.tmp/a12-openapi-final.log`).
+
+### A12 Native Checkpoint Findings
+
+Feature checkpoint `fa80a22a5b65d2e37e7e43b23830b8d79e695eb5` was dispatched
+as CI run `39110538617`. Its Python 3.11 job failed: 6 failed, 1888 passed,
+11 skipped, 105 warnings in 203.16 seconds. The failed assertions concern
+legacy metadata fixtures: schema-14 pseudo-downgrade retained current indices;
+schema-19 upgrade expected version 20; future-schema/read-only tests still
+treated version 21 as unsupported/current 20. This is not a passing native gate.
+Log: `.tmp/remediation-a12-ci-python311.log`. The dependency-security aggregate
+passed for this checkpoint, including the newly pinned browser digest library.
+
+The schema-14 and schema-19 fixtures now create actual migration-prefix DDL,
+rather than dropping selected tables from a current database. The latter copies
+synthetic stored DOE rows into schema 19 and checks config/result/SHA bytes and
+foreign-key integrity after upgrade. The first local correction had an incorrect
+constant import and failed collection; corrected use of `SCHEMA_VERSION` passed
+both tests (18.68 seconds, 3 deprecation warnings). Logs:
+`.tmp/remediation-a12-legacy-migration-correction.log` and
+`.tmp/remediation-a12-legacy-migration-correction2.log`. Future-schema tests are
+being updated with the A13 migration; all required gates remain pending.
+
+## A13 In Progress: Execution And Completion Ownership
+
+Source inspection confirmed that present analysis routes synchronously return
+completed results, including the regularized subprocess runner. A jobs/cancel
+endpoint alone does not establish a cancellable executor. A13 makes that
+capability explicit, preserves terminal states under cancellation CAS, settles
+abandoned nonterminal metadata after acquiring the workspace lease, and batches
+history artifact counts. Metadata 22 adds only nullable analysis-run failure
+reason storage; statistical results/models are not rewritten. API remains 23.
+
+An adjacent completion race is addressed in the same ownership boundary:
+schema mutation may commit before a late analysis INSERT, so an earlier stale
+UPDATE cannot mark that new row. Dataset read metadata must be coherent and
+completion publication must recheck dependencies inside its own transaction.
+The UI must also verify the saved status and current request/source ownership
+before presenting completion. This is currently implementation/source evidence,
+not a claim that all deferred/browser/database race tests passed.
+
+Local focused checks during A13 (Windows 10 build 19045, CPython 3.10.11,
+current locked environment, synthetic temporary workspaces):
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_workspace_backup.py backend/tests/unit/test_dev_startup_contract.py backend/tests/unit/test_health.py -q
+npm --prefix frontend test -- --run src/runtimeCompatibility.test.tsx src/analysisCatalogDisplay.test.tsx src/analysisDomains.test.tsx src/analysisMethodFamilies.test.ts src/sidebarNavigationModel.test.ts
+```
+
+The backend selection passed 87 tests / 4 warnings / 267.31 seconds
+(`.tmp/remediation-a13-runtime-backup.log`). Exact schema-20/21 archives restore
+without migration; normal startup then upgrades to 22. The current schema-22
+round-trip, unsupported 19/23 refusal and frontend/PowerShell handshake boundary
+are tested separately. The five frontend files passed 26 tests / 7.74 seconds
+under Node 22.23.2 (`.tmp/remediation-a13-catalog-runtime-frontend.log`). The
+intermediate strict typecheck failed on newly required capability/status fixture
+fields; fixtures were updated explicitly without relaxing production types.
+
+Native Linux 3.12 at A12 checkpoint `fa80a22` reproduced the same six outdated
+migration-fixture failures as Python 3.11: 1888 passed, 11 skipped, 105 warnings,
+306.49 seconds (`.tmp/remediation-a12-ci-linux.log`). Release packaging was skipped
+by its dependency gate; it was not validated or published from that checkpoint.
+
+The same checkpoint's Windows hosted job `117625552527` completed with the same
+six fixture failures: 1897 passed, 2 skipped, 105 warnings in 2371.23 seconds
+(`.tmp/remediation-a12-ci-windows.log`). It was not a timeout. Ruff/format/mypy
+passed; the check script stopped at pytest, so its frontend stages and dependent
+Windows E2E did not run. No statistical reference failure was reported in this
+run. The repaired fixtures require a new native gate rather than relabelling
+this checkpoint successful.
+
+Managed-report compatibility after metadata 22 was checked with:
+
+```powershell
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_managed_report_artifacts.py backend/tests/unit/test_managed_report_api.py -q
+```
+
+Result: 32 passed, 1 skipped, 3 warnings, 197.07 seconds
+(`.tmp/remediation-a13-managed-migration-regression.log`). The skipped case
+requires symbolic-link privileges unavailable to this Windows account; native
+Linux validation remains required. This run includes actual report ownership,
+legacy DOE BLOB migration, restored managed-report download and source checksum
+checks, not just API dispatch mocks.
+
+### A13 Backend Verification
+
+The completion ownership suite ran against actual synthetic PLS/GPR/regression
+writers, in addition to storage-level transactions. Command:
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+.\.tmp\remediation-a03-source\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_analysis_completion_consistency.py backend/tests/unit/test_analysis_completion_writers.py backend/tests/unit/test_dataset_schema_cas.py backend/tests/unit/test_pls_regression_api.py backend/tests/unit/test_gaussian_process_regression_api.py backend/tests/unit/test_regression_workflow_extensions_api.py -q --basetemp=.tmp/a13-completion-related-cases
+```
+
+Result: 82 passed / 12 existing warnings / 376.52 seconds
+(`.tmp/a13-completion-related.log`). Seven production completion writers pass
+captured dependencies into the atomic INSERT boundary. A changed schema marks
+the preserved result stale; deleted owners or replaced model identities reject
+publication with stable 409 codes and remove only newly created files. This is
+not a new universal dependency graph for all dedicated DOE/BO/Phase II work.
+
+Execution lifecycle/metadata/lifespan tests passed 74 cases / 3 warnings /
+252.07 seconds (`.tmp/remediation-a13-backend-focused.log`). Additional actual
+resource-limit drift, catalog/history/status/cancellation/OpenAPI checks passed
+85 cases / 417 deselected / 3 warnings / 50.24 seconds
+(`.tmp/remediation-a13-api-contracts.log`). The UI history reason tests passed
+4 cases (`.tmp/remediation-a13-history-display.log`). Migration 22 is additive
+and transactional; existing immutable artifact bytes remain unchanged.
+
+The root's full OpenAPI/frontend contract selection passed 233 tests / 2 warnings
+in 13.00 seconds (`.tmp/remediation-a13-openapi.log`). All-backend Ruff lint and
+format checks passed (339 files), and mypy passed all 199 modules
+(`.tmp/remediation-a13-mypy-all.log`). These are focused/static checks, not a
+substitute for the final Windows/Linux product and release gates.
+
+Independent UI source review found that switching/restoring intent could clear
+a previous completed result before a replacement succeeds. The frontend patch
+separates pending-request invalidation from successful source/result replacement;
+deferred tests and browser checks are being recorded separately. A failed
+auxiliary export-list request must not erase a successfully restored result.
+
+The final frontend focused checks passed 195 tests in seven files (7.70 seconds,
+`.tmp/a13-focused-final.log`). A new unrelated-owner deletion assertion first
+failed before removing App's duplicate global result reset; the dataset hook
+already owns exact-source deletion. Its corrected tests distinguish unrelated
+deletion from actual current-source deletion. Read-only TypeScript AST comparison
+found all 32 analysis request argument constructions unchanged from `fa80a22`;
+that is request parity evidence, not an independent numerical reference run.
+
+The root's full frontend run passed 782 tests in 88 files (62.32 seconds,
+`.tmp/remediation-a13-frontend-all.log`). Whole frontend lint exited 0 with nine
+pre-existing refresh warnings; localization verified 2889 source strings and
+4087 translation keys. Production build and the real-server completion browser
+stage remain separately gated, not implied by these unit results.
+
+The additional pending-history cancellation regression passed 199 focused tests
+and strict types/scoped lint. The next whole frontend run failed one existing
+five-route lazy-import test at its unchanged 5-second deadline: 785 passed,
+1 failed (`.tmp/remediation-a13-frontend-all-final.log`). Its isolated run passed
+3 tests in 4.74 seconds (`.tmp/remediation-a13-lazy-isolated.log`). This does not
+prove that the failure was only host contention.
+
+Two unchanged full runs with `npm --prefix frontend test -- --run --maxWorkers=2`
+each passed 786 tests / 88 files (78.28 and 77.87 seconds), recorded in
+`.tmp/remediation-a13-frontend-bounded.log` and
+`.tmp/remediation-a13-frontend-bounded-repeat.log`. Vitest now declares that same
+two-worker file-level resource budget for local and CI checks. No assertions,
+test deadlines, intra-test concurrent imports, or test files were removed.
+This limits transform/memory contention on the 8 GiB reference host; subsequent
+native and browser checks remain required.
+
+The first actual-server completion browser run failed at `failed-activation-ko`
+after the configuration, dataset A/B/A, cross-tab schema and verification-retry
+cases passed. The server returned the intentional 503 and the UI completed its
+error state, but the active selector still named the failed target B while the
+retained result belonged to A. This is a product mismatch, not a timing-only
+assertion: the retry button and selector were enabled before checking their
+values. Evidence: `.tmp/remediation-a13-analysis-completion-e2e.log` and the
+actual child page's HTML/screenshot/trace under
+`.tmp/e2e-a13-analysis-completion/analysis-completion/failed-activation-ko`.
+The whole browser run is failed; correcting the selector must preserve the
+separate retry target and requires another run in both locales.
+
+`ActiveDatasetVersionSelector` now prefers the committed version when idle,
+while keeping the pending identity for retry and for an initial restore without
+a committed version. Two new KO/EN regressions first failed on the old code
+(`.tmp/a13-selector-red.log`); all 177 focused selector/workflow tests and strict
+types then passed. The retry behavior was not removed or disabled.
+
+The unchanged browser assertions then passed all 12 real-server KO/EN cases:
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests/e2e/critical_path.py --backend-port 8027 --frontend-port 5257 --analysis-completion-only --diagnostics-root .tmp/e2e-a13-analysis-completion2
+```
+
+Exit 0, `.tmp/remediation-a13-analysis-completion-e2e2.log`. Each case compares
+the server's immutable result with the genuinely committed, delayed response
+and asserts exactly one analysis POST. Cases cover configuration edits, A/B/A
+source intent, another editor's schema update, GET-only completion verification
+retry, failed source activation and locale/live resize. The failed-activation
+completed screenshot was visually inspected: committed source/result retained,
+explicit safe error and retry shown. This is local Chromium/Windows evidence;
+it is not the full native product or final archive gate.
+
+The default full frontend command, now using the declared two-worker budget,
+passed 789 tests / 88 files in 70.51 seconds after the selector correction
+(`.tmp/remediation-a13-frontend-default-final.log`). The latest origin/main fetch
+still resolved to the original BASE_SHA. No user image or generated diagnostics
+are included in the feature checkpoint.
+
+The final A13 production build (including strict TypeScript) exited 0,
+`.tmp/remediation-a13-build-final.log`; Vite completed in 4.69 seconds with the
+existing >500 kB chunk warning. No chunk threshold was raised to hide it.

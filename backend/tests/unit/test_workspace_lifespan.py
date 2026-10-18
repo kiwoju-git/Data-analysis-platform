@@ -16,6 +16,7 @@ from app.storage.workspace_lease import (
 
 STARTUP_OPERATIONS = (
     "initialize_metadata_store",
+    "recover_interrupted_executions",
     "recover_analysis_export_quarantine_files",
     "recover_analysis_run_quarantine_files",
     "recover_workspace_asset_quarantine_files",
@@ -115,7 +116,14 @@ def test_incomplete_restore_refuses_startup_without_cleanup(tmp_path, monkeypatc
         pass
 
 
-@pytest.mark.parametrize("user_version,migration_version", [(21, None), (20, 21), (0, 21)])
+@pytest.mark.parametrize(
+    "user_version,migration_version",
+    [
+        (metadata.SCHEMA_VERSION + 1, None),
+        (metadata.SCHEMA_VERSION, metadata.SCHEMA_VERSION + 1),
+        (0, metadata.SCHEMA_VERSION + 1),
+    ],
+)
 def test_future_metadata_refuses_startup_and_initialization_without_mutation(
     tmp_path, monkeypatch, user_version, migration_version
 ):
@@ -174,5 +182,5 @@ def test_metadata_version_reader_is_usable_on_readonly_connection(tmp_path):
     with closing(
         sqlite3.connect(f"{store.path.resolve().as_uri()}?mode=ro", uri=True)
     ) as connection:
-        assert metadata.validate_metadata_compatibility(connection) == 20
+        assert metadata.validate_metadata_compatibility(connection) == metadata.SCHEMA_VERSION
     assert store.path.read_bytes() == before

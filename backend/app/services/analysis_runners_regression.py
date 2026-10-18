@@ -23,6 +23,7 @@ from app.core.errors import ApiError
 from app.services.analysis_run_execution import (
     APP_VERSION,
     NUMERIC_DATA_TYPES,
+    raise_completion_conflict,
 )
 from app.services.analysis_run_execution import (
     RowSnapshotArtifact as _RowSnapshotArtifact,
@@ -77,8 +78,10 @@ from app.statistics.xy_correlation import (
 from app.storage.atomic import atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
+    AnalysisCompletionDependencies,
     AnalysisRunRecord,
     DatasetColumnRecord,
+    DatasetSchemaDependency,
     RegressionModelRecord,
     insert_analysis_run_record_with_artifacts_and_regression_model,
 )
@@ -834,12 +837,16 @@ def _store_succeeded_linear_model_result(
                 created_at=completed_at,
                 app_version=APP_VERSION,
             ),
+            dependencies=AnalysisCompletionDependencies(
+                (DatasetSchemaDependency(context.version.version_id, context.version.schema_hash),)
+            ),
         )
-    except Exception:
+    except Exception as exc:
         if manifest_path is not None:
             _remove_file_if_exists(manifest_path)
         if result_path is not None:
             _remove_file_if_exists(result_path)
+        raise_completion_conflict(exc)
         raise
     return envelope
 

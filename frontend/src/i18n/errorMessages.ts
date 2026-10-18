@@ -10,6 +10,10 @@ export interface LocalizedErrorDisplay {
 }
 
 const errorKeys: Readonly<Record<string, TranslationKey>> = {
+  analysis_completion_source_changed: "analysisCompletion.sourceChanged",
+  analysis_completion_source_missing: "analysisCompletion.sourceChanged",
+  analysis_completion_dependency_invalid: "analysisCompletion.sourceChanged",
+  analysis_completion_verification_failed: "analysisCompletion.verificationFailed",
   analysis_report_capability_required: "reportCapability.notReady",
   analysis_report_capability_failed: "reportCapability.unknown",
   analysis_report_capability_invalid: "reportCapability.unknown",

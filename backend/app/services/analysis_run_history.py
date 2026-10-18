@@ -11,21 +11,12 @@ from app.api.v1.schemas.analyses import (
     AnalysisRunStatusResponse,
 )
 from app.core.errors import ApiError
-from app.services.analysis_run_execution import utc_now as _utc_now
 from app.storage.metadata import (
     AnalysisRunRecord,
     count_analysis_artifact_records,
     get_analysis_run_record,
-    list_analysis_run_records,
-    update_analysis_run_status_record,
+    list_analysis_run_page_with_artifact_counts,
 )
-
-CANCELLABLE_STATES = {AnalysisRunState.QUEUED.value, AnalysisRunState.RUNNING.value}
-TERMINAL_STATES = {
-    AnalysisRunState.SUCCEEDED.value,
-    AnalysisRunState.FAILED.value,
-    AnalysisRunState.CANCELLED.value,
-}
 
 
 def get_analysis_run_status(
@@ -53,22 +44,20 @@ def list_analysis_runs(
     limit: int,
     offset: int,
 ) -> AnalysisRunListResponse:
-    records = list_analysis_run_records(
+    records, artifact_counts, has_more = list_analysis_run_page_with_artifact_counts(
         workspace_root,
         dataset_version_id=None if dataset_version_id is None else str(dataset_version_id),
         method_id=method_id,
         status=None if run_status is None else run_status.value,
         stale=stale,
         result_available=result_available,
-        limit=limit + 1,
+        limit=limit,
         offset=offset,
     )
-    has_more = len(records) > limit
-    records = records[:limit]
     items = [
         _to_list_item_response(
-            workspace_root,
             record,
+            artifact_count=artifact_counts[record.analysis_id],
         )
         for record in records
     ]
@@ -98,25 +87,11 @@ def request_analysis_run_cancellation(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    if record.status in TERMINAL_STATES:
-        raise ApiError(
-            code="analysis_run_not_cancellable",
-            message="이미 종료된 분석 실행은 취소 요청할 수 없습니다.",
-            status_code=status.HTTP_409_CONFLICT,
-            developer_detail=record.status,
-        )
-
-    if record.status in CANCELLABLE_STATES:
-        updated = update_analysis_run_status_record(
-            workspace_root=workspace_root,
-            analysis_id=str(analysis_id),
-            status=AnalysisRunState.CANCEL_REQUESTED.value,
-            updated_at=_utc_now(),
-        )
-        if updated is not None:
-            record = updated
-
-    return _to_response(workspace_root, record)
+    raise ApiError(
+        code="analysis_run_cancellation_unsupported",
+        message="현재 분석 실행은 서버 취소를 지원하지 않습니다.",
+        status_code=status.HTTP_409_CONFLICT,
+    )
 
 
 def _to_response(workspace_root: Path, record: AnalysisRunRecord) -> AnalysisRunStatusResponse:
@@ -137,14 +112,15 @@ def _to_response(workspace_root: Path, record: AnalysisRunRecord) -> AnalysisRun
         created_at=record.created_at,
         updated_at=record.updated_at,
         completed_at=record.completed_at,
+        failure_code=record.failure_code,
     )
 
 
 def _to_list_item_response(
-    workspace_root: Path,
     record: AnalysisRunRecord,
+    *,
+    artifact_count: int,
 ) -> AnalysisRunListItemResponse:
-    artifact_count = count_analysis_artifact_records(workspace_root, record.analysis_id)
     return AnalysisRunListItemResponse(
         analysis_id=UUID(record.analysis_id),
         method_id=record.method_id,
@@ -159,6 +135,7 @@ def _to_list_item_response(
         created_at=record.created_at,
         updated_at=record.updated_at,
         completed_at=record.completed_at,
+        failure_code=record.failure_code,
     )
 
 

@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.main import create_app
 from app.storage.metadata import (
+    MIGRATIONS,
+    SCHEMA_VERSION,
     AnalysisRunRecord,
     DatasetColumnRecord,
     DatasetRecord,
@@ -96,19 +98,17 @@ def test_asset_metadata_round_trip_order_and_integrity_boundaries(tmp_path) -> N
 
 def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
-    with TestClient(create_app(settings)):
-        pass
     db_path = metadata_db_path(settings.workspace_root)
+    db_path.parent.mkdir(parents=True)
     with sqlite3.connect(db_path) as connection:
-        connection.execute("DROP TABLE dataset_version_lineage")
-        connection.execute("DROP TABLE regression_model_user_metadata")
-        connection.execute("DROP TABLE dataset_version_user_metadata")
-        connection.execute("DROP TRIGGER cleanup_analysis_run_user_metadata")
-        connection.execute("DROP TRIGGER cleanup_doe_design_user_metadata")
-        connection.execute("DROP TRIGGER cleanup_bayesian_study_user_metadata")
-        connection.execute("DROP TABLE workspace_asset_user_metadata")
-        connection.execute("DROP TABLE experiment_design_analysis_assets")
-        connection.execute("DELETE FROM schema_migrations WHERE version >= 15")
+        for migration in MIGRATIONS:
+            if migration.version > 14:
+                break
+            connection.executescript(migration.sql)
+            connection.execute(
+                "INSERT INTO schema_migrations(version, name) VALUES (?, ?)",
+                (migration.version, migration.name),
+            )
         connection.execute("PRAGMA user_version = 14")
 
     with TestClient(create_app(settings)):
@@ -128,7 +128,8 @@ def test_schema_14_migrates_asset_metadata_tables(tmp_path) -> None:
     assert "bayesian_recommendation_batches" in tables
     assert "bayesian_recommendation_batch_items" in tables
     assert "experiment_design_analysis_assets" in tables
-    assert user_version == 20
+    assert "managed_report_artifacts" in tables
+    assert user_version == SCHEMA_VERSION
 
 
 def test_dataset_archive_visibility_round_trip_and_schema_15_upgrade(tmp_path) -> None:

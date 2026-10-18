@@ -30,7 +30,7 @@ from app.services.analysis_run_retention import recover_analysis_run_quarantine_
 from app.services.dataset_cell_corrections import recover_dataset_cell_correction_files
 from app.services.dataset_version_retention import recover_dataset_version_quarantine_files
 from app.services.workspace_asset_retention import recover_workspace_asset_quarantine_files
-from app.storage.metadata import initialize_metadata_store
+from app.storage.metadata import initialize_metadata_store, recover_interrupted_executions
 from app.storage.workspace_lease import (
     acquire_workspace_lease,
     ensure_workspace_restore_complete,
@@ -44,6 +44,7 @@ def create_lifespan(settings: Settings) -> Callable[[FastAPI], AbstractAsyncCont
         with acquire_workspace_lease(settings.workspace_root) as lease:
             ensure_workspace_restore_complete(lease.root)
             app.state.metadata_store = initialize_metadata_store(lease.root)
+            app.state.interrupted_execution_recovery = recover_interrupted_executions(lease.root)
             app.state.analysis_export_quarantine_recovery = (
                 recover_analysis_export_quarantine_files(lease.root)
             )

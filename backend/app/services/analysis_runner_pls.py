@@ -27,6 +27,7 @@ from app.services.analysis_run_execution import (
     canonical_json_bytes,
     create_row_snapshot_artifact,
     iter_rows_for_snapshot,
+    raise_completion_conflict,
     remove_file_if_exists,
     utc_now,
 )
@@ -39,8 +40,10 @@ from app.statistics.pls_regression import (
 )
 from app.storage.metadata import (
     AnalysisArtifactRecord,
+    AnalysisCompletionDependencies,
     AnalysisRunRecord,
     DatasetColumnRecord,
+    DatasetSchemaDependency,
     RegressionModelRecord,
     insert_analysis_run_record_with_artifacts_and_regression_model,
 )
@@ -256,13 +259,17 @@ def _store_result_and_model(
                 created_at=completed_at,
                 app_version=APP_VERSION,
             ),
+            dependencies=AnalysisCompletionDependencies(
+                (DatasetSchemaDependency(context.version.version_id, context.version.schema_hash),)
+            ),
         )
         return envelope
-    except Exception:
+    except Exception as exc:
         if result_path is not None:
             remove_file_if_exists(result_path)
         if manifest_path is not None:
             remove_file_if_exists(manifest_path)
+        raise_completion_conflict(exc)
         raise
 
 

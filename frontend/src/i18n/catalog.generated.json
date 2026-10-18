@@ -1,6 +1,14 @@
 {
   "version": 1,
   "en": {
+    "analysisCompletion.title": "Analysis completion not applied",
+    "analysisCompletion.recovery": "Review the current inputs or open the saved run in analysis history. Verification retry does not rerun the analysis.",
+    "analysisCompletion.correlationId": "Correlation ID",
+    "execution.interrupted_on_restart": "The previous execution was interrupted when the app restarted. Run it again.",
+    "execution.failure_code": "Failure code",
+    "analysisCompletion.retry": "Verify saved completion again",
+    "analysisCompletion.sourceChanged": "This completion no longer matches the current input or source. It was not applied here. Saved successful runs remain in analysis history.",
+    "analysisCompletion.verificationFailed": "The saved completion could not be verified as current and available. Retry verification without rerunning the analysis, or inspect analysis history.",
     "reportCapability.title": "Stored-result HTML coverage",
     "reportCapability.sourceChanged": "The stored report source changed. Review the refreshed coverage, then explicitly create the report again.",
     "reportCapability.loading": "Checking this stored result's report support...",
@@ -4082,6 +4090,14 @@
     "twoVariances.warning.two_variances_display_points_limited": "Charts display at most 500 points per group; calculations use every usable row."
   },
   "ko": {
+    "analysisCompletion.title": "분석 완료 결과 미적용",
+    "analysisCompletion.recovery": "현재 입력을 확인하거나 분석 이력에서 저장된 실행을 여세요. 완료 상태 재확인은 분석을 다시 실행하지 않습니다.",
+    "analysisCompletion.correlationId": "오류 추적 ID",
+    "execution.interrupted_on_restart": "앱이 재시작되어 이전 실행이 중단되었습니다. 다시 실행해 주세요.",
+    "execution.failure_code": "실패 코드",
+    "analysisCompletion.retry": "저장 완료 상태 다시 확인",
+    "analysisCompletion.sourceChanged": "완료 결과가 현재 입력 또는 원본 상태와 일치하지 않아 이 화면에 적용하지 않았습니다. 저장된 성공 결과는 분석 이력에서 확인할 수 있습니다.",
+    "analysisCompletion.verificationFailed": "저장 결과가 현재 상태이며 사용 가능한지 확인하지 못했습니다. 분석을 다시 실행하지 않고 상태 확인을 재시도하거나 분석 이력을 확인하세요.",
     "reportCapability.title": "저장 결과 HTML 지원 범위",
     "reportCapability.sourceChanged": "저장 보고서 원본이 변경되었습니다. 갱신된 지원 범위를 확인한 뒤 보고서 생성을 다시 선택하세요.",
     "reportCapability.loading": "이 저장 결과의 보고서 지원 범위를 확인하는 중입니다.",

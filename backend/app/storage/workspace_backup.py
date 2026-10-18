@@ -70,7 +70,7 @@ _EXPORT_KINDS = {
     "pls_completed_prediction": "completed-prediction.json",
     "managed_source_html_report": "managed-report.html",
 }
-SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21})
+SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21, 22})
 
 
 def _check_limits(limits: BackupLimits) -> None:
@@ -158,7 +158,7 @@ def _schema_definition(connection: sqlite3.Connection) -> tuple[tuple[str, ...],
     )
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def _known_schema_definition(version: int) -> tuple[tuple[str, ...], ...]:
     # Compile only application-owned DDL in RAM. Never migrate the source/restore DB.
     with closing(sqlite3.connect(":memory:")) as reference:

@@ -2,6 +2,7 @@ import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  AnalysisMethodListResponse,
   AnalysisReportCapability,
   AnalysisResultEnvelope,
   AnalysisRunDeleteResponse,
@@ -12,6 +13,7 @@ import type {
   AnalysisRunComparisonResponse,
   AnalysisRunListResponse,
   AnalysisRunStatusResponse,
+  AnalysisRunRequest,
   AttributeControlLimitSetListResponse,
   AttributeControlLimitSetDeletionPreflightResponse,
   AttributeControlLimitSetResponse,
@@ -63,6 +65,12 @@ import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionSta
 import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
 import { useReportCenterState } from "./useReportCenterState";
 import { useManagedReports } from "./useManagedReports";
+import { useCurrentAnalysisExecution } from "./useCurrentAnalysisExecution";
+import type { AnalysisExecutionSource } from "./analysisExecutionContext";
+import { PrincipalComponentsPanel } from "./PrincipalComponentsPanel";
+import { PlsRegressionPanel } from "./PlsRegressionPanel";
+import { GaussianProcessRegressionPanel } from "./GaussianProcessRegressionPanel";
+import { TwoVariancesPanel } from "./TwoVariancesPanel";
 import type { ManagedReportDescriptor, ManagedReportList, ReportSourceDescriptor, StoredReportCapability, StoredSourceSnapshot } from "./api/types/reports";
 import { useAssetManagementState } from "./useAssetManagementState";
 import { useProjectOverviewState } from "./useProjectOverviewState";
@@ -83,6 +91,7 @@ const managedReportMocks = vi.hoisted(() => ({ fetchReportSources: vi.fn(), fetc
 vi.mock("./api/reports", () => managedReportMocks);
 
 const apiMocks = vi.hoisted(() => ({
+  createAnalysisRun: vi.fn(),
   abandonBayesianTrial: vi.fn(),
   closeBayesianStudy: vi.fn(),
   createBayesianRecommendation: vi.fn(),
@@ -171,6 +180,7 @@ interface MemoSlot<T> {
 }
 
 interface EffectSlot {
+  create?: React.EffectCallback;
   cleanup: (() => void) | undefined;
   deps: React.DependencyList | undefined;
 }
@@ -218,6 +228,7 @@ class HookRunner<Props, Result> {
   ) {
     this.props = initialProps;
     this.dispatcher = {
+      useContext: (context: { _currentValue: unknown }) => context._currentValue,
       useCallback: <T extends (...args: never[]) => unknown>(
         callback: T,
         deps: React.DependencyList,
@@ -266,6 +277,17 @@ class HookRunner<Props, Result> {
     }
   }
 
+  replayEffects(): void {
+    for (const slot of this.slots) {
+      if (this.isEffectSlot(slot)) {
+        slot.cleanup?.();
+        const cleanup = slot.create?.();
+        slot.cleanup = typeof cleanup === "function" ? cleanup : undefined;
+      }
+    }
+    this.flushSync();
+  }
+
   private flushSync(): void {
     while (this.pending) {
       this.pending = false;
@@ -282,6 +304,7 @@ class HookRunner<Props, Result> {
         pendingEffect.slot.cleanup?.();
         const cleanup = pendingEffect.create();
         pendingEffect.slot.cleanup = typeof cleanup === "function" ? cleanup : undefined;
+        pendingEffect.slot.create = pendingEffect.create;
         pendingEffect.slot.deps = pendingEffect.deps;
       }
     }
@@ -382,6 +405,313 @@ function reportResult(analysisId: string): AnalysisResultEnvelope {
     dataset_version_id: "dataset-a",
   } as AnalysisResultEnvelope;
 }
+
+describe("current analysis completion ownership", () => {
+  const source: AnalysisExecutionSource = { datasetVersionId: "dataset-a", schemaHash: "a".repeat(64), methodId: "eda.descriptive", methodVersion: "0.1.0", workspace: "analysis" };
+  const request = () => ({ dataset_version_id: source.datasetVersionId, method_id: source.methodId!, method_version: source.methodVersion!, roles: {}, options: { columns: ["x"] }, filter_snapshot: { expression_version: 1, conditions: [] } });
+  function result(id = reportIdA): AnalysisResultEnvelope {
+    return { ...reportResult(id), status: "succeeded", warnings: [], result: {}, provenance: {
+      dataset_version_id: source.datasetVersionId, source_schema_hash: source.schemaHash,
+      method_id: source.methodId!, method_version: source.methodVersion!, app_version: "test",
+    } };
+  }
+  function status(id = reportIdA): AnalysisRunStatusResponse {
+    return { analysis_id: id, dataset_version_id: source.datasetVersionId, method_id: source.methodId!, method_version: source.methodVersion!,
+      status: "succeeded", stale: false, result_available: true, failure_code: null, config_schema_version: 1, artifact_count: 1,
+      created_at: "2026-10-18", updated_at: "2026-10-18", completed_at: "2026-10-18" };
+  }
+  function runner() {
+    apiMocks.fetchAnalysisRunStatus.mockResolvedValue(status());
+    return new HookRunner(useCurrentAnalysisExecution, source);
+  }
+  it("holds the result until live completion status succeeds and clones request arrays", async () => {
+    const held = deferred<AnalysisRunStatusResponse>();
+    const run = runner();
+    apiMocks.createAnalysisRun.mockResolvedValue(result());
+    apiMocks.fetchAnalysisRunStatus.mockReturnValue(held.promise);
+    const input = request();
+    await run.act(() => { void run.output.execute(input); input.options.columns.push("later"); });
+    expect((apiMocks.createAnalysisRun.mock.calls[0][0] as AnalysisRunRequest).options.columns).toEqual(["x"]);
+    expect(run.output.result).toBeNull(); expect(run.output.isRunning).toBe(true);
+    held.resolve(status()); await run.flush();
+    expect(run.output.result?.analysis_id).toBe(reportIdA); expect(run.output.isRunning).toBe(false);
+    run.unmount();
+  });
+  it.each(["dataset", "schema", "method", "workspace", "configuration", "aba"])("rejects late success after %s intent", async (change) => {
+    const held = deferred<AnalysisResultEnvelope>(); const run = runner();
+    apiMocks.createAnalysisRun.mockReturnValue(held.promise);
+    await run.act(() => { void run.output.execute(request()); });
+    if (change === "configuration") await run.act(() => run.output.invalidate());
+    else {
+      run.update({ ...source, ...(change === "schema" ? { schemaHash: "b".repeat(64) } : change === "method" ? { methodId: "eda.normality" } : change === "workspace" ? { workspace: "home" } : { datasetVersionId: "dataset-b" }) });
+      if (change === "aba") run.update(source);
+    }
+    held.resolve(result()); await run.flush();
+    expect(run.output.result).toBeNull(); expect(run.output.error).toBeNull(); expect(run.output.isRunning).toBe(false);
+    expect(apiMocks.fetchAnalysisRunStatus).not.toHaveBeenCalled(); run.unmount();
+  });
+  it("does not let old catch/finally clear a newer running request", async () => {
+    const old = deferred<AnalysisResultEnvelope>(), next = deferred<AnalysisResultEnvelope>(); const run = runner();
+    apiMocks.createAnalysisRun.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    await run.act(() => { void run.output.execute(request()); });
+    await run.act(() => { void run.output.execute(request()); });
+    old.reject(new Error("obsolete_failure")); await run.flush();
+    expect(run.output.isRunning).toBe(true); expect(run.output.error).toBeNull();
+    next.resolve(result()); await run.flush(); expect(run.output.result?.analysis_id).toBe(reportIdA); run.unmount();
+  });
+  it("does not publish stale cross-tab completion even when immutable provenance matches", async () => {
+    const run = runner(); apiMocks.createAnalysisRun.mockResolvedValue(result());
+    apiMocks.fetchAnalysisRunStatus.mockResolvedValue({ ...status(), stale: true });
+    await run.act(() => { void run.output.execute(request()); });
+    expect(run.output.result).toBeNull(); expect(run.output.error).toBe("analysis_completion_source_changed");
+    expect(run.output.savedAnalysisId).toBe(reportIdA); expect(run.output.canRetryVerification).toBe(false); run.unmount();
+  });
+  it("retries failed status verification without repeating analysis creation", async () => {
+    const run = runner(); apiMocks.createAnalysisRun.mockResolvedValue(result());
+    apiMocks.fetchAnalysisRunStatus.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(status());
+    await run.act(() => { void run.output.execute(request()); });
+    expect(run.output.error).toBe("analysis_completion_verification_failed"); expect(run.output.canRetryVerification).toBe(true);
+    await run.act(() => { void run.output.retryVerification(); });
+    expect(run.output.result?.analysis_id).toBe(reportIdA);
+    expect(apiMocks.createAnalysisRun).toHaveBeenCalledTimes(1); expect(apiMocks.fetchAnalysisRunStatus).toHaveBeenCalledTimes(2); run.unmount();
+  });
+  it.each(["dataset_version_id", "method_id", "method_version", "schema", "missing"])("rejects returned %s mismatch before status lookup", async (field) => {
+    const run = runner(); const payload = result();
+    if (field === "schema") payload.provenance.source_schema_hash = "b".repeat(64);
+    else if (field === "missing") payload.provenance.source_schema_hash = null;
+    else Object.assign(payload, { [field]: "wrong" });
+    apiMocks.createAnalysisRun.mockResolvedValue(payload);
+    await run.act(() => { void run.output.execute(request()); });
+    expect(run.output.result).toBeNull(); expect(run.output.error).toBe("analysis_completion_source_changed");
+    expect(apiMocks.fetchAnalysisRunStatus).not.toHaveBeenCalled(); run.unmount();
+  });
+  it.each(["owner", "unavailable", "failed"])("rejects %s stored status", async (field) => {
+    const run = runner(); apiMocks.createAnalysisRun.mockResolvedValue(result());
+    apiMocks.fetchAnalysisRunStatus.mockResolvedValue({ ...status(), ...(field === "owner" ? { analysis_id: reportIdB } : field === "unavailable" ? { result_available: false } : { status: "failed" }) });
+    await run.act(() => { void run.output.execute(request()); });
+    expect(run.output.result).toBeNull(); expect(run.output.error).toBe("analysis_completion_verification_failed"); run.unmount();
+  });
+  it("ignores a status success after same-turn invalidation and preserves same-source rerenders", async () => {
+    const held = deferred<AnalysisRunStatusResponse>(); const run = runner();
+    apiMocks.createAnalysisRun.mockResolvedValue(result()); apiMocks.fetchAnalysisRunStatus.mockReturnValue(held.promise);
+    await run.act(() => { void run.output.execute(request()); });
+    run.update({ ...source }); expect(run.output.isRunning).toBe(true);
+    run.output.invalidate(); held.resolve(status()); await run.flush();
+    expect(run.output.result).toBeNull(); expect(run.output.error).toBeNull(); run.unmount();
+  });
+  it("does not perform status requests or writes after unmount", async () => {
+    const held = deferred<AnalysisResultEnvelope>(); const run = runner();
+    apiMocks.createAnalysisRun.mockReturnValue(held.promise);
+    await run.act(() => { void run.output.execute(request()); }); run.unmount();
+    held.resolve(result()); await run.flush(); expect(apiMocks.fetchAnalysisRunStatus).not.toHaveBeenCalled();
+  });
+  it("re-arms StrictMode effects without creating an execution automatically", async () => {
+    const run = runner(); run.replayEffects();
+    expect(apiMocks.createAnalysisRun).not.toHaveBeenCalled();
+    apiMocks.createAnalysisRun.mockResolvedValue(result());
+    await run.act(() => { void run.output.execute(request()); });
+    expect(run.output.result?.analysis_id).toBe(reportIdA); run.unmount();
+  });
+  it("retains original API cause and rejects raw exception text as an error code", async () => {
+    const run = runner(); const cause = new Error("Private user value or internal exception text");
+    apiMocks.createAnalysisRun.mockRejectedValue(cause);
+    await run.act(() => { void run.output.execute(request()); });
+    expect(run.output.error).toBe("analysis_run_failed"); expect(run.output.errorCause).toBe(cause); run.unmount();
+  });
+  it("blocks new execution while an accepted dataset switch is pending", async () => {
+    const run = runner(); run.update({ ...source, sourceChanging: true });
+    await run.act(() => { void run.output.execute(request()); });
+    expect(apiMocks.createAnalysisRun).not.toHaveBeenCalled();
+    expect(run.output.error).toBe("analysis_completion_source_changed"); run.unmount();
+  });
+  it.each(["activation", "parsing"])("preserves completed A when accepted %s fails, but discards A's pending rerun", async (kind) => {
+    const h = datasetWorkflowHarness(); await h.select(1);
+    const id = h.versions[0].version_id;
+    const run = new HookRunner(useCurrentAnalysisExecution, { ...source, datasetVersionId: id });
+    const payload = { ...result(), dataset_version_id: id, provenance: { ...result().provenance, dataset_version_id: id } };
+    apiMocks.createAnalysisRun.mockResolvedValueOnce(payload);
+    apiMocks.fetchAnalysisRunStatus.mockResolvedValue({ ...status(), dataset_version_id: id });
+    await run.act(() => { void run.output.execute({ ...request(), dataset_version_id: id }); });
+    expect(run.output.result?.analysis_id).toBe(reportIdA);
+    h.callbacks.onCommittedSourceIntent.mockImplementation(() => run.output.invalidate(false));
+    h.callbacks.onDatasetReset.mockImplementation(() => run.output.invalidate());
+    const pending = deferred<AnalysisResultEnvelope>(); apiMocks.createAnalysisRun.mockReturnValueOnce(pending.promise);
+    await run.act(() => { void run.output.execute({ ...request(), dataset_version_id: id }); });
+    if (kind === "activation") {
+      apiMocks.fetchDatasetVersion.mockRejectedValueOnce(new Error("api_unreachable")); await h.select(2);
+    } else {
+      apiMocks.uploadDataset.mockResolvedValueOnce(workflowUpload(2));
+      await h.file("replacement.csv"); await h.upload();
+      apiMocks.confirmDatasetParsing.mockRejectedValueOnce(new Error("parsing_confirmation_failed"));
+      await h.runner.act(() => h.runner.output.datasetPageProps.onConfirmParsing());
+    }
+    pending.reject(new Error("obsolete_failure")); await run.flush();
+    expect(h.runner.output.version?.version_id).toBe(id);
+    expect(run.output.result?.analysis_id).toBe(reportIdA); expect(run.output.error).toBeNull(); expect(run.output.isRunning).toBe(false);
+    await run.act(() => run.output.invalidate()); expect(run.output.result).toBeNull();
+    h.runner.unmount(); run.unmount();
+  });
+  it("preserves completed current results on failed history restore and retires them only on restore commit", async () => {
+    const restore = deferred<AnalysisResultEnvelope>();
+    apiMocks.createAnalysisRun.mockResolvedValue(result());
+    apiMocks.fetchAnalysisRunStatus.mockResolvedValue(status());
+    apiMocks.fetchAnalysisRunResult.mockReturnValueOnce(restore.promise);
+    const exports = vi.fn(() => Promise.resolve());
+    const run = new HookRunner(() => {
+      const current = useCurrentAnalysisExecution(source);
+      const history = useRestoredAnalysisResultState({
+        analysisCatalog: null, currentAnalysisId: current.result?.analysis_id ?? null,
+        currentDatasetVersionId: source.datasetVersionId, resetKey: 0,
+        onRestoreIntent: () => current.invalidate(false), onRestoreCommitted: () => current.invalidate(),
+        onSelectMethod: vi.fn(), onRefreshAnalysisResultExports: exports,
+      });
+      return { current, history };
+    }, undefined);
+    await run.act(() => { void run.output.current.execute(request()); });
+    const pending = deferred<AnalysisResultEnvelope>();
+    apiMocks.createAnalysisRun.mockReturnValueOnce(pending.promise);
+    await run.act(() => { void run.output.current.execute(request()); });
+    await run.act(() => run.output.history.onRestoreAnalysisRun(reportIdB));
+    expect(run.output.current.result?.analysis_id).toBe(reportIdA);
+    restore.reject(new Error("analysis_result_fetch_failed"));
+    pending.resolve(result(reportIdB)); await run.flush();
+    expect(run.output.current.result?.analysis_id).toBe(reportIdA);
+    expect(run.output.current.isRunning).toBe(false);
+    expect(run.output.history.restoredAnalysisResultError).toBe("analysis_result_fetch_failed");
+    expect(exports).not.toHaveBeenCalled();
+    apiMocks.fetchAnalysisRunResult.mockResolvedValueOnce(result(reportIdB));
+    await run.act(() => run.output.history.onRestoreAnalysisRun(reportIdB));
+    expect(run.output.current.result).toBeNull();
+    expect(run.output.history.restoredAnalysisResult?.analysis_id).toBe(reportIdB);
+    expect(exports).toHaveBeenCalledWith(reportIdB);
+    run.unmount();
+  });
+  it("preserves completed results after unrelated dataset deletion but clears them when the active owner is deleted", async () => {
+    const h = datasetWorkflowHarness(); await h.select(1);
+    const id = h.versions[0].version_id;
+    const run = new HookRunner(useCurrentAnalysisExecution, { ...source, datasetVersionId: id });
+    apiMocks.createAnalysisRun.mockResolvedValue({ ...result(), dataset_version_id: id, provenance: { ...result().provenance, dataset_version_id: id } });
+    apiMocks.fetchAnalysisRunStatus.mockResolvedValue({ ...status(), dataset_version_id: id });
+    await run.act(() => { void run.output.execute({ ...request(), dataset_version_id: id }); });
+    h.callbacks.onDatasetReset.mockImplementation(() => run.output.invalidate());
+    await h.runner.act(() => h.runner.output.onDatasetDeleted(workflowDeletion(h.versions[1])));
+    await run.flush();
+    expect(run.output.result?.analysis_id).toBe(reportIdA);
+    expect(h.runner.output.version?.version_id).toBe(id);
+    await h.runner.act(() => h.runner.output.onDatasetDeleted(workflowDeletion(h.versions[0])));
+    await run.flush();
+    expect(run.output.result).toBeNull();
+    expect(h.runner.output.version).toBeNull();
+    h.runner.unmount(); run.unmount();
+  });
+  it("keeps a successful historical result when later export refresh or replacement restore fails", async () => {
+    apiMocks.fetchAnalysisRunResult.mockResolvedValueOnce(result(reportIdB)).mockRejectedValueOnce(new Error("analysis_result_fetch_failed"));
+    const run = new HookRunner(() => useRestoredAnalysisResultState({
+      analysisCatalog: null, currentAnalysisId: null, currentDatasetVersionId: source.datasetVersionId, resetKey: 0,
+      onSelectMethod: vi.fn(), onRefreshAnalysisResultExports: vi.fn(() => Promise.reject(new Error("export unavailable"))),
+    }), undefined);
+    await run.act(() => run.output.onRestoreAnalysisRun(reportIdB));
+    expect(run.output.restoredAnalysisResult?.analysis_id).toBe(reportIdB);
+    expect(run.output.restoredAnalysisResultError).toBe("analysis_export_list_fetch_failed");
+    await run.act(() => run.output.onRestoreAnalysisRun(reportIdA));
+    expect(run.output.restoredAnalysisResult?.analysis_id).toBe(reportIdB);
+    expect(run.output.restoredAnalysisResultError).toBe("analysis_result_fetch_failed");
+    run.unmount();
+  });
+  it.each(["method-navigation", "source-aba"])("cancels late history restore after %s without clearing an accepted payload", async (kind) => {
+    const held = deferred<AnalysisResultEnvelope>();
+    const selection = vi.fn(), exports = vi.fn(() => Promise.resolve());
+    apiMocks.fetchAnalysisRunResult.mockResolvedValueOnce(result(reportIdA)).mockReturnValueOnce(held.promise);
+    const run = new HookRunner(() => useRestoredAnalysisResultState({
+      analysisCatalog: null, currentAnalysisId: null, currentDatasetVersionId: source.datasetVersionId,
+      resetKey: 0, onSelectMethod: selection, onRefreshAnalysisResultExports: exports,
+    }), undefined);
+    await run.act(() => run.output.onRestoreAnalysisRun(reportIdA));
+    await run.act(() => run.output.onRestoreAnalysisRun(reportIdB));
+    expect(run.output.isRestoringAnalysisResult).toBe(true);
+    await run.act(() => run.output.cancelPendingRestore());
+    if (kind === "source-aba") await run.act(() => run.output.cancelPendingRestore());
+    held.resolve(result(reportIdB)); await run.flush();
+    expect(run.output.restoredAnalysisResult?.analysis_id).toBe(reportIdA);
+    expect(run.output.isRestoringAnalysisResult).toBe(false);
+    expect(run.output.restoredAnalysisResultError).toBeNull();
+    expect(exports).toHaveBeenCalledTimes(1);
+    expect(selection).not.toHaveBeenCalled();
+    run.unmount();
+  });
+  it("keeps a committed history payload and refreshes its exports when its own method navigation cancels pending restore", async () => {
+    const exports = vi.fn(() => Promise.resolve());
+    let cancel: () => void = vi.fn();
+    apiMocks.fetchAnalysisRunResult.mockResolvedValue(result(reportIdA));
+    const run = new HookRunner(() => useRestoredAnalysisResultState({
+      analysisCatalog: { methods: [{ method_id: source.methodId, module_id: "exploration" }] } as AnalysisMethodListResponse,
+      currentAnalysisId: null, currentDatasetVersionId: source.datasetVersionId,
+      resetKey: 0, onSelectMethod: () => cancel(), onRefreshAnalysisResultExports: exports,
+    }), undefined);
+    cancel = () => run.output.cancelPendingRestore();
+    await run.act(() => run.output.onRestoreAnalysisRun(reportIdA));
+    expect(run.output.restoredAnalysisResult?.analysis_id).toBe(reportIdA);
+    expect(run.output.isRestoringAnalysisResult).toBe(false);
+    expect(exports).toHaveBeenCalledWith(reportIdA);
+    run.unmount();
+  });
+  it("does not let a cancelled restore error/finally clear a newer pending restore", async () => {
+    const old = deferred<AnalysisResultEnvelope>(), next = deferred<AnalysisResultEnvelope>();
+    apiMocks.fetchAnalysisRunResult.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const run = new HookRunner(() => useRestoredAnalysisResultState({
+      analysisCatalog: null, currentAnalysisId: null, currentDatasetVersionId: source.datasetVersionId,
+      resetKey: 0, onSelectMethod: vi.fn(), onRefreshAnalysisResultExports: vi.fn(() => Promise.resolve()),
+    }), undefined);
+    await run.act(() => run.output.onRestoreAnalysisRun(reportIdA));
+    await run.act(() => run.output.cancelPendingRestore());
+    await run.act(() => run.output.onRestoreAnalysisRun(reportIdB));
+    old.reject(new Error("analysis_result_fetch_failed")); await run.flush();
+    expect(run.output.isRestoringAnalysisResult).toBe(true);
+    expect(run.output.restoredAnalysisResultError).toBeNull();
+    next.resolve(result(reportIdB)); await run.flush();
+    expect(run.output.restoredAnalysisResult?.analysis_id).toBe(reportIdB);
+    run.unmount();
+  });
+});
+
+describe("local analysis input notifications", () => {
+  function elements(node: unknown): React.ReactElement<Record<string, unknown>>[] {
+    if (Array.isArray(node)) return node.flatMap(elements);
+    if (React.isValidElement<Record<string, unknown>>(node)) return [node, ...Object.values(node.props).flatMap(elements)];
+    return typeof node === "object" && node !== null ? Object.values(node).flatMap(elements) : [];
+  }
+  it.each(["pca", "pls", "gp", "two_variances"])("notifies synchronously for %s native run inputs, not mounting/rerendering", (kind) => {
+    vi.stubGlobal("window", { confirm: vi.fn(() => true) });
+    const changed = vi.fn(), execute = vi.fn();
+    const props = { analysisResult: null, filterValidationError: null, isRunningAnalysis: false, methodId: kind,
+      onRun: execute, result: null, version: workflowVersion(1), onAnalysisInputChange: changed };
+    const run = new HookRunner(() => kind === "pca" ? PrincipalComponentsPanel(props) : kind === "pls" ? PlsRegressionPanel(props) :
+      kind === "gp" ? GaussianProcessRegressionPanel(props) : TwoVariancesPanel({ ...props, filterDrafts: [] }), undefined);
+    expect(changed).not.toHaveBeenCalled();
+    run.update(undefined); expect(changed).not.toHaveBeenCalled();
+    const inputs = elements(run.output).filter((item) => typeof item.type === "string" && typeof item.props.onChange === "function");
+    expect(inputs.length).toBeGreaterThan(1);
+    for (const input of inputs) {
+      const before = changed.mock.calls.length;
+      const current = input.props.value;
+      const value = { value: typeof current === "number" || typeof current === "string" ? String(current) : "", checked: Boolean(input.props.checked) };
+      (input.props.onChange as (event: unknown) => void)({ currentTarget: value, target: value });
+      expect(changed).toHaveBeenCalledTimes(before + 1);
+    }
+    expect(execute).not.toHaveBeenCalled(); run.unmount();
+  });
+  it("does not invalidate a run when GP coordinate reset is cancelled", () => {
+    vi.stubGlobal("window", { confirm: vi.fn(() => false) });
+    const changed = vi.fn();
+    const run = new HookRunner(() => GaussianProcessRegressionPanel({ analysisResult: null, filterValidationError: null,
+      isRunningAnalysis: false, methodId: "regression.gaussian_process", onRun: vi.fn(), result: null,
+      version: workflowVersion(1), onAnalysisInputChange: changed }), undefined);
+    const reset = elements(run.output).find((item) => typeof item.props.onChange === "function" && String(item.props.onChange).includes("window.confirm"));
+    expect(reset).toBeDefined();
+    (reset!.props.onChange as (event: unknown) => void)({ currentTarget: { checked: false } });
+    expect(changed).not.toHaveBeenCalled(); run.unmount();
+  });
+});
 
 function reportWindow(query = "") {
   const events = new EventTarget();
@@ -846,7 +1176,7 @@ function runtimeInfo(
     service: "datalab-studio-api",
     app_version: "0.1.0",
     api_contract_version: 23,
-    metadata_schema_version: 21,
+    metadata_schema_version: 22,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
@@ -1026,6 +1356,7 @@ function datasetWorkflowHarness() {
   apiMocks.fetchRowsPreview.mockImplementation((id: string) => Promise.resolve(workflowPreview(versionFor(id))));
   apiMocks.fetchDatasetProfile.mockImplementation((id: string) => Promise.resolve(workflowProfile(versionFor(id))));
   const callbacks = {
+    onCommittedSourceIntent: vi.fn(),
     onDatasetReset: vi.fn(), onDatasetColumnsChanged: vi.fn(),
     onDatasetVersionCreated: vi.fn(), onSchemaChanged: vi.fn(),
   };
@@ -1051,6 +1382,16 @@ function datasetWorkflowHarness() {
 }
 
 describe("A05 dataset source isolation", () => {
+  it("notifies accepted source intent synchronously but not cancelled navigation or intake drafts", async () => {
+    const h = datasetWorkflowHarness(); await h.select(1); h.callbacks.onCommittedSourceIntent.mockClear();
+    await h.file("draft.csv"); expect(h.callbacks.onCommittedSourceIntent).not.toHaveBeenCalled();
+    h.confirm.mockReturnValueOnce(false); await h.select(2);
+    expect(h.callbacks.onCommittedSourceIntent).not.toHaveBeenCalled();
+    const held = deferred<DatasetVersionResponse>(); apiMocks.fetchDatasetVersion.mockReturnValueOnce(held.promise);
+    h.runner.output.activeDatasetSelectorProps.onSelect(h.versions[1].version_id);
+    expect(h.callbacks.onCommittedSourceIntent).toHaveBeenCalledTimes(1);
+    held.resolve(h.versions[1]); await h.runner.flush(); h.runner.unmount();
+  });
   it.each([false, true])("preserves failed-upload context unless replacement is approved: %s", async (approved) => {
     const h = datasetWorkflowHarness();
     await h.select(1);

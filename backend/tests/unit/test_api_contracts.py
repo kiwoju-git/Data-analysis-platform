@@ -12392,7 +12392,7 @@ def test_analysis_run_rejects_unknown_method(tmp_path) -> None:
     assert response.json()["error"]["code"] == "analysis_method_not_found"
 
 
-def test_analysis_run_status_and_cancel_skeleton_without_fake_result(tmp_path) -> None:
+def test_analysis_run_restart_failure_and_unsupported_cancel_without_fake_result(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     initialize_metadata_store(settings.workspace_root)
     analysis_id = uuid4()
@@ -12422,16 +12422,16 @@ def test_analysis_run_status_and_cancel_skeleton_without_fake_result(tmp_path) -
     assert response.status_code == 200
     payload = response.json()
     AnalysisRunStatusResponse.model_validate(payload)
-    assert payload["status"] == "queued"
+    assert payload["status"] == "failed"
+    assert payload["failure_code"] == "execution_interrupted_on_restart"
     assert payload["result_available"] is False
     assert payload["artifact_count"] == 0
     assert "result_path" not in response.text
     assert "p_value" not in response.text
 
-    assert cancel_response.status_code == 200
+    assert cancel_response.status_code == 409
     cancel_payload = cancel_response.json()
-    assert cancel_payload["status"] == "cancel_requested"
-    assert cancel_payload["result_available"] is False
+    assert cancel_payload["error"]["code"] == "analysis_run_cancellation_unsupported"
     assert "result_path" not in cancel_response.text
     assert "p_value" not in cancel_response.text
 
@@ -12444,7 +12444,7 @@ def test_analysis_run_status_rejects_missing_run(tmp_path) -> None:
     assert response.json()["error"]["code"] == "analysis_run_not_found"
 
 
-def test_job_status_and_cancel_skeleton(tmp_path) -> None:
+def test_job_restart_failure_and_unsupported_cancel(tmp_path) -> None:
     settings = Settings(workspace_root=tmp_path)
     initialize_metadata_store(settings.workspace_root)
     job_id = uuid4()
@@ -12471,14 +12471,14 @@ def test_job_status_and_cancel_skeleton(tmp_path) -> None:
     assert response.status_code == 200
     payload = response.json()
     JobStatusResponse.model_validate(payload)
-    assert payload["state"] == "running"
+    assert payload["state"] == "failed"
+    assert payload["error_code"] == "execution_interrupted_on_restart"
     assert payload["progress"] == 0.5
     assert payload["cancel_requested"] is False
 
-    assert cancel_response.status_code == 200
+    assert cancel_response.status_code == 409
     cancel_payload = cancel_response.json()
-    assert cancel_payload["state"] == "cancel_requested"
-    assert cancel_payload["cancel_requested"] is True
+    assert cancel_payload["error"]["code"] == "job_cancellation_unsupported"
 
 
 def test_job_status_rejects_missing_job(tmp_path) -> None:

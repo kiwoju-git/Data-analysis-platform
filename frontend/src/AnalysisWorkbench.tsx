@@ -27,6 +27,7 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import { getAnalysisRunErrorDetails } from "./analysisRunErrors";
+import { ApiRequestError } from "./api/client";
 import type { AnalysisDomainDefinition } from "./analysisDomains";
 import { analysisDomainForMethod } from "./analysisDomainMapping";
 import type {
@@ -127,6 +128,7 @@ interface AnalysisWorkbenchProps {
   selectedMethod: AnalysisMethodDescriptor | null;
   selectedAnalysisResult?: AnalysisResultEnvelope | null;
   analysisRunError: string | null;
+  analysisRunErrorCause?: unknown;
   comparisonState?: AnalysisWorkbenchComparisonState;
   exportState?: AnalysisWorkbenchExportState;
   historyState?: AnalysisWorkbenchHistoryState;
@@ -147,6 +149,7 @@ export function AnalysisWorkbench({
   selectedMethod,
   selectedAnalysisResult = null,
   analysisRunError,
+  analysisRunErrorCause,
   exportState,
   restoredState,
   version,
@@ -360,7 +363,7 @@ export function AnalysisWorkbench({
             onClearDeletion={effectiveExportState.onClearAnalysisResultExportDeletion}
           /> : null}
           {analysisRunError !== null ? (
-            <AnalysisRunErrorNotice errorCode={analysisRunError} />
+            <AnalysisRunErrorNotice errorCode={analysisRunError} cause={analysisRunErrorCause} />
           ) : null}
           {executablePanel === null || executablePanel === undefined ? (
             <section className="analysis-run-panel" aria-label="분석 실행 상태">
@@ -373,12 +376,13 @@ export function AnalysisWorkbench({
   );
 }
 
-function AnalysisRunErrorNotice({ errorCode }: { errorCode: string }) {
-  const { locale } = useI18n();
+function AnalysisRunErrorNotice({ errorCode, cause }: { errorCode: string; cause?: unknown }) {
+  const { locale, t } = useI18n();
   const details = getAnalysisRunErrorDetails(errorCode, locale);
   return (
     <div className="error-box analysis-error-box" role="alert">
       <h4>{details.title}</h4>
+      {cause instanceof ApiRequestError && cause.correlationId !== null ? <p><code>{t("analysisCompletion.correlationId")}: {cause.correlationId}</code></p> : null}
       <p>{details.message}</p>
       <p>
         <strong>해결 방법:</strong> {details.action}

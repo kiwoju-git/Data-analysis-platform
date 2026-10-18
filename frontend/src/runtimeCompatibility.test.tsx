@@ -20,6 +20,9 @@ describe("runtime compatibility", () => {
 
   it("blocks old contracts, missing capabilities, and known commit mismatches", () => {
     expect(
+      evaluateRuntimeCompatibility(runtimeInfo({ metadata_schema_version: 21 })),
+    ).toMatchObject({ compatible: false, code: "metadata_schema_version_mismatch" });
+    expect(
       evaluateRuntimeCompatibility(runtimeInfo({ api_contract_version: 22 })),
     ).toMatchObject({ compatible: false, code: "api_contract_version_mismatch" });
     expect(
@@ -99,7 +102,7 @@ function runtimeInfo(overrides: Partial<RuntimeInfoResponse> = {}): RuntimeInfoR
     service: "datalab-studio-api",
     app_version: "0.1.0",
     api_contract_version: 23,
-    metadata_schema_version: 21,
+    metadata_schema_version: 22,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,

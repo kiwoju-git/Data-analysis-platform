@@ -29,8 +29,11 @@ from app.services.dataset_rows import DatasetRowsContext, iter_dataset_rows
 from app.storage.atomic import atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
+    AnalysisCompletionDependencies,
     AnalysisRunRecord,
+    AnalysisRunStorageConflict,
     DatasetColumnRecord,
+    DatasetSchemaDependency,
     insert_analysis_run_record_with_artifacts,
 )
 
@@ -484,12 +487,25 @@ def store_succeeded_analysis_result(
                 app_version=APP_VERSION,
             ),
             artifacts=[row_snapshot.record],
+            dependencies=AnalysisCompletionDependencies(
+                (DatasetSchemaDependency(context.version.version_id, context.version.schema_hash),)
+            ),
         )
-    except Exception:
+    except Exception as exc:
         if result_path is not None:
             remove_file_if_exists(result_path)
+        raise_completion_conflict(exc)
         raise
     return envelope
+
+
+def raise_completion_conflict(exc: Exception) -> None:
+    if isinstance(exc, AnalysisRunStorageConflict) and exc.code.startswith("analysis_completion_"):
+        raise ApiError(
+            code=exc.code,
+            message="The analysis source changed or is no longer available. Refresh the source.",
+            status_code=status.HTTP_409_CONFLICT,
+        ) from exc
 
 
 def analysis_result_relative_path(analysis_id: str) -> Path:

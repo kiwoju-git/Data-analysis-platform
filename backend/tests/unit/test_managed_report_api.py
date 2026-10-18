@@ -15,7 +15,7 @@ from test_response_optimizer_api import _create_source_analysis, _optimizer_requ
 
 from app.core.config import Settings
 from app.main import create_app
-from app.storage.metadata import metadata_db_path
+from app.storage.metadata import SCHEMA_VERSION, metadata_db_path
 from app.storage.workspace_backup import backup_workspace, restore_workspace
 
 
@@ -246,7 +246,7 @@ def test_new_report_stores_survive_offline_backup_restore(tmp_path):
             reports.append((report, action, content.content))
     archive = tmp_path / "backup.zip"
     manifest = backup_workspace(root, archive)
-    assert manifest["metadata_schema_version"] == 21
+    assert manifest["metadata_schema_version"] == SCHEMA_VERSION
     assert any("workspaces/reports/" in item["path"] for item in manifest["files"])
     restored_root = tmp_path / "restored workspace"
     restore_workspace(archive, restored_root)

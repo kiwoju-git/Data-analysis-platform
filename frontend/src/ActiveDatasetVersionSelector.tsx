@@ -26,7 +26,9 @@ export function ActiveDatasetVersionSelector({
   activationError = null,
 }: ActiveDatasetVersionSelectorProps) {
   const { locale } = useI18n();
-  const selectedVersionId = pendingVersionId ?? version?.version_id ?? "";
+  const selectedVersionId = isSwitching
+    ? pendingVersionId ?? version?.version_id ?? ""
+    : version?.version_id ?? pendingVersionId ?? "";
   const activeOnCurrentPage = catalogState.catalog?.versions.some(
     (candidate) => candidate.version_id === selectedVersionId,
   );

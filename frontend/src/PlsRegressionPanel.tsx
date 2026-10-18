@@ -35,6 +35,7 @@ export interface PlsRunConfig {
 }
 
 interface Props {
+  onAnalysisInputChange?: () => void;
   analysisResult: AnalysisResultEnvelope | null;
   filterValidationError: string | null;
   isRunningAnalysis: boolean;
@@ -60,6 +61,7 @@ const PLS_WARNING_KEYS = {
 } as const;
 
 export function PlsRegressionPanel({
+  onAnalysisInputChange,
   analysisResult,
   filterValidationError,
   isRunningAnalysis,
@@ -139,7 +141,10 @@ export function PlsRegressionPanel({
               <span>{t("pls.response")}</span>
               <select
                 value={responseColumnId}
-                onChange={(event) => setResponseColumnId(event.currentTarget.value)}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setResponseColumnId(event.currentTarget.value);
+                }}
               >
                 <option value="">{t("pls.select")}</option>
                 {numericColumns.map((column) => (
@@ -157,8 +162,14 @@ export function PlsRegressionPanel({
               legend={t("pls.predictors")}
               maximumSelection={100}
               minimumSelection={2}
-              onClear={() => setPredictorColumnIds([])}
-              onToggle={togglePredictor}
+              onClear={() => {
+                onAnalysisInputChange?.();
+                setPredictorColumnIds([]);
+              }}
+              onToggle={(...args) => {
+                onAnalysisInputChange?.();
+                togglePredictor(...args);
+              }}
               selectedColumnIds={predictorColumnIds}
             />
           </div>
@@ -174,9 +185,12 @@ export function PlsRegressionPanel({
                   <select
                     value={componentSelection}
                     onChange={(event) =>
-                      setComponentSelection(
+                      {
+                        onAnalysisInputChange?.();
+                        setComponentSelection(
                         event.currentTarget.value as "automatic_cv" | "fixed",
-                      )
+                      );
+                      }
                     }
                   >
                     <option value="automatic_cv">{t("pls.automatic")}</option>
@@ -191,7 +205,10 @@ export function PlsRegressionPanel({
                   <input
                     max={componentCeiling}
                     min={1}
-                    onChange={(event) => setMaxComponents(Number(event.currentTarget.value))}
+                    onChange={(event) => {
+                      onAnalysisInputChange?.();
+                      setMaxComponents(Number(event.currentTarget.value));
+                    }}
                     type="number"
                     value={maxComponents}
                   />
@@ -205,7 +222,10 @@ export function PlsRegressionPanel({
                     disabled={componentSelection !== "fixed"}
                     max={maxComponents}
                     min={1}
-                    onChange={(event) => setNComponents(Number(event.currentTarget.value))}
+                    onChange={(event) => {
+                      onAnalysisInputChange?.();
+                      setNComponents(Number(event.currentTarget.value));
+                    }}
                     type="number"
                     value={nComponents}
                   />
@@ -218,7 +238,10 @@ export function PlsRegressionPanel({
                   <label className="doe-table-toggle">
                     <input
                       checked={scale}
-                      onChange={(event) => setScale(event.currentTarget.checked)}
+                      onChange={(event) => {
+                        onAnalysisInputChange?.();
+                        setScale(event.currentTarget.checked);
+                      }}
                       type="checkbox"
                     />
                     <span>{t("pls.standardizeHelp")}</span>
@@ -234,7 +257,10 @@ export function PlsRegressionPanel({
               <select
                 value={cvMethod}
                 onChange={(event) =>
-                  setCvMethod(event.currentTarget.value as "k_fold" | "leave_one_out")
+                  {
+                    onAnalysisInputChange?.();
+                    setCvMethod(event.currentTarget.value as "k_fold" | "leave_one_out");
+                  }
                 }
               >
                 <option value="k_fold">{t("pls.kFold")}</option>
@@ -247,7 +273,10 @@ export function PlsRegressionPanel({
                 disabled={cvMethod !== "k_fold"}
                 max={10}
                 min={2}
-                onChange={(event) => setCvFolds(Number(event.currentTarget.value))}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setCvFolds(Number(event.currentTarget.value));
+                }}
                 type="number"
                 value={cvFolds}
               />
@@ -257,7 +286,10 @@ export function PlsRegressionPanel({
               <input
                 checked={cvShuffle}
                 disabled={cvMethod !== "k_fold"}
-                onChange={(event) => setCvShuffle(event.currentTarget.checked)}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setCvShuffle(event.currentTarget.checked);
+                }}
                 type="checkbox"
               />
             </label>
@@ -265,7 +297,10 @@ export function PlsRegressionPanel({
               <span>{t("pls.seed")}</span>
               <input
                 disabled={cvMethod !== "k_fold" || !cvShuffle}
-                onChange={(event) => setCvSeed(Number(event.currentTarget.value))}
+                onChange={(event) => {
+                  onAnalysisInputChange?.();
+                  setCvSeed(Number(event.currentTarget.value));
+                }}
                 type="number"
                 value={cvSeed}
               />
@@ -280,7 +315,10 @@ export function PlsRegressionPanel({
                 <input
                   max={10000}
                   min={1}
-                  onChange={(event) => setMaxIter(Number(event.currentTarget.value))}
+                  onChange={(event) => {
+                    onAnalysisInputChange?.();
+                    setMaxIter(Number(event.currentTarget.value));
+                  }}
                   type="number"
                   value={maxIter}
                 />
@@ -290,7 +328,10 @@ export function PlsRegressionPanel({
                 <input
                   max={0.1}
                   min={1e-12}
-                  onChange={(event) => setTolerance(Number(event.currentTarget.value))}
+                  onChange={(event) => {
+                    onAnalysisInputChange?.();
+                    setTolerance(Number(event.currentTarget.value));
+                  }}
                   step="any"
                   type="number"
                   value={tolerance}
@@ -301,7 +342,10 @@ export function PlsRegressionPanel({
                 <input
                   max={5000}
                   min={100}
-                  onChange={(event) => setPlotPointLimit(Number(event.currentTarget.value))}
+                  onChange={(event) => {
+                    onAnalysisInputChange?.();
+                    setPlotPointLimit(Number(event.currentTarget.value));
+                  }}
                   type="number"
                   value={plotPointLimit}
                 />

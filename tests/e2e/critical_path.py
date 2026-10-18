@@ -43,6 +43,7 @@ from dataset_context import verify_dataset_context
 from app_readiness import wait_for_app_ready
 from gp_prediction_context import verify_gp_prediction_context
 from schema_concurrency import verify_schema_concurrency
+from analysis_completion import verify_analysis_completion
 from regularized_regression import verify_regularized_regression
 from result_charts import verify_chart_interactions, verify_result_chart_models
 from chart_formatting import verify_chart_formatting
@@ -226,6 +227,7 @@ def main() -> int:
     parser.add_argument("--upload-recovery-only", action="store_true")
     parser.add_argument("--chart-formatting-only", action="store_true")
     parser.add_argument("--report-center-context-only", action="store_true")
+    parser.add_argument("--analysis-completion-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -339,6 +341,7 @@ def main() -> int:
             args.upload_recovery_only,
             args.chart_formatting_only,
             args.report_center_context_only,
+            args.analysis_completion_only,
         )
         print("E2E critical path passed")
         return 0
@@ -644,11 +647,16 @@ def run_browser_flow(
     upload_recovery_only: bool = False,
     chart_formatting_only: bool = False,
     report_center_context_only: bool = False,
+    analysis_completion_only: bool = False,
 ) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            if analysis_completion_only:
+                diagnostics.step("verify current analysis completion ownership")
+                verify_analysis_completion(browser, frontend_base_url, diagnostics.root / "analysis-completion", isolated_workspace=True)
+                return
             if report_center_context_only:
                 diagnostics.step("verify Report Center request context")
                 verify_report_center_context(browser, frontend_base_url, diagnostics.root / "report-center-context")
@@ -698,6 +706,8 @@ def run_browser_flow(
                 verify_refined_ui(browser, frontend_base_url, diagnostics.root / "refined-ui", version_id)
                 return
             if not factorial_only and not gpr_report_only:
+                diagnostics.step("verify current analysis completion ownership")
+                verify_analysis_completion(browser, frontend_base_url, diagnostics.root / "analysis-completion", isolated_workspace=True)
                 diagnostics.step("verify Report Center request context")
                 verify_report_center_context(browser, frontend_base_url, diagnostics.root / "report-center-context")
                 diagnostics.step("verify API translation boundary with synthetic inputs")

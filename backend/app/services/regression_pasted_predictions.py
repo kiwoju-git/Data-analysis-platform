@@ -32,7 +32,7 @@ from app.api.v1.schemas.analyses import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
-from app.services.analysis_run_execution import runtime_build_provenance
+from app.services.analysis_run_execution import raise_completion_conflict, runtime_build_provenance
 from app.services.regression_models import (
     _coefficient_estimates,
     _design_vector_for_manifest,
@@ -46,7 +46,10 @@ from app.services.regression_models import (
 from app.storage.atomic import atomic_write_bytes
 from app.storage.metadata import (
     AnalysisArtifactRecord,
+    AnalysisCompletionDependencies,
+    AnalysisModelDependency,
     AnalysisRunRecord,
+    DatasetSchemaDependency,
     get_analysis_run_record,
     insert_analysis_run_record_with_artifacts,
     list_analysis_artifact_records,
@@ -656,13 +659,28 @@ def _persist(
                     response.created_at,
                 ),
             ],
+            dependencies=AnalysisCompletionDependencies(
+                datasets=(
+                    DatasetSchemaDependency(
+                        str(state.source_dataset_version_id), state.manifest["source_schema_hash"]
+                    ),
+                ),
+                model=AnalysisModelDependency(
+                    str(state.model_id),
+                    str(state.source_analysis_id),
+                    str(state.source_dataset_version_id),
+                    state.manifest_sha256,
+                    state.manifest["source_schema_hash"],
+                ),
+            ),
         )
-    except Exception:
+    except Exception as exc:
         for path in (result_path, input_path, rows_path):
             try:
                 (settings.workspace_root / path).unlink()
             except FileNotFoundError:
                 pass
+        raise_completion_conflict(exc)
         raise
 
 

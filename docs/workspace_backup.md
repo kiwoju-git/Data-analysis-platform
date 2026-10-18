@@ -9,16 +9,20 @@ There is no web endpoint accepting arbitrary filesystem paths and no network
 transfer. The backup is not encrypted or signed: protect it like the source data.
 SHA-256 detects corruption, not a malicious party who can replace the archive.
 
-Backup format 1 supports the exact metadata schema 20 inventory. It does not
+Backup format 1 supports the exact metadata schema 20, 21 and 22 inventories. It does not
 migrate the source or restored database, execute an analysis, fit a model, or
 rebuild an export. Older/newer or structurally different databases are refused;
 use the compatible application/tool version rather than modifying metadata to
-force acceptance. No metadata migration is added by this feature.
+force acceptance. The backup feature itself adds no migration. Normal application
+startup, not restore, upgrades an older supported database. Metadata 21 adds
+managed report ownership; 22 adds a nullable execution failure code. Restoring a
+schema-22 archive does not downgrade it for older application versions.
 
 The archive contains all registered workspace assets and the complete SQLite
 logical state, including stale analyses, archived datasets, unconfirmed uploads,
-DOE/LHS runs and revisions, BO history, and managed Factorial HTML/prediction
-BLOBs. It is **not** an arbitrary recursive backup of everything placed beside
+DOE/LHS runs and revisions, BO history, managed DOE HTML/prediction BLOBs,
+completed server-side GP/PLS predictions, and managed exact-source reports.
+It is **not** an arbitrary recursive backup of everything placed beside
 the app. Unregistered files under `db`, `workspaces`, or `artifacts` cause refusal
 instead of a misleading complete backup. Unrelated root files, logs, credentials,
 and browser downloads are not read or included. A browser-downloaded PLS/GP

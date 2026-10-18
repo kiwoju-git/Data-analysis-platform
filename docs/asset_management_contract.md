@@ -16,6 +16,11 @@ See [Managed Report Storage](managed_report_storage_contract.md) and
 [Report Center](report_center_contract.md) for exact sources, migration, stale
 status, file integrity, backup and owner-cascade behavior.
 
+A13 adds nullable analysis-run failure metadata (schema 22), not a new numerical
+artifact format. Existing completed result/model/report bytes remain unchanged.
+The offline backup reader accepts exact schemas 20, 21 and 22; restoration keeps
+the archived schema until an explicit normal application startup migrates it.
+
 ## GPR Settings and PLS Reports (2026-09-17)
 
 Standalone GP manifest 3 retains the existing selected-model JSON/NPZ ownership
@@ -188,7 +193,7 @@ quarantine recovery. Different ports do not allow concurrent processes to open
 the same workspace. This process-level boundary does not replace per-request
 schema CAS, deletion preflight, or transaction checks.
 
-The offline backup format preserves the complete schema-20 logical database and
+The offline backup format preserves the complete supported logical database and
 all registered external files, including stale results and unconfirmed uploads.
 It refuses recovery markers, unknown managed files, incompatible schemas, and
 broken ownership/hash references. Restore verifies a bounded archive into a new

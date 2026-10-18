@@ -24,6 +24,7 @@ export interface MannWhitneyExecutionOptions {
 }
 
 interface MannWhitneyPanelProps {
+  onAnalysisInputChange?: () => void;
   alpha: number;
   alternative: string;
   analysisResult: AnalysisResultEnvelope | null;
@@ -155,7 +156,10 @@ export function MannWhitneyPanel(props: MannWhitneyPanelProps) {
             <button
               aria-pressed={inputLayout === "stacked"}
               className={inputLayout === "stacked" ? "active" : ""}
-              onClick={() => setInputLayout("stacked")}
+              onClick={() => {
+                props.onAnalysisInputChange?.();
+                setInputLayout("stacked");
+              }}
               type="button"
             >
               {t("mannWhitney.stacked")}
@@ -163,7 +167,10 @@ export function MannWhitneyPanel(props: MannWhitneyPanelProps) {
             <button
               aria-pressed={inputLayout === "unstacked"}
               className={inputLayout === "unstacked" ? "active" : ""}
-              onClick={() => setInputLayout("unstacked")}
+              onClick={() => {
+                props.onAnalysisInputChange?.();
+                setInputLayout("unstacked");
+              }}
               type="button"
             >
               {t("mannWhitney.unstacked")}
@@ -172,20 +179,41 @@ export function MannWhitneyPanel(props: MannWhitneyPanelProps) {
           <div className="option-grid">
             {inputLayout === "stacked" ? (
               <>
-                <ColumnSelect label={t("mannWhitney.response")} value={props.responseColumnId ?? ""} columns={props.responseColumns} onChange={props.onResponseColumnChange} />
-                <ColumnSelect label={t("mannWhitney.group")} value={props.groupColumnId ?? ""} columns={props.groupColumns} onChange={props.onGroupColumnChange} />
-                <LevelSelect label={t("mannWhitney.group1")} value={group1Value} levels={levels} disabled={preflightLoading} onChange={setGroup1Value} />
-                <LevelSelect label={t("mannWhitney.group2")} value={group2Value} levels={levels} disabled={preflightLoading} onChange={setGroup2Value} />
+                <ColumnSelect label={t("mannWhitney.response")} value={props.responseColumnId ?? ""} columns={props.responseColumns} onChange={(...args) => {
+                  props.onAnalysisInputChange?.();
+                  props.onResponseColumnChange(...args);
+                }} />
+                <ColumnSelect label={t("mannWhitney.group")} value={props.groupColumnId ?? ""} columns={props.groupColumns} onChange={(...args) => {
+                  props.onAnalysisInputChange?.();
+                  props.onGroupColumnChange(...args);
+                }} />
+                <LevelSelect label={t("mannWhitney.group1")} value={group1Value} levels={levels} disabled={preflightLoading} onChange={(...args) => {
+                  props.onAnalysisInputChange?.();
+                  setGroup1Value(...args);
+                }} />
+                <LevelSelect label={t("mannWhitney.group2")} value={group2Value} levels={levels} disabled={preflightLoading} onChange={(...args) => {
+                  props.onAnalysisInputChange?.();
+                  setGroup2Value(...args);
+                }} />
               </>
             ) : (
               <>
-                <ColumnSelect label={t("mannWhitney.sample1")} value={sample1ColumnId} columns={props.responseColumns} onChange={setSample1ColumnId} />
-                <ColumnSelect label={t("mannWhitney.sample2")} value={sample2ColumnId} columns={props.responseColumns.filter((column) => column.column_id !== sample1ColumnId)} onChange={setSample2ColumnId} />
+                <ColumnSelect label={t("mannWhitney.sample1")} value={sample1ColumnId} columns={props.responseColumns} onChange={(...args) => {
+                  props.onAnalysisInputChange?.();
+                  setSample1ColumnId(...args);
+                }} />
+                <ColumnSelect label={t("mannWhitney.sample2")} value={sample2ColumnId} columns={props.responseColumns.filter((column) => column.column_id !== sample1ColumnId)} onChange={(...args) => {
+                  props.onAnalysisInputChange?.();
+                  setSample2ColumnId(...args);
+                }} />
               </>
             )}
             <label>
               <span>{t("mannWhitney.method")}</span>
-              <select value={props.method} onChange={(event) => props.onMethodChange(event.currentTarget.value)}>
+              <select value={props.method} onChange={(event) => {
+                props.onAnalysisInputChange?.();
+                props.onMethodChange(event.currentTarget.value);
+              }}>
                 <option value="auto">{t("mannWhitney.auto")}</option>
                 <option value="exact">Exact</option>
                 <option value="asymptotic">Asymptotic</option>
@@ -193,7 +221,10 @@ export function MannWhitneyPanel(props: MannWhitneyPanelProps) {
             </label>
             <label>
               <span>{t("mannWhitney.alternative")}</span>
-              <select value={props.alternative} onChange={(event) => props.onAlternativeChange(event.currentTarget.value)}>
+              <select value={props.alternative} onChange={(event) => {
+                props.onAnalysisInputChange?.();
+                props.onAlternativeChange(event.currentTarget.value);
+              }}>
                 <option value="two_sided">{t("mannWhitney.twoSided")}</option>
                 <option value="greater">{firstLabel || t("mannWhitney.sample1")} &gt; {secondLabel || t("mannWhitney.sample2")}</option>
                 <option value="less">{firstLabel || t("mannWhitney.sample1")} &lt; {secondLabel || t("mannWhitney.sample2")}</option>
@@ -201,7 +232,10 @@ export function MannWhitneyPanel(props: MannWhitneyPanelProps) {
             </label>
             <label>
               <span>{t("mannWhitney.alpha")}</span>
-              <input max="0.5" min="0.001" step="0.001" type="number" value={props.alpha} onChange={(event) => props.onAlphaChange(Number(event.currentTarget.value))} />
+              <input max="0.5" min="0.001" step="0.001" type="number" value={props.alpha} onChange={(event) => {
+                props.onAnalysisInputChange?.();
+                props.onAlphaChange(Number(event.currentTarget.value));
+              }} />
             </label>
           </div>
           {inputLayout === "stacked" && preflightLoading ? <div className="notice-box">{t("mannWhitney.preflightLoading")}</div> : null}

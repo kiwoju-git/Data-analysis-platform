@@ -58,7 +58,7 @@ refitting models or rewriting results. Restore requires a new or empty target;
 it does not merge with an existing workspace. Existing backups are never
 overwritten. Keep the original workspace. Browser downloads outside it are not
 included. Archives contain private data and are neither encrypted nor signed.
-The current backup format supports metadata schemas 20 and 21 and rejects unknown
+The current backup format supports metadata schemas 20, 21 and 22 and rejects unknown
 assets, incompatible schema, and incomplete recovery state. The complete source
 contract is `docs/workspace_backup.md` in the repository documentation.
 
