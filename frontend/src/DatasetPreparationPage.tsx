@@ -15,6 +15,7 @@ import type { SchemaDraftPatch } from "./datasetPreparationTypes";
 import { PasteDatasetPanel } from "./PasteDatasetPanel";
 import type { SchemaDraft } from "./schemaPresets";
 import { appLocationChangeEvent } from "./browserNavigation";
+import { DatasetIntakeLimits } from "./DatasetIntakeLimits";
 
 export interface DatasetPreparationPageProps {
   canApplyBayesianPreset: boolean;
@@ -127,6 +128,7 @@ export function DatasetPreparationPage({
           {isUploading ? "업로드 중" : "업로드"}
         </button>
       </form>
+      <DatasetIntakeLimits />
       <PasteDatasetPanel isSubmitting={isPastingDataset} onRegister={onPasteDataset} />
       {flowError !== null ? (
         <div className="error-box" role="alert">

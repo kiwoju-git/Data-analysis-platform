@@ -38,9 +38,9 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 
 | ID | Area | Status | Evidence / Remaining Work |
 |---|---|---|---|
-| A01 | Windows E2E readiness/diagnostics | fixed | Child diagnostics, explicit ready gates and exact synthetic version selection implemented; focused Windows browser run passed. Original CI cause remains unproven; Linux/CI verification pending. |
-| A02 | Locale initialization | fixed | Getter SecurityError reproduced in a new regression test before the fix; safe getter, in-memory switching, startup render/import boundary added. Independent of the unresolved A01 CI cause. |
-| A03 | Dependencies/uploads | source_confirmed | Current Starlette advisories and fresh npm audits inspected; upgrade/lock and upload integration not yet complete. |
+| A01 | Windows E2E readiness/diagnostics | verified | Child diagnostics, explicit ready gates and exact synthetic version selection passed local focused and hosted Windows/Linux full E2E. Original CI cause remains unproven. |
+| A02 | Locale initialization | reproduced / verified | Getter SecurityError reproduced before the fix; safe getter, in-memory switching and startup boundary passed both platforms. Independent of the unresolved original A01 cause. |
+| A03 | Dependencies/uploads | reproduced / fixed (verification in progress) | Native security locks, streaming/multipart limits, worker ownership, visible intake limits and exact-inventory CI audits implemented. Truncation/cancel races reproduced. See dependency_upload_security.md; whole application checks pending. |
 | A04 | Transport/i18n | - | Pending request/response integrity tests. |
 | A05 | Dataset context | - | Pending deferred-response reproduction. |
 | A06 | GPR direct prediction | - | Pending snapshot/identity tests. |
@@ -100,9 +100,12 @@ This is not a physical Windows 11 or Linux execution claim.
 | `npm --prefix frontend run lint` | A01/A02 | No errors; 9 existing refresh warnings, plus 1 new entry-point warning subsequently removed by extracting ApplicationContent. Targeted ESLint then passed without warnings. |
 | `.venv\Scripts\python.exe -m pytest backend/tests/unit/test_openapi_frontend_contract.py backend/tests/unit/test_dev_startup_contract.py` | A01/A02 first run | 226 passed / 1 failed: new E2E stage names missing in the coverage document. Document synchronized; focused failed test rerun passed. |
 | Same backend command after document synchronization | A01/A02 rerun | 227 passed. |
-| `powershell -ExecutionPolicy Bypass -File scripts/check.ps1` | A01/A02 integrated | In progress; `.tmp/remediation-a01-a02-check.log`. |
+| `powershell -ExecutionPolicy Bypass -File scripts/check.ps1` | A01/A02 integrated | Exit 0: backend 1371 passed / 2 skipped; frontend 401 passed; typecheck/build/localization passed; lint 0 errors / 9 existing warnings. New diagnostic tests separately run. `.tmp/remediation-a01-a02-check.log`. |
 | `.venv\Scripts\python.exe -m pytest backend/tests/unit/test_e2e_diagnostics.py -q` | A01 review fixes | 5 passed. |
 | `powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 8031 -FrontendPort 5231 -DiagnosticsRoot .tmp/e2e-remediation-a01-final -KeepWorkspace` | A01/A02 local E2E | Failed in the new catalog-pending negative test: readiness correctly rejected the missing landing, but the test assumed Playwright's error text included the attribute name. It includes the locator/expected value instead. Corrected the assertion and always release held requests; no product timeout increase. Full suite is not counted as passed. |
+| Focused E2E command with `-RefinedUiOnly -DiagnosticsRoot .tmp/e2e-remediation-focused-3` | A01/A02 corrected negative test | Passed, including pending catalog, slow/failed chunk, storage cases, both locales and viewport checks. |
+| `npm test -- --run` from isolated A03 frontend | A03 | Vitest 4.1.12: 57 files / 404 tests passed. |
+| `powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1 -BackendPort 8033 -FrontendPort 5233 -DiagnosticsRoot ../e2e-remediation-a03 -KeepWorkspace` from isolated A03 worktree | A03 | Exit 0, full critical path passed including refined UI/intake policy, startup readiness and Two Variances. |
 | `npm --prefix frontend audit --omit=dev --json` | A03 baseline | Exit 0; no reported runtime advisories at lookup time. |
 | `npm --prefix frontend audit --json` | A03 baseline | Exit 1; 14 affected package entries (12 high, 2 moderate), including indirect impact. Not 14 independent vulnerabilities. |
 
@@ -114,6 +117,11 @@ existing workbench tokens, readable recovery text, no raw exception/stack.
 
 A01/A02 checkpoint `456695365f493cbb2572236b0270c6a68d565500` was pushed to
 the feature branch, not main. [Checkpoint CI](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/39087043940)
-was started; it includes the subsequently corrected negative-test assertion.
+reproduced the negative-test assertion on Linux. Corrected in `3a65b68`;
+[run 39087911267](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/39087911267)
+completed successfully: Windows full checks, Windows E2E, Linux full checks/E2E,
+Python 3.11 checks and Linux archive/offline smoke. The archive is a CI artifact,
+not a published Release. This run predates A03 dependency/upload changes and
+does not validate them. A03 is isolated in its own worktree for verification.
 No release publication or main push has completed for this remediation.
 Historical successes are not validation evidence for these changes.

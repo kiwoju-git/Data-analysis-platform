@@ -1,3 +1,15 @@
+export interface DatasetIntakeLimitsResponse {
+  file_bytes: number;
+  paste_utf8_bytes: number;
+  json_request_bytes: number;
+  multipart_request_bytes: number;
+  multipart_files: 1;
+  multipart_fields: number;
+  multipart_field_bytes: number;
+  parsed_rows: number;
+  parsed_columns: number;
+}
+
 export interface UploadWarning {
   code: string;
   message: string;

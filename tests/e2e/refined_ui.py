@@ -106,6 +106,12 @@ def _verify_locale(
             page.goto(base_url + route, wait_until="domcontentloaded")
             wait_for_app_ready(page, locale, route)
             expect(page.locator(".topbar .status-ready")).to_be_visible()
+            if name == "datasets":
+                limits = page.locator(".dataset-intake-limits")
+                expect(limits).to_be_visible()
+                expect(limits).to_contain_text("104,857,600")
+                expect(limits).to_contain_text("1,048,576")
+                expect(limits).to_contain_text("16,384")
             assert_no_overflow(page)
             if name.endswith("-domain"):
                 guide = page.locator(".analysis-domain-guide")

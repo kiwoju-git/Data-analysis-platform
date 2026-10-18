@@ -57,6 +57,20 @@ class DatasetUploadResponse(BaseModel):
     next_step: Literal["confirm_schema"]
 
 
+class DatasetIntakeLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_bytes: int
+    paste_utf8_bytes: int
+    json_request_bytes: int
+    multipart_request_bytes: int
+    multipart_files: Literal[1]
+    multipart_fields: int
+    multipart_field_bytes: int
+    parsed_rows: int
+    parsed_columns: int
+
+
 class PastedDatasetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

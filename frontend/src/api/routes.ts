@@ -37,6 +37,9 @@ export interface AttributeControlLimitSetsRouteParams {
 }
 
 export const apiRoutes = {
+  datasetIntakeLimits(): string {
+    return apiUrl("/datasets/intake-limits");
+  },
   twoVariancesPreflight() {
     return apiUrl("/analysis-methods/quality.two_variances/preflight");
   },

@@ -94,7 +94,7 @@ function column(id: string, name: string, dataType: "decimal" | "text"): Dataset
     measurement_level: dataType === "decimal" ? "continuous" : "nominal",
     role: "unspecified",
     unit: null,
-  } as DatasetColumnResponse;
+  };
 }
 
 function version(columns: DatasetColumnResponse[]): DatasetVersionResponse {
@@ -136,5 +136,5 @@ function result(): EquivalenceTostResult {
     tost: { p_value: 0.0003, equivalent: true, decision_rule: "both_one_sided_tests_reject_at_alpha", ci_inside_equivalence_bounds: true },
     confidence_interval: { level: 0.9, lower: 0.015, upper: 0.185, inside_equivalence_bounds: true },
     effect_size: null,
-  } as EquivalenceTostResult;
+  };
 }

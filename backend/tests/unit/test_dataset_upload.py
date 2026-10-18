@@ -5,11 +5,38 @@ import zipfile
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
 from app.storage.metadata import get_dataset_record, list_dataset_artifact_records
+
+
+@pytest.mark.parametrize("kind", ["csv", "xlsx"])
+@pytest.mark.parametrize("limit", ["max_dataset_rows", "max_dataset_columns"])
+def test_confirm_parsing_dimension_limit_preserves_raw_without_partial_version(
+    tmp_path, kind, limit
+):
+    settings = Settings(workspace_root=tmp_path, **{limit: 1})
+    content = b"x,y\n1,2\n3,4\n" if kind == "csv" else _xlsx_workbook_bytes()
+    with TestClient(create_app(settings)) as client:
+        uploaded = client.post("/api/v1/datasets", files={"file": (f"input.{kind}", content)})
+        assert uploaded.status_code == 201
+        dataset_id = uploaded.json()["dataset_id"]
+        parsing = _confirmation_body()
+        if kind == "xlsx":
+            parsing["parsing"].update(
+                kind="xlsx", encoding=None, delimiter=None, xlsx_sheet_name="Sheet1"
+            )
+        response = client.post(f"/api/v1/datasets/{dataset_id}/confirm-parsing", json=parsing)
+        assert response.status_code == 413, response.text
+        assert response.json()["error"]["code"] == "dataset_dimensions_exceeded"
+        assert client.get(f"/api/v1/datasets/{dataset_id}/versions").json()["versions"] == []
+        record = get_dataset_record(tmp_path, dataset_id)
+        assert record is not None
+        assert (tmp_path / record.stored_path).read_bytes() == content
+        assert record.sha256 == hashlib.sha256(content).hexdigest()
 
 
 def test_upload_csv_preserves_raw_file_and_records_metadata(tmp_path) -> None:

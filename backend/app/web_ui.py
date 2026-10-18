@@ -4,7 +4,16 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse as StarletteFileResponse
+from fastapi.responses import RedirectResponse
+
+
+class FileResponse(StarletteFileResponse):
+    # Starlette 1.7 is the last Python 3.10-compatible release. Avoid its
+    # multipart-range EOF loop when a local UI file changes during a read.
+    # Per Starlette's policy, multiple ranges fall back to a full response.
+    max_ranges = 1
+
 
 SPA_PATHS = ("home", "project", "datasets", "graphs", "reports", "help", "manage", "analysis")
 MODULE_IDS = {"exploration", "hypothesis", "categorical", "regression", "quality", "doe"}

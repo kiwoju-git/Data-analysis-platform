@@ -31,7 +31,6 @@ import type {
   RegressionPredictionResponse,
   RegressionPredictionRowsPageResponse,
   RegressionModelDeleteResponse,
-  RegressionModelCatalogResponse,
   RegressionModelDeletionPreflightResponse,
   RuntimeInfoResponse,
 } from "./api";
@@ -633,7 +632,7 @@ beforeEach(() => {
     offset: 0,
     has_previous: false,
     has_next: false,
-  } as RegressionModelCatalogResponse);
+  });
 });
 
 afterEach(() => {
@@ -1000,7 +999,7 @@ describe("async workbench hooks", () => {
       offset: 0,
       limit: 100,
       items: [firstLimitSet, secondLimitSet],
-    } as AttributeControlLimitSetListResponse);
+    });
     apiMocks.fetchAttributeControlMonitoringPreflight.mockResolvedValue({
       ready: true,
       issues: [],
@@ -1039,7 +1038,7 @@ describe("async workbench hooks", () => {
       model_id: "model-a",
       deletion_ready: true,
       deletion_manifest_sha256: "a".repeat(64),
-    } as RegressionModelDeletionPreflightResponse);
+    });
     const deletion = deferred<RegressionModelDeleteResponse>();
     apiMocks.deleteRegressionModel.mockReturnValueOnce(deletion.promise);
     const runner = new HookRunner<
@@ -1145,10 +1144,10 @@ describe("async workbench hooks", () => {
       model_id: "model-a",
       deletion_ready: true,
       deletion_manifest_sha256: "a".repeat(64),
-    } as RegressionModelDeletionPreflightResponse);
+    });
     apiMocks.deleteRegressionModel.mockResolvedValue({
       model_id: "model-a",
-    } as RegressionModelDeleteResponse);
+    });
     const runner = new HookRunner<
       Parameters<typeof useRegressionModelRetentionState>[0],
       ReturnType<typeof useRegressionModelRetentionState>
@@ -1175,7 +1174,7 @@ describe("async workbench hooks", () => {
     apiMocks.deleteRegressionModel.mockResolvedValue({
       model_id: "model-a",
       deletion_mode: "model_and_predictions",
-    } as RegressionModelDeleteResponse);
+    });
     const runner = new HookRunner<
       Parameters<typeof useRegressionModelRetentionState>[0],
       ReturnType<typeof useRegressionModelRetentionState>

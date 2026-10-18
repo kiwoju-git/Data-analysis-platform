@@ -90,3 +90,28 @@ def test_static_symlink_outside_dist_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(HTTPException):
         safe_static_file(root, "assets/linked.txt")
+
+
+def test_static_range_policy_avoids_multipart_eof_handler(tmp_path, monkeypatch):
+    from starlette.responses import FileResponse
+
+    async def forbidden_multipart(*args, **kwargs):
+        raise AssertionError("The Python 3.10 range mitigation must bypass multi-range reads")
+
+    monkeypatch.setattr(FileResponse, "_handle_multiple_ranges", forbidden_multipart)
+    root = web_files(tmp_path)
+    payload = (root / "assets" / "app-123.js").read_bytes()
+    with TestClient(
+        create_app(Settings(frontend_dist=root, workspace_root=tmp_path / "workspace")),
+        base_url="http://127.0.0.1",
+    ) as client:
+        single = client.get("/assets/app-123.js", headers={"Range": "bytes=0-5"})
+        assert single.status_code == 206
+        assert single.content == payload[:6]
+        multiple = client.get("/assets/app-123.js", headers={"Range": "bytes=0-2,8-10"})
+        assert multiple.status_code == 200
+        assert multiple.content == payload
+        # Even a range beyond EOF cannot enter the vulnerable multipart handler.
+        eof = client.get("/assets/app-123.js", headers={"Range": "bytes=0-2,999999-"})
+        assert eof.status_code == 200
+        assert eof.content == payload

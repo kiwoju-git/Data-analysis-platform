@@ -17,7 +17,7 @@ const analysisCatalog: AnalysisMethodListResponse = {
     ["quality", "품질 관리", 50] as const,
     ["doe", "실험 계획법", 60] as const,
   ].map(([module_id, label_ko, order]) => ({
-    module_id: module_id as AnalysisMethodListResponse["modules"][number]["module_id"],
+    module_id: module_id,
     label_ko,
     label_en: String(label_ko),
     order,
