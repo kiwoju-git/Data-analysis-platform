@@ -1,5 +1,112 @@
 # HTML Report Coverage Matrix
 
+## Current A11 Contract
+
+Generic HTML artifact schema **4** records locale, exact source SHA-256, renderer
+version, rendered section IDs and `full`/`summary` level. Existing files are not
+rewritten. API contract remains 23 for this integrated remediation; method/result
+versions and metadata schema 20 are unchanged by report display changes.
+
+`report_coverage.report_definitions()` and renderer-owned section declarations are
+the source of truth. `GET /api/v1/analysis-runs/{id}/report-capability?locale=en|ko`
+describes the particular stored payload. The catalog exposes the same schema and
+variant declarations. There is no separate frontend HTML method allowlist.
+HTML POST can bind `expected_source_result_sha256`; mismatch returns 409 without
+creating an artifact. Unsupported schema, variant or empty core returns 422.
+
+- `full`: every declared applicable section rendered from stored values.
+- `summary`: readable core, with named optional sections unavailable.
+- `unsupported`: no valid core/known schema or renderer-contract mismatch.
+- `not_applicable`: explicitly unrequested/inapplicable, distinct from missing
+  legacy fields. It does not authorize invented values.
+
+These are renderer completeness levels, not claims that every historical file or
+option was visually tested. The capability and visible HTML both list actual
+sections and reasons. The escaped JSON appendix is not output-coverage evidence.
+Stored plot limits stay intact and saved/calculation N is stated; frontend
+pagination never restricts report rows/components.
+
+`analysis_report_source` checks ownership/result SHA, row-selection snapshot
+identity/SHA and frozen Phase II dependencies without canonical-row reads.
+`source_validation=stored_dependencies_only` does not claim to revalidate current
+raw data. Stale results carry a visible warning; normal restore/calculation
+readers keep their existing freshness policies. Legacy general config has no
+independent full-config digest, so this is not arbitrary DB-tamper authentication.
+
+HTML uses escaped text and inline SVG/CSS under the existing CSP. No fit, CV,
+prediction, raw-row reload, external resource or full-result CSV flattening occurs.
+CSV export is separate. Unknown warning codes retain their code and original
+meaning; known messages have explicit translations rather than generic replacement.
+
+### Current Method-Level Sections
+
+Versions and accepted stored schemas are declared in the live catalog and
+`INLINE_REPORT_CONTRACTS`; the historical matrix below is not the current contract.
+
+| Method ID | Actual renderer / saved sections | Important limit |
+| --- | --- | --- |
+| eda.descriptive | Basic EDA: settings/all column statistics | Quick chart is not an additional stored statistical payload |
+| eda.graphical_summary | Basic EDA: statistics/AD/CI, histogram/normal fit/box/Q-Q/ECDF | Missing legacy plots are not regenerated |
+| eda.normality | normality_report: tests and Q-Q | Missing legacy Q-Q becomes summary |
+| eda.principal_components | principal_components_report: eigenanalysis/loadings/scree/score/loading/biplot/D-squared | Raw loadings separate from display scale; no fake PC2 |
+| hypothesis.one_sample_t | hypothesis_report: sample/test/effect/estimate/CI plot | Stored one-sided endpoint semantics |
+| hypothesis.paired_t | hypothesis_report: pairing/difference/test/effect/CI | Difference definition retained |
+| hypothesis.two_sample_t | hypothesis_report: groups/difference/test/effect/CI | No automatic Welch/pooled reselection |
+| hypothesis.one_way_anova | hypothesis_report: standard/Welch groups/ANOVA/post-hoc/effects | Current payload lacks residual diagnostics: summary |
+| hypothesis.equivalence_tost | hypothesis_report: one-sample margins/CI/two tests/plot | Method-specific variant |
+| hypothesis.two_sample_equivalence_tost | hypothesis_report: two-sample TOST and sample summaries | Shared summary_type does not authorize a different design |
+| hypothesis.paired_equivalence_tost | hypothesis_report: paired TOST and differences | Same variant/interval constraints |
+| hypothesis.one_sample_wilcoxon | hypothesis_report: ranks/test/effect/available estimate | No invented CI |
+| hypothesis.mann_whitney | hypothesis_report: groups/ranks/test/effects/available estimate | Not automatically a median difference |
+| hypothesis.kruskal_wallis | hypothesis_report: groups/ranks/test/effect/post-hoc | No unsupported interval |
+| categorical.one_proportion | categorical_report: counts/test/proportion/interval | Event/trial and one-sided bounds retained |
+| categorical.two_proportion | categorical_report: groups/counts/difference/test/interval | Actual sample inputs preserved |
+| categorical.chi_square_association | categorical_report: actual/expected counts/residual/effect/association view | Actual and expected labelled separately |
+| regression.pearson | correlation_report: correlation/test/CI/scatter | Saved row identity and units |
+| regression.xy_correlation | correlation_report: all pair rows/heatmap | Failed cells never become zero |
+| regression.linear_model, OLS | linear_model_report: fit/equation/coefs/ANOVA/selection/influence/raw+standardized diagnostics | Missing legacy sections become summary |
+| regression.linear_model, Ridge/Lasso/EN | regularized_model_report + residual distribution: tuning/CV/all coefficient paths | No OLS inference |
+| regression.partial_least_squares | pls_regression_report: settings/components/coefs/train+OOF/score/all loadings/residuals | No UI pagination limit, invented VIP or p-values |
+| regression.gaussian_process | GP core + gaussian_process_report: settings/optimizer/train+CV/residual/predictive SD/profile/surface tables and mean+SD heatmaps/comparison | Single/compare variants; missing old settings/plots reduce level |
+| quality.individuals_chart | quality_report: I/MR summaries/charts/signals | Shapes and zero limits preserved |
+| quality.subgroup_chart | quality_report: Xbar/R/S summaries/charts/signals | Actual subgroup counts/statistics |
+| quality.attribute_control_chart | quality_report: p/np/c/u summaries/charts/signals | Point-varying limits and frozen Phase II dependency |
+| quality.run_chart | quality_report: runs/randomness/signals | Median only, no invented LCL/UCL |
+| quality.capability | quality_report: capability/nonconformance/histogram/specifications | Stored bins, zero LSL/target retained |
+| quality.gage_rr | quality_report: ANOVA/variance components/design | Current payload lacks interaction: summary |
+| quality.gage_run_chart | quality_report: part/operator/replicate and separate run series | No cross-operator joins or invented timestamps |
+| quality.two_variances | two_variances_report: settings/groups/ratio/test/conditional interval/plots | BF intentionally has no ratio CI; Bonett deferred |
+| eda.equal_variances | Basic EDA: groups/tests/multiple-comparison intervals/pairs | Distinct from Two Variances ratio CI |
+
+Dedicated workflows still use their own readers/exports. Factorial/general
+factorial retain managed analysis HTML and separate legacy design reports.
+Managed prediction/RSM/optimizer/LHS/BO reports remain the separate **A12 gate**;
+they are not implemented by generic dispatch. Completed PLS/GPR local JSON
+snapshots are explicitly not Report Center artifacts and never overwrite results.
+Comparability and multivariate monitoring stay roadmap-only; Two Variances is
+implemented; GP surrogate and model-dependent optimization remain contextual.
+
+### Evidence and Limits
+
+`test_report_coverage` checks registry/dispatch/schema/variant/empty-core contracts;
+dispatch mocks are not numerical proof. `test_analysis_report_capabilities` and
+`test_analysis_report_source` test actual capability/HTML section parity, source
+hash binding, owned paths/snapshots, frozen Phase II dependencies, no raw reads/
+CSV flattening and unchanged dependency bytes. Family report tests inspect visible
+tables/SVG values, locales, escaping, large stored tables and legacy gaps.
+Actual-producer fixtures prove display parity, not independent numerical accuracy.
+
+The A11 browser suite uses actual components with mocked synthetic HTTP for
+KO/EN, delayed capability/export, 409, mutation, widths and Unicode downloads.
+Real backend API tests separately exercise create/download. These are not the
+final all-platform Release gate. Exact checks/failures are in
+`end_to_end_remediation.md`; unexecuted combinations are not claimed as verified.
+
+## Historical Audit (Superseded by A11 Above)
+
+The following records the earlier schema-3 baseline and its then-missing sections.
+It is retained as audit history, not as the current menu/report support list.
+
 HTML report artifact schema 3 is generated only from the stored result envelope. It records
 the requested `en` or `ko` report locale and does not
 rerun analyses or read raw dataset rows. All user-provided text is escaped and all graphics are
@@ -82,8 +189,9 @@ Renderer shorthand: E = named EDA renderer in `analysis_run_exports.py`, H =
 | Measurement | quality.gage_rr 0.1.0 | gage_rr / 1 | Q: variance components | summary; full ANOVA/interaction views absent | API capability/gage exports |
 | Measurement | quality.gage_run_chart 0.1.0 | gage_run_chart / 1 | Q: design/run summary | summary | API capability/gage exports |
 
-Planned Comparability, multivariate monitoring and two-variance items are not
-executable and have no report. BO's surrogate is contextual, not a second GP.
+Comparability and multivariate monitoring were planned and have no report.
+Two Variances is now implemented (the former planned label was obsolete).
+BO's surrogate is contextual, not a second GP.
 The contextual regression optimizer retains its own non-HTML workflow.
 
 ### PLS Screen Correspondence

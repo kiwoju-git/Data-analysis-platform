@@ -2,6 +2,7 @@ import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  AnalysisReportCapability,
   AnalysisResultEnvelope,
   AnalysisRunDeleteResponse,
   AnalysisRunDeletionPreflightResponse,
@@ -65,6 +66,17 @@ import { useAssetManagementState } from "./useAssetManagementState";
 import { useProjectOverviewState } from "./useProjectOverviewState";
 import type { AnalysisRunsRouteParams } from "./api/routes";
 
+function reportCapability(analysisId: string, locale: "en" | "ko", hash = "a"): AnalysisReportCapability {
+  return {
+    capability_schema_version: 1, analysis_id: analysisId, method_id: "eda.descriptive",
+    summary_type: "descriptive_statistics", result_schema_version: 1,
+    source_result_sha256: hash.repeat(64), stale: false, locale,
+    renderer_id: "descriptive", renderer_version: "1", variant_id: "default",
+    report_level: "full", sections: [], reason: null, html_available: true,
+    source_validation: "stored_dependencies_only",
+  };
+}
+
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
   closeBayesianStudy: vi.fn(),
@@ -87,6 +99,7 @@ const apiMocks = vi.hoisted(() => ({
   downloadAnalysisResultExport: vi.fn(),
   fetchAnalysisResultExportDeletionPreflight: vi.fn(),
   fetchAnalysisResultExports: vi.fn(),
+  fetchAnalysisReportCapability: vi.fn(),
   fetchAnalysisRunComparison: vi.fn(),
   fetchAnalysisRunDeletionPreflight: vi.fn(),
   fetchAnalysisRunResult: vi.fn(),
@@ -2629,6 +2642,120 @@ describe("async workbench hooks", () => {
     expect(runner.output.analysisResultExportList?.analysis_id).toBe("analysis-b");
     expect(runner.output.isLoadingAnalysisResultExportList).toBe(false);
     runner.unmount();
+  });
+
+  it("binds HTML creation to the restored owner, explicit locale and capability hash", async () => {
+    apiMocks.fetchAnalysisResultExports.mockImplementation((id: string) => Promise.resolve(exportListResponse(id)));
+    apiMocks.fetchAnalysisReportCapability.mockImplementation((id: string, locale: "en" | "ko") => Promise.resolve(reportCapability(id, locale)));
+    apiMocks.createAnalysisResultHtmlReport.mockResolvedValue({ analysis_id: "restored-b", report_locale: "en", source_result_sha256: "a".repeat(64) });
+    const runner = new HookRunner(useAnalysisExportState, {
+      currentAnalysisId: null, currentDatasetVersionId: "dataset-a", resetKey: 0, locale: "en" as const,
+    });
+    await runner.act(() => { void runner.output.onRefreshAnalysisResultExports("restored-b"); });
+    expect(runner.output.analysisReportCapability?.analysis_id).toBe("restored-b");
+    await runner.act(() => runner.output.onCreateAnalysisResultHtmlReport("restored-b"));
+    expect(apiMocks.createAnalysisResultHtmlReport).toHaveBeenCalledWith("restored-b", {
+      locale: "en", expected_source_result_sha256: "a".repeat(64),
+    });
+    expect(runner.output.analysisResultHtmlReport?.analysis_id).toBe("restored-b");
+    runner.unmount();
+  });
+
+  it("does not create HTML when capability is unknown or unsupported", async () => {
+    const pending = deferred<AnalysisReportCapability>();
+    apiMocks.fetchAnalysisReportCapability.mockReturnValue(pending.promise);
+    apiMocks.fetchAnalysisResultExports.mockResolvedValue(exportListResponse("analysis-a"));
+    const runner = new HookRunner(useAnalysisExportState, {
+      currentAnalysisId: "analysis-a", currentDatasetVersionId: "dataset-a", resetKey: 0,
+    });
+    await runner.act(() => runner.output.onCreateAnalysisResultHtmlReport("analysis-a"));
+    expect(apiMocks.createAnalysisResultHtmlReport).not.toHaveBeenCalled();
+    pending.resolve({ ...reportCapability("analysis-a", "en"), report_level: "unsupported", html_available: false });
+    await runner.flush();
+    await runner.act(() => runner.output.onCreateAnalysisResultHtmlReport("analysis-a"));
+    expect(apiMocks.createAnalysisResultHtmlReport).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it("ignores late capability success and HTML completion after a locale or mutation change", async () => {
+    const oldCapability = deferred<AnalysisReportCapability>();
+    const oldHtml = deferred<unknown>();
+    apiMocks.fetchAnalysisResultExports.mockResolvedValue(exportListResponse("analysis-a"));
+    apiMocks.fetchAnalysisReportCapability.mockReturnValueOnce(oldCapability.promise)
+      .mockResolvedValueOnce(reportCapability("analysis-a", "ko"))
+      .mockResolvedValueOnce(reportCapability("analysis-a", "ko", "b"));
+    const initial: Parameters<typeof useAnalysisExportState>[0] = {
+      currentAnalysisId: "analysis-a", currentDatasetVersionId: "dataset-a", resetKey: 0, locale: "en", workspaceRevision: 0,
+    };
+    const runner = new HookRunner(useAnalysisExportState, initial);
+    runner.update({ ...initial, locale: "ko" });
+    await runner.flush();
+    oldCapability.resolve(reportCapability("analysis-a", "en"));
+    await runner.flush();
+    expect(runner.output.analysisReportCapability?.locale).toBe("ko");
+    apiMocks.createAnalysisResultHtmlReport.mockReturnValue(oldHtml.promise);
+    await runner.act(() => runner.output.onCreateAnalysisResultHtmlReport("analysis-a"));
+    runner.update({ ...initial, locale: "ko", workspaceRevision: 1 });
+    await runner.flush();
+    oldHtml.resolve({ analysis_id: "analysis-a", report_locale: "ko", source_result_sha256: "a".repeat(64) });
+    await runner.flush();
+    expect(runner.output.analysisResultHtmlReport).toBeNull();
+    expect(runner.output.analysisReportCapability?.source_result_sha256).toBe("b".repeat(64));
+    expect(runner.output.isCreatingAnalysisResultHtmlReport).toBe(false);
+    runner.unmount();
+  });
+
+  it("keeps restored owner B coverage when A fails late and retries coverage without reloading exports", async () => {
+    const old = deferred<AnalysisReportCapability>();
+    apiMocks.fetchAnalysisResultExports.mockImplementation((id: string) => Promise.resolve(exportListResponse(id)));
+    apiMocks.fetchAnalysisReportCapability.mockReturnValueOnce(old.promise)
+      .mockRejectedValueOnce(new Error("api_unreachable"))
+      .mockResolvedValueOnce(reportCapability("analysis-b", "en"));
+    const runner = new HookRunner(useAnalysisExportState, {
+      currentAnalysisId: "analysis-a", currentDatasetVersionId: "dataset-a", resetKey: 0, locale: "en" as const,
+    });
+    await runner.act(() => { void runner.output.onRefreshAnalysisResultExports("analysis-b"); });
+    expect(runner.output.analysisReportCapabilityError).toBe("api_unreachable");
+    old.reject(new Error("private raw failure"));
+    await runner.flush();
+    expect(runner.output.analysisReportCapabilityError).toBe("api_unreachable");
+    const count = apiMocks.fetchAnalysisResultExports.mock.calls.length;
+    await runner.act(() => runner.output.onRefreshAnalysisReportCapability());
+    expect(runner.output.analysisReportCapability?.analysis_id).toBe("analysis-b");
+    expect(apiMocks.fetchAnalysisResultExports).toHaveBeenCalledTimes(count);
+    runner.unmount();
+  });
+
+  it("rejects mismatched capability and never publishes a report with another source hash", async () => {
+    apiMocks.fetchAnalysisResultExports.mockResolvedValue(exportListResponse("analysis-a"));
+    apiMocks.fetchAnalysisReportCapability.mockResolvedValueOnce(reportCapability("analysis-b", "en"))
+      .mockResolvedValueOnce(reportCapability("analysis-a", "en"));
+    const runner = new HookRunner(useAnalysisExportState, {
+      currentAnalysisId: "analysis-a", currentDatasetVersionId: "dataset-a", resetKey: 0, locale: "en" as const,
+    });
+    await runner.flush();
+    expect(runner.output.analysisReportCapability).toBeNull();
+    expect(runner.output.analysisReportCapabilityError).toBe("analysis_report_capability_invalid");
+    await runner.act(() => runner.output.onRefreshAnalysisReportCapability());
+    apiMocks.createAnalysisResultHtmlReport.mockResolvedValue({ analysis_id: "analysis-a", report_locale: "en", source_result_sha256: "b".repeat(64) });
+    await runner.act(() => runner.output.onCreateAnalysisResultHtmlReport("analysis-a"));
+    expect(runner.output.analysisResultHtmlReport).toBeNull();
+    expect(runner.output.analysisResultHtmlReportError).toBe("analysis_report_source_mismatch");
+    runner.unmount();
+  });
+
+  it("invalidates in-flight capability on unmount without exposing exception text", async () => {
+    const pending = deferred<AnalysisReportCapability>();
+    apiMocks.fetchAnalysisResultExports.mockResolvedValue(exportListResponse("analysis-a"));
+    apiMocks.fetchAnalysisReportCapability.mockReturnValue(pending.promise);
+    const runner = new HookRunner(useAnalysisExportState, {
+      currentAnalysisId: "analysis-a", currentDatasetVersionId: "dataset-a", resetKey: 0,
+    });
+    runner.unmount();
+    pending.reject(new Error("private exception detail"));
+    await runner.flush();
+    expect(runner.output.analysisReportCapability).toBeNull();
+    expect(runner.output.analysisReportCapabilityError).toBeNull();
   });
 
   it("keeps export deletion reset state after old preflight and delete responses", async () => {

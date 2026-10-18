@@ -1,4 +1,5 @@
 import type { TwoVariancesResult } from "./twoVariances";
+import type { MethodReportContract } from "./reportCapabilities";
 import type {
   DescriptiveStatisticsResult,
   EqualVariancesResult,
@@ -73,6 +74,7 @@ export interface AnalysisMethodDescriptor {
   source_prerequisite?: AnalysisSourcePrerequisite | null;
   order: number;
   disabled_reason: string | null;
+  report_contract?: MethodReportContract | null;
 }
 
 export interface AnalysisMethodListResponse {

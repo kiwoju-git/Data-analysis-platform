@@ -101,10 +101,6 @@ import { ProjectOverviewPage } from "./ProjectOverviewPage";
 import { RoleDictionary } from "./RoleDictionary";
 import { ReportCenterPage } from "./ReportCenterPage";
 import {
-  reportCreationCapabilities,
-  reportWorkflowCapabilities,
-} from "./reportCenterCapabilities";
-import {
   bayesianRecommendationBudgetBlocker,
   bayesianRecommendationStatus,
   bayesianStudyCloseBlocker,
@@ -597,25 +593,13 @@ describe("App", () => {
     expect(html).toContain("인과관계나 실무적 중요성을 단정하지 마세요");
   });
 
-  it("keeps Report Center capabilities explicit for generic and dedicated workflows", () => {
-    expect(reportCreationCapabilities("eda.descriptive")).toEqual({
-      json: true,
-      csv: true,
-      html: true,
-    });
-    expect(reportCreationCapabilities("regression.predict")).toEqual({
-      json: false,
-      csv: false,
-      html: false,
-    });
-    expect(reportWorkflowCapabilities.find((item) => item.methodId === "regression.predict"))
-      .toMatchObject({ csv: "전용 화면에서 full prediction CSV 지원", html: "현재 지원되지 않음" });
+  it("shows backend renderer registration without promising result coverage", () => {
     const html = renderToString(
       <ReportCenterPage catalog={analysisTestCatalog()} currentDatasetVersionId={null} />,
     );
     expect(html).toContain("리포트 센터");
-    expect(html).toContain("P0 capability matrix");
-    expect(html).toContain("현재 지원되지 않음");
+    expect(html).toContain("등록된 보고서 렌더러");
+    expect(html).toContain("등록 여부만으로 지원 범위를 보장하지 않습니다");
     expect(html).not.toContain("PDF");
   });
 
@@ -1499,7 +1483,8 @@ describe("App", () => {
     expect(html).toContain("사람에게 공유하기 좋은 self-contained 정적 보고서입니다.");
     expect(html).toContain("JSON 생성");
     expect(html).toContain("CSV 생성");
-    expect(html).toContain("HTML 생성");
+    expect(html).not.toContain("HTML 생성");
+    expect(html).toContain("이 결과와 언어의 HTML 지원 확인이 필요합니다");
     expect(html).toContain(selectedMethod.method_id);
   });
 

@@ -4,10 +4,42 @@ from html import escape
 from typing import Any
 
 from app.i18n.report_text import ReportLocale, report_text
+from app.services.report_contract import (
+    ReportBody,
+    ReportSection,
+    ReportSectionDefinition,
+    ReportVariantDefinition,
+)
 from app.services.stored_report_primitives import report_horizontal_bars, report_plot, report_table
 
+PLS_REPORT_VARIANTS = (
+    ReportVariantDefinition(
+        "pls",
+        tuple(
+            ReportSectionDefinition(
+                section_id,
+                section_id
+                in {"method_and_sample", "component_selection", "model_summary", "coefficients"},
+            )
+            for section_id in (
+                "method_and_sample",
+                "component_selection",
+                "selection_plot",
+                "model_summary",
+                "coefficients",
+                "diagnostic_scope",
+                "response_plots",
+                "scores",
+                "loadings",
+                "residuals",
+                "warnings_limits",
+            )
+        ),
+    ),
+)
 
-def pls_warning_text(code: str, locale: ReportLocale) -> str:
+
+def pls_warning_text(code: str, locale: ReportLocale, original: str | None = None) -> str:
     messages = {
         "pls_predictive_not_causal": (
             "PLS predicts associations, not causal effects.",
@@ -38,13 +70,20 @@ def pls_warning_text(code: str, locale: ReportLocale) -> str:
             "결측 또는 비수치 행을 완전 사례 정책으로 제외했습니다.",
         ),
     }
-    en, ko = messages.get(
-        code, ("Review the saved warning code.", "저장된 경고 코드를 확인하세요.")
-    )
+    en, ko = messages.get(code, (original or code, original or code))
     return report_text(locale, en=en, ko=ko)
 
 
 def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
+    body = pls_report_body(payload, locale)
+    selected = int(payload["model_summary"]["selected_components"])
+    return (
+        f'<section data-pls-report="1" data-selected-components="{selected}">'
+        f"{body.render()}</section>"
+    )
+
+
+def pls_report_body(payload: dict[str, Any], locale: ReportLocale) -> ReportBody:
     def text(en: str, ko: str) -> str:
         return report_text(locale, en=en, ko=ko)
 
@@ -53,6 +92,13 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
 
     def paragraph(en: str, ko: str) -> str:
         return f"<p>{escape(text(en, ko))}</p>"
+
+    sections: list[ReportSection] = []
+    parts: list[str] = []
+
+    def take(section_id: str, en: str, ko: str) -> None:
+        sections.append(ReportSection(section_id, text(en, ko), "rendered", "".join(parts)))
+        parts.clear()
 
     if payload.get("schema_version") != 1:
         raise ValueError("analysis_report_schema_unsupported")
@@ -101,11 +147,11 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
             ],
             [text("Missing policy", "결측 정책"), method["missing_policy"]],
         ]
-        parts = [
-            f'<section data-pls-report="1" data-selected-components="{selected}">',
+        parts += [
             heading("PLS Method and Sample", "PLS 분석 방법과 표본"),
             report_table(metric_headers, settings),
         ]
+        take("method_and_sample", "PLS Method and Sample", "PLS 분석 방법과 표본")
         headers = [
             text("Components", "성분 수"),
             text("X variance ratio", "X 설명 비율"),
@@ -138,6 +184,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 ],
             ),
         ]
+        take("component_selection", "Component Selection", "성분 선택")
         series = [
             (
                 label,
@@ -167,6 +214,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
             ),
             "</div>",
         ]
+        take("selection_plot", "PLS Model Selection", "PLS 모형 선택")
         parts += [
             heading("Selected Model Summary", "선택 모형 요약"),
             report_table(
@@ -187,6 +235,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 ],
             ),
         ]
+        take("model_summary", "Selected Model Summary", "선택 모형 요약")
         parts += [
             heading("Regression Coefficients", "회귀계수"),
             report_table(
@@ -207,6 +256,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 "나타내며 유의성 검정이 아닙니다.",
             ),
         ]
+        take("coefficients", "Regression Coefficients", "회귀계수")
         parts += [
             heading("Stored Diagnostic Coverage", "저장된 진단 범위"),
             f'<p>{len(points)} / {total}; '
@@ -217,6 +267,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 "저장된 점만 표시하며 원자료를 다시 읽지 않습니다.",
             ),
         ]
+        take("diagnostic_scope", "Stored Diagnostic Coverage", "저장된 진단 범위")
         response_name = payload["response"]["display_name"]
         unit = payload["response"].get("unit")
         response_label = response_name + (f" ({unit})" if unit else "")
@@ -244,6 +295,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                     identity=True,
                 ),
             ]
+        take("response_plots", "Observed and Predicted Responses", "관측 반응값과 예측값")
         row_label = text("Observation", "관측 행")
         score_title = text("Score Plot", "Score Plot")
         score_points = [
@@ -273,6 +325,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 ],
             ),
         ]
+        take("scores", "Latent Scores", "잠재 성분 점수")
         for component in range(selected):
             label = text(f"Loading Component {component+1}", f"Loading 성분 {component+1}")
             parts += [
@@ -310,6 +363,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 ],
             )
         ]
+        take("loadings", "All Stored Loadings", "전체 저장 loading")
         residual = text("Residual", "잔차")
         parts += [
             heading("Residual Diagnostics", "잔차 진단"),
@@ -364,6 +418,7 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 ],
             ),
         ]
+        take("residuals", "Residual Diagnostics", "잔차 진단")
         parts += [
             heading("Warnings and Limitations", "경고와 해석 제한"),
             "<ul>",
@@ -380,8 +435,8 @@ def render_pls_report(payload: dict[str, Any], locale: ReportLocale) -> str:
                 "별도 점 예측은 이 저장 분석에 "
                 "포함되지 않으며 완료된 예측을 별도로 내보내세요.",
             ),
-            "</section>",
         ]
+        take("warnings_limits", "Warnings and Limitations", "경고와 해석 제한")
     except (KeyError, IndexError, TypeError) as exc:
         raise ValueError("analysis_report_payload_invalid") from exc
-    return "".join(parts)
+    return ReportBody("pls", tuple(sections))

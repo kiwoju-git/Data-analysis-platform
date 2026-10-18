@@ -21,6 +21,8 @@ import type {
   AnalysisRunDeletionPreflightResponse,
   AnalysisRunListResponse,
   AnalysisRunStatusResponse,
+  AnalysisReportCapability,
+  AnalysisResultHtmlReportRequest,
   AnalysisRunRequest,
 } from "./types";
 import { getCurrentLocale } from "../i18n/store";
@@ -203,6 +205,7 @@ export async function createAnalysisResultCsvExport(
 
 export async function createAnalysisResultHtmlReport(
   analysisId: string,
+  request: AnalysisResultHtmlReportRequest = { locale: getCurrentLocale() },
 ): Promise<AnalysisResultHtmlReportResponse> {
   const response = await fetchApi(
     apiRoutes.analysisRunExportHtml(analysisId),
@@ -212,7 +215,7 @@ export async function createAnalysisResultHtmlReport(
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ locale: getCurrentLocale() }),
+      body: JSON.stringify(request),
     },
   );
 
@@ -221,6 +224,17 @@ export async function createAnalysisResultHtmlReport(
   }
 
   return (await response.json()) as AnalysisResultHtmlReportResponse;
+}
+
+export async function fetchAnalysisReportCapability(
+  analysisId: string,
+  locale: "en" | "ko",
+): Promise<AnalysisReportCapability> {
+  const response = await fetchApi(apiRoutes.analysisReportCapability(analysisId, locale), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(await apiErrorCode(response, "analysis_report_capability_failed"));
+  return await response.json() as AnalysisReportCapability;
 }
 
 export async function fetchAnalysisResultExports(

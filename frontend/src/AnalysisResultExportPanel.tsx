@@ -4,6 +4,7 @@ import { localizedErrorDisplay } from "./i18n/errorMessages";
 import { translateSystemText } from "./i18n/translate";
 
 import type {
+  AnalysisReportCapability,
   AnalysisResultCsvExportResponse,
   AnalysisResultEnvelope,
   AnalysisResultExportDeleteResponse,
@@ -18,6 +19,8 @@ import {
   formatDateTime,
   shortHash,
 } from "./analysisWorkbenchUtils";
+import { AnalysisReportCapabilityPanel } from "./AnalysisReportCapabilityPanel";
+import { canCreateHtmlReport } from "./reportCenterCapabilities";
 
 export function AnalysisResultExportPanel({
   analysisResult,
@@ -47,7 +50,11 @@ export function AnalysisResultExportPanel({
   onLoadDeletionPreflight,
   onDeleteExport,
   onClearDeletion,
-  creationCapabilities = { json: true, csv: true, html: true },
+  creationCapabilities = { json: true, csv: true },
+  reportCapability = null,
+  reportCapabilityError = null,
+  isLoadingReportCapability = false,
+  onRetryReportCapability,
 }: {
   analysisResult: AnalysisResultEnvelope | null;
   csvExportError: string | null;
@@ -76,10 +83,14 @@ export function AnalysisResultExportPanel({
   onLoadDeletionPreflight: (analysisId: string, exportId: string) => void;
   onDeleteExport: (preflight: AnalysisResultExportDeletionPreflightResponse) => void;
   onClearDeletion: () => void;
-  creationCapabilities?: { json: boolean; csv: boolean; html: boolean };
+  creationCapabilities?: { json: boolean; csv: boolean };
+  reportCapability?: AnalysisReportCapability | null;
+  reportCapabilityError?: string | null;
+  isLoadingReportCapability?: boolean;
+  onRetryReportCapability?: () => void;
 }) {
   const [pendingDeletionExportId, setPendingDeletionExportId] = useState<string | null>(null);
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   if (analysisResult === null || analysisResult.status !== "succeeded") {
     return null;
   }
@@ -100,6 +111,7 @@ export function AnalysisResultExportPanel({
     matchingExport?.stale === true ||
     matchingCsvExport?.stale === true ||
     matchingHtmlReport?.stale === true;
+  const matchingCapability = reportCapability?.analysis_id === analysisResult.analysis_id && reportCapability.locale === locale ? reportCapability : null;
 
   return (
     <section className="analysis-export-panel" aria-labelledby="analysis-export-title">
@@ -132,15 +144,16 @@ export function AnalysisResultExportPanel({
         />
         <ExportFormatAction
           description="사람에게 공유하기 좋은 self-contained 정적 보고서입니다."
-          disabled={isExportingHtml}
+          disabled={isExportingHtml || !canCreateHtmlReport(matchingCapability, analysisResult.analysis_id, locale)}
           format="HTML"
           isBusy={isExportingHtml}
-          unsupportedReason={creationCapabilities.html ? null : "현재 지원되지 않음"}
+          unsupportedReason={canCreateHtmlReport(matchingCapability, analysisResult.analysis_id, locale) ? null : t("reportCapability.notReady")}
           onCreate={() => {
             onCreateHtmlReport(analysisResult.analysis_id);
           }}
         />
       </div>
+      <AnalysisReportCapabilityPanel capability={matchingCapability} error={reportCapabilityError} loading={isLoadingReportCapability} onRetry={onRetryReportCapability} />
       {hasStaleExport ? (
         <div className="notice-box">
           stale result export입니다. 데이터셋 schema 또는 source가 바뀐 뒤 생성된 결과일 수 있으니

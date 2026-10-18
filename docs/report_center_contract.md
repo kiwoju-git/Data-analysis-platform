@@ -9,6 +9,46 @@ core results cannot succeed as empty HTML. Existing reports are not rewritten.
 Completed PLS point predictions may be downloaded separately as client JSON
 snapshots; these are explicitly not managed Report Center artifacts.
 
+## A11 Backend-Owned Report Coverage
+
+- `GET /api/v1/analysis-runs/{analysis_id}/report-capability?locale=en|ko`
+  is the only authority for generic HTML availability. The response binds the
+  requested ID, locale, original result SHA-256, renderer/version, variant,
+  `full`/`summary`/`unsupported` level and explicit section statuses/reasons.
+  A method catalog `report_contract` describes registration, not proof that every
+  historical result has all required sections. There is no frontend method allowlist.
+- Current-result and restored-result REPORT actions both use the actual displayed
+  export owner. Unknown, failed, mismatched and unsupported capability cannot create
+  HTML. JSON remains available; unsupported results are not presented as complete
+  user reports. Missing sections and stale status remain visible in text.
+- Capability has an independent ID/locale/workspace-revision request lane. List
+  filtering does not reload it or remount the selected action panel. Locale changes,
+  source switches, mutation and unmount invalidate obsolete capability/HTML
+  success, failure and finally handlers. StrictMode replay remains supported.
+- HTML POST carries explicit `locale` and the capability's
+  `expected_source_result_sha256`. Successful publication must match ID, locale and
+  source hash. A source-change conflict refreshes capability, shows a recovery
+  message and requires another explicit create action; it never retries POST
+  automatically. Schema-4 HTML responses include report level, renderer version
+  and rendered section IDs. Historical export metadata remains readable.
+- `source_validation=stored_dependencies_only` is disclosed: verification does not
+  reload original rows or rerun statistics. Section titles are backend-localized
+  text, escaped by React; reason codes and user names are not machine-translated.
+- Common Content-Disposition parsing prefers valid RFC 5987 UTF-8 `filename*`
+  over `filename`, with safe fallback for malformed encoding. Path prefixes,
+  controls/bidi formatting, Windows-invalid characters and device names are
+  sanitized, while ordinary Unicode and private-use characters remain literal.
+  Factorial downloads use the same helper after their existing byte/hash checks.
+- The installed ui-ux-pro-max `error recovery retry` guidance was applied to
+  adjacent retry/status feedback and progressive section disclosure. Existing
+  typography, colors and data density are retained; no new dependencies or fonts.
+
+Validation boundaries: deferred hook tests cover owner/locale/mutation ordering;
+SSR tests cover localized full/summary/unsupported text and escaping. The Report
+Center browser fixture covers real React interaction and downloads using mocked
+synthetic HTTP. It does not substitute for backend saved-file/checksum/renderer
+tests or the real-backend critical path.
+
 ## A10 Request Ownership and Recovery
 
 - List filters/pagination and selected result/status have independent latest-request
@@ -90,7 +130,8 @@ For a generic analysis run, Report Center supports:
 
 - JSON result envelope export;
 - method-defined long-form CSV export;
-- escaped, self-contained static HTML report;
+- escaped, self-contained static HTML when the selected result's backend
+  capability permits it, with its declared full or summary coverage;
 - existing export listing, checksum-validated download, and deletion preflight/deletion;
 - visible stale status and method/dataset/version metadata.
 
@@ -110,7 +151,8 @@ generated filename is ID-derived and contains no original filename or workspace 
 | RSM | Dedicated workflow restore | Not supported | Not supported |
 | Bayesian Optimization | Study/recommendation restore | Not supported | Not supported |
 
-Unsupported formats are rendered as `현재 지원되지 않음` with a link to the owning workflow. A
+The table documents dedicated owning workflows; it is not a client-side generic
+HTML allowlist. Unsupported formats show an explicit capability explanation. A
 generic HTML fallback must not serialize arbitrary dedicated result bodies, raw predictor values,
 run-level response values, filenames, or internal paths. HTML, PDF, and Word are distinct formats;
 the UI must not label one as another.

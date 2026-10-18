@@ -10749,6 +10749,10 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
             },
         )
         analysis_id = response.json()["analysis_id"]
+        source_record = get_analysis_run_record(settings.workspace_root, analysis_id)
+        assert source_record is not None and source_record.result_path is not None
+        source_path = settings.workspace_root / source_record.result_path
+        source_before = source_path.read_bytes()
         export_response = client.post(f"/api/v1/analysis-runs/{analysis_id}/exports/html")
         export_payload = export_response.json()
         download_response = client.get(
@@ -10771,13 +10775,14 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert response.status_code == 201
     assert export_response.status_code == 201
     AnalysisResultHtmlReportResponse.model_validate(export_payload)
-    assert export_payload["schema_version"] == 3
+    assert export_payload["schema_version"] == 4
     assert export_payload["format"] == "analysis_result_html_report"
     assert export_payload["artifact_kind"] == "analysis_result_html_report"
     assert export_payload["media_type"] == "text/html"
     assert export_payload["title"] == "Statistical Twin Analysis Report"
     assert export_payload["report_locale"] == "en"
-    assert export_payload["section_count"] >= 1
+    assert export_payload["section_count"] == 5
+    assert export_payload["report_level"] == "full"
     assert export_payload["stale"] is False
 
     artifact = get_analysis_artifact_record(
@@ -10793,31 +10798,40 @@ def test_analysis_result_html_report_export_creates_escaped_downloadable_artifac
     assert hashlib.sha256(export_bytes).hexdigest() == export_payload["sha256"]
     assert len(export_bytes) == export_payload["size_bytes"]
     export_text = export_bytes.decode("utf-8")
+    export_body = export_text.split("<details", 1)[0]
     assert '<html lang="en">' in export_text
-    assert "Descriptive Statistics Summary" in export_text
+    assert "Column summaries" in export_body
+    for section_id in ("settings", "summary", "distribution_summary", "warnings", "interpretation"):
+        assert f'data-report-section="{section_id}"' in export_body
     assert export_text.index("Analysis Summary") < export_text.index("Technical Information")
     assert "<summary>Machine-readable Source Result JSON</summary>" in export_text
     assert "<details open" not in export_text
     assert "Content-Security-Policy" in export_text
     assert "default-src 'none'" in export_text
-    assert "<th>Mean</th>" in export_text
-    assert "<td>1.5</td>" in export_text
-    assert "<td>0.7071067811865476</td>" in export_text
-    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in export_text
+    assert "<th>Mean</th>" in export_body
+    assert "<td>1.5</td>" in export_body
+    assert "<td>0.7071067812</td>" in export_body
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in export_body
+    assert "<svg" not in export_body  # Descriptive statistics is table-only.
     assert "<script>alert(1)</script>" not in export_text
     assert str(tmp_path) not in export_text
     assert "workspaces/analyses" not in export_text
     assert "result_path" not in export_text
 
     assert korean_export_response.status_code == 201
-    assert korean_export_payload["schema_version"] == 3
+    assert korean_export_payload["schema_version"] == 4
     assert korean_export_payload["report_locale"] == "ko"
     assert korean_export_payload["title"] == "Statistical Twin 분석 보고서"
     korean_export_text = korean_download_response.content.decode("utf-8")
+    korean_export_body = korean_export_text.split("<details", 1)[0]
     assert '<html lang="ko">' in korean_export_text
-    assert "기술통계 요약" in korean_export_text
+    assert "변수별 요약" in korean_export_body
+    assert '<div data-report-section="distribution_summary"' in korean_export_body
+    assert "<th>평균</th>" in korean_export_body and "<td>1.5</td>" in korean_export_body
     assert "<summary>기술 정보</summary>" in korean_export_text
     assert unsupported_locale_response.status_code == 422
+    assert source_path.read_bytes() == source_before
+    assert json.loads(source_before)["result"]["columns"][0]["std"] == 0.7071067811865476
 
     assert download_response.status_code == 200
     assert download_response.headers["content-type"].startswith("text/html")
@@ -10917,24 +10931,58 @@ def test_analysis_result_html_report_export_renders_eda_method_specific_sections
             equal_variances_response.json()["analysis_id"],
         )
 
-    assert "그래프 요약" in graph_text
-    assert "히스토그램 + 적합 정규곡선" in graph_text
-    assert "통계 요약" in graph_text
-    assert "신뢰구간" in graph_text
-    assert "추가 그래프: ECDF" in graph_text
-    assert "normal-fit" in graph_text
-    assert "<svg" in graph_text
+    graph_body = graph_text.split("<details", 1)[0]
+    for section_id in (
+        "settings",
+        "summary",
+        "moments",
+        "histogram",
+        "normal_fit",
+        "boxplot",
+        "qq_plot",
+        "ecdf",
+        "normality",
+        "confidence_intervals",
+        "warnings",
+        "interpretation",
+    ):
+        assert f'data-report-section="{section_id}"' in graph_body
+    assert "히스토그램과 저장 정규 적합" in graph_body
+    assert "저장 신뢰구간" in graph_body
+    assert "경험적 누적분포" in graph_body
+    assert "normal-fit" in graph_body
+    assert graph_body.count("<svg") == 5
+    assert "<th>평균</th>" in graph_body and "<td>1.5</td>" in graph_body
+    assert "표준정규 이론 분위수" in graph_body and "누적확률" in graph_body
 
-    assert "정규성 검정 요약" in normality_text
-    assert "<th>Shapiro W</th>" in normality_text
-    assert "<th>Anderson statistic</th>" in normality_text
-    assert "normality_insufficient_observations" in normality_text
+    normality_body = normality_text.split("<details", 1)[0]
+    assert 'data-report-section="normality_tests"' in normality_body
+    assert "<th>Shapiro W</th>" in normality_body
+    assert "<th>Anderson-Darling A²</th>" in normality_body
+    assert 'data-report-section="qq_plots"' in normality_body
+    assert "<svg" in normality_body and "data-x=" in normality_body
+    assert "normality_insufficient_observations" in normality_body
 
-    assert "등분산 검정 요약" in equal_variances_text
-    assert "다중 비교" in equal_variances_text
-    assert "Levene 검정 (Brown-Forsythe)" in equal_variances_text
-    assert "표준편차 다중 비교구간" in equal_variances_text
-    assert "Bonett-Nakayama" in equal_variances_text
+    equal_body = equal_variances_text.split("<details", 1)[0]
+    for section_id in (
+        "settings",
+        "groups",
+        "tests",
+        "multiple_summary",
+        "comparison_intervals",
+        "pairwise",
+        "non_overlap",
+        "additional_tests",
+        "warnings",
+        "interpretation",
+    ):
+        assert f'data-report-section="{section_id}"' in equal_body
+    assert "그룹 요약" in equal_body and "<td>12.5</td>" in equal_body
+    assert "<td>20</td>" in equal_body and "<td>10</td>" in equal_body
+    assert "levene_brown_forsythe" in equal_body
+    assert "classical_levene_mean_centered" in equal_body
+    assert "표준편차 다중 비교구간" in equal_body and "<svg" in equal_body
+    assert "<th>보정 p값</th>" in equal_body and "Bonett-Nakayama" in equal_body
 
 
 def test_analysis_result_html_report_export_renders_hypothesis_method_sections(
@@ -11045,25 +11093,29 @@ def test_analysis_result_html_report_export_renders_hypothesis_method_sections(
             tost_response.json()["analysis_id"],
         )
 
-    assert "가설 검정 요약" in one_sample_text
-    assert "one_sample_t_test" in one_sample_text
-    assert "<td>Estimate</td>" in one_sample_text
-    assert "<td>P value</td>" in one_sample_text
-    assert "cohen_dz" in one_sample_text
+    one_sample_body = one_sample_text.split("<details", 1)[0]
+    anova_body = anova_text.split("<details", 1)[0]
+    tost_body = tost_text.split("<details", 1)[0]
+    assert 'data-report-section="estimate_interval"' in one_sample_body
+    assert "<td>추정 차이</td>" in one_sample_body
+    assert "<td>p값</td>" in one_sample_body
+    assert "Cohen dz" in one_sample_body
+    assert "<svg" in one_sample_body
 
-    assert "가설 검정 요약" in anova_text
-    assert "one_way_anova" in anova_text
-    assert "가설 검정 그룹 요약" in anova_text
-    assert "가설 검정 사후 비교" in anova_text
-    assert "eta_squared" in anova_text
-    assert "<th>Adjusted p</th>" in anova_text
+    assert 'data-report-section="groups"' in anova_body
+    assert 'data-report-section="anova_table"' in anova_body
+    assert 'data-report-section="posthoc"' in anova_body
+    assert "Eta squared" in anova_body
+    assert "<th>원시 p값</th>" in anova_body
+    assert "<th>보정 p값</th>" in anova_body
 
-    assert "가설 검정 요약" in tost_text
-    assert "equivalence_tost" in tost_text
-    assert "<td>Lower one-sided p</td>" in tost_text
-    assert "<td>Upper one-sided p</td>" in tost_text
-    assert "<td>Equivalent</td>" in tost_text
-    assert "<td>CI inside equivalence bounds</td>" in tost_text
+    assert 'data-report-section="test"' in tost_body
+    assert "<td>lower</td>" in tost_body
+    assert "<td>upper</td>" in tost_body
+    assert "<td>동등성 판정</td>" in tost_body
+    assert "<td>구간이 동등성 경계 내부</td>" in tost_body
+    assert 'data-report-section="interval_plot"' in tost_body
+    assert "<svg" in tost_body
 
 
 def test_analysis_result_html_report_export_renders_categorical_method_sections(
@@ -11188,23 +11240,26 @@ def test_analysis_result_html_report_export_renders_categorical_method_sections(
             chi_square_response.json()["analysis_id"],
         )
 
-    assert "범주형 분석 요약" in one_proportion_text
-    assert "one_proportion_test" in one_proportion_text
-    assert "<td>Event count</td>" in one_proportion_text
-    assert "cohen_h" in one_proportion_text
+    one_proportion_body = one_proportion_text.split("<details", 1)[0]
+    two_proportion_body = two_proportion_text.split("<details", 1)[0]
+    chi_square_body = chi_square_text.split("<details", 1)[0]
+    assert 'data-report-section="sample_summary"' in one_proportion_body
+    assert "<td>사건 수</td>" in one_proportion_body
+    assert "Cohen h" in one_proportion_body
+    assert "<svg" in one_proportion_body
 
-    assert "범주형 분석 요약" in two_proportion_text
-    assert "two_proportion_test" in two_proportion_text
-    assert "범주형 그룹 요약" in two_proportion_text
-    assert "<td>Difference estimate</td>" in two_proportion_text
-    assert "risk_ratio" in two_proportion_text
+    assert 'data-report-section="groups"' in two_proportion_body
+    assert 'data-report-section="contingency_table"' in two_proportion_body
+    assert "<td>비율 차이 추정량</td>" in two_proportion_body
+    assert "<td>위험비</td>" in two_proportion_body
+    assert "<td>A</td><td>4</td><td>2</td>" in two_proportion_body
 
-    assert "범주형 분석 요약" in chi_square_text
-    assert "chi_square_association" in chi_square_text
-    assert "cramers_v" in chi_square_text
-    assert "Expected count diagnostics" in chi_square_text
-    assert "범주형 교차표 요약" in chi_square_text
-    assert "X=20" in chi_square_text
+    assert "Cramer V" in chi_square_body
+    assert 'data-report-section="expected_counts"' in chi_square_body
+    assert 'data-report-section="contingency_table"' in chi_square_body
+    assert 'data-report-section="cell_diagnostics"' in chi_square_body
+    assert "<td>A</td><td>20</td><td>15</td><td>5</td><td>40</td>" in chi_square_body
+    assert "<th>표준화 잔차</th>" in chi_square_body
 
 
 def test_analysis_result_html_report_export_renders_regression_method_sections(
@@ -11325,24 +11380,30 @@ def test_analysis_result_html_report_export_renders_regression_method_sections(
             linear_response.json()["analysis_id"],
         )
 
-    assert "상관/회귀 분석 요약" in pearson_text
-    assert "pearson_correlation" in pearson_text
-    assert "<td>Correlation</td>" in pearson_text
-    assert "<td>Scatter points</td>" in pearson_text
+    pearson_body = pearson_text.split("<details", 1)[0]
+    assert 'data-report-section="correlation_summary"' in pearson_body
+    assert "<th>Pearson r</th>" in pearson_body
+    assert 'data-report-section="scatter_plot"' in pearson_body
+    assert "<svg" in pearson_body and "data-x=" in pearson_body
 
-    assert "상관/회귀 분석 요약" in xy_text
-    assert "xy_correlation_matrix" in xy_text
-    assert "상관 쌍 요약" in xy_text
-    assert "<td>x1</td>" in xy_text
-    assert "<td>y2</td>" in xy_text
+    xy_body = xy_text.split("<details", 1)[0]
+    assert 'data-report-section="correlation_pairs"' in xy_body
+    assert 'data-report-section="correlation_heatmap"' in xy_body
+    assert "<td>x1</td>" in xy_body
+    assert "<td>y2</td>" in xy_body
+    assert "<svg" in xy_body and 'data-scale-value="-1.0"' in xy_body
 
-    assert "상관/회귀 분석 요약" in linear_text
-    assert "linear_model" in linear_text
-    assert "<td>Model R squared</td>" in linear_text
-    assert "<td>F p value</td>" in linear_text
-    assert "선형모델 계수 요약" in linear_text
-    assert "<td>Intercept</td>" in linear_text
-    assert "<td>x1</td>" in linear_text
+    linear_body = linear_text.split("<details", 1)[0]
+    assert 'data-report-section="model_summary"' in linear_body
+    assert 'data-report-section="coefficients"' in linear_body
+    assert 'data-report-section="anova"' in linear_body
+    assert 'data-report-section="residuals_raw"' in linear_body
+    assert 'data-report-section="residuals_standardized"' in linear_body
+    assert "<td>r_squared</td>" in linear_body
+    assert "<td>f_p_value</td>" in linear_body
+    assert "<td>Intercept</td>" in linear_body
+    assert "<td>x1</td>" in linear_body
+    assert linear_body.count("<svg") == 8
 
 
 def test_analysis_result_html_report_export_renders_quality_chart_sections(
@@ -11440,25 +11501,27 @@ def test_analysis_result_html_report_export_renders_quality_chart_sections(
             run_chart_response.json()["analysis_id"],
         )
 
-    assert "품질 관리 요약" in individuals_text
-    assert "individuals_chart" in individuals_text
-    assert "품질 차트 요약" in individuals_text
-    assert "Individuals" in individuals_text
-    assert "Moving range" in individuals_text
-    assert "<td>Signal count</td>" in individuals_text
+    individuals_body = individuals_text.split("<details", 1)[0]
+    assert 'data-report-section="quality_summary"' in individuals_body
+    assert 'data-report-section="individuals_charts"' in individuals_body
+    assert 'data-report-section="signals"' in individuals_body
+    assert individuals_body.count("<svg") == 2
+    assert 'data-reference-axis="y" data-value="0.0"' in individuals_body
 
-    assert "품질 관리 요약" in subgroup_text
-    assert "subgroup_chart" in subgroup_text
-    assert "Xbar" in subgroup_text
-    assert "<td>Subgroup size</td>" in subgroup_text
-    assert "<td>Subgroup count</td>" in subgroup_text
+    subgroup_body = subgroup_text.split("<details", 1)[0]
+    assert 'data-report-section="subgroup_charts"' in subgroup_body
+    assert "Xbar" in subgroup_body
+    assert "<td>subgroup_size</td>" in subgroup_body
+    assert "<td>subgroup_count</td>" in subgroup_body
+    assert subgroup_body.count("<svg") == 2
 
-    assert "품질 관리 요약" in run_chart_text
-    assert "run_chart" in run_chart_text
-    assert "<td>Run count</td>" in run_chart_text
-    assert "품질 신호 요약" in run_chart_text
-    assert "run_chart_trend" in run_chart_text
-    assert "control_limit" not in run_chart_text
+    run_body = run_chart_text.split("<details", 1)[0]
+    assert 'data-report-section="run_chart"' in run_body
+    assert 'data-report-section="randomness_tests"' in run_body
+    assert "<td>runs.run_count</td>" in run_body
+    assert "run_chart_trend" in run_body
+    assert "중앙값" in run_body
+    assert "UCL" not in run_body and "LCL" not in run_body
 
 
 def test_analysis_result_html_report_export_renders_quality_capability_and_gage_sections(
@@ -11594,27 +11657,28 @@ def test_analysis_result_html_report_export_renders_quality_capability_and_gage_
             gage_run_response.json()["analysis_id"],
         )
 
-    assert "품질 관리 요약" in capability_text
-    assert "capability_analysis" in capability_text
-    assert "공정능력 요약" in capability_text
-    assert "<td>Spec LSL</td>" in capability_text
-    assert "<td>Expected nonconformance ppm</td>" in capability_text
+    capability_body = capability_text.split("<details", 1)[0]
+    assert 'data-report-section="capability_indices"' in capability_body
+    assert 'data-report-section="capability_histogram"' in capability_body
+    assert "<td>spec_limits.lsl</td>" in capability_body
+    assert "<td>expected_nonconformance_normal.total_ppm</td>" in capability_body
+    assert "<svg" in capability_body and "data-lower=" in capability_body
 
-    assert "품질 관리 요약" in gage_text
-    assert "gage_rr" in gage_text
-    assert "Gage R&amp;R 분산 요약" in gage_text
-    assert "total_gage_rr" in gage_text
-    assert "<td>Part count</td>" in gage_text
-    assert "Part A" not in gage_text
-    assert "Operator 1" not in gage_text
+    gage_body = gage_text.split("<details", 1)[0]
+    assert 'data-report-section="gage_anova"' in gage_body
+    assert 'data-report-section="gage_variance_components"' in gage_body
+    assert "total_gage_rr" in gage_body
+    assert "<td>design.part_count</td>" in gage_body
+    assert "Part A" not in gage_body
+    assert "Operator 1" not in gage_body
 
-    assert "품질 관리 요약" in gage_run_text
-    assert "gage_run_chart" in gage_run_text
-    assert "<td>Measurement mean</td>" in gage_run_text
-    assert "<td>Chart point count</td>" in gage_run_text
-    assert "품질 차트 요약" in gage_run_text
-    assert "Part A" not in gage_run_text
-    assert "Operator 1" not in gage_run_text
+    gage_run_body = gage_run_text.split("<details", 1)[0]
+    assert 'data-report-section="gage_run_plot"' in gage_run_body
+    assert 'data-report-section="gage_group_summaries"' in gage_run_body
+    assert "<td>summary.mean</td>" in gage_run_body
+    assert gage_run_body.count("<polyline") > 1
+    assert "Part A" not in gage_run_body
+    assert "Operator 1" not in gage_run_body
 
 
 def test_analysis_result_html_report_export_detects_result_checksum_mismatch_without_artifact(

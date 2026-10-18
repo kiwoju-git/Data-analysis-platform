@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.v1.schemas.report_capabilities import MethodReportContract
+
 
 class AnalysisModuleId(str, Enum):
     EXPLORATION = "exploration"
@@ -64,6 +66,7 @@ class AnalysisMethodDescriptor(BaseModel):
     source_prerequisite: AnalysisSourcePrerequisite | None = None
     order: int
     disabled_reason: str | None = None
+    report_contract: MethodReportContract | None = None
 
 
 class AnalysisMethodListResponse(BaseModel):
@@ -1742,12 +1745,16 @@ class AnalysisResultHtmlReportResponse(BaseModel):
     title: str
     section_count: int = Field(ge=0)
     report_locale: Literal["en", "ko"]
+    report_level: Literal["full", "summary"]
+    renderer_version: str
+    rendered_section_ids: list[str]
 
 
 class AnalysisResultHtmlReportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     locale: Literal["en", "ko"] = "en"
+    expected_source_result_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class AnalysisResultExportListItemResponse(BaseModel):

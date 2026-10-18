@@ -7,6 +7,7 @@ from app.api.v1.schemas.analyses import (
     AnalysisSourcePrerequisite,
     MethodAvailability,
 )
+from app.services.report_coverage import method_report_contract
 
 METHOD_VERSION = "0.1.0"
 METHOD_VERSIONS: dict[str, str] = {
@@ -158,6 +159,7 @@ def _available(
         execution_mode=execution_mode,
         requires_dataset=requires_dataset,
         source_prerequisite=source_prerequisite,
+        report_contract=method_report_contract(method_id),
         order=order,
         disabled_reason=None,
     )

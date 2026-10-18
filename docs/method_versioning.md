@@ -1,5 +1,15 @@
 # Method Versioning Policy
 
+## Reliability Remediation (2026-10-18)
+
+API 23 covers schema-hash CAS and the additive stored-report capability contract.
+Generic HTML writes artifact schema 4 (actual level/renderer version/section IDs);
+existing schema 1-3 exports remain downloadable without rewriting. The capability
+schema is 1 and section renderer version is 2.0.0. No calculation, result or model
+method version changes for this display-only expansion; metadata remains 20 at
+A11. Dedicated managed sources are a separate A12 gate. Historical entries below
+describe their original release, not the current HTML writer.
+
 ## Result Charts and Two Variances (2026-10-08)
 
 API 22 adds quality.two_variances method0.1.0 / two_variances_test result1 and

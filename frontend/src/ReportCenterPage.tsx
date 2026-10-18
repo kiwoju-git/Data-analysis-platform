@@ -19,10 +19,6 @@ import {
   appLocationChangeEvent,
   pushAppLocation,
 } from "./browserNavigation";
-import {
-  reportCreationCapabilities,
-  localizedReportWorkflowCapabilities,
-} from "./reportCenterCapabilities";
 import { analysisMethodDisplayLabel } from "./analysisNavigation";
 import { useAnalysisExportState } from "./useAnalysisExportState";
 import { useAnalysisRunDeletionState } from "./useAnalysisRunDeletionState";
@@ -258,6 +254,7 @@ function ReportBrowser({
               result={state.selectedResult}
               resultError={state.selectedResultError}
               stale={state.selectedStatus?.stale ?? null}
+              workspaceRevision={workspaceAssetRevision}
             />
           </div>
         ) : null}
@@ -288,7 +285,7 @@ function ReportBrowser({
           </div>
         ) : null}
       </section>
-      <ReportCapabilityMatrix />
+      <ReportCapabilityMatrix catalog={catalog} />
     </div>
   );
 }
@@ -388,6 +385,7 @@ function SelectedReportState({
   result,
   resultError,
   stale,
+  workspaceRevision,
 }: {
   isLoading: boolean;
   onDeleted: (response: AnalysisRunDeleteResponse) => void;
@@ -396,6 +394,7 @@ function SelectedReportState({
   result: AnalysisResultEnvelope | null;
   resultError: string | null;
   stale: boolean | null;
+  workspaceRevision: number;
 }) {
   if (isLoading) {
     return (
@@ -415,6 +414,7 @@ function SelectedReportState({
       onExportDeleted={onExportDeleted}
       result={result}
       stale={stale}
+      workspaceRevision={workspaceRevision}
     />
   );
 }
@@ -424,20 +424,24 @@ function SelectedReportActions({
   onExportDeleted,
   result,
   stale,
+  workspaceRevision,
 }: {
   onDeleted: (response: AnalysisRunDeleteResponse) => void;
   onExportDeleted: () => void;
   result: AnalysisResultEnvelope;
   stale: boolean | null;
+  workspaceRevision: number;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const { locale } = useI18n();
   const exportState = useAnalysisExportState({
     currentAnalysisId: result.analysis_id,
     currentDatasetVersionId: result.dataset_version_id,
     resetKey: 0,
+    locale,
+    workspaceRevision,
   });
   const deletionState = useAnalysisRunDeletionState(result.analysis_id, onDeleted);
-  const capabilities = reportCreationCapabilities(result.method_id);
   const exportedDeletionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -477,7 +481,10 @@ function SelectedReportActions({
       </p>
       <AnalysisResultExportPanel
         analysisResult={result}
-        creationCapabilities={capabilities}
+        reportCapability={exportState.analysisReportCapability}
+        reportCapabilityError={exportState.analysisReportCapabilityError}
+        isLoadingReportCapability={exportState.isLoadingAnalysisReportCapability}
+        onRetryReportCapability={exportState.onRefreshAnalysisReportCapability}
         csvExportError={exportState.analysisResultCsvExportError}
         csvExportResult={exportState.analysisResultCsvExport}
         deletion={exportState.analysisResultExportDeletion}
@@ -509,11 +516,6 @@ function SelectedReportActions({
           exportState.onLoadAnalysisResultExportDeletionPreflight
         }
       />
-      {!capabilities.html ? (
-        <p className="notice-box">
-          이 dedicated workflow의 HTML 보고서는 현재 지원되지 않습니다.
-        </p>
-      ) : null}
       <div className="report-analysis-deletion">
         <button
           className="secondary-button"
@@ -550,8 +552,8 @@ function SelectedReportActions({
   );
 }
 
-function ReportCapabilityMatrix() {
-  const { locale } = useI18n();
+function ReportCapabilityMatrix({ catalog }: { catalog: AnalysisMethodListResponse | null }) {
+  const { locale, t } = useI18n();
   return (
     <section
       className="report-capability-section"
@@ -559,8 +561,8 @@ function ReportCapabilityMatrix() {
     >
       <div className="panel-heading">
         <div>
-          <h3 id="report-capability-title">전용 workflow 지원 범위</h3>
-          <p>P0 capability matrix</p>
+          <h3 id="report-capability-title">{t("reportCapability.catalog")}</h3>
+          <p>{t("reportCapability.catalogNote")}</p>
         </div>
       </div>
       <div className="table-wrap">
@@ -568,25 +570,17 @@ function ReportCapabilityMatrix() {
           <thead>
             <tr>
               <th>Workflow</th>
-              <th>저장 결과</th>
-              <th>JSON</th>
-              <th>CSV</th>
-              <th>HTML</th>
-              <th>이동</th>
+              <th>{t("reportCapability.renderer")}</th>
             </tr>
           </thead>
           <tbody>
-            {localizedReportWorkflowCapabilities(locale).map((item) => (
-              <tr key={item.methodId}>
+            {catalog?.methods.map((item) => (
+              <tr key={item.method_id}>
                 <td>
-                  <strong>{item.label}</strong>
-                  <span className="cell-subtle">{item.methodId}</span>
+                  <strong>{methodLabel(item, locale)}</strong>
+                  <span className="cell-subtle">{item.method_id}</span>
                 </td>
-                <td>{item.storedResult}</td>
-                <td>{item.json}</td>
-                <td>{item.csv}</td>
-                <td>{item.html}</td>
-                <td><a href={item.workflowPath}>열기</a></td>
+                <td>{item.report_contract == null ? t("reportCapability.noRenderer") : `${item.report_contract.renderer_id} / ${item.report_contract.renderer_version}`}</td>
               </tr>
             ))}
           </tbody>

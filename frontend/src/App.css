@@ -5578,10 +5578,22 @@ td select {
 .report-browser,
 .report-selected-result,
 .report-capability-section {
+  min-inline-size: 0;
   border: 1px solid #d8dde5;
   border-radius: 8px;
   background: #ffffff;
   padding: 16px;
+}
+
+.analysis-report-capability {
+  min-inline-size: 0;
+  border-block-start: 1px solid #d8dde5;
+  padding-block: 12px;
+}
+
+.analysis-report-capability code,
+.analysis-report-capability dd {
+  overflow-wrap: anywhere;
 }
 
 .help-quick-start h3,

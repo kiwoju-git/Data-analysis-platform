@@ -115,15 +115,35 @@ export async function apiErrorCode(response: Response, fallback: string): Promis
 }
 
 export function filenameFromContentDisposition(value: string | null): string | null {
-  if (value === null) {
-    return null;
+  if (value === null) return null;
+  let fallback: string | null = null;
+  let extended: string | null = null;
+  const parameters = /(?:^|;)\s*(filename\*?)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;]*))/giu;
+  for (const match of value.matchAll(parameters)) {
+    const name = (match[2] ?? match[3]).trim();
+    if (match[1].toLowerCase() === "filename*") {
+      const utf8 = /^utf-8'[^']*'(.*)$/iu.exec(name);
+      if (utf8 === null) continue;
+      try { extended ??= safeDownloadFilename(decodeURIComponent(utf8[1])); }
+      catch { /* A malformed extended parameter may use the plain fallback. */ }
+    } else {
+      fallback ??= safeDownloadFilename(name.replace(/\\(["\\])/gu, "$1"));
+    }
   }
-  const quoted = /filename="([^"]+)"/i.exec(value);
-  if (quoted !== null) {
-    return quoted[1];
-  }
-  const unquoted = /filename=([^;]+)/i.exec(value);
-  return unquoted === null ? null : unquoted[1].trim();
+  return extended ?? fallback;
+}
+
+function safeDownloadFilename(value: string): string | null {
+  const basename = value.split(/[\\/]/u).at(-1) ?? "";
+  // A server filename is advisory: retain Unicode text, never filesystem paths.
+  const clean = Array.from(basename)
+    .filter((character) => {
+      const code = character.codePointAt(0)!;
+      return code > 31 && !(code >= 127 && code <= 159)
+        && !(code >= 0x202a && code <= 0x202e) && !(code >= 0x2066 && code <= 0x2069);
+    }).join("").replace(/[<>:"|?*]/gu, "_").replace(/^[. ]+|[. ]+$/gu, "");
+  if (clean.length === 0) return null;
+  return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(clean) ? `_${clean}` : clean;
 }
 
 export function triggerBrowserDownload(blob: Blob, filename: string): void {

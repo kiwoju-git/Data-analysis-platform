@@ -1,5 +1,15 @@
 # Local Workspace Asset Management Contract
 
+## Stored Report Capability (2026-10-18)
+
+Generic HTML schema 4 uses the existing analysis-artifact ownership and retention
+path; metadata remains 20. Capability reads are read-only and create no artifact.
+HTML creation records the exact source result SHA, actual renderer version and
+section coverage. Unsupported payload or expected-SHA mismatch creates nothing.
+Historical exports are never regenerated on read. File checksum/download/deletion
+guards remain unchanged. Completed PLS/GPR local JSON snapshots are not managed
+reports; dedicated managed source adapters are the separate A12 gate.
+
 ## GPR Settings and PLS Reports (2026-09-17)
 
 Standalone GP manifest 3 retains the existing selected-model JSON/NPZ ownership

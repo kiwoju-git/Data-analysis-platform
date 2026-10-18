@@ -16,6 +16,13 @@ the CAS uses existing columns. Statistical method/result/model versions and
 historical artifact bytes are unchanged. Historical notes below retain their
 original numbers and are not current handshake requirements.
 
+A11 adds report capability schema 1 under this same integrated API 23 update.
+Catalog method report declarations and stored-result capability use the same
+renderer contracts. Generic HTML artifact schema 4 adds level/renderer/sections;
+optional expected source SHA binds a create request to its capability. Metadata
+and analysis result/model schemas do not change, and old HTML bytes are not
+rewritten. See `html_report_coverage_matrix.md` for the actual per-payload scope.
+
 ## 2026-10-08 Update
 
 API contract22 adds the Two Variances preflight/execution contract; minimum

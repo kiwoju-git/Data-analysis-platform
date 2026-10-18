@@ -7,23 +7,10 @@ import type { AnalysisMethodDescriptor, AnalysisMethodListResponse } from "./api
 import { availabilityLabel } from "./analysisWorkbenchUtils";
 import { graphBuilderDefinition, graphBuilderDefinitions, localizedGraphBuilderDefinitions } from "./graphBuilderRegistry";
 import { getCurrentLocale, setCurrentLocale } from "./i18n/store";
-import { localizedReportWorkflowCapabilities, reportWorkflowCapabilities } from "./reportCenterCapabilities";
 
 describe("trusted static display boundaries", () => {
   const originalLocale = getCurrentLocale();
   afterEach(() => setCurrentLocale(originalLocale));
-
-  it("localizes report descriptions without mutating stored IDs, paths, or catalog text", () => {
-    const before = JSON.stringify(reportWorkflowCapabilities);
-    const english = localizedReportWorkflowCapabilities("en");
-    const korean = localizedReportWorkflowCapabilities("ko");
-    expect(english[0].label).toBe("Run general analysis");
-    expect(korean[0].label).toBe("일반 분석 실행");
-    expect(english[0].html).toBe("support");
-    expect(english.map(({ methodId, workflowPath }) => ({ methodId, workflowPath })))
-      .toEqual(korean.map(({ methodId, workflowPath }) => ({ methodId, workflowPath })));
-    expect(JSON.stringify(reportWorkflowCapabilities)).toBe(before);
-  });
 
   it("localizes graph display fields without changing execution configuration", () => {
     const before = JSON.stringify(graphBuilderDefinitions);

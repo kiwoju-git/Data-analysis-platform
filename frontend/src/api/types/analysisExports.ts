@@ -47,6 +47,9 @@ export interface AnalysisResultHtmlReportResponse {
   title: string;
   section_count: number;
   report_locale: "en" | "ko";
+  report_level?: "full" | "summary";
+  renderer_version?: string;
+  rendered_section_ids?: string[];
 }
 
 export interface AnalysisResultExportListItem {

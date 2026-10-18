@@ -276,11 +276,16 @@ def test_gp_html_reports_use_saved_result_and_requested_locale(tmp_path) -> None
     assert '<html lang="en">' in english_text
     assert "Gaussian Process Model Summary" in english_text
     assert "Kernel Hyperparameters" in english_text
-    assert "Observed versus Fitted" in english_text
+    english_body = english_text.split("<details", 1)[0]
+    korean_body = korean_text.split("<details", 1)[0]
+    assert 'data-report-section="gp_training_plot"' in english_body
+    assert "Observed vs Training Prediction" in english_body
+    assert 'data-report-section="gp_cv_plot"' in english_body
     assert '<html lang="ko">' in korean_text
     assert "Gaussian Process 모형 요약" in korean_text
     assert "음의 로그 예측밀도" in korean_text
-    assert "관측값 대 적합값" in korean_text
+    assert "관측값 대 학습 예측" in korean_body
+    assert 'data-report-section="gp_cv_plot"' in korean_body
     assert "<script" not in english_text
     assert "https://" not in english_text
 

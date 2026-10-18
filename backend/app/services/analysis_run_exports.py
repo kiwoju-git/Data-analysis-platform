@@ -31,11 +31,25 @@ from app.api.v1.schemas.analyses import (
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.i18n.report_text import ReportLocale, report_text
+from app.services.analysis_report_source import load_analysis_report_source
 from app.services.analysis_run_execution import canonical_json_bytes
 from app.services.analysis_run_execution import utc_now as _utc_now
 from app.services.analysis_run_results import get_analysis_run_result
-from app.services.gaussian_process_report import gp_saved_details_report
-from app.services.pls_regression_report import pls_warning_text, render_pls_report
+from app.services.basic_eda_report import BasicEdaPlotRenderers, render_basic_eda_report
+from app.services.categorical_report import render_categorical_report
+from app.services.correlation_report import correlation_report_body
+from app.services.gaussian_process_report import (
+    gp_saved_details_report,
+    gp_saved_sections,
+    gp_surface_sections,
+    validate_gp_report_core,
+)
+from app.services.hypothesis_report import render_hypothesis_report
+from app.services.linear_model_report import linear_model_report_body
+from app.services.normality_report import normality_report_body
+from app.services.pls_regression_report import pls_report_body, pls_warning_text
+from app.services.principal_components_report import principal_components_report_body
+from app.services.quality_report import quality_report_body
 from app.services.regression_models import (
     REGRESSION_PREDICTION_METHOD_ID,
     iter_regression_prediction_rows,
@@ -45,8 +59,16 @@ from app.services.regularized_model_report import (
     regularized_warning_text,
     render_regularized_report,
 )
-from app.services.report_coverage import INLINE_REPORT_CONTRACTS, SUMMARY_REPORT_METHODS
-from app.services.stored_report_primitives import report_plot
+from app.services.report_contract import (
+    ReportBody,
+    ReportDefinition,
+    ReportLevel,
+    ReportSection,
+    assess_report_body,
+)
+from app.services.report_coverage import report_definitions
+from app.services.report_warnings import report_warning_text
+from app.services.stored_report_primitives import report_plot, report_table
 from app.services.two_variances_report import render_two_variances_report
 from app.storage.atomic import atomic_replace, atomic_write_bytes
 from app.storage.metadata import (
@@ -73,7 +95,7 @@ ANALYSIS_RESULT_CSV_EXPORT_FORMAT: Literal["analysis_result_csv"] = "analysis_re
 ANALYSIS_RESULT_CSV_EXPORT_MEDIA_TYPE: Literal["text/csv"] = "text/csv"
 ANALYSIS_RESULT_CSV_COLUMNS = ("section", "path", "value")
 ANALYSIS_RESULT_CSV_PREVIEW_ROW_LIMIT = 50
-ANALYSIS_RESULT_HTML_REPORT_SCHEMA_VERSION = 3
+ANALYSIS_RESULT_HTML_REPORT_SCHEMA_VERSION = 4
 ANALYSIS_RESULT_HTML_REPORT_KIND: Literal["analysis_result_html_report"] = (
     "analysis_result_html_report"
 )
@@ -617,15 +639,10 @@ def create_analysis_result_html_report_export(
     settings: Settings,
     analysis_id: UUID,
     locale: Literal["en", "ko"] = "en",
+    expected_source_result_sha256: str | None = None,
 ) -> AnalysisResultHtmlReportResponse:
-    record = get_analysis_run_record(settings.workspace_root, str(analysis_id))
-    if record is None:
-        raise ApiError(
-            code="analysis_run_not_found",
-            message="요청한 분석 실행을 찾을 수 없습니다.",
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-    result = get_analysis_run_result(settings, analysis_id)
+    stored = load_analysis_report_source(settings, analysis_id)
+    record, result = stored.record, stored.envelope
     if record.result_sha256 is None:
         raise ApiError(
             code="analysis_result_not_available",
@@ -633,17 +650,35 @@ def create_analysis_result_html_report_export(
             status_code=status.HTTP_409_CONFLICT,
         )
 
+    if (
+        expected_source_result_sha256 is not None
+        and expected_source_result_sha256 != record.result_sha256
+    ):
+        raise ApiError(
+            code="analysis_report_source_changed",
+            message="The saved report source changed. Reload its report capability.",
+            status_code=409,
+        )
+    prepared = prepare_analysis_report(result, locale)
+    if prepared.level == "unsupported" or prepared.definition is None:
+        raise ApiError(
+            code="analysis_report_payload_unsupported",
+            message=(
+                "This stored result is not supported by the HTML renderer. "
+                "Its JSON remains available."
+            ),
+            status_code=422,
+        )
     export_id = uuid4()
     created_at = _utc_now()
-    rows = _analysis_result_csv_rows(result)
     export_bytes = _analysis_result_html_report_bytes(
         result=result,
         analysis_id=analysis_id,
         source_result_sha256=record.result_sha256,
         stale=record.stale,
         created_at=created_at,
-        rows=rows,
         locale=locale,
+        prepared=prepared,
     )
     export_sha256 = hashlib.sha256(export_bytes).hexdigest()
 
@@ -685,8 +720,13 @@ def create_analysis_result_html_report_export(
             en=ANALYSIS_RESULT_HTML_REPORT_TITLE,
             ko="Statistical Twin 분석 보고서",
         ),
-        section_count=len(rows),
+        section_count=prepared.body.rendered_count,
         report_locale=locale,
+        report_level=prepared.level,
+        renderer_version=prepared.definition.renderer_version,
+        rendered_section_ids=[
+            section.section_id for section in prepared.body.sections if section.status == "rendered"
+        ],
     )
 
 
@@ -1114,17 +1154,15 @@ def _analysis_result_html_report_bytes(
     source_result_sha256: str,
     stale: bool,
     created_at: str,
-    rows: list[list[str]],
     locale: ReportLocale = "en",
+    prepared: "PreparedAnalysisReport | None" = None,
 ) -> bytes:
-    del rows
-
     def warning_text(code: str, message: str) -> str:
         if (result.result or {}).get("summary_type") == "partial_least_squares_regression":
-            return pls_warning_text(code, locale)
+            return pls_warning_text(code, locale, message)
         if isinstance((result.result or {}).get("regularization"), dict):
-            return regularized_warning_text(code, locale)
-        return message if locale == "ko" else "Review this analysis warning."
+            return regularized_warning_text(code, locale, message)
+        return report_warning_text(code, message, locale)
 
     warning_markup = "\n".join(
         "<li>"
@@ -1140,15 +1178,8 @@ def _analysis_result_html_report_bytes(
             en="<li>No saved warnings.</li>",
             ko="<li>저장된 경고가 없습니다.</li>",
         )
-    try:
-        method_specific_markup = _analysis_result_method_specific_report_section(result, locale)
-    except ValueError as exc:
-        raise ApiError(
-            code="analysis_report_payload_unsupported",
-            message="The saved result cannot be rendered by this report version.",
-            status_code=422,
-        ) from exc
-    if not method_specific_markup.strip():
+    prepared = prepared or prepare_analysis_report(result, locale)
+    if prepared.level == "unsupported":
         raise ApiError(
             code="analysis_report_payload_unsupported",
             message=(
@@ -1157,21 +1188,35 @@ def _analysis_result_html_report_bytes(
             ),
             status_code=422,
         )
-    if result.method_id in SUMMARY_REPORT_METHODS:
+    method_specific_markup = prepared.render()
+    if prepared.level == "summary":
         notice = report_text(
             locale,
             en=(
-                "Summary report: the tables below are supported, but this renderer does not "
-                "reproduce every interactive result view. Consult the saved JSON for full detail."
+                "Summary report: some sections are unavailable in this stored payload. "
+                "The section coverage below identifies them; no analysis has been rerun."
             ),
             ko=(
-                "요약 보고서: 아래 표는 지원하지만 모든 대화형 결과 화면을 재현하지는 않습니다. "
-                "전체 저장 내용은 JSON으로 확인하세요."
+                "요약 보고서: 저장 결과에서 일부 섹션을 제공할 수 없습니다. "
+                "아래 섹션 범위와 사유를 확인하세요. 분석을 재실행하지 않았습니다."
             ),
         )
         method_specific_markup = (
             f'<p class="notice">{_html_text(notice)}</p>' + method_specific_markup
         )
+    coverage = report_table(
+        [
+            report_text(locale, en="Section", ko="섹션"),
+            report_text(locale, en="Status", ko="상태"),
+            report_text(locale, en="Reason", ko="사유"),
+        ],
+        [[section.title, section.status, section.reason] for section in prepared.body.sections],
+    )
+    coverage_heading = report_text(locale, en="Report Coverage", ko="보고서 제공 범위")
+    method_specific_markup = (
+        f'<div data-report-level="{prepared.level}"><h3>{_html_text(coverage_heading)}</h3>'
+        f"<p>{_html_text(prepared.level)}</p>{coverage}</div>" + method_specific_markup
+    )
     method_label = _analysis_method_report_label(result.method_id, locale)
     result_payload = result.result if isinstance(result.result, dict) else {}
     input_settings = _report_input_settings(result_payload, locale)
@@ -1182,8 +1227,10 @@ def _analysis_result_html_report_bytes(
     row_count_total = _report_cell_value(result.provenance.row_count_total)
     stale_label = report_text(
         locale,
-        en="Review required because the source changed" if stale else "Current source",
-        ko="원본 변경으로 확인 필요" if stale else "현재 원본 기준",
+        en="Review required because the source changed"
+        if stale
+        else "Not marked stale; source rows not revalidated",
+        ko="원본 변경으로 확인 필요" if stale else "stale 표시 없음; 원자료 재검증 안 함",
     )
     report_heading = report_text(
         locale,
@@ -1392,49 +1439,167 @@ def _report_input_settings(payload: dict[str, object], locale: ReportLocale = "e
     return f'<dl class="meta">{"".join(settings)}</dl>'
 
 
-def _analysis_result_method_specific_report_section(
+@dataclass(frozen=True)
+class PreparedAnalysisReport:
+    definition: ReportDefinition | None
+    body: ReportBody
+    level: ReportLevel
+    pls_components: int | None = None
+
+    def render(self) -> str:
+        markup = self.body.render()
+        if self.pls_components is not None:
+            return (
+                f'<section data-pls-report="1" data-selected-components="{self.pls_components}">'
+                f"{markup}</section>"
+            )
+        return markup
+
+
+def prepare_analysis_report(
     result: AnalysisResultEnvelope, locale: ReportLocale = "en"
-) -> str:
+) -> PreparedAnalysisReport:
+    definition = report_definitions().get(result.method_id)
     payload = result.result
-    if not isinstance(payload, dict):
-        return ""
-    summary_type = payload.get("summary_type")
-    contract = INLINE_REPORT_CONTRACTS.get(result.method_id)
+
+    def unsupported(reason: str) -> PreparedAnalysisReport:
+        return PreparedAnalysisReport(
+            definition, ReportBody("unsupported", (), reason), "unsupported"
+        )
+
     if (
-        contract is None
-        or summary_type != contract[0]
-        or not isinstance(payload.get("schema_version"), int)
-        or payload.get("schema_version") not in contract[1]
+        definition is None
+        or not isinstance(payload, dict)
+        or payload.get("summary_type") != definition.summary_type
+        or type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") not in definition.accepted_schemas
     ):
-        raise ValueError("analysis_report_schema_unsupported")
+        return unsupported("analysis_report_schema_unsupported")
     if not any(
         value not in (None, {}, [])
         for key, value in payload.items()
         if key not in {"schema_version", "summary_type", "method", "warnings"}
     ):
-        raise ValueError("analysis_report_payload_invalid")
-    renderers: dict[str, Callable[[dict[str, Any], ReportLocale], str]] = {
-        "descriptive_statistics": _descriptive_statistics_report_section,
-        "graphical_summary": _graphical_summary_report_section_v2,
-        "normality_test": _normality_report_section,
-        "equal_variances_test": _equal_variances_report_section_v2,
-        "principal_components_analysis": _principal_components_report_section,
-        "gaussian_process_regression": _gaussian_process_report_section,
-        "partial_least_squares_regression": render_pls_report,
+        return unsupported("analysis_report_payload_invalid")
+    summary_type = definition.summary_type
+    body_renderers: dict[str, Callable[[dict[str, Any], ReportLocale], ReportBody]] = {
+        "normality_test": normality_report_body,
+        "principal_components_analysis": principal_components_report_body,
+        "pearson_correlation": correlation_report_body,
+        "xy_correlation_matrix": correlation_report_body,
+        "linear_model": linear_model_report_body,
+        "partial_least_squares_regression": pls_report_body,
+    }
+    legacy_renderers: dict[str, Callable[[dict[str, Any], ReportLocale], str]] = {
         "two_variances_test": render_two_variances_report,
     }
-    renderer = renderers.get(str(summary_type))
-    if renderer is not None:
-        return renderer(payload, locale)
-    if summary_type in HYPOTHESIS_REPORT_SUMMARY_TYPES:
-        return _hypothesis_report_section(payload, str(summary_type), locale)
-    if summary_type in CATEGORICAL_REPORT_SUMMARY_TYPES:
-        return _categorical_report_section(payload, str(summary_type), locale)
-    if summary_type in REGRESSION_REPORT_SUMMARY_TYPES:
-        return _regression_report_section(payload, str(summary_type), locale)
-    if summary_type in QUALITY_REPORT_SUMMARY_TYPES:
-        return _quality_report_section(payload, str(summary_type), locale)
-    return ""
+    try:
+        renderer = body_renderers.get(summary_type)
+        if renderer is not None:
+            body = renderer(payload, locale)
+        elif summary_type in {
+            "descriptive_statistics",
+            "graphical_summary",
+            "equal_variances_test",
+        }:
+            body = render_basic_eda_report(
+                payload,
+                locale,
+                plots=BasicEdaPlotRenderers(
+                    histogram=_report_histogram_svg,
+                    boxplot=_report_boxplot_svg,
+                    confidence_intervals=_report_confidence_interval_svg,
+                    variance_intervals=_variance_comparison_report_svg,
+                ),
+            )
+        elif summary_type in HYPOTHESIS_REPORT_SUMMARY_TYPES:
+            body = render_hypothesis_report(payload, locale)
+        elif summary_type in CATEGORICAL_REPORT_SUMMARY_TYPES:
+            body = render_categorical_report(payload, locale)
+        elif summary_type in QUALITY_REPORT_SUMMARY_TYPES:
+            body = quality_report_body(payload, locale)
+        elif summary_type == "gaussian_process_regression":
+            selection = payload.get("kernel_selection", {})
+            if not isinstance(selection, dict):
+                return unsupported("analysis_report_payload_invalid")
+            mode = selection.get("mode", "single")
+            core = _gaussian_process_report_section(payload, locale)
+            if not core:
+                return unsupported("analysis_report_payload_invalid")
+            body = ReportBody(
+                mode,
+                (
+                    ReportSection(
+                        "gp_results",
+                        report_text(
+                            locale,
+                            en="Stored Gaussian Process Results",
+                            ko="저장된 Gaussian Process 결과",
+                        ),
+                        "rendered",
+                        core,
+                    ),
+                    *gp_saved_sections(payload, locale),
+                    *gp_surface_sections(payload, locale),
+                    (
+                        ReportSection(
+                            "gp_comparison",
+                            report_text(locale, en="Kernel Comparison", ko="커널 비교"),
+                            "rendered",
+                            _gp_kernel_comparison_report(payload, locale),
+                        )
+                        if mode == "compare"
+                        else ReportSection(
+                            "gp_comparison",
+                            report_text(locale, en="Kernel Comparison", ko="커널 비교"),
+                            "not_applicable",
+                            reason="single_kernel_mode",
+                        )
+                    ),
+                ),
+            )
+        else:
+            legacy = legacy_renderers.get(summary_type)
+            if legacy is None:
+                return unsupported("analysis_report_renderer_unavailable")
+            core = legacy(payload, locale)
+            if not core:
+                return unsupported("analysis_report_payload_invalid")
+            body = ReportBody(
+                "default",
+                (
+                    ReportSection(
+                        "results",
+                        _analysis_method_report_label(result.method_id, locale),
+                        "rendered",
+                        core,
+                    ),
+                ),
+            )
+        level = assess_report_body(definition, body)
+    except (KeyError, TypeError, IndexError, ValueError) as exc:
+        # Missing legacy fields are report limitations, never fabricated values.
+        reason = (
+            str(exc)
+            if isinstance(exc, ValueError) and str(exc).startswith("analysis_report_")
+            else "analysis_report_payload_invalid"
+        )
+        return unsupported(reason)
+    components = (
+        int(payload["model_summary"]["selected_components"])
+        if summary_type == "partial_least_squares_regression"
+        else None
+    )
+    return PreparedAnalysisReport(definition, body, level, components)
+
+
+def _analysis_result_method_specific_report_section(
+    result: AnalysisResultEnvelope, locale: ReportLocale = "en"
+) -> str:
+    prepared = prepare_analysis_report(result, locale)
+    if prepared.level == "unsupported":
+        raise ValueError(prepared.body.unsupported_reason or "analysis_report_payload_invalid")
+    return prepared.render()
 
 
 def _descriptive_statistics_report_section(
@@ -2411,9 +2576,9 @@ def _gaussian_process_report_section(
 ) -> str:
     summary = payload.get("model_summary")
     kernel = payload.get("kernel")
-    diagnostics = payload.get("diagnostics")
     if not isinstance(summary, dict) or not isinstance(kernel, dict):
         return ""
+    validate_gp_report_core(payload)
     heading = report_text(
         locale,
         en="Gaussian Process Model Summary",
@@ -2481,7 +2646,6 @@ def _gaussian_process_report_section(
         if row
     )
     parameter_rows = _gp_parameter_report_rows(kernel.get("parameters"), locale)
-    chart = _gp_observed_fitted_report_svg(diagnostics, locale, payload.get("response"))
     metric_header = report_text(locale, en="Metric", ko="지표")
     value_header = report_text(locale, en="Value", ko="값")
     parameter_header = report_text(locale, en="Parameter", ko="항목")
@@ -2489,9 +2653,7 @@ def _gaussian_process_report_section(
     estimate_header = report_text(locale, en="Estimate", ko="추정값")
     bounds_header = report_text(locale, en="Bounds", ko="경계")
     status_header = report_text(locale, en="Status", ko="상태")
-    return (
-        gp_saved_details_report(payload, locale)
-        + f"""
+    return f"""
   <h2>{_html_text(heading)}</h2>
   <p>{_html_text(description)}</p>
   <table>
@@ -2505,10 +2667,7 @@ def _gaussian_process_report_section(
     <thead><tr><th>{_html_text(parameter_header)}</th><th>{_html_text(predictor_header)}</th><th>{_html_text(estimate_header)}</th><th>{_html_text(bounds_header)}</th><th>{_html_text(status_header)}</th></tr></thead>
     <tbody>{parameter_rows}</tbody>
   </table>
-  {chart}
-  {_gp_kernel_comparison_report(payload, locale)}
 """
-    )
 
 
 def _gp_kernel_comparison_report(payload: dict[str, object], locale: ReportLocale) -> str:
@@ -2516,8 +2675,20 @@ def _gp_kernel_comparison_report(payload: dict[str, object], locale: ReportLocal
     candidates = payload.get("kernel_candidates")
     if not isinstance(selection, dict) or selection.get("mode") != "compare":
         return ""
-    if not isinstance(candidates, list):
+    if not isinstance(candidates, list) or not candidates:
         return ""
+    if any(
+        not isinstance(candidate, dict) or candidate.get("status") not in {"succeeded", "failed"}
+        for candidate in candidates
+    ):
+        raise ValueError("analysis_report_payload_invalid")
+    selected = [candidate for candidate in candidates if candidate.get("selected") is True]
+    if (
+        len(selected) != 1
+        or selected[0].get("status") != "succeeded"
+        or selected[0].get("preset") != selection.get("selected_preset")
+    ):
+        raise ValueError("analysis_report_payload_invalid")
     heading = report_text(locale, en="Kernel Comparison", ko="Kernel 후보 비교")
     warning = report_text(
         locale,
@@ -2566,6 +2737,14 @@ def _gp_kernel_comparison_report(payload: dict[str, object], locale: ReportLocal
             details.append(
                 f"<details><summary>{_html_text(str(candidate.get('preset')))}</summary>"
                 + _gaussian_process_report_section(
+                    {
+                        **detail,
+                        "response": payload.get("response", {}),
+                        "predictors": payload.get("predictors", []),
+                    },
+                    locale,
+                )
+                + gp_saved_details_report(
                     {
                         **detail,
                         "response": payload.get("response", {}),

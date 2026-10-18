@@ -16,18 +16,31 @@ import {
   type AnalysisResultJsonExportResponse,
 } from "./api";
 import { createLatestRequestGuard } from "./latestRequest";
+import { getCurrentLocale } from "./i18n/store";
+import type { AppLocale } from "./i18n/types";
+import { useAnalysisReportCapability } from "./useAnalysisReportCapability";
 
 interface UseAnalysisExportStateOptions {
   currentAnalysisId: string | null;
   currentDatasetVersionId: string | null;
   resetKey: number;
+  locale?: AppLocale;
+  workspaceRevision?: number;
 }
 
 export function useAnalysisExportState({
   currentAnalysisId,
   currentDatasetVersionId,
   resetKey,
+  locale = getCurrentLocale(),
+  workspaceRevision = 0,
 }: UseAnalysisExportStateOptions) {
+  const [exportOwnerId, setExportOwnerId] = useState(currentAnalysisId);
+  const exportOwner = useRef(currentAnalysisId);
+  const capabilityState = useAnalysisReportCapability(exportOwnerId, locale, workspaceRevision);
+  const htmlContextKey = JSON.stringify([currentAnalysisId, currentDatasetVersionId, exportOwnerId, locale, workspaceRevision, resetKey]);
+  const htmlContext = useRef(htmlContextKey);
+  htmlContext.current = htmlContextKey;
   const [analysisResultJsonExport, setAnalysisResultJsonExport] =
     useState<AnalysisResultJsonExportResponse | null>(null);
   const [analysisResultJsonExportError, setAnalysisResultJsonExportError] = useState<
@@ -99,6 +112,8 @@ export function useAnalysisExportState({
 
   const resetAnalysisExportState = useCallback(() => {
     cancelAnalysisExportRequests();
+    exportOwner.current = null;
+    setExportOwnerId(null);
     setAnalysisResultJsonExport(null);
     setAnalysisResultJsonExportError(null);
     setAnalysisResultCsvExport(null);
@@ -129,6 +144,9 @@ export function useAnalysisExportState({
   }
 
   const refreshAnalysisResultExports = useCallback(async (analysisId: string) => {
+    if (exportOwner.current !== analysisId) resetAnalysisExportState();
+    exportOwner.current = analysisId;
+    setExportOwnerId(analysisId);
     const request = exportListRequest.begin();
     setIsLoadingAnalysisResultExportList(true);
     setAnalysisResultExportListError(null);
@@ -149,7 +167,7 @@ export function useAnalysisExportState({
         setIsLoadingAnalysisResultExportList(false);
       }
     }
-  }, [exportListRequest]);
+  }, [exportListRequest, resetAnalysisExportState]);
 
   async function createJsonExport(analysisId: string) {
     const request = jsonExportRequest.begin();
@@ -202,25 +220,42 @@ export function useAnalysisExportState({
   }
 
   async function createHtmlReport(analysisId: string) {
+    const capability = capabilityState.analysisReportCapability;
+    if (capability === null || capability.analysis_id !== analysisId ||
+        capability.locale !== locale || !capability.html_available || capability.report_level === "unsupported") {
+      setAnalysisResultHtmlReportError("analysis_report_capability_required");
+      return;
+    }
     const request = htmlReportRequest.begin();
+    const isCurrent = () => htmlReportRequest.isCurrent(request) && htmlContext.current === htmlContextKey;
     setIsCreatingAnalysisResultHtmlReport(true);
     setAnalysisResultHtmlReportError(null);
     setAnalysisResultExportDownloadError(null);
     try {
-      const response = await createAnalysisResultHtmlReport(analysisId);
-      if (htmlReportRequest.isCurrent(request)) {
+      const response = await createAnalysisResultHtmlReport(analysisId, {
+        locale,
+        expected_source_result_sha256: capability.source_result_sha256,
+      });
+      if (isCurrent()) {
+        if (response.analysis_id !== analysisId || response.report_locale !== locale ||
+            response.source_result_sha256 !== capability.source_result_sha256) {
+          throw new Error("analysis_report_source_mismatch");
+        }
         setAnalysisResultHtmlReport(response);
         await refreshAnalysisResultExports(analysisId);
       }
     } catch (error) {
-      if (htmlReportRequest.isCurrent(request)) {
+      if (isCurrent()) {
         setAnalysisResultHtmlReport(null);
         setAnalysisResultHtmlReportError(
           error instanceof Error ? error.message : "analysis_result_html_report_failed",
         );
+        if (error instanceof Error && error.message === "analysis_report_source_changed") {
+          void capabilityState.onRefreshAnalysisReportCapability();
+        }
       }
     } finally {
-      if (htmlReportRequest.isCurrent(request)) {
+      if (isCurrent()) {
         setIsCreatingAnalysisResultHtmlReport(false);
       }
     }
@@ -316,6 +351,7 @@ export function useAnalysisExportState({
 
   useEffect(() => {
     resetAnalysisExportState();
+    setExportOwnerId(currentAnalysisId);
     if (currentAnalysisId !== null) {
       void refreshAnalysisResultExports(currentAnalysisId);
     }
@@ -329,7 +365,15 @@ export function useAnalysisExportState({
     resetKey,
   ]);
 
+  useEffect(() => {
+    htmlReportRequest.cancel();
+    setIsCreatingAnalysisResultHtmlReport(false);
+    setAnalysisResultHtmlReportError(null);
+    return () => htmlReportRequest.cancel();
+  }, [htmlContextKey, htmlReportRequest]);
+
   return {
+    ...capabilityState,
     analysisResultCsvExport,
     analysisResultCsvExportError,
     analysisResultExportDownloadError,

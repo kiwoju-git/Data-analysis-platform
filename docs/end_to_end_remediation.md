@@ -41,14 +41,14 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A01 | Windows E2E readiness/diagnostics | verified | Child diagnostics, explicit ready gates and exact synthetic version selection passed local focused and hosted Windows/Linux full E2E. Original CI cause remains unproven. |
 | A02 | Locale initialization | reproduced / verified | Getter SecurityError reproduced before the fix; safe getter, in-memory switching and startup boundary passed both platforms. Independent of the unresolved original A01 cause. |
 | A03 | Dependencies/uploads | reproduced / verified | Native security locks, streaming/multipart limits, worker ownership and visible intake limits passed full local checks and all native CI jobs at 1213457. See dependency_upload_security.md. |
-| A04 | Transport/i18n | reproduced / fixed (integration rerun pending) | Request bytes and response objects remain untouched; explicit display boundaries replace compiler tokens. Frozen Windows full browser/frontend checks passed. Integrated CI exposed a missing documentation step marker; corrected locally, native CI rerun pending. |
-| A05 | Dataset context | reproduced / fixed (native integration pending) | 101 focused tests and all 16 real-server en/ko browser scenarios passed, including same-active schema, native file-cancel and replacement paste ownership. Whole native checkpoint CI remains required. |
-| A06 | GPR direct prediction | reproduced / fixed (native integration pending) | Five pre-fix component regressions; 80 focused tests and 18 real-model en/ko browser cases passed. Exact ID validation and detached JSON snapshots preserve both uncertainty kinds. |
-| A07 | Schema CAS | reproduced / fixed (native integration pending) | Atomic expected-hash CAS, explicit draft comparison/reapply and no-op preservation; 299 backend focused, 18 final backend, 119 frontend focused, six real two-editor browser cases passed. |
-| A08 | Workspace/backup | source_confirmed / reproduced / fixed / verified (Windows focused) | Exclusive lease and offline archive implemented; actual asset round-trip/CLI pass. Native Linux and whole-product gate pending. |
+| A04 | Transport/i18n | reproduced / fixed / verified | Body preservation and explicit display boundaries; subsequent native checkpoint A09 passed every job. Earlier failures remain below. |
+| A05 | Dataset context | reproduced / fixed / verified | 101 focused/16 real-server en/ko scenarios; integrated native A09 Windows/Linux passed after the explicit replacement-confirmation fixture correction. |
+| A06 | GPR direct prediction | reproduced / fixed / verified | Five pre-fix regressions, 80 focused/18 real-model browser cases; native A09 passed. Snapshots are not managed reports. |
+| A07 | Schema CAS | reproduced / fixed / verified | Atomic CAS/no-op/conflict UI; 299 broad backend/18 final backend/119 frontend/six real two-editor browser cases and native A09 passed. |
+| A08 | Workspace/backup | source_confirmed / reproduced / fixed / verified | Exclusive lease/offline archive, actual asset round-trip/CLI; native A09 passed after platform-neutral fault injection fix. |
 | A09 | Chart formatters | source_confirmed / reproduced / fixed / verified (focused) | Axis/legacy/locale precedence wired; coordinates/pin preserved in browser. Whole-check gate remains separate. |
-| A10 | Report Center | - | Pending independent query-lane tests. |
-| A11 | Generic reports | - | Pending method/schema/section parity. |
+| A10 | Report Center | source_confirmed / reproduced / fixed / verified (focused) | Independent list/detail/status and exact-owner guards; real-component mocked-transport browser passed. Native checkpoint still running at latest observation. |
+| A11 | Generic reports | source_confirmed / reproduced / fixed (integration in progress) | Stored-only reader, method/schema/section capability, report parity and UI guards; final all-family/native gate pending. |
 | A12 | Dedicated reports | - | After A01-A11; requires exact revision/hash owners. |
 | A13 | Execution capabilities | - | Pending cancellation CAS and grouped counts. |
 | A14 | Capability documentation | - | Pending generated registry/handler/report matrix. |
@@ -579,3 +579,123 @@ Root frozen frontend verification also passed the full ESLint run (zero errors,
 nine existing warnings), production build (existing chunk-size advisory),
 localization and `git diff --check`. Logs: `.tmp/remediation-a10-lint.log`,
 `.tmp/remediation-a10-build.log`. No main/Release publication is implied.
+
+## A11 Implementation and Evidence
+
+Report definitions now declare accepted schemas, estimator/design variants,
+renderer version and required/optional sections. The same stored-payload
+assessment drives the catalog/capability API, frontend controls and HTML body.
+HTML schema 4 adds level/renderer/section metadata; old files are untouched.
+Unsupported core fails before an artifact is created; a source SHA mismatch is
+409. HTML no longer flattens the result into CSV path/value rows.
+
+Method-specific pure renderers add stored diagnostics, PCA loading/biplot/D-squared,
+inference intervals/TOST/post-hoc, categorical tables/association, Pearson/XY,
+OLS selection/ANOVA/residuals, regularized residual distribution and every stored
+coefficient path, GP mean/observation-SD surfaces, and quality/gage charts.
+PLS retains every saved component and point. Missing historical sections lower
+coverage rather than refitting; ANOVA residuals and gage interactions absent from
+current payloads remain explicit limitations. See `html_report_coverage_matrix.md`.
+
+The source reader is separate from normal restore freshness checks: result,
+snapshot and frozen Phase II assets are verified without raw-row reloading.
+Read-before-path-validation and Phase II label/config disagreement were corrected.
+The latter was reproduced as two actual capability requests incorrectly returning
+200/full before the fix (`.tmp/a11-phase-label-prefixed.log`). General legacy
+config has no independent full-config digest; this limitation is not concealed.
+
+Executed narrow evidence (synthetic only):
+
+- Source/family checks: 56 passed, two Windows real-symlink privilege skips,
+  three existing warnings, 83.56 seconds (`.tmp/a11-source-family-final.log`).
+- Updated shared geometry + EDA/Pearson/quality API: 31 passed / 230 deselected,
+  20.64 seconds (`.tmp/a11-family-api-final.log`).
+- Hypothesis/categorical/warnings: 139 passed / 18.60 seconds; actual-family API
+  two passed / 232 deselected / three warnings. Initial API run used the old root
+  venv and failed before upload parsing; current-lock rerun passed, not suppressed.
+- Actual HTML API families: eight passed / 226 deselected / four warnings
+  (`.tmp/remediation-a11-html-api-2.log`).
+- Capability API: six passed / three warnings / 20.48 seconds; contract/dispatch
+  checks 47 passed. Dispatch-only checks are not numerical parity evidence.
+- GP/OLS contract plus GP HTML API: 27 passed / five deselected / three warnings
+  (`.tmp/remediation-a11-gp-linear-contract-3.log`). Earlier two test failures used
+  a transient NumPy prediction basis in a saved-payload equality check; the fixture
+  now mirrors the runner's separate basis storage. A later assertion still used
+  the old training-plot title and was replaced with actual visible section checks.
+- Frontend focused 233 passed; OpenAPI 220 passed; strict typing, scoped lint,
+  localization (2889 sources / 4025 keys), and diff whitespace passed.
+- Full frontend 700 passed in 82 files / 71.17 seconds, with no concurrent browser
+  suite (`.tmp/remediation-a11-frontend-full.log`). Mypy passed 184 source files
+  at the preceding report checkpoint (`.tmp/remediation-a11-mypy-2.log`).
+- Real Chromium KO/EN capability/export races, hash conflict, exact owner,
+  locale/mutation and Unicode filename download passed at 1440/1280/1024/390.
+  Diagnostics `.tmp/e2e-a11-report-capability-final` contain 16 PNGs, four traces,
+  two synthetic downloads and two evidence JSON files. HTTP is mocked in this
+  component-state suite, not a claimed live backend run. Both earlier fixture
+  failures selecting an already-active filter remain in prior logs.
+
+Independent review reproduced a malformed GP kernel-selection list causing an
+uncaught AttributeError. Explicit nested-object validation and negative fixtures
+now reject this as unsupported; the final expanded report suite is still pending.
+No main or Release publication has occurred.
+
+### Native Checkpoint Boundary
+
+Run `39101069921` at `3eb3e57a1e1950013a0e1e13907a738e573957a9`
+completed successfully across Windows, Windows E2E, Linux, Python 3.11,
+dependency-security and Linux archive verification. This proves that checkpoint,
+not the later A09 small-value follow-up/A10/A11 changes. Run `39102592691` at
+`36e50949f2317ea2805e2331c88c9f3f1b64f006` had Linux/Python 3.11/security/archive
+success while Windows was still running at this observation. A CI archive is not
+a published GitHub Release or evidence for unimplemented A12-A15.
+
+### A11 Frozen Integration
+
+The final combined report-focused run passed **334 tests**, with two Windows
+symlink-privilege skips and three existing warnings (169.19 seconds). Log:
+`.tmp/remediation-a11-focused-integrated.log`. The command used the current-lock
+Python with `PYTHONPATH=$PWD/backend` and these files after `-m pytest ... -q`:
+
+```text
+backend/tests/unit/test_report_contract.py
+backend/tests/unit/test_report_coverage.py
+backend/tests/unit/test_analysis_report_capabilities.py
+backend/tests/unit/test_analysis_report_source.py
+backend/tests/unit/test_basic_eda_report.py
+backend/tests/unit/test_hypothesis_report.py
+backend/tests/unit/test_categorical_report.py
+backend/tests/unit/test_report_warnings.py
+backend/tests/unit/test_linear_model_report.py
+backend/tests/unit/test_stored_family_reports.py
+backend/tests/unit/test_gaussian_process_report_contract.py
+backend/tests/unit/test_pls_report.py
+backend/tests/unit/test_two_variances_report.py
+backend/tests/unit/test_analysis_export_retention_api.py
+```
+
+The first integrated Basic EDA API run had two old-heading assertion failures
+(70 passed). Both now inspect visible section IDs/tables/SVG and saved values;
+the exact two reran successfully (21.48 seconds, four existing warnings).
+No numeric tolerance or calculation was changed. Logs:
+`.tmp/remediation-a11-dispatch-integrated.log`, `.tmp/remediation-a11-basic-eda-api.log`.
+
+Real-server Chromium verification also passed, including PLS analysis, completed
+prediction snapshot, KO/EN HTML creation/download, offline file navigation and
+Report Center redownload, plus GPR settings/kernel comparison and chart/layout
+checks. This used a synthetic temporary workspace, not the user's server/data:
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests/e2e/critical_path.py --backend-port 8027 --frontend-port 5257 --gpr-report-only --diagnostics-root .tmp/e2e-a11-real-reports
+```
+
+Exit 0, diagnostics `.tmp/e2e-a11-real-reports`, log
+`.tmp/remediation-a11-real-report-e2e.log`; test-created servers were terminated
+by the runner. Full frontend: 700/82, strict TypeScript, production build,
+localization 2889/4025 and ESLint passed (nine existing warnings). Backend Ruff
+and format check passed 316 files; mypy passed 185 source files after integration.
+Whole-backend/native A11 checkpoint and later A12-A15 gates remain separate.
+
+Final actual HTML API rerun (`-m pytest backend/tests/unit/test_api_contracts.py
+-k analysis_result_html_report -q`) passed eight tests / 226 deselected / four
+existing warnings in 31.30 seconds. Log `.tmp/remediation-a11-html-api-final.log`.

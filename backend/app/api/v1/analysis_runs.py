@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request, Response, status
@@ -22,6 +22,8 @@ from app.api.v1.schemas.analyses import (
     AnalysisRunState,
     AnalysisRunStatusResponse,
 )
+from app.api.v1.schemas.report_capabilities import AnalysisReportCapability
+from app.services.analysis_report_capabilities import get_analysis_report_capability
 from app.services.analysis_run_comparisons import compare_analysis_runs
 from app.services.analysis_run_exports import (
     create_analysis_result_csv_export,
@@ -155,7 +157,17 @@ def create_analysis_result_html_report_export_route(
         settings=request.app.state.settings,
         analysis_id=analysis_id,
         locale=body.locale if body is not None else "en",
+        expected_source_result_sha256=body.expected_source_result_sha256
+        if body is not None
+        else None,
     )
+
+
+@router.get("/{analysis_id}/report-capability", response_model=AnalysisReportCapability)
+def get_analysis_report_capability_route(
+    request: Request, analysis_id: UUID, locale: Literal["en", "ko"] = "en"
+) -> AnalysisReportCapability:
+    return get_analysis_report_capability(request.app.state.settings, analysis_id, locale)
 
 
 @router.get("/{analysis_id}/exports", response_model=AnalysisResultExportListResponse)

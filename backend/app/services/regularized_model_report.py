@@ -7,7 +7,7 @@ from typing import Any
 from app.i18n.report_text import ReportLocale, report_text
 
 
-def regularized_warning_text(code: str, locale: ReportLocale) -> str:
+def regularized_warning_text(code: str, locale: ReportLocale, original: str | None = None) -> str:
     messages = {
         "regularized_model_predictive_not_causal": (
             "Coefficients and CV metrics do not establish causality or significance.",
@@ -54,7 +54,7 @@ def regularized_warning_text(code: str, locale: ReportLocale) -> str:
             "필수 수치 변수의 유효하지 않은 값을 제외했습니다.",
         ),
     }
-    en, ko = messages.get(code, ("Review this analysis warning.", "분석 경고를 확인하세요."))
+    en, ko = messages.get(code, (original or code, original or code))
     return report_text(locale, en=en, ko=ko)
 
 
@@ -160,7 +160,7 @@ def render_regularized_report(payload: dict[str, Any], locale: ReportLocale) -> 
             [[r["alpha"], *r["standardized_coefficients"]] for r in path],
         ),
     ]
-    for index, feature in enumerate(config["feature_order"][:20]):
+    for index, feature in enumerate(config["feature_order"]):
         parts.append(
             _scatter(
                 f"{title}: {feature}",

@@ -356,6 +356,10 @@ export const apiRoutes = {
     return apiUrl(`/analysis-runs/${pathId(analysisId)}`);
   },
 
+  analysisReportCapability(analysisId: string, locale: "en" | "ko"): string {
+    return urlWithQuery(`/analysis-runs/${pathId(analysisId)}/report-capability`, new URLSearchParams({ locale }));
+  },
+
   analysisRunDeletionPreflight(analysisId: string): string {
     return apiUrl(`/analysis-runs/${pathId(analysisId)}/deletion-preflight`);
   },

@@ -344,6 +344,14 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="analysisReportCapability",
+        method="get",
+        path="/api/v1/analysis-runs/{analysis_id}/report-capability",
+        success_status="200",
+        response_schema="AnalysisReportCapability",
+        parameters=frozenset({("analysis_id", "path"), ("locale", "query")}),
+    ),
+    OperationContract(
         route_name="analysisRunExports",
         method="get",
         path="/api/v1/analysis-runs/{analysis_id}/exports",

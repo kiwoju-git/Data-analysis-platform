@@ -38,6 +38,10 @@ import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
 
 export interface AnalysisWorkbenchExportState {
+  analysisReportCapability?: import("./api").AnalysisReportCapability | null;
+  analysisReportCapabilityError?: string | null;
+  isLoadingAnalysisReportCapability?: boolean;
+  onRefreshAnalysisReportCapability?: () => void;
   analysisResultCsvExport?: AnalysisResultCsvExportResponse | null;
   analysisResultCsvExportError?: string | null;
   analysisResultExportDownloadError?: string | null;
@@ -320,6 +324,10 @@ export function AnalysisWorkbench({
           ) : null}
           {selectedMethod.execution_mode !== "dedicated" ? <AnalysisResultExportPanel
             analysisResult={analysisResultForExport}
+              reportCapability={exportState?.analysisReportCapability}
+              reportCapabilityError={exportState?.analysisReportCapabilityError}
+              isLoadingReportCapability={exportState?.isLoadingAnalysisReportCapability}
+              onRetryReportCapability={exportState?.onRefreshAnalysisReportCapability}
             csvExportError={effectiveExportState.analysisResultCsvExportError}
             csvExportResult={effectiveExportState.analysisResultCsvExport}
             downloadError={effectiveExportState.analysisResultExportDownloadError}

@@ -592,6 +592,8 @@ export default function App() {
   const currentAnalysisId = analysisResult?.analysis_id ?? null;
   const currentDatasetVersionId = version?.version_id ?? null;
   const analysisExportState = useAnalysisExportState({
+    locale,
+    workspaceRevision: workspaceAssetRevision,
     currentAnalysisId,
     currentDatasetVersionId,
     resetKey: datasetStateRevision,
