@@ -5,6 +5,8 @@ param(
     [string]$DiagnosticsRoot = "",
     [switch]$InstallBrowsers,
     [switch]$KeepWorkspace,
+    [ValidateSet("full", "workflows", "context", "data", "prediction")]
+    [string]$Suite = "full",
     [switch]$FactorialWorkflowOnly,
     [switch]$GprReportOnly,
     [switch]$RefinedUiOnly,
@@ -14,7 +16,8 @@ param(
     [switch]$SchemaConcurrencyOnly,
     [switch]$UploadRecoveryOnly,
     [switch]$ChartFormattingOnly,
-    [switch]$ReportCenterContextOnly
+    [switch]$ReportCenterContextOnly,
+    [switch]$AnalysisCompletionOnly
 )
 
 Set-StrictMode -Version Latest
@@ -57,6 +60,9 @@ try {
     if ($KeepWorkspace) {
         $Args += "--keep-workspace"
     }
+    if ($PSBoundParameters.ContainsKey("Suite")) {
+        $Args += @("--suite", "$Suite")
+    }
     if ($FactorialWorkflowOnly) {
         $Args += "--factorial-workflow-only"
     }
@@ -86,6 +92,9 @@ try {
     }
     if ($ReportCenterContextOnly) {
         $Args += "--report-center-context-only"
+    }
+    if ($AnalysisCompletionOnly) {
+        $Args += "--analysis-completion-only"
     }
 
     & $Python @Args

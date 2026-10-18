@@ -1322,3 +1322,54 @@ The corrected guard passed 11 targeted tests in 1.34s, including wrong owner,
 unsupported/summary capability, missing renderer/hash and incomplete sections.
 Ruff and the new test's format check passed. This focused check does not replace
 the pending complete browser rerun.
+
+### Final Browser Gate and Bounded Windows Partitions
+
+Run 39120103693 at `6db0f0d` passed the Windows full check (2285 passed /
+3 skipped / 105 warnings, 2047.58s), Linux full check (2276 passed /
+12 skipped / 105 warnings, 430.97s), and Python 3.11 (2276 passed /
+12 skipped / 105 warnings, 229.18s). Both complete frontend checks passed
+803 tests in 89 files. Native Linux full E2E, archive installation/restore
+journeys and every dependency-security gate passed. The exact archive is a
+checkpoint only: Windows E2E and therefore `release-ready` failed.
+
+The failed actual child was `gp-prediction-context/model-ko`. Its trace records
+`/src/i18n/translate.ts` failing with `net::ERR_NO_BUFFER_SPACE` before any HTTP
+response, while 18 other startup requests returned 200 and the WebSocket returned
+101. The root was empty; locale/runtime initialization never ran. This is evidence
+of an asset transport failure, not evidence of a locale or GP state regression.
+No OS counters were captured in that run, so socket exhaustion remains a hypothesis,
+not a confirmed root cause. Adding a timeout would not refetch a failed ESM import.
+Evidence: job 117660845278, artifact 12134228801, and
+`.tmp/remediation-a15-windows-mount-diagnostics/gp-prediction-context/model-ko/`.
+
+The same source passed a fresh complete local browser run, exit 0, on Windows 10
+Home 19045/Python 3.10.11, with Node 22.23.2. Command (root `PYTHONPATH` and locked
+test venv as above): `tests/e2e/critical_path.py --backend-port 8051
+--frontend-port 5271 --diagnostics-root .tmp/e2e-a15-full2`.
+Log: `.tmp/remediation-a15-full2-browser.log`; completion 2026-10-18 11:03:36 UTC.
+This is not a hosted-Windows or physical-Windows-11 pass. An earlier local run
+loaded the old Report Center assertion before its fix and failed; its record at
+`.tmp/remediation-a15-full-browser.log` is retained.
+
+The Windows browser job is partitioned into independent context, data, prediction
+and legacy-workflow runners with synthetic workspaces. Default local/Linux full
+execution and its original order remain available. No assertion, retry, individual
+timeout, API response, statistical fixture or cold-start condition is relaxed.
+All partitions must succeed for the stable `e2e` aggregate, which is required by
+`release-ready`. Coverage/dispatch contracts guard against missing or duplicated
+stages. A failed child now records a bounded five-second, read-only Windows TCP
+state aggregate; addresses, PIDs and raw command output are not persisted.
+Collection runs only after failure, does not slow normal contexts, cannot replace
+the original exception, and is not attributed to the browser without evidence.
+Ten diagnostic unit tests passed in 0.85s. The partitioned native execution remains
+unverified until the next complete CI run; main/Release publication is blocked.
+
+The partition parser first failed 11 explicit `--suite full`/focused-option
+conflict cases (106 passed): argparse treated the explicit value as its string
+default. Parsing now keeps a `None` default and normalizes to full afterward.
+The corrected partition/readiness suite passed 117 in 5.10s. Combined partition,
+readiness, diagnostics and startup tests passed 139 in 73.64s. The separate
+startup/CI/document contract subset passed 29, with 226 deselected and two
+existing Starlette deprecation warnings, in 89.38s. Ruff/format/diff checks pass.
+These are contract tests; actual split browser execution is still required.

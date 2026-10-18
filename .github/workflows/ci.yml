@@ -128,10 +128,14 @@ jobs:
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 
-  e2e:
+  windows-e2e:
     runs-on: windows-latest
     needs: windows
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [workflows, context, data, prediction]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -161,12 +165,12 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}\ms-playwright
           DATALAB_E2E_ROOT: ${{ runner.temp }}\datalab-e2e
           DATALAB_E2E_DIAGNOSTICS_ROOT: ${{ runner.temp }}\datalab-e2e-diagnostics
-        run: powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -WorkspaceRoot "${{ env.DATALAB_E2E_ROOT }}" -DiagnosticsRoot "${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}" -KeepWorkspace
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -Suite "${{ matrix.suite }}" -WorkspaceRoot "${{ env.DATALAB_E2E_ROOT }}" -DiagnosticsRoot "${{ env.DATALAB_E2E_DIAGNOSTICS_ROOT }}" -KeepWorkspace
       - name: Upload E2E diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-logs
+          name: e2e-logs-${{ matrix.suite }}
           path: |
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\logs\*.log
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\screenshots\*.png
@@ -186,6 +190,18 @@ jobs:
             ${{ runner.temp }}\datalab-e2e-diagnostics\api-boundary\**
             ${{ runner.temp }}\datalab-e2e-diagnostics\chart-formatting\**
           if-no-files-found: ignore
+
+  e2e:
+    if: always()
+    needs: windows-e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require every isolated Windows browser suite
+        env:
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: python scripts/release_readiness.py gate --kind windows-e2e --source-commit "$GITHUB_SHA" --output .tmp/windows-e2e-gate.json
 
   linux:
     runs-on: ubuntu-24.04

@@ -87,9 +87,11 @@ The script starts backend and frontend servers on loopback-only test ports,
 uses a temporary `DATALAB_WORKSPACE_ROOT`, runs the browser flow, and removes
 the temporary workspace unless `-KeepWorkspace` is passed.
 
-GitHub Actions runs the same browser smoke in a separate `e2e` job after the
-Windows check job succeeds. CI uploads only diagnostics-root log files, failure
-screenshots, and failure HTML snapshots as `e2e-logs`; it does not upload the
+GitHub Actions runs the same browser coverage in four `windows-e2e` suites after
+the Windows check job succeeds; `e2e` requires all four to succeed. CI uploads
+only synthetic diagnostics-root logs, screenshots, DOM, JSON and traces as
+`e2e-logs-context`, `e2e-logs-data`, `e2e-logs-prediction`, and
+`e2e-logs-workflows`; it does not upload the
 temporary data workspace. Local
 `scripts/check.ps1` intentionally remains browser-free so routine checks do not
 require a Playwright browser install.

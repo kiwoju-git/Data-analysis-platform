@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -17,6 +18,7 @@ def diagnostics(monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, "source_identity", lambda: {"source_commit": "fixture"})
+    monkeypatch.setattr(module.platform, "system", lambda: "diagnostic-test")
     return module
 
 
@@ -76,3 +78,61 @@ def test_cleanup_failure_is_not_success(diagnostics, tmp_path):
         with diagnostics.diagnosed_page(browser, tmp_path, "cleanup"):
             pass
     context.close.assert_called_once()
+
+
+def test_tcp_snapshot_keeps_only_aggregate_states(diagnostics):
+    output = """
+Active Connections
+  Proto  Local Address          Foreign Address        State
+  TCP    127.0.0.1:5271          0.0.0.0:0              LISTENING
+  TCP    127.0.0.1:5271          127.0.0.1:49156        TIME_WAIT
+  TCP    [::1]:5271             [::1]:49157             TIME_WAIT
+  TCP    10.0.0.2:443           192.0.2.1:80            ESTABLISHED
+  UDP    127.0.0.1:123           *:*
+  TCP    127.0.0.1:5271          0.0.0.0:0              UNKNOWN
+"""
+    assert diagnostics.tcp_state_counts(output) == {
+        "ESTABLISHED": 1,
+        "LISTENING": 1,
+        "TIME_WAIT": 2,
+    }
+
+
+def test_tcp_snapshot_is_bounded_read_only_and_redacts_raw_output(diagnostics, monkeypatch):
+    monkeypatch.setattr(diagnostics.platform, "system", lambda: "Windows")
+    run = MagicMock(return_value=MagicMock(stdout="TCP 127.0.0.1:1 192.0.2.1:2 TIME_WAIT"))
+    monkeypatch.setattr(diagnostics.subprocess, "run", run)
+    result = diagnostics.socket_failure_diagnostics()
+    assert result == {
+        "status": "collected",
+        "scope": "host_aggregate_not_browser_attribution",
+        "tcp_states": {"TIME_WAIT": 1},
+        "total_tcp_sockets": 1,
+    }
+    run.assert_called_once_with(
+        ["netstat.exe", "-an", "-p", "tcp"],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=True,
+        timeout=5,
+    )
+
+
+@pytest.mark.parametrize(
+    "failure", [OSError("sensitive path"), subprocess.TimeoutExpired("private", 5)]
+)
+def test_tcp_snapshot_failure_does_not_expose_error_text(diagnostics, monkeypatch, failure):
+    monkeypatch.setattr(diagnostics.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(diagnostics.subprocess, "run", MagicMock(side_effect=failure))
+    assert diagnostics.socket_failure_diagnostics() == {
+        "status": "unavailable",
+        "error_type": type(failure).__name__,
+    }
+
+
+def test_other_platform_does_not_spawn_diagnostic(diagnostics, monkeypatch):
+    run = MagicMock(side_effect=AssertionError("Must not spawn"))
+    monkeypatch.setattr(diagnostics.subprocess, "run", run)
+    assert diagnostics.socket_failure_diagnostics()["status"] == "not_collected"
+    run.assert_not_called()

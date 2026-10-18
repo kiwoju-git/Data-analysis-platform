@@ -7,6 +7,7 @@ import platform
 import subprocess
 import sys
 import traceback
+from collections import Counter
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -14,6 +15,53 @@ from typing import Iterator
 from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import Browser, Page, expect
+
+
+def tcp_state_counts(output: str) -> dict[str, int]:
+    """Retain only aggregate Windows TCP states, never socket addresses or PIDs."""
+    states = {
+        "CLOSED",
+        "LISTENING",
+        "SYN_SENT",
+        "SYN_RECEIVED",
+        "ESTABLISHED",
+        "FIN_WAIT_1",
+        "FIN_WAIT_2",
+        "CLOSE_WAIT",
+        "CLOSING",
+        "LAST_ACK",
+        "TIME_WAIT",
+    }
+    counts: Counter[str] = Counter()
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) == 4 and fields[0] == "TCP" and fields[-1] in states:
+            counts[fields[-1]] += 1
+    return dict(sorted(counts.items()))
+
+
+def socket_failure_diagnostics() -> dict[str, object]:
+    """A bounded, read-only failure snapshot, not proof of resource exhaustion."""
+    if platform.system() != "Windows":
+        return {"status": "not_collected", "reason": "windows_tcp_diagnostic_only"}
+    try:
+        result = subprocess.run(
+            ["netstat.exe", "-an", "-p", "tcp"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return {"status": "unavailable", "error_type": type(error).__name__}
+    counts = tcp_state_counts(result.stdout)
+    return {
+        "status": "collected",
+        "scope": "host_aggregate_not_browser_attribution",
+        "tcp_states": counts,
+        "total_tcp_sockets": sum(counts.values()),
+    }
 
 
 @lru_cache(maxsize=1)
@@ -163,6 +211,7 @@ def diagnosed_page(
             "browser": browser.version,
             "stage": name,
             "failure_type": type(failure).__name__,
+            "socket_snapshot": socket_failure_diagnostics(),
             "failure_traceback": traceback.format_exception(
                 type(failure), failure, failure.__traceback__
             ),

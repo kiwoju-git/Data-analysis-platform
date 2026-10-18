@@ -24,6 +24,19 @@ The Windows job allowance is 60 minutes after observing backend-only durations
 up to 39m31s before frontend checks. Per-test deadlines, numerical budgets and
 the existing 20-minute Windows browser-job allowance are unchanged.
 
+Windows browser coverage runs as four independent `windows-e2e` matrix jobs:
+`context`, `data`, `prediction`, and `workflows`. The `e2e` aggregate accepts only
+matrix success. This bounds cumulative cold Vite/Chromium context load after a
+recorded pre-import `ERR_NO_BUFFER_SPACE` failure; it is not a retry or a confirmed
+OS root-cause claim. Default local and Linux E2E still run the complete ordered
+suite. Failure diagnostics include read-only host TCP state counts, without
+addresses or PIDs. Exact partition coverage and actual dispatch are unit-tested.
+
+Download current Windows diagnostics with `gh run download <run-id> --repo
+kiwoju-git/Data-analysis-platform --pattern 'e2e-logs-*' --dir
+"$env:TEMP\datalab-e2e-logs"`. Older historical runs below used one `e2e-logs`
+artifact; their original evidence names are intentionally preserved.
+
 Linux archive versions come from `release-version.json`, or an explicitly
 validated `workflow_dispatch` input. CI artifact names include the source SHA.
 The final tag/archive version must agree, existing tags/assets are never replaced,

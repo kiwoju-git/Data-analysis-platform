@@ -1,5 +1,21 @@
 # Browser E2E Coverage
 
+## Windows CI Partitions
+
+`scripts/e2e.ps1 -Suite full` remains the default complete ordered journey.
+Windows CI uses separate runners/workspaces for `-Suite context`, `-Suite data`,
+`-Suite prediction`, and `-Suite workflows`; Linux retains the full suite.
+Context covers analysis completion, Report Center, API translation and chart
+formatting. Data covers dataset races and schema concurrency. Prediction covers
+saved GPR prediction races. Workflows retains all original chart, resize,
+localization and legacy journeys, including refined UI/startup/Two Variances.
+No tests are retried or omitted; all four must pass the `e2e` aggregate before
+`release-ready` can succeed. Each run writes `suite-manifest.json` to its isolated
+diagnostics directory. `--suite` and focused `--*-only` options are mutually
+exclusive. Actual dispatch and coverage-union tests guard the partition contract.
+The failed-child recorder captures bounded Windows TCP state aggregates only on
+failure; these host-wide counts are not proof of browser socket exhaustion.
+
 ## Capability Help Remediation
 
 The refined-UI suite additionally opens exact PCA, general-factorial and saved
@@ -938,8 +954,8 @@ runner prints that process name, exit code, and recent log tail. If readiness
 times out while the processes are still running, the runner records the timed-out
 URL and prints recent backend/frontend log tails.
 
-CI uses separate workspace and diagnostics roots. It uploads only diagnostics
-under `logs`, `screenshots`, and `html` as the `e2e-logs` artifact. It does not
+CI uses separate workspace and diagnostics roots. It uploads only synthetic logs,
+screenshots, DOM, JSON and traces as the `e2e-logs-<suite>` artifacts. It does not
 upload raw workspace files or generated dataset artifacts. The current smoke
 uses synthetic data only; do not point this smoke at private user data.
 

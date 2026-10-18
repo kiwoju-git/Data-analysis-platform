@@ -19,6 +19,7 @@ REQUIRED_JOBS = {
         "dependency-security",
     ),
     "dependencies": ("security-python", "security-npm"),
+    "windows-e2e": ("windows-e2e",),
 }
 VERSION_PATTERN = r"(?:0|[1-9][0-9]{0,7})\.(?:0|[1-9][0-9]{0,7})\.(?:0|[1-9][0-9]{0,7})"
 

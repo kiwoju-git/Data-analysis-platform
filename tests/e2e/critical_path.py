@@ -209,7 +209,32 @@ C\t96.0\t89\t19.5
 """
 
 
-def main() -> int:
+SUITE_STAGES = {
+    "context": (
+        "analysis_completion", "report_center_context", "api_translation", "chart_formatting",
+    ),
+    "data": ("dataset_context", "schema_concurrency"),
+    "prediction": ("gp_prediction_context",),
+    "workflows": (
+        "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell",
+        "legacy_workflow",
+    ),
+}
+FULL_STAGE_ORDER = (
+    "analysis_completion", "report_center_context", "api_translation", "dataset_context",
+    "gp_prediction_context", "schema_concurrency", "chart_interactions", "result_chart_models",
+    "chart_formatting", "desktop_resize", "localization_shell", "legacy_workflow",
+)
+
+
+def suite_stage_ids(suite: str) -> tuple[str, ...]:
+    if suite == "full":
+        return FULL_STAGE_ORDER
+    selected = SUITE_STAGES[suite]
+    return tuple(stage for stage in FULL_STAGE_ORDER if stage in selected)
+
+
+def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run the DataLab Studio critical-path browser E2E smoke test.",
     )
@@ -218,18 +243,25 @@ def main() -> int:
     parser.add_argument("--workspace-root", type=Path, default=None)
     parser.add_argument("--diagnostics-root", type=Path, default=None)
     parser.add_argument("--keep-workspace", action="store_true")
-    parser.add_argument("--factorial-workflow-only", action="store_true")
-    parser.add_argument("--gpr-report-only", action="store_true")
-    parser.add_argument("--refined-ui-only", action="store_true")
-    parser.add_argument("--api-translation-only", action="store_true")
-    parser.add_argument("--dataset-context-only", action="store_true")
-    parser.add_argument("--gp-prediction-context-only", action="store_true")
-    parser.add_argument("--schema-concurrency-only", action="store_true")
-    parser.add_argument("--upload-recovery-only", action="store_true")
-    parser.add_argument("--chart-formatting-only", action="store_true")
-    parser.add_argument("--report-center-context-only", action="store_true")
-    parser.add_argument("--analysis-completion-only", action="store_true")
-    args = parser.parse_args()
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--suite", choices=("full", "workflows", "context", "data", "prediction"))
+    mode.add_argument("--factorial-workflow-only", action="store_true")
+    mode.add_argument("--gpr-report-only", action="store_true")
+    mode.add_argument("--refined-ui-only", action="store_true")
+    mode.add_argument("--api-translation-only", action="store_true")
+    mode.add_argument("--dataset-context-only", action="store_true")
+    mode.add_argument("--gp-prediction-context-only", action="store_true")
+    mode.add_argument("--schema-concurrency-only", action="store_true")
+    mode.add_argument("--upload-recovery-only", action="store_true")
+    mode.add_argument("--chart-formatting-only", action="store_true")
+    mode.add_argument("--report-center-context-only", action="store_true")
+    mode.add_argument("--analysis-completion-only", action="store_true")
+    return parser
+
+
+def main() -> int:
+    args = argument_parser().parse_args()
+    args.suite = args.suite or "full"
 
     repo_root = Path(__file__).resolve().parents[2]
     if args.workspace_root is None:
@@ -242,6 +274,11 @@ def main() -> int:
     )
     diagnostics = E2EDiagnostics(diagnostics_root)
     diagnostics.record("E2E diagnostics initialized")
+    if not any(value for key, value in vars(args).items() if key.endswith("_only")):
+        (diagnostics.root / "suite-manifest.json").write_text(
+            json.dumps({"schema_version": 1, "suite": args.suite, "stages": suite_stage_ids(args.suite)}, indent=2),
+            encoding="utf-8",
+        )
     log_root = diagnostics.log_root
     managed_processes: list[ManagedProcess] = []
     log_handles = []
@@ -343,6 +380,7 @@ def main() -> int:
             args.chart_formatting_only,
             args.report_center_context_only,
             args.analysis_completion_only,
+            suite=args.suite,
         )
         print("E2E critical path passed")
         return 0
@@ -649,7 +687,10 @@ def run_browser_flow(
     chart_formatting_only: bool = False,
     report_center_context_only: bool = False,
     analysis_completion_only: bool = False,
+    *,
+    suite: str = "full",
 ) -> None:
+    stages = suite_stage_ids(suite)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
@@ -707,22 +748,33 @@ def run_browser_flow(
                 verify_refined_ui(browser, frontend_base_url, diagnostics.root / "refined-ui", version_id)
                 return
             if not factorial_only and not gpr_report_only:
-                diagnostics.step("verify current analysis completion ownership")
-                verify_analysis_completion(browser, frontend_base_url, diagnostics.root / "analysis-completion", isolated_workspace=True)
-                diagnostics.step("verify Report Center request context")
-                verify_report_center_context(browser, frontend_base_url, diagnostics.root / "report-center-context")
-                diagnostics.step("verify API translation boundary with synthetic inputs")
-                verify_api_translation_boundary(browser, frontend_base_url, diagnostics.root / "api-boundary", isolated_workspace=True)
-                diagnostics.step("verify dataset source context under delayed responses")
-                verify_dataset_context(browser, frontend_base_url, diagnostics.root / "dataset-context", isolated_workspace=True)
-                diagnostics.step("verify saved GP prediction request context")
-                verify_gp_prediction_context(browser, frontend_base_url, diagnostics.root / "gp-prediction-context", isolated_workspace=True)
-                diagnostics.step("verify two-editor schema concurrency")
-                verify_schema_concurrency(browser, frontend_base_url, diagnostics.root / "schema-concurrency", isolated_workspace=True)
-            verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
-            verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
-            diagnostics.step("verify chart axis formatting")
-            verify_chart_formatting(browser, frontend_base_url, diagnostics.root / "chart-formatting")
+                if "analysis_completion" in stages:
+                    diagnostics.step("verify current analysis completion ownership")
+                    verify_analysis_completion(browser, frontend_base_url, diagnostics.root / "analysis-completion", isolated_workspace=True)
+                if "report_center_context" in stages:
+                    diagnostics.step("verify Report Center request context")
+                    verify_report_center_context(browser, frontend_base_url, diagnostics.root / "report-center-context")
+                if "api_translation" in stages:
+                    diagnostics.step("verify API translation boundary with synthetic inputs")
+                    verify_api_translation_boundary(browser, frontend_base_url, diagnostics.root / "api-boundary", isolated_workspace=True)
+                if "dataset_context" in stages:
+                    diagnostics.step("verify dataset source context under delayed responses")
+                    verify_dataset_context(browser, frontend_base_url, diagnostics.root / "dataset-context", isolated_workspace=True)
+                if "gp_prediction_context" in stages:
+                    diagnostics.step("verify saved GP prediction request context")
+                    verify_gp_prediction_context(browser, frontend_base_url, diagnostics.root / "gp-prediction-context", isolated_workspace=True)
+                if "schema_concurrency" in stages:
+                    diagnostics.step("verify two-editor schema concurrency")
+                    verify_schema_concurrency(browser, frontend_base_url, diagnostics.root / "schema-concurrency", isolated_workspace=True)
+            if "chart_interactions" in stages:
+                verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
+            if "result_chart_models" in stages:
+                verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
+            if "chart_formatting" in stages:
+                diagnostics.step("verify chart axis formatting")
+                verify_chart_formatting(browser, frontend_base_url, diagnostics.root / "chart-formatting")
+            if "legacy_workflow" not in stages:
+                return
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
             verify_localization_shell(browser, frontend_base_url, diagnostics)
             context = browser.new_context(accept_downloads=True)

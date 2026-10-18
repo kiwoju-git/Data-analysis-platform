@@ -69,6 +69,15 @@ def test_security_gate_requires_both_runtime_and_dev_matrix_groups() -> None:
         readiness.require_successful_jobs(jobs, "dependencies", SHA)
 
 
+@pytest.mark.parametrize("result", ["failure", "cancelled", "skipped", "in_progress", None])
+def test_windows_e2e_matrix_aggregate_requires_every_suite_success(result) -> None:
+    jobs = successful_jobs("windows-e2e")
+    assert readiness.require_successful_jobs(jobs, "windows-e2e", SHA)["status"] == "passed"
+    jobs["windows-e2e"]["result"] = result
+    with pytest.raises(ValueError, match="did not succeed"):
+        readiness.require_successful_jobs(jobs, "windows-e2e", SHA)
+
+
 def test_version_uses_metadata_or_explicit_validated_override(tmp_path: Path) -> None:
     metadata = tmp_path / "release.json"
     metadata.write_text(
