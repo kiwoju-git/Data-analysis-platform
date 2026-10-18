@@ -7,6 +7,7 @@ import { createLatestRequestGuard } from "../latestRequest";
 import { InteractiveScatterChart, type InteractiveScatterPoint } from "./InteractiveScatterChart";
 import { InteractiveGridChart } from "./InteractiveGridChart";
 import { paddedNumericRange } from "./chartScale";
+import { integerChartTicks } from "./chartLayout";
 import { gpResidualModel, gpScatterModel, gpSurfaceRequest, gpUncertaintyModel, joinGpSurfaceRows } from "./gpChartModels";
 
 type Props = { result: GaussianProcessRegressionResult; scope: string };
@@ -44,10 +45,11 @@ export function GpUncertaintyChart({ result, scope }: Props) {
   const points: InteractiveScatterPoint[] = gpUncertaintyModel(result).map((point) => ({ ...point,
     title: `${t("gp.row")} ${point.x}`, ariaLabel: `${t("gp.row")} ${point.x}, ${number(point.y)}`, className: "gp-uncertainty-point",
     details: [{ label: t("gp.newObservationSd"), value: number(point.y) }] }));
+  const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="gp-uncertainty" sourceKey={`${scope}:uncertainty`} title={t("gp.uncertaintyDiagnostics")} description={t("gp.newObservationSd")}
-    annotations={[]} emptyLabel={t("charts.noData")} formatValue={number} points={points}
+    annotations={[]} emptyLabel={t("charts.noData")} yFormatValue={number} points={points}
     xLabel={t("gp.row")} yLabel={t("gp.newObservationSd")} yUnit={result.response.unit}
-    xRange={paddedNumericRange(points.map((point) => point.x))} yRange={paddedNumericRange([0, ...points.map((point) => point.y)])} />;
+    xRange={xRange} xTicks={integerChartTicks(xRange)} yRange={paddedNumericRange([0, ...points.map((point) => point.y)])} />;
 }
 
 export function GpProfileChart({ profile, result, scope }: Props & { profile: GaussianProcessRegressionResult["conditional_profiles"][number] }) {

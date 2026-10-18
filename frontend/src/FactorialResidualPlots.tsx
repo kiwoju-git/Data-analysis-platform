@@ -3,6 +3,7 @@ import type { DoeFinalModelWorkflow } from "./api/types/doeModelWorkflow";
 import { InteractiveHistogramChart } from "./charts/InteractiveHistogramChart";
 import { InteractiveScatterChart, type ScatterReferenceLine } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { integerChartTicks } from "./charts/chartLayout";
 import { factorialNumber } from "./doe/factorialWorkflowPresentation";
 import { t } from "./i18n/translate";
 
@@ -21,7 +22,7 @@ export function FactorialResidualPlots({ plots }: { plots: DoeFinalModelWorkflow
     return <InteractiveScatterChart chartId={`${id}-${mode}-${kind}`} title={t(`doe.residual.${kind}`)} description={t("doe.residual.description")}
       annotations={[]} emptyLabel={t("doe.residual.empty")} formatValue={factorialNumber}
       xLabel={t(kind === "qq" ? "doe.residual.quantile" : kind === "fits" ? "doe.residual.fitted" : "doe.residual.run")} yLabel={label}
-      xRange={range} yRange={paddedNumericRange([0, ...data.map((point) => point.y), ...lines.flatMap((line) => [line.y1, line.y2])])} referenceLines={lines}
+      xRange={range} xTicks={kind === "order" ? integerChartTicks(range) : undefined} yRange={paddedNumericRange([0, ...data.map((point) => point.y), ...lines.flatMap((line) => [line.y1, line.y2])])} referenceLines={lines}
       points={data.map((point) => ({ id: `${id}-${kind}-${point.run_order}`, title: `${t("doe.residual.run")} ${point.run_order}`,
         ariaLabel: `${t("doe.residual.run")} ${point.run_order}: ${factorialNumber(point.y)}`, className: "scatter-point",
         x: point.x, y: point.y, details: [{ label, value: factorialNumber(point.y) }, { label: t("doe.residual.run"), value: String(point.run_order) }] }))} />;

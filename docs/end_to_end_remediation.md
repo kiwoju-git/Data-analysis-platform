@@ -46,7 +46,7 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A06 | GPR direct prediction | reproduced / fixed (native integration pending) | Five pre-fix component regressions; 80 focused tests and 18 real-model en/ko browser cases passed. Exact ID validation and detached JSON snapshots preserve both uncertainty kinds. |
 | A07 | Schema CAS | reproduced / fixed (native integration pending) | Atomic expected-hash CAS, explicit draft comparison/reapply and no-op preservation; 299 backend focused, 18 final backend, 119 frontend focused, six real two-editor browser cases passed. |
 | A08 | Workspace/backup | source_confirmed / reproduced / fixed / verified (Windows focused) | Exclusive lease and offline archive implemented; actual asset round-trip/CLI pass. Native Linux and whole-product gate pending. |
-| A09 | Chart formatters | - | Pending display-contract tests. |
+| A09 | Chart formatters | source_confirmed / reproduced / fixed / verified (focused) | Axis/legacy/locale precedence wired; coordinates/pin preserved in browser. Whole-check gate remains separate. |
 | A10 | Report Center | - | Pending independent query-lane tests. |
 | A11 | Generic reports | - | Pending method/schema/section parity. |
 | A12 | Dedicated reports | - | After A01-A11; requires exact revision/hash owners. |
@@ -432,3 +432,46 @@ passed two tests / 64 deselected (3.01 seconds); native rerun is still required.
 The failed native run did pass actual backup/restore/CLI and lease tests, but is
 not a successful whole gate. Logs: `.tmp/remediation-a08-ci-py311.log` and
 `.tmp/remediation-a08-publication-crossplatform.log`.
+
+## A09 Evidence
+
+The original Scatter accepted but ignored `formatValue`; seven pre-fix formatter
+tests failed. A separate two-observation test exposed fractional row labels.
+The fix separates numeric tick positions from labels, wires per-axis/legacy
+formatters, and uses explicit integer tick labels only for known row/order axes.
+No stored coordinate, analysis method, interval, pin/source identity or artifact
+is changed. Focused checks passed 29 tests in five files and 29 consumer tests in
+six files, plus scoped lint, Python checks and the step-inventory assertion.
+
+The standalone browser first passed six EN/KO viewport cases. The integrated
+rerun also included 1280 x 800, so all eight locale/viewport cases passed together
+with existing interaction and PCA/PLS/GP chart-model suites. Each checks raw
+coordinate invariance, selection retention, explicit source reset and zero API
+requests. Synthetic diagnostics/screenshots are in
+`.tmp/e2e-remediation-a09-charts`; log `.tmp/remediation-a09-charts-e2e.log`.
+
+```powershell
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests\e2e\critical_path.py --backend-port 8040 --frontend-port 5240 --chart-formatting-only --diagnostics-root .tmp/e2e-remediation-a09-charts --keep-workspace
+npm --prefix frontend test -- --run
+```
+
+The first full Vitest run passed 654 tests and failed the existing lazy-workspace
+module import at its 5-second timeout while the browser suite was also running.
+Without source or timeout changes, the isolated test passed all three cases
+(2.32 seconds of test execution). This does not prove a product defect or erase
+the first failure. The complete frontend rerun is recorded separately; no timeout
+increase or test removal is used. Logs: `.tmp/remediation-a09-frontend.log` and
+`.tmp/remediation-a09-lazy-isolated.log`.
+
+The complete rerun passed 655 tests in 78 files (72.48 seconds), without a
+concurrent browser suite. TypeScript strict checking, production build, and
+localization (2900 source strings / 3993 keys) passed. ESLint exited successfully
+with nine pre-existing React fast-refresh warnings and no errors. The production
+build retains its large-chunk advisory. Logs: `.tmp/remediation-a09-frontend-2.log`
+and `.tmp/remediation-a09-build.log`. The frozen A08 whole Windows check and the
+next native CI remain separate, unfinished gates; these results do not authorize
+main or Release publication.
+
+The same A08 fault-injection failure also occurred on Linux/Python 3.12:
+1515 passed / 11 skipped / 105 warnings / one failure (254.86 seconds).
+Its log is `.tmp/remediation-a08-ci-linux.log`; the correction is `ab6a5da`.

@@ -1,7 +1,11 @@
+import { formatLocaleNumber } from "../i18n/formatters";
+import { getCurrentLocale } from "../i18n/store";
+import type { AppLocale } from "../i18n/types";
 import type { NumericRange } from "./chartScale";
 
 export interface PlotBounds { left: number; top: number; width: number; height: number }
 export interface ChartLayout { width: number; height: number; maxWidth: number; plot: PlotBounds }
+export type ChartTickFormatter = (value: number) => string;
 export const STANDARD_CHART_LAYOUT: ChartLayout = {
   width: 480, height: 320, maxWidth: 640,
   plot: { left: 72, top: 24, width: 384, height: 232 },
@@ -23,15 +27,16 @@ export function wrapAxisTitle(title: string, limit: number): string[] {
   return [title.slice(0, at), rest.length > limit ? `${rest.slice(0, limit - 3)}...` : rest];
 }
 
-export function formatChartTick(value: number): string {
+export function formatChartTick(value: number, locale: AppLocale = getCurrentLocale()): string {
+  if (!Number.isFinite(value)) return "-";
   if (value === 0) return "0";
   const magnitude = Math.abs(value);
   return magnitude >= 1e6 || magnitude < 1e-3
-    ? value.toExponential(2).replace(/\.0+(?=e)/, "")
-    : Number(value.toPrecision(5)).toString();
+    ? formatLocaleNumber(value, locale, { notation: "scientific", maximumSignificantDigits: 3 }).replace("E", "e")
+    : formatLocaleNumber(value, locale, { maximumSignificantDigits: 5 });
 }
 
-export function numericChartTicks(range: NumericRange, target = 5): Array<{ value: number; label: string }> {
+export function numericChartTickValues(range: NumericRange, target = 5): number[] {
   if (!Number.isFinite(range.min) || !Number.isFinite(range.max) || range.min >= range.max) return [];
   const raw = (range.max / target - range.min / target);
   if (!(raw > 0) || !Number.isFinite(raw)) return [];
@@ -41,8 +46,16 @@ export function numericChartTicks(range: NumericRange, target = 5): Array<{ valu
   const start = Math.ceil(range.min / step - 1e-10);
   const end = Math.floor(range.max / step + 1e-10);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end - start > 20) return [];
-  return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => {
-    const value = Number(((start + index) * step).toPrecision(12));
-    return { value, label: formatChartTick(value) };
-  });
+  return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) =>
+    Number(((start + index) * step).toPrecision(12)));
+}
+
+export function numericChartTicks(range: NumericRange, target = 5, formatTick: ChartTickFormatter = formatChartTick): Array<{ value: number; label: string }> {
+  return numericChartTickValues(range, target).map((value) => ({ value, label: formatTick(value) }));
+}
+
+export function integerChartTicks(range: NumericRange): Array<{ value: number; label: string }> {
+  return numericChartTickValues(range).filter(Number.isInteger).map((value) => ({
+    value, label: formatLocaleNumber(value, getCurrentLocale(), { maximumFractionDigits: 0 }),
+  }));
 }

@@ -42,19 +42,20 @@ export interface ChartBand {
 export interface InteractiveScatterChartProps {
   annotations: string[]; chartId: string; compact?: boolean;
   connectPoints?: "line" | "step";
-  description: string; emptyLabel: string; formatValue: (value: number) => string;
+  description: string; emptyLabel: string; formatValue?: AxisSpec["formatTick"];
   points: InteractiveScatterPoint[]; referenceLines?: ScatterReferenceLine[];
   square?: boolean; title: string; xLabel: string; xRange: NumericRange; yLabel: string; yRange: NumericRange;
   xUnit?: string | null; yUnit?: string | null;
   xTicks?: AxisSpec["ticks"]; yTicks?: AxisSpec["ticks"];
+  xFormatValue?: AxisSpec["formatTick"]; yFormatValue?: AxisSpec["formatTick"];
   series?: readonly ChartSeries[]; intervals?: readonly ChartInterval[]; bands?: readonly ChartBand[];
   selectedPointId?: string | null; onPointSelect?: (pointId: string) => void;
   onPointActivate?: (pointId: string) => void; onSelectionClear?: () => void; sourceKey?: string;
 }
 
 export function InteractiveScatterChart({ annotations, chartId, compact = false, connectPoints,
-  description, emptyLabel, points, referenceLines = [], square = false, title,
-  xLabel, xRange, yLabel, yRange, xUnit, yUnit, xTicks, yTicks, series = [], intervals = [], bands = [],
+  description, emptyLabel, formatValue, points, referenceLines = [], square = false, title,
+  xLabel, xRange, yLabel, yRange, xUnit, yUnit, xTicks, yTicks, xFormatValue, yFormatValue, series = [], intervals = [], bands = [],
   selectedPointId, onPointSelect, onPointActivate, onSelectionClear, sourceKey,
 }: InteractiveScatterChartProps) {
   const arrowId = `chart-arrow-${useId().replace(/:/g, "")}`;
@@ -95,7 +96,7 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
   return <ChartFrame chartId={chartId} title={title}
     description={`${description}; ${axisTitle(xLabel, xUnit)}; ${axisTitle(yLabel, yUnit)}`}
     layout={layout} className={compact ? "chart-frame-compact" : ""}
-    axes={<ChartAxes layout={layout} x={{ label: xLabel, unit: xUnit, range: xDomain, ticks: xTicks }} y={{ label: yLabel, unit: yUnit, range: yDomain, ticks: yTicks }} />}
+    axes={<ChartAxes layout={layout} x={{ label: xLabel, unit: xUnit, range: xDomain, ticks: xTicks, formatTick: xFormatValue ?? formatValue }} y={{ label: yLabel, unit: yUnit, range: yDomain, ticks: yTicks, formatTick: yFormatValue ?? formatValue }} />}
     overlay={labels.map(({ point, text, left, top }) => <text key={point.id} className="chart-vector-label" x={left} y={top + 12}
       textAnchor="start"><title>{point.label}</title>{text}</text>)}
     footer={<>

@@ -45,6 +45,7 @@ from gp_prediction_context import verify_gp_prediction_context
 from schema_concurrency import verify_schema_concurrency
 from regularized_regression import verify_regularized_regression
 from result_charts import verify_chart_interactions, verify_result_chart_models
+from chart_formatting import verify_chart_formatting
 from desktop_resize import verify_desktop_resize
 from two_variances import verify_two_variances
 
@@ -222,6 +223,7 @@ def main() -> int:
     parser.add_argument("--gp-prediction-context-only", action="store_true")
     parser.add_argument("--schema-concurrency-only", action="store_true")
     parser.add_argument("--upload-recovery-only", action="store_true")
+    parser.add_argument("--chart-formatting-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -333,6 +335,7 @@ def main() -> int:
             args.gp_prediction_context_only,
             args.schema_concurrency_only,
             args.upload_recovery_only,
+            args.chart_formatting_only,
         )
         print("E2E critical path passed")
         return 0
@@ -636,11 +639,18 @@ def run_browser_flow(
     gp_prediction_context_only: bool = False,
     schema_concurrency_only: bool = False,
     upload_recovery_only: bool = False,
+    chart_formatting_only: bool = False,
 ) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            if chart_formatting_only:
+                diagnostics.step("verify focused chart formatting and interaction")
+                verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
+                verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
+                verify_chart_formatting(browser, frontend_base_url, diagnostics.root / "chart-formatting")
+                return
             if upload_recovery_only:
                 diagnostics.step("verify focused CSV upload error recovery")
                 context = browser.new_context(accept_downloads=True)
@@ -689,6 +699,8 @@ def run_browser_flow(
                 verify_schema_concurrency(browser, frontend_base_url, diagnostics.root / "schema-concurrency", isolated_workspace=True)
             verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
             verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
+            diagnostics.step("verify chart axis formatting")
+            verify_chart_formatting(browser, frontend_base_url, diagnostics.root / "chart-formatting")
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
             verify_localization_shell(browser, frontend_base_url, diagnostics)
             context = browser.new_context(accept_downloads=True)

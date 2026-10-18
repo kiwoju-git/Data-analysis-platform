@@ -2,6 +2,7 @@ import type { GageRunChartResult } from "../api";
 import { useI18n } from "../i18n/LocaleProvider";
 import { InteractiveScatterChart } from "./InteractiveScatterChart";
 import { paddedNumericRange } from "./chartScale";
+import { integerChartTicks } from "./chartLayout";
 
 export function GageResultChart({ result }: { result: GageRunChartResult }) {
   const { t, formatNumber } = useI18n();
@@ -16,8 +17,8 @@ export function GageResultChart({ result }: { result: GageRunChartResult }) {
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="gage-run" title="Gage Run Chart" description="Gage Run Chart"
     points={points} annotations={[t("charts.displayCount", { shown: points.length, total: result.chart.point_count })]}
-    emptyLabel={t("charts.noData")} formatValue={formatNumber} xLabel={t("charts.runOrder")} yLabel={result.columns.measurement.display_name} yUnit={result.columns.measurement.unit}
-    xRange={xRange} yRange={paddedNumericRange(points.map((point) => point.y))}
+    emptyLabel={t("charts.noData")} yFormatValue={formatNumber} xLabel={t("charts.runOrder")} yLabel={result.columns.measurement.display_name} yUnit={result.columns.measurement.unit}
+    xRange={xRange} xTicks={integerChartTicks(xRange)} yRange={paddedNumericRange(points.map((point) => point.y))}
     series={[...new Set(points.map((point) => point.seriesId))].map((id) => ({ id, label: `${t("charts.operatorIndex")}: ${id.split(":")[1]}`, className: points.find((point) => point.seriesId === id)!.className,
       pointIds: points.filter((point) => point.seriesId === id).map((point) => point.id), connect: "none" }))}
     referenceLines={[{ label: `${t("charts.mean")}: ${formatNumber(result.summary.mean)}`, x1: xRange.min, x2: xRange.max, y1: result.summary.mean, y2: result.summary.mean }]} />;

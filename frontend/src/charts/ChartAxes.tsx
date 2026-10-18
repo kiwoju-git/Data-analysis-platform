@@ -1,23 +1,27 @@
+import { useI18n } from "../i18n/LocaleProvider";
 import { scaleChartValue, type NumericRange } from "./chartScale";
-import { axisTitle, numericChartTicks, wrapAxisTitle, type ChartLayout } from "./chartLayout";
+import { axisTitle, formatChartTick, numericChartTicks, wrapAxisTitle, type ChartLayout, type ChartTickFormatter } from "./chartLayout";
 
 export interface AxisSpec {
   label: string;
   unit?: string | null;
   range: NumericRange;
   ticks?: ReadonlyArray<{ value: number; label: string }>;
+  formatTick?: ChartTickFormatter;
 }
 
 export function ChartAxes({ x, y, layout, grid = true }: {
   x: AxisSpec; y: AxisSpec; layout: ChartLayout; grid?: boolean;
 }) {
+  const { locale } = useI18n();
   const { plot } = layout;
   const xAt = (value: number) => scaleChartValue(value, x.range, plot.left, plot.left + plot.width);
   const yAt = (value: number) => scaleChartValue(value, y.range, plot.top + plot.height, plot.top);
   const xTitle = axisTitle(x.label, x.unit);
   const yTitle = axisTitle(y.label, y.unit);
-  const xTicks = (x.ticks ?? numericChartTicks(x.range)).filter((tick) => Number.isFinite(tick.value) && tick.value >= x.range.min && tick.value <= x.range.max);
-  const yTicks = (y.ticks ?? numericChartTicks(y.range)).filter((tick) => Number.isFinite(tick.value) && tick.value >= y.range.min && tick.value <= y.range.max);
+  const defaultFormat: ChartTickFormatter = (value) => formatChartTick(value, locale);
+  const xTicks = (x.ticks ?? numericChartTicks(x.range, 5, x.formatTick ?? defaultFormat)).filter((tick) => Number.isFinite(tick.value) && tick.value >= x.range.min && tick.value <= x.range.max);
+  const yTicks = (y.ticks ?? numericChartTicks(y.range, 5, y.formatTick ?? defaultFormat)).filter((tick) => Number.isFinite(tick.value) && tick.value >= y.range.min && tick.value <= y.range.max);
   return <g className="chart-axes">
     {xTicks.map((tick, index) => <g key={`${tick.value}-${index}`}>
       {grid && <line className="chart-grid-line" x1={xAt(tick.value)} x2={xAt(tick.value)} y1={plot.top} y2={plot.top + plot.height} />}

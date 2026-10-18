@@ -10,6 +10,7 @@ import {
   type InteractiveScatterPoint,
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { integerChartTicks } from "./charts/chartLayout";
 import { observedDiagnosticPoints } from "./linearModelDiagnosticPoints";
 import { useI18n } from "./i18n/LocaleProvider";
 import { translateSystemText } from "./i18n/translate";
@@ -461,6 +462,7 @@ function renderResidualPayloadChart(
       title={isOrder ? "Residuals versus Order" : "Residuals versus Fits"}
       xLabel={isOrder ? "Observation order" : "Fitted value"}
       xRange={xRange}
+      xTicks={isOrder ? integerChartTicks(xRange) : undefined}
       yLabel="Residual"
       yRange={yRange}
     />

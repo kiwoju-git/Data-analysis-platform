@@ -21,6 +21,7 @@ import {
   type ScatterReferenceLine,
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { integerChartTicks } from "./charts/chartLayout";
 import { formatLocalDateTime } from "./dateFormat";
 import {
   graphBuilderDefinition,
@@ -660,6 +661,7 @@ function SequenceChart({
         title={label}
         xLabel="Order"
         xRange={paddedNumericRange(points.map((point) => point.position))}
+        xTicks={integerChartTicks(paddedNumericRange(points.map((point) => point.position)))}
         yLabel="Value"
         yRange={paddedNumericRange(yValues)}
       />

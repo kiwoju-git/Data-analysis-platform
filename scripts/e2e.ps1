@@ -12,7 +12,8 @@ param(
     [switch]$DatasetContextOnly,
     [switch]$GpPredictionContextOnly,
     [switch]$SchemaConcurrencyOnly,
-    [switch]$UploadRecoveryOnly
+    [switch]$UploadRecoveryOnly,
+    [switch]$ChartFormattingOnly
 )
 
 Set-StrictMode -Version Latest
@@ -78,6 +79,9 @@ try {
     }
     if ($UploadRecoveryOnly) {
         $Args += "--upload-recovery-only"
+    }
+    if ($ChartFormattingOnly) {
+        $Args += "--chart-formatting-only"
     }
 
     & $Python @Args

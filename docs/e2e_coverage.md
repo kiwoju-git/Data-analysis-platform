@@ -1,5 +1,18 @@
 # Browser E2E Coverage
 
+## Chart Formatter Boundaries
+
+`scripts/e2e.ps1 -ChartFormattingOnly` runs the existing chart interaction and
+PCA/PLS/GP stored-result browser checks, then the independent formatter fixture.
+The latter verifies explicit tick labels, axis-specific formatters, the legacy
+fallback and common locale formatting at 1440/1280/1024/390px in both locales.
+Numeric data geometry, pinned identity and source identity must remain unchanged
+across formatting, locale and resize updates; changing the source clears the pin.
+All formatter/interaction requests must remain API-free. The fixture preserves
+synthetic private-use characters and angle-bracket text literally. Screenshots
+and a `formatter-evidence.json` record the actual tested viewports, while the
+child context captures trace/DOM/error diagnostics on failure.
+
 ## CSV Upload Recovery
 
 `scripts/e2e.ps1 -UploadRecoveryOnly` runs the existing CSV recovery scenario
@@ -702,6 +715,7 @@ browser critical path.
   - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
     `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
     overflow and keep the language/API controls visible.
+- `verify focused chart formatting and interaction` (focused chart mode)
 - `verify focused CSV upload error recovery` (focused upload mode)
 - `verify two-editor schema concurrency` (focused schema mode)
 - `verify saved GP prediction request context` (focused prediction mode)
@@ -713,6 +727,7 @@ browser critical path.
 - `verify dataset source context under delayed responses` (full flow)
 - `verify saved GP prediction request context` (full flow)
 - `verify two-editor schema concurrency` (full flow)
+- `verify chart axis formatting`
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`

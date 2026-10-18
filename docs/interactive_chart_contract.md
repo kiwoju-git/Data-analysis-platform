@@ -1,5 +1,46 @@
 # Interactive Chart Contract
 
+## Axis Formatter Boundaries (2026-10-18)
+
+`AxisSpec.formatTick` formats only numeric tick labels. Scatter exposes optional
+`xFormatValue` and `yFormatValue`; its old `formatValue` is an optional compatibility
+fallback, no longer an ignored prop. Priority is explicit `ticks[].label`, then
+axis-specific formatter, legacy `formatValue`, and common locale formatting.
+An explicit empty tick array still means no ticks. Caller labels are text nodes,
+not translated or parsed back into numbers, including user names/private-use text.
+
+`numericChartTickValues` retains the existing finite 1/2/2.5/5/10 tick positions.
+`numericChartTicks` maps those numbers to labels separately. Common formatting
+uses the current locale (not a module-load snapshot), five significant digits,
+and scientific notation with up to three significant digits for nonzero values
+below 0.001 or at least 1,000,000. Nonfinite display values are `-`, never zero;
+invalid numeric ranges produce no generated ticks. A custom domain formatter
+remains authoritative. No p-value calculation or table formatting changes.
+
+Percent formatting does not multiply a plotted coordinate or range. Changing
+locale/formatter/viewport does not change stored values, sourceKey, IDs, pin,
+reference lines, intervals or API calls. Component ticks remain the saved
+component numbers. `integerChartTicks` filters the bounded generated positions
+to integers for explicitly ordinal row/run/subgroup axes only; it never allocates
+one element per row. Its locale labels preserve exact integer values. Continuous
+predictor values and dates are not rounded into row indices.
+
+Audited mixed axes: PCA scree/D-squared, PLS component-selection R-squared and GP
+observation predictive SD now declare the numeric response formatter on Y only.
+Two-component scores and continuous observed/predicted plots retain their shared
+numeric formatter. Integer row ticks apply to one-component PCA/PLS scores, GP
+uncertainty, quality sequence charts, Gage runs, prediction rows, Graph Builder
+sequence previews, OLS snapshot order and factorial residual run order. The OLS
+order payload is the saved integer `index + 1`, not an arbitrary input time value.
+Existing Scatter callers do not pass a percent formatter as a shared formatter;
+the separate percent/count policy is tested directly to prevent future misuse.
+
+The installed ui-ux-pro-max chart guidance was consulted with local scatter/
+correlation search. Its applicable direct-label, keyboard-detail and preserved
+table guidance reinforces the existing dense statistical UI; no new chart library,
+palette or layout was introduced. Formatter tests use SSR/pure Vitest plus the
+API-free real-browser fixture documented in `docs/e2e_coverage.md`.
+
 ## Fixed Frames and Stored-Result Adapters (2026-10-08)
 
 `ChartFrame` owns the HTML wrapper and a unique title/description/clip-path per
