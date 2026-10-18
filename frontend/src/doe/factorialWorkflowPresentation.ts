@@ -1,11 +1,14 @@
 import type { DoeFinalModelWorkflow, DoeModelSelectionOptions } from "../api/types/doeModelWorkflow";
 import { t } from "../i18n/translate";
+import { formatSmallChartValue } from "../charts/chartNumberFormatting";
 
 type Cell = DoeFinalModelWorkflow["factorial_plots"]["cells"][number];
 type Means = "fitted_mean" | "data_mean";
 
 export function factorialNumber(value: number | null | undefined): string {
-  return value === null || value === undefined || !Number.isFinite(value) ? "-" : Number(value.toPrecision(6)).toLocaleString();
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  const rounded = Number(value.toPrecision(6));
+  return formatSmallChartValue(rounded, 3) ?? rounded.toLocaleString();
 }
 
 export const defaultDoeSelection: DoeModelSelectionOptions = {

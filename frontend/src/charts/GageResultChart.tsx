@@ -2,10 +2,12 @@ import type { GageRunChartResult } from "../api";
 import { useI18n } from "../i18n/LocaleProvider";
 import { InteractiveScatterChart } from "./InteractiveScatterChart";
 import { paddedNumericRange } from "./chartScale";
-import { integerChartTicks } from "./chartLayout";
+import { formatChartTick, integerChartTicks } from "./chartLayout";
+import { formatChartDetailValue } from "./chartNumberFormatting";
 
 export function GageResultChart({ result }: { result: GageRunChartResult }) {
-  const { t, formatNumber } = useI18n();
+  const { t, locale } = useI18n();
+  const formatNumber = (value: number) => formatChartDetailValue(value, locale);
   const points = result.chart.points.map((point) => ({ id: `run:${point.position}:${point.canonical_position}`,
     x: point.position, y: point.value, seriesId: `operator:${point.operator_index}`, title: `Run ${point.position}`,
     markerRadius: point.replicate_index % 2 === 0 ? 4.6 : 3.4,
@@ -17,7 +19,7 @@ export function GageResultChart({ result }: { result: GageRunChartResult }) {
   const xRange = paddedNumericRange(points.map((point) => point.x));
   return <InteractiveScatterChart chartId="gage-run" title="Gage Run Chart" description="Gage Run Chart"
     points={points} annotations={[t("charts.displayCount", { shown: points.length, total: result.chart.point_count })]}
-    emptyLabel={t("charts.noData")} yFormatValue={formatNumber} xLabel={t("charts.runOrder")} yLabel={result.columns.measurement.display_name} yUnit={result.columns.measurement.unit}
+    emptyLabel={t("charts.noData")} yFormatValue={(value) => formatChartTick(value, locale)} xLabel={t("charts.runOrder")} yLabel={result.columns.measurement.display_name} yUnit={result.columns.measurement.unit}
     xRange={xRange} xTicks={integerChartTicks(xRange)} yRange={paddedNumericRange(points.map((point) => point.y))}
     series={[...new Set(points.map((point) => point.seriesId))].map((id) => ({ id, label: `${t("charts.operatorIndex")}: ${id.split(":")[1]}`, className: points.find((point) => point.seriesId === id)!.className,
       pointIds: points.filter((point) => point.seriesId === id).map((point) => point.id), connect: "none" }))}

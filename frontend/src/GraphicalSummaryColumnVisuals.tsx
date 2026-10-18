@@ -10,6 +10,7 @@ import {
   type InteractiveScatterPoint,
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { formatSmallChartValue } from "./charts/chartNumberFormatting";
 import { useI18n } from "./i18n/LocaleProvider";
 import { translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
@@ -266,7 +267,7 @@ function formatAnalysisNumber(value: number | null): string {
   if (value === null) {
     return "-";
   }
-  return new Intl.NumberFormat("ko-KR", {
+  return formatSmallChartValue(value, 6) ?? new Intl.NumberFormat("ko-KR", {
     maximumFractionDigits: 6,
   }).format(value);
 }

@@ -15,6 +15,7 @@ import {
   type InteractiveScatterPoint,
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { formatSmallChartValue } from "./charts/chartNumberFormatting";
 import { useI18n } from "./i18n/LocaleProvider";
 
 interface RegressionResponseOptimizerPanelProps {
@@ -353,6 +354,6 @@ function numberOrNull(value: string): number | null {
 
 function formatNumber(value: number | undefined): string {
   return typeof value === "number" && Number.isFinite(value)
-    ? value.toLocaleString("ko-KR", { maximumFractionDigits: 6 })
+    ? formatSmallChartValue(value, 6) ?? value.toLocaleString("ko-KR", { maximumFractionDigits: 6 })
     : "-";
 }

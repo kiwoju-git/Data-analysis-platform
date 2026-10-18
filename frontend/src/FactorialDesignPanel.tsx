@@ -2,6 +2,7 @@ import { translateSystemText as systemText } from "./i18n/translate";
 import { InteractiveHorizontalBarChart } from "./charts/InteractiveHorizontalBarChart";
 import { InteractiveScatterChart } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
+import { formatSmallChartValue } from "./charts/chartNumberFormatting";
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { t } from "./i18n/translate";
 
@@ -1256,7 +1257,8 @@ function formatMetric(value: number | null): string {
   if (value === null || !Number.isFinite(value)) {
     return "-";
   }
-  return Number(value.toPrecision(6)).toLocaleString();
+  const rounded = Number(value.toPrecision(6));
+  return formatSmallChartValue(rounded, 3) ?? rounded.toLocaleString();
 }
 
 function formatPValue(value: number | null): string {

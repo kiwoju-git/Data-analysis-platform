@@ -11,6 +11,7 @@ import {
 } from "./charts/InteractiveScatterChart";
 import { paddedNumericRange } from "./charts/chartScale";
 import { integerChartTicks } from "./charts/chartLayout";
+import { formatSmallChartValue } from "./charts/chartNumberFormatting";
 import { observedDiagnosticPoints } from "./linearModelDiagnosticPoints";
 import { useI18n } from "./i18n/LocaleProvider";
 import { translateSystemText } from "./i18n/translate";
@@ -587,6 +588,6 @@ function formatPercent(value: number | null | undefined): string {
 
 function formatModelNumber(value: number | null | undefined): string {
   return typeof value === "number" && Number.isFinite(value)
-    ? value.toLocaleString("ko-KR", { maximumFractionDigits: 6 })
+    ? formatSmallChartValue(value, 6) ?? value.toLocaleString("ko-KR", { maximumFractionDigits: 6 })
     : "NA";
 }

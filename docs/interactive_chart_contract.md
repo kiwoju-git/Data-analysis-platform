@@ -15,7 +15,19 @@ uses the current locale (not a module-load snapshot), five significant digits,
 and scientific notation with up to three significant digits for nonzero values
 below 0.001 or at least 1,000,000. Nonfinite display values are `-`, never zero;
 invalid numeric ranges produce no generated ticks. A custom domain formatter
-remains authoritative. No p-value calculation or table formatting changes.
+remains authoritative. No p-value calculation changes.
+
+Callers must not pass default `Intl.NumberFormat` to measurement axes: its
+three-decimal default can label distinct micro-scale measurements as zero.
+Pearson, Gage, and prediction plots use the scientific-capable axis formatter and
+seven-significant-digit detail formatting. Existing six-decimal OLS, graphical
+summary, and response-optimizer display helpers retain ordinary formatting but
+use scientific notation below their decimal resolution. Factorial's existing
+six-significant-digit rounding is retained before the same protection against
+the subsequent three-decimal locale default. Shared table/detail helpers receive
+that tiny-value correction too; normal-value rounding and null markers are kept.
+Two Variances, GP/PCA/PLS precision helpers, and significant-digit QQ/LHS/Graph
+Builder formatters already preserve nonzero tiny values and remain unchanged.
 
 Percent formatting does not multiply a plotted coordinate or range. Changing
 locale/formatter/viewport does not change stored values, sourceKey, IDs, pin,
