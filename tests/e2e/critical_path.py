@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from collections.abc import Sequence
@@ -1913,6 +1914,22 @@ def create_exports(page: Page) -> None:
     expect(page.locator(".result-table").filter(has_text="Hedges g")).to_be_visible()
 
 
+def validate_selected_report_capability(capability: dict, analysis_id: str) -> None:
+    assert capability["analysis_id"] == analysis_id
+    assert capability["method_id"] == "hypothesis.two_sample_t"
+    assert capability["report_level"] == "full"
+    assert capability["html_available"] is True
+    assert capability["renderer_id"] == "two_sample_t_test"
+    assert isinstance(capability["renderer_version"], str)
+    assert capability["renderer_version"]
+    assert re.fullmatch(r"[a-f0-9]{64}", capability["source_result_sha256"])
+    assert capability["sections"]
+    assert all(
+        section["status"] in {"rendered", "not_applicable"}
+        for section in capability["sections"]
+    )
+
+
 def verify_help_report_and_manage_routes(
     page: Page, diagnostics: E2EDiagnostics
 ) -> None:
@@ -1936,7 +1953,22 @@ def verify_help_report_and_manage_routes(
         "data-analysis-id", selected_report_id
     )
     expect(page.get_by_role("button", name="HTML 생성")).to_be_enabled()
-    expect(page.get_by_text("현재 지원되지 않음", exact=True).first).to_be_visible()
+    origin = urllib.parse.urlsplit(page.url)
+    capability_response = page.request.get(
+        f"{origin.scheme}://{origin.netloc}/api/v1/analysis-runs/{selected_report_id}/report-capability",
+        params={"locale": "ko"},
+    )
+    assert capability_response.status == 200, capability_response.text()
+    capability = capability_response.json()
+    validate_selected_report_capability(capability, selected_report_id)
+    coverage = page.locator(".analysis-report-capability")
+    expect(coverage).to_have_attribute("data-report-capability", "full")
+    expect(coverage).to_contain_text(
+        f"{capability['renderer_id']} / {capability['renderer_version']}"
+    )
+    expect(coverage.locator(".result-provenance code")).to_have_text(
+        capability["source_result_sha256"]
+    )
     page.get_by_role("button", name="HTML 생성").click()
     expect(page.get_by_role("button", name="HTML 다운로드")).to_be_visible(
         timeout=15_000

@@ -28,8 +28,11 @@ Linux archive versions come from `release-version.json`, or an explicitly
 validated `workflow_dispatch` input. CI artifact names include the source SHA.
 The final tag/archive version must agree, existing tags/assets are never replaced,
 and only the exact validated archive bytes may be published after the aggregate
-gate succeeds. The new A15 gate and installation checks are under implementation;
-this document is not a claim of a completed native run or published Release.
+gate succeeds. The A15 gate and installation checks are implemented and have
+focused local evidence; native archive validation and publication are separate
+acceptance steps. This document does not claim a completed final native run or
+published Release. The final immutable run and archive evidence belong to the
+Release assets, avoiding a source-SHA/manifest documentation cycle.
 
 Diagnostics uploads are restricted to the separate synthetic-fixture diagnostics
 root (including the actual child-page DOM, screenshot, metadata and trace), never

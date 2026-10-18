@@ -1296,3 +1296,29 @@ checked 347 backend files and mypy passed all 200 application modules.
 The follow-up synthetic source run also passed Two Variances deep-link/reload,
 BF API execution, four generic HTML exports with source/output hashes and
 server-stopped offline rendering (`.tmp/a15-browser-tail-1.log`).
+
+### A15 Native Whole-Check Follow-up
+
+Run 39119054354 at `4982aa9` passed the Linux full check: backend 2265 passed /
+12 skipped, frontend 803 passed / 89 files, Ruff (347 formatted files), mypy
+(200 application modules), strict TypeScript/build and localization (2875 source
+strings / 4117 keys). The independent numerical probe and source runner lifecycle
+also passed. Python 3.11 passed 2265 / 12 skipped / 105 warnings in 255.75s.
+All five Python lock audits and npm runtime/development audit jobs passed.
+
+Linux browser E2E then failed at `verify_help_report_and_manage_routes`: the old
+test demanded a global `currently unsupported` message. The actual selected
+two-sample t result exposes a full HTML capability with renderer
+`two_sample_t_test / 2.0.0`, exact source hash and enabled HTML creation.
+The failure is an obsolete assertion against the new capability contract, not
+an HTML generation failure or locale-readiness failure. The expectation now
+checks the selected result's actual capability; no product feature is hidden to
+satisfy the former assertion. Evidence:
+`.tmp/remediation-a15-ci-linux.log`, run job 117650714872 and its synthetic
+child-page diagnostics. This failed run does not authorize a Release; native
+archive validation was skipped and remains required.
+
+The corrected guard passed 11 targeted tests in 1.34s, including wrong owner,
+unsupported/summary capability, missing renderer/hash and incomplete sections.
+Ruff and the new test's format check passed. This focused check does not replace
+the pending complete browser rerun.
