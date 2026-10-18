@@ -24,6 +24,8 @@ import { LanguageSwitcher } from "./i18n/LanguageSwitcher";
 import { getCurrentLocale } from "./i18n/store";
 import { translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
+import { FeedbackEntry } from "./FeedbackDialog";
+import type { SupportContext } from "./supportDiagnostics";
 
 export interface AppChromeProps {
   canOpenAnalysis: boolean;
@@ -31,6 +33,7 @@ export interface AppChromeProps {
   healthClassName: string;
   healthLabel: string;
   runtimeReady?: boolean;
+  feedbackContext?: SupportContext;
   locale?: AppLocale;
   activePage: AppRoute["page"];
   activeDatasetSelectorProps: ActiveDatasetVersionSelectorProps;
@@ -51,6 +54,7 @@ export function AppChrome({
   healthClassName,
   healthLabel,
   runtimeReady = false,
+  feedbackContext,
   locale = getCurrentLocale(),
   activePage,
   activeDatasetSelectorProps,
@@ -205,7 +209,8 @@ export function AppChrome({
       <main className="main">
         <header className="topbar" data-locale={locale}>
           <p className="topbar-title">{pageTitle ?? pageTitleFor(activePage)}</p>
-          <div className="topbar-actions">
+          <div className="topbar-actions topbar-feedback-actions">
+            <FeedbackEntry context={feedbackContext} beforeOpen={() => setDrawerOpen(false)} />
             <LanguageSwitcher />
             <span className={healthClassName} aria-live="polite">
               {healthLabel}

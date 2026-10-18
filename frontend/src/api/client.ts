@@ -7,13 +7,17 @@ export function getApiBaseUrl(): string {
 }
 
 import { getCurrentLocale } from "../i18n/store";
+import { observeApiFailure, observeApiResponse, observeNetworkFailure } from "../supportDiagnostics";
 
 export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = localeHeaders(init?.headers ?? (input instanceof Request ? input.headers : undefined));
   try {
-    return await fetch(input, { ...init, headers });
+    const response = await fetch(input, { ...init, headers });
+    observeApiResponse();
+    return response;
   } catch (error) {
     if (error instanceof TypeError) {
+      observeNetworkFailure();
       throw new Error("api_unreachable");
     }
     throw error;
@@ -87,13 +91,15 @@ export async function apiRequestError(
   const routeNotFound =
     response.status === 404 &&
     (backendCode === "not_found" || detail?.toLowerCase() === "not found");
-  return new ApiRequestError({
+  const error = new ApiRequestError({
     status: response.status,
     code: routeNotFound ? "api_contract_mismatch" : (backendCode ?? fallback),
     backendMessage: backendMessage ?? detail,
     routeNotFound,
     correlationId,
   });
+  observeApiFailure({ code: error.code, status: error.status, correlationId: error.correlationId });
+  return error;
 }
 
 export async function apiErrorCode(response: Response, fallback: string): Promise<string> {

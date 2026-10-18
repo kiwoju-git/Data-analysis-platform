@@ -4,6 +4,7 @@ import {
   MINIMUM_METADATA_SCHEMA_VERSION,
 } from "./runtimeCompatibility";
 import type { RuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
+import { FeedbackEntry } from "./FeedbackDialog";
 
 export function RuntimeCompatibilityGate({
   state,
@@ -12,11 +13,18 @@ export function RuntimeCompatibilityGate({
   state: RuntimeCompatibilityState;
   onRetry: () => void;
 }) {
+  const feedbackContext = {
+    appVersion: state.runtime?.app_version,
+    buildCommit: state.runtime?.build_commit ?? FRONTEND_BUILD_COMMIT,
+    apiContractVersion: state.runtime?.api_contract_version,
+    metadataSchemaVersion: state.runtime?.metadata_schema_version,
+  };
   if (state.kind === "checking") {
     return (
       <main className="runtime-gate-page" data-runtime-state={state.kind} aria-busy="true">
         <h1>Statistical Twin</h1>
         <p role="status">프런트엔드와 백엔드 호환성을 확인하고 있습니다.</p>
+        <FeedbackEntry context={feedbackContext} />
       </main>
     );
   }
@@ -44,6 +52,7 @@ export function RuntimeCompatibilityGate({
           <li>실행 로그에 표시된 새 브라우저 주소를 열고 Ctrl+F5를 누릅니다.</li>
         </ol>
         <button className="primary-button" onClick={onRetry} type="button">다시 확인</button>
+        <FeedbackEntry context={feedbackContext} />
       </section>
     </main>
   );

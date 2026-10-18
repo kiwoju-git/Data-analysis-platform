@@ -4615,6 +4615,14 @@ export default function App() {
   return (
     <AppChrome
       runtimeReady={runtimeCompatibility.state.kind === "compatible"}
+      feedbackContext={{
+        appVersion: runtimeCompatibility.state.runtime?.app_version,
+        buildCommit: runtimeCompatibility.state.runtime?.build_commit,
+        apiContractVersion: runtimeCompatibility.state.runtime?.api_contract_version,
+        metadataSchemaVersion: runtimeCompatibility.state.runtime?.metadata_schema_version,
+        methodId: selectedMethod?.method_id,
+        catalogMethodIds: analysisCatalog?.methods.map((method) => method.method_id),
+      }}
       activeDatasetSelectorProps={activeDatasetSelectorProps}
       activePage={appRoute.page}
       canOpenAnalysis={selectedMethod !== null || analysisCatalog !== null}
