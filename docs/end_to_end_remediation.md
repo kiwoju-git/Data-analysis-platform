@@ -421,3 +421,14 @@ error, valid upload and parsing. Production code was not changed. Evidence:
 `.tmp/e2e-remediation-upload-recovery-retry/screenshots/csv-upload-error-recovery.png`.
 Hook tests passed 95 cases, and the step-inventory test passed one case. This
 follow-up is commit `5be3d64`, not a claim of a completed whole E2E run.
+
+Native A08 checkpoint `07074f7` / run `39099846083` failed Python 3.11 with
+1515 passed / 11 skipped / 105 warnings / one failure (244.89 seconds).
+The failing rollback test patched `Path.rename`, while Linux correctly uses
+`renameat2`; no interruption was injected. Its replacement patches the shared
+publication boundary and asserts the actual injection/call order. The separate
+real-platform no-replace test remains intact. The corrected narrow Windows run
+passed two tests / 64 deselected (3.01 seconds); native rerun is still required.
+The failed native run did pass actual backup/restore/CLI and lease tests, but is
+not a successful whole gate. Logs: `.tmp/remediation-a08-ci-py311.log` and
+`.tmp/remediation-a08-publication-crossplatform.log`.

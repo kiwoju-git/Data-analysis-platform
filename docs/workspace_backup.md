@@ -175,7 +175,10 @@ power-loss/hardware-write-cache durability guarantee on Windows or Linux.
 - `backend/tests/unit/test_workspace_backup.py`: deterministic inventory round
   trip, exclusive lease, path/link/reparse rejection, ZIP/manifest corruption,
   size limits, schema objects, deadlines, output preservation, and publication
-  rollback. Synthetic fixtures only.
+  rollback. Fault injection targets the shared publication boundary so it runs
+  on both Windows rename and Linux `renameat2`; a separate test exercises the
+  real platform primitive's refusal to replace an existing empty directory.
+  Synthetic fixtures only.
 - `backend/tests/unit/test_workspace_backup_api.py`: API-created datasets,
   canonical artifacts, models including GP NPZ, exports, DOE BLOBs and DB-only
   ownership; reopen/prediction/checksum verification without refitting.

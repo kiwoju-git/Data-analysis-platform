@@ -260,20 +260,29 @@ def test_size_and_count_limits_are_enforced(tmp_path: Path) -> None:
 
 
 def test_failed_publication_rolls_back_only_owned_directories(tmp_path: Path, monkeypatch) -> None:
+    from app.storage import workspace_backup
+
     source = _workspace(tmp_path / "source")
     archive = tmp_path / "good.zip"
     backup_workspace(source, archive)
     target = tmp_path / "target"
-    rename = Path.rename
+    publish_directory = workspace_backup._publish_directory
+    publication_attempts: list[str] = []
+    interruption_injected = False
 
-    def interrupted(path, destination):
-        if Path(destination) == checked_path(target) / "workspaces":
+    def interrupted(path: Path, destination: Path) -> None:
+        nonlocal interruption_injected
+        publication_attempts.append(destination.name)
+        if destination == checked_path(target) / "workspaces":
+            interruption_injected = True
             raise OSError("synthetic interruption")
-        return rename(path, destination)
+        publish_directory(path, destination)
 
-    monkeypatch.setattr(Path, "rename", interrupted)
+    monkeypatch.setattr(workspace_backup, "_publish_directory", interrupted)
     with pytest.raises(WorkspaceBackupError, match="restore_failed"):
         restore_workspace(archive, target)
+    assert interruption_injected is True
+    assert publication_attempts == ["db", "workspaces"]
     assert {item.name for item in target.iterdir()} == {".workspace.lock"}
     assert (source / "workspaces/datasets/dataset-1/raw/source.csv").exists()
 
