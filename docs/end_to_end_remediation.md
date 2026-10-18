@@ -45,7 +45,7 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A05 | Dataset context | reproduced / fixed (native integration pending) | 101 focused tests and all 16 real-server en/ko browser scenarios passed, including same-active schema, native file-cancel and replacement paste ownership. Whole native checkpoint CI remains required. |
 | A06 | GPR direct prediction | reproduced / fixed (native integration pending) | Five pre-fix component regressions; 80 focused tests and 18 real-model en/ko browser cases passed. Exact ID validation and detached JSON snapshots preserve both uncertainty kinds. |
 | A07 | Schema CAS | reproduced / fixed (native integration pending) | Atomic expected-hash CAS, explicit draft comparison/reapply and no-op preservation; 299 backend focused, 18 final backend, 119 frontend focused, six real two-editor browser cases passed. |
-| A08 | Workspace/backup | - | Pending lease and archive validation. |
+| A08 | Workspace/backup | source_confirmed / reproduced / fixed / verified (Windows focused) | Exclusive lease and offline archive implemented; actual asset round-trip/CLI pass. Native Linux and whole-product gate pending. |
 | A09 | Chart formatters | - | Pending display-contract tests. |
 | A10 | Report Center | - | Pending independent query-lane tests. |
 | A11 | Generic reports | - | Pending method/schema/section parity. |
@@ -351,3 +351,73 @@ passed (`.tmp/e2e-remediation-a07-dataset-regression`, ports 8035/5235,
 `--dataset-context-only`). Production build also passed; its existing large-chunk
 warning remains a performance advisory, not a suppressed failure. This checkpoint
 is ready for whole-product/native integration, not for main or Release publication.
+
+Native A07 CI `39098275942` passed Linux full checks (1418 backend tests / 11
+skips / 104 warnings; 641 frontend tests), source-runner lifecycle, Python 3.11
+and dependency security. Its full browser flow then failed upload error recovery:
+the new file replacement confirmation was implicitly dismissed by Playwright.
+The application correctly retained the cancelled file/error. Three Node
+regressions verify reject/approve/late-failure behavior without production changes;
+the browser fixture now explicitly approves and checks that exact confirmation.
+This is a failed CI checkpoint, not a full native pass. Log:
+`.tmp/remediation-a07-ci-linux.log`.
+
+## A08 In-Progress Evidence
+
+The exclusive OS lease precedes every app initialization/recovery operation;
+future metadata versions and incomplete restore publication are rejected before
+mutation. On local Windows/Python 3.10, lease/lifespan/startup/migration/CAS checks
+passed 70 tests / one symlink-permission skip. Final lease/lifespan rechecks passed
+28 tests / one skip. Real Uvicorn servers on distinct ports also verified shared
+workspace refusal and independent workspace success (one test, 40.02 seconds;
+`.tmp/remediation-a08-real-server-lease.log`). Native Linux remains a separate gate.
+
+The first actual-asset backup integration failed in verification staging: Windows
+rejected a path beyond its non-prefixed path limit although the original API-owned
+file path was short enough. The fixture is retained; shortening it would conceal
+the product defect. Validated internal extended-path I/O now fixes that failure,
+without persisting platform prefixes in metadata or archive member paths.
+Log: `.tmp/remediation-a08-backup-api.log`. Archive/security unit passes alone do
+not establish successful model/report backup and restore.
+
+The second integration attempt reached restore/reopen, then hit an overly broad
+test guard: the existing attribute-limit-set reader intentionally checks its
+canonical source integrity. That reader alone may use its original verification
+iterator; backup, verify, restore, report reads, and model prediction still run
+under no-refit/no-source-row-load guards. The third attempt passed both integration
+tests (30.66 seconds, three existing deprecation warnings): real GP/PLS/OLS models,
+saved predictions, HTML exports, control limits, Factorial/LHS/BO stored assets,
+and an unconfirmed upload. Logical DB rows and external file hashes match before
+and after restoration; reopened model predictions match over two app restarts.
+The second test invokes the real CLI in separate Python processes with Korean/
+space paths and verifies existing-output refusal without changing its hash.
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_workspace_backup_api.py -q
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_workspace_server_lease.py -q
+```
+
+The temporary environment is the native Windows hash-locked environment; source
+imports point explicitly to the current root. Logs:
+`.tmp/remediation-a08-backup-api-2.log` (failed test guard),
+`.tmp/remediation-a08-backup-api-3.log` (two passed), and
+`.tmp/remediation-a08-real-server-lease.log` (one passed).
+
+Independent review found and prompted fixes for actual ZIP central-directory
+counting before allocation, concatenated-directory offsets, bounded SQLite
+metadata hydration, and atomic no-replace Linux restore publication. Final Windows
+backup unit tests passed 66 cases (76.90 seconds, one intentional malformed-ZIP
+fixture warning), including an oversized integer limit's typed refusal. Scoped
+Ruff/format and mypy passed (root mypy: five production files). Linux
+`renameat2(RENAME_NOREPLACE)` and native offline restoration still require CI;
+Windows passes are not evidence of Linux execution.
+
+The CSV recovery focused runner initially failed its own `/` versus `/home`
+readiness assertion. After correcting that test route, the actual browser passed
+empty-file error, explicit replacement approval, native FileList change, cleared
+error, valid upload and parsing. Production code was not changed. Evidence:
+`.tmp/remediation-upload-recovery-e2e-retry.log` and
+`.tmp/e2e-remediation-upload-recovery-retry/screenshots/csv-upload-error-recovery.png`.
+Hook tests passed 95 cases, and the step-inventory test passed one case. This
+follow-up is commit `5be3d64`, not a claim of a completed whole E2E run.

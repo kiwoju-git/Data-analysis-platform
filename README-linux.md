@@ -32,10 +32,35 @@ workspace explicitly:
 ./run.sh --workspace-root "$HOME/statistical-twin-workspace" --port 8600
 ```
 
-Do not open the same workspace concurrently from multiple application processes.
+An OS lease prevents two application processes from opening the same workspace,
+even on different ports. Do not delete the lock file to bypass this protection.
 Installation never deletes/migrates existing user files. Normal application
 startup performs the repository's existing metadata upgrade/recovery protocol.
 Back up a workspace before using a newer application release.
+
+## Offline Backup and Restore
+
+Stop the application normally first. The installed application includes the
+offline CLI; no source checkout or Node.js is needed:
+
+```sh
+./.venv/bin/python -m app.storage.workspace_backup backup \
+  --workspace "$HOME/.datalabstudio" --output "$HOME/datalab-backup.zip"
+./.venv/bin/python -m app.storage.workspace_backup verify \
+  --archive "$HOME/datalab-backup.zip"
+./.venv/bin/python -m app.storage.workspace_backup restore \
+  --archive "$HOME/datalab-backup.zip" --workspace "$HOME/.datalabstudio-restored"
+./run.sh --workspace-root "$HOME/.datalabstudio-restored"
+```
+
+Backup preserves registered files and the entire logical database, without
+refitting models or rewriting results. Restore requires a new or empty target;
+it does not merge with an existing workspace. Existing backups are never
+overwritten. Keep the original workspace. Browser downloads outside it are not
+included. Archives contain private data and are neither encrypted nor signed.
+The current backup format supports metadata schema 20 only and rejects unknown
+assets, incompatible schema, and incomplete recovery state. The complete source
+contract is `docs/workspace_backup.md` in the repository documentation.
 
 ## Trusted LAN Boundary
 

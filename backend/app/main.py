@@ -30,29 +30,35 @@ from app.services.dataset_cell_corrections import recover_dataset_cell_correctio
 from app.services.dataset_version_retention import recover_dataset_version_quarantine_files
 from app.services.workspace_asset_retention import recover_workspace_asset_quarantine_files
 from app.storage.metadata import initialize_metadata_store
+from app.storage.workspace_lease import (
+    acquire_workspace_lease,
+    ensure_workspace_restore_complete,
+)
 from app.web_ui import built_ui_router
 
 
 def create_lifespan(settings: Settings) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.metadata_store = initialize_metadata_store(settings.workspace_root)
-        app.state.analysis_export_quarantine_recovery = recover_analysis_export_quarantine_files(
-            settings.workspace_root
-        )
-        app.state.analysis_run_quarantine_recovery = recover_analysis_run_quarantine_files(
-            settings.workspace_root
-        )
-        app.state.workspace_asset_quarantine_recovery = recover_workspace_asset_quarantine_files(
-            settings.workspace_root
-        )
-        app.state.dataset_version_quarantine_recovery = recover_dataset_version_quarantine_files(
-            settings.workspace_root
-        )
-        app.state.dataset_cell_correction_recovery = recover_dataset_cell_correction_files(
-            settings.workspace_root
-        )
-        yield
+        with acquire_workspace_lease(settings.workspace_root) as lease:
+            ensure_workspace_restore_complete(lease.root)
+            app.state.metadata_store = initialize_metadata_store(lease.root)
+            app.state.analysis_export_quarantine_recovery = (
+                recover_analysis_export_quarantine_files(lease.root)
+            )
+            app.state.analysis_run_quarantine_recovery = recover_analysis_run_quarantine_files(
+                lease.root
+            )
+            app.state.workspace_asset_quarantine_recovery = (
+                recover_workspace_asset_quarantine_files(lease.root)
+            )
+            app.state.dataset_version_quarantine_recovery = (
+                recover_dataset_version_quarantine_files(lease.root)
+            )
+            app.state.dataset_cell_correction_recovery = recover_dataset_cell_correction_files(
+                lease.root
+            )
+            yield
 
     return lifespan
 

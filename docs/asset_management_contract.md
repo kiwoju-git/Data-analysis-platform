@@ -164,3 +164,19 @@ safe operational metadata relation. Cleanup triggers follow owner deletion;
 optimistic updates use `expected_metadata_updated_at`. Stored result/design/
 study JSON, checksums, dataset schema hashes, and model manifests are never
 rewritten. This storage migration does not change a statistical method version.
+
+## Offline Workspace Protection
+
+Application lifespan holds an exclusive OS lease before metadata migration or
+quarantine recovery. Different ports do not allow concurrent processes to open
+the same workspace. This process-level boundary does not replace per-request
+schema CAS, deletion preflight, or transaction checks.
+
+The offline backup format preserves the complete schema-20 logical database and
+all registered external files, including stale results and unconfirmed uploads.
+It refuses recovery markers, unknown managed files, incompatible schemas, and
+broken ownership/hash references. Restore verifies a bounded archive into a new
+or empty destination; it never merges, refits, rewrites stored artifacts, or
+removes the source workspace. There is no backup metadata migration. See
+[workspace lease](workspace_lease.md) and [backup/restore contract](workspace_backup.md)
+for exact coverage, publication recovery, and limitations.

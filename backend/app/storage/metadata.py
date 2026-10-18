@@ -1,6 +1,7 @@
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
@@ -21,6 +22,14 @@ class Migration:
 class MetadataStoreInfo:
     path: Path
     schema_version: int
+
+
+class MetadataSchemaCompatibilityError(RuntimeError):
+    def __init__(
+        self, code: Literal["workspace_metadata_newer", "workspace_metadata_invalid"]
+    ) -> None:
+        super().__init__(code)
+        self.code = code
 
 
 class AnalysisArtifactStorageConflict(RuntimeError):
@@ -1382,14 +1391,41 @@ def metadata_db_path(workspace_root: Path) -> Path:
 
 def initialize_metadata_store(workspace_root: Path) -> MetadataStoreInfo:
     db_path = metadata_db_path(workspace_root)
+    if db_path.exists():
+        with closing(sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)) as reader:
+            validate_metadata_compatibility(reader)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     with sqlite3.connect(db_path) as connection:
+        validate_metadata_compatibility(connection)
         connection.execute("PRAGMA foreign_keys = ON;")
         _apply_migrations(connection)
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION};")
 
     return MetadataStoreInfo(path=db_path, schema_version=SCHEMA_VERSION)
+
+
+def validate_metadata_compatibility(connection: sqlite3.Connection) -> int:
+    """Inspect version markers without migrating or recovering workspace content."""
+    try:
+        version = connection.execute("PRAGMA user_version;").fetchone()[0]
+        versions = [version]
+        migrations_exist = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations';"
+        ).fetchone()
+        if migrations_exist is not None:
+            recorded = connection.execute("SELECT MAX(version) FROM schema_migrations;").fetchone()[
+                0
+            ]
+            if recorded is not None:
+                versions.append(recorded)
+    except sqlite3.DatabaseError as exc:
+        raise MetadataSchemaCompatibilityError("workspace_metadata_invalid") from exc
+    if any(not isinstance(value, int) or value < 0 for value in versions):
+        raise MetadataSchemaCompatibilityError("workspace_metadata_invalid")
+    if any(value > SCHEMA_VERSION for value in versions):
+        raise MetadataSchemaCompatibilityError("workspace_metadata_newer")
+    return int(version)
 
 
 def _apply_migrations(connection: sqlite3.Connection) -> None:

@@ -144,3 +144,25 @@ powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -DiagnosticsRoot .\.t
 ```
 
 User workspaces, uploads, exports, and generated artifacts remain outside the Git repository. The application does not require telemetry or external data upload for its core workflow.
+
+## Offline Backup
+
+One application process exclusively leases each workspace, even on different
+ports. Stop it normally before running the offline backup tool; do not delete
+the lock file or terminate an unrelated process to bypass the lease.
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\backup_workspace.py `
+  --workspace "$env:LOCALAPPDATA\DataLabStudio" `
+  --output "$env:USERPROFILE\Documents\datalab-backup.zip"
+.\.venv\Scripts\python.exe .\scripts\restore_workspace.py `
+  --archive "$env:USERPROFILE\Documents\datalab-backup.zip" `
+  --workspace "$env:LOCALAPPDATA\DataLabStudio-restored"
+```
+
+Restore only to a new or empty directory. This preserves registered uploads,
+results, models, reports, and database state, without refitting or overwriting
+the original workspace. The archive is not encrypted; retain it securely.
+See [backup scope, verification, and recovery](docs/workspace_backup.md) and
+[workspace lease](docs/workspace_lease.md). Browser downloads outside the
+workspace require separate retention.
