@@ -1,5 +1,18 @@
 # Statistical Method Audit Matrix
 
+## Current Inventory and Historical Evidence
+
+Current method/version, canonical menu placement, execution prerequisites/limits,
+and stored-report schema/variant declarations are generated in the
+[capability matrix](generated/analysis_capability_matrix.md). Per-source report
+capability still determines actual `full`/`summary`/`unsupported` output.
+The [journey matrix](remediation_journey_matrix.md) records executed workflow scope.
+
+The dated records and verification-depth tables below retain their original
+method versions, fixtures and limits. They are historical statistical audit
+evidence, not the current support count or a claim that all current combinations
+were rerun. Source consistency checks do not replace independent numerical tests.
+
 2026-10-08: quality.two_variances0.1.0/result1 is a new two-independent-group
 method, not a rename of eda.equal_variances. Median Brown-Forsythe is default
 (equality only, no ratio CI); explicit normal-F supports directional/nonunit
@@ -51,10 +64,11 @@ JSON model catalog, preflight, prediction and training-domain optimizer.
 Automatic performance uses outer-fold OOF predictions, not the tuning curve.
 Full specification: [regularized linear models](regularized_linear_model_contract.md).
 
-Last updated: 2026-08-29
+### Historical Registry Snapshot (2026-08-29)
 
-This matrix records the current implementation and QA state for the 37 stable,
-available method IDs in the six-module registry. It is an audit artifact, not
+This historical snapshot recorded implementation and QA state for 37 stable,
+available method IDs in the then-current six-module registry. Current counts and
+versions come from the generated inventory above. This audit artifact is not
 permission to make planned workflows executable.
 
 Legend: Y = covered or present, N = not present, Partial = intentionally limited coverage, N/A = not applicable because the method is not executable through that path.

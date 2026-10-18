@@ -1,6 +1,7 @@
 import { getCurrentLocale } from "./i18n/store";
-import { translateSystemText, translationToken } from "./i18n/translate";
+import { t, translateSystemText, translationToken } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
+import { ANALYSIS_CAPABILITY_LIMITS } from "./analysisCapabilities";
 
 export interface MethodRoleRequirement {
   label: string;
@@ -72,10 +73,11 @@ export const analysisMethodGuidance = {
       { category: "target", label: "분포·이상치" },
       { category: "target", label: "Histogram·Box Plot" },
     ],
-    roleRequirements: [required("분석 변수", "수치형 또는 범주형 컬럼"), optional("그룹", "패널 또는 색상 구분")],
-    optionChecklist: ["히스토그램 bin", "박스플롯 표시", "Q-Q plot 표시"],
+    roleRequirements: [required("분석 변수", "수치형 컬럼 1개 이상")],
+    optionChecklist: [translationToken("capabilityGuidance.graphicalOptions")],
     preflightChecks: ["표본 수", "고유값 수", "극단값 후보", "렌더링 비용"],
-    resultFocus: ["분포 모양", "이상 후보", "그룹 비교 시각화"],
+    resultFocus: ["분포 모양", "이상 후보", translationToken("capabilityGuidance.numericSummary")],
+    plainLanguage: translationToken("capabilityGuidance.graphicalSummary"),
   },
   "eda.normality": {
     methodId: "eda.normality",
@@ -84,10 +86,23 @@ export const analysisMethodGuidance = {
       { category: "target", label: "Q-Q Plot" },
       { category: "caution", label: "자동 검정 전환 금지" },
     ],
-    roleRequirements: [required("분석 변수", "연속형 수치 컬럼"), optional("그룹", "그룹별 정규성 점검")],
+    roleRequirements: [required("분석 변수", "연속형 수치 컬럼")],
     optionChecklist: ["유의수준", "Q-Q plot", "Shapiro-Wilk/Anderson-Darling"],
     preflightChecks: ["표본 수 범위", "상수열", "비정규 자동 전환 금지", "결측 제외 수"],
     resultFocus: ["Q-Q plot", "검정통계량", "p-value", "정규성 한계 경고"],
+    plainLanguage: translationToken("capabilityGuidance.normality"),
+  },
+  "eda.principal_components": {
+    methodId: "eda.principal_components",
+    cardTags: [
+      { category: "data_type", label: "수치형 변수" },
+      { category: "target", label: translationToken("capabilityGuidance.pcaTarget") },
+    ],
+    roleRequirements: [required("분석 변수", translationToken("capabilityGuidance.pcaInputs"))],
+    optionChecklist: [translationToken("capabilityGuidance.pcaOptions")],
+    preflightChecks: ["상수열", "결측 제외 수", translationToken("capabilityGuidance.pcaPreflight")],
+    resultFocus: [translationToken("capabilityGuidance.pcaResults")],
+    plainLanguage: translationToken("capabilityGuidance.pca"),
   },
   "eda.equal_variances": {
     methodId: "eda.equal_variances",
@@ -176,8 +191,7 @@ export const analysisMethodGuidance = {
     optionChecklist: ["등분산 또는 Welch", "호환되는 사후비교", "Dunnett 기준군", "결측 처리"],
     preflightChecks: ["그룹별 N", "잔차 정규성 설계 확인", "등분산 가정", "상수 그룹"],
     resultFocus: ["실제 분산 모형", "F 통계량/p-value", "효과크기 지원 여부", "요청한 사후비교"],
-    plainLanguage:
-      "세 개 이상 그룹의 평균이 모두 같다고 보기 어려운지 먼저 확인합니다. 전체 검정이 유의할 때만 어떤 그룹끼리 다른지 사후비교를 보여줍니다.",
+    plainLanguage: translationToken("capabilityGuidance.anova"),
     commonErrors: [
       "그룹 컬럼에 사용 가능한 그룹이 2개 미만인 경우",
       "반응 변수가 숫자 컬럼이 아닌 경우",
@@ -448,7 +462,7 @@ export const analysisMethodGuidance = {
   },
   "doe.response_optimizer": {
     methodId: "doe.response_optimizer",
-    roleRequirements: [required("검증된 모델", "저장된 DOE 반응표면 모델"), required("목표", "최대/최소/목표값/허용 범위")],
+    roleRequirements: [required(translationToken("capabilityGuidance.savedModel"), "저장된 DOE 반응표면 모델"), required("목표", "최대/최소/목표값/허용 범위")],
     optionChecklist: ["요인 탐색 범위", "desirability shape/importance", "선형 제약", "seed/평가/시간 budget"],
     preflightChecks: ["source checksum", "동일 factor 공간", "설계영역", "제약 feasible 여부"],
     resultFocus: ["권장 조건", "예측 반응", "개별/종합 desirability", "제약과 종료 이유"],
@@ -465,7 +479,7 @@ export const analysisMethodGuidance = {
       "P/NP/C/U",
       "불량품과 결점 구분",
       "complete-case",
-      "Phase I 기준선 추정 전용 (Phase II frozen limits 미지원)",
+      translationToken("capabilityGuidance.attributePhase"),
     ],
     preflightChecks: [
       "음수/비정수 계수",
@@ -637,7 +651,7 @@ export const analysisMethodGuidance = {
   "doe.factorial_design": {
     methodId: "doe.factorial_design",
     roleRequirements: [required("요인", "이름, 수준, low/high"), optional("블록", "블록 또는 반복 구조")],
-    optionChecklist: ["2-level full factorial", "반복/센터점", "랜덤 seed", "run order"],
+    optionChecklist: [translationToken("capabilityGuidance.factorialVariants"), "반복/센터점", "랜덤 seed", "run order"],
     preflightChecks: [
       "요인 수준",
       "실행 수 제한",
@@ -645,8 +659,15 @@ export const analysisMethodGuidance = {
       "모형 rank와 잔차 자유도",
     ],
     resultFocus: ["효과 순위", "OLS/ANOVA", "pure error/lack-of-fit", "잔차 진단"],
-    plainLanguage:
-      "전용 DOE API에서 2-level full factorial 설계표와 반응값을 저장하고 -1/+1 coding 효과 추정, hierarchy 고정 OLS/ANOVA, pure error/lack-of-fit, 잔차 진단을 실행합니다. 반응표면 분석은 별도 RSM 화면에서 제공합니다.",
+    plainLanguage: translationToken("capabilityGuidance.factorial"),
+  },
+  "doe.general_factorial_design": {
+    methodId: "doe.general_factorial_design",
+    roleRequirements: [required("요인", translationToken("capabilityGuidance.generalFactors")), required("반응", translationToken("capabilityGuidance.generalResponse"))],
+    optionChecklist: [translationToken("capabilityGuidance.generalOptions"), "랜덤 seed", "run order"],
+    preflightChecks: ["요인 수준", "실행 수 제한", "모형 rank와 잔차 자유도"],
+    resultFocus: ["OLS/ANOVA", translationToken("capabilityGuidance.generalResults"), "pure error/lack-of-fit", "잔차 진단"],
+    plainLanguage: translationToken("capabilityGuidance.generalFactorial"),
   },
   "hypothesis.two_sample_equivalence_tost": {
     methodId: "hypothesis.two_sample_equivalence_tost",
@@ -681,7 +702,7 @@ export const analysisMethodGuidance = {
   "doe.latin_hypercube": {
     methodId: "doe.latin_hypercube",
     roleRequirements: [
-      required("연속형 요인", "1~6개 요인의 이름, low, high"),
+      required("연속형 요인", translationToken("capabilityGuidance.continuousFactors")),
       optional("단위", "각 요인의 실제 측정 단위"),
     ],
     cardTags: [
@@ -723,7 +744,7 @@ export const analysisMethodGuidance = {
   "doe.bayesian_optimization": {
     methodId: "doe.bayesian_optimization",
     roleRequirements: [
-      required("요인", "1~6개 연속 요인과 실제 안전 low/high"),
+      required("요인", translationToken("capabilityGuidance.continuousFactors")),
       required("목적", "최대화 또는 최소화할 단일 숫자 반응"),
       required("순차 이력", "실제로 수행한 조건과 관측 반응"),
     ],
@@ -774,7 +795,13 @@ export function getAnalysisMethodGuidance(
   const guidance = Object.prototype.hasOwnProperty.call(guidanceById, methodId)
     ? guidanceById[methodId]
     : { ...fallbackGuidance, methodId };
-  const displayText = (source: string) => translateSystemText(source, locale);
+  const displayText = (source: string) => source === translationToken("capabilityGuidance.continuousFactors")
+    ? t("capabilityGuidance.continuousFactors", {
+        maximum: methodId === "doe.latin_hypercube"
+          ? ANALYSIS_CAPABILITY_LIMITS.LATIN_HYPERCUBE_FACTOR_LIMIT
+          : ANALYSIS_CAPABILITY_LIMITS.BAYESIAN_STUDY_FACTOR_LIMIT,
+      }, locale)
+    : translateSystemText(source, locale);
   return {
     ...guidance,
     cardTags: guidance.cardTags?.map((tag) => ({

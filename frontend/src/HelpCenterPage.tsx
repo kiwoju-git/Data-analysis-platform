@@ -11,6 +11,8 @@ import { RoleDictionary } from "./RoleDictionary";
 import { isContextualAnalysisMethod } from "./analysisMethodPresentation";
 import { analysisMethodPlacement } from "./analysisDomainMapping";
 import { ANALYSIS_DOMAINS } from "./analysisDomains";
+import { sourcePrerequisiteLabel } from "./analysisWorkbenchUtils";
+import { visiblePlannedWorkflows } from "./plannedWorkflowVisibility";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
 
@@ -139,24 +141,75 @@ export function HelpCenterPage({
           </div>
         </div>
         <div className="analysis-domain-family-grid">
-          {ANALYSIS_DOMAINS.map((domain) => (
+          {ANALYSIS_DOMAINS.map((domain) => {
+            const planned = [
+              ...(domain.directPlannedWorkflows ?? []),
+              ...domain.families.flatMap((family) => family.plannedWorkflows ?? []),
+            ];
+            const roadmap = planned.filter((workflow) => workflow.visibility === "roadmap_only");
+            const contextual = [
+              ...(domain.directContextualWorkflows ?? []),
+              ...domain.families.flatMap((family) => family.contextualWorkflows ?? []),
+            ];
+            const contextualIds = [
+              ...(domain.directContextualMethodIds ?? []),
+              ...domain.families.flatMap((family) => family.contextualMethodIds ?? []),
+            ];
+            const contextualMethods = contextualIds.flatMap((id) => {
+              const method = catalog?.methods.find((candidate) => candidate.method_id === id);
+              return method === undefined ? [] : [method];
+            });
+            return (
             <section className="analysis-domain-family-card" key={domain.id}>
               <h3>{t(domain.labelKey)}</h3>
               <p>{t(domain.descriptionKey)}</p>
               <div className="method-card-tags">
-                {domain.families.map((family) => (
+                {domain.families.filter((family) =>
+                  family.methodIds.length > 0
+                  || (family.contextualMethodIds?.length ?? 0) > 0
+                  || (family.contextualWorkflows?.length ?? 0) > 0
+                  || visiblePlannedWorkflows(family.plannedWorkflows ?? []).length > 0,
+                ).map((family) => (
                   <span className="method-card-tag" key={family.id}>
                     {t(family.labelKey)}
                   </span>
                 ))}
               </div>
-              {domain.families.flatMap((family) => family.plannedWorkflows ?? []).map((workflow) => (
+              {visiblePlannedWorkflows(planned).map((workflow) => (
                 <p className="compact-note" key={workflow.id}>
                   {t(workflow.labelKey)} · {t("analysisPlanned.label")}
                 </p>
               ))}
+              {contextual.length + contextualMethods.length > 0 ? (
+                <div data-help-contextual="true">
+                  <h4>{t("capabilityHelp.contextual")}</h4>
+                  {contextualMethods.map((method) => (
+                    <p className="compact-note" key={method.method_id}>
+                      <button className="text-link" onClick={() => selectHelpMethod(method)} type="button">
+                        {methodLabel(method, locale)}
+                      </button>
+                      {sourcePrerequisiteLabel(method, locale) !== null ? ` · ${sourcePrerequisiteLabel(method, locale)}` : null}
+                    </p>
+                  ))}
+                  {contextual.map((workflow) => (
+                    <p className="compact-note" key={workflow.id}>
+                      {t(workflow.labelKey)} · {t(workflow.statusKey ?? "analysisContext.label")}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              {roadmap.length > 0 ? (
+                <div data-help-roadmap="true">
+                  <h4>{t("capabilityHelp.roadmap")}</h4>
+                  <p className="compact-note">{t("capabilityHelp.roadmapNote")}</p>
+                  {roadmap.map((workflow) => (
+                    <p className="compact-note" data-workflow-id={workflow.id} key={workflow.id}>{t(workflow.labelKey)}</p>
+                  ))}
+                </div>
+              ) : null}
             </section>
-          ))}
+            );
+          })}
         </div>
       </section>
       <section
@@ -189,6 +242,7 @@ export function HelpCenterPage({
               </div>
               <button
                 className="primary-button"
+                disabled={selectedMethod.availability !== "available"}
                 onClick={() => onOpenAnalysis(selectedMethod)}
                 type="button"
               >
@@ -249,10 +303,7 @@ export function HelpCenterPage({
           <li>저장 artifact checksum 불일치</li>
         </ul>
         <h3>Report/export</h3>
-        <p>
-          일반 분석의 JSON/CSV/HTML은 Report Center에서 생성합니다. 지원되지 않는
-          dedicated HTML 형식은 지원됨으로 표시하지 않습니다.
-        </p>
+        <p>{t("capabilityHelp.reportSources")}</p>
       </section>
     </div>
   );

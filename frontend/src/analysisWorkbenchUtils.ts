@@ -13,6 +13,16 @@ export function availabilityLabel(method: AnalysisMethodDescriptor, locale?: App
   return translateSystemText("계획됨", locale);
 }
 
+export function sourcePrerequisiteLabel(method: AnalysisMethodDescriptor, locale?: AppLocale): string | null {
+  if (method.source_prerequisite === "regression_model") {
+    return t("capabilityPrerequisite.regressionModel", {}, locale);
+  }
+  if (method.source_prerequisite === "response_surface_analysis") {
+    return t("capabilityPrerequisite.responseSurface", {}, locale);
+  }
+  return method.requires_dataset ? t("capabilityPrerequisite.dataset", {}, locale) : null;
+}
+
 export function shortHash(value: string): string {
   return value.length <= 12 ? value : value.slice(0, 12);
 }

@@ -42,10 +42,16 @@ Backend만 좁게 확인할 때:
 
 Direct dependency와 Python 3.10 Windows wheel hash lock은
 `backend/pyproject.toml`과 `backend/requirements-py310-win.lock`에서 관리합니다.
+Linux의 지원 대상은 Ubuntu 24.04 x86_64 / CPython 3.12이며 별도 runtime/dev
+해시 lock을 사용합니다. CPython 3.11 호환성 lock과 CI도 별도입니다.
+Windows 3.10 경로를 Linux lock으로 대체하지 않습니다. 설치와 배포 전제조건은
+[Linux 안내](../README-linux.md)를 참조하십시오.
 
 ## Storage와 migration
 
-현재 SQLite schema version은 `14`입니다. Dataset version, analysis result, DOE response
+현재 API와 metadata version은 [생성된 capability matrix](../docs/generated/analysis_capability_matrix.md)와
+`core/runtime_contract.py`, `storage/metadata.py`의 상수로 확인합니다. 이 문서에 과거 숫자를
+별도로 유지하지 않습니다. Dataset version, analysis result, DOE response
 revision, Bayesian history/recommendation/lifecycle, control-limit set 등 persisted relation은
 migration과 backward-compatibility test를 통해 변경합니다. 기존 stored record를 새
 method/result 의미로 조용히 재해석하지 않습니다.
@@ -56,7 +62,11 @@ commit하지 않습니다.
 
 ## 보안 경계
 
-- 기본 bind는 `127.0.0.1`이며 core API는 local single-user용입니다.
+- Windows 개발 API는 loopback이고, 승인된 LAN 개발 frontend는 same-origin proxy를 통해
+  `0.0.0.0:8600`으로 접속합니다. `dev.ps1 -LocalOnly`는 loopback 전용입니다.
+- Linux source 개발은 기본 loopback이며 명시적 `--lan`이 필요합니다. Linux Release는
+  승인된 trusted-LAN 기본 bind와 Host/Origin guard를 사용하고 `--local-only`로 제한합니다.
+  어느 경로도 인증된 다중 사용자 서비스나 공개 인터넷 배포를 의미하지 않습니다.
 - raw row, request body, filename, internal path, traceback을 client error/log에 노출하지 않습니다.
 - 외부 pickle/joblib, arbitrary Python/shell/`eval`을 허용하지 않습니다.
 - CPU-bound statistics와 scikit-learn 작업은 async event loop에서 직접 실행하지 않습니다.
@@ -64,3 +74,13 @@ commit하지 않습니다.
 
 통계, 개인정보, Windows 호환성 규칙은 [AGENTS.md](../AGENTS.md)와
 [PRD addendum](../data_prd_addendum.md)가 우선합니다.
+
+## Capability와 도움말 정합성
+
+[Capability 계약](../docs/analysis_capability_contract.md)과
+[생성 matrix](../docs/generated/analysis_capability_matrix.md)는 실제 method registry,
+runner/route, 저장 report reader, frontend 분류를 교차 검증합니다. `scripts/check.ps1`과
+`scripts/check.sh`는 오프라인으로 생성 결과가 최신인지 확인합니다. Node는 이 개발 검사에만
+필요하며 backend 실행이나 설치된 Release의 Python-only 검사에 요구되지 않습니다.
+정적 matrix는 실행 전 조건 검사 또는 개별 저장 결과의 `full/summary/unsupported`
+report capability를 대체하지 않습니다.

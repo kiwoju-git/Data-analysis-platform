@@ -3,6 +3,7 @@ import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
+import analysisCapabilities from "./generated/analysisCapabilities.json";
 import { AnalysisPage } from "./AnalysisPage";
 import { AnalysisExportDeletionConfirmation } from "./AnalysisResultExportPanel";
 import { AnalysisRunDeletionConfirmation } from "./AnalysisHistoryPanel";
@@ -340,8 +341,10 @@ describe("App", () => {
     });
   });
 
-  it("defines guidance for all 36 documented six-module workflows", () => {
-    expect(analysisMethodGuidanceIds).toHaveLength(36);
+  it("defines guidance for every generated catalog method without extra workflows", () => {
+    expect([...analysisMethodGuidanceIds].sort()).toEqual(
+      analysisCapabilities.methods.map((method) => method.method_id).sort(),
+    );
     expect(getAnalysisMethodGuidance("eda.descriptive", "ko").roleRequirements[0]).toMatchObject({
       label: "분석 변수",
       required: true,
@@ -354,7 +357,7 @@ describe("App", () => {
       "랜덤 seed",
     );
     expect(getAnalysisMethodGuidance("doe.factorial_design", "ko").plainLanguage).toContain(
-      "효과 추정",
+      "완전요인은 항 포함·강제 유지 및 hierarchy를 지키는 후진 제거",
     );
     expect(getAnalysisMethodGuidance("doe.response_surface", "ko").plainLanguage).toContain(
       "full quadratic OLS",

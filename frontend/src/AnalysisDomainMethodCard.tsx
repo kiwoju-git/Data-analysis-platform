@@ -3,7 +3,7 @@ import type {
   AnalysisContextualWorkflow,
   AnalysisPlannedWorkflow,
 } from "./analysisDomains";
-import { availabilityLabel } from "./analysisWorkbenchUtils";
+import { availabilityLabel, sourcePrerequisiteLabel } from "./analysisWorkbenchUtils";
 import { getMethodCardTags } from "./analysisMethodGuidance";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
@@ -25,10 +25,11 @@ export function AnalysisDomainMethodCard({
   const { locale } = useI18n();
   const tags = getMethodCardTags(method.method_id, locale).slice(0, 3);
   const descriptionId = `analysis-domain-method-${safeId(method.method_id)}`;
+  const prerequisite = method.source_prerequisite ? sourcePrerequisiteLabel(method, locale) : null;
   return (
     <button
       aria-label={methodLabel(method, locale)}
-      aria-describedby={descriptionId}
+      aria-describedby={prerequisite === null ? descriptionId : `${descriptionId} ${descriptionId}-source`}
       aria-pressed={selected}
       className={`analysis-domain-method-card${selected ? " is-active" : ""}`}
       disabled={method.availability !== "available"}
@@ -44,6 +45,9 @@ export function AnalysisDomainMethodCard({
         {tags.map((tag, index) => <span key={`${tag.category}-${index}`}>{tag.label}</span>)}
       </span>
       <small>{availabilityLabel(method)}</small>
+      {prerequisite !== null ? (
+        <span className="analysis-method-prerequisite" id={`${descriptionId}-source`}>{prerequisite}</span>
+      ) : null}
     </button>
   );
 }

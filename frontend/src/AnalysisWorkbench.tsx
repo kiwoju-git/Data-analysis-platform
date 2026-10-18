@@ -34,7 +34,7 @@ import type {
   AnalysisHistoryResultAvailabilityFilter,
   AnalysisHistoryStaleFilter,
 } from "./analysisWorkbenchTypes";
-import { availabilityLabel } from "./analysisWorkbenchUtils";
+import { availabilityLabel, sourcePrerequisiteLabel } from "./analysisWorkbenchUtils";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
 
@@ -303,6 +303,7 @@ export function AnalysisWorkbench({
           />
           {selectedMethod.execution_mode === "dedicated" ? (
             <div className="notice-box">
+              {selectedMethod.source_prerequisite ? <p>{sourcePrerequisiteLabel(selectedMethod, locale)}</p> : null}
               저장된 Source 자산을 선택하면 연결 관계와 파일 무결성을 다시 확인합니다.
               확인을 통과한 자산만 실행할 수 있습니다.
             </div>

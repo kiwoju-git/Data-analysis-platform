@@ -1,5 +1,16 @@
 # Browser E2E Coverage
 
+## Capability Help Remediation
+
+The refined-UI suite additionally opens exact PCA, general-factorial and saved
+regression prediction help links in Korean/English at 1440 and 390 pixels. It
+checks the actual help body, required saved-model context, non-executable
+roadmap-only sections and page overflow. Captures use the synthetic child-page
+diagnostics boundary. Static registry/guidance drift tests are complementary;
+they do not substitute for these browser assertions. The first A14 run exposed
+a long prerequisite badge overflow; the scoped wrapping fix is revalidated in
+the remediation ledger, without hiding page overflow or enlarging its tolerance.
+
 ## Managed Stored Reports
 
 `tests/e2e/managed_reports.py` exercises the real React component with explicit

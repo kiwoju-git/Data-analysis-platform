@@ -4,6 +4,8 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 PYTHON="$ROOT/.venv/bin/python"
 "$PYTHON" scripts/render_tutorial_results.py --check
+node --test scripts/read_frontend_capability_metadata.test.mjs
+"$PYTHON" scripts/generate_capability_matrix.py --check
 "$PYTHON" -m ruff check backend
 "$PYTHON" -m ruff format --check backend
 "$PYTHON" -m mypy backend/app

@@ -52,7 +52,7 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A11 | Generic reports | source_confirmed / reproduced / fixed / verified (local focused) | Stored-only readers, actual HTML parity and UI guards passed; two checkpoint failures and their corrections are retained below. Final native gate pending. |
 | A12 | Dedicated reports | source_confirmed / reproduced / fixed / verified (local focused) | Six exact source kinds, opt-in server predictions, ownership/retention/backup and actual EN/KO offline-report browser flow passed. Native gate pending. |
 | A13 | Execution capabilities | source_confirmed / reproduced / fixed / verified (local focused/browser) | Unsupported cancellation, atomic terminal protection, grouped counts, lease-owned recovery and transactional completion dependencies passed focused checks. Twelve real-server KO/EN current-result cases passed after fixing a reproduced failed-activation selector mismatch; final native gates remain pending. |
-| A14 | Capability documentation | source_confirmed | Guidance drift found; generated registry/handler/report matrix pending. |
+| A14 | Capability documentation | source_confirmed / reproduced / fixed / verified (local) | Generated declaration/guidance drift checks, 803 frontend tests, strict build and actual KO/EN help/navigation browser checks passed. First-run stale-count assertion and long-label overflow are retained below; final native gate remains pending. |
 | A15 | Release installation identity | source_confirmed | Existing marker content/installed-code mismatch can be missed; pre-import release-owned identity guard pending. |
 
 ## A01 Evidence
@@ -1131,3 +1131,84 @@ was changed for these added assertions.
 The added hook tests also passed strict TypeScript via
 `npm --prefix frontend run typecheck` (exit 0,
 `.tmp/remediation-a14-report-test-typecheck.log`).
+
+### A14 Capability and Guidance
+
+The installed UI skill's Disabled States guidance was applied narrowly:
+prerequisites, roadmap-only information and executable availability are distinct,
+without replacing the existing compact workbench design. Missing PCA/general
+factorial guidance and incorrect Phase II, ANOVA post-hoc, normality grouping,
+graphical-summary input, LHS/BO limit and factorial selection explanations were
+corrected against actual validators/contracts. Generated static facts do not
+override live catalog availability or per-source HTML capability.
+
+The new frontend assertions initially failed all eight cases. After implementation:
+
+```powershell
+npm --prefix frontend test -- --run src/analysisCapabilityDisplay.test.tsx src/analysisMethodGuidance.test.ts src/analysisCatalogDisplay.test.tsx src/analysisDomains.test.tsx src/analysisMethodFamilies.test.ts src/sidebarNavigationModel.test.ts
+```
+
+Result: 40 passed / 6 files / 9.31 seconds (`.tmp/a14-guidance-final2.log`).
+Strict TypeScript, scoped frontend ESLint, localization (2876 source strings,
+4116 keys) and diff whitespace checks passed. An initial ESLint invocation from
+the wrong working directory failed configuration discovery; the correct scoped
+invocation passed. Those are not whole-suite or browser pass claims.
+
+The full frontend run then reported 1 failed / 800 passed / 89 files in 97.16s
+(`.tmp/remediation-a14-frontend-all.log`): an old App test still required exactly
+36 guidance entries. It now compares canonical generated method IDs with guidance
+IDs; the focused assertion passed (1 selected, 102 excluded by the test filter).
+This does not substitute for the pending corrected whole-suite run.
+
+The first actual refined-UI browser run failed on the English DOE domain at
+1440px with 60px page overflow after adding prerequisite labels. Its own child
+page evidence is retained at `.tmp/e2e-a14-capability-help/refined-ui/en`, and the
+command log is `.tmp/remediation-a14-capability-help-browser.log`. The failure is
+not hidden by page overflow CSS or a larger permitted tolerance. A scoped label
+layout correction and repeated browser validation are required.
+
+Backend capability declaration tests passed 24 cases in 10.07s; the Node AST
+reader passed 11 cases. Focused mypy, Ruff/format, deterministic generator
+`--check` (also from an unrelated cwd) and whitespace checks passed. The generated
+files explicitly use LF on Windows. These are offline declaration/drift checks,
+not execution evidence for every advertised method/option.
+
+The prerequisite fix keeps the compact availability badge and places its longer
+source requirement in a separate wrapping description with `aria-describedby`.
+An isolated saved-DOM probe reproduced 60px before the fix and 0px afterward at
+1440/1280/1024/390; this was followed by an actual application rerun:
+
+```powershell
+npm --prefix frontend test -- --run src/App.test.tsx -t 'defines guidance'
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests/e2e/critical_path.py --backend-port 8027 --frontend-port 5257 --refined-ui-only --diagnostics-root .tmp/e2e-a14-capability-help2
+```
+
+The browser command exited 0, including startup fault scenarios, exact synthetic
+dataset selection, KO/EN, four widths, input/locale/navigation retention and the
+new PCA/general-factorial/saved-prediction help checks at desktop/mobile sizes.
+Log: `.tmp/remediation-a14-capability-help-browser2.log`. The actual 1440px DOE
+and 390px prediction-help screenshots were visually inspected for wrapping and
+readable prerequisite text. The live route still uses actual catalog availability;
+roadmap-only help offers no execution button. OpenAPI/frontend contracts also
+passed 233 tests / 2 warnings / 10.57s (`.tmp/remediation-a14-openapi.log`).
+
+Visual review also found the historical optimizer role tag `Proven model`.
+It now says `Saved model` / `저장된 모델`, accurately describing the stored-model
+prerequisite without asserting validated predictive performance. This text-only
+follow-up passed 20 focused cases and localization (2875 source strings / 4117
+keys); no calculation or availability rule changed.
+
+The final A14 full frontend run passed 803 tests / 89 files in 76.03s
+(`.tmp/remediation-a14-frontend-final.log`). Production build, including strict
+TypeScript, exited 0 (`.tmp/remediation-a14-build.log`, Vite 5.13s). Existing
+large-chunk/plugin-timing warnings remain visible; no thresholds were raised.
+Ruff passed, format checked 343 files, mypy checked 200 application modules, and
+the generator's final `--check` passed (`.tmp/remediation-a14-{ruff,format,mypy,generated-final}.log`).
+
+The first whole lint invocation exposed two unsafe mock-call type accesses in
+the newly added last-page test (`.tmp/remediation-a14-lint.log`). The assertion
+now uses its explicit request type, without changing expected offsets/behavior.
+Its 170 hook tests passed again in 7.01s. The final whole lint exited 0 with
+zero errors and nine existing Fast Refresh warnings
+(`.tmp/remediation-a14-lint-final.log`). The latest fetch still leaves origin/main
+at BASE_SHA; this checkpoint is feature-branch-only, not final native acceptance.

@@ -1,11 +1,6 @@
-const contextualAnalysisMethodIds = new Set([
-  "regression.predict",
-  "regression.predict_pasted",
-  "regression.predict_manual",
-  "regression.linear_model_optimizer",
-  "doe.general_factorial_design",
-]);
+import { analysisMethodPlacement } from "./analysisDomainMapping";
+import { isKnownContextualSubworkflow } from "./analysisCapabilities";
 
 export function isContextualAnalysisMethod(methodId: string): boolean {
-  return contextualAnalysisMethodIds.has(methodId);
+  return analysisMethodPlacement(methodId)?.contextual ?? isKnownContextualSubworkflow(methodId);
 }

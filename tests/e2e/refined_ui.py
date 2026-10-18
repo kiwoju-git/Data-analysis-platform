@@ -133,6 +133,9 @@ def _verify_locale(
             page.evaluate("window.scrollTo(0, 0)")
             page.screenshot(path=str(root / f"{name}-{locale}-{width}.png"))
 
+        if width in (1440, 390):
+            _verify_capability_help(page, base_url, root, locale, width)
+
         page.goto(
             base_url + "/analysis/hypothesis/hypothesis.two_sample_t",
             wait_until="domcontentloaded",
@@ -216,6 +219,44 @@ def _verify_locale(
         )
     page.screenshot(path=str(root / f"graph-selected-{locale}.png"))
     assert not failures, failures
+
+
+def _verify_capability_help(
+    page: Page, base_url: str, root: Path, locale: str, width: int
+) -> None:
+    cases = (
+        ("eda.principal_components", "D"),
+        (
+            "doe.general_factorial_design",
+            "multi-level" if locale == "en" else "수준",
+        ),
+        (
+            "regression.predict",
+            "Compatible saved regression model required"
+            if locale == "en"
+            else "호환되는 저장 회귀 모델 필요",
+        ),
+    )
+    for method_id, expected_text in cases:
+        route = f"/help?section=methods&method_id={method_id}"
+        page.goto(base_url + route, wait_until="domcontentloaded")
+        wait_for_app_ready(page, locale, route)
+        detail = page.locator(".help-method-detail")
+        expect(detail).to_be_visible()
+        expect(detail).to_contain_text(expected_text)
+        if method_id == "regression.predict":
+            expect(
+                detail.locator('[data-source-prerequisite="regression_model"]')
+            ).to_be_visible()
+        roadmap = page.locator('[data-help-roadmap="true"]')
+        expect(roadmap).to_have_count(2)
+        for item in roadmap.all():
+            expect(item).to_contain_text(
+                "Roadmap only" if locale == "en" else "로드맵 전용"
+            )
+            expect(item.get_by_role("button")).to_have_count(0)
+        assert_no_overflow(page)
+        page.screenshot(path=str(root / f"capability-{method_id}-{locale}-{width}.png"))
 
 
 if __name__ == "__main__":

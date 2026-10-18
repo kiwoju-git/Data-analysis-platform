@@ -1,0 +1,4039 @@
+{
+  "schema_version": 1,
+  "api_contract_version": 23,
+  "metadata_schema_version": 22,
+  "methods": [
+    {
+      "method_id": "eda.descriptive",
+      "method_version": "0.2.0",
+      "module_id": "exploration",
+      "label_ko": "기술통계",
+      "label_en": "Display Descriptive Statistics",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 10,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "eda.descriptive",
+          "summary_type": "descriptive_statistics",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "descriptive_statistics",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "descriptive_v1",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "summary",
+                  "core": true
+                },
+                {
+                  "section_id": "distribution_summary",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "descriptive_v2",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "summary",
+                  "core": true
+                },
+                {
+                  "section_id": "distribution_summary",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_descriptive_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "basic-exploration",
+        "family_id": null,
+        "contextual": false,
+        "order": 0
+      }
+    },
+    {
+      "method_id": "eda.graphical_summary",
+      "method_version": "0.2.0",
+      "module_id": "exploration",
+      "label_ko": "그래프 요약",
+      "label_en": "Graphical Summary",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 20,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "eda.graphical_summary",
+          "summary_type": "graphical_summary",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "graphical_summary",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "graphical_v1",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "summary",
+                  "core": true
+                },
+                {
+                  "section_id": "moments",
+                  "core": false
+                },
+                {
+                  "section_id": "histogram",
+                  "core": false
+                },
+                {
+                  "section_id": "normal_fit",
+                  "core": false
+                },
+                {
+                  "section_id": "boxplot",
+                  "core": false
+                },
+                {
+                  "section_id": "qq_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "ecdf",
+                  "core": false
+                },
+                {
+                  "section_id": "normality",
+                  "core": false
+                },
+                {
+                  "section_id": "confidence_intervals",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "graphical_v2",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "summary",
+                  "core": true
+                },
+                {
+                  "section_id": "moments",
+                  "core": false
+                },
+                {
+                  "section_id": "histogram",
+                  "core": false
+                },
+                {
+                  "section_id": "normal_fit",
+                  "core": false
+                },
+                {
+                  "section_id": "boxplot",
+                  "core": false
+                },
+                {
+                  "section_id": "qq_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "ecdf",
+                  "core": false
+                },
+                {
+                  "section_id": "normality",
+                  "core": false
+                },
+                {
+                  "section_id": "confidence_intervals",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_graphical_summary_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "basic-exploration",
+        "family_id": null,
+        "contextual": false,
+        "order": 1
+      }
+    },
+    {
+      "method_id": "eda.normality",
+      "method_version": "0.2.0",
+      "module_id": "exploration",
+      "label_ko": "정규성 검정",
+      "label_en": "Normality Test",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 30,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "eda.normality",
+          "summary_type": "normality_test",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "normality_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "normality_tests",
+                  "core": true
+                },
+                {
+                  "section_id": "qq_plots",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_normality_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "basic-exploration",
+        "family_id": null,
+        "contextual": false,
+        "order": 2
+      }
+    },
+    {
+      "method_id": "eda.principal_components",
+      "method_version": "0.1.0",
+      "module_id": "exploration",
+      "label_ko": "PCA 기반 다변량 검토",
+      "label_en": "Principal Components Analysis",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 35,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "eda.principal_components",
+          "summary_type": "principal_components_analysis",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "principal_components_analysis",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "pca_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "eigenanalysis",
+                  "core": true
+                },
+                {
+                  "section_id": "loadings",
+                  "core": true
+                },
+                {
+                  "section_id": "scree_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "score_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "loading_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "biplot",
+                  "core": false
+                },
+                {
+                  "section_id": "outlier_plot",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_principal_components_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "basic-exploration",
+        "family_id": null,
+        "contextual": false,
+        "order": 3
+      }
+    },
+    {
+      "method_id": "hypothesis.one_sample_t",
+      "method_version": "0.1.0",
+      "module_id": "hypothesis",
+      "label_ko": "1-표본 t-검정",
+      "label_en": "1-Sample t-Test",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 10,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.one_sample_t",
+          "summary_type": "one_sample_t_test",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "one_sample_t_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "one_sample_t",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "sample_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": true
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "interval_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_one_sample_t_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "t-tests",
+        "contextual": false,
+        "order": 4
+      }
+    },
+    {
+      "method_id": "hypothesis.paired_t",
+      "method_version": "0.1.0",
+      "module_id": "hypothesis",
+      "label_ko": "대응표본 t-검정",
+      "label_en": "Paired t-Test",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 20,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.paired_t",
+          "summary_type": "paired_t_test",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "paired_t_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "paired_t",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "sample_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": true
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "interval_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_paired_t_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "t-tests",
+        "contextual": false,
+        "order": 5
+      }
+    },
+    {
+      "method_id": "hypothesis.two_sample_t",
+      "method_version": "0.1.0",
+      "module_id": "hypothesis",
+      "label_ko": "2-표본 t-검정",
+      "label_en": "2-Sample t-Test",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 30,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.two_sample_t",
+          "summary_type": "two_sample_t_test",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "two_sample_t_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "two_sample_t",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": true
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "interval_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_two_sample_t_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "t-tests",
+        "contextual": false,
+        "order": 6
+      }
+    },
+    {
+      "method_id": "hypothesis.one_way_anova",
+      "method_version": "0.2.0",
+      "module_id": "hypothesis",
+      "label_ko": "일원분산분석",
+      "label_en": "One-Way ANOVA",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 40,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.one_way_anova",
+          "summary_type": "one_way_anova",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "one_way_anova",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "anova_standard",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "anova_table",
+                  "core": false
+                },
+                {
+                  "section_id": "group_intervals",
+                  "core": false
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "posthoc",
+                  "core": false
+                },
+                {
+                  "section_id": "residual_diagnostics",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "anova_welch",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "anova_table",
+                  "core": false
+                },
+                {
+                  "section_id": "group_intervals",
+                  "core": false
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "posthoc",
+                  "core": false
+                },
+                {
+                  "section_id": "residual_diagnostics",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_one_way_anova_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "analysis-of-variance",
+        "contextual": false,
+        "order": 7
+      }
+    },
+    {
+      "method_id": "hypothesis.equivalence_tost",
+      "method_version": "0.2.0",
+      "module_id": "hypothesis",
+      "label_ko": "1-표본 동등성 검정",
+      "label_en": "1-Sample Equivalence Test (TOST)",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 50,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.equivalence_tost",
+          "summary_type": "equivalence_tost",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "equivalence_tost",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "tost_one_sample",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "sample_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": true
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "interval_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_equivalence_tost_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "equivalence-tests",
+        "contextual": false,
+        "order": 8
+      }
+    },
+    {
+      "method_id": "hypothesis.two_sample_equivalence_tost",
+      "method_version": "0.1.0",
+      "module_id": "hypothesis",
+      "label_ko": "2-표본 동등성 검정",
+      "label_en": "2-Sample Equivalence Test (TOST)",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 60,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.two_sample_equivalence_tost",
+          "summary_type": "equivalence_tost",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "equivalence_tost",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "tost_two_sample",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "sample_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": true
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "interval_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_two_sample_equivalence_tost_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "equivalence-tests",
+        "contextual": false,
+        "order": 9
+      }
+    },
+    {
+      "method_id": "hypothesis.paired_equivalence_tost",
+      "method_version": "0.1.0",
+      "module_id": "hypothesis",
+      "label_ko": "대응표본 동등성 검정",
+      "label_en": "Paired Equivalence Test (TOST)",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 70,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.paired_equivalence_tost",
+          "summary_type": "equivalence_tost",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "equivalence_tost",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "tost_paired",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "sample_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": true
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "interval_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_paired_equivalence_tost_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "equivalence-tests",
+        "contextual": false,
+        "order": 10
+      }
+    },
+    {
+      "method_id": "hypothesis.one_sample_wilcoxon",
+      "method_version": "0.1.0",
+      "module_id": "hypothesis",
+      "label_ko": "1-표본 Wilcoxon",
+      "label_en": "1-Sample Wilcoxon Signed-Rank",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 80,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.one_sample_wilcoxon",
+          "summary_type": "one_sample_wilcoxon_signed_rank_test",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "one_sample_wilcoxon_signed_rank_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "wilcoxon",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "sample_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "rank_details",
+                  "core": false
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_one_sample_wilcoxon_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "nonparametric-tests",
+        "contextual": false,
+        "order": 11
+      }
+    },
+    {
+      "method_id": "hypothesis.mann_whitney",
+      "method_version": "0.2.0",
+      "module_id": "hypothesis",
+      "label_ko": "Mann-Whitney U",
+      "label_en": "Mann-Whitney U",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 90,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.mann_whitney",
+          "summary_type": "mann_whitney_u_test",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "mann_whitney_u_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "mann_whitney",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "sample_inputs",
+                  "core": false
+                },
+                {
+                  "section_id": "rank_details",
+                  "core": false
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_mann_whitney_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "nonparametric-tests",
+        "contextual": false,
+        "order": 12
+      }
+    },
+    {
+      "method_id": "hypothesis.kruskal_wallis",
+      "method_version": "0.1.0",
+      "module_id": "hypothesis",
+      "label_ko": "Kruskal-Wallis",
+      "label_en": "Kruskal-Wallis",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 100,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "hypothesis.kruskal_wallis",
+          "summary_type": "kruskal_wallis_test",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "kruskal_wallis_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "kruskal_wallis",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "rank_details",
+                  "core": false
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "posthoc",
+                  "core": false
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_kruskal_wallis_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "mean-equivalence",
+        "family_id": "nonparametric-tests",
+        "contextual": false,
+        "order": 13
+      }
+    },
+    {
+      "method_id": "categorical.one_proportion",
+      "method_version": "0.1.0",
+      "module_id": "categorical",
+      "label_ko": "1-비율",
+      "label_en": "1-Proportion",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 10,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "categorical.one_proportion",
+          "summary_type": "one_proportion_test",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "one_proportion_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "one_proportion",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "sample_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": true
+                },
+                {
+                  "section_id": "levels",
+                  "core": false
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "count_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_one_proportion_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "proportions-categorical",
+        "family_id": "proportion-tests",
+        "contextual": false,
+        "order": 14
+      }
+    },
+    {
+      "method_id": "categorical.two_proportion",
+      "method_version": "0.1.0",
+      "module_id": "categorical",
+      "label_ko": "2-비율",
+      "label_en": "2-Proportion",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 20,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "categorical.two_proportion",
+          "summary_type": "two_proportion_test",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "two_proportion_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "two_proportion",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "estimate_interval",
+                  "core": true
+                },
+                {
+                  "section_id": "contingency_table",
+                  "core": false
+                },
+                {
+                  "section_id": "expected_counts",
+                  "core": false
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "count_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_two_proportion_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "proportions-categorical",
+        "family_id": "proportion-tests",
+        "contextual": false,
+        "order": 15
+      }
+    },
+    {
+      "method_id": "categorical.chi_square_association",
+      "method_version": "0.1.0",
+      "module_id": "categorical",
+      "label_ko": "카이제곱 독립성 검정",
+      "label_en": "Chi-square Test for Association",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 30,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "categorical.chi_square_association",
+          "summary_type": "chi_square_association",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "chi_square_association",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "chi_square",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "contingency_table",
+                  "core": true
+                },
+                {
+                  "section_id": "test",
+                  "core": true
+                },
+                {
+                  "section_id": "levels",
+                  "core": false
+                },
+                {
+                  "section_id": "expected_counts",
+                  "core": false
+                },
+                {
+                  "section_id": "cell_diagnostics",
+                  "core": false
+                },
+                {
+                  "section_id": "effect_sizes",
+                  "core": false
+                },
+                {
+                  "section_id": "alternatives",
+                  "core": false
+                },
+                {
+                  "section_id": "count_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_chi_square_association_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "proportions-categorical",
+        "family_id": "categorical-association",
+        "contextual": false,
+        "order": 16
+      }
+    },
+    {
+      "method_id": "regression.pearson",
+      "method_version": "0.1.0",
+      "module_id": "regression",
+      "label_ko": "Pearson 상관",
+      "label_en": "Pearson Correlation",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 10,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "regression.pearson",
+          "summary_type": "pearson_correlation",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "pearson_correlation",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "correlation_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "scatter_plot",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_pearson_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "correlation-regression-prediction",
+        "family_id": null,
+        "contextual": false,
+        "order": 17
+      }
+    },
+    {
+      "method_id": "regression.xy_correlation",
+      "method_version": "0.1.0",
+      "module_id": "regression",
+      "label_ko": "X-Y 상관행렬",
+      "label_en": "X-Y Correlation",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 20,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "regression.xy_correlation",
+          "summary_type": "xy_correlation_matrix",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "xy_correlation_matrix",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "correlation_pairs",
+                  "core": true
+                },
+                {
+                  "section_id": "correlation_heatmap",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_xy_correlation_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "correlation-regression-prediction",
+        "family_id": null,
+        "contextual": false,
+        "order": 18
+      }
+    },
+    {
+      "method_id": "regression.linear_model",
+      "method_version": "0.3.0",
+      "module_id": "regression",
+      "label_ko": "회귀모형 적합",
+      "label_en": "Fit Regression Model",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": [
+        {
+          "name": "max_time_budget",
+          "value": 300,
+          "unit": "seconds",
+          "variant": "regularized"
+        },
+        {
+          "name": "max_worker_slots",
+          "value": 1,
+          "unit": "workers",
+          "variant": "regularized"
+        }
+      ],
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 30,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "regression.linear_model",
+          "summary_type": "linear_model",
+          "accepted_schemas": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "renderer_id": "linear_model",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "ols",
+              "sections": [
+                {
+                  "section_id": "model_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "coefficients",
+                  "core": true
+                },
+                {
+                  "section_id": "anova",
+                  "core": false
+                },
+                {
+                  "section_id": "selection",
+                  "core": false
+                },
+                {
+                  "section_id": "diagnostics",
+                  "core": false
+                },
+                {
+                  "section_id": "residuals_raw",
+                  "core": false
+                },
+                {
+                  "section_id": "residuals_standardized",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "ridge",
+              "sections": [
+                {
+                  "section_id": "regularized_results",
+                  "core": true
+                },
+                {
+                  "section_id": "residual_distribution",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "lasso",
+              "sections": [
+                {
+                  "section_id": "regularized_results",
+                  "core": true
+                },
+                {
+                  "section_id": "residual_distribution",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "elastic_net",
+              "sections": [
+                {
+                  "section_id": "regularized_results",
+                  "core": true
+                },
+                {
+                  "section_id": "residual_distribution",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_linear_model_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "correlation-regression-prediction",
+        "family_id": null,
+        "contextual": false,
+        "order": 19
+      }
+    },
+    {
+      "method_id": "regression.partial_least_squares",
+      "method_version": "0.1.0",
+      "module_id": "regression",
+      "label_ko": "PLS 회귀",
+      "label_en": "Partial Least Squares Regression",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": [
+        {
+          "name": "max_predictors",
+          "value": 100,
+          "unit": "predictors",
+          "variant": null
+        },
+        {
+          "name": "max_components",
+          "value": 30,
+          "unit": "components",
+          "variant": null
+        },
+        {
+          "name": "max_usable_rows",
+          "value": 20000,
+          "unit": "rows",
+          "variant": null
+        },
+        {
+          "name": "max_usable_rows",
+          "value": 500,
+          "unit": "rows",
+          "variant": "leave_one_out"
+        }
+      ],
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 35,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "regression.partial_least_squares",
+          "summary_type": "partial_least_squares_regression",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "partial_least_squares_regression",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "pls",
+              "sections": [
+                {
+                  "section_id": "method_and_sample",
+                  "core": true
+                },
+                {
+                  "section_id": "component_selection",
+                  "core": true
+                },
+                {
+                  "section_id": "selection_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "model_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "coefficients",
+                  "core": true
+                },
+                {
+                  "section_id": "diagnostic_scope",
+                  "core": false
+                },
+                {
+                  "section_id": "response_plots",
+                  "core": false
+                },
+                {
+                  "section_id": "scores",
+                  "core": false
+                },
+                {
+                  "section_id": "loadings",
+                  "core": false
+                },
+                {
+                  "section_id": "residuals",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings_limits",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        },
+        {
+          "source_kind": "regression_prediction",
+          "method_id": "regression.completed_prediction",
+          "summary_type": "completed_prediction",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "completed_prediction_report",
+          "renderer_version": "1.0.0",
+          "variants": [
+            {
+              "variant_id": "completed_prediction",
+              "sections": [
+                {
+                  "section_id": "provenance",
+                  "core": true
+                },
+                {
+                  "section_id": "inputs",
+                  "core": true
+                },
+                {
+                  "section_id": "predictions",
+                  "core": true
+                },
+                {
+                  "section_id": "limitations",
+                  "core": true
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_pls_regression_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "correlation-regression-prediction",
+        "family_id": null,
+        "contextual": false,
+        "order": 20
+      }
+    },
+    {
+      "method_id": "regression.gaussian_process",
+      "method_version": "0.3.0",
+      "module_id": "regression",
+      "label_ko": "Gaussian Process 회귀",
+      "label_en": "Gaussian Process Regression",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": [
+        {
+          "name": "max_predictors",
+          "value": 12,
+          "unit": "predictors",
+          "variant": null
+        },
+        {
+          "name": "max_usable_rows",
+          "value": 500,
+          "unit": "rows",
+          "variant": null
+        },
+        {
+          "name": "max_usable_rows",
+          "value": 200,
+          "unit": "rows",
+          "variant": "leave_one_out"
+        },
+        {
+          "name": "max_optimizer_starts",
+          "value": 256,
+          "unit": "starts",
+          "variant": null
+        },
+        {
+          "name": "max_optimizer_restarts",
+          "value": 10,
+          "unit": "restarts",
+          "variant": "final_refit"
+        },
+        {
+          "name": "max_optimizer_restarts",
+          "value": 5,
+          "unit": "restarts",
+          "variant": "cross_validation"
+        },
+        {
+          "name": "max_time_budget",
+          "value": 600,
+          "unit": "seconds",
+          "variant": null
+        }
+      ],
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 37,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "regression.gaussian_process",
+          "summary_type": "gaussian_process_regression",
+          "accepted_schemas": [
+            1,
+            2,
+            3
+          ],
+          "renderer_id": "gaussian_process_regression",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "single",
+              "sections": [
+                {
+                  "section_id": "gp_results",
+                  "core": true
+                },
+                {
+                  "section_id": "gp_reproducibility",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_optimization",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_training_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_cv_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_residual_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_uncertainty_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_profiles",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_surface_values",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_surface_mean",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_surface_sd",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_comparison",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "compare",
+              "sections": [
+                {
+                  "section_id": "gp_results",
+                  "core": true
+                },
+                {
+                  "section_id": "gp_reproducibility",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_optimization",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_training_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_cv_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_residual_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_uncertainty_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_profiles",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_surface_values",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_surface_mean",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_surface_sd",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_comparison",
+                  "core": true
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        },
+        {
+          "source_kind": "regression_prediction",
+          "method_id": "regression.completed_prediction",
+          "summary_type": "completed_prediction",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "completed_prediction_report",
+          "renderer_version": "1.0.0",
+          "variants": [
+            {
+              "variant_id": "completed_prediction",
+              "sections": [
+                {
+                  "section_id": "provenance",
+                  "core": true
+                },
+                {
+                  "section_id": "inputs",
+                  "core": true
+                },
+                {
+                  "section_id": "predictions",
+                  "core": true
+                },
+                {
+                  "section_id": "limitations",
+                  "core": true
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_gaussian_process_regression_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "correlation-regression-prediction",
+        "family_id": null,
+        "contextual": false,
+        "order": 21
+      }
+    },
+    {
+      "method_id": "regression.predict",
+      "method_version": "0.3.0",
+      "module_id": "regression",
+      "label_ko": "예측",
+      "label_en": "Predict",
+      "availability": "available",
+      "execution_mode": "dedicated",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": false,
+      "source_prerequisite": "regression_model",
+      "order": 40,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "regression_prediction",
+          "method_id": "regression.predict",
+          "summary_type": "stored_regression_prediction",
+          "accepted_schemas": [
+            1,
+            2,
+            3
+          ],
+          "renderer_id": "stored_regression_prediction",
+          "renderer_version": "1.0.0",
+          "variants": [
+            {
+              "variant_id": "stored_prediction",
+              "sections": [
+                {
+                  "section_id": "provenance",
+                  "core": true
+                },
+                {
+                  "section_id": "inputs",
+                  "core": false
+                },
+                {
+                  "section_id": "predictions",
+                  "core": true
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/regression-models/{model_id}/predictions",
+        "handler": "create_regression_predictions_route",
+        "source": "backend/app/api/v1/regression_models.py"
+      },
+      "placement": {
+        "domain_id": "correlation-regression-prediction",
+        "family_id": null,
+        "contextual": true,
+        "order": 22
+      }
+    },
+    {
+      "method_id": "doe.factorial_design",
+      "method_version": "0.9.0",
+      "module_id": "doe",
+      "label_ko": "실험 계획 생성",
+      "label_en": "Design of Experiments",
+      "availability": "available",
+      "execution_mode": "dedicated",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": false,
+      "source_prerequisite": null,
+      "order": 10,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "doe_analysis",
+          "method_id": "doe.factorial_design",
+          "summary_type": "factorial_analysis",
+          "accepted_schemas": [
+            1,
+            2,
+            3
+          ],
+          "renderer_id": "dedicated_factorial",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "factorial",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "model_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "terms",
+                  "core": true
+                },
+                {
+                  "section_id": "anova",
+                  "core": true
+                },
+                {
+                  "section_id": "selection",
+                  "core": false
+                },
+                {
+                  "section_id": "equation",
+                  "core": false
+                },
+                {
+                  "section_id": "coded_coefficients",
+                  "core": false
+                },
+                {
+                  "section_id": "diagnostics",
+                  "core": false
+                },
+                {
+                  "section_id": "residual_plots",
+                  "core": false
+                },
+                {
+                  "section_id": "factorial_plots",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        },
+        {
+          "source_kind": "regression_prediction",
+          "method_id": "doe.factorial_prediction",
+          "summary_type": "factorial_prediction",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "dedicated_doe_prediction",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "doe_prediction",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "prediction_rows",
+                  "core": true
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/doe-designs/factorial",
+        "handler": "create_factorial_design_route",
+        "source": "backend/app/api/v1/doe_designs.py"
+      },
+      "placement": {
+        "domain_id": "doe-optimization",
+        "family_id": null,
+        "contextual": false,
+        "order": 23
+      }
+    },
+    {
+      "method_id": "doe.response_surface",
+      "method_version": "0.3.0",
+      "module_id": "doe",
+      "label_ko": "반응표면법",
+      "label_en": "Response Surface Method",
+      "availability": "available",
+      "execution_mode": "dedicated",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": false,
+      "source_prerequisite": null,
+      "order": 30,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "doe_analysis",
+          "method_id": "doe.response_surface",
+          "summary_type": "response_surface_analysis",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "dedicated_response_surface",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "response_surface",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "model_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "terms",
+                  "core": true
+                },
+                {
+                  "section_id": "anova",
+                  "core": true
+                },
+                {
+                  "section_id": "diagnostics",
+                  "core": false
+                },
+                {
+                  "section_id": "stationary_point",
+                  "core": false
+                },
+                {
+                  "section_id": "surface_grid",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/doe-designs/response-surface",
+        "handler": "create_response_surface_design_route",
+        "source": "backend/app/api/v1/doe_designs.py"
+      },
+      "placement": {
+        "domain_id": "doe-optimization",
+        "family_id": null,
+        "contextual": false,
+        "order": 24
+      }
+    },
+    {
+      "method_id": "doe.response_optimizer",
+      "method_version": "0.4.0",
+      "module_id": "doe",
+      "label_ko": "반응 최적화",
+      "label_en": "Response Optimizer",
+      "availability": "available",
+      "execution_mode": "dedicated",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": false,
+      "source_prerequisite": "response_surface_analysis",
+      "order": 40,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "doe_optimizer_result",
+          "method_id": "doe.response_optimizer",
+          "summary_type": "response_optimizer",
+          "accepted_schemas": [
+            2
+          ],
+          "renderer_id": "dedicated_response_optimizer",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "response_optimizer",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "objectives",
+                  "core": true
+                },
+                {
+                  "section_id": "recommendation",
+                  "core": true
+                },
+                {
+                  "section_id": "factor_region",
+                  "core": false
+                },
+                {
+                  "section_id": "search",
+                  "core": false
+                },
+                {
+                  "section_id": "source_eligibility",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/doe-designs/response-surface/{design_id}/optimizations",
+        "handler": "create_response_optimizer_route",
+        "source": "backend/app/api/v1/doe_designs.py"
+      },
+      "placement": {
+        "domain_id": "doe-optimization",
+        "family_id": null,
+        "contextual": false,
+        "order": 25
+      }
+    },
+    {
+      "method_id": "doe.general_factorial_design",
+      "method_version": "0.4.0",
+      "module_id": "doe",
+      "label_ko": "일반 완전요인 설계",
+      "label_en": "General Full Factorial Design",
+      "availability": "available",
+      "execution_mode": "dedicated",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": false,
+      "source_prerequisite": null,
+      "order": 15,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "doe_analysis",
+          "method_id": "doe.general_factorial_design",
+          "summary_type": "general_factorial_analysis",
+          "accepted_schemas": [
+            1,
+            2,
+            3
+          ],
+          "renderer_id": "dedicated_general_factorial",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "general_factorial",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "model_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "terms",
+                  "core": true
+                },
+                {
+                  "section_id": "anova",
+                  "core": true
+                },
+                {
+                  "section_id": "selection",
+                  "core": false
+                },
+                {
+                  "section_id": "equation",
+                  "core": false
+                },
+                {
+                  "section_id": "coded_coefficients",
+                  "core": false
+                },
+                {
+                  "section_id": "diagnostics",
+                  "core": false
+                },
+                {
+                  "section_id": "residual_plots",
+                  "core": false
+                },
+                {
+                  "section_id": "factorial_plots",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        },
+        {
+          "source_kind": "regression_prediction",
+          "method_id": "doe.factorial_prediction",
+          "summary_type": "factorial_prediction",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "dedicated_doe_prediction",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "doe_prediction",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "prediction_rows",
+                  "core": true
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/doe-designs/general-factorial",
+        "handler": "create_general_factorial_design_route",
+        "source": "backend/app/api/v1/doe_designs.py"
+      },
+      "placement": {
+        "domain_id": "doe-optimization",
+        "family_id": null,
+        "contextual": true,
+        "order": 26
+      }
+    },
+    {
+      "method_id": "doe.latin_hypercube",
+      "method_version": "0.3.0",
+      "module_id": "doe",
+      "label_ko": "LHS 공간충전 설계",
+      "label_en": "Latin Hypercube Sampling",
+      "availability": "available",
+      "execution_mode": "dedicated",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": false,
+      "source_prerequisite": null,
+      "order": 20,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "lhs_design_revision",
+          "method_id": "doe.latin_hypercube",
+          "summary_type": "latin_hypercube_design",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "dedicated_lhs",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "lhs",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "factors",
+                  "core": true
+                },
+                {
+                  "section_id": "runs",
+                  "core": true
+                },
+                {
+                  "section_id": "quality",
+                  "core": false
+                },
+                {
+                  "section_id": "responses",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/doe-designs/latin-hypercube",
+        "handler": "create_latin_hypercube_design_route",
+        "source": "backend/app/api/v1/doe_designs.py"
+      },
+      "placement": {
+        "domain_id": "ai-ml-experimental-design",
+        "family_id": null,
+        "contextual": false,
+        "order": 27
+      }
+    },
+    {
+      "method_id": "doe.bayesian_optimization",
+      "method_version": "0.6.0",
+      "module_id": "doe",
+      "label_ko": "베이지안 최적화",
+      "label_en": "Bayesian Optimization",
+      "availability": "available",
+      "execution_mode": "dedicated",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": false,
+      "source_prerequisite": null,
+      "order": 50,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "bayesian_history_revision",
+          "method_id": "doe.bayesian_optimization",
+          "summary_type": "bayesian_history",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "dedicated_bayesian",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "bayesian",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "definition",
+                  "core": true
+                },
+                {
+                  "section_id": "history",
+                  "core": true
+                },
+                {
+                  "section_id": "observations",
+                  "core": false
+                },
+                {
+                  "section_id": "history_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "attachment",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/bayesian-studies",
+        "handler": "create_bayesian_study_route",
+        "source": "backend/app/api/v1/bayesian_studies.py"
+      },
+      "placement": {
+        "domain_id": "ai-ml-experimental-design",
+        "family_id": null,
+        "contextual": false,
+        "order": 28
+      }
+    },
+    {
+      "method_id": "quality.attribute_control_chart",
+      "method_version": "0.3.0",
+      "module_id": "quality",
+      "label_ko": "계수형 관리도",
+      "label_en": "Control Chart",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 10,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "quality.attribute_control_chart",
+          "summary_type": "attribute_control_chart",
+          "accepted_schemas": [
+            1,
+            2,
+            3
+          ],
+          "renderer_id": "attribute_control_chart",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "quality_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "attribute_chart",
+                  "core": false
+                },
+                {
+                  "section_id": "signals",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_attribute_control_chart_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "quality-process-monitoring",
+        "family_id": "control-charts",
+        "contextual": false,
+        "order": 29
+      }
+    },
+    {
+      "method_id": "quality.subgroup_chart",
+      "method_version": "0.1.0",
+      "module_id": "quality",
+      "label_ko": "부분군 관리도",
+      "label_en": "Variables Charts for Subgroups",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 30,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "quality.subgroup_chart",
+          "summary_type": "subgroup_chart",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "subgroup_chart",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "quality_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "subgroup_charts",
+                  "core": false
+                },
+                {
+                  "section_id": "signals",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_subgroup_chart_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "quality-process-monitoring",
+        "family_id": "control-charts",
+        "contextual": false,
+        "order": 30
+      }
+    },
+    {
+      "method_id": "quality.individuals_chart",
+      "method_version": "0.1.0",
+      "module_id": "quality",
+      "label_ko": "I-MR 관리도",
+      "label_en": "Individuals and Moving Range (I-MR) Chart",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 35,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "quality.individuals_chart",
+          "summary_type": "individuals_chart",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "individuals_chart",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "quality_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "individuals_charts",
+                  "core": false
+                },
+                {
+                  "section_id": "signals",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_individuals_chart_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "quality-process-monitoring",
+        "family_id": "control-charts",
+        "contextual": false,
+        "order": 31
+      }
+    },
+    {
+      "method_id": "quality.run_chart",
+      "method_version": "0.2.0",
+      "module_id": "quality",
+      "label_ko": "런 차트",
+      "label_en": "Run Chart",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 40,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "quality.run_chart",
+          "summary_type": "run_chart",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "run_chart",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "quality_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "run_chart",
+                  "core": false
+                },
+                {
+                  "section_id": "randomness_tests",
+                  "core": false
+                },
+                {
+                  "section_id": "signals",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_run_chart_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "quality-process-monitoring",
+        "family_id": "process-behavior",
+        "contextual": false,
+        "order": 32
+      }
+    },
+    {
+      "method_id": "quality.capability",
+      "method_version": "0.1.0",
+      "module_id": "quality",
+      "label_ko": "공정능력 분석",
+      "label_en": "Capability Analysis",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 50,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "quality.capability",
+          "summary_type": "capability_analysis",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "capability_analysis",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "quality_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "capability_indices",
+                  "core": true
+                },
+                {
+                  "section_id": "capability_histogram",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_capability_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "quality-process-monitoring",
+        "family_id": "process-capability",
+        "contextual": false,
+        "order": 33
+      }
+    },
+    {
+      "method_id": "eda.equal_variances",
+      "method_version": "0.2.0",
+      "module_id": "exploration",
+      "label_ko": "등분산 검정",
+      "label_en": "Test for Equal Variances",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 40,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "eda.equal_variances",
+          "summary_type": "equal_variances_test",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "equal_variances_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "equal_variances_v1",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "tests",
+                  "core": true
+                },
+                {
+                  "section_id": "multiple_summary",
+                  "core": false
+                },
+                {
+                  "section_id": "comparison_intervals",
+                  "core": false
+                },
+                {
+                  "section_id": "pairwise",
+                  "core": false
+                },
+                {
+                  "section_id": "non_overlap",
+                  "core": false
+                },
+                {
+                  "section_id": "additional_tests",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            },
+            {
+              "variant_id": "equal_variances_v2",
+              "sections": [
+                {
+                  "section_id": "settings",
+                  "core": true
+                },
+                {
+                  "section_id": "groups",
+                  "core": true
+                },
+                {
+                  "section_id": "tests",
+                  "core": true
+                },
+                {
+                  "section_id": "multiple_summary",
+                  "core": false
+                },
+                {
+                  "section_id": "comparison_intervals",
+                  "core": false
+                },
+                {
+                  "section_id": "pairwise",
+                  "core": false
+                },
+                {
+                  "section_id": "non_overlap",
+                  "core": false
+                },
+                {
+                  "section_id": "additional_tests",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                },
+                {
+                  "section_id": "interpretation",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_equal_variances_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "measurement-variability",
+        "family_id": "variance-comparison",
+        "contextual": false,
+        "order": 34
+      }
+    },
+    {
+      "method_id": "quality.two_variances",
+      "method_version": "0.1.0",
+      "module_id": "quality",
+      "label_ko": "두 분산 비교",
+      "label_en": "Two Variances",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": [
+        {
+          "name": "max_usable_rows",
+          "value": 20000,
+          "unit": "rows",
+          "variant": null
+        },
+        {
+          "name": "max_plot_points",
+          "value": 500,
+          "unit": "points_per_group",
+          "variant": null
+        }
+      ],
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 80,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "quality.two_variances",
+          "summary_type": "two_variances_test",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "two_variances_test",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "results",
+                  "core": true
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_two_variances_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "measurement-variability",
+        "family_id": "variance-comparison",
+        "contextual": false,
+        "order": 35
+      }
+    },
+    {
+      "method_id": "quality.gage_rr",
+      "method_version": "0.1.0",
+      "module_id": "quality",
+      "label_ko": "Gage R&R",
+      "label_en": "Gage R&R Study",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 60,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "quality.gage_rr",
+          "summary_type": "gage_rr",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "gage_rr",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "quality_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "gage_anova",
+                  "core": true
+                },
+                {
+                  "section_id": "gage_variance_components",
+                  "core": true
+                },
+                {
+                  "section_id": "gage_interaction",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_gage_rr_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "measurement-variability",
+        "family_id": "measurement-systems",
+        "contextual": false,
+        "order": 36
+      }
+    },
+    {
+      "method_id": "quality.gage_run_chart",
+      "method_version": "0.1.0",
+      "module_id": "quality",
+      "label_ko": "Gage Run Chart",
+      "label_en": "Gage Run Chart",
+      "availability": "available",
+      "execution_mode": "inline",
+      "execution_capability": {
+        "lifecycle": "synchronous_request",
+        "cancellation_support": "none",
+        "progress_support": "none"
+      },
+      "resource_limits": null,
+      "requires_dataset": true,
+      "source_prerequisite": null,
+      "order": 70,
+      "disabled_reason": null,
+      "entry_kind": "catalog_method",
+      "reports": [
+        {
+          "source_kind": "analysis_run",
+          "method_id": "quality.gage_run_chart",
+          "summary_type": "gage_run_chart",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "gage_run_chart",
+          "renderer_version": "2.0.0",
+          "variants": [
+            {
+              "variant_id": "default",
+              "sections": [
+                {
+                  "section_id": "quality_summary",
+                  "core": true
+                },
+                {
+                  "section_id": "gage_run_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gage_group_summaries",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ],
+      "entry_point": {
+        "route": "/api/v1/analysis-runs",
+        "handler": "run_gage_run_chart_analysis",
+        "source": "backend/app/services/analysis_runs.py"
+      },
+      "placement": {
+        "domain_id": "measurement-variability",
+        "family_id": "measurement-systems",
+        "contextual": false,
+        "order": 37
+      }
+    }
+  ],
+  "subworkflows": [
+    {
+      "method_id": "regression.predict_pasted",
+      "method_version": "0.2.0",
+      "entry_kind": "subworkflow",
+      "source_prerequisite": "regression_model",
+      "entry_point": {
+        "route": "/api/v1/regression-models/{model_id}/pasted-predictions",
+        "handler": "create_regression_pasted_prediction_route",
+        "source": "backend/app/api/v1/regression_models.py"
+      },
+      "reports": [
+        {
+          "source_kind": "regression_prediction",
+          "method_id": "regression.predict",
+          "summary_type": "stored_regression_prediction",
+          "accepted_schemas": [
+            1,
+            2,
+            3
+          ],
+          "renderer_id": "stored_regression_prediction",
+          "renderer_version": "1.0.0",
+          "variants": [
+            {
+              "variant_id": "stored_prediction",
+              "sections": [
+                {
+                  "section_id": "provenance",
+                  "core": true
+                },
+                {
+                  "section_id": "inputs",
+                  "core": false
+                },
+                {
+                  "section_id": "predictions",
+                  "core": true
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ]
+    },
+    {
+      "method_id": "regression.linear_model_optimizer",
+      "method_version": "0.2.0",
+      "entry_kind": "subworkflow",
+      "source_prerequisite": "regression_model",
+      "entry_point": {
+        "route": "/api/v1/regression-models/{model_id}/response-optimizations",
+        "handler": "create_regression_response_optimization_route",
+        "source": "backend/app/api/v1/regression_models.py"
+      },
+      "reports": [
+        {
+          "source_kind": "doe_optimizer_result",
+          "method_id": "regression.linear_model_optimizer",
+          "summary_type": "regression_response_optimizer",
+          "accepted_schemas": [
+            1,
+            2
+          ],
+          "renderer_id": "dedicated_regression_optimizer",
+          "renderer_version": "1",
+          "variants": [
+            {
+              "variant_id": "regression_optimizer",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "goal",
+                  "core": true
+                },
+                {
+                  "section_id": "recommendation",
+                  "core": true
+                },
+                {
+                  "section_id": "factor_region",
+                  "core": false
+                },
+                {
+                  "section_id": "profiles",
+                  "core": false
+                },
+                {
+                  "section_id": "search",
+                  "core": false
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        }
+      ]
+    }
+  ],
+  "legacy_aliases": {
+    "regression.response_optimizer": "doe.response_optimizer"
+  },
+  "report_source_kinds": [
+    "analysis_run",
+    "regression_prediction",
+    "doe_analysis",
+    "doe_optimizer_result",
+    "lhs_design_revision",
+    "bayesian_history_revision"
+  ],
+  "limits": {
+    "LATIN_HYPERCUBE_FACTOR_LIMIT": 10,
+    "BAYESIAN_STUDY_FACTOR_LIMIT": 10,
+    "FACTORIAL_AUTHORING_FACTOR_LIMIT": 10,
+    "GENERAL_FACTORIAL_AUTHORING_FACTOR_LIMIT": 10,
+    "RESPONSE_SURFACE_CCD_FACTOR_LIMIT": 5,
+    "FACTORIAL_RUN_LIMIT": 256,
+    "GENERAL_FACTORIAL_RUN_LIMIT": 256
+  },
+  "option_policies": {
+    "anova_posthoc_default": "when_requested",
+    "normality_grouping": "not_supported",
+    "graphical_summary_input": "numeric_ungrouped",
+    "factorial_selection": "full_design_only",
+    "attribute_phase_2": "eligible_frozen_limit_set_required",
+    "two_variances_brown_forsythe_ratio_ci": "not_provided"
+  },
+  "domains": [
+    {
+      "id": "basic-exploration",
+      "order": 1,
+      "landingMode": "flat_methods",
+      "sidebarMode": "flat_methods",
+      "labelKey": "analysisDomains.basic.label",
+      "descriptionKey": "analysisDomains.basic.description",
+      "directMethodIds": [
+        "eda.descriptive",
+        "eda.graphical_summary",
+        "eda.normality",
+        "eda.principal_components"
+      ],
+      "families": []
+    },
+    {
+      "id": "mean-equivalence",
+      "order": 2,
+      "landingMode": "family_cards",
+      "sidebarMode": "family_tree",
+      "labelKey": "analysisDomains.mean.label",
+      "descriptionKey": "analysisDomains.mean.description",
+      "families": [
+        {
+          "id": "t-tests",
+          "labelKey": "analysisFamilies.tTests.label",
+          "descriptionKey": "analysisFamilies.tTests.description",
+          "methodIds": [
+            "hypothesis.one_sample_t",
+            "hypothesis.paired_t",
+            "hypothesis.two_sample_t"
+          ]
+        },
+        {
+          "id": "analysis-of-variance",
+          "labelKey": "analysisFamilies.anova.label",
+          "descriptionKey": "analysisFamilies.anova.description",
+          "methodIds": [
+            "hypothesis.one_way_anova"
+          ],
+          "layout": "direct_single"
+        },
+        {
+          "id": "equivalence-tests",
+          "labelKey": "analysisFamilies.equivalence.label",
+          "descriptionKey": "analysisFamilies.equivalence.description",
+          "methodIds": [
+            "hypothesis.equivalence_tost",
+            "hypothesis.two_sample_equivalence_tost",
+            "hypothesis.paired_equivalence_tost"
+          ],
+          "columnSpan": 2,
+          "layout": "wide"
+        },
+        {
+          "id": "nonparametric-tests",
+          "labelKey": "analysisFamilies.nonparametric.label",
+          "descriptionKey": "analysisFamilies.nonparametric.description",
+          "methodIds": [
+            "hypothesis.one_sample_wilcoxon",
+            "hypothesis.mann_whitney",
+            "hypothesis.kruskal_wallis"
+          ],
+          "columnSpan": 2,
+          "layout": "wide"
+        },
+        {
+          "id": "comparability-assessment",
+          "labelKey": "analysisFamilies.comparability.label",
+          "descriptionKey": "analysisFamilies.comparability.description",
+          "methodIds": [],
+          "layout": "planned",
+          "plannedWorkflows": [
+            {
+              "id": "hypothesis.comparability_assessment",
+              "visibility": "roadmap_only",
+              "labelKey": "analysisPlanned.comparability.label",
+              "descriptionKey": "analysisPlanned.comparability.description",
+              "showInSidebar": true
+            }
+          ]
+        }
+      ],
+      "selectionGuideKeys": [
+        "analysisContext.twoSampleGuide.mean",
+        "analysisContext.twoSampleGuide.rank",
+        "analysisContext.twoSampleGuide.equivalence"
+      ]
+    },
+    {
+      "id": "proportions-categorical",
+      "order": 3,
+      "landingMode": "family_cards",
+      "sidebarMode": "family_tree",
+      "labelKey": "analysisDomains.categorical.label",
+      "descriptionKey": "analysisDomains.categorical.description",
+      "families": [
+        {
+          "id": "proportion-tests",
+          "labelKey": "analysisFamilies.proportions.label",
+          "descriptionKey": "analysisFamilies.proportions.description",
+          "methodIds": [
+            "categorical.one_proportion",
+            "categorical.two_proportion"
+          ]
+        },
+        {
+          "id": "categorical-association",
+          "labelKey": "analysisFamilies.association.label",
+          "descriptionKey": "analysisFamilies.association.description",
+          "methodIds": [
+            "categorical.chi_square_association"
+          ],
+          "layout": "direct_single"
+        }
+      ]
+    },
+    {
+      "id": "correlation-regression-prediction",
+      "order": 4,
+      "landingMode": "flat_methods",
+      "sidebarMode": "flat_methods",
+      "labelKey": "analysisDomains.regression.label",
+      "descriptionKey": "analysisDomains.regression.description",
+      "directMethodIds": [
+        "regression.pearson",
+        "regression.xy_correlation",
+        "regression.linear_model",
+        "regression.partial_least_squares",
+        "regression.gaussian_process"
+      ],
+      "directContextualMethodIds": [
+        "regression.predict"
+      ],
+      "directContextualWorkflows": [
+        {
+          "id": "regression.linear_model_optimizer",
+          "labelKey": "analysisContext.regressionOptimizer.label",
+          "descriptionKey": "analysisContext.regressionOptimizer.description"
+        }
+      ],
+      "contextualSummaryKey": "analysisContext.regressionModelActions",
+      "families": []
+    },
+    {
+      "id": "doe-optimization",
+      "order": 5,
+      "landingMode": "flat_methods",
+      "sidebarMode": "flat_methods",
+      "labelKey": "analysisDomains.doe.label",
+      "descriptionKey": "analysisDomains.doe.description",
+      "directMethodIds": [
+        "doe.factorial_design",
+        "doe.response_surface",
+        "doe.response_optimizer"
+      ],
+      "directContextualMethodIds": [
+        "doe.general_factorial_design"
+      ],
+      "families": []
+    },
+    {
+      "id": "ai-ml-experimental-design",
+      "order": 6,
+      "landingMode": "flat_methods",
+      "sidebarMode": "flat_methods",
+      "labelKey": "analysisDomains.ai.label",
+      "descriptionKey": "analysisDomains.ai.description",
+      "directMethodIds": [
+        "doe.latin_hypercube",
+        "doe.bayesian_optimization"
+      ],
+      "directContextualWorkflows": [
+        {
+          "id": "gaussian-process-surrogate",
+          "labelKey": "analysisContext.gaussianProcess.label",
+          "descriptionKey": "analysisContext.gaussianProcess.description",
+          "presentation": "card",
+          "showInSidebar": false,
+          "statusKey": "analysisContext.gaussianProcess.status"
+        }
+      ],
+      "families": []
+    },
+    {
+      "id": "quality-process-monitoring",
+      "order": 7,
+      "landingMode": "family_cards",
+      "sidebarMode": "family_tree",
+      "labelKey": "analysisDomains.quality.label",
+      "descriptionKey": "analysisDomains.quality.description",
+      "families": [
+        {
+          "id": "control-charts",
+          "labelKey": "analysisFamilies.controlCharts.label",
+          "descriptionKey": "analysisFamilies.controlCharts.description",
+          "methodIds": [
+            "quality.attribute_control_chart",
+            "quality.subgroup_chart",
+            "quality.individuals_chart"
+          ]
+        },
+        {
+          "id": "process-behavior",
+          "labelKey": "analysisFamilies.processBehavior.label",
+          "descriptionKey": "analysisFamilies.processBehavior.description",
+          "methodIds": [
+            "quality.run_chart"
+          ],
+          "layout": "direct_single"
+        },
+        {
+          "id": "process-capability",
+          "labelKey": "analysisFamilies.capability.label",
+          "descriptionKey": "analysisFamilies.capability.description",
+          "methodIds": [
+            "quality.capability"
+          ],
+          "layout": "direct_single"
+        },
+        {
+          "id": "multivariate-monitoring",
+          "labelKey": "analysisFamilies.multivariateMonitoring.label",
+          "descriptionKey": "analysisFamilies.multivariateMonitoring.description",
+          "methodIds": [],
+          "plannedWorkflows": [
+            {
+              "id": "quality.multivariate_monitoring",
+              "visibility": "roadmap_only",
+              "labelKey": "analysisPlanned.multivariateMonitoring.label",
+              "descriptionKey": "analysisPlanned.multivariateMonitoring.description",
+              "showInSidebar": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "measurement-variability",
+      "order": 8,
+      "landingMode": "family_cards",
+      "sidebarMode": "family_tree",
+      "labelKey": "analysisDomains.measurement.label",
+      "descriptionKey": "analysisDomains.measurement.description",
+      "families": [
+        {
+          "id": "variance-comparison",
+          "labelKey": "analysisFamilies.variance.label",
+          "descriptionKey": "analysisFamilies.variance.description",
+          "methodIds": [
+            "eda.equal_variances",
+            "quality.two_variances"
+          ]
+        },
+        {
+          "id": "measurement-systems",
+          "labelKey": "analysisFamilies.measurementSystems.label",
+          "descriptionKey": "analysisFamilies.measurementSystems.description",
+          "methodIds": [
+            "quality.gage_rr",
+            "quality.gage_run_chart"
+          ]
+        }
+      ]
+    }
+  ],
+  "informational_workflows": [
+    {
+      "id": "hypothesis.comparability_assessment",
+      "visibility": "roadmap_only",
+      "labelKey": "analysisPlanned.comparability.label",
+      "descriptionKey": "analysisPlanned.comparability.description",
+      "showInSidebar": true,
+      "entry_kind": "planned_workflow",
+      "domain_id": "mean-equivalence",
+      "family_id": "comparability-assessment"
+    },
+    {
+      "id": "regression.linear_model_optimizer",
+      "labelKey": "analysisContext.regressionOptimizer.label",
+      "descriptionKey": "analysisContext.regressionOptimizer.description",
+      "entry_kind": "contextual_information",
+      "domain_id": "correlation-regression-prediction",
+      "family_id": null,
+      "visibility": "navigation"
+    },
+    {
+      "id": "gaussian-process-surrogate",
+      "labelKey": "analysisContext.gaussianProcess.label",
+      "descriptionKey": "analysisContext.gaussianProcess.description",
+      "presentation": "card",
+      "showInSidebar": false,
+      "statusKey": "analysisContext.gaussianProcess.status",
+      "entry_kind": "contextual_information",
+      "domain_id": "ai-ml-experimental-design",
+      "family_id": null,
+      "visibility": "navigation"
+    },
+    {
+      "id": "quality.multivariate_monitoring",
+      "visibility": "roadmap_only",
+      "labelKey": "analysisPlanned.multivariateMonitoring.label",
+      "descriptionKey": "analysisPlanned.multivariateMonitoring.description",
+      "showInSidebar": true,
+      "entry_kind": "planned_workflow",
+      "domain_id": "quality-process-monitoring",
+      "family_id": "multivariate-monitoring"
+    }
+  ],
+  "guidance_method_ids": [
+    "categorical.chi_square_association",
+    "categorical.one_proportion",
+    "categorical.two_proportion",
+    "doe.bayesian_optimization",
+    "doe.factorial_design",
+    "doe.general_factorial_design",
+    "doe.latin_hypercube",
+    "doe.response_optimizer",
+    "doe.response_surface",
+    "eda.descriptive",
+    "eda.equal_variances",
+    "eda.graphical_summary",
+    "eda.normality",
+    "eda.principal_components",
+    "hypothesis.equivalence_tost",
+    "hypothesis.kruskal_wallis",
+    "hypothesis.mann_whitney",
+    "hypothesis.one_sample_t",
+    "hypothesis.one_sample_wilcoxon",
+    "hypothesis.one_way_anova",
+    "hypothesis.paired_equivalence_tost",
+    "hypothesis.paired_t",
+    "hypothesis.two_sample_equivalence_tost",
+    "hypothesis.two_sample_t",
+    "quality.attribute_control_chart",
+    "quality.capability",
+    "quality.gage_rr",
+    "quality.gage_run_chart",
+    "quality.individuals_chart",
+    "quality.run_chart",
+    "quality.subgroup_chart",
+    "quality.two_variances",
+    "regression.gaussian_process",
+    "regression.linear_model",
+    "regression.partial_least_squares",
+    "regression.pearson",
+    "regression.predict",
+    "regression.xy_correlation"
+  ],
+  "evidence": "source_declarations_not_runtime_test_results"
+}

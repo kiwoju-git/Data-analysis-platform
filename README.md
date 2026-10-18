@@ -1,5 +1,17 @@
 # Statistical Twin
 
+### Current Capability and Compatibility
+
+The [generated capability matrix](docs/generated/analysis_capability_matrix.md)
+joins the actual registry, execution routes, canonical menus, help coverage and
+stored-report readers. It records the current API/metadata versions and separates
+available methods, source prerequisites, limited options, contextual workflows,
+historical readers and roadmap-only items. A static declaration is not a runtime
+eligibility check or a claim that every stored report is complete.
+See the [capability contract](docs/analysis_capability_contract.md) and
+[executed journey evidence](docs/remediation_journey_matrix.md); dated validation
+records below retain their original scope rather than certifying the current build.
+
 ### Result Charts and Two Variances
 
 Result charts share viewport-safe tooltips, explicit pinned selections, visible
@@ -7,8 +19,8 @@ axes and bounded responsive frames. Desktop results switch between one/two
 columns by available content width; navigation becomes a drawer below1100px.
 PCA/PLS/GPR and existing DOE/BO fitting policies are unchanged.
 `quality.two_variances`0.1 adds explicit two-group BF equality or normal-F ratio
-inference; Bonett ratio intervals are not included in this version. API22,
-metadata20. See [method contract](docs/two_variances_method_contract.md) and
+inference; Bonett ratio intervals are not included in this version. Current
+runtime compatibility is recorded above. See [method contract](docs/two_variances_method_contract.md) and
 [validation record](docs/result_charts_linux_validation.md).
 
 ### Linux Prerelease
@@ -73,8 +85,8 @@ optimization within the training domain. They do not provide classical OLS
 p-values, ANOVA or prediction intervals. The eight analysis domains retain all
 current methods with more compact selection cards and initially collapsed guides.
 See [the statistical contract](docs/regularized_linear_model_contract.md).
-This release requires matching frontend/backend API contract 20 and metadata
-schema 20; existing saved artifacts are not rewritten.
+Frontend/backend runtime compatibility must match the current contract in the
+generated matrix; existing saved artifacts are not silently rewritten.
 
 The refined UI uses Graph Builder's selection blue with compact, neutral
 navigation. Inactive sidebar groups start collapsed; an open analysis keeps its

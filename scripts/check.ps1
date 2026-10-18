@@ -21,6 +21,8 @@ function Invoke-CheckedCommand {
 Push-Location $RepoRoot
 try {
     Invoke-CheckedCommand "tutorial Markdown sync" { & $Python .\scripts\render_tutorial_results.py --check }
+    Invoke-CheckedCommand "capability metadata AST tests" { node --test .\scripts\read_frontend_capability_metadata.test.mjs }
+    Invoke-CheckedCommand "capability matrix sync" { & $Python .\scripts\generate_capability_matrix.py --check }
     Invoke-CheckedCommand "backend ruff check" { & $Python -m ruff check .\backend }
     Invoke-CheckedCommand "backend ruff format check" { & $Python -m ruff format --check .\backend }
     Invoke-CheckedCommand "backend mypy" { & $Python -m mypy .\backend\app }

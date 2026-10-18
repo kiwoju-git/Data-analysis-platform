@@ -1,5 +1,12 @@
 # Planned Workflow Visibility
 
+The [generated capability matrix](generated/analysis_capability_matrix.md) reads
+current visibility and placement from `frontend/src/analysisDomains.ts` and joins
+actual backend methods. Its non-menu section distinguishes planned, roadmap-only,
+contextual information, current subworkflows and legacy aliases. None of those
+labels alone creates an available method or a report action. This document records
+the product decisions behind those declarations, not a separate support count.
+
 Roadmap-only (not executable, hidden from sidebar and landing):
 
 - `hypothesis.comparability_assessment`: future integrated comparability

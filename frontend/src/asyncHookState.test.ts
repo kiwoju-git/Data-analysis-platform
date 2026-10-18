@@ -2976,7 +2976,7 @@ describe("async workbench hooks", () => {
     apiMocks.fetchAnalysisRuns.mockClear();
     deleted = true;
     await runner.act(() => runner.output.onSelectedAnalysisDeleted(reportIdA));
-    expect(apiMocks.fetchAnalysisRuns.mock.calls.map(([query]) => query.offset)).toEqual([20, 0]);
+    expect(apiMocks.fetchAnalysisRuns.mock.calls.map(([query]) => (query as AnalysisRunsRouteParams).offset)).toEqual([20, 0]);
     expect(runner.output.offset).toBe(0);
     expect(runner.output.list?.runs.map((row) => row.analysis_id)).toEqual([reportIdB]);
     expect(runner.output.selectedAnalysisId).toBe(selectedDeleted ? null : reportIdB);

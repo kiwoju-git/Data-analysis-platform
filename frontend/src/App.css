@@ -329,6 +329,14 @@ button.analysis-domain-method-card.is-active > small {
   white-space: nowrap;
 }
 
+.analysis-domain-method-card > .analysis-method-prerequisite {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+
 .analysis-domain-method-card.is-planned {
   background: #f7f7f8;
   color: #5f6670;

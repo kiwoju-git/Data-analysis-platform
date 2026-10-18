@@ -6,6 +6,7 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import { getAnalysisMethodGuidance } from "./analysisMethodGuidance";
+import { sourcePrerequisiteLabel } from "./analysisWorkbenchUtils";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
 import { translateSystemText } from "./i18n/translate";
@@ -19,12 +20,20 @@ export function MethodHelpContent({
   profile?: DatasetProfileResponse | null;
   version?: DatasetVersionResponse | null;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const guidance = getAnalysisMethodGuidance(method.method_id, locale);
   const requiredRoles = guidance.roleRequirements.filter((role) => role.required);
+  const prerequisite = sourcePrerequisiteLabel(method, locale);
 
   return (
     <div className="method-help-content">
+      {prerequisite !== null ? (
+        <section className="method-help-section" data-source-prerequisite={method.source_prerequisite ?? "dataset"}>
+          <h4>{t("capabilityPrerequisite.title")}</h4>
+          <p>{prerequisite}</p>
+          {method.source_prerequisite ? <p className="compact-note">{t("capabilityPrerequisite.inWorkflow")}</p> : null}
+        </section>
+      ) : null}
       <HelpSection title="쉽게 말하면">
         <p>{guidance.plainLanguage ?? `${methodLabel(method, locale)}의 입력, 사전점검, 결과 해석 순서를 확인합니다.`}</p>
       </HelpSection>

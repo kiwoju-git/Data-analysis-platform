@@ -1,5 +1,10 @@
 # HTML Report Coverage Matrix
 
+Current method/version, canonical navigation, execution prerequisites and declared
+reader schemas are joined in the [generated capability matrix](generated/analysis_capability_matrix.md).
+It is source-declaration evidence, not a replacement for per-source report checks
+or the executed [journey matrix](remediation_journey_matrix.md).
+
 ## Current A11 Contract
 
 Generic HTML artifact schema **4** records locale, exact source SHA-256, renderer
@@ -97,9 +102,10 @@ Versions and accepted stored schemas are declared in the live catalog and
 
 Dedicated workflows still use their own readers/exports. Factorial/general
 factorial retain managed analysis HTML and separate legacy design reports.
-Managed prediction/RSM/optimizer/LHS/BO reports remain the separate **A12 gate**;
-they are not implemented by generic dispatch. Completed PLS/GPR local JSON
-snapshots are explicitly not Report Center artifacts and never overwrite results.
+Managed prediction/RSM/optimizer/LHS/BO reports use the separate **A12 managed-source
+implementation**, not generic dispatch. Completed PLS/GPR predictions explicitly
+persisted through that API are Report Center sources. Unsaved browser-only JSON
+snapshots are not server sources. Neither path overwrites the original analysis.
 Comparability and multivariate monitoring stay roadmap-only; Two Variances is
 implemented; GP surrogate and model-dependent optimization remain contextual.
 
