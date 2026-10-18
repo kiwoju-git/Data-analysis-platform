@@ -152,7 +152,7 @@ describe("prediction and paste display boundaries", () => {
     harness.draft = {
       byteCount: 100, canSubmit: true, characterCount: raw.length, hasHeaderPreview: true,
       mode: "grid", pasteSurfaceRef: { current: null }, rawTextAreaRef: { current: null },
-      preview, selection: null, clear: vi.fn(), getRawText: () => raw, onCellSelect: vi.fn(),
+      preview, selection: null, clear: vi.fn(), getRawText: () => raw, getRevision: () => 0, onCellSelect: vi.fn(),
       onDirectPaste: vi.fn(), onRawTextChange: vi.fn(), replace: vi.fn(),
       setHasHeaderPreview: vi.fn(), setMode: vi.fn(),
     };

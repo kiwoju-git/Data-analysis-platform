@@ -4,6 +4,7 @@ import { useI18n } from "./i18n/LocaleProvider";
 import { t, translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
 import type { DatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
+import { DatasetRequestError } from "./DatasetRequestError";
 
 export interface ActiveDatasetVersionSelectorProps {
   catalogState: DatasetVersionCatalogState;
@@ -12,6 +13,7 @@ export interface ActiveDatasetVersionSelectorProps {
   version: DatasetVersionResponse | null;
   onRetrySwitch: () => void;
   onSelect: (versionId: string) => void;
+  activationError?: string | null;
 }
 
 export function ActiveDatasetVersionSelector({
@@ -21,6 +23,7 @@ export function ActiveDatasetVersionSelector({
   version,
   onRetrySwitch,
   onSelect,
+  activationError = null,
 }: ActiveDatasetVersionSelectorProps) {
   const { locale } = useI18n();
   const selectedVersionId = pendingVersionId ?? version?.version_id ?? "";
@@ -110,6 +113,12 @@ export function ActiveDatasetVersionSelector({
           데이터셋 버전 확인 중
         </div>
       ) : null}
+      {isSwitching && version !== null ? (
+        <p className="active-dataset-operational-row" role="status">
+          {t("dataset.workflow.pendingKeepsActive", {}, locale)}
+        </p>
+      ) : null}
+      <DatasetRequestError kind="activation" error={activationError} busy={isSwitching} onRetry={onRetrySwitch} />
       {catalogState.error !== null ? (
         <div className="active-dataset-operational-row context-bar-error" role="alert">
           데이터셋 목록 조회 실패: {catalogState.error}
@@ -118,7 +127,7 @@ export function ActiveDatasetVersionSelector({
           </button>
         </div>
       ) : null}
-      {version === null && pendingVersionId !== null && !isSwitching ? (
+      {activationError === null && version === null && pendingVersionId !== null && !isSwitching ? (
         <div className="active-dataset-operational-row">
           <button className="secondary-button" onClick={onRetrySwitch} type="button">
             선택한 데이터셋 다시 불러오기

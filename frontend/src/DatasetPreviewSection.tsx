@@ -15,6 +15,11 @@ import type {
   DatasetVersionResponse,
 } from "./api";
 import { spreadsheetColumnLabel } from "./pastedTablePreview";
+import { DatasetRequestError } from "./DatasetRequestError";
+import { createLatestRequestGuard } from "./latestRequest";
+import { datasetRequestErrorCode } from "./datasetRequestErrors";
+import { useI18n } from "./i18n/LocaleProvider";
+import { t } from "./i18n/translate";
 
 interface DatasetPreviewSectionProps {
   isLoadingPreview: boolean;
@@ -26,8 +31,9 @@ interface DatasetPreviewSectionProps {
   onPreviewLimitChange: (limit: number) => void;
   onCreateCellCorrection: (
     request: DatasetCellCorrectionRequest,
-  ) => Promise<DatasetCellCorrectionResponse>;
+  ) => Promise<DatasetCellCorrectionResponse | null>;
   onDirtyChange: (dirty: boolean) => void;
+  error?: string | null;
 }
 
 interface CanonicalCellSelection {
@@ -53,7 +59,9 @@ export function DatasetPreviewSection({
   onPreviewLimitChange,
   onCreateCellCorrection,
   onDirtyChange,
+  error = null,
 }: DatasetPreviewSectionProps) {
+  const { locale } = useI18n();
   const [jumpRow, setJumpRow] = useState("1");
   const [selection, setSelection] = useState<CanonicalCellSelection | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -62,9 +70,17 @@ export function DatasetPreviewSection({
   const [isConfirmingSave, setIsConfirmingSave] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [savedVersions, setSavedVersions] = useState<{ current: number; parent: number } | null>(null);
   const saveButtonRef = useRef<HTMLButtonElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const saveGuard = useRef(createLatestRequestGuard());
+  const savingParentId = useRef<string | null>(null);
+  const displayedVersionId = useRef(version.version_id);
+
+  useEffect(() => {
+    const guard = saveGuard.current;
+    return () => guard.cancel();
+  }, []);
 
   const dirty =
     isEditing &&
@@ -77,13 +93,23 @@ export function DatasetPreviewSection({
   const correctionSourceUnavailable = version.canonical_artifact === null;
 
   useEffect(() => {
+    if (savingParentId.current !== null && version.version_id !== savingParentId.current &&
+        version.parent_version_id !== savingParentId.current) {
+      saveGuard.current.cancel();
+      savingParentId.current = null;
+      setIsSaving(false);
+    }
+    if (version.version_id !== displayedVersionId.current && version.parent_version_id !== displayedVersionId.current) {
+      setSavedVersions(null);
+    }
+    displayedVersionId.current = version.version_id;
     setSelection(null);
     setIsEditing(false);
     setDraftMissing(false);
     setDraftValue("");
     setIsConfirmingSave(false);
     setEditError(null);
-  }, [preview?.offset, preview?.limit, version.version_id]);
+  }, [preview?.offset, preview?.limit, version.version_id, version.parent_version_id]);
 
   useEffect(() => {
     onDirtyChange(dirty);
@@ -130,9 +156,10 @@ export function DatasetPreviewSection({
 
   const confirmDiscard = () =>
     !dirty ||
-    window.confirm("저장하지 않은 셀 수정이 있습니다. 변경을 버리고 이동하시겠습니까?");
+    window.confirm(t("dataset.workflow.discardUnsaved", {}, locale));
 
   const selectCell = (next: CanonicalCellSelection) => {
+    if (isSaving) return;
     if (selection?.address !== next.address && !confirmDiscard()) return;
     setSelection(next);
     setIsEditing(false);
@@ -155,6 +182,7 @@ export function DatasetPreviewSection({
 
   return (
     <section className="canonical-preview-section" aria-labelledby="canonical-preview-title">
+      <DatasetRequestError kind="preview" error={error} busy={isLoadingPreview} onRetry={() => onLoadRowsPreview(version.version_id, previewOffset)} />
       <div className="panel-heading">
         <div>
           <h4 id="canonical-preview-title">Canonical 행 미리보기</h4>
@@ -399,15 +427,15 @@ export function DatasetPreviewSection({
                     setDraftValue(selection.value ?? "");
                     setDraftMissing(selection.value === null);
                     setIsEditing(true);
-                    setSuccessMessage(null);
+                    setSavedVersions(null);
                   }}
                 >
                   수정
                 </button>
               </>
             )}
-            {successMessage !== null ? (
-              <p className="success-box" role="status">{successMessage}</p>
+            {savedVersions !== null ? (
+              <p className="success-box" role="status">{t("dataset.workflow.cellSaved", savedVersions, locale)}</p>
             ) : null}
           </section>
           {isConfirmingSave && selection !== null ? (
@@ -456,6 +484,8 @@ export function DatasetPreviewSection({
                     disabled={isSaving}
                     type="button"
                     onClick={() => {
+                      const request = saveGuard.current.begin();
+                      savingParentId.current = version.version_id;
                       setIsSaving(true);
                       setEditError(null);
                       void onCreateCellCorrection({
@@ -471,22 +501,24 @@ export function DatasetPreviewSection({
                         }],
                       })
                         .then((response) => {
+                          if (!saveGuard.current.isCurrent(request) || response === null) return;
                           setIsConfirmingSave(false);
                           setIsEditing(false);
                           setSelection(null);
-                          setSuccessMessage(
-                            `셀 수정 내용을 데이터셋 v${response.new_version.version_number}로 저장했습니다. 원본 v${version.version_number}은 그대로 유지됩니다.`,
-                          );
+                          setSavedVersions({ current: response.new_version.version_number, parent: version.version_number });
                         })
                         .catch((error) => {
+                          if (!saveGuard.current.isCurrent(request)) return;
                           setIsConfirmingSave(false);
                           setEditError(
-                            error instanceof Error
-                              ? error.message
-                              : "dataset_cell_correction_failed",
+                            datasetRequestErrorCode(error, "dataset_cell_correction_failed"),
                           );
                         })
-                        .finally(() => setIsSaving(false));
+                        .finally(() => {
+                          if (!saveGuard.current.isCurrent(request)) return;
+                          savingParentId.current = null;
+                          setIsSaving(false);
+                        });
                     }}
                   >
                     {isSaving ? "새 버전 생성 중" : `v${version.version_number + 1} 생성`}

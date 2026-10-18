@@ -40,9 +40,9 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 |---|---|---|---|
 | A01 | Windows E2E readiness/diagnostics | verified | Child diagnostics, explicit ready gates and exact synthetic version selection passed local focused and hosted Windows/Linux full E2E. Original CI cause remains unproven. |
 | A02 | Locale initialization | reproduced / verified | Getter SecurityError reproduced before the fix; safe getter, in-memory switching and startup boundary passed both platforms. Independent of the unresolved original A01 cause. |
-| A03 | Dependencies/uploads | reproduced / fixed (verification in progress) | Native security locks, streaming/multipart limits, worker ownership, visible intake limits and exact-inventory CI audits implemented. Truncation/cancel races reproduced. See dependency_upload_security.md; whole application checks pending. |
-| A04 | Transport/i18n | - | Pending request/response integrity tests. |
-| A05 | Dataset context | - | Pending deferred-response reproduction. |
+| A03 | Dependencies/uploads | reproduced / verified | Native security locks, streaming/multipart limits, worker ownership and visible intake limits passed full local checks and all native CI jobs at 1213457. See dependency_upload_security.md. |
+| A04 | Transport/i18n | reproduced / fixed (integration rerun pending) | Request bytes and response objects remain untouched; explicit display boundaries replace compiler tokens. Frozen Windows full browser/frontend checks passed. Integrated CI exposed a missing documentation step marker; corrected locally, native CI rerun pending. |
+| A05 | Dataset context | reproduced / fixed (native integration pending) | 101 focused tests and all 16 real-server en/ko browser scenarios passed, including same-active schema, native file-cancel and replacement paste ownership. Whole native checkpoint CI remains required. |
 | A06 | GPR direct prediction | - | Pending snapshot/identity tests. |
 | A07 | Schema CAS | - | Pending transaction/API implementation. |
 | A08 | Workspace/backup | - | Pending lease and archive validation. |
@@ -125,3 +125,114 @@ not a published Release. This run predates A03 dependency/upload changes and
 does not validate them. A03 is isolated in its own worktree for verification.
 No release publication or main push has completed for this remediation.
 Historical successes are not validation evidence for these changes.
+
+## A03/A04 Integration Checkpoint
+
+A04 transport/display checkpoint: `e7f2f77`. A03 security and native-venv fixes
+were integrated as `9f295a5` and `d036d8c`, preserving both sets of translation
+keys. The feature branch was pushed; main and Release were not changed.
+
+Native A03 run `39092099520`, source `1213457`, passed Linux 3.12 full checks
+(1402 passed, 11 skipped), Python 3.11 checks (1402 passed, 11 skipped), all five
+Python security profiles and npm runtime/all audits. The Linux archive job also
+passed. Hosted Windows passed 1411 tests with two skips and its full E2E passed.
+The local A03 full check exited zero (1410 passed / three skipped, frontend 404
+passed, typecheck/build/localization/lint passed). Different privilege-dependent
+skips are reported separately, not combined into one platform total.
+This is A03 evidence, not validation of the integrated A04 source.
+
+A04's new browser transport suite passed all four en/ko paste/upload cases,
+including quotes, backslashes, newlines and private-use token characters.
+Original upload SHA, byte count, stored cells, headers and schema identity were
+checked across locale changes. A later whole browser run reached linear-model
+prediction and failed because an accessible row label acquired an extra space.
+An explicit parameterized translation fixed that label. The frozen whole-suite
+rerun passed, including all transport and existing analysis workflows. No timeout
+was increased to conceal the failure.
+
+An earlier non-frozen frontend run included A05's nine intentionally failing
+pre-fix race tests. It produced 486 passes and nine failures, not an all-green
+A04 result. Integrated source `d036d8c` is frozen in a separate worktree with its
+own dependencies for clean full checks while A05 is developed separately.
+
+Frozen A04 Windows frontend checks passed: 70 files / 494 Vitest tests,
+typecheck/production build, localization (2905 source strings / 3954 keys), and
+lint (zero errors / nine existing refresh warnings). These ran from the
+checkpoint's own hash-locked dependencies, not the in-progress A05 tree.
+
+Integrated CI run `39093367838` at `d036d8c` failed the backend documentation
+contract: the new transport E2E stage was described above the step inventory but
+not added to the inventory itself. Python 3.11 reported 1401 passes, 11 skips and
+this one failure; Linux also stopped at this contract. The stage inventory is
+being synchronized, including the new A05 stage. A skipped downstream archive
+job is not a successful packaging check. Whole CI must run again on a new
+checkpoint. The corrected step-inventory test passed locally (one test, 216
+deselected).
+
+Frozen A04 browser command, from its own worktree and virtual environment:
+`python tests/e2e/critical_path.py --backend-port 8034 --frontend-port 5234
+--diagnostics-root ../e2e-remediation-a04-frozen --keep-workspace`.
+Exit zero; log `.tmp/remediation-a04-frozen-e2e.log` and synthetic diagnostics
+`.tmp/e2e-remediation-a04-frozen` are local evidence, not committed data.
+
+## A05 In-Progress Evidence
+
+The original nine deferred-response regressions failed before the hook change.
+The focused post-change suite passed 95 tests across six files. A separate API
+error regression first failed eight tests because dataset wrappers discarded
+typed error metadata; the wrappers now preserve code/status/correlation/message.
+
+Real browser tests let schema/cell writes commit on the synthetic backend and
+hold the response until another dataset is active. Both locales also exercise
+independent profile failure/retry and cancellation of a dirty schema switch.
+The first run passed the schema scenario then failed because the cell fixture
+selected the group column instead of the numeric column; its selector was
+corrected. The second run passed all eight scenarios (exit zero), recording
+source/child hashes and URL/session selection. Evidence:
+`.tmp/e2e-remediation-a05-context-2` and `.tmp/remediation-a05-context-e2e-2.log`.
+This run logged a Playwright `Response.finished()` cleanup-task warning at
+context close; the fixture now waits for and validates the delivered JSON body
+instead. The final rerun must verify that change too.
+
+Review then reproduced another case: an acknowledged schema write can be
+discarded when only a new intake draft changes, leaving the same active version
+with old metadata. One targeted regression failed and one passed before its
+fix (`.tmp/a05-schema-reconcile-before.log`). Reconciliation is scoped to the
+unchanged committed version/generation, latest schema-write sequence and matching
+base hash; it must not replace the new intake draft or reactivate an old dataset.
+
+That reconciliation passed the next focused suite (97 tests) and ten browser
+cases (`context-3`, exit zero). Review then added explicit empty-paste intent,
+native file-cancel restoration and independent paste-submission ownership. The
+final focused controller/transport suite passed 101 tests across six files;
+scoped ESLint passed. Original user files are never changed by these tests.
+
+Browser runs `context-4`, `context-5` and `context-6` did not pass. They exposed
+test-fixture issues while extending coverage: raw editing switches back to grid
+preview, removing a route handler released a held request, and the single-column
+paste required an explicit delimiter/encoding before confirmation. The fixture
+now selects raw mode, holds only the first request without unregistering it, and
+confirms parsing options explicitly. No product wait timeout was increased.
+The corresponding logs are `.tmp/remediation-a05-context-e2e-{4,5,6}.log`.
+
+The first typecheck caught a paste-display test fixture missing the new draft
+revision accessor; that fixture was corrected. A concurrent follow-up typecheck
+caught a narrowing error in the not-yet-integrated A06 helper, subsequently fixed
+and checked with `node node_modules/typescript/bin/tsc --noEmit` (exit zero).
+A06's five pre-fix component regressions are intentionally red until its own
+implementation and are not included in the A05 checkpoint.
+
+Final A05 browser run `context-7` exited zero with all 16 cases (eight per
+locale), no failed page errors or the earlier response-finished cleanup warning.
+Command from the root checkout, using the integrated hash-locked environment:
+
+```powershell
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe tests\e2e\critical_path.py --backend-port 8035 --frontend-port 5235 --dataset-context-only --diagnostics-root .tmp/e2e-remediation-a05-context-7 --keep-workspace
+```
+
+Log: `.tmp/remediation-a05-context-e2e-7.log`. Each synthetic case records exact
+server identities/hashes, a screenshot and a trace under that diagnostics root.
+The profile-retry screenshot was visually inspected; this confirms recovery and
+preserved dataset content, not a complete English-copy audit. Existing awkward
+English profile labels and untranslated warning prose remain A11/A14 display
+work, distinct from the protected API transport boundary.

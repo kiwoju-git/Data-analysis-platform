@@ -1,4 +1,5 @@
 import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { DatasetRequestError } from "./DatasetRequestError";
 
 import type { DatasetProfileResponse } from "./api";
 import {
@@ -13,6 +14,7 @@ interface DatasetProfileSectionProps {
   profile: DatasetProfileResponse | null;
   versionId: string;
   onLoadDatasetProfile: (versionId: string) => void;
+  error?: string | null;
 }
 
 export function DatasetProfileSection({
@@ -20,6 +22,7 @@ export function DatasetProfileSection({
   profile,
   versionId,
   onLoadDatasetProfile,
+  error = null,
 }: DatasetProfileSectionProps) {
   const missingCellCount =
     profile?.columns.reduce((total, column) => total + column.n_missing, 0) ?? 0;
@@ -39,6 +42,7 @@ export function DatasetProfileSection({
 
   return (
     <>
+      <DatasetRequestError kind="profile" error={error} busy={isLoadingProfile} onRetry={() => onLoadDatasetProfile(versionId)} />
       <div className="schema-actions">
         <div>
           <strong>데이터 품질 점검</strong>

@@ -68,7 +68,8 @@ describe("ActiveDatasetVersionSelector", () => {
     expect(html).toContain("데이터셋 버전 확인 중");
     expect(html).toContain("데이터셋 목록 조회 실패");
     expect(html).toContain("분석 데이터셋 목록 페이지 이동");
-    expect((html.match(/active-dataset-operational-row/g) ?? [])).toHaveLength(3);
+    expect(html).toContain("마지막 활성 데이터셋이 유지됩니다");
+    expect((html.match(/active-dataset-operational-row/g) ?? [])).toHaveLength(4);
   });
 
   it("keeps long catalog labels, off-page options, and invalid dates safe", () => {

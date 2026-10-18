@@ -11,6 +11,7 @@ import {
   updateDatasetSchema,
   type ConfirmedParsingOptions,
   type DatasetCellCorrectionRequest,
+  type DatasetVersionDeleteResponse,
   type DatasetColumnResponse,
   type DatasetProfileResponse,
   type DatasetRowsPreviewResponse,
@@ -22,6 +23,11 @@ import type { ActiveDatasetVersionSelectorProps } from "./ActiveDatasetVersionSe
 import type { SchemaDraftPatch } from "./datasetPreparationTypes";
 import { applyBayesianOptimizationPreset, type SchemaDraft } from "./schemaPresets";
 import { useDatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
+import { createLatestRequestGuard } from "./latestRequest";
+import { createSourceContextGuard } from "./sourceContextGuard";
+import { appLocationChangeEvent } from "./browserNavigation";
+import { t } from "./i18n/translate";
+import { datasetRequestErrorCode as requestErrorCode } from "./datasetRequestErrors";
 
 const defaultPreviewLimit = 10;
 const defaultMissingTokens = ["", "NA", "N/A", "null", "N/T"];
@@ -30,7 +36,8 @@ const currentDatasetVersionStorageKey = "datalab.current_dataset_version_id";
 function readStoredDatasetVersionId(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.sessionStorage.getItem(currentDatasetVersionStorageKey);
+    const value = window.sessionStorage.getItem(currentDatasetVersionStorageKey);
+    return value !== null && uuidPattern.test(value) ? value : null;
   } catch {
     return null;
   }
@@ -47,7 +54,7 @@ function updateActiveDatasetVersionQuery(versionId: string | null): void {
   const url = new URL(window.location.href);
   if (versionId === null) url.searchParams.delete("dataset_version_id");
   else url.searchParams.set("dataset_version_id", versionId);
-  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function storeDatasetVersionId(versionId: string | null): void {
@@ -77,6 +84,29 @@ export interface DatasetWorkflow {
   profile: DatasetProfileResponse | null;
   setFlowError: (error: string | null) => void;
   version: DatasetVersionResponse | null;
+  confirmNavigation: () => boolean;
+  onDatasetDeleted: (response: DatasetVersionDeleteResponse) => void;
+}
+
+type DatasetSourceIdentity = Readonly<{
+  versionId: string;
+  schemaHash: string;
+  canonicalSha256: string | null;
+}>;
+
+const requestLaneNames = ["activation", "intake", "confirmation", "schema", "cell", "preview", "profile"] as const;
+type RequestLane = typeof requestLaneNames[number];
+
+function sourceIdentity(version: DatasetVersionResponse | null): DatasetSourceIdentity | null {
+  return version === null ? null : Object.freeze({
+    versionId: version.version_id,
+    schemaHash: version.schema_hash,
+    canonicalSha256: version.canonical_artifact?.sha256 ?? null,
+  });
+}
+
+function contextMismatch(): Error {
+  return Object.assign(new Error("dataset_response_context_mismatch"), { code: "dataset_response_context_mismatch" });
 }
 
 export function useDatasetWorkflow({
@@ -104,448 +134,550 @@ export function useDatasetWorkflow({
   const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
   const [pendingVersionId, setPendingVersionId] = useState<string | null>(null);
   const [flowError, setFlowError] = useState<string | null>(null);
-  const restoreRequestRef = useRef(0);
-  const previewRequestRef = useRef(0);
-  const profileRequestRef = useRef(0);
-  const callbacksRef = useRef({
-    onDatasetColumnsChanged,
-    onDatasetReset,
-    onDatasetVersionCreated,
-  });
-  const cellEditDirtyRef = useRef(false);
-  callbacksRef.current = {
-    onDatasetColumnsChanged,
-    onDatasetReset,
-    onDatasetVersionCreated,
-  };
+  const [activationError, setActivationError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [draftResetRevision, setDraftResetRevision] = useState(0);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const acceptedFileList = useRef<FileList | null>(null);
+  const mounted = useRef(false);
+  const committed = useRef<DatasetVersionResponse | null>(null);
+  const committedGeneration = useRef(0);
+  const schemaWriteSequence = useRef(0);
+  const pending = useRef<string | null>(null);
+  const activationInFlight = useRef(false);
+  const readsInFlight = useRef({ preview: false, profile: false });
+  const context = useRef(createSourceContextGuard<DatasetSourceIdentity | null>(null));
+  const lanes = useRef(Object.fromEntries(requestLaneNames.map((name) => [name, createLatestRequestGuard()])) as Record<RequestLane, ReturnType<typeof createLatestRequestGuard>>);
+  const callbacks = useRef({ onDatasetColumnsChanged, onDatasetReset, onDatasetVersionCreated, onSchemaChanged });
+  callbacks.current = { onDatasetColumnsChanged, onDatasetReset, onDatasetVersionCreated, onSchemaChanged };
+  const cellDirty = useRef(false);
+  const pasteDirty = useRef(false);
+  const schemaDirty = useRef(false);
+  const schemaRevision = useRef(0);
+  const schemaDraftsRef = useRef(schemaDrafts);
+  schemaDraftsRef.current = schemaDrafts;
+  const readPage = useRef({ offset: 0, limit: defaultPreviewLimit });
+  const location = useRef(typeof window === "undefined" ? "" : window.location.href);
+  const navigation = useRef({ activate: activateDatasetVersion, confirm: confirmNavigation, hasDirty: hasDirtyChanges });
+  navigation.current = { activate: activateDatasetVersion, confirm: confirmNavigation, hasDirty: hasDirtyChanges };
+  const datasetVersionCatalogState = useDatasetVersionCatalogState(pendingVersionId ?? version?.version_id ?? null);
 
   useEffect(() => {
-    const versionId = readDatasetVersionIdFromUrl() ?? readStoredDatasetVersionId();
-    if (versionId === null) return;
-
-    const request = restoreRequestRef.current + 1;
-    restoreRequestRef.current = request;
-    setPendingVersionId(versionId);
-    setIsSwitchingVersion(true);
-    setIsLoadingPreview(true);
-    setIsLoadingProfile(true);
-    void Promise.all([
-      fetchDatasetVersion(versionId),
-      fetchRowsPreview(versionId, 0, defaultPreviewLimit),
-      fetchDatasetProfile(versionId),
-    ])
-      .then(([restoredVersion, restoredPreview, restoredProfile]) => {
-        if (restoreRequestRef.current !== request) return;
-        setVersion(restoredVersion);
-        setSchemaDrafts(schemaDraftsFromColumns(restoredVersion.columns));
-        setPreview(restoredPreview);
-        setPreviewOffset(0);
-        setProfile(restoredProfile);
-        setPendingVersionId(null);
-        storeDatasetVersionId(restoredVersion.version_id);
-        updateActiveDatasetVersionQuery(restoredVersion.version_id);
-        callbacksRef.current.onDatasetColumnsChanged(restoredVersion.columns);
-      })
-      .catch((error) => {
-        if (restoreRequestRef.current !== request) return;
-        storeDatasetVersionId(null);
-        updateActiveDatasetVersionQuery(null);
-        setFlowError(
-          error instanceof Error ? error.message : "dataset_version_restore_failed",
-        );
-      })
-      .finally(() => {
-        if (restoreRequestRef.current !== request) return;
-        setIsLoadingPreview(false);
-        setIsLoadingProfile(false);
-        setIsSwitchingVersion(false);
-      });
-
+    mounted.current = true;
+    if (context.current.isDisposed()) context.current = createSourceContextGuard(sourceIdentity(committed.current));
+    const ownedContext = context.current;
+    const ownedLanes = lanes.current;
+    const restoredId = readDatasetVersionIdFromUrl() ?? readStoredDatasetVersionId();
+    if (restoredId !== null) void navigation.current.activate(restoredId, true);
+    const onLocationChange = (event: Event) => {
+      const next = new URL(window.location.href);
+      const previous = new URL(location.current);
+      if (previous.pathname === "/datasets" && next.pathname !== "/datasets" && !navigation.current.confirm()) {
+        window.history.replaceState(window.history.state, "", previous.href);
+        event.stopImmediatePropagation();
+        return;
+      }
+      const requested = readDatasetVersionIdFromUrl();
+      if (requested !== null && requested !== committed.current?.version_id && requested !== pending.current) {
+        void navigation.current.activate(requested);
+      }
+      location.current = window.location.href;
+    };
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!navigation.current.hasDirty()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener?.("popstate", onLocationChange);
+    window.addEventListener?.(appLocationChangeEvent, onLocationChange);
+    window.addEventListener?.("beforeunload", beforeUnload);
     return () => {
-      if (restoreRequestRef.current === request) restoreRequestRef.current += 1;
+      mounted.current = false;
+      ownedContext.dispose();
+      for (const lane of Object.values(ownedLanes)) lane.cancel();
+      window.removeEventListener?.("popstate", onLocationChange);
+      window.removeEventListener?.(appLocationChangeEvent, onLocationChange);
+      window.removeEventListener?.("beforeunload", beforeUnload);
     };
   }, []);
 
-  const datasetVersionCatalogState = useDatasetVersionCatalogState(
-    pendingVersionId ?? version?.version_id ?? null,
-  );
+  function begin(lane: RequestLane) {
+    const guard = context.current;
+    const source = guard.capture();
+    const request = lanes.current[lane].begin();
+    return { lane, guard, source, request, identity: sourceIdentity(committed.current) };
+  }
 
-  const delimiterOptions = useMemo(() => {
-    const candidates =
-      upload?.parsing.delimiter_candidates.map((candidate) => candidate.delimiter) ?? [];
-    return Array.from(new Set([",", "\t", ";", "|", ...candidates]));
-  }, [upload]);
+  function isCurrent(ticket: ReturnType<typeof begin>) {
+    return mounted.current && context.current === ticket.guard &&
+      ticket.guard.isCurrent(ticket.source) && lanes.current[ticket.lane].isCurrent(ticket.request);
+  }
 
-  const canConfirm =
-    upload !== null &&
-    parsingOptions !== null &&
-    canConfirmParsingOptions(parsingOptions) &&
-    !isConfirming;
-
-  const canApplyBayesianPreset =
-    version !== null &&
-    version.parsing.has_header === false &&
-    schemaDrafts.length >= 34 &&
-    version.columns
-      .slice(0, 34)
-      .every((column, index) => column.original_name === `column_${index + 1}`);
-
-  function resetDatasetDerivedState() {
-    restoreRequestRef.current += 1;
-    previewRequestRef.current += 1;
-    profileRequestRef.current += 1;
-    storeDatasetVersionId(null);
-    updateActiveDatasetVersionQuery(null);
-    setVersion(null);
+  function advanceSource(next = committed.current) {
+    if (next !== null && next === committed.current) {
+      if (readsInFlight.current.preview) setPreviewError("dataset_request_interrupted");
+      if (readsInFlight.current.profile) setProfileError("dataset_request_interrupted");
+    }
+    readsInFlight.current = { preview: false, profile: false };
+    context.current.advance(sourceIdentity(next));
+    for (const lane of Object.values(lanes.current)) lane.cancel();
+    pending.current = null;
+    activationInFlight.current = false;
     setPendingVersionId(null);
     setIsSwitchingVersion(false);
-    setSchemaDrafts([]);
+    setIsUploading(false);
+    setIsPastingDataset(false);
+    setIsConfirming(false);
+    setIsSavingSchema(false);
+    setIsLoadingPreview(false);
+    setIsLoadingProfile(false);
+  }
+
+  function persist(next: DatasetVersionResponse | null) {
+    storeDatasetVersionId(next?.version_id ?? null);
+    updateActiveDatasetVersionQuery(next?.version_id ?? null);
+    if (typeof window !== "undefined") location.current = window.location.href;
+  }
+
+  function clearFileSelection() {
+    setSelectedFile(null);
+    acceptedFileList.current = null;
+    if (fileInput.current !== null) fileInput.current.value = "";
+  }
+
+  function clearIntake(preserveFileInput = false) {
+    if (!preserveFileInput) clearFileSelection();
+    setUpload(null);
+    setParsingOptions(null);
+    setPastedHeaderPreference(null);
+    pasteDirty.current = false;
+    setDraftResetRevision((value) => value + 1);
+  }
+
+  function hasDirtyChanges() {
+    return cellDirty.current || schemaDirty.current || pasteDirty.current || selectedFile !== null || upload !== null;
+  }
+
+  function approveReplacement() {
+    return !hasDirtyChanges() || window.confirm(t("dataset.workflow.discardUnsaved"));
+  }
+
+  function confirmNavigation() {
+    if (!approveReplacement()) return false;
+    if (hasDirtyChanges()) {
+      advanceSource();
+      clearIntake();
+      cellDirty.current = false;
+      schemaDirty.current = false;
+      schemaRevision.current += 1;
+      const drafts = schemaDraftsFromColumns(committed.current?.columns ?? []);
+      schemaDraftsRef.current = drafts;
+      setSchemaDrafts(drafts);
+    }
+    return true;
+  }
+
+  function publishVersion(next: DatasetVersionResponse) {
+    advanceSource(next);
+    committedGeneration.current += 1;
+    committed.current = next;
+    setVersion(next);
+    const drafts = schemaDraftsFromColumns(next.columns);
+    schemaDraftsRef.current = drafts;
+    setSchemaDrafts(drafts);
+    schemaDirty.current = false;
+    schemaRevision.current += 1;
+    cellDirty.current = false;
+    clearIntake();
+    readPage.current = { offset: 0, limit: defaultPreviewLimit };
+    setPreviewLimit(defaultPreviewLimit);
+    setPreviewOffset(0);
+    callbacks.current.onDatasetReset();
+    callbacks.current.onDatasetColumnsChanged(next.columns);
     setPreview(null);
     setProfile(null);
-    setPreviewOffset(0);
-    onDatasetReset();
-  }
-
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    setSelectedFile(event.currentTarget.files?.[0] ?? null);
-    setUpload(null);
-    setParsingOptions(null);
-    setPastedHeaderPreference(null);
-    resetDatasetDerivedState();
+    setPreviewError(null);
+    setProfileError(null);
+    setActivationError(null);
     setFlowError(null);
+    persist(next);
+    void loadRowsPreview(next.version_id, readPage.current.offset, readPage.current.limit);
+    void loadDatasetProfile(next.version_id);
   }
 
-  async function handleUpload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (selectedFile === null) {
-      setFlowError("업로드할 파일을 선택하세요.");
-      return;
+  // A schema write mutates the retained version. Reconcile its acknowledged
+  // metadata without replacing a newer intake draft or cancelling its request.
+  function publishSchema(next: DatasetVersionResponse, preserveDraft: boolean) {
+    committedGeneration.current += 1;
+    committed.current = next;
+    setVersion(next);
+    if (!preserveDraft) {
+      const drafts = schemaDraftsFromColumns(next.columns);
+      schemaDraftsRef.current = drafts;
+      setSchemaDrafts(drafts);
+      schemaDirty.current = false;
     }
-
-    setIsUploading(true);
-    setFlowError(null);
-    setPastedHeaderPreference(null);
-    resetDatasetDerivedState();
-    try {
-      const response = await uploadDataset(selectedFile);
-      setUpload(response);
-      setParsingOptions(parsingSuggestionToConfirmation(response));
-    } catch (error) {
-      setUpload(null);
-      setParsingOptions(null);
-      setFlowError(error instanceof Error ? error.message : "dataset_upload_failed");
-    } finally {
-      setIsUploading(false);
-    }
+    for (const lane of ["schema", "cell", "preview", "profile"] as const) lanes.current[lane].cancel();
+    readsInFlight.current = { preview: false, profile: false };
+    setIsSavingSchema(false);
+    setPreview(null);
+    setProfile(null);
+    setPreviewError(null);
+    setProfileError(null);
+    callbacks.current.onSchemaChanged(next.columns);
+    void loadRowsPreview(next.version_id, readPage.current.offset, readPage.current.limit);
+    void loadDatasetProfile(next.version_id);
   }
 
-  async function handlePasteDataset(
-    content: string,
-    previewHasHeader: boolean,
-  ): Promise<boolean> {
-    if (content.trim() === "") {
-      setFlowError("empty_pasted_data");
-      return false;
-    }
-
-    setIsPastingDataset(true);
-    setFlowError(null);
-    setSelectedFile(null);
-    setUpload(null);
-    setParsingOptions(null);
-    resetDatasetDerivedState();
-    try {
-      const response = await createDatasetFromPastedText({
-        content,
-        original_filename: "pasted-data.txt",
-      });
-      setUpload(response);
-      setParsingOptions(parsingSuggestionToConfirmation(response));
-      setPastedHeaderPreference(previewHasHeader);
-      return true;
-    } catch (error) {
-      setUpload(null);
-      setParsingOptions(null);
-      setFlowError(error instanceof Error ? error.message : "dataset_paste_failed");
-      return false;
-    } finally {
-      setIsPastingDataset(false);
-    }
+  // A superseded write can still create a valid stored version. Refresh its catalog,
+  // but never activate it or publish source-bound UI callbacks.
+  function notifyPersistedVersion() {
+    if (!mounted.current) return;
+    datasetVersionCatalogState.onRefresh();
+    callbacks.current.onDatasetVersionCreated();
   }
 
-  async function handleConfirmParsing() {
-    if (upload === null || parsingOptions === null) {
-      return;
-    }
-
-    setIsConfirming(true);
-    setFlowError(null);
-    try {
-      const response = await confirmDatasetParsing(upload.dataset_id, {
-        parsing: parsingOptions,
-        columns: [],
-      });
-      setVersion(response);
-      storeDatasetVersionId(response.version_id);
-      updateActiveDatasetVersionQuery(response.version_id);
-      setPendingVersionId(null);
-      setSchemaDrafts(schemaDraftsFromColumns(response.columns));
-      onDatasetColumnsChanged(response.columns);
-      setPreviewOffset(0);
-      await Promise.all([
-        loadRowsPreview(response.version_id, 0),
-        loadDatasetProfile(response.version_id),
-      ]);
-      datasetVersionCatalogState.onRefresh();
-      callbacksRef.current.onDatasetVersionCreated();
-    } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "parsing_confirmation_failed");
-    } finally {
-      setIsConfirming(false);
-    }
-  }
-
-  async function handleSaveSchema() {
-    if (version === null) {
-      return;
-    }
-
-    setIsSavingSchema(true);
-    setFlowError(null);
-    try {
-      const response = await updateDatasetSchema(version.version_id, {
-        columns: schemaDrafts.map((draft) => ({
-          column_id: draft.column_id,
-          display_name: draft.display_name,
-          measurement_level: draft.measurement_level,
-          role: draft.role,
-          unit: draft.unit.trim() === "" ? null : draft.unit.trim(),
-        })),
-      });
-      const updatedVersion: DatasetVersionResponse = {
-        ...version,
-        schema_hash: response.schema_hash,
-        columns: response.columns,
-      };
-      setVersion(updatedVersion);
-      setSchemaDrafts(schemaDraftsFromColumns(response.columns));
-      onSchemaChanged(response.columns);
-      await Promise.all([
-        loadRowsPreview(version.version_id, previewOffset),
-        loadDatasetProfile(version.version_id),
-      ]);
-    } catch (error) {
-      setFlowError(error instanceof Error ? error.message : "schema_update_failed");
-    } finally {
-      setIsSavingSchema(false);
-    }
-  }
-
-  async function loadRowsPreview(
-    versionId: string,
-    offset: number,
-    limit = previewLimit,
-  ) {
-    const request = previewRequestRef.current + 1;
-    previewRequestRef.current = request;
+  async function loadRowsPreview(versionId: string, offset: number, limit = previewLimit) {
+    if (!mounted.current || committed.current?.version_id !== versionId) return;
+    const ticket = begin("preview");
+    readsInFlight.current.preview = true;
+    if (readPage.current.offset !== offset || readPage.current.limit !== limit) setPreview(null);
+    readPage.current = { offset, limit };
+    setPreviewOffset(offset);
+    setPreviewLimit(limit);
     setIsLoadingPreview(true);
+    setPreviewError(null);
     try {
       const response = await fetchRowsPreview(versionId, offset, limit);
-      if (previewRequestRef.current !== request) return;
+      if (!isCurrent(ticket)) return;
+      if (response.version_id !== versionId || response.offset !== offset || response.limit !== limit) throw contextMismatch();
       setPreview(response);
       setPreviewOffset(offset);
+      setPreviewLimit(limit);
     } catch (error) {
-      if (previewRequestRef.current !== request) return;
-      setFlowError(error instanceof Error ? error.message : "rows_preview_failed");
+      if (!isCurrent(ticket)) return;
+      setPreviewError(requestErrorCode(error, "rows_preview_failed"));
     } finally {
-      if (previewRequestRef.current === request) setIsLoadingPreview(false);
+      if (isCurrent(ticket)) {
+        readsInFlight.current.preview = false;
+        setIsLoadingPreview(false);
+      }
     }
   }
 
   async function loadDatasetProfile(versionId: string) {
-    const request = profileRequestRef.current + 1;
-    profileRequestRef.current = request;
+    if (!mounted.current || committed.current?.version_id !== versionId) return;
+    const ticket = begin("profile");
+    readsInFlight.current.profile = true;
     setIsLoadingProfile(true);
+    setProfileError(null);
     try {
       const response = await fetchDatasetProfile(versionId);
-      if (profileRequestRef.current !== request) return;
+      if (!isCurrent(ticket)) return;
+      const expected = ticket.identity;
+      if (expected === null || response.version_id !== versionId || response.schema_hash !== expected.schemaHash ||
+          (expected.canonicalSha256 !== null && response.canonical_artifact?.sha256 !== expected.canonicalSha256)) {
+        throw contextMismatch();
+      }
       setProfile(response);
     } catch (error) {
-      if (profileRequestRef.current !== request) return;
-      setProfile(null);
-      setFlowError(error instanceof Error ? error.message : "dataset_profile_failed");
+      if (!isCurrent(ticket)) return;
+      setProfileError(requestErrorCode(error, "dataset_profile_failed"));
     } finally {
-      if (profileRequestRef.current === request) setIsLoadingProfile(false);
+      if (isCurrent(ticket)) {
+        readsInFlight.current.profile = false;
+        setIsLoadingProfile(false);
+      }
     }
   }
 
-  async function activateDatasetVersion(versionId: string) {
-    if (versionId === "" || (version?.version_id === versionId && pendingVersionId === null)) {
+  async function activateDatasetVersion(versionId: string, bootstrap = false) {
+    if (!mounted.current || !uuidPattern.test(versionId) ||
+        (committed.current?.version_id === versionId && pending.current === null)) return;
+    if (!bootstrap && !approveReplacement()) {
+      persist(committed.current);
       return;
     }
-    if (
-      cellEditDirtyRef.current &&
-      !window.confirm("저장하지 않은 셀 수정이 있습니다. 변경을 버리고 이동하시겠습니까?")
-    ) {
-      return;
-    }
-    cellEditDirtyRef.current = false;
-    const request = restoreRequestRef.current + 1;
-    restoreRequestRef.current = request;
-    previewRequestRef.current += 1;
-    profileRequestRef.current += 1;
+    advanceSource();
+    pending.current = versionId;
+    activationInFlight.current = true;
     setPendingVersionId(versionId);
+    const ticket = begin("activation");
     setIsSwitchingVersion(true);
-    setIsLoadingPreview(true);
-    setIsLoadingProfile(true);
+    setActivationError(null);
     setFlowError(null);
-    setVersion(null);
-    setSchemaDrafts([]);
-    setPreview(null);
-    setProfile(null);
-    setPreviewOffset(0);
-    callbacksRef.current.onDatasetReset();
     try {
-      const [nextVersion, nextPreview, nextProfile] = await Promise.all([
-        fetchDatasetVersion(versionId),
-        fetchRowsPreview(versionId, 0, defaultPreviewLimit),
-        fetchDatasetProfile(versionId),
-      ]);
-      if (restoreRequestRef.current !== request) return;
-      setVersion(nextVersion);
-      setSchemaDrafts(schemaDraftsFromColumns(nextVersion.columns));
-      setPreview(nextPreview);
-      setProfile(nextProfile);
-      setPreviewLimit(defaultPreviewLimit);
-      setPendingVersionId(null);
-      storeDatasetVersionId(nextVersion.version_id);
-      updateActiveDatasetVersionQuery(nextVersion.version_id);
-      callbacksRef.current.onDatasetColumnsChanged(nextVersion.columns);
+      const next = await fetchDatasetVersion(versionId);
+      if (!isCurrent(ticket)) return;
+      if (next.version_id !== versionId) throw contextMismatch();
+      publishVersion(next);
     } catch (error) {
-      if (restoreRequestRef.current !== request) return;
-      storeDatasetVersionId(null);
-      updateActiveDatasetVersionQuery(null);
-      setFlowError(error instanceof Error ? error.message : "dataset_version_restore_failed");
+      if (!isCurrent(ticket)) return;
+      const code = requestErrorCode(error, "dataset_version_restore_failed");
+      setActivationError(code);
+      if (committed.current !== null || code === "dataset_version_not_found") persist(committed.current);
     } finally {
-      if (restoreRequestRef.current === request) {
-        setIsLoadingPreview(false);
-        setIsLoadingProfile(false);
+      if (isCurrent(ticket)) {
+        activationInFlight.current = false;
         setIsSwitchingVersion(false);
       }
     }
   }
 
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    if (!mounted.current) return;
+    const input = event.currentTarget;
+    fileInput.current = input;
+    const nextFile = input.files?.[0] ?? null;
+    if (nextFile === null || ((pasteDirty.current || upload !== null || selectedFile !== null) &&
+        !window.confirm(t("dataset.workflow.discardUnsaved")))) {
+      if (acceptedFileList.current !== null) input.files = acceptedFileList.current;
+      else input.value = "";
+      return;
+    }
+    if (typeof DataTransfer !== "undefined") {
+      const snapshot = new DataTransfer();
+      snapshot.items.add(nextFile);
+      acceptedFileList.current = snapshot.files;
+    } else {
+      acceptedFileList.current = input.files;
+    }
+    advanceSource();
+    clearIntake(true);
+    setSelectedFile(nextFile);
+    setFlowError(null);
+  }
+
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!mounted.current || selectedFile === null) {
+      if (mounted.current) setFlowError("dataset_file_required");
+      return;
+    }
+    advanceSource();
+    const ticket = begin("intake");
+    setIsUploading(true);
+    setFlowError(null);
+    setPastedHeaderPreference(null);
+    setUpload(null);
+    setParsingOptions(null);
+    try {
+      const response = await uploadDataset(selectedFile);
+      if (!isCurrent(ticket)) return;
+      setUpload(response);
+      setParsingOptions(parsingSuggestionToConfirmation(response));
+    } catch (error) {
+      if (isCurrent(ticket)) setFlowError(requestErrorCode(error, "dataset_upload_failed"));
+    } finally {
+      if (isCurrent(ticket)) setIsUploading(false);
+    }
+  }
+
+  async function handlePasteDataset(content: string, previewHasHeader: boolean): Promise<boolean> {
+    if (!mounted.current || content.trim() === "") {
+      if (mounted.current) setFlowError("empty_pasted_data");
+      return false;
+    }
+    advanceSource();
+    const ticket = begin("intake");
+    setIsPastingDataset(true);
+    setFlowError(null);
+    clearFileSelection();
+    setUpload(null);
+    setParsingOptions(null);
+    try {
+      const response = await createDatasetFromPastedText({ content, original_filename: "pasted-data.txt" });
+      if (!isCurrent(ticket)) return false;
+      setUpload(response);
+      setParsingOptions(parsingSuggestionToConfirmation(response));
+      setPastedHeaderPreference(previewHasHeader);
+      return true;
+    } catch (error) {
+      if (isCurrent(ticket)) setFlowError(requestErrorCode(error, "dataset_paste_failed"));
+      return false;
+    } finally {
+      if (isCurrent(ticket)) setIsPastingDataset(false);
+    }
+  }
+
+  async function handleConfirmParsing() {
+    if (!mounted.current || upload === null || parsingOptions === null) return;
+    if ((cellDirty.current || schemaDirty.current) && !window.confirm(t("dataset.workflow.discardUnsaved"))) return;
+    advanceSource();
+    const ticket = begin("confirmation");
+    setIsConfirming(true);
+    setFlowError(null);
+    try {
+      const response = await confirmDatasetParsing(upload.dataset_id, { parsing: parsingOptions, columns: [] });
+      if (!isCurrent(ticket)) {
+        notifyPersistedVersion();
+        return;
+      }
+      if (response.dataset_id !== upload.dataset_id) throw contextMismatch();
+      publishVersion(response);
+      notifyPersistedVersion();
+    } catch (error) {
+      if (isCurrent(ticket)) setFlowError(requestErrorCode(error, "parsing_confirmation_failed"));
+    } finally {
+      if (isCurrent(ticket)) setIsConfirming(false);
+    }
+  }
+
+  async function handleSaveSchema() {
+    const current = committed.current;
+    if (!mounted.current || current === null || activationInFlight.current) return;
+    const ticket = begin("schema");
+    const generation = committedGeneration.current;
+    const sequence = ++schemaWriteSequence.current;
+    const revision = schemaRevision.current;
+    const submitted = schemaDraftsRef.current;
+    setIsSavingSchema(true);
+    setFlowError(null);
+    try {
+      const response = await updateDatasetSchema(current.version_id, {
+        columns: submitted.map((draft) => ({
+          column_id: draft.column_id, display_name: draft.display_name,
+          measurement_level: draft.measurement_level, role: draft.role,
+          unit: draft.unit.trim() === "" ? null : draft.unit.trim(),
+        })),
+      });
+      const sameCommittedSchema = mounted.current && committedGeneration.current === generation &&
+        schemaWriteSequence.current === sequence && committed.current?.version_id === current.version_id &&
+        committed.current.dataset_id === current.dataset_id && committed.current.schema_hash === current.schema_hash;
+      if (!isCurrent(ticket) && !sameCommittedSchema) return;
+      if (response.version_id !== current.version_id || response.dataset_id !== current.dataset_id) throw contextMismatch();
+      publishSchema({ ...current, schema_hash: response.schema_hash, columns: response.columns }, revision !== schemaRevision.current);
+    } catch (error) {
+      if (isCurrent(ticket)) setFlowError(requestErrorCode(error, "schema_update_failed"));
+    } finally {
+      if (isCurrent(ticket)) setIsSavingSchema(false);
+    }
+  }
+
   function updateSchemaDraft(columnId: string, patch: SchemaDraftPatch) {
-    setSchemaDrafts((current) =>
-      current.map((draft) => (draft.column_id === columnId ? { ...draft, ...patch } : draft)),
-    );
+    schemaRevision.current += 1;
+    schemaDirty.current = true;
+    setSchemaDrafts((current) => {
+      const next = current.map((draft) => draft.column_id === columnId ? { ...draft, ...patch } : draft);
+      schemaDraftsRef.current = next;
+      return next;
+    });
   }
 
   function handleApplyBayesianPreset() {
-    setSchemaDrafts((current) => applyBayesianOptimizationPreset(current));
+    schemaRevision.current += 1;
+    schemaDirty.current = true;
+    setSchemaDrafts((current) => {
+      const next = applyBayesianOptimizationPreset(current);
+      schemaDraftsRef.current = next;
+      return next;
+    });
   }
 
   function handlePreviewLimitChange(limit: number) {
-    if (version === null || ![10, 25, 50, 100].includes(limit)) return;
-    const lastAlignedOffset =
-      version.row_count === 0 ? 0 : Math.floor((version.row_count - 1) / limit) * limit;
+    const current = committed.current;
+    if (current === null || ![10, 25, 50, 100].includes(limit)) return;
+    const lastAlignedOffset = current.row_count === 0 ? 0 : Math.floor((current.row_count - 1) / limit) * limit;
     const nextOffset = Math.min(Math.floor(previewOffset / limit) * limit, lastAlignedOffset);
-    setPreviewLimit(limit);
-    void loadRowsPreview(version.version_id, nextOffset, limit);
+    void loadRowsPreview(current.version_id, nextOffset, limit);
   }
 
+  function onDatasetDeleted(response: DatasetVersionDeleteResponse) {
+    if (!mounted.current) return;
+    const current = committed.current;
+    const deletesActive = current !== null && (current.version_id === response.version_id ||
+      (response.deletion_scope === "dataset_root" && current.dataset_id === response.dataset_id));
+    const deletesPending = pending.current === response.version_id;
+    const deletesIntake = response.deletion_scope === "dataset_root" && upload?.dataset_id === response.dataset_id;
+    datasetVersionCatalogState.onRefresh();
+    if (!deletesActive && !deletesPending && !deletesIntake) return;
+    advanceSource(deletesActive ? null : current);
+    if (deletesIntake || deletesActive) clearIntake();
+    if (deletesActive) {
+      committedGeneration.current += 1;
+      committed.current = null;
+      setVersion(null);
+      setPreview(null);
+      setProfile(null);
+      setSchemaDrafts([]);
+      schemaDraftsRef.current = [];
+      cellDirty.current = false;
+      schemaDirty.current = false;
+      callbacks.current.onDatasetReset();
+    }
+    setActivationError(null);
+    setPreviewError(null);
+    setProfileError(null);
+    persist(committed.current);
+  }
+
+  const delimiterOptions = useMemo(() => Array.from(new Set([",", "\t", ";", "|",
+    ...(upload?.parsing.delimiter_candidates.map((candidate) => candidate.delimiter) ?? [])])), [upload]);
+  const canConfirm = upload !== null && parsingOptions !== null && canConfirmParsingOptions(parsingOptions) && !isConfirming;
+  const canApplyBayesianPreset = version !== null && version.parsing.has_header === false &&
+    schemaDrafts.length >= 34 && version.columns.slice(0, 34).every((column, index) => column.original_name === `column_${index + 1}`);
+
   const datasetPageProps = {
-    canApplyBayesianPreset,
-    canConfirm,
-    delimiterOptions,
-    flowError,
-    isConfirming,
-    isLoadingPreview,
-    isLoadingProfile,
-    isPastingDataset,
-    isSavingSchema,
-    isUploading,
-    parsingOptions,
-    pastedHeaderPreference,
-    preview,
-    previewLimit,
-    previewOffset,
-    profile,
-    schemaDrafts,
-    selectedFile,
-    upload,
-    version,
+    canApplyBayesianPreset, canConfirm, delimiterOptions, flowError, isConfirming,
+    isLoadingPreview, isLoadingProfile, isPastingDataset, isSavingSchema, isUploading,
+    parsingOptions, pastedHeaderPreference, preview, previewLimit, previewOffset,
+    profile, schemaDrafts, selectedFile, upload, version, previewError, profileError,
+    isSwitchingVersion, draftResetRevision,
     onApplyBayesianPreset: handleApplyBayesianPreset,
-    onCellEditDirtyChange: (dirty: boolean) => {
-      cellEditDirtyRef.current = dirty;
+    onCellEditDirtyChange: (dirty: boolean) => { cellDirty.current = dirty; },
+    onPasteDraftChange: (dirty: boolean, reason: "user" | "reset" = "user") => {
+      pasteDirty.current = dirty;
+      if (reason === "user") {
+        advanceSource();
+        setUpload(null);
+        setParsingOptions(null);
+      }
     },
     onCreateCellCorrection: async (request: DatasetCellCorrectionRequest) => {
-      if (version === null) throw new Error("dataset_version_not_found");
+      const current = committed.current;
+      if (!mounted.current || current === null || activationInFlight.current) return null;
+      if (request.confirmation_parent_version_id !== current.version_id || request.expected_parent_schema_hash !== current.schema_hash) throw contextMismatch();
+      const ticket = begin("cell");
       setFlowError(null);
-      const response = await createDatasetCellCorrection(version.version_id, request);
-      const nextVersion = response.new_version;
-      cellEditDirtyRef.current = false;
-      callbacksRef.current.onDatasetReset();
-      setVersion(nextVersion);
-      setSchemaDrafts(schemaDraftsFromColumns(nextVersion.columns));
-      setPreviewOffset(0);
-      setPreviewLimit(defaultPreviewLimit);
-      storeDatasetVersionId(nextVersion.version_id);
-      updateActiveDatasetVersionQuery(nextVersion.version_id);
-      callbacksRef.current.onDatasetColumnsChanged(nextVersion.columns);
-      await Promise.all([
-        loadRowsPreview(nextVersion.version_id, 0, defaultPreviewLimit),
-        loadDatasetProfile(nextVersion.version_id),
-      ]);
-      datasetVersionCatalogState.onRefresh();
-      callbacksRef.current.onDatasetVersionCreated();
-      return response;
+      try {
+        const response = await createDatasetCellCorrection(current.version_id, request);
+        if (!isCurrent(ticket)) {
+          notifyPersistedVersion();
+          return null;
+        }
+        if (response.parent_version_id !== current.version_id || response.new_version.dataset_id !== current.dataset_id) throw contextMismatch();
+        publishVersion(response.new_version);
+        notifyPersistedVersion();
+        return response;
+      } catch (error) {
+        if (!isCurrent(ticket)) return null;
+        throw error;
+      }
     },
-    onConfirmParsing: () => {
-      void handleConfirmParsing();
-    },
+    onConfirmParsing: () => { void handleConfirmParsing(); },
     onFileChange: handleFileChange,
-    onLoadDatasetProfile: (versionId: string) => {
-      void loadDatasetProfile(versionId);
-    },
-    onLoadRowsPreview: (versionId: string, offset: number) => {
-      void loadRowsPreview(versionId, offset);
-    },
+    onLoadDatasetProfile: (versionId: string) => { void loadDatasetProfile(versionId); },
+    onLoadRowsPreview: (versionId: string, offset: number) => { void loadRowsPreview(versionId, offset); },
     onPreviewLimitChange: handlePreviewLimitChange,
     onParsingOptionsChange: (options: ConfirmedParsingOptions) => {
+      advanceSource();
       setParsingOptions(options);
     },
     onPasteDataset: handlePasteDataset,
-    onSaveSchema: () => {
-      void handleSaveSchema();
-    },
+    onSaveSchema: () => { void handleSaveSchema(); },
     onSchemaDraftChange: updateSchemaDraft,
-    onUpload: (event: FormEvent<HTMLFormElement>) => {
-      void handleUpload(event);
-    },
+    onUpload: (event: FormEvent<HTMLFormElement>) => { void handleUpload(event); },
   } satisfies DatasetPreparationPageProps;
 
   const activeDatasetSelectorProps = {
-    catalogState: datasetVersionCatalogState,
-    isSwitching: isSwitchingVersion,
-    pendingVersionId,
-    version,
-    onRetrySwitch: () => {
-      if (pendingVersionId !== null) void activateDatasetVersion(pendingVersionId);
-    },
-    onSelect: (versionId: string) => {
-      void activateDatasetVersion(versionId);
-    },
+    catalogState: datasetVersionCatalogState, isSwitching: isSwitchingVersion,
+    pendingVersionId, version, activationError,
+    onRetrySwitch: () => { if (pending.current !== null) void activateDatasetVersion(pending.current); },
+    onSelect: (versionId: string) => { void activateDatasetVersion(versionId); },
   } satisfies ActiveDatasetVersionSelectorProps;
 
-  return {
-    activeDatasetSelectorProps,
-    datasetPageProps,
-    flowError,
-    profile,
-    setFlowError,
-    version,
-  };
+  return { activeDatasetSelectorProps, datasetPageProps, flowError, profile, setFlowError, version, confirmNavigation, onDatasetDeleted };
 }
 
 const uuidPattern =

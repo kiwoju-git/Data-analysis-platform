@@ -63,7 +63,7 @@ export async function uploadDataset(file: File): Promise<DatasetUploadResponse> 
   });
 
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "dataset_upload_failed"));
+    throw await apiRequestError(response, "dataset_upload_failed");
   }
 
   return (await response.json()) as DatasetUploadResponse;
@@ -82,7 +82,7 @@ export async function createDatasetFromPastedText(
   });
 
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "dataset_paste_failed"));
+    throw await apiRequestError(response, "dataset_paste_failed");
   }
 
   return (await response.json()) as DatasetUploadResponse;
@@ -105,7 +105,7 @@ export async function confirmDatasetParsing(
   );
 
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "parsing_confirmation_failed"));
+    throw await apiRequestError(response, "parsing_confirmation_failed");
   }
 
   return (await response.json()) as DatasetVersionResponse;
@@ -119,7 +119,7 @@ export async function fetchDatasetVersion(
   });
 
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "dataset_version_fetch_failed"));
+    throw await apiRequestError(response, "dataset_version_fetch_failed");
   }
 
   return (await response.json()) as DatasetVersionResponse;
@@ -142,7 +142,7 @@ export async function updateDatasetSchema(
   );
 
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "schema_update_failed"));
+    throw await apiRequestError(response, "schema_update_failed");
   }
 
   return (await response.json()) as DatasetSchemaResponse;
@@ -160,7 +160,7 @@ export async function fetchRowsPreview(
   });
 
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "rows_preview_failed"));
+    throw await apiRequestError(response, "rows_preview_failed");
   }
 
   return (await response.json()) as DatasetRowsPreviewResponse;
@@ -174,7 +174,7 @@ export async function fetchDatasetProfile(versionId: string): Promise<DatasetPro
   });
 
   if (!response.ok) {
-    throw new Error(await apiErrorCode(response, "dataset_profile_failed"));
+    throw await apiRequestError(response, "dataset_profile_failed");
   }
 
   return (await response.json()) as DatasetProfileResponse;

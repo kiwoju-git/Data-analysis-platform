@@ -1,6 +1,15 @@
 {
   "version": 1,
   "en": {
+    "dataset.workflow.discardUnsaved": "You have unsaved changes. Discard them and continue?",
+    "dataset.workflow.previewFailed": "The row preview could not be loaded. The active dataset is unchanged.",
+    "dataset.workflow.profileFailed": "The data quality profile could not be loaded. The active dataset is unchanged.",
+    "dataset.workflow.activationFailed": "The selected dataset could not be loaded. The last active dataset is retained.",
+    "dataset.workflow.retry.preview": "Retry row preview",
+    "dataset.workflow.retry.profile": "Retry data quality profile",
+    "dataset.workflow.retry.activation": "Retry selected dataset",
+    "dataset.workflow.pendingKeepsActive": "Loading the selected dataset. The last active dataset remains available until loading succeeds.",
+    "dataset.workflow.cellSaved": "Saved the cell correction as dataset v{current}. Original v{parent} is unchanged.",
     "assets.delete.analysisSummary": "Delete this analysis result and {files} dependent files? This action cannot be undone.",
     "assets.delete.designSummary": "Delete {versions} design versions, {runs} runs, {revisions} response revisions and {analyses} analyses together?",
     "assets.delete.studySummary": "Delete this Bayesian Study and {trials} trials? This action cannot be undone.",
@@ -3957,6 +3966,15 @@
     "twoVariances.warning.two_variances_display_points_limited": "Charts display at most 500 points per group; calculations use every usable row."
   },
   "ko": {
+    "dataset.workflow.discardUnsaved": "저장하지 않은 입력이 있습니다. 변경을 버리고 이동하시겠습니까?",
+    "dataset.workflow.previewFailed": "행 미리보기를 불러오지 못했습니다. 현재 데이터셋은 유지됩니다.",
+    "dataset.workflow.profileFailed": "데이터 품질 점검을 불러오지 못했습니다. 현재 데이터셋은 유지됩니다.",
+    "dataset.workflow.activationFailed": "선택한 데이터셋을 불러오지 못했습니다. 마지막 활성 데이터셋은 유지됩니다.",
+    "dataset.workflow.retry.preview": "행 미리보기 다시 불러오기",
+    "dataset.workflow.retry.profile": "데이터 품질 점검 다시 불러오기",
+    "dataset.workflow.retry.activation": "선택한 데이터셋 다시 불러오기",
+    "dataset.workflow.pendingKeepsActive": "선택한 데이터셋을 불러오는 중입니다. 성공할 때까지 마지막 활성 데이터셋이 유지됩니다.",
+    "dataset.workflow.cellSaved": "셀 수정 내용을 데이터셋 v{current}로 저장했습니다. 원본 v{parent}은 그대로 유지됩니다.",
     "assets.delete.analysisSummary": "분석 결과와 종속 파일 {files}개를 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
     "assets.delete.designSummary": "설계 {versions}개 버전, run {runs}개, 반응 revision {revisions}개, 분석 {analyses}개를 함께 삭제합니다.",
     "assets.delete.studySummary": "Bayesian Study와 trial {trials}개를 삭제합니다. 이 작업은 되돌릴 수 없습니다.",

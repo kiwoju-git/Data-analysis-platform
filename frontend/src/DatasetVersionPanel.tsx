@@ -24,10 +24,13 @@ interface DatasetVersionPanelProps {
   profile: DatasetProfileResponse | null;
   schemaDrafts: SchemaDraft[];
   version: DatasetVersionResponse;
+  previewError?: string | null;
+  profileError?: string | null;
+  isSwitchingVersion?: boolean;
   onApplyBayesianPreset: () => void;
   onCreateCellCorrection: (
     request: DatasetCellCorrectionRequest,
-  ) => Promise<DatasetCellCorrectionResponse>;
+  ) => Promise<DatasetCellCorrectionResponse | null>;
   onCellEditDirtyChange: (dirty: boolean) => void;
   onLoadDatasetProfile: (versionId: string) => void;
   onLoadRowsPreview: (versionId: string, offset: number) => void;
@@ -47,6 +50,9 @@ export function DatasetVersionPanel({
   profile,
   schemaDrafts,
   version,
+  previewError = null,
+  profileError = null,
+  isSwitchingVersion = false,
   onApplyBayesianPreset,
   onCreateCellCorrection,
   onCellEditDirtyChange,
@@ -127,11 +133,13 @@ export function DatasetVersionPanel({
           ) : null}
         </dl>
       </details>
+      <fieldset disabled={isSwitchingVersion} aria-busy={isSwitchingVersion} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <DatasetProfileSection
         isLoadingProfile={isLoadingProfile}
         profile={profile}
         versionId={version.version_id}
         onLoadDatasetProfile={onLoadDatasetProfile}
+        error={profileError}
       />
       <DatasetSchemaSection
         canApplyBayesianPreset={canApplyBayesianPreset}
@@ -152,7 +160,9 @@ export function DatasetVersionPanel({
         onPreviewLimitChange={onPreviewLimitChange}
         onCreateCellCorrection={onCreateCellCorrection}
         onDirtyChange={onCellEditDirtyChange}
+        error={previewError}
       />
+      </fieldset>
     </section>
   );
 }

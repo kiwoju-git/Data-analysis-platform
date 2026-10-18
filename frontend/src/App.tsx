@@ -376,6 +376,8 @@ export default function App() {
     profile,
     setFlowError,
     version,
+    confirmNavigation: confirmDatasetNavigation,
+    onDatasetDeleted,
   } = useDatasetWorkflow({
     onDatasetVersionCreated: () => {
       publishWorkspaceMutation("dataset_created");
@@ -4016,6 +4018,7 @@ export default function App() {
     analysisId?: string,
     tab: "reports" | "history" = "reports",
   ) {
+    if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
     if (typeof window !== "undefined") {
       const url = new URL("/reports", window.location.origin);
       const activeVersionId = activeDatasetIdFromCurrentLocation();
@@ -4032,6 +4035,7 @@ export default function App() {
   }
 
   function handleOpenProjectPage() {
+    if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
     if (typeof window !== "undefined") {
       pushAppLocation(pathWithActiveDatasetQuery("/home"));
     }
@@ -4039,6 +4043,7 @@ export default function App() {
   }
 
   function handleOpenGraphsPage() {
+    if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
     if (typeof window !== "undefined") {
       pushAppLocation(pathWithActiveDatasetQuery("/graphs"));
     }
@@ -4051,8 +4056,7 @@ export default function App() {
   }
 
   function handleAssetsDeleted(response: DatasetVersionDeleteResponse) {
-    void response;
-    activeDatasetSelectorProps.catalogState.onRefresh();
+    onDatasetDeleted(response);
     setDatasetStateRevision((revision) => revision + 1);
     publishWorkspaceMutation("dataset_deleted");
     setAnalysisResult(null);
@@ -4061,6 +4065,7 @@ export default function App() {
   function handleOpenManagePage(
     tab: "all" | "datasets" | "analyses" | "models" | "designs" = "all",
   ) {
+    if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
     if (typeof window !== "undefined") {
       const url = new URL(
         pathWithActiveDatasetQuery("/manage"),
@@ -4075,6 +4080,7 @@ export default function App() {
   function handleOpenHelpPage(
     section?: "purpose" | "roles" | "methods" | "tutorial",
   ) {
+    if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
     if (typeof window !== "undefined") {
       const url = new URL("/help", window.location.origin);
       const activeVersionId = activeDatasetIdFromCurrentLocation();
@@ -4090,6 +4096,7 @@ export default function App() {
   }
 
   function handleSelectAnalysisMethod(moduleId: AnalysisModuleId, methodId: string | null) {
+    if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
     analysisExportState.clearAnalysisExportErrors();
     if (methodId !== null && typeof window !== "undefined") {
       pushAppLocation(
@@ -4109,6 +4116,7 @@ export default function App() {
   }
 
   function handleOpenAnalysisPage() {
+    if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
     if (typeof window !== "undefined") {
       pushAppLocation(pathWithActiveDatasetQuery("/analysis"));
     }
@@ -4116,6 +4124,7 @@ export default function App() {
   }
 
   function handleOpenAnalysisDomain(domain: AnalysisDomainDefinition) {
+    if (appRoute.page === "dataset" && !confirmDatasetNavigation()) return;
     if (typeof window !== "undefined") {
       const url = new URL(pathWithActiveDatasetQuery("/analysis"), window.location.origin);
       url.searchParams.set("domain", domain.id);

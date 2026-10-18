@@ -24,6 +24,9 @@ import type {
   DatasetVersionDeleteResponse,
   DatasetVersionDeletionPreflightResponse,
   DatasetVersionResponse,
+  DatasetUploadResponse,
+  DatasetCellCorrectionResponse,
+  DatasetSchemaResponse,
   DatasetRowsPreviewResponse,
   DatasetProfileResponse,
   RegressionPredictionCsvExportResponse,
@@ -52,6 +55,8 @@ import { useBayesianRecommendationState } from "./features/bayesian/hooks/useBay
 import { useBayesianRetentionState } from "./features/bayesian/hooks/useBayesianRetentionState";
 import { useDatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 import { useDatasetWorkflow } from "./useDatasetWorkflow";
+import { usePastedDatasetDraft } from "./usePastedDatasetDraft";
+import { usePastedDatasetSubmission } from "./usePastedDatasetSubmission";
 import { useDatasetVersionRetentionState } from "./useDatasetVersionRetentionState";
 import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
 import { useReportCenterState } from "./useReportCenterState";
@@ -64,6 +69,9 @@ const apiMocks = vi.hoisted(() => ({
   createBayesianRecommendation: vi.fn(),
   createBayesianRecommendationBatch: vi.fn(),
   createBayesianStudy: vi.fn(),
+  confirmDatasetParsing: vi.fn(),
+  createDatasetCellCorrection: vi.fn(),
+  createDatasetFromPastedText: vi.fn(),
   createAnalysisResultCsvExport: vi.fn(),
   createAnalysisResultHtmlReport: vi.fn(),
   createAnalysisResultJsonExport: vi.fn(),
@@ -105,6 +113,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchRegressionModelManifest: vi.fn(),
   fetchRegressionModels: vi.fn(),
   recordBayesianObservation: vi.fn(),
+  updateDatasetSchema: vi.fn(),
+  uploadDataset: vi.fn(),
 }));
 
 vi.mock("./api", () => apiMocks);
@@ -112,14 +122,17 @@ vi.mock("./api", () => apiMocks);
 interface Deferred<T> {
   promise: Promise<T>;
   resolve: (value: T) => void;
+  reject: (error: unknown) => void;
 }
 
 function deferred<T>(): Deferred<T> {
   let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((promiseResolve) => {
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve;
+    reject = promiseReject;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 interface StateSlot<T> {
@@ -639,6 +652,636 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "window");
 });
 
+function workflowUpload(index: number): DatasetUploadResponse {
+  return {
+    dataset_id: datasetCatalogItem(index).dataset_id,
+    original_filename: `synthetic-${index}.csv`,
+    size_bytes: 6,
+    sha256: "a".repeat(64),
+    detected_format: "csv",
+    parsing: {
+      kind: "delimited_text", encoding_candidates: ["utf-8"],
+      suggested_encoding: "utf-8", delimiter_candidates: [],
+      suggested_delimiter: ",", quote_char: '"', decimal: ".", thousands: null,
+      has_header: true, header_row: 1, data_start_row: 2,
+      xlsx_requires_sheet_selection: false,
+    },
+    warnings: [], next_step: "confirm_schema",
+  };
+}
+
+function workflowVersion(index: number): DatasetVersionResponse {
+  const item = datasetCatalogItem(index);
+  return {
+    version_id: item.version_id, dataset_id: item.dataset_id,
+    version_number: 1, row_count: 2, column_count: 1,
+    schema_hash: `schema-${index}`, created_at: item.created_at,
+    source_sha256: "a".repeat(64), canonical_artifact: null,
+    parsing: {
+      kind: "delimited_text", encoding: "utf-8", delimiter: ",", quote_char: '"',
+      decimal: ".", thousands: null, has_header: true, header_row: 1,
+      data_start_row: 2, missing_tokens: [], xlsx_sheet_name: null,
+    },
+    columns: [{
+      column_id: `column-${index}`, version_id: item.version_id, column_index: 0,
+      original_name: `value-${index}`, display_name: `value-${index}`,
+      data_type: "decimal", measurement_level: "continuous", role: "feature", unit: null,
+    }],
+  };
+}
+
+function workflowPreview(version: DatasetVersionResponse): DatasetRowsPreviewResponse {
+  return {
+    version_id: version.version_id, offset: 0, limit: 10, total_rows: 2,
+    returned_rows: 2, columns: version.columns,
+    rows: [{ row_index: 0, values: ["1"] }, { row_index: 1, values: ["2"] }],
+  };
+}
+
+function workflowProfile(version: DatasetVersionResponse): DatasetProfileResponse {
+  return {
+    profile_schema_version: 1, version_id: version.version_id,
+    dataset_id: version.dataset_id, row_count: 2, column_count: 1,
+    schema_hash: version.schema_hash, computed_at: version.created_at,
+    unique_count_limit: 100, canonical_artifact: null, profile_artifact: null,
+    preflight: {
+      estimated_memory_bytes: 16, duplicate_row_count: 0,
+      duplicate_row_count_capped: false, duplicate_row_check_limit: 100,
+    },
+    columns: [], warnings: [],
+  };
+}
+
+function workflowSchema(version: DatasetVersionResponse): DatasetSchemaResponse {
+  return { version_id: version.version_id, dataset_id: version.dataset_id, schema_hash: "changed-a", columns: version.columns };
+}
+
+function workflowDeletion(version: DatasetVersionResponse): DatasetVersionDeleteResponse {
+  return {
+    deletion_schema_version: 3, version_id: version.version_id, dataset_id: version.dataset_id,
+    deletion_scope: "version_only", deletion_manifest_sha256: "d".repeat(64), deleted_at: version.created_at,
+    deletion_mode: "verified_files_and_metadata", operation_id: "delete_dataset_verified",
+    preserved_unverified_file_count: 0, deleted_dependency_count: 0, cleanup_status: "deleted",
+    deleted_counts: {
+      dataset_version_count: 1, dataset_root_count: 0, dataset_column_count: 1,
+      dataset_artifact_count: 1, artifact_file_count: 1, artifact_file_bytes: 16,
+      raw_upload_file_count: 0, raw_upload_file_bytes: 0, sibling_version_count: 1,
+      analysis_run_count: 0, regression_model_count: 0, prediction_source_count: 0,
+      prediction_target_count: 0, analysis_export_count: 0, job_count: 0,
+      attribute_control_limit_set_count: 0, phase_2_analysis_count: 0,
+    },
+  };
+}
+
+function datasetWorkflowHarness() {
+  let href = "http://127.0.0.1/datasets?section=dataset-version";
+  const storage = new Map<string, string>();
+  const events = new EventTarget();
+  const confirm = vi.fn(() => true);
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      get location() { return new URL(href); },
+      history: {
+        state: null,
+        replaceState: (_state: unknown, _title: string, url: string) => {
+          href = new URL(url, href).href;
+        },
+      },
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
+      },
+      confirm,
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
+      dispatchEvent: events.dispatchEvent.bind(events),
+    },
+  });
+  const versions = [workflowVersion(1), workflowVersion(2), workflowVersion(3)];
+  const versionFor = (id: string) => {
+    const found = versions.find((item) => item.version_id === id);
+    if (found === undefined) throw new Error("unexpected_test_version");
+    return found;
+  };
+  apiMocks.fetchDatasetVersion.mockImplementation((id: string) => Promise.resolve(versionFor(id)));
+  apiMocks.fetchRowsPreview.mockImplementation((id: string) => Promise.resolve(workflowPreview(versionFor(id))));
+  apiMocks.fetchDatasetProfile.mockImplementation((id: string) => Promise.resolve(workflowProfile(versionFor(id))));
+  const callbacks = {
+    onDatasetReset: vi.fn(), onDatasetColumnsChanged: vi.fn(),
+    onDatasetVersionCreated: vi.fn(), onSchemaChanged: vi.fn(),
+  };
+  const runner = new HookRunner(useDatasetWorkflow, callbacks);
+  const select = (index: number) => runner.act(() => {
+    runner.output.activeDatasetSelectorProps.onSelect(versions[index - 1].version_id);
+  });
+  const file = (name: string) => runner.act(() => {
+    runner.output.datasetPageProps.onFileChange({
+      currentTarget: { files: [new File(["x\n1"], name)] },
+    } as unknown as React.ChangeEvent<HTMLInputElement>);
+  });
+  const upload = () => runner.act(() => {
+    runner.output.datasetPageProps.onUpload({ preventDefault: vi.fn() } as unknown as React.FormEvent<HTMLFormElement>);
+  });
+  const navigate = (id: string) => {
+    const url = new URL(href);
+    url.searchParams.set("dataset_version_id", id);
+    href = url.href;
+    events.dispatchEvent(new Event("popstate"));
+  };
+  return { runner, callbacks, versions, select, file, upload, storage, confirm, navigate, href: () => href };
+}
+
+describe("A05 dataset source isolation", () => {
+  it("preserves the committed dataset when only a new file draft is selected", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const resets = h.callbacks.onDatasetReset.mock.calls.length;
+    await h.file("replacement.csv");
+    expect(h.runner.output.version?.version_id).toBe(h.versions[0].version_id);
+    expect(h.storage.get("datalab.current_dataset_version_id")).toBe(h.versions[0].version_id);
+    expect(new URL(h.href()).searchParams.get("dataset_version_id")).toBe(h.versions[0].version_id);
+    expect(h.callbacks.onDatasetReset).toHaveBeenCalledTimes(resets);
+    h.runner.unmount();
+  });
+
+  it("does not publish a late upload for an obsolete selected file", async () => {
+    const h = datasetWorkflowHarness();
+    const old = deferred<DatasetUploadResponse>();
+    apiMocks.uploadDataset.mockReturnValueOnce(old.promise);
+    await h.file("old.csv");
+    await h.upload();
+    await h.file("new.csv");
+    old.resolve(workflowUpload(1));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.selectedFile?.name).toBe("new.csv");
+    expect(h.runner.output.datasetPageProps.upload).toBeNull();
+    expect(h.runner.output.datasetPageProps.isUploading).toBe(false);
+    h.runner.unmount();
+  });
+
+  it("restores the visible file selection when replacement is rejected", async () => {
+    const h = datasetWorkflowHarness();
+    await h.file("accepted.csv");
+    h.confirm.mockReturnValue(false);
+    const input = { files: [new File(["replacement"], "rejected.csv")], value: "rejected.csv" };
+    await h.runner.act(() => h.runner.output.datasetPageProps.onFileChange({ currentTarget: input } as unknown as React.ChangeEvent<HTMLInputElement>));
+    expect(h.runner.output.datasetPageProps.selectedFile?.name).toBe("accepted.csv");
+    expect(input.files[0].name).toBe("accepted.csv");
+    apiMocks.uploadDataset.mockResolvedValueOnce(workflowUpload(1));
+    await h.upload();
+    expect((apiMocks.uploadDataset.mock.calls[0][0] as File).name).toBe("accepted.csv");
+    h.runner.unmount();
+  });
+
+  it("invalidates a pending paste when the user clears it, while reset acknowledgement preserves completed staging", async () => {
+    const h = datasetWorkflowHarness();
+    const old = deferred<DatasetUploadResponse>();
+    apiMocks.createDatasetFromPastedText.mockReturnValueOnce(old.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onPasteDraftChange?.(true, "user"));
+    const oldCompletion = h.runner.output.datasetPageProps.onPasteDataset("x\n1", true);
+    await h.runner.flush();
+    await h.runner.act(() => h.runner.output.datasetPageProps.onPasteDraftChange?.(false, "user"));
+    old.resolve(workflowUpload(1));
+    expect(await oldCompletion).toBe(false);
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.upload).toBeNull();
+    expect(h.runner.output.datasetPageProps.isPastingDataset).toBe(false);
+    apiMocks.createDatasetFromPastedText.mockResolvedValueOnce(workflowUpload(2));
+    expect(await h.runner.output.datasetPageProps.onPasteDataset("x\n2", true)).toBe(true);
+    await h.runner.flush();
+    await h.runner.act(() => h.runner.output.datasetPageProps.onPasteDraftChange?.(false, "reset"));
+    expect(h.runner.output.datasetPageProps.upload?.dataset_id).toBe(h.versions[1].dataset_id);
+    h.runner.unmount();
+  });
+
+  it("does not accept an old paste after a dataset selection", async () => {
+    const h = datasetWorkflowHarness();
+    const old = deferred<DatasetUploadResponse>();
+    apiMocks.createDatasetFromPastedText.mockReturnValueOnce(old.promise);
+    const completion = h.runner.output.datasetPageProps.onPasteDataset("x\n1", true);
+    await h.runner.flush();
+    await h.select(2);
+    old.resolve(workflowUpload(1));
+    expect(await completion).toBe(false);
+    await h.runner.flush();
+    expect(h.runner.output.version?.version_id).toBe(h.versions[1].version_id);
+    expect(h.runner.output.datasetPageProps.upload).toBeNull();
+    h.runner.unmount();
+  });
+
+  it("does not activate a late parsing confirmation over the newer selection", async () => {
+    const h = datasetWorkflowHarness();
+    apiMocks.uploadDataset.mockResolvedValueOnce(workflowUpload(1));
+    await h.file("old.csv");
+    await h.upload();
+    const old = deferred<DatasetVersionResponse>();
+    apiMocks.confirmDatasetParsing.mockReturnValueOnce(old.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onConfirmParsing());
+    await h.select(2);
+    const readCount = apiMocks.fetchRowsPreview.mock.calls.length;
+    old.resolve(h.versions[0]);
+    await h.runner.flush();
+    expect(h.runner.output.version?.version_id).toBe(h.versions[1].version_id);
+    expect(apiMocks.fetchRowsPreview).toHaveBeenCalledTimes(readCount);
+    expect(h.storage.get("datalab.current_dataset_version_id")).toBe(h.versions[1].version_id);
+    h.runner.unmount();
+  });
+
+  it("does not publish an old schema write after switching versions", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const old = deferred<DatasetSchemaResponse>();
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(old.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.select(2);
+    old.resolve(workflowSchema(h.versions[0]));
+    await h.runner.flush();
+    expect(h.runner.output.version?.version_id).toBe(h.versions[1].version_id);
+    expect(h.callbacks.onSchemaChanged).not.toHaveBeenCalled();
+    h.runner.unmount();
+  });
+
+  it("preserves schema draft edits made after the submitted snapshot", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const old = deferred<DatasetSchemaResponse>();
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(old.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { display_name: "new unsaved label" }));
+    old.resolve(workflowSchema(h.versions[0]));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].display_name).toBe("new unsaved label");
+    expect(h.runner.output.version?.schema_hash).toBe("changed-a");
+    expect(h.callbacks.onSchemaChanged).toHaveBeenCalledOnce();
+    h.runner.unmount();
+  });
+
+  it("reconciles a saved active schema after intake intent changes without cancelling the newer upload", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const schemaSave = deferred<DatasetSchemaResponse>();
+    const intake = deferred<DatasetUploadResponse>();
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(schemaSave.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.file("new-intake.csv");
+    apiMocks.uploadDataset.mockReturnValueOnce(intake.promise);
+    await h.upload();
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { display_name: "still unsaved" }));
+    const updated = { ...h.versions[0], schema_hash: "changed-a", columns: [{ ...h.versions[0].columns[0], display_name: "saved label" }] };
+    apiMocks.fetchDatasetProfile.mockResolvedValueOnce(workflowProfile(updated));
+    schemaSave.resolve({ ...workflowSchema(updated), columns: updated.columns });
+    await h.runner.flush();
+    expect(h.runner.output.version?.schema_hash).toBe("changed-a");
+    expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledOnce();
+    expect(h.runner.output.version?.columns[0].display_name).toBe("saved label");
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].display_name).toBe("still unsaved");
+    expect(h.callbacks.onSchemaChanged).toHaveBeenCalledWith(updated.columns);
+    expect(h.runner.output.datasetPageProps.selectedFile?.name).toBe("new-intake.csv");
+    expect(h.runner.output.datasetPageProps.isUploading).toBe(true);
+    intake.resolve(workflowUpload(2));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.upload?.dataset_id).toBe(h.versions[1].dataset_id);
+    expect(h.runner.output.version?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.profile?.schema_hash).toBe("changed-a");
+    h.runner.unmount();
+  });
+
+  it("does not reconcile an old schema save over a newer save on the same active version", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const oldSave = deferred<DatasetSchemaResponse>();
+    const newSave = deferred<DatasetSchemaResponse>();
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(oldSave.promise).mockReturnValueOnce(newSave.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.file("new-intake.csv");
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { display_name: "newer label" }));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    const columns = [{ ...h.versions[0].columns[0], display_name: "newer label" }];
+    newSave.resolve({ ...workflowSchema(h.versions[0]), schema_hash: "newest-schema", columns });
+    await h.runner.flush();
+    const versionReads = apiMocks.fetchDatasetVersion.mock.calls.length;
+    oldSave.resolve(workflowSchema(h.versions[0]));
+    await h.runner.flush();
+    expect(h.runner.output.version?.schema_hash).toBe("newest-schema");
+    expect(h.runner.output.version?.columns[0].display_name).toBe("newer label");
+    expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledTimes(versionReads);
+    h.runner.unmount();
+  });
+
+  it("does not activate a completed old cell correction over a newer dataset", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const old = deferred<DatasetCellCorrectionResponse>();
+    apiMocks.createDatasetCellCorrection.mockReturnValueOnce(old.promise);
+    const completion = h.runner.output.datasetPageProps.onCreateCellCorrection!({
+      confirmation_parent_version_id: h.versions[0].version_id,
+      expected_parent_schema_hash: h.versions[0].schema_hash,
+      expected_parent_canonical_sha256: "a".repeat(64),
+      edits: [{ row_index: 0, column_id: "column-1", operation: "set_value", value: "3" }],
+    });
+    await h.runner.flush();
+    await h.select(2);
+    old.resolve({
+      correction_schema_version: 1, parent_version_id: h.versions[0].version_id,
+      new_version: { ...h.versions[2], dataset_id: h.versions[0].dataset_id, parent_version_id: h.versions[0].version_id }, changed_cell_count: 1, lineage_sha256: "b".repeat(64),
+      created_at: h.versions[0].created_at,
+    });
+    await completion;
+    await h.runner.flush();
+    expect(h.runner.output.version?.version_id).toBe(h.versions[1].version_id);
+    expect(h.storage.get("datalab.current_dataset_version_id")).toBe(h.versions[1].version_id);
+    h.runner.unmount();
+  });
+
+  it("keeps a successfully restored version when only its profile fails", async () => {
+    const h = datasetWorkflowHarness();
+    apiMocks.fetchDatasetProfile.mockRejectedValueOnce(new Error("dataset_profile_failed"));
+    await h.select(1);
+    expect(h.runner.output.version?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.datasetPageProps.preview?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.profile).toBeNull();
+    expect(h.storage.get("datalab.current_dataset_version_id")).toBe(h.versions[0].version_id);
+    h.runner.unmount();
+  });
+
+  it("does not persist a selection response after unmount without bootstrap selection", async () => {
+    const h = datasetWorkflowHarness();
+    const old = deferred<DatasetVersionResponse>();
+    apiMocks.fetchDatasetVersion.mockReturnValueOnce(old.promise);
+    await h.select(1);
+    h.runner.unmount();
+    old.resolve(h.versions[0]);
+    await h.runner.flush();
+    expect(h.storage.size).toBe(0);
+    expect(h.callbacks.onDatasetColumnsChanged).not.toHaveBeenCalled();
+    expect(new URL(h.href()).searchParams.get("dataset_version_id")).toBeNull();
+  });
+
+  it("keeps the newer intake busy and error state when an old request fails", async () => {
+    const h = datasetWorkflowHarness();
+    const first = deferred<DatasetUploadResponse>();
+    const second = deferred<DatasetUploadResponse>();
+    apiMocks.uploadDataset.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    await h.file("first.csv");
+    await h.upload();
+    await h.file("second.csv");
+    await h.upload();
+    first.reject(new Error("obsolete raw failure"));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.isUploading).toBe(true);
+    expect(h.runner.output.flowError).toBeNull();
+    second.resolve(workflowUpload(2));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.upload?.dataset_id).toBe(h.versions[1].dataset_id);
+    expect(h.runner.output.datasetPageProps.isUploading).toBe(false);
+    h.runner.unmount();
+  });
+
+  it("retries a failed profile without refetching or losing the committed version", async () => {
+    const h = datasetWorkflowHarness();
+    apiMocks.fetchDatasetProfile.mockRejectedValueOnce(new Error("profile failed"));
+    await h.select(1);
+    expect(h.runner.output.datasetPageProps.profileError).toBe("dataset_profile_failed");
+    await h.runner.act(() => h.runner.output.datasetPageProps.onLoadDatasetProfile(h.versions[0].version_id));
+    expect(h.runner.output.profile?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.datasetPageProps.profileError).toBeNull();
+    expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledOnce();
+    h.runner.unmount();
+  });
+
+  it("does not couple a preview failure to profile loading or active identity", async () => {
+    const h = datasetWorkflowHarness();
+    apiMocks.fetchRowsPreview.mockRejectedValueOnce(new Error("preview failed"));
+    await h.select(1);
+    expect(h.runner.output.profile?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.datasetPageProps.previewError).toBe("rows_preview_failed");
+    expect(h.runner.output.datasetPageProps.profileError).toBeNull();
+    await h.runner.act(() => h.runner.output.datasetPageProps.onLoadRowsPreview(h.versions[0].version_id, 0));
+    expect(h.runner.output.datasetPageProps.preview?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.datasetPageProps.previewError).toBeNull();
+    h.runner.unmount();
+  });
+
+  it("preserves the last good dataset when the replacement version cannot be loaded", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    apiMocks.fetchDatasetVersion.mockRejectedValueOnce(new Error("not found"));
+    await h.select(2);
+    expect(h.runner.output.version?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.activeDatasetSelectorProps.pendingVersionId).toBe(h.versions[1].version_id);
+    expect(h.runner.output.activeDatasetSelectorProps.activationError).toBe("dataset_version_restore_failed");
+    expect(h.storage.get("datalab.current_dataset_version_id")).toBe(h.versions[0].version_id);
+    await h.runner.act(() => h.runner.output.activeDatasetSelectorProps.onRetrySwitch());
+    expect(h.runner.output.version?.version_id).toBe(h.versions[1].version_id);
+    expect(h.runner.output.activeDatasetSelectorProps.activationError).toBeNull();
+    h.runner.unmount();
+  });
+
+  it("rejects an obsolete same-ID schema write after A-B-A selection", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const old = deferred<DatasetSchemaResponse>();
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(old.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.select(2);
+    await h.select(1);
+    old.resolve(workflowSchema(h.versions[0]));
+    await h.runner.flush();
+    expect(h.runner.output.version?.schema_hash).toBe(h.versions[0].schema_hash);
+    expect(h.callbacks.onSchemaChanged).not.toHaveBeenCalled();
+    h.runner.unmount();
+  });
+
+  it.each(["service_unavailable", "network_error", "dataset_version_not_found"])("retains initial restore identity except confirmed missing version: %s", async (code) => {
+    const h = datasetWorkflowHarness();
+    h.runner.unmount();
+    const id = h.versions[0].version_id;
+    h.storage.set("datalab.current_dataset_version_id", id);
+    window.history.replaceState(null, "", `/datasets?section=dataset-version&dataset_version_id=${id}`);
+    apiMocks.fetchDatasetVersion.mockRejectedValueOnce(Object.assign(new Error("private server error"), { code }));
+    const runner = new HookRunner(useDatasetWorkflow, h.callbacks);
+    await runner.flush();
+    expect(runner.output.version).toBeNull();
+    expect(runner.output.activeDatasetSelectorProps.activationError).toBe(code);
+    expect(h.storage.get("datalab.current_dataset_version_id")).toBe(code === "dataset_version_not_found" ? undefined : id);
+    expect(new URL(h.href()).searchParams.get("dataset_version_id")).toBe(code === "dataset_version_not_found" ? null : id);
+    expect(new URL(h.href()).searchParams.get("section")).toBe("dataset-version");
+    await runner.act(() => runner.output.activeDatasetSelectorProps.onRetrySwitch());
+    expect(runner.output.version?.version_id).toBe(id);
+    expect(runner.output.activeDatasetSelectorProps.activationError).toBeNull();
+    runner.unmount();
+  });
+
+  it("makes interrupted auxiliary reads retryable while a new intake draft preserves the active dataset", async () => {
+    const h = datasetWorkflowHarness();
+    const oldPreview = deferred<DatasetRowsPreviewResponse>();
+    const oldProfile = deferred<DatasetProfileResponse>();
+    apiMocks.fetchRowsPreview.mockReturnValueOnce(oldPreview.promise);
+    apiMocks.fetchDatasetProfile.mockReturnValueOnce(oldProfile.promise);
+    await h.select(1);
+    expect(h.runner.output.datasetPageProps.isLoadingPreview).toBe(true);
+    expect(h.runner.output.datasetPageProps.isLoadingProfile).toBe(true);
+    await h.file("new-draft.csv");
+    expect(h.runner.output.version?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.datasetPageProps.previewError).toBe("dataset_request_interrupted");
+    expect(h.runner.output.datasetPageProps.profileError).toBe("dataset_request_interrupted");
+    oldPreview.resolve(workflowPreview(h.versions[0]));
+    oldProfile.resolve(workflowProfile(h.versions[0]));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.preview).toBeNull();
+    expect(h.runner.output.profile).toBeNull();
+    await h.runner.act(() => h.runner.output.datasetPageProps.onLoadRowsPreview(h.versions[0].version_id, 0));
+    await h.runner.act(() => h.runner.output.datasetPageProps.onLoadDatasetProfile(h.versions[0].version_id));
+    expect(h.runner.output.datasetPageProps.preview?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.profile?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.datasetPageProps.previewError).toBeNull();
+    expect(h.runner.output.datasetPageProps.profileError).toBeNull();
+    expect(h.runner.output.datasetPageProps.selectedFile?.name).toBe("new-draft.csv");
+    expect(h.storage.get("datalab.current_dataset_version_id")).toBe(h.versions[0].version_id);
+    expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledOnce();
+    h.runner.unmount();
+  });
+
+  it("preserves schema edits, URL and requests when dirty selection is rejected", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSchemaDraftChange("column-1", { unit: "unsaved unit" }));
+    h.confirm.mockReturnValue(false);
+    await h.select(2);
+    expect(h.runner.output.datasetPageProps.schemaDrafts[0].unit).toBe("unsaved unit");
+    expect(h.runner.output.version?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.activeDatasetSelectorProps.pendingVersionId).toBeNull();
+    expect(apiMocks.fetchDatasetVersion).toHaveBeenCalledOnce();
+    expect(new URL(h.href()).searchParams.get("dataset_version_id")).toBe(h.versions[0].version_id);
+    h.runner.unmount();
+  });
+
+  it("reacts to same-mount dataset query navigation without changing unrelated query values", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    await h.runner.act(() => h.navigate(h.versions[1].version_id));
+    expect(h.runner.output.version?.version_id).toBe(h.versions[1].version_id);
+    expect(new URL(h.href()).searchParams.get("section")).toBe("dataset-version");
+    h.runner.unmount();
+  });
+
+  it("rejects a mismatched preview and never renders a mismatched profile schema", async () => {
+    const h = datasetWorkflowHarness();
+    apiMocks.fetchRowsPreview.mockResolvedValueOnce(workflowPreview(h.versions[1]));
+    apiMocks.fetchDatasetProfile.mockResolvedValueOnce({ ...workflowProfile(h.versions[0]), schema_hash: "wrong-schema" });
+    await h.select(1);
+    expect(h.runner.output.version?.version_id).toBe(h.versions[0].version_id);
+    expect(h.runner.output.datasetPageProps.preview).toBeNull();
+    expect(h.runner.output.profile).toBeNull();
+    expect(h.runner.output.datasetPageProps.previewError).toBe("dataset_response_context_mismatch");
+    expect(h.runner.output.datasetPageProps.profileError).toBe("dataset_response_context_mismatch");
+    h.runner.unmount();
+  });
+
+  it("clears a deleted active source and rejects its pending write", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const old = deferred<DatasetSchemaResponse>();
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(old.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.runner.act(() => h.runner.output.onDatasetDeleted(workflowDeletion(h.versions[0])));
+    old.resolve(workflowSchema(h.versions[0]));
+    await h.runner.flush();
+    expect(h.runner.output.version).toBeNull();
+    expect(h.storage.size).toBe(0);
+    expect(h.callbacks.onSchemaChanged).not.toHaveBeenCalled();
+    h.runner.unmount();
+  });
+
+  it("does not cancel a current source write when an unrelated dataset is deleted", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const old = deferred<DatasetSchemaResponse>();
+    apiMocks.updateDatasetSchema.mockReturnValueOnce(old.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onSaveSchema());
+    await h.runner.act(() => h.runner.output.onDatasetDeleted(workflowDeletion(h.versions[1])));
+    old.resolve(workflowSchema(h.versions[0]));
+    await h.runner.flush();
+    expect(h.runner.output.version?.schema_hash).toBe("changed-a");
+    expect(h.callbacks.onSchemaChanged).toHaveBeenCalledOnce();
+    h.runner.unmount();
+  });
+
+  it("does not let old preview failure replace the new source read state", async () => {
+    const h = datasetWorkflowHarness();
+    await h.select(1);
+    const old = deferred<DatasetRowsPreviewResponse>();
+    apiMocks.fetchRowsPreview.mockReturnValueOnce(old.promise);
+    await h.runner.act(() => h.runner.output.datasetPageProps.onLoadRowsPreview(h.versions[0].version_id, 0));
+    await h.select(2);
+    old.reject(new Error("late failed preview"));
+    await h.runner.flush();
+    expect(h.runner.output.datasetPageProps.preview?.version_id).toBe(h.versions[1].version_id);
+    expect(h.runner.output.datasetPageProps.previewError).toBeNull();
+    expect(h.runner.output.datasetPageProps.isLoadingPreview).toBe(false);
+    h.runner.unmount();
+  });
+
+  it("keeps a newer raw paste draft when an older submission is cleared", async () => {
+    const changed = vi.fn();
+    const runner = new HookRunner(usePastedDatasetDraft, changed);
+    const change = (value: string) => runner.act(() => runner.output.onRawTextChange({ currentTarget: { value } } as React.ChangeEvent<HTMLTextAreaElement>));
+    await change("name\nold");
+    const submitted = runner.output.getRevision();
+    const literal = "name\n\uE000user-token\uE001";
+    await change(literal);
+    await runner.act(() => runner.output.clear(submitted));
+    expect(runner.output.getRawText()).toBe(literal);
+    expect(changed).toHaveBeenLastCalledWith(true, "user");
+    await runner.act(() => runner.output.clear(runner.output.getRevision()));
+    expect(runner.output.getRawText()).toBe("");
+    expect(changed).toHaveBeenLastCalledWith(false, "user");
+    runner.unmount();
+  });
+
+  it.each(["before", "after"] as const)("lets a newer paste complete when obsolete completion arrives %s it", async (completionOrder) => {
+    const old = deferred<boolean>();
+    const next = deferred<boolean>();
+    const register = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const runner = new HookRunner(usePastedDatasetSubmission, { isSubmitting: false, onRegister: register });
+    const edit = (value: string) => runner.act(() => runner.output.draft.onRawTextChange({ currentTarget: { value } } as React.ChangeEvent<HTMLTextAreaElement>));
+    const submit = () => runner.output.submit({ preventDefault: vi.fn() } as unknown as React.FormEvent<HTMLFormElement>);
+    await edit("x\n1");
+    const firstCompletion = submit();
+    await runner.flush();
+    expect(runner.output.isAwaitingSubmit).toBe(true);
+    await edit("x\n2");
+    expect(runner.output.isAwaitingSubmit).toBe(false);
+    const secondCompletion = submit();
+    await runner.flush();
+    expect(register).toHaveBeenNthCalledWith(2, "x\n2", true);
+    expect(runner.output.isAwaitingSubmit).toBe(true);
+    if (completionOrder === "before") {
+      old.resolve(true);
+      await firstCompletion;
+      await runner.flush();
+      expect(runner.output.isAwaitingSubmit).toBe(true);
+      expect(runner.output.draft.getRawText()).toBe("x\n2");
+    }
+    next.resolve(true);
+    await secondCompletion;
+    await runner.flush();
+    expect(runner.output.isAwaitingSubmit).toBe(false);
+    expect(runner.output.draft.getRawText()).toBe("");
+    if (completionOrder === "after") {
+      await edit("x\n\uE000new-unsaved\uE001");
+      old.resolve(true);
+      await firstCompletion;
+      await runner.flush();
+      expect(runner.output.draft.getRawText()).toBe("x\n\uE000new-unsaved\uE001");
+      expect(runner.output.isAwaitingSubmit).toBe(false);
+    }
+    runner.unmount();
+  });
+});
+
 describe("async workbench hooks", () => {
   it("keeps successful project cards when one overview request fails", async () => {
     apiMocks.fetchWorkspaceSummary.mockRejectedValueOnce(
@@ -869,8 +1512,8 @@ describe("async workbench hooks", () => {
     const profileA = deferred<DatasetProfileResponse>();
     const profileB = deferred<DatasetProfileResponse>();
     apiMocks.fetchDatasetVersion.mockReturnValueOnce(versionA.promise).mockReturnValueOnce(versionB.promise);
-    apiMocks.fetchRowsPreview.mockReturnValueOnce(previewA.promise).mockReturnValueOnce(previewB.promise);
-    apiMocks.fetchDatasetProfile.mockReturnValueOnce(profileA.promise).mockReturnValueOnce(profileB.promise);
+    apiMocks.fetchRowsPreview.mockImplementation((id: string) => id === workflowVersion(1).version_id ? previewA.promise : previewB.promise);
+    apiMocks.fetchDatasetProfile.mockImplementation((id: string) => id === workflowVersion(1).version_id ? profileA.promise : profileB.promise);
 
     let currentHref = "http://127.0.0.1/analysis/regression/regression.linear_model";
     const storage = new Map<string, string>();
@@ -906,37 +1549,15 @@ describe("async workbench hooks", () => {
     await runner.act(() => runner.output.activeDatasetSelectorProps.onSelect(idA));
     await runner.act(() => runner.output.activeDatasetSelectorProps.onSelect(idB));
 
-    const columnsB = [{ column_id: "column-b" }] as DatasetVersionResponse["columns"];
-    versionB.resolve({
-      version_id: idB,
-      dataset_id: "10000000-0000-4000-8000-000000000002",
-      version_number: 1,
-      row_count: 48,
-      column_count: 1,
-      schema_hash: "schema-b",
-      source_sha256: "b".repeat(64),
-      parsing: { has_header: true },
-      columns: columnsB,
-      created_at: "2026-07-21T00:00:00Z",
-    } as DatasetVersionResponse);
-    previewB.resolve({ version_id: idB, rows: [] } as unknown as DatasetRowsPreviewResponse);
-    profileB.resolve({ version_id: idB } as unknown as DatasetProfileResponse);
+    const columnsB = workflowVersion(2).columns;
+    versionB.resolve(workflowVersion(2));
+    previewB.resolve(workflowPreview(workflowVersion(2)));
+    profileB.resolve(workflowProfile(workflowVersion(2)));
     await runner.flush();
 
-    versionA.resolve({
-      version_id: idA,
-      dataset_id: "10000000-0000-4000-8000-000000000001",
-      version_number: 1,
-      row_count: 240,
-      column_count: 1,
-      schema_hash: "schema-a",
-      source_sha256: "a".repeat(64),
-      parsing: { has_header: true },
-      columns: [{ column_id: "column-a" }],
-      created_at: "2026-07-21T00:00:00Z",
-    } as DatasetVersionResponse);
-    previewA.resolve({ version_id: idA, rows: [] } as unknown as DatasetRowsPreviewResponse);
-    profileA.resolve({ version_id: idA } as unknown as DatasetProfileResponse);
+    versionA.resolve(workflowVersion(1));
+    previewA.resolve(workflowPreview(workflowVersion(1)));
+    profileA.resolve(workflowProfile(workflowVersion(1)));
     await runner.flush();
 
     expect(runner.output.version?.version_id).toBe(idB);
@@ -945,7 +1566,7 @@ describe("async workbench hooks", () => {
     expect(storage.get("datalab.current_dataset_version_id")).toBe(idB);
     expect(new URL(currentHref).searchParams.get("dataset_version_id")).toBe(idB);
     expect(callbacks.onDatasetColumnsChanged).toHaveBeenLastCalledWith(columnsB);
-    expect(callbacks.onDatasetReset).toHaveBeenCalledTimes(2);
+    expect(callbacks.onDatasetReset).toHaveBeenCalledTimes(1);
     runner.unmount();
   });
 

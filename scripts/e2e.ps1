@@ -8,7 +8,8 @@ param(
     [switch]$FactorialWorkflowOnly,
     [switch]$GprReportOnly,
     [switch]$RefinedUiOnly,
-    [switch]$ApiTranslationOnly
+    [switch]$ApiTranslationOnly,
+    [switch]$DatasetContextOnly
 )
 
 Set-StrictMode -Version Latest
@@ -62,6 +63,9 @@ try {
     }
     if ($ApiTranslationOnly) {
         $Args += "--api-translation-only"
+    }
+    if ($DatasetContextOnly) {
+        $Args += "--dataset-context-only"
     }
 
     & $Python @Args

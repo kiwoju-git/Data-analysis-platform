@@ -1,5 +1,22 @@
 # Browser E2E Coverage
 
+## Dataset Context Remediation
+
+Stage `verify dataset source context under delayed responses` uses synthetic
+server writes and withholds their responses while the user selects another
+version. Schema/cell writes must remain stored without reactivating their old
+source. Parent/current source checksums, URL/session selection and current grid
+values are checked. A separately failed profile request must preserve the valid
+version/preview and offer an independent retry. An acknowledged same-version
+schema write must update committed metadata without discarding a newer intake
+draft. Rejected file replacement must preserve both the native selected file and
+the actual upload bytes. Clearing/replacing a pending paste must reject its old
+response and permit the newer submission. Dirty-switch cancellation preserves
+draft, URL and selection. Both locales are exercised.
+`scripts/e2e.ps1 -DatasetContextOnly` runs this stage. Each child context records
+its own trace and evidence. Test implementation is not a pass claim; execution
+results belong in the remediation ledger.
+
 ## API Translation Boundary Remediation
 
 Stage `verify API translation boundary with synthetic inputs` runs four isolated
@@ -646,8 +663,12 @@ browser critical path.
   - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
     `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
     overflow and keep the language/API controls visible.
+- `verify dataset source context under delayed responses` (focused dataset mode)
+- `verify API translation boundary with synthetic inputs` (focused transport mode)
 - `verify startup readiness and storage recovery` (focused startup/refined mode)
 - `verify refined UI with exact synthetic version` (focused mode)
+- `verify API translation boundary with synthetic inputs` (full flow)
+- `verify dataset source context under delayed responses` (full flow)
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`

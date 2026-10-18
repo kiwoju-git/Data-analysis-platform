@@ -1,35 +1,25 @@
-import { useState, type FormEvent } from "react";
-
 import { PastePreviewGrid } from "./PastePreviewGrid";
 import {
   pastedDelimiterLabel,
   pastedPreviewWarningMessage,
   type PastedTablePreview,
 } from "./pastedTablePreview";
-import { usePastedDatasetDraft } from "./usePastedDatasetDraft";
+import type { PastedDatasetDraftChangeReason } from "./usePastedDatasetDraft";
+import { usePastedDatasetSubmission } from "./usePastedDatasetSubmission";
 import { useI18n } from "./i18n/LocaleProvider";
 
 interface PasteDatasetPanelProps {
   isSubmitting: boolean;
   onRegister: (content: string, previewHasHeader: boolean) => Promise<boolean>;
+  onDraftChange?: (dirty: boolean, reason: PastedDatasetDraftChangeReason) => void;
+  resetRevision?: number;
 }
 
-export function PasteDatasetPanel({ isSubmitting, onRegister }: PasteDatasetPanelProps) {
+export function PasteDatasetPanel({ isSubmitting, onRegister, onDraftChange, resetRevision = 0 }: PasteDatasetPanelProps) {
   const { locale } = useI18n();
-  const draft = usePastedDatasetDraft();
-  const [isAwaitingSubmit, setIsAwaitingSubmit] = useState(false);
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!draft.canSubmit || isSubmitting || isAwaitingSubmit) return;
-    setIsAwaitingSubmit(true);
-    try {
-      const succeeded = await onRegister(draft.getRawText(), draft.hasHeaderPreview);
-      if (succeeded) draft.clear();
-    } finally {
-      setIsAwaitingSubmit(false);
-    }
-  };
+  const { draft, isAwaitingSubmit, submit } = usePastedDatasetSubmission({
+    isSubmitting, onRegister, onDraftChange, resetRevision,
+  });
 
   return (
     <form className="paste-panel paste-staging-panel" onSubmit={(event) => void submit(event)}>
@@ -131,7 +121,7 @@ export function PasteDatasetPanel({ isSubmitting, onRegister }: PasteDatasetPane
           <button
             className="secondary-button"
             disabled={draft.characterCount === 0 || isSubmitting || isAwaitingSubmit}
-            onClick={draft.clear}
+            onClick={() => draft.clear()}
             type="button"
           >
             모두 지우기

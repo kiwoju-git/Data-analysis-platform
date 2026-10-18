@@ -15,6 +15,7 @@ import {
 } from "./pastedTablePreview";
 
 export type PastedDatasetDraftMode = "grid" | "raw";
+export type PastedDatasetDraftChangeReason = "user" | "reset";
 
 export interface PastedCellSelection {
   address: string;
@@ -33,7 +34,8 @@ export interface PastedDatasetDraft {
   preview: PastedTablePreview | null;
   rawTextAreaRef: React.RefObject<HTMLTextAreaElement>;
   selection: PastedCellSelection | null;
-  clear: () => void;
+  clear: (expectedRevision?: number, reason?: PastedDatasetDraftChangeReason) => void;
+  getRevision: () => number;
   getRawText: () => string;
   onCellSelect: (rowIndex: number, columnIndex: number) => void;
   onDirectPaste: (event: ClipboardEvent<HTMLElement>) => void;
@@ -43,8 +45,11 @@ export interface PastedDatasetDraft {
   setMode: (mode: PastedDatasetDraftMode) => void;
 }
 
-export function usePastedDatasetDraft(): PastedDatasetDraft {
+export function usePastedDatasetDraft(onDraftChange?: (dirty: boolean, reason: PastedDatasetDraftChangeReason) => void): PastedDatasetDraft {
   const rawTextRef = useRef("");
+  const revisionRef = useRef(0);
+  const onDraftChangeRef = useRef(onDraftChange);
+  onDraftChangeRef.current = onDraftChange;
   const rawTextAreaRef = useRef<HTMLTextAreaElement>(null);
   const pasteSurfaceRef = useRef<HTMLDivElement>(null);
   const [characterCount, setCharacterCount] = useState(0);
@@ -59,7 +64,9 @@ export function usePastedDatasetDraft(): PastedDatasetDraft {
   } | null>(null);
 
   const setRawText = useCallback((text: string) => {
+    revisionRef.current += 1;
     rawTextRef.current = text;
+    onDraftChangeRef.current?.(text.length > 0, "user");
     if (rawTextAreaRef.current !== null && rawTextAreaRef.current.value !== text) {
       rawTextAreaRef.current.value = text;
     }
@@ -72,8 +79,11 @@ export function usePastedDatasetDraft(): PastedDatasetDraft {
     setModeState(nextPreview.rawModeOnly ? "raw" : "grid");
   }, []);
 
-  const clear = useCallback(() => {
+  const clear = useCallback((expectedRevision?: number, reason: PastedDatasetDraftChangeReason = "user") => {
+    if (expectedRevision !== undefined && expectedRevision !== revisionRef.current) return;
+    revisionRef.current += 1;
     rawTextRef.current = "";
+    onDraftChangeRef.current?.(false, reason);
     if (rawTextAreaRef.current !== null) rawTextAreaRef.current.value = "";
     setCharacterCount(0);
     setByteCount(0);
@@ -107,6 +117,7 @@ export function usePastedDatasetDraft(): PastedDatasetDraft {
     rawTextAreaRef,
     selection,
     clear,
+    getRevision: () => revisionRef.current,
     getRawText: () => rawTextRef.current,
     onCellSelect: (rowIndex, columnIndex) => {
       setSelectedCoordinates({ rowIndex, columnIndex });
@@ -123,7 +134,11 @@ export function usePastedDatasetDraft(): PastedDatasetDraft {
       clear();
       globalThis.setTimeout(() => pasteSurfaceRef.current?.focus(), 0);
     },
-    setHasHeaderPreview,
+    setHasHeaderPreview: (value) => {
+      revisionRef.current += 1;
+      setHasHeaderPreview(value);
+      onDraftChangeRef.current?.(rawTextRef.current.length > 0, "user");
+    },
     setMode: (nextMode) => {
       if (nextMode === "grid" && preview?.rawModeOnly) return;
       setModeState(nextMode);

@@ -38,10 +38,15 @@ export interface DatasetPreparationPageProps {
   selectedFile: File | null;
   upload: DatasetUploadResponse | null;
   version: DatasetVersionResponse | null;
+  previewError?: string | null;
+  profileError?: string | null;
+  isSwitchingVersion?: boolean;
+  draftResetRevision?: number;
+  onPasteDraftChange?: (dirty: boolean, reason: "user" | "reset") => void;
   onApplyBayesianPreset: () => void;
   onCreateCellCorrection?: (
     request: DatasetCellCorrectionRequest,
-  ) => Promise<DatasetCellCorrectionResponse>;
+  ) => Promise<DatasetCellCorrectionResponse | null>;
   onCellEditDirtyChange?: (dirty: boolean) => void;
   onConfirmParsing: () => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -76,6 +81,11 @@ export function DatasetPreparationPage({
   selectedFile,
   upload,
   version,
+  previewError = null,
+  profileError = null,
+  isSwitchingVersion = false,
+  draftResetRevision = 0,
+  onPasteDraftChange,
   onApplyBayesianPreset,
   onCreateCellCorrection = unavailableCellCorrection,
   onCellEditDirtyChange = () => undefined,
@@ -129,7 +139,12 @@ export function DatasetPreparationPage({
         </button>
       </form>
       <DatasetIntakeLimits />
-      <PasteDatasetPanel isSubmitting={isPastingDataset} onRegister={onPasteDataset} />
+      <PasteDatasetPanel
+        isSubmitting={isPastingDataset}
+        onRegister={onPasteDataset}
+        onDraftChange={onPasteDraftChange}
+        resetRevision={draftResetRevision}
+      />
       {flowError !== null ? (
         <div className="error-box" role="alert">
           오류 코드: {flowError}
@@ -159,6 +174,9 @@ export function DatasetPreparationPage({
           profile={profile}
           schemaDrafts={schemaDrafts}
           version={version}
+          previewError={previewError}
+          profileError={profileError}
+          isSwitchingVersion={isSwitchingVersion || isConfirming}
           onApplyBayesianPreset={onApplyBayesianPreset}
           onCreateCellCorrection={onCreateCellCorrection}
           onCellEditDirtyChange={onCellEditDirtyChange}
