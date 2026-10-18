@@ -715,6 +715,7 @@ def test_analysis_methods_api_exposes_inline_and_dedicated_methods_without_mock_
         "doe.response_surface",
         "doe.bayesian_optimization",
     }
+
     def assert_no_calculated_results(value):
         if isinstance(value, dict):
             assert not {"p_value", "statistic", "result"}.intersection(value)
