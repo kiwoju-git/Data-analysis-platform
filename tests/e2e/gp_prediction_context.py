@@ -226,6 +226,15 @@ def _snapshot(page: Page, path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _assert_snapshot_response(snapshot: dict, delivered: dict) -> None:
+    expected = copy.deepcopy(delivered)
+    # The completed snapshot omits absent optional persistence metadata. All
+    # prediction values, row ordering and non-null descriptors remain exact.
+    if expected.get("saved_prediction") is None:
+        expected.pop("saved_prediction", None)
+    assert snapshot == expected
+
+
 def _scenario(
     page: Page,
     base_url: str,
@@ -288,7 +297,8 @@ def _scenario(
         snapshot = _snapshot(page, output / "prediction.json")
         assert snapshot["source_analysis_id"] == analysis["analysis_id"]
         assert snapshot["request"] == intercepted.request
-        assert snapshot["response"] == intercepted.payload
+        assert intercepted.payload is not None
+        _assert_snapshot_response(snapshot["response"], intercepted.payload)
         assert snapshot["prediction_recalculated_on_export"] is False
         assert snapshot["response"]["model_manifest_sha256"] == model["manifest_sha256"]
         for returned in snapshot["response"]["rows"]:

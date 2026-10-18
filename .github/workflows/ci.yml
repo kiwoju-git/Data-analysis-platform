@@ -2,6 +2,11 @@ name: ci
 
 on:
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Optional numeric Linux prerelease version; defaults to committed metadata"
+        required: false
+        type: string
   pull_request:
   push:
     branches:
@@ -94,15 +99,16 @@ jobs:
     needs: [security-python, security-npm]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
       - name: Require all dependency audits
         env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          python -c 'import json,os; assert all(j["result"] == "success" for j in json.loads(os.environ["RESULTS"]).values())'
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: python scripts/release_readiness.py gate --kind dependencies --source-commit "$GITHUB_SHA" --output .tmp/dependency-gate.json
 
   windows:
     runs-on: windows-latest
-    timeout-minutes: 45
+    # Observed backend duration reached 39m31s before frontend checks.
+    timeout-minutes: 60
     env:
       DATALAB_GP_REFERENCE_MODE: independent
     steps:
@@ -165,8 +171,20 @@ jobs:
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\logs\*.log
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\screenshots\*.png
             ${{ runner.temp }}\datalab-e2e-diagnostics\**\html\*.html
+            ${{ runner.temp }}\datalab-e2e-diagnostics\**\*.json
+            ${{ runner.temp }}\datalab-e2e-diagnostics\**\*.zip
+            ${{ runner.temp }}\datalab-e2e-diagnostics\**\*.png
+            ${{ runner.temp }}\datalab-e2e-diagnostics\**\*.html
             ${{ runner.temp }}\datalab-e2e-diagnostics\refined-ui\**
             ${{ runner.temp }}\datalab-e2e-diagnostics\startup\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\dataset-context\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\gp-prediction-context\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\schema-concurrency\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\analysis-completion\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\report-center-context\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\managed-reports\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\api-boundary\**
+            ${{ runner.temp }}\datalab-e2e-diagnostics\chart-formatting\**
           if-no-files-found: ignore
 
   linux:
@@ -248,6 +266,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [linux, python311]
     timeout-minutes: 35
+    env:
+      RELEASE_VERSION_OVERRIDE: ${{ inputs.release_version || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -258,12 +278,14 @@ jobs:
           node-version: "22"
       - name: Bootstrap builder
         run: bash scripts/bootstrap.sh --python python3.12
+      - name: Resolve committed or explicit release version
+        run: .venv/bin/python scripts/release_readiness.py version --override "$RELEASE_VERSION_OVERRIDE" --github-env "$GITHUB_ENV"
       - name: Install validation browser
         run: .venv/bin/python -m playwright install --with-deps chromium
       - name: Build exact committed archive
-        run: .venv/bin/python scripts/build_linux_release.py --source-commit "$GITHUB_SHA" --release-version 2026.10.2 --output-dir .tmp/linux-release
+        run: .venv/bin/python scripts/build_linux_release.py --source-commit "$GITHUB_SHA" --release-version "$RELEASE_VERSION" --output-dir .tmp/linux-release
       - name: Verify completed archive offline
-        run: .venv/bin/python scripts/verify_linux_release.py .tmp/linux-release/statistical-twin-linux-2026.10.2-ubuntu24.04-x86_64-py312.tar.gz --output-dir .tmp/linux-release-validation
+        run: .venv/bin/python scripts/verify_linux_release.py ".tmp/linux-release/statistical-twin-linux-$RELEASE_VERSION-ubuntu24.04-x86_64-py312.tar.gz" --output-dir .tmp/linux-release-validation --expected-source-commit "$GITHUB_SHA" --expected-release-version "$RELEASE_VERSION"
       - uses: actions/upload-artifact@v4
         if: success()
         with:
@@ -277,3 +299,21 @@ jobs:
           name: linux-release-failure-diagnostics
           path: .tmp/linux-release-validation
           if-no-files-found: ignore
+
+  release-ready:
+    if: always()
+    needs: [windows, e2e, linux, python311, linux-release, dependency-security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require all product, security and archive gates
+        env:
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: python scripts/release_readiness.py gate --kind release --source-commit "$GITHUB_SHA" --output .tmp/release-ready.json
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: release-ready-${{ github.sha }}
+          path: .tmp/release-ready.json
+          if-no-files-found: error

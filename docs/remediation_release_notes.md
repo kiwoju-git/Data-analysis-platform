@@ -80,6 +80,18 @@ make a verified offline backup. Returning to old code may require restoring that
 magically downgrade into schema 20/21. Keep the current workspace and all newer
 analysis/model/report files intact for a compatible application version.
 
-Final Linux mixed-install identity, network-blocked archive installation and
-the aggregate `release-ready` gate are A15 requirements; publication must wait
-for their actual results, not the existence of these notes.
+## Release Identity
+
+The release-owned stdlib bootstrap verifies payload, wheel build identity,
+installed application bytes and an atomic completion marker before application
+imports. A stale venv cannot be legitimized by copying a new web directory or
+BUILD_INFO. Installation and launch hold exclusive/shared locks respectively.
+The guarded backup command preserves this boundary without creating application
+bytecode. These checks detect mixed installations, not an attacker who replaces
+the release and all its checksums.
+
+The final archive verifier tests network-blocked installation, live reinstall
+refusal, mixed marker/code/wheel failures, visible saved-model journeys, offline
+HTML and restart across two installations. The aggregate `release-ready` gate
+requires Windows, Windows E2E, Linux, Python 3.11, archive and dependency-security
+success. Publication must wait for actual results, not the existence of these notes.

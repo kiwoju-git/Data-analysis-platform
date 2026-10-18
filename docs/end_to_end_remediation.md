@@ -53,7 +53,7 @@ Allowed evidence statuses: `source_confirmed`, `reproduced`, `fixed`, `verified`
 | A12 | Dedicated reports | source_confirmed / reproduced / fixed / verified (local focused) | Six exact source kinds, opt-in server predictions, ownership/retention/backup and actual EN/KO offline-report browser flow passed. Native gate pending. |
 | A13 | Execution capabilities | source_confirmed / reproduced / fixed / verified (local focused/browser) | Unsupported cancellation, atomic terminal protection, grouped counts, lease-owned recovery and transactional completion dependencies passed focused checks. Twelve real-server KO/EN current-result cases passed after fixing a reproduced failed-activation selector mismatch; final native gates remain pending. |
 | A14 | Capability documentation | source_confirmed / reproduced / fixed / verified (local) | Generated declaration/guidance drift checks, 803 frontend tests, strict build and actual KO/EN help/navigation browser checks passed. First-run stale-count assertion and long-label overflow are retained below; final native gate remains pending. |
-| A15 | Release installation identity | source_confirmed | Existing marker content/installed-code mismatch can be missed; pre-import release-owned identity guard pending. |
+| A15 | Release installation identity | source_confirmed / fixed / verified (local focused) | Release-owned pre-import wheel/installed-code/marker checks, install locks and CI aggregate gate implemented; local identity/launcher and archive-verifier tests pass. Native isolated installation and final publication remain pending. |
 
 ## A01 Evidence
 
@@ -1212,3 +1212,87 @@ Its 170 hook tests passed again in 7.01s. The final whole lint exited 0 with
 zero errors and nine existing Fast Refresh warnings
 (`.tmp/remediation-a14-lint-final.log`). The latest fetch still leaves origin/main
 at BASE_SHA; this checkpoint is feature-branch-only, not final native acceptance.
+
+### A15 Opening and Native Capacity
+
+A14 checkpoint `a258447` was pushed to the feature branch and a native run was
+dispatched. A15 is now implementing release-owned pre-import installed-code
+identity, OS-isolated installation, actual archive UI/restart journeys and an
+all-job `release-ready` gate. None is accepted merely because its source exists.
+
+The previous A13 Windows job 117637159539 reached its 45-minute ceiling
+(09:12:26 to 09:57:28 UTC). Pytest was interrupted at 96% in workspace-backup
+tests: 1 failed, 1920 passed, 2 skipped, 105 warnings, 2593.69s. The sole completed
+failure was the same corrected ordered E2E documentation marker. Remaining
+backend tests and frontend checks did not finish; this is not a full pass.
+Evidence: `.tmp/remediation-a13-ci-windows.log`. The A15 workflow gives the full
+Windows job 60 minutes, based on this measured duration; per-test timeouts,
+numeric budgets and the 20-minute browser job are unchanged.
+
+The new aggregate/version unit suite first exposed the missing workflow gate
+(1 failed / 47 passed). After CI wiring, it and OpenAPI contracts passed 281 tests
+/ 2 warnings / 14.59s (`.tmp/remediation-a15-release-gate.log`). Required job keys
+must match exactly and every result must be `success`; cancellation/skips/missing
+jobs fail even under `python -O`. These are local contract tests, not native
+Release acceptance.
+
+### A14 Native Follow-up and A15 Focused Evidence
+
+Run 39117176195 at `a258447` passed Python 3.11 and dependency security.
+Linux full check passed: backend 2009 passed / 12 skipped / 105 warnings in
+212.43s, frontend 803 passed / 89 files, strict typecheck/build and static checks.
+Linux browser E2E then failed in `gp-prediction-context/reverse-ko`, not readiness.
+The actual child diagnostic and trace show exact equality of every shared field
+and number; the raw API response additionally contains `saved_prediction: null`.
+The browser convenience snapshot intentionally omits that absent persistence
+descriptor. The test now normalizes only absent/null `saved_prediction`, retaining
+exact comparisons for non-null descriptors, all numbers, row order and other
+fields. Seven contract tests pass, including a one-ULP difference rejection;
+replaying the actual failed trace passes. A fresh full browser run remains required.
+Evidence: `.tmp/remediation-a14-ci-linux.log` and
+`.tmp/remediation-a14-ci-gp-diagnostics/gp-prediction-context/reverse-ko/`.
+
+A15 identity/launcher tests passed 44 / 1 Linux-only skip on Windows. They include
+real ZIP/wheel files, a real Hatch wheel build and real venv `.pth` execution control
+versus the guarded `-I -S -B` boundary. Network-namespace helper tests passed 61;
+these pure tests do not claim actual Linux isolation. Archive-verifier tests passed
+97, including bounded extraction, phase evidence, unchanged artifact hashes,
+live-install refusal evidence and owned process cleanup. Their first rerun crossed
+a mock-boundary edit and failed (93 passed / 1 failed); an unmocked child exited at
+connection refusal before opening a browser. An explicit subprocess guard now
+prevents that unit-test escape. No user workspace was accessed.
+
+The combined identity/launcher/readiness/network/UI-serving/OpenAPI/startup suite
+passed 401 / 2 skipped / 3 warnings in 127.13s:
+`$env:PYTHONPATH='D:\codex\data\backend';
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe -m pytest
+backend/tests/unit/test_release_identity.py backend/tests/unit/test_release_launch.py
+backend/tests/unit/test_release_readiness.py backend/tests/unit/test_network_isolated_install.py
+backend/tests/unit/test_web_ui.py backend/tests/unit/test_openapi_frontend_contract.py
+backend/tests/unit/test_dev_startup_contract.py -q`.
+Log: `.tmp/remediation-a15-focused.log`. The root path is the actual local test
+invocation, not a deployment requirement.
+
+The first Windows source-debug archive-journey driver failed at a label selector
+after visible paste/confirmation and PCA completed. Narrowing the driver to the
+actual wrapping label and component table control fixed it. The second run exited
+0: three visible analysis submissions, saved PLS/GPR direct predictions and JSON
+snapshots, four KO/EN managed reports, server-stopped offline HTML, and same-workspace
+restart/restore with zero new analysis submissions. Exact prediction values,
+client IDs, manifest hashes and report bytes were checked. Evidence:
+`.tmp/a15-browser-debug-2/` and `.tmp/a15-browser-debug-2.log`. This is Windows
+source/Vite evidence, not Linux built-archive or cross-install evidence.
+
+After the optional-null correction, the actual GPR context browser suite passed
+all 18 KO/EN scenarios, exit 0:
+`tests/e2e/critical_path.py --backend-port 8049 --frontend-port 5269
+--gp-prediction-context-only --diagnostics-root .tmp/e2e-a15-gp-snapshot`
+under the same locked Windows Python/root PYTHONPATH and Node 22 environment.
+Log: `.tmp/remediation-a15-gp-snapshot-browser.log`. The seven exact-comparison
+tests, 97 verifier tests and then-current seven journey tests passed together
+(111 tests / 1.78s); the final eighth journey contract test passed in a separate
+eight-test run (1.29s). Ruff passed for backend and touched scripts/E2E, formatting
+checked 347 backend files and mypy passed all 200 application modules.
+The follow-up synthetic source run also passed Two Variances deep-link/reload,
+BF API execution, four generic HTML exports with source/output hashes and
+server-stopped offline rendering (`.tmp/a15-browser-tail-1.log`).

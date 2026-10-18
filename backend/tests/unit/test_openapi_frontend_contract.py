@@ -3791,11 +3791,7 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     )
     ci_status_text = (_repo_root() / "docs/ci_status.md").read_text(encoding="utf-8")
     workflow_section = _markdown_h2_section(ci_status_text, "Workflow Configuration")
-    local_validation_section = _markdown_h2_section(ci_status_text, "Local Validation")
-    historical_validation_section = _markdown_h2_section(
-        ci_status_text,
-        "Historical Local Validation",
-    )
+    current_section = _markdown_h2_section(ci_status_text, "Current Reliability Gate")
     remote_section = _markdown_h2_section(
         ci_status_text,
         "Remote GitHub Actions Verification",
@@ -3817,12 +3813,25 @@ def test_ci_status_doc_tracks_remote_verification_checklist() -> None:
     ):
         assert phrase in workflow_section
 
-    assert "latest recorded backend pytest count is 818" in local_validation_section
-    assert "latest recorded frontend Vitest count is 175" in local_validation_section
-    assert "latest OpenAPI/frontend contract count is 167" in local_validation_section
-    assert "The latest run passed backend ruff check" not in local_validation_section
-    assert "That 2026-07-09 run passed backend ruff check" in historical_validation_section
-    assert "That 2026-07-07 run passed backend ruff check" in historical_validation_section
+    for phrase in (
+        "end_to_end_remediation.md",
+        "remediation_journey_matrix.md",
+        "historical",
+        "release-ready",
+        "windows",
+        "e2e",
+        "linux",
+        "python311",
+        "linux-release",
+        "dependency-security",
+        "cancelled",
+        "skipped",
+        "in-progress",
+        "release-version.json",
+        "source SHA",
+        "exact validated archive bytes",
+    ):
+        assert phrase in current_section
 
     for phrase in (
         "29834082053",

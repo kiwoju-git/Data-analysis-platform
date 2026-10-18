@@ -76,6 +76,7 @@ def prepare_launcher(monkeypatch, tmp_path, *, arguments=(), addresses=None):
     root = tmp_path / "release with spaces"
     root.mkdir()
     release_fixture(root)
+    identity = verify_release(root)
     monkeypatch.setattr(launch.platform, "system", lambda: "Linux")
     monkeypatch.setattr(launch.platform, "machine", lambda: "x86_64")
     monkeypatch.setattr(launch.platform, "python_implementation", lambda: "CPython")
@@ -116,7 +117,17 @@ def prepare_launcher(monkeypatch, tmp_path, *, arguments=(), addresses=None):
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", guarded_import)
-    return launch, root, port_probe, discovery, snapshots, run
+    verified_entry = SimpleNamespace(
+        main=lambda: launch.launch_verified(root, identity, list(arguments))
+    )
+    return verified_entry, root, port_probe, discovery, snapshots, run
+
+
+def test_direct_installed_launcher_cannot_bypass_release_owned_bootstrap():
+    import app.launch as launch
+
+    with pytest.raises(SystemExit, match="release-owned run.sh"):
+        launch.main()
 
 
 @pytest.mark.parametrize("local_only", [False, True])

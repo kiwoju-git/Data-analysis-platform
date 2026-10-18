@@ -19,6 +19,10 @@ from pathlib import Path
 
 from generate_python_lock import collect_wheel_records, render_lock
 
+RELEASE_VERSION_PATTERN = (
+    r"(?:0|[1-9][0-9]{0,7})\.(?:0|[1-9][0-9]{0,7})\.(?:0|[1-9][0-9]{0,7})"
+)
+
 
 def checked(arguments: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
     subprocess.run(arguments, cwd=cwd, env=env, check=True)
@@ -38,7 +42,7 @@ def main() -> int:
     ):
         parser.error("Build on Linux x86_64 CPython 3.12")
     if not re.fullmatch(r"[a-f0-9]{40}", args.source_commit) or not re.fullmatch(
-        r"[0-9]+\.[0-9]+\.[0-9]+", args.release_version
+        RELEASE_VERSION_PATTERN, args.release_version
     ):
         parser.error("Use a full source SHA and numeric release version")
     repo = Path(__file__).resolve().parents[1]
@@ -78,6 +82,36 @@ def main() -> int:
         )
         checked(["npm", "ci"], source / "frontend", env)
         checked(["npm", "run", "build"], source / "frontend", env)
+        contract_env = dict(os.environ, PYTHONPATH=str(source / "backend"))
+        contract = json.loads(
+            subprocess.check_output(
+                [
+                    sys.executable,
+                    "-B",
+                    "-c",
+                    "import json; from app.core.runtime_contract import API_CONTRACT_VERSION,RUNTIME_CAPABILITIES; from app.storage.metadata import SCHEMA_VERSION; print(json.dumps([API_CONTRACT_VERSION,SCHEMA_VERSION,RUNTIME_CAPABILITIES]))",
+                ],
+                cwd=source,
+                env=contract_env,
+                text=True,
+            )
+        )
+        build_identity = {
+            "source_commit": args.source_commit,
+            "release_version": args.release_version,
+            "api_contract_version": contract[0],
+            "metadata_schema_version": contract[1],
+            "required_capabilities": contract[2],
+            "python_target": "3.12",
+            "os": "ubuntu24.04",
+            "architecture": "x86_64",
+        }
+        # Staging-only resource: wheel/lock hashes are deliberately not self-referential.
+        (source / "backend/app/_release_build.json").write_text(
+            json.dumps(build_identity, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
         package = stage / "statistical-twin-linux"
         wheels = package / "wheels"
         wheels.mkdir(parents=True)
@@ -110,6 +144,16 @@ def main() -> int:
             ],
             source,
         )
+        application_wheels = list(wheels.glob("datalab_studio_backend-*.whl"))
+        if len(application_wheels) != 1:
+            raise ValueError("Expected exactly one application wheel")
+        application_wheel = application_wheels[0]
+        with zipfile.ZipFile(application_wheel) as built_wheel:
+            if (
+                json.loads(built_wheel.read("app/_release_build.json"))
+                != build_identity
+            ):
+                raise ValueError("Built wheel lacks the exact staged source identity")
         lock = render_lock(collect_wheel_records(wheels), "py312-linux", "runtime")
         lock = lock.replace(
             "# Source roots: backend/requirements-py312-linux-runtime.in",
@@ -119,7 +163,12 @@ def main() -> int:
             lock, encoding="ascii", newline="\n"
         )
         shutil.copytree(source / "frontend/dist", package / "web")
-        for filename in ("install.sh", "run.sh", "README-linux.md"):
+        for filename in (
+            "install.sh",
+            "run.sh",
+            "README-linux.md",
+            "release_bootstrap.py",
+        ):
             contents = (source / filename).read_text(encoding="utf-8")
             (package / filename).write_text(contents, encoding="utf-8", newline="\n")
         notices = package / "THIRD_PARTY_NOTICES"
@@ -167,28 +216,12 @@ def main() -> int:
                         )
         if (source / "LICENSE").is_file():
             shutil.copy2(source / "LICENSE", notices / "APPLICATION-LICENSE")
-        contract_env = dict(os.environ, PYTHONPATH=str(source / "backend"))
-        contract = json.loads(
-            subprocess.check_output(
-                [
-                    sys.executable,
-                    "-c",
-                    "import json; from app.core.runtime_contract import API_CONTRACT_VERSION,RUNTIME_CAPABILITIES; from app.storage.metadata import SCHEMA_VERSION; print(json.dumps([API_CONTRACT_VERSION,SCHEMA_VERSION,RUNTIME_CAPABILITIES]))",
-                ],
-                cwd=source,
-                env=contract_env,
-                text=True,
-            )
-        )
         info = {
-            "release_version": args.release_version,
-            "source_commit": args.source_commit,
-            "api_contract_version": contract[0],
-            "metadata_schema_version": contract[1],
-            "required_capabilities": contract[2],
-            "python_target": "3.12",
-            "os": "ubuntu24.04",
-            "architecture": "x86_64",
+            **build_identity,
+            "application_wheel": application_wheel.relative_to(package).as_posix(),
+            "application_wheel_sha256": hashlib.sha256(
+                application_wheel.read_bytes()
+            ).hexdigest(),
             "build_timestamp": datetime.now(timezone.utc).isoformat(),
             "lock_sha256": hashlib.sha256(
                 (package / "requirements-release.lock").read_bytes()
@@ -209,11 +242,11 @@ def main() -> int:
         )
         with tarfile.open(output / archive_name, "w:gz") as archive:
             archive.add(package, arcname="statistical-twin-linux")
+        shutil.copy2(package / "README-linux.md", output / "README-linux.md")
     checksum = hashlib.sha256((output / archive_name).read_bytes()).hexdigest()
     (output / "SHA256SUMS").write_text(
         f"{checksum}  {archive_name}\n", encoding="ascii"
     )
-    shutil.copy2(repo / "README-linux.md", output / "README-linux.md")
     print(
         json.dumps(
             {

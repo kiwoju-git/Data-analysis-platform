@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import sys
 import urllib.error
 import urllib.parse
@@ -112,110 +111,50 @@ def verify_network_guards(base: str) -> list[str]:
     return [name for name, *_ in checks]
 
 
-def create_dataset(base: str, content: str) -> dict:
-    uploaded = request(
-        base,
-        "/api/v1/datasets/paste",
-        {"content": content, "original_filename": "release-synthetic.csv"},
-    )
-    return request(
-        base,
-        f"/api/v1/datasets/{uploaded['dataset_id']}/confirm-parsing",
-        {
-            "parsing": {
-                "kind": "delimited_text",
-                "encoding": "utf-8",
-                "delimiter": ",",
-                "quote_char": '"',
-                "decimal": ".",
-                "thousands": None,
-                "has_header": True,
-                "header_row": 1,
-                "data_start_row": 2,
-                "missing_tokens": ["", "NA"],
-            },
-            "columns": [],
-        },
-    )
-
-
 def verify_application(base: str, output: Path) -> dict:
-    from playwright.sync_api import expect, sync_playwright
+    from linux_release_journey import payload_digest, run_initial
 
-    info = request(base, "/api/v1/runtime-info")
-    content = (
-        "response,x1,x2,group\n"
-        + "\n".join(
-            f"{math.sin(i/3)+.35*((i*7)%11)/4:.12f},{i/3:.12f},{((i*7)%11)/4:.12f},{'A' if i <= 8 else 'B'}"
-            for i in range(1, 17)
-        )
-        + "\n"
+    result = run_initial(base, output, request)
+    version = result["version"]
+    columns = {
+        column["display_name"]: column["column_id"] for column in version["columns"]
+    }
+    catalog = request(base, "/api/v1/analysis-methods")
+    method = next(
+        item
+        for item in catalog["methods"]
+        if item["method_id"] == "quality.two_variances"
     )
-    version = create_dataset(base, content)
-    ids = [column["column_id"] for column in version["columns"]]
-    methods = [
-        (
-            "eda.principal_components",
-            "0.1.0",
-            {"column_ids": ids[:3]},
-            "principal_components_analysis",
-        ),
-        (
-            "regression.partial_least_squares",
-            "0.1.0",
-            {
-                "response_column_id": ids[0],
-                "predictor_column_ids": ids[1:3],
-                "max_components": 2,
-                "cv": {"method": "k_fold", "folds": 3, "shuffle": True, "seed": 19},
-            },
-            "partial_least_squares_regression",
-        ),
-        (
-            "regression.gaussian_process",
-            "0.3.0",
-            {
-                "response_column_id": ids[0],
-                "predictor_column_ids": ids[1:3],
-                "optimizer_restarts": 0,
-                "cv_optimizer_restarts": 0,
-                "cv": {"method": "k_fold", "folds": 3, "shuffle": True, "seed": 29},
-                "profile_points": 10,
-                "surface_grid_size": 10,
-                "time_budget_seconds": 120,
-            },
-            "gaussian_process_regression",
-        ),
-        (
-            "quality.two_variances",
-            "0.1.0",
-            {
-                "response_column_id": ids[0],
-                "group_column_id": ids[3],
+    source = request(
+        base,
+        "/api/v1/analysis-runs",
+        {
+            "method_id": method["method_id"],
+            "method_version": method["method_version"],
+            "dataset_version_id": version["version_id"],
+            "roles": {},
+            "options": {
+                "response_column_id": columns["yield_pct"],
+                "group_column_id": columns["group"],
                 "numerator_group_key": "A",
                 "denominator_group_key": "B",
             },
-            "two_variances_test",
-        ),
-    ]
-    results = []
-    reports = []
-    for method_id, method_version, options, summary in methods:
-        source = request(
-            base,
-            "/api/v1/analysis-runs",
-            {
-                "method_id": method_id,
-                "method_version": method_version,
-                "dataset_version_id": version["version_id"],
-                "roles": {},
-                "options": options,
-            },
-        )
-        assert source["result"]["summary_type"] == summary
-        analysis_id = source["analysis_id"]
+        },
+    )
+    assert source["result"]["summary_type"] == "two_variances_test"
+    result["analyses"].append(
+        {
+            "method_id": method["method_id"],
+            "analysis_id": source["analysis_id"],
+            "envelope": source,
+            "execution_evidence": "API smoke, not visible Two Variances form",
+            "result_payload_sha256": payload_digest(source["result"]),
+        }
+    )
+    for analysis in result["analyses"]:
+        analysis_id = analysis["analysis_id"]
         restored = request(base, f"/api/v1/analysis-runs/{analysis_id}/result")
-        assert restored["result"] == source["result"]
+        assert payload_digest(restored["result"]) == analysis["result_payload_sha256"]
         export = request(
             base, f"/api/v1/analysis-runs/{analysis_id}/exports/html", {"locale": "en"}
         )
@@ -225,114 +164,101 @@ def verify_application(base: str, output: Path) -> dict:
             timeout=30,
         ) as response:
             html = response.read()
+        digest = hashlib.sha256(html).hexdigest()
+        assert digest == export["sha256"]
         assert b"<svg" in html and b"<table" in html and b"<script" not in html
-        path = output / f"{method_id}.html"
+        path = output / "html" / f"{analysis['method_id']}.html"
         path.write_bytes(html)
-        reports.append(path)
+        analysis["generic_report"] = {
+            "path": str(path.resolve()),
+            "sha256": digest,
+            "descriptor": export,
+        }
+        analysis["source_result_artifact_sha256"] = export["source_result_sha256"]
         assert (
-            request(base, f"/api/v1/analysis-runs/{analysis_id}/result")["result"]
-            == source["result"]
-        )
-        results.append(
-            {
-                "method_id": method_id,
-                "analysis_id": analysis_id,
-                "result_sha256": hashlib.sha256(
-                    json.dumps(source["result"], sort_keys=True).encode()
-                ).hexdigest(),
-                "html_sha256": hashlib.sha256(html).hexdigest(),
-            }
-        )
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        context = browser.new_context(viewport={"width": 1440, "height": 900})
-        context.add_init_script("localStorage.setItem('statistical-twin.locale','en')")
-        page = context.new_page()
-        page.goto(base + "/home", wait_until="networkidle")
-        expect(
-            page.get_by_role("heading", name="Statistical Twin", exact=True)
-        ).to_be_visible()
-        assert "version mismatch" not in page.locator("body").inner_text().lower()
-        browser_runtime = page.evaluate(
-            "async () => (await fetch('/api/v1/runtime-info')).json()"
-        )
-        assert browser_runtime["build_commit"] == info["build_commit"]
-        with page.expect_request(
-            lambda req: req.url == base + "/api/v1/datasets/paste"
-        ) as sent:
-            browser_mutation = page.evaluate(
-                """async () => {
-                    const response = await fetch('/api/v1/datasets/paste', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({content: 'value,group\\n1,A\\n2,B\\n', original_filename: 'browser-lan-smoke.csv'})
-                    });
-                    return {status: response.status, payload: await response.json()};
-                }"""
+            payload_digest(
+                request(base, f"/api/v1/analysis-runs/{analysis_id}/result")["result"]
             )
-        assert sent.value.header_value("origin") == base
-        assert (
-            browser_mutation["status"] == 201
-            and browser_mutation["payload"]["dataset_id"]
+            == analysis["result_payload_sha256"]
         )
-        page.screenshot(path=str(output / "release-home.png"), full_page=True)
-        for route, selector in (
-            (
-                "/analysis/quality/quality.two_variances",
-                '[data-analysis-execution="quality.two_variances"]',
-            ),
-            (
-                "/analysis/regression/regression.gaussian_process",
-                '[data-analysis-execution="regression.gaussian_process"]',
-            ),
-            ("/reports", ".report-center-page #report-center-title"),
-        ):
-            page.goto(base + route, wait_until="networkidle")
-            page.reload(wait_until="networkidle")
-            expect(page.locator(selector)).to_be_visible(timeout=30_000)
-            expect(page.locator(".error-box[role=alert]")).to_have_count(0)
-        for report in reports:
-            context.set_offline(True)
-            page.goto(report.as_uri())
-            expect(page.locator("svg").first).to_be_visible()
-            assert page.locator("table").count() > 0
-            context.set_offline(False)
-        browser.close()
-    return {
-        "runtime": info,
-        "access_origin": base,
-        "browser_same_origin_mutation": True,
-        "network_guard_checks": verify_network_guards(base),
-        "dataset_version_id": version["version_id"],
-        "analyses": results,
-        "checks": [
-            "CSV paste",
-            "PCA",
-            "PLS",
-            "GPR",
-            "Two Variances",
-            "result restore",
-            "HTML download",
-            "offline HTML",
-            "built home",
-            "deep-link refresh",
-            "interface-IP browser runtime request",
-            "interface-IP browser same-origin mutation",
-            "Host and Origin rejection",
-        ],
-    }
+    result["network_guard_checks"] = verify_network_guards(base)
+    result["checks"] = [
+        "visible paste and parsing confirmation",
+        "visible PCA/PLS/GPR execution",
+        "saved PLS and GPR direct predictions",
+        "KO/EN managed HTML creation/download",
+        "exact managed source inspection",
+        "API Two Variances",
+        "generic HTML API export",
+        "built-UI readiness",
+        "interface-IP same-origin mutation",
+        "Host/Origin rejection",
+    ]
+    result["offline_html_verified"] = False
+    return result
+
+
+def require_server_stopped(base: str) -> None:
+    try:
+        with HTTP.open(base + "/api/v1/runtime-info", timeout=3):
+            pass
+    except urllib.error.HTTPError as error:
+        raise AssertionError(
+            "The original application server is still responding"
+        ) from error
+    except urllib.error.URLError:
+        return
+    raise AssertionError(
+        "The original application server must be stopped for offline verification"
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--url", required=True)
+    parser.add_argument("--url")
     parser.add_argument("--output", type=Path, required=True)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--resume-evidence", type=Path)
+    modes.add_argument("--offline-reports", type=Path)
     args = parser.parse_args()
     if sys.flags.optimize:
         parser.error("Run validation without Python optimization")
+    if not args.offline_reports and not args.url:
+        parser.error("--url is required for initial and resume journeys")
     args.output.mkdir(parents=True, exist_ok=True)
-    result = verify_application(args.url, args.output)
-    (args.output / "application-smoke.json").write_text(
-        json.dumps(result, indent=2) + "\n", encoding="utf-8"
+    if args.offline_reports:
+        from linux_release_journey import run_offline
+
+        evidence = json.loads(args.offline_reports.read_text(encoding="utf-8"))
+        assert evidence["schema_version"] == 2 and evidence["status"] == "succeeded"
+        # The orchestrator must stop the actual server, not just disable browser networking.
+        require_server_stopped(evidence["access_origin"])
+        result = run_offline(args.output, evidence)
+        result["original_server_unreachable"] = True
+        name = "offline-smoke.json"
+    elif args.resume_evidence:
+        from linux_release_journey import run_resume
+
+        evidence = json.loads(args.resume_evidence.read_text(encoding="utf-8"))
+        assert evidence["schema_version"] == 2 and evidence["status"] == "succeeded"
+        result = run_resume(args.url, args.output, evidence, request)
+        name = "resume-smoke.json"
+    else:
+        try:
+            result = verify_application(args.url, args.output)
+        except Exception:
+            journal = args.output / "journey-evidence.json"
+            if journal.exists():
+                partial = json.loads(journal.read_text(encoding="utf-8"))
+                partial["status"] = "failed"
+                journal.write_text(
+                    json.dumps(partial, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+            raise
+        name = "application-smoke.json"
+    (args.output / name).write_text(
+        json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
 

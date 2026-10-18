@@ -15,6 +15,10 @@ from app.core.trusted_lan import local_linux_ipv4_addresses
 
 
 def verify_release(root: Path) -> dict[str, Any]:
+    """Compatibility payload check only; it does not certify an installed venv.
+
+    Normal releases enter through release_bootstrap.py before this module is imported.
+    """
     root = root.resolve()
     manifest = root / "FILES.sha256"
     if not manifest.is_file() or manifest.is_symlink():
@@ -83,15 +87,15 @@ def verify_release(root: Path) -> dict[str, Any]:
     return info
 
 
-def main() -> None:
+def launch_verified(root: Path, evidence: dict[str, Any], arguments: list[str]) -> None:
+    """Called only after release-owned payload, wheel, files and marker verification."""
     parser = argparse.ArgumentParser(description="Statistical Twin verified Linux release")
-    parser.add_argument("--release-root", type=Path, required=True)
     parser.add_argument("--workspace-root", type=Path)
     parser.add_argument("--port", type=int, default=8600)
     parser.add_argument(
         "--local-only", action="store_true", help="Bind only 127.0.0.1; disable LAN access"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(arguments)
     if (
         platform.system() != "Linux"
         or platform.machine().lower() != "x86_64"
@@ -101,10 +105,15 @@ def main() -> None:
         parser.error("This release requires Linux x86_64 and CPython 3.12")
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535")
-    root = args.release_root.resolve()
+    root = root.resolve()
     host = "127.0.0.1" if args.local_only else "0.0.0.0"
     try:
         info = verify_release(root)
+        if any(
+            info[key] != evidence.get(key)
+            for key in ("source_commit", "api_contract_version", "metadata_schema_version")
+        ):
+            raise ValueError("Verified installation identity changed")
         check_tcp_port_available(host, args.port)
         lan_hosts = [] if args.local_only else local_linux_ipv4_addresses()
     except (ValueError, OSError) as error:
@@ -144,6 +153,10 @@ def main() -> None:
     uvicorn.run(
         "app.main:app", host=host, port=args.port, workers=1, reload=False, proxy_headers=False
     )
+
+
+def main() -> None:
+    raise SystemExit("Use the release-owned run.sh entry point; direct app.launch is unsupported.")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,39 @@
 # CI Status
 
-Last updated: 2026-10-08
+Last updated: 2026-10-18
+
+## Current Reliability Gate
+
+This section is the current remediation contract; the older run narratives below
+are historical evidence, not acceptance for this source. Exact executed commands,
+failed attempts and immutable run links are recorded in
+[end_to_end_remediation.md](end_to_end_remediation.md). The source/fixture boundaries
+are in [remediation_journey_matrix.md](remediation_journey_matrix.md).
+
+`release-ready` requires every declared job to finish with exactly `success`:
+`windows`, `e2e`, `linux`, `python311`, `linux-release`, `dependency-security`.
+Failure, cancelled, skipped, missing and in-progress states cannot pass. This
+aggregate binds its evidence to the workflow source commit; it does not publish
+a Release. An earlier green checkpoint or successful intermediate archive does
+not override a later failure. Branch protection and repository settings are not
+changed to bypass these checks.
+
+Native targets remain hosted Windows/Python 3.10, Ubuntu 24.04/Python 3.12, and
+Python 3.11 compatibility. Hosted Windows is not a physical Windows 11 test.
+The Windows job allowance is 60 minutes after observing backend-only durations
+up to 39m31s before frontend checks. Per-test deadlines, numerical budgets and
+the existing 20-minute Windows browser-job allowance are unchanged.
+
+Linux archive versions come from `release-version.json`, or an explicitly
+validated `workflow_dispatch` input. CI artifact names include the source SHA.
+The final tag/archive version must agree, existing tags/assets are never replaced,
+and only the exact validated archive bytes may be published after the aggregate
+gate succeeds. The new A15 gate and installation checks are under implementation;
+this document is not a claim of a completed native run or published Release.
+
+Diagnostics uploads are restricted to the separate synthetic-fixture diagnostics
+root (including the actual child-page DOM, screenshot, metadata and trace), never
+the workspace root, source uploads or actual user models.
 
 ## Result Charts and Linux Addition
 
@@ -85,7 +118,7 @@ review, corrected attempts and rollback. No statistical/schema/storage changes.
 - Diagnostics are ignored under `.tmp/e2e-diagnostics-dashboard-refresh`.
   Remote CI is checked separately for the published SHA, not inferred locally.
 
-## Current Curvature/GP Release
+## Historical Curvature/GP Release
 
 The current run record is `curvature_gp_validation.md`. Earlier success counts
 below are historical and do not substitute for the new release gates. Remote
@@ -714,9 +747,9 @@ publication/CI status is reported only after observing the published commit.
   784, frontend lint/typecheck and Vitest 152, OpenAPI/frontend contracts 155,
   18 tutorial Markdown blocks, and production build. The separate real-API
   tutorial smoke passed all 18 sections in 18.7 seconds.
-- The latest recorded backend pytest count is 818.
-- The latest recorded frontend Vitest count is 175.
-- The latest OpenAPI/frontend contract count is 167.
+- That historical checkpoint recorded 818 backend tests.
+- That historical checkpoint recorded 175 frontend tests.
+- That historical checkpoint recorded 167 OpenAPI/frontend contract tests.
   These counts describe the current fully collected validation suites; the
   final command result and commit SHA are stated in the first entry above.
 - The clean pushed commit results are local development evidence, not
@@ -1282,7 +1315,7 @@ This satisfies the current repository-side requirement that main pushes should s
   cross-dataset rows through the real API with full page checksum/count/schema
   verification and full CSV creation. It is a benchmark record, not a CI
   pass/fail gate.
-- The latest recorded backend pytest count is 750. The latest recorded frontend Vitest count is 111. The latest OpenAPI/frontend contract count is 150.
+- That historical checkpoint recorded 750 backend tests, 111 frontend tests and 150 OpenAPI/frontend contract tests.
 
 ## Historical Local Validation
 

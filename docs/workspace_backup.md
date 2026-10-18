@@ -48,11 +48,11 @@ Source checkout, PowerShell (use explicit paths outside the repository):
 Installed Linux release (no Git, Node, or source scripts needed):
 
 ```bash
-./.venv/bin/python -m app.storage.workspace_backup backup \
+./.venv/bin/python -I -S -B release_bootstrap.py workspace-backup --release-root "$PWD" backup \
   --workspace "$HOME/.datalabstudio" --output "$HOME/datalab-backup.zip"
-./.venv/bin/python -m app.storage.workspace_backup verify \
+./.venv/bin/python -I -S -B release_bootstrap.py workspace-backup --release-root "$PWD" verify \
   --archive "$HOME/datalab-backup.zip"
-./.venv/bin/python -m app.storage.workspace_backup restore \
+./.venv/bin/python -I -S -B release_bootstrap.py workspace-backup --release-root "$PWD" restore \
   --archive "$HOME/datalab-backup.zip" --workspace "$HOME/.datalabstudio-restored"
 ```
 

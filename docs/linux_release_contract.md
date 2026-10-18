@@ -43,16 +43,22 @@ the source, API and metadata identities; startup and archive verification check 
 
 Install requires Ubuntu24.04/x86_64/CPython3.12+venv/pip already available. It
 verifies paths and hashes, force-reinstalls only the packaged wheels offline and
-sets a success marker only after pip check and release verification. Reinstallation
+sets an atomic structured success marker only after pip check and release verification. Reinstallation
 does not trust an equal app_version as proof that backend code matches the archive.
 User workspaces are not touched by installation.
 
-The launcher verifies identity/files before setting environment and importing the
-FastAPI app. Owner approval on 2026-10-16 changes the release default to
+The release-owned stdlib bootstrap verifies the actual application wheel, installed
+files and marker before importing any installed application module. It uses
+`-I -S -B` and holds a shared installation lock; reinstall needs an exclusive lock.
+See [release identity](release_identity_contract.md) for the staging-only wheel
+resource and the distinction between payload and installed-code verification.
+Owner approval on 2026-10-16 changes the release default to
 0.0.0.0:8600 (built UI and API together), one worker, no reload, CPU threads capped.
 `run.sh --local-only` restores 127.0.0.1:8600. Linux source development and Windows
 development defaults are unchanged. Proxy headers are disabled in the release.
-The existing workspace default and metadata20 migration/recovery rules remain.
+The existing workspace default remains. Remediation uses API 23 and additive
+metadata migrations 21/22; historical artifacts are not rewritten. Workspace lease
+acquisition precedes migration and interrupted-run recovery.
 Local-only mode can be accessed remotely through SSH forwarding.
 Linux port preflight uses SO_REUSEADDR (never SO_REUSEPORT), matching Uvicorn's
 closed-connection TIME_WAIT restart behavior. An active listener still fails
@@ -81,10 +87,11 @@ Settings permits a non-loopback bind only with trusted_lan=true, production
 environment and a valid built UI directory separate from workspace. API-only
 Settings remains loopback by default. The launcher explicitly clears the LAN
 mode and host list in --local-only mode, including stale inherited values.
-No numerical policy, result/model schema, API22 contract or metadata20 changes.
+The LAN binding itself changes no numerical policy or statistical result/model
+schema. API/metadata changes belong to the separate remediation contracts.
 
 Verification extracts the actual tar.gz twice into new locations, installs with
-neither Node nor Git in PATH and pip no-index, uses an external synthetic workspace,
+neither Node nor Git in PATH in an actually isolated network namespace, uses an external synthetic workspace,
 checks API/UI/deep links, PCA/PLS/GP/Two Variances, reports, restart and restore.
 The LAN verifier uses the runner's actual non-loopback interface address and
 browser same-origin requests, verifies rejected Host/Origin requests, and then
@@ -96,3 +103,7 @@ after FINAL_SHA. The exact tested bytes are published as a prerelease.
 CI archive build/validation may run alongside Windows checks after Linux gates
 pass. It only uploads a CI artifact: main and public Release publication still
 require every Windows/Linux/E2E job to pass on that exact source commit.
+The `release-ready` job additionally requires all dependency-security gates.
+`release-version.json` or the validated workflow input supplies the archive version;
+CI evidence is SHA-named. No failed/skipped/pending job is a publication success.
+Namespace tooling is CI-only; the distributed offline installer needs no sudo.

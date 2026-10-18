@@ -12,7 +12,7 @@ Verify the downloaded archive against the accompanying SHA256SUMS, then:
 
 ```sh
 sha256sum -c SHA256SUMS
-tar -xzf statistical-twin-linux-2026.10.2-ubuntu24.04-x86_64-py312.tar.gz
+tar -xzf statistical-twin-linux-2026.10.3-ubuntu24.04-x86_64-py312.tar.gz
 cd statistical-twin-linux
 ./install.sh
 ./run.sh
@@ -44,11 +44,11 @@ Stop the application normally first. The installed application includes the
 offline CLI; no source checkout or Node.js is needed:
 
 ```sh
-./.venv/bin/python -m app.storage.workspace_backup backup \
+./.venv/bin/python -I -S -B release_bootstrap.py workspace-backup --release-root "$PWD" backup \
   --workspace "$HOME/.datalabstudio" --output "$HOME/datalab-backup.zip"
-./.venv/bin/python -m app.storage.workspace_backup verify \
+./.venv/bin/python -I -S -B release_bootstrap.py workspace-backup --release-root "$PWD" verify \
   --archive "$HOME/datalab-backup.zip"
-./.venv/bin/python -m app.storage.workspace_backup restore \
+./.venv/bin/python -I -S -B release_bootstrap.py workspace-backup --release-root "$PWD" restore \
   --archive "$HOME/datalab-backup.zip" --workspace "$HOME/.datalabstudio-restored"
 ./run.sh --workspace-root "$HOME/.datalabstudio-restored"
 ```
@@ -101,9 +101,34 @@ Windows trusted-LAN development policy is unchanged.
 ## Identity and Integrity
 
 `BUILD_INFO.json` records source commit, API contract, metadata schema, Python
-target and lock hash. Release version (for example 2026.10.2) is independent of
+target and lock hash. Release version (for example 2026.10.3) is independent of
 app_version and API contract. `FILES.sha256` verifies packaged files at install
-and launch. An absent or mismatched file fails startup instead of mixing builds.
+and launch. The release-owned `release_bootstrap.py` runs with `-I -S -B` before
+importing installed app code: no current-directory/PYTHONPATH import, `.pth`
+execution or application bytecode writes. It verifies the actual application
+wheel's build resource and installed source files against that wheel, not merely
+the requested BUILD_INFO commit or the installed RECORD file.
+
+`.installed` is an atomic structured completion marker, written only after
+offline pip installation, pip check and installed-code verification succeed.
+A copied marker, old application code, extra application bytecode or mismatched
+resource fails startup. Payload verification works before a venv exists;
+installed verification additionally requires the valid marker and matching code.
+Shared run/exclusive install locks prevent reinstalling while the server or
+verified backup CLI runs. Do not delete `.release.lock` or run `python -m app.launch`
+directly. Use a fresh directory if an older installation contains leftover code.
+
+For installation diagnostics:
+
+```sh
+python3.12 -I -S -B release_bootstrap.py verify-payload --release-root "$PWD"
+./.venv/bin/python -I -S -B release_bootstrap.py verify-installed --release-root "$PWD"
+```
+
+These commands report the actual verified source, application wheel, lock and
+file-manifest identities. SHA-256 integrity checks are not digital signatures;
+obtain the archive and its checksum from the trusted release channel. An absent
+or mismatched file fails startup instead of mixing builds.
 Static files cannot serve workspace files, arbitrary paths or missing API URLs.
 
 `requirements-release.lock` includes the application wheel and every dependency
