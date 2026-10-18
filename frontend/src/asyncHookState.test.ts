@@ -10,6 +10,7 @@ import type {
   AnalysisResultExportListResponse,
   AnalysisRunComparisonResponse,
   AnalysisRunListResponse,
+  AnalysisRunStatusResponse,
   AttributeControlLimitSetListResponse,
   AttributeControlLimitSetDeletionPreflightResponse,
   AttributeControlLimitSetResponse,
@@ -62,6 +63,7 @@ import { useRuntimeCompatibilityState } from "./useRuntimeCompatibilityState";
 import { useReportCenterState } from "./useReportCenterState";
 import { useAssetManagementState } from "./useAssetManagementState";
 import { useProjectOverviewState } from "./useProjectOverviewState";
+import type { AnalysisRunsRouteParams } from "./api/routes";
 
 const apiMocks = vi.hoisted(() => ({
   abandonBayesianTrial: vi.fn(),
@@ -88,6 +90,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchAnalysisRunComparison: vi.fn(),
   fetchAnalysisRunDeletionPreflight: vi.fn(),
   fetchAnalysisRunResult: vi.fn(),
+  fetchAnalysisRunStatus: vi.fn(),
   fetchAnalysisRuns: vi.fn(),
   fetchAttributeControlLimitSets: vi.fn(),
   fetchAttributeControlLimitSetDeletionPreflight: vi.fn(),
@@ -348,6 +351,36 @@ function historyResponse(datasetVersionId: string): AnalysisRunListResponse {
     has_more: false,
     runs: [],
   };
+}
+
+const reportIdA = "10000000-0000-4000-8000-000000000001";
+const reportIdB = "10000000-0000-4000-8000-000000000002";
+
+function reportResult(analysisId: string): AnalysisResultEnvelope {
+  return {
+    analysis_id: analysisId,
+    method_id: "eda.descriptive",
+    method_version: "0.1.0",
+    dataset_version_id: "dataset-a",
+  } as AnalysisResultEnvelope;
+}
+
+function reportWindow(query = "") {
+  const events = new EventTarget();
+  const location = { href: `http://127.0.0.1:8600/reports?tab=reports${query}#saved` };
+  const history = {
+    state: { navigation: "preserved" },
+    replaceState: vi.fn((_state: unknown, _title: string, next: string) => {
+      location.href = new URL(next, location.href).href;
+    }),
+  };
+  vi.stubGlobal("window", {
+    location,
+    history,
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+  });
+  return { location, history, events };
 }
 
 function exportListResponse(analysisId: string): AnalysisResultExportListResponse {
@@ -623,6 +656,9 @@ beforeEach(() => {
     mock.mockReset();
   }
   apiMocks.fetchRegressionModelManifest.mockResolvedValue({});
+  apiMocks.fetchAnalysisRunStatus.mockImplementation((analysisId: string) => Promise.resolve({
+    ...reportResult(analysisId), status: "succeeded", stale: false, result_available: true,
+  }));
   apiMocks.fetchLatestBayesianRecommendationBatch.mockResolvedValue({
     study_id: "default-study",
     study_version_id: "default-study-version",
@@ -2145,46 +2181,291 @@ describe("async workbench hooks", () => {
     runner.unmount();
   });
 
+  it("keeps Report Center detail independent of list filter changes", async () => {
+    const browser = reportWindow(`&analysis_id=${reportIdA}`);
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockResolvedValueOnce(reportResult(reportIdA));
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.flush();
+    const pending = deferred<AnalysisResultEnvelope>();
+    apiMocks.fetchAnalysisRunResult.mockReturnValueOnce(pending.promise);
+    await runner.act(() => runner.output.onSelectAnalysis(reportIdB));
+    expect(new URL(browser.location.href).searchParams.get("analysis_id")).toBe(reportIdB);
+    await runner.act(() => runner.output.onChangeMethodId("regression.pls"));
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledTimes(2);
+    expect(runner.output.selectedAnalysisId).toBe(reportIdB);
+    expect(runner.output.isLoadingResult).toBe(true);
+    pending.resolve(reportResult(reportIdB));
+    await runner.flush();
+    expect(runner.output.selectedResult?.analysis_id).toBe(reportIdB);
+    runner.unmount();
+  });
+
+  it("blocks a dataset-only Report Center list when the dataset is cleared", async () => {
+    reportWindow();
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockResolvedValue(reportResult(reportIdA));
+    const runner = new HookRunner<string | null, ReturnType<typeof useReportCenterState>>(useReportCenterState, "dataset-a");
+    await runner.act(() => runner.output.onChangeCurrentDatasetOnly(true));
+    await runner.act(() => runner.output.onSelectAnalysis(reportIdA));
+    apiMocks.fetchAnalysisRuns.mockClear();
+    runner.update(null);
+    await runner.flush();
+    expect(apiMocks.fetchAnalysisRuns).not.toHaveBeenCalled();
+    expect(runner.output.list).toBeNull();
+    expect(runner.output.currentDatasetOnly).toBe(true);
+    expect(runner.output.selectedResult?.analysis_id).toBe(reportIdA);
+    runner.unmount();
+  });
+
+  it("does not refetch Report Center when an unused current dataset changes", async () => {
+    reportWindow();
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    const runner = new HookRunner<string, ReturnType<typeof useReportCenterState>>(useReportCenterState, "dataset-a");
+    await runner.flush();
+    runner.update("dataset-b");
+    await runner.flush();
+    expect(apiMocks.fetchAnalysisRuns).toHaveBeenCalledOnce();
+    runner.unmount();
+  });
+
+  it.each(["", "not-a-uuid", `${reportIdA}&analysis_id=${reportIdB}`])(
+    "rejects invalid or ambiguous Report Center query %s without HTTP", async (id) => {
+      reportWindow(`&analysis_id=${id}`);
+      apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+      const runner = new HookRunner(useReportCenterState, "dataset-a");
+      await runner.flush();
+      expect(apiMocks.fetchAnalysisRunResult).not.toHaveBeenCalled();
+      expect(runner.output.selectedAnalysisId).toBeNull();
+      expect(runner.output.selectedResultError).toBe("report_center_analysis_id_invalid");
+      runner.unmount();
+    },
+  );
+
+  it("observes Report Center popstate without accepting mismatched response owners", async () => {
+    const browser = reportWindow(`&analysis_id=${reportIdA}`);
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockResolvedValue(reportResult(reportIdA));
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.flush();
+    browser.location.href = `http://127.0.0.1:8600/reports?analysis_id=${reportIdB}`;
+    await runner.act(() => browser.events.dispatchEvent(new Event("popstate")));
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenLastCalledWith(reportIdB);
+    expect(runner.output.selectedResult).toBeNull();
+    expect(runner.output.selectedResultError).toBe("report_center_result_identity_mismatch");
+    runner.unmount();
+  });
+
+  it("does not publish an analysis deletion after its view unmounts", async () => {
+    const pending = deferred<AnalysisRunDeleteResponse>();
+    apiMocks.deleteStoredAnalysisRun.mockReturnValueOnce(pending.promise);
+    const onDeleted = vi.fn();
+    const runner = new HookRunner(
+      (id: string) => useAnalysisRunDeletionState(id, onDeleted), reportIdA,
+    );
+    await runner.act(() => runner.output.onDelete(analysisDeletionPreflight(reportIdA)));
+    runner.unmount();
+    pending.resolve({ analysis_id: reportIdA } as AnalysisRunDeleteResponse);
+    await runner.flush();
+    expect(onDeleted).not.toHaveBeenCalled();
+  });
+
   it("restores a Report Center result from the analysis_id query", async () => {
-    const replaceState = vi.fn();
-    vi.stubGlobal("window", {
-      location: {
-        href: "http://127.0.0.1:8600/reports?tab=reports&analysis_id=analysis-a",
-      },
-      history: { replaceState },
-    });
-    const result = {
-      analysis_id: "analysis-a",
-      method_id: "eda.descriptive",
-      method_version: "0.1.0",
-      dataset_version_id: "dataset-a",
-    } as AnalysisResultEnvelope;
+    const browser = reportWindow(`&analysis_id=${reportIdA}`);
+    const result = reportResult(reportIdA);
     apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
     apiMocks.fetchAnalysisRunResult.mockResolvedValue(result);
     const runner = new HookRunner(useReportCenterState, "dataset-a");
     await runner.flush();
 
-    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledWith("analysis-a");
-    expect(runner.output.selectedAnalysisId).toBe("analysis-a");
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledWith(reportIdA);
+    expect(runner.output.selectedAnalysisId).toBe(reportIdA);
     expect(runner.output.selectedResult).toEqual(result);
-    expect(replaceState).toHaveBeenCalled();
+    expect(browser.history.replaceState).not.toHaveBeenCalled();
     runner.unmount();
   });
 
+  it.each(["resolve", "reject"] as const)("ignores late Report Center list %s and finally", async (outcome) => {
+    reportWindow();
+    const old = deferred<AnalysisRunListResponse>();
+    const latest = deferred<AnalysisRunListResponse>();
+    apiMocks.fetchAnalysisRuns.mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.act(() => runner.output.onChangeMethodId("regression.pls"));
+    if (outcome === "resolve") old.resolve(historyResponse("obsolete"));
+    else old.reject(new Error("obsolete_failed"));
+    await runner.flush();
+    expect(runner.output.isLoadingList).toBe(true);
+    expect(runner.output.listError).toBeNull();
+    expect(runner.output.list).toBeNull();
+    latest.resolve(historyResponse("current"));
+    await runner.flush();
+    expect(runner.output.list?.dataset_version_id).toBe("current");
+    runner.unmount();
+  });
+
+  it.each(["resolve", "reject"] as const)("ignores late Report Center detail %s and finally", async (outcome) => {
+    const browser = reportWindow();
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    const old = deferred<AnalysisResultEnvelope>();
+    const latest = deferred<AnalysisResultEnvelope>();
+    apiMocks.fetchAnalysisRunResult.mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.act(() => runner.output.onSelectAnalysis(reportIdA));
+    await runner.act(() => runner.output.onSelectAnalysis(reportIdB));
+    if (outcome === "resolve") old.resolve(reportResult(reportIdA));
+    else old.reject(new Error("analysis_run_not_found"));
+    await runner.flush();
+    expect(runner.output.isLoadingResult).toBe(true);
+    expect(runner.output.selectedResultError).toBeNull();
+    expect(runner.output.selectedAnalysisId).toBe(reportIdB);
+    expect(new URL(browser.location.href).searchParams.get("analysis_id")).toBe(reportIdB);
+    latest.resolve(reportResult(reportIdB));
+    await runner.flush();
+    expect(runner.output.selectedResult?.analysis_id).toBe(reportIdB);
+    expect(browser.location.href).toContain("#saved");
+    expect(browser.history.replaceState).toHaveBeenLastCalledWith(
+      browser.history.state, "", `/reports?tab=reports&analysis_id=${reportIdB}#saved`,
+    );
+    runner.unmount();
+  });
+
+  it("retries Report Center detail independently and keeps transient-failure URL", async () => {
+    const browser = reportWindow(`&analysis_id=${reportIdA}`);
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockRejectedValueOnce(new Error("api_unreachable"));
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.flush();
+    expect(runner.output.selectedAnalysisId).toBe(reportIdA);
+    expect(runner.output.selectedResultError).toBe("api_unreachable");
+    expect(browser.history.replaceState).not.toHaveBeenCalled();
+    apiMocks.fetchAnalysisRunResult.mockResolvedValueOnce(reportResult(reportIdA));
+    await runner.act(() => runner.output.onRetrySelectedResult());
+    expect(apiMocks.fetchAnalysisRuns).toHaveBeenCalledOnce();
+    expect(runner.output.selectedResult?.analysis_id).toBe(reportIdA);
+    runner.unmount();
+  });
+
+  it("resets Report Center pagination on dataset scope changes, never broadening null", async () => {
+    reportWindow();
+    apiMocks.fetchAnalysisRuns.mockImplementation((query: AnalysisRunsRouteParams) => Promise.resolve({
+      ...historyResponse(query.datasetVersionId ?? "all"), offset: query.offset, returned_count: 1,
+    }));
+    const runner = new HookRunner<string | null, ReturnType<typeof useReportCenterState>>(useReportCenterState, "dataset-a");
+    await runner.act(() => runner.output.onChangeCurrentDatasetOnly(true));
+    await runner.act(() => runner.output.onChangeOffset(20));
+    expect(runner.output.offset).toBe(20);
+    apiMocks.fetchAnalysisRuns.mockClear();
+    runner.update(null);
+    await runner.flush();
+    expect(runner.output.listBlocked).toBe(true);
+    expect(apiMocks.fetchAnalysisRuns).not.toHaveBeenCalled();
+    runner.update("dataset-b");
+    await runner.flush();
+    expect(apiMocks.fetchAnalysisRuns).toHaveBeenCalledOnce();
+    expect(apiMocks.fetchAnalysisRuns).toHaveBeenLastCalledWith(expect.objectContaining({
+      datasetVersionId: "dataset-b", offset: 0,
+    }));
+    runner.update(null);
+    await runner.flush();
+    await runner.act(() => runner.output.onChangeCurrentDatasetOnly(false));
+    expect(runner.output.listBlocked).toBe(false);
+    expect(apiMocks.fetchAnalysisRuns).toHaveBeenLastCalledWith(expect.objectContaining({
+      datasetVersionId: null, offset: 0,
+    }));
+    runner.unmount();
+  });
+
+  it("keeps Report Center B selected when deletion of A completes", async () => {
+    const browser = reportWindow(`&analysis_id=${reportIdB}`);
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockResolvedValue(reportResult(reportIdB));
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.flush();
+    await runner.act(() => runner.output.onSelectedAnalysisDeleted(reportIdA));
+    expect(runner.output.selectedResult?.analysis_id).toBe(reportIdB);
+    expect(browser.history.replaceState).not.toHaveBeenCalled();
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledOnce();
+    expect(apiMocks.fetchAnalysisRuns).toHaveBeenCalledTimes(2);
+    runner.unmount();
+  });
+
+  it("preserves independently loaded stale Report Center status across list filters", async () => {
+    reportWindow(`&analysis_id=${reportIdA}`);
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockResolvedValue(reportResult(reportIdA));
+    apiMocks.fetchAnalysisRunStatus.mockResolvedValue({ analysis_id: reportIdA, stale: true });
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.flush();
+    await runner.act(() => runner.output.onChangeStaleFilter("fresh"));
+    expect(runner.output.selectedStatus?.stale).toBe(true);
+    expect(runner.output.selectedResult?.analysis_id).toBe(reportIdA);
+    expect(apiMocks.fetchAnalysisRunStatus).toHaveBeenCalledOnce();
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledOnce();
+    runner.unmount();
+  });
+
+  it("guards Report Center status independently and retries without rereading result", async () => {
+    reportWindow();
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockImplementation((id: string) => Promise.resolve(reportResult(id)));
+    const old = deferred<AnalysisRunStatusResponse>();
+    apiMocks.fetchAnalysisRunStatus.mockReturnValueOnce(old.promise)
+      .mockRejectedValueOnce(new Error("api_unreachable"));
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.act(() => runner.output.onSelectAnalysis(reportIdA));
+    await runner.act(() => runner.output.onSelectAnalysis(reportIdB));
+    old.resolve({ analysis_id: reportIdA, stale: false } as AnalysisRunStatusResponse);
+    await runner.flush();
+    expect(runner.output.selectedStatus).toBeNull();
+    expect(runner.output.selectedStatusError).toBe("api_unreachable");
+    expect(runner.output.selectedResult?.analysis_id).toBe(reportIdB);
+    apiMocks.fetchAnalysisRunStatus.mockResolvedValueOnce({ analysis_id: reportIdB, stale: true });
+    await runner.act(() => runner.output.onRetrySelectedStatus());
+    expect(runner.output.selectedStatus?.stale).toBe(true);
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledTimes(2);
+    runner.unmount();
+  });
+
+  it("clears Report Center selection on invalid and removed same-mount URL, including held replies", async () => {
+    const browser = reportWindow(`&analysis_id=${reportIdA}`);
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    const pending = deferred<AnalysisResultEnvelope>();
+    apiMocks.fetchAnalysisRunResult.mockReturnValueOnce(pending.promise);
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    await runner.flush();
+    browser.location.href = "http://127.0.0.1:8600/reports?analysis_id=invalid";
+    await runner.act(() => browser.events.dispatchEvent(new Event("datalab:location-change")));
+    pending.resolve(reportResult(reportIdA));
+    await runner.flush();
+    expect(runner.output.selectedResult).toBeNull();
+    expect(runner.output.selectedAnalysisId).toBeNull();
+    expect(runner.output.selectedResultError).toBe("report_center_analysis_id_invalid");
+    expect(apiMocks.fetchAnalysisRunResult).toHaveBeenCalledOnce();
+    browser.location.href = "http://127.0.0.1:8600/reports?tab=reports#saved";
+    await runner.act(() => browser.events.dispatchEvent(new Event("popstate")));
+    expect(runner.output.selectedResultError).toBeNull();
+    expect(browser.history.replaceState).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it("does not apply Report Center replies or callbacks after unmount", async () => {
+    const browser = reportWindow(`&analysis_id=${reportIdA}`);
+    const pending = deferred<AnalysisResultEnvelope>();
+    apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
+    apiMocks.fetchAnalysisRunResult.mockReturnValueOnce(pending.promise);
+    const runner = new HookRunner(useReportCenterState, "dataset-a");
+    runner.unmount();
+    pending.reject(new Error("analysis_run_not_found"));
+    await runner.flush();
+    runner.output.onSelectedAnalysisDeleted(reportIdA);
+    expect(browser.history.replaceState).not.toHaveBeenCalled();
+    expect(apiMocks.fetchAnalysisRuns).toHaveBeenCalledOnce();
+  });
+
   it("clears a selected Report Center result after mutation revalidation returns not found", async () => {
-    const replaceState = vi.fn();
-    vi.stubGlobal("window", {
-      location: {
-        href: "http://127.0.0.1:8600/reports?tab=reports&analysis_id=analysis-a",
-      },
-      history: { replaceState },
-    });
-    const result = {
-      analysis_id: "analysis-a",
-      method_id: "eda.descriptive",
-      method_version: "0.1.0",
-      dataset_version_id: "dataset-a",
-    } as AnalysisResultEnvelope;
+    const browser = reportWindow(`&analysis_id=${reportIdA}`);
+    const result = reportResult(reportIdA);
     apiMocks.fetchAnalysisRuns.mockResolvedValue(historyResponse("dataset-a"));
     apiMocks.fetchAnalysisRunResult.mockResolvedValueOnce(result);
     const runner = new HookRunner(
@@ -2193,7 +2474,7 @@ describe("async workbench hooks", () => {
       { datasetVersionId: "dataset-a", revision: 0 },
     );
     await runner.flush();
-    expect(runner.output.selectedAnalysisId).toBe("analysis-a");
+    expect(runner.output.selectedAnalysisId).toBe(reportIdA);
 
     apiMocks.fetchAnalysisRunResult.mockRejectedValueOnce(
       new Error("analysis_run_not_found"),
@@ -2203,11 +2484,11 @@ describe("async workbench hooks", () => {
 
     expect(runner.output.selectedAnalysisId).toBeNull();
     expect(runner.output.selectedResult).toBeNull();
-    expect(runner.output.notice).toContain("함께 삭제");
-    expect(replaceState).toHaveBeenLastCalledWith(
-      null,
+    expect(runner.output.notice).toBe("report_center_result_removed");
+    expect(browser.history.replaceState).toHaveBeenLastCalledWith(
+      browser.history.state,
       "",
-      "/reports?tab=reports",
+      "/reports?tab=reports#saved",
     );
     runner.unmount();
   });

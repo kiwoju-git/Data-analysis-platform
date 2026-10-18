@@ -20,6 +20,7 @@ import type {
   AnalysisRunComparisonResponse,
   AnalysisRunDeletionPreflightResponse,
   AnalysisRunListResponse,
+  AnalysisRunStatusResponse,
   AnalysisRunRequest,
 } from "./types";
 import { getCurrentLocale } from "../i18n/store";
@@ -119,6 +120,16 @@ export async function fetchAnalysisRunResult(analysisId: string): Promise<Analys
   }
 
   return (await response.json()) as AnalysisResultEnvelope;
+}
+
+export async function fetchAnalysisRunStatus(analysisId: string): Promise<AnalysisRunStatusResponse> {
+  const response = await fetchApi(apiRoutes.analysisRunStatus(analysisId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "analysis_status_fetch_failed"));
+  }
+  return (await response.json()) as AnalysisRunStatusResponse;
 }
 
 export async function fetchAnalysisRunDeletionPreflight(

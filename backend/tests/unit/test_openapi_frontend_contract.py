@@ -286,6 +286,14 @@ FRONTEND_ROUTE_CONTRACTS = [
         parameters=frozenset({("left_analysis_id", "query"), ("right_analysis_id", "query")}),
     ),
     OperationContract(
+        route_name="analysisRunStatus",
+        method="get",
+        path="/api/v1/analysis-runs/{analysis_id}",
+        success_status="200",
+        response_schema="AnalysisRunStatusResponse",
+        parameters=frozenset({("analysis_id", "path")}),
+    ),
+    OperationContract(
         route_name="analysisRunResult",
         method="get",
         path="/api/v1/analysis-runs/{analysis_id}/result",

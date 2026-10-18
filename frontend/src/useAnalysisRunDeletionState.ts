@@ -31,6 +31,10 @@ export function useAnalysisRunDeletionState(
     setError(null);
     setIsLoadingPreflight(false);
     setIsDeleting(false);
+    return () => {
+      preflightRequest.cancel();
+      deletionRequest.cancel();
+    };
   }, [analysisId, deletionRequest, preflightRequest]);
 
   return {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   AnalysisMethodListResponse,
   AnalysisResultEnvelope,
+  AnalysisRunDeleteResponse,
   DatasetVersionResponse,
 } from "./api";
 import { AnalysisHistoryWorkspace } from "./AnalysisHistoryWorkspace";
@@ -28,6 +29,7 @@ import { useAnalysisRunDeletionState } from "./useAnalysisRunDeletionState";
 import { useReportCenterState } from "./useReportCenterState";
 import { methodLabel } from "./i18n/catalogLabels";
 import { useI18n } from "./i18n/LocaleProvider";
+import { ReportCenterFeedback } from "./ReportCenterFeedback";
 
 export function ReportCenterPage({
   catalog,
@@ -76,7 +78,7 @@ export function ReportCenterPage({
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.set("tab", nextTab);
-    pushAppLocation(`${url.pathname}${url.search}`);
+    pushAppLocation(`${url.pathname}${url.search}${url.hash}`);
   };
 
   return (
@@ -143,10 +145,7 @@ function ReportBrowser({
     currentDatasetVersionId,
     workspaceAssetRevision,
   );
-  const selectedItem =
-    state.list?.runs.find(
-      (item) => item.analysis_id === state.selectedAnalysisId,
-    ) ?? null;
+  const { t } = useI18n();
 
   return (
     <div className="report-browser-workspace">
@@ -156,7 +155,7 @@ function ReportBrowser({
       </div>
       {state.notice !== null ? (
         <div className="notice-box" role="status">
-          <span>{state.notice}</span>
+          <ReportCenterFeedback code={state.notice} />
           <button
             className="secondary-button compact-button"
             onClick={state.onClearNotice}
@@ -170,11 +169,11 @@ function ReportBrowser({
         <div className="panel-heading">
           <div>
             <h3 id="report-browser-title">저장 분석 목록</h3>
-            <p>선택한 결과의 작업은 해당 목록 항목 바로 아래에 표시됩니다.</p>
+            <p>{t("reportCenter.selectionLocation")}</p>
           </div>
           <button
             className="secondary-button"
-            disabled={state.isLoadingList}
+            disabled={state.isLoadingList || state.listBlocked}
             onClick={state.onRefresh}
             type="button"
           >
@@ -186,11 +185,14 @@ function ReportBrowser({
           currentDatasetVersionId={currentDatasetVersionId}
           state={state}
         />
+        {state.listBlocked ? (
+          <ReportCenterFeedback code="report_center_current_dataset_required" />
+        ) : null}
         {state.isLoadingList ? (
           <div className="notice-box" role="status">리포트 목록을 불러오는 중입니다.</div>
         ) : null}
         {state.listError !== null ? (
-          <div className="error-box" role="alert">오류 코드: {state.listError}</div>
+          <ReportCenterFeedback code={state.listError} onRetry={state.onRefresh} />
         ) : null}
         {state.list !== null && state.list.runs.length === 0 ? (
           <div className="notice-box">조건에 맞는 저장 분석이 없습니다.</div>
@@ -202,6 +204,7 @@ function ReportBrowser({
               <article className="report-run-item" key={run.analysis_id}>
                 <button
                   aria-current={selected ? "true" : undefined}
+                  data-analysis-id={run.analysis_id}
                   className={selected ? "report-run-row is-selected" : "report-run-row"}
                   disabled={!run.result_available || run.status !== "succeeded"}
                   onClick={() => state.onSelectAnalysis(run.analysis_id)}
@@ -230,35 +233,31 @@ function ReportBrowser({
                     <span>현재</span>
                   )}
                 </button>
-                {selected ? (
-                  <SelectedReportState
-                    isLoading={state.isLoadingResult}
-                    onDeleted={() => {
-                      state.onSelectedAnalysisDeleted();
-                      onWorkspaceMutation?.("analysis_deleted");
-                    }}
-                    onExportDeleted={() => onWorkspaceMutation?.("export_deleted")}
-                    result={state.selectedResult}
-                    resultError={state.selectedResultError}
-                    stale={run.stale}
-                  />
-                ) : null}
               </article>
             );
           })}
         </div>
-        {state.selectedAnalysisId !== null && selectedItem === null ? (
-          <div className="report-direct-selection">
+        {state.selectedAnalysisId !== null || state.selectedResultError !== null ? (
+          <div className="report-direct-selection" data-report-selection={state.selectedAnalysisId ?? "invalid"}>
+            {state.selectedAnalysisId !== null && state.selectedStatus === null ? (
+              <div className="notice-box" data-report-status="unknown" role="status">
+                {t(state.isLoadingStatus ? "reportCenter.statusLoading" : "reportCenter.statusUnknown")}
+              </div>
+            ) : null}
+            {state.selectedStatusError !== null ? (
+              <ReportCenterFeedback code={state.selectedStatusError} onRetry={state.onRetrySelectedStatus} />
+            ) : null}
             <SelectedReportState
               isLoading={state.isLoadingResult}
-              onDeleted={() => {
-                state.onSelectedAnalysisDeleted();
+              onDeleted={(response) => {
+                state.onSelectedAnalysisDeleted(response.analysis_id);
                 onWorkspaceMutation?.("analysis_deleted");
               }}
               onExportDeleted={() => onWorkspaceMutation?.("export_deleted")}
+              onRetry={state.selectedAnalysisId === null ? undefined : state.onRetrySelectedResult}
               result={state.selectedResult}
               resultError={state.selectedResultError}
-              stale={false}
+              stale={state.selectedStatus?.stale ?? null}
             />
           </div>
         ) : null}
@@ -369,7 +368,7 @@ function ReportFilters({
       <label className="checkbox-field report-dataset-filter">
         <input
           checked={state.currentDatasetOnly}
-          disabled={currentDatasetVersionId === null}
+          disabled={currentDatasetVersionId === null && !state.currentDatasetOnly}
           onChange={(event) =>
             state.onChangeCurrentDatasetOnly(event.target.checked)
           }
@@ -385,16 +384,18 @@ function SelectedReportState({
   isLoading,
   onDeleted,
   onExportDeleted,
+  onRetry,
   result,
   resultError,
   stale,
 }: {
   isLoading: boolean;
-  onDeleted: () => void;
+  onDeleted: (response: AnalysisRunDeleteResponse) => void;
   onExportDeleted: () => void;
+  onRetry?: () => void;
   result: AnalysisResultEnvelope | null;
   resultError: string | null;
-  stale: boolean;
+  stale: boolean | null;
 }) {
   if (isLoading) {
     return (
@@ -405,9 +406,7 @@ function SelectedReportState({
   }
   if (resultError !== null) {
     return (
-      <div className="error-box" role="alert">
-        저장 결과를 열 수 없습니다. 오류 코드: {resultError}
-      </div>
+      <ReportCenterFeedback code={resultError} onRetry={onRetry} />
     );
   }
   return result === null ? null : (
@@ -426,10 +425,10 @@ function SelectedReportActions({
   result,
   stale,
 }: {
-  onDeleted: () => void;
+  onDeleted: (response: AnalysisRunDeleteResponse) => void;
   onExportDeleted: () => void;
   result: AnalysisResultEnvelope;
-  stale: boolean;
+  stale: boolean | null;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const exportState = useAnalysisExportState({
@@ -455,7 +454,12 @@ function SelectedReportActions({
   }, [exportState.analysisResultExportDeletion, onExportDeleted]);
 
   return (
-    <section className="report-selected-result" aria-labelledby="report-selected-title">
+    <section
+      className="report-selected-result"
+      aria-labelledby="report-selected-title"
+      data-analysis-id={result.analysis_id}
+      data-report-status={stale === null ? "unknown" : stale ? "stale" : "fresh"}
+    >
       <div className="panel-heading">
         <div>
           <h3 id="report-selected-title" ref={headingRef} tabIndex={-1}>

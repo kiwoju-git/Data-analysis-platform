@@ -11,6 +11,7 @@ export { fetchAnalysisResultExportDeletionPreflight } from "./api/analyses";
 export { fetchAnalysisRunComparison } from "./api/analyses";
 export { fetchAnalysisRunDeletionPreflight } from "./api/analyses";
 export { fetchAnalysisRunResult } from "./api/analyses";
+export { fetchAnalysisRunStatus } from "./api/analyses";
 export { fetchAnalysisRuns } from "./api/analyses";
 export { getApiBaseUrl } from "./api/client";
 export {

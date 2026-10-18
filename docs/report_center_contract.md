@@ -1,6 +1,6 @@
 # Report Center P0 Contract
 
-Last updated: 2026-09-17
+Last updated: 2026-10-18
 
 PLS now has a schema-1-specific renderer, not the OLS renderer. GPR includes
 saved optimizer/bounds/convergence evidence. See `html_report_coverage_matrix.md`
@@ -9,21 +9,60 @@ core results cannot succeed as empty HTML. Existing reports are not rewritten.
 Completed PLS point predictions may be downloaded separately as client JSON
 snapshots; these are explicitly not managed Report Center artifacts.
 
-## Purpose
+## A10 Request Ownership and Recovery
+
+- List filters/pagination and selected result/status have independent latest-request
+  lanes. List refresh, method/status/stale filters and dataset changes do not reload
+  the selected result or alter its URL. Explicit workspace mutation revalidates each
+  affected lane once. Obsolete success, failure and finally handlers cannot publish.
+- `currentDatasetOnly=true` with no active dataset blocks the list and issues no
+  unfiltered HTTP request. The checkbox remains checked and can be explicitly
+  cleared. A new dataset scope starts at page zero; changing an unused current
+  dataset when this filter is off causes no request.
+- A valid UUID `analysis_id` is recorded at selection intention, before the result
+  request. Responses do not rewrite selection URLs. Query updates preserve other
+  parameters, fragment and history state. Same-mount `popstate` and the existing
+  app location event observe selection changes. Empty, malformed or duplicate IDs
+  produce an explicit error without a result/status request or misleading old result.
+- Result and status responses must match the requested analysis ID. Existing
+  `GET /analysis-runs/{analysis_id}` supplies live stale metadata independently of
+  list membership. Status failure is unknown, never fresh; a readable result remains
+  available with an explicit warning and status-only retry. Result failures have
+  a separate retry. Only current-owner `analysis_run_not_found` clears selection.
+- The result panel stays mounted while filters change. Its stale warning comes
+  from the independent status lane, not a missing list row. Deletion callbacks
+  carry the actual deleted ID; deleting A cannot clear B. Unmount invalidates all
+  owned callbacks, including deletion. StrictMode effect replay reissues a cancelled
+  deep-link read rather than leaving a permanent loading state.
+- Stable error/notice codes are rendered in the current locale, with explicit
+  recovery actions and `role=alert`/`status`. User/transport exception text is not
+  translated or echoed. The installed ui-ux-pro-max `error recovery retry` guidance
+  informed these changes; existing dense colors, spacing and controls are retained.
+- No API/schema/method version, stored report/result/model or numerical calculation
+  changes. The new frontend status client uses an existing backend endpoint.
+
+Evidence: `asyncHookState.test.ts` deferred-response regressions,
+`reportCenterQuery.test.tsx` URL/EN-KO feedback checks, and
+`tests/e2e/report_center_context.py` StrictMode browser transport fixture. The
+fixture mocks HTTP with synthetic records and is not a backend/export-integrity test;
+the existing full critical path still exercises real saved report/export APIs.
+
+## Original P0 Scope
 
 `/reports` is the central discovery and export surface for persisted analysis results. It reuses
 the existing checksum-validated analysis-run result and export APIs. It does not introduce a new
 result renderer, reinterpret stored artifacts, or imply that every dedicated workflow has an HTML
 report.
 
-Selecting a stored run renders its result/export/delete action panel immediately
-after that list item. The selection is represented by the ID-only
+Selecting a stored run renders one stable result/export/delete action panel below
+the list. Filtering a selected run out of the list does not remount the panel,
+reset pending export/delete controls, or move focus. The selection is represented by the ID-only
 `analysis_id` query parameter and is restored by exact result lookup after
-reload. Long lists and pagination no longer place selected controls at the end
-of the page. The selection button and inline action panel are siblings, so
-interactive controls are never nested.
+reload. The selection controls have one stable location after the paged list,
+independent of whether the selected row matches the active filters. Interactive
+controls are never nested inside the selection buttons.
 
-The inline panel distinguishes deleting one generated export artifact, which
+The selected panel distinguishes deleting one generated export artifact, which
 preserves the analysis result, from deleting the stored analysis run. Stored-run
 deletion reuses the checksum-bound analysis-run preflight and quarantine
 contract and removes its owned result, row snapshot, and exports only when no

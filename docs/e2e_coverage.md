@@ -1,5 +1,20 @@
 # Browser E2E Coverage
 
+## Report Center Request Context
+
+`scripts/e2e.ps1 -ReportCenterContextOnly` runs stage
+`verify Report Center request context` against the real React Report Center in
+StrictMode, with explicit synthetic transport mocks. KO/EN checks cover cold
+deep-link replay, independent list/detail/status requests, stale status outside
+filtered lists, stable export panel identity, current-dataset-null blocking and
+explicit filter clearing, held response ownership, independent retries, delayed
+deletion after another selection, malformed/duplicate query IDs and same-mount
+navigation. Viewports 1440/1280/1024/390 preserve selection/export state without
+page overflow. Each owned context records trace/DOM/error evidence and screenshots;
+`report-center-evidence.json` states the mocked transport scope. This is not a
+claim of backend deletion/export persistence verification; the full existing
+critical path independently exercises real report generation and download.
+
 ## Chart Formatter Boundaries
 
 `scripts/e2e.ps1 -ChartFormattingOnly` runs the existing chart interaction and
@@ -715,6 +730,7 @@ browser critical path.
   - captures `home-en.png`, `mobile-en.png`, `help-ko.png`, `home-ko.png`, and
     `mobile-ko.png`; the 390 x 844 views also assert no page-level horizontal
     overflow and keep the language/API controls visible.
+- `verify Report Center request context` (focused report mode)
 - `verify focused chart formatting and interaction` (focused chart mode)
 - `verify focused CSV upload error recovery` (focused upload mode)
 - `verify two-editor schema concurrency` (focused schema mode)
@@ -723,6 +739,7 @@ browser critical path.
 - `verify API translation boundary with synthetic inputs` (focused transport mode)
 - `verify startup readiness and storage recovery` (focused startup/refined mode)
 - `verify refined UI with exact synthetic version` (focused mode)
+- `verify Report Center request context` (full flow)
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)
 - `verify saved GP prediction request context` (full flow)

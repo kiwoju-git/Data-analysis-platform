@@ -352,6 +352,10 @@ export const apiRoutes = {
     return apiUrl(`/analysis-runs/${pathId(analysisId)}/result`);
   },
 
+  analysisRunStatus(analysisId: string): string {
+    return apiUrl(`/analysis-runs/${pathId(analysisId)}`);
+  },
+
   analysisRunDeletionPreflight(analysisId: string): string {
     return apiUrl(`/analysis-runs/${pathId(analysisId)}/deletion-preflight`);
   },

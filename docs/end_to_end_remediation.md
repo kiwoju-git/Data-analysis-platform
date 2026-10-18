@@ -475,3 +475,107 @@ main or Release publication.
 The same A08 fault-injection failure also occurred on Linux/Python 3.12:
 1515 passed / 11 skipped / 105 warnings / one failure (254.86 seconds).
 Its log is `.tmp/remediation-a08-ci-linux.log`; the correction is `ab6a5da`.
+
+A09 checkpoint `3eb3e57a1e1950013a0e1e13907a738e573957a9` was pushed only to
+the feature branch. CI run `39101069921` is the native rerun, not a completed
+release gate at this point.
+
+## A10 In-Progress Evidence
+
+Before implementation, deferred hook tests reproduced eight failures and passed
+three existing related cases (92 deselected): list/detail callback coupling,
+late URL selection, dataset-null filter broadening, invalid/duplicate link
+requests, missing same-mount navigation handling, and an unmounted deletion
+callback. Log: `.tmp/a10-report-red.log`. These are synthetic client-state
+reproductions, not assertions about a user's workspace.
+
+## A11 Baseline
+
+Before report changes, the current contract/PLS/Two Variances/export-retention
+tests passed 48 tests with three existing deprecation warnings (48.94 seconds).
+This baseline includes existing dispatch-only checks and does not prove missing
+report sections are implemented. Log: `.tmp/remediation-a11-report-baseline.log`.
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+.\.tmp\remediation-a04-source\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_report_coverage.py backend/tests/unit/test_pls_report.py backend/tests/unit/test_two_variances_report.py backend/tests/unit/test_analysis_export_retention_api.py -q
+```
+
+The existing HTML API checks also passed before implementation: eight passed /
+226 deselected / four deprecation warnings (46.06 seconds), using
+`-m pytest backend/tests/unit/test_api_contracts.py -k analysis_result_html_report -q`.
+Log: `.tmp/remediation-a11-html-api-baseline.log`. Existing textual assertions are
+not evidence of visible plot/section parity; the new A11 checks must inspect the
+rendered body and exclude the raw JSON appendix.
+
+## Native Checkpoint Updates
+
+A08 Windows hosted CI job `117593692320` passed: 1525 backend tests, two skips,
+105 warnings (1355.49 seconds), 644 frontend tests / 77 files, strict typing,
+production build, lint (nine existing warnings), and localization. This is a
+Windows hosted runner, not a physical Windows 11 validation. The separate E2E
+job `117597883752` was still running at this observation.
+
+A09 Python 3.11 job `117597273651` passed 1516 tests / 11 skips / 105 warnings
+(248.71 seconds), including the corrected platform-neutral restore interruption
+test. The subsequent numerical diagnostic probe is explicitly not acceptance
+evidence; its deliberate smaller BO budget failure is not a passed calculation.
+Logs: `.tmp/remediation-a08-ci-windows.log`, `.tmp/remediation-a09-ci-py311.log`.
+
+The frozen A08 local Windows whole check finished successfully: 1523 backend
+tests / four skips / 105 warnings (1885.11 seconds), 644 frontend tests / 77
+files, Ruff, formatting, mypy, strict TypeScript, localization and production
+build. ESLint retained nine existing warnings. Log:
+`.tmp/remediation-a08-whole-check.log`. This validates that frozen checkpoint,
+not the later A10/A11 worktree.
+
+A09 native Linux/Python 3.12 job `117597273507` passed 1516 tests / 11 skips /
+105 warnings (215.96 seconds), 655 frontend tests / 78 files, full checks,
+the complete synthetic Chromium critical path and the LAN guard checks.
+Log: `.tmp/remediation-a09-ci-linux.log`. Other jobs and later commits still
+require their own release gate.
+
+## A09 Small-Value Follow-Up
+
+Independent call-site review found that honoring previously ignored formatters
+exposed old three/six-decimal formatting: distinct small nonzero values could
+all display as zero. Six actual consumer SSR tests failed before the correction.
+Pearson, gage and prediction charts now use scientific-capable axis formatting
+and significant-digit details. Fixed-decimal consumers retain ordinary-value
+rounding and use a narrow nonzero fallback only when rounding would erase a
+nonzero value. No coordinate or statistic changes. Focused tests passed 34 cases;
+scoped lint and strict TypeScript passed. Logs:
+`.tmp/remediation-a09-small-values-before.log` and
+`.tmp/remediation-a09-small-values-after.log`.
+
+The combined frozen A09 follow-up/A10 frontend suite passed 688 tests in 80 files
+(54.04 seconds), with no concurrent browser suite. Root strict TypeScript passed.
+Log: `.tmp/remediation-a10-frontend-full.log`.
+
+## A10 Verification
+
+List, selected result and selected status now have independent identities and
+guards. A single stable selected panel preserves export state/focus across list
+filters. Missing dataset scope blocks a current-dataset request until explicitly
+changed. Invalid/duplicate UUID queries never request a result; actual missing
+owners clear selection, while transient errors preserve the requested identity.
+StrictMode replay, same-mount navigation and all late-response branches are
+covered. Stored-result and dataset bytes are not modified by this client change.
+
+Focused Vitest passed 221 tests; API route/step contracts passed 219 tests with
+two existing warnings. Strict TypeScript, scoped ESLint, localization (2897
+source strings / 4003 keys), Python checks and diff whitespace passed. Real
+Chromium, with a mocked synthetic transport and actual Report Center components,
+passed KO/EN at 1440, 1280, 1024 and 390 widths, delayed list/detail/status/delete
+responses, filters, null dataset scope, retries, invalid links, unmount/remount
+and exact-owner removal. This is browser state evidence, not a real backend
+mutation test. Diagnostics: `.tmp/e2e-a10-report-center-final/`; logs:
+`.tmp/a10-report-final-focused.log`, `.tmp/a10-openapi-final.log`,
+`.tmp/a10-report-browser-final.log`. Earlier browser fixture failures (asserting
+an unrendered export ID and a misplaced new test block) remain recorded; the
+final assertions inspect visible checksum/state and correct scenario order.
+
+Root frozen frontend verification also passed the full ESLint run (zero errors,
+nine existing warnings), production build (existing chunk-size advisory),
+localization and `git diff --check`. Logs: `.tmp/remediation-a10-lint.log`,
+`.tmp/remediation-a10-build.log`. No main/Release publication is implied.

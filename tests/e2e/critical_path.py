@@ -46,6 +46,7 @@ from schema_concurrency import verify_schema_concurrency
 from regularized_regression import verify_regularized_regression
 from result_charts import verify_chart_interactions, verify_result_chart_models
 from chart_formatting import verify_chart_formatting
+from report_center_context import verify_report_center_context
 from desktop_resize import verify_desktop_resize
 from two_variances import verify_two_variances
 
@@ -224,6 +225,7 @@ def main() -> int:
     parser.add_argument("--schema-concurrency-only", action="store_true")
     parser.add_argument("--upload-recovery-only", action="store_true")
     parser.add_argument("--chart-formatting-only", action="store_true")
+    parser.add_argument("--report-center-context-only", action="store_true")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -336,6 +338,7 @@ def main() -> int:
             args.schema_concurrency_only,
             args.upload_recovery_only,
             args.chart_formatting_only,
+            args.report_center_context_only,
         )
         print("E2E critical path passed")
         return 0
@@ -640,11 +643,16 @@ def run_browser_flow(
     schema_concurrency_only: bool = False,
     upload_recovery_only: bool = False,
     chart_formatting_only: bool = False,
+    report_center_context_only: bool = False,
 ) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
         try:
+            if report_center_context_only:
+                diagnostics.step("verify Report Center request context")
+                verify_report_center_context(browser, frontend_base_url, diagnostics.root / "report-center-context")
+                return
             if chart_formatting_only:
                 diagnostics.step("verify focused chart formatting and interaction")
                 verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
@@ -689,6 +697,8 @@ def run_browser_flow(
                 verify_refined_ui(browser, frontend_base_url, diagnostics.root / "refined-ui", version_id)
                 return
             if not factorial_only and not gpr_report_only:
+                diagnostics.step("verify Report Center request context")
+                verify_report_center_context(browser, frontend_base_url, diagnostics.root / "report-center-context")
                 diagnostics.step("verify API translation boundary with synthetic inputs")
                 verify_api_translation_boundary(browser, frontend_base_url, diagnostics.root / "api-boundary", isolated_workspace=True)
                 diagnostics.step("verify dataset source context under delayed responses")
@@ -1908,9 +1918,11 @@ def verify_help_report_and_manage_routes(
     expect(page.get_by_role("heading", name="선택한 결과")).to_be_visible(
         timeout=15_000
     )
-    expect(
-        report_rows.first.locator("xpath=..").locator(".report-selected-result")
-    ).to_be_visible()
+    selected_report_id = report_rows.first.get_attribute("data-analysis-id")
+    assert selected_report_id is not None
+    expect(page.locator(".report-selected-result")).to_have_attribute(
+        "data-analysis-id", selected_report_id
+    )
     expect(page.get_by_role("button", name="HTML 생성")).to_be_enabled()
     expect(page.get_by_text("현재 지원되지 않음", exact=True).first).to_be_visible()
     page.get_by_role("button", name="HTML 생성").click()

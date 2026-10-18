@@ -13,7 +13,8 @@ param(
     [switch]$GpPredictionContextOnly,
     [switch]$SchemaConcurrencyOnly,
     [switch]$UploadRecoveryOnly,
-    [switch]$ChartFormattingOnly
+    [switch]$ChartFormattingOnly,
+    [switch]$ReportCenterContextOnly
 )
 
 Set-StrictMode -Version Latest
@@ -82,6 +83,9 @@ try {
     }
     if ($ChartFormattingOnly) {
         $Args += "--chart-formatting-only"
+    }
+    if ($ReportCenterContextOnly) {
+        $Args += "--report-center-context-only"
     }
 
     & $Python @Args

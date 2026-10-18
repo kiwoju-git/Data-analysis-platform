@@ -33,6 +33,21 @@ export interface AnalysisRunListResponse {
   runs: AnalysisRunListItem[];
 }
 
+export interface AnalysisRunStatusResponse {
+  analysis_id: string;
+  method_id: string;
+  method_version: string;
+  dataset_version_id: string | null;
+  status: AnalysisRunState;
+  config_schema_version: number;
+  result_available: boolean;
+  artifact_count: number;
+  stale: boolean;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
 export interface AnalysisRunDeletionCounts {
   analysis_run_count: 1;
   analysis_artifact_count: number;
